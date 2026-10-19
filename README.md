@@ -17,7 +17,7 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 ## What it does
 
 - Next-game card while you wait: both logos, season records, kickoff day and time in your timezone, and a ticker with the betting line, over/under, TV network and venue
-- Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the last play (clock and down and distance can be added to the ticker too)
+- Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance, where the ball is and the last play (each has its own switch; the clock keeps its own row and never goes in the ticker)
 - Full-screen splashes in your team's color for touchdowns, field goals, extra points and two-point conversions, the opponent's scores acknowledged in theirs, and a victory splash on a win
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs and goals get the fireworks too
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
