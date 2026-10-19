@@ -49,16 +49,29 @@ ADDR2LINE_GLOBS = [
 ADDR_RE = re.compile(r"^\s*(PC|BT\d+):\s*0x([0-9A-Fa-f]{8})")
 FOREIGN_ADDR_RE = re.compile(r"^\s*(pc|bt\d+):\s*0x([0-9A-Fa-f]{8})")
 FOREIGN_MARK = "Captured by a different firmware build"
+# "Other core (1) backtrace:", or "other core (1):" in a foreign report.
+OTHER_CORE_RE = re.compile(r"^\s*[Oo]ther core \((\d)\)")
+
+
+def address_groups(report, foreign_ok=False):
+    """[(title, [(label, '0x...')])]: the crashed core's PC and backtrace, then
+    the other core's when the report has one. They are separate stacks, so
+    each is decoded on its own; one list would read as a single call chain."""
+    groups = [("Crashed core", [])]
+    for line in report.splitlines():
+        m = OTHER_CORE_RE.match(line)
+        if m:
+            groups.append((f"Other core ({m.group(1)})", []))
+            continue
+        m = ADDR_RE.match(line) or (foreign_ok and FOREIGN_ADDR_RE.match(line))
+        if m:
+            groups[-1][1].append((m.group(1), "0x" + m.group(2).upper()))
+    return [(title, addrs) for title, addrs in groups if addrs]
 
 
 def addresses(report, foreign_ok=False):
     """[(label, '0x...')] for the PC and backtrace lines, in order."""
-    out = []
-    for line in report.splitlines():
-        m = ADDR_RE.match(line) or (foreign_ok and FOREIGN_ADDR_RE.match(line))
-        if m:
-            out.append((m.group(1), "0x" + m.group(2).upper()))
-    return out
+    return [a for _, addrs in address_groups(report, foreign_ok) for a in addrs]
 
 
 def is_foreign(report):
@@ -142,6 +155,8 @@ def decode(addr2line, elf, addrs):
 
 
 def selftest():
+    # The report the firmware saves (the same text tests/test_parse.cpp's
+    # test_crash_capture builds): the other core's backtrace counts from BT0.
     report = (
         "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
         "  Reason: Fault - LoadProhibited (cause 28)\n"
@@ -151,11 +166,14 @@ def selftest():
         "  BT0: 0x40386CDF  (backtrace)\n"
         "  BT1: 0x421736DD  (backtrace)\n"
         "  Other core (1) backtrace:\n"
-        "  BT2: 0x4038665D  (backtrace)\n"
+        "  BT0: 0x4038665D  (backtrace)\n"
     )
     got = addresses(report)
     assert got == [("PC", "0x40055EBF"), ("BT0", "0x40386CDF"), ("BT1", "0x421736DD"),
-                   ("BT2", "0x4038665D")], got
+                   ("BT0", "0x4038665D")], got
+    groups = address_groups(report)
+    assert groups == [("Crashed core", [("PC", "0x40055EBF"), ("BT0", "0x40386CDF"), ("BT1", "0x421736DD")]),
+                      ("Other core (1)", [("BT0", "0x4038665D")])], groups
     assert not is_foreign(report)
     foreign = (
         "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
@@ -164,10 +182,14 @@ def selftest():
         "  Captured by a different firmware build; addresses belong to that build's ELF\n"
         "  pc: 0x40055ebf\n"
         "  bt0: 0x40386cdf\n"
+        "  other core (0):\n"
+        "  bt1: 0x4038665d\n"
     )
     assert is_foreign(foreign)
     assert addresses(foreign) == [], addresses(foreign)
-    assert addresses(foreign, foreign_ok=True) == [("pc", "0x40055EBF"), ("bt0", "0x40386CDF")]
+    assert address_groups(foreign, foreign_ok=True) == [
+        ("Crashed core", [("pc", "0x40055EBF"), ("bt0", "0x40386CDF")]),
+        ("Other core (0)", [("bt1", "0x4038665D")])], address_groups(foreign, foreign_ok=True)
     assert asset_name("scoreboard75") == "firmware-scoreboard75.zip"
     assert build_matches(1760000000, 1760000000 + 600)
     assert not build_matches(1760000000, 1760000000 + 86400)
@@ -201,8 +223,8 @@ def main():
     print(report.rstrip() or "(no backtrace: a brownout, or the crash handler had nothing)")
 
     foreign = is_foreign(report)
-    addrs = addresses(report, foreign_ok=foreign)
-    if addrs:
+    groups = address_groups(report, foreign_ok=foreign)
+    if groups:
         elf = args.elf
         if foreign and not elf:
             print("\nThis report came from a different build than the one that saved it (an update that "
@@ -218,8 +240,12 @@ def main():
             else:
                 elf = release_elf(version, variant)
         if elf:
+            addr2line = find_addr2line(args.addr2line)
             print(f"\nDecoded with {elf}:")
-            print(decode(find_addr2line(args.addr2line), elf, addrs).rstrip())
+            for title, addrs in groups:
+                if len(groups) > 1:
+                    print(f"\n{title}:")
+                print(decode(addr2line, elf, addrs).rstrip())
 
     if args.clear and args.host:
         print("\nCleared." if clear(args.host) else "\nClear failed.")
