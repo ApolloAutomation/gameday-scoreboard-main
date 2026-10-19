@@ -474,9 +474,14 @@ jobs:
           v=$(git show origin/main:firmware/gameday-common.yaml | sed -n 's/^  version: "\(.*\)"$/\1/p' | head -n1)
           # A repo with no release yet has no live site to republish; the
           # files wait on the beta-firmware prerelease for the first release.
-          if ! tag=$(gh release view --json tagName --jq .tagName 2>/dev/null); then
-            echo "::warning::There is no release yet, so the site isn't live and this beta reaches it with the first release. The files are on the beta-firmware prerelease."
-            exit 0
+          # Only gh's "release not found" counts; any other error fails here.
+          if ! tag=$(gh release view --json tagName --jq .tagName 2>"$RUNNER_TEMP/release.err"); then
+            if grep -q 'release not found' "$RUNNER_TEMP/release.err"; then
+              echo "::warning::There is no release yet, so the site isn't live and this beta reaches it with the first release. The files are on the beta-firmware prerelease."
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/release.err" >&2
+            exit 1
           fi
           if [ "v$v" != "$tag" ]; then
             echo "::warning::main is at v$v and the latest release is $tag, so this beta reaches the site with the v$v release, not now."
@@ -651,7 +656,7 @@ jobs:
           {
             cat notes/notes.md
             echo
-            echo "Install or update from the [flasher page]($SITE_URL/), or let a panel already running v0.2.2 or later update itself from its device page."
+            echo "Install or update from the [flasher page]($SITE_URL/), or let a panel already running a release from this repository update itself from its device page."
             if [ -n "$PREV" ]; then
               echo
               echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${GITHUB_REF_NAME}"

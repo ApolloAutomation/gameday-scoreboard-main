@@ -66,10 +66,15 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml | head -n1)
-          if ! TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null); then
-            echo "::warning::There is no release yet, so there is no firmware to publish with the site. The first release's tag deploy publishes it."
-            echo "go=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          # Only gh's "release not found" counts; any other error fails here.
+          if ! TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>"$RUNNER_TEMP/release.err"); then
+            if grep -q 'release not found' "$RUNNER_TEMP/release.err"; then
+              echo "::warning::There is no release yet, so there is no firmware to publish with the site. The first release's tag deploy publishes it."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/release.err" >&2
+            exit 1
           fi
           echo "source version $VERSION, latest release $TAG"
           if { [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$FROM_BETA" != true ]; } || [ "v$VERSION" = "$TAG" ]; then
