@@ -515,6 +515,34 @@ test("favorites post the whole list in order on add, move and remove", async ({ 
   ]);
 });
 
+test("moving and removing favorites from the keyboard keeps the focus on the list", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const rows = page.locator("#favCtls .ctl.fav");
+  await expect(rows).toHaveCount(3);
+  // Move down follows the team it moved, so Enter again moves it on.
+  await rows.nth(0).getByRole("button", { name: "Move down" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "nfl:34,nfl:6,ncaa:145" });
+  await expect(rows.nth(1).getByRole("button", { name: "Move down" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "nfl:34,ncaa:145,nfl:6" });
+  await expect(rows.nth(2).getByRole("button", { name: "Move down" })).toBeFocused();
+  // Remove lands on the row that took its place, or on the one above for the last row.
+  await rows.nth(0).getByRole("button", { name: "Remove" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "ncaa:145,nfl:6" });
+  await expect(rows.nth(0).getByRole("button", { name: "Remove" })).toBeFocused();
+  await rows.nth(1).getByRole("button", { name: "Remove" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "ncaa:145" });
+  await expect(rows.nth(0).getByRole("button", { name: "Remove" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "" });
+  await expect(page.locator("#favAdd")).toBeFocused();
+  await expect(page.locator("#favCtls .ctl.fav label")).toHaveCount(0);
+});
+
 test("the favorites list stops offering Add a favorite at the panel's limit", async ({ page, request }) => {
   const mlb = (n) => Array.from({ length: n }, (_, i) => ({ l: "mlb", id: i + 1 }));
   await reset(request, { favs: mlb(15) });

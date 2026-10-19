@@ -687,10 +687,17 @@
   const postFavs = (keys) => setGD({ favs: keys.join(",") });
   const renderFavs = () => {
     const host = $("#favCtls");
+    // Where the keyboard was, so the rebuilt list puts it back: the same
+    // button on the same team's row, or on the row now in a removed one's place.
+    const a = document.activeElement;
+    const was = a && host.contains(a) && a.closest(".ctl.fav")
+      ? { key: a.closest(".ctl.fav").dataset.key, title: a.title, at: Array.from(host.children).indexOf(a.closest(".ctl.fav")) }
+      : null;
     host.innerHTML = "";
     favKeys.forEach((key, i) => {
       const t = teamByKey(key);
       const row = el("div", "ctl fav");
+      row.dataset.key = key;
       const img = el("img");
       img.loading = "lazy";
       img.alt = "";
@@ -723,6 +730,12 @@
     });
     if (!favKeys.length) host.appendChild(el("p", "hint", "No favorites yet."));
     $("#favAdd").hidden = favKeys.length >= favMax();
+    if (was) {
+      const rows = Array.from(host.querySelectorAll(".ctl.fav"));
+      const row = rows.find((r) => r.dataset.key === was.key) || rows[Math.min(was.at, rows.length - 1)];
+      const b = row && Array.from(row.querySelectorAll("button")).find((x) => x.title === was.title);
+      (b || $("#favAdd")).focus();
+    }
   };
   const addFav = (t) => {
     const key = keyOf(t);
