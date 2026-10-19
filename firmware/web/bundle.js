@@ -264,8 +264,8 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     <div class="sheet">
       <div class="head">
         <input type="search" id="q" placeholder="Search teams" aria-label="Search teams" autocomplete="off">
-        <div class="tabs" role="tablist" aria-label="Leagues"><button data-lg="now" class="on" role="tab" aria-selected="true" aria-controls="tiles">On now</button></div>
         <button class="btn" id="close">Close</button>
+        <div class="tabs" role="tablist" aria-label="Leagues"><button data-lg="now" class="on" role="tab" aria-selected="true" aria-controls="tiles">On now</button></div>
       </div>
       <div class="tiles" id="tiles" role="tabpanel"></div>
     </div>

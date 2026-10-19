@@ -195,14 +195,16 @@ button { font: inherit; color: inherit; }
   width: min(760px, 94vw); max-height: 92vh; overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
 }
-.sheet .head { display: flex; gap: 10px; align-items: center; position: sticky; top: -14px; background: var(--panel); padding: 6px 0 10px; z-index: 1; }
+.sheet .head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; position: sticky; top: -14px; background: var(--panel); padding: 6px 0 10px; z-index: 1; }
 .sheet input[type=search] {
-  flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 10px; padding: 10px 12px; font-size: 15px; outline: none;
 }
 .sheet input[type=search]:focus { border-color: var(--accent); }
-.tabs { display: flex; gap: 6px; }
-.tabs button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+/* The league tabs take a row of their own under the search box and Close, and
+   wrap, so every league and Close stay on screen at any width. */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.tabs button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px; white-space: nowrap; }
 .tabs button.on { background: var(--accent); border-color: var(--accent); color: #041022; font-weight: 700; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 10px; }
 .tile {

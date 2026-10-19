@@ -900,6 +900,22 @@ test("the picker has a tab per league and follows a team from another sport", as
   await expect(page.locator("#curLg")).toHaveText("NHL");
 });
 
+test("the picker's league tabs and Close fit on screen, on a small phone and on a computer", async ({ page, request }) => {
+  await reset(request);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto("/");
+    await page.locator("#pick").click();
+    await expect(page.locator("#modal")).toHaveClass(/open/);
+    const sheet = await page.locator(".sheet").evaluate((s) => [s.scrollWidth, s.clientWidth]);
+    expect(sheet[0], `the sheet scrolls sideways at ${width}px`).toBeLessThanOrEqual(sheet[1]);
+    await expect(page.locator("#close")).toBeInViewport({ ratio: 1 });
+    for (const tab of await page.locator(".tabs button").all()) await expect(tab).toBeInViewport({ ratio: 1 });
+    await page.locator("#close").click();
+    await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  }
+});
+
 test("other sports show their situation line and no timeout pips", async ({ page, request }) => {
   const mlb = {
     s: "IN", l: "mlb", sport: 1, ta: "NYY", ti: 10, ts: 3, oa: "TOR", oi: 14, os: 2, p: 0, tt: 0, ot: 0,
