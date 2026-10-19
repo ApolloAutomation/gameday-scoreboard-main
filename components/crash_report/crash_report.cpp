@@ -13,6 +13,7 @@
 
 #include <esp_attr.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 
 #include <cinttypes>
 #include <cstring>
@@ -24,8 +25,6 @@ namespace crash_report {
 static const char *const TAG = "crash_report";
 // The crash handler's log tag; only its lines go into the report.
 static const char *const HANDLER_TAG = "esp32.crash";
-// Anything earlier is a clock that was never set.
-static constexpr time_t CLOCK_VALID = 1700000000;
 
 CrashReport *global_crash_report = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -73,8 +72,7 @@ void CrashReport::setup() {
 #endif
     r.version[VERSION_SIZE - 1] = '\0';
     // The clock survives a soft reset, so it is often already set.
-    const time_t now = ::time(nullptr);
-    r.time = now >= CLOCK_VALID ? (uint32_t) now : 0;
+    r.time = boot_time(::time(nullptr), esp_timer_get_time() / 1000000);
     this->need_time_ = r.time == 0;
     r.report[0] = '\0';
     this->report_len_ = 0;
@@ -117,11 +115,11 @@ void CrashReport::loop() {
     ESP_LOGI(TAG, "Crash report cleared");
   }
   if (this->need_time_) {
-    const time_t now = ::time(nullptr);
-    if (now >= CLOCK_VALID) {
+    const uint32_t at = boot_time(::time(nullptr), esp_timer_get_time() / 1000000);
+    if (at != 0) {
       std::lock_guard<std::mutex> lock(this->mutex_);
       if (this->record_ != nullptr) {
-        this->record_->time = (uint32_t) now;
+        this->record_->time = at;
         this->save_();
       }
       this->need_time_ = false;

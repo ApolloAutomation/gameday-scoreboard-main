@@ -64,6 +64,16 @@ inline Save save_for_start(int reason, bool planned) {
   return Save::NOTHING;
 }
 
+// Anything earlier is a clock that was never set.
+static constexpr int64_t CLOCK_VALID = 1700000000;
+
+// Record::time: the clock when this start began, from the clock now and the
+// seconds since, or 0 while the clock isn't set. A clock that comes a while
+// after the start (Wi-Fi was down) still gives the start's time.
+inline uint32_t boot_time(int64_t now, int64_t uptime_s) {
+  return now >= CLOCK_VALID ? (uint32_t) (now - uptime_s) : 0;
+}
+
 // The "reason" in GET /gameday/crash, which scripts/crash_report.py prints.
 inline const char *reason_name(int reason) {
   switch (reason) {

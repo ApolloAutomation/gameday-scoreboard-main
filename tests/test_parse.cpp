@@ -4091,6 +4091,12 @@ static void test_crash_save() {
       CHECK(saves == fault);
     }
   }
+  // The time saved is the start's, also when the clock comes minutes later.
+  const int64_t now = 1792000000;  // 2026-10-16
+  CHECK_EQ(boot_time(now, 2), (uint32_t) (now - 2));
+  CHECK_EQ(boot_time(now + 3600, 3600), (uint32_t) now);
+  CHECK_EQ(boot_time(1000, 5), 0u);  // no clock yet
+  CHECK_EQ(boot_time(CLOCK_VALID - 1, 0), 0u);
 }
 
 static void test_heat_guard() {
