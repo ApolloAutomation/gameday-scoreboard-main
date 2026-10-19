@@ -1464,7 +1464,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept,"
     + " and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows."
-    + " To set it up again, use the Game Day app or join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
   await expect(page.locator("#board")).toHaveClass(/dim/);
   await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
 
@@ -1473,7 +1473,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await page.locator("#actions button", { hasText: "Factory reset" }).click();
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into setup with everything erased, so this page won't reconnect."
-    + " To set it up again, use the Game Day app or join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
   // The mock still answers, but the page has stopped asking it.
   const asked = [];
   page.on("request", (r) => { if (r.url().startsWith(baseURL)) asked.push(r.url()); });

@@ -1463,7 +1463,7 @@
     clearTimeout(stateTimer);
     setConn(false);
     const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-    showRestart(why + " To set it up again, use the Game Day app or join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
+    showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
   };
 
   // ---- check for updates -----------------------------------------------------
