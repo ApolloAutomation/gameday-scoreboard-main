@@ -2770,6 +2770,26 @@ static void test_badge() {
   CHECK(b.dark_text && b.has_ring && b.ring == 0x1E5AA8);
 }
 
+// The badge thresholds to the step, on grays: black text only above 600, the
+// gray ring only below 120, as in the app.
+static void test_badge_thresholds() {
+  CHECK_EQ(badge_luminance(0x999999), kBadgeDarkTextLum);
+  CHECK(!badge_style(0x999999, 0x999999).dark_text);
+  CHECK(badge_style(0x9A9A9A, 0x9A9A9A).dark_text);
+  CHECK(badge_luminance(0x1E1E1E) < kBadgeNearBlackLum);
+  CHECK(badge_luminance(0x1F1F1F) > kBadgeNearBlackLum);
+  BadgeStyle b = badge_style(0x1E1E1E, 0x1E1E1E);
+  CHECK(b.has_ring && b.ring == kBadgeNeutralRing);
+  b = badge_style(0x1F1F1F, 0x1F1F1F);
+  CHECK(!b.has_ring);
+  // A near-black fill with a ring just light enough keeps it.
+  b = badge_style(0x000000, 0x1F1F1F);
+  CHECK(b.has_ring && b.ring == 0x1F1F1F);
+  // Green weighs most: a pure green is light, a pure blue dark.
+  CHECK(badge_style(0x00FF00, 0x00FF00).dark_text);
+  CHECK(!badge_style(0x0000FF, 0x0000FF).dark_text);
+}
+
 // The demo build's matchups, made-up teams and script (demo.h).
 static void test_demo() {
   auto abbrs = [](DemoMatchup m) { return std::string(m.home->abbr) + "-" + m.away->abbr; };
@@ -5024,6 +5044,7 @@ int main() {
   test_timezone_index();
   test_postseason();
   test_badge();
+  test_badge_thresholds();
   test_demo();
   test_recap();
   test_recap_share();
