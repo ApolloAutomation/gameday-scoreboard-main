@@ -103,6 +103,8 @@
     {"name": "two panels", "set": [["panels", "2"]], "expect": {"panels": 2}},
     {"name": "zero panels is refused", "start": {"panels": 2}, "set": [["panels", "0"]], "expect": {"panels": 2}},
     {"name": "more panels than the build drives is refused", "set": [["panels", "3"]], "expect": {"panels": 1}},
+    {"name": "a panel count past a byte is refused, not wrapped to one panel", "start": {"panels": 2}, "set": [["panels", "257"]], "expect": {"panels": 2}},
+    {"name": "a negative panel count is refused, not wrapped to two panels", "set": [["panels", "-254"]], "expect": {"panels": 1}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

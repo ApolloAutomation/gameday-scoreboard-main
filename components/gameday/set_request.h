@@ -153,7 +153,7 @@ enum class SetKind : uint8_t {
   PLAY,      // on
   ODDS,      // on
   OPP,       // on
-  PANELS,    // value; PanelLayout refuses a count it can't drive
+  PANELS,    // value, 1-255; PanelLayout refuses a count it can't drive
   BOOTADDR,  // on
   LOCKON,    // value, minutes
   RELEASE,   // value, seconds
@@ -221,9 +221,11 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k == "panels") {
+    // PanelLayout takes the count as a byte and refuses one it can't drive;
+    // a value that doesn't fit would wrap first (257 to one panel).
     op.kind = SetKind::PANELS;
     op.value = read_int(v);
-    return true;
+    return op.value >= 1 && op.value <= UINT8_MAX;
   }
   if (k == "tz") {
     op.kind = SetKind::TZ;

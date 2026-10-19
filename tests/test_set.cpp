@@ -152,10 +152,13 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::BOOTADDR: s.bootaddr = op.on; break;
     case SetKind::AUTOUPD: s.autoupd = op.on; break;
     case SetKind::BETA: s.beta = op.on; break;
-    case SetKind::PANELS:
-      if (op.value >= 1 && op.value <= kMaxCols)
-        s.panels = op.value;
+    case SetKind::PANELS: {
+      // apply_set_ hands PanelLayout::set_cols a byte.
+      const uint8_t cols = (uint8_t) op.value;
+      if (cols >= 1 && cols <= kMaxCols)
+        s.panels = cols;
       break;
+    }
   }
 }
 
@@ -256,6 +259,9 @@ void test_parse_set() {
   SCHECK(parse_set("mode", "5", op, kFavMax) && op.value == 5, "mode 5");
   SCHECK(!parse_set("mode", "6", op, kFavMax), "mode 6");
   SCHECK(parse_set("panels", "7", op, kFavMax) && op.value == 7, "panels passes the count through");
+  SCHECK(!parse_set("panels", "257", op, kFavMax), "panels 257 would wrap to 1 in PanelLayout's byte");
+  SCHECK(!parse_set("panels", "-254", op, kFavMax), "panels -254 would wrap to 2 in PanelLayout's byte");
+  SCHECK(!parse_set("panels", "0", op, kFavMax), "panels 0");
   SCHECK(parse_set("tz", "America/Chicago", op, kFavMax) && op.value == 1, "tz IANA");
   SCHECK(!parse_set("tz", "-1", op, kFavMax), "tz -1");
   SCHECK(parse_set("down", "1", op, kFavMax) && op.on, "down 1");
