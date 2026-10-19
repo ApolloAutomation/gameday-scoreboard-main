@@ -258,7 +258,7 @@
   </div>
 
   <div class="modal" id="modal">
-    <div class="sheet">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose a team">
       <div class="head">
         <input type="search" id="q" placeholder="Search teams" aria-label="Search teams" autocomplete="off">
         <button class="btn" id="close">Close</button>
@@ -949,7 +949,7 @@
           if (pickFav) return choose(t);
           setGD({ team: keyOf(t) });
           toast("Now following the " + t[3]);
-          $("#modal").classList.remove("open");
+          closePicker();
         };
         return b;
       };
@@ -972,7 +972,7 @@
       setGD({ team: keyOf(t) });
       toast("Now following the " + t[3]);
     }
-    $("#modal").classList.remove("open");
+    closePicker();
   };
   let league = "now";
   const renderTiles = () => {
@@ -1006,8 +1006,13 @@
   };
   $("#pick").onclick = () => openPicker(false);
   $("#favAdd").onclick = () => openPicker(true);
+  // A dialog: Tab stays inside it, and closing hands focus back to the
+  // button that opened it.
+  let pickerFrom = null;
   const openPicker = async (fav) => {
     pickFav = fav;
+    pickerFrom = document.activeElement;
+    $(".sheet").setAttribute("aria-label", fav ? "Add a favorite" : "Choose a team");
     const cur = S ? teamByKey(refKey(S.team)) : null;
     league = cur ? cur[0] : "nfl";
     try {
@@ -1048,9 +1053,23 @@
     };
   });
   $("#q").oninput = renderTiles;
-  $("#close").onclick = () => $("#modal").classList.remove("open");
-  $("#modal").onclick = (ev) => { if (ev.target.id === "modal") $("#modal").classList.remove("open"); };
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") $("#modal").classList.remove("open"); });
+  const closePicker = () => {
+    if (!$("#modal").classList.contains("open")) return;
+    $("#modal").classList.remove("open");
+    if (pickerFrom && pickerFrom.isConnected) pickerFrom.focus();
+    pickerFrom = null;
+  };
+  $("#close").onclick = closePicker;
+  $("#modal").onclick = (ev) => { if (ev.target.id === "modal") closePicker(); };
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closePicker(); });
+  $("#modal").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Tab") return;
+    const all = Array.from($(".sheet").querySelectorAll("input, button:not([disabled])")).filter((n) => n.tabIndex >= 0);
+    if (!all.length) return;
+    const first = all[0], last = all[all.length - 1];
+    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+  });
 
   const renderCurrentTeam = () => {
     const t = S ? teamByKey(refKey(S.team)) : null;

@@ -916,6 +916,32 @@ test("the picker's league tabs and Close fit on screen, on a small phone and on 
   }
 });
 
+test("the picker is a dialog that keeps the keyboard inside and hands focus back when it closes", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#curName")).toHaveText("Dallas Cowboys");
+  const inDialog = () => page.evaluate(() => !!document.activeElement.closest('[role="dialog"]'));
+  await page.locator("#pick").focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Choose a team" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(page.getByRole("searchbox", { name: "Search teams" })).toBeFocused();
+  // Shift+Tab from the first control wraps to the last, Tab from the last back to the first.
+  await page.keyboard.press("Shift+Tab");
+  expect(await inDialog()).toBe(true);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("searchbox", { name: "Search teams" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("#pick")).toBeFocused();
+
+  await page.locator("#favAdd").click();
+  await expect(page.getByRole("dialog", { name: "Add a favorite" })).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#favAdd")).toBeFocused();
+});
+
 test("other sports show their situation line and no timeout pips", async ({ page, request }) => {
   const mlb = {
     s: "IN", l: "mlb", sport: 1, ta: "NYY", ti: 10, ts: 3, oa: "TOR", oi: 14, os: 2, p: 0, tt: 0, ot: 0,
