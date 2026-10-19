@@ -530,6 +530,21 @@ test("the favorites list stops offering Add a favorite at the panel's limit", as
   await expect(page.locator("#favCtls .ctl.fav").nth(4).locator("small")).toHaveText("MLB");
 });
 
+test("a favorite names the remote button the panel gives it, with an empty slot before it", async ({ page, request }) => {
+  // Slots 1 and 3 emptied on their own (fav1=none, fav3=none): the panel keeps
+  // the Texans on button 2 and the Cowboys on button 4.
+  await reset(request, { favs: [{}, { l: "nfl", id: 34 }, {}, { l: "nfl", id: 6 }] });
+  await page.goto("/");
+  const rows = page.locator("#favCtls .ctl.fav");
+  await expect(rows.locator("label")).toHaveText([/^1\. Houston Texans/, /^2\. Dallas Cowboys/]);
+  await expect(rows.locator("small")).toHaveText(["NFL · remote button 2", "NFL · remote button 4"]);
+
+  // A move posts the whole list, which the panel saves from slot 1.
+  await rows.nth(0).getByRole("button", { name: "Move down" }).click();
+  await expectSet(request, { favs: "nfl:6,nfl:34" });
+  await expect(rows.locator("small")).toHaveText(["NFL · remote button 1", "NFL · remote button 2"]);
+});
+
 test("Live games chips post the leagues, and move an old live mode to mode 5", async ({ page, request }) => {
   await reset(request, { mode: 5, live: ["mlb", "nhl"], live_auto: false });
   await page.goto("/");

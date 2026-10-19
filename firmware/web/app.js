@@ -677,6 +677,10 @@
   // Favorites: one row per team in priority order. Every change posts the
   // whole list (favs=) so the device always sees one ordered list.
   let favKeys = [];
+  // Each favorite's slot on the panel, which is its WizMote button for the
+  // first four. A slot emptied on its own (fav1=none, as the app can post)
+  // leaves a gap the list skips.
+  let favSlots = [];
   const favMax = () => (S && S.favmax) || 4;
   // renderSettings() redraws the list from S, which already carries the post.
   const postFavs = (keys) => setGD({ favs: keys.join(",") });
@@ -692,7 +696,8 @@
       if (t) img.src = logoUrl(t[0], t[1], t[2]);
       row.appendChild(img);
       const name = el("label", null, (i + 1) + ". " + (t ? t[3] : key));
-      if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (i < 4 ? " · remote button " + (i + 1) : "")));
+      const slot = favSlots[i] ?? i;
+      if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (slot < 4 ? " · remote button " + (slot + 1) : "")));
       row.appendChild(name);
       const ctl = el("span", "favmove");
       const mk = (label, title, fn) => {
@@ -728,9 +733,11 @@
   const renderSettings = () => {
     if (!S) return;
     document.querySelectorAll(".sw[data-set]").forEach((sw) => setOn(sw, !!S[sw.dataset.set], "aria-checked"));
-    const keys = (S.favs || []).map(refKey).filter(Boolean);
-    if (keys.join(",") !== favKeys.join(",")) {
+    const keys = [], slots = [];
+    (S.favs || []).forEach((t, i) => { if (refKey(t)) { keys.push(refKey(t)); slots.push(i); } });
+    if (keys.join(",") !== favKeys.join(",") || slots.join(",") !== favSlots.join(",")) {
       favKeys = keys;
+      favSlots = slots;
       renderFavs();
     } else {
       $("#favAdd").hidden = favKeys.length >= favMax();
