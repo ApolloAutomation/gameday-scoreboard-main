@@ -274,6 +274,56 @@ static void test_over_under_values() {
   CHECK(status_text(s, TickerOptions{}, "Sun 1:00 PM").find("O/U") == std::string::npos);
 }
 
+// Documents with parts missing, empty or null, in every sport: each parser
+// says no rather than inventing a game, and a game with only some fields
+// still reads and draws.
+static void test_odd_documents() {
+  const Sport sports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
+  for (Sport sport : sports) {
+    GameSnapshot x;
+    CHECK(!parse_event_str(R"({"id":"1"})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":null})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":[]}]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":null}]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":[{"id":"4"},{"id":"5"}]}]})", sport, 3, x,
+                           "1"));  // not our game
+    CHECK(!x.valid);
+    // Our side and nothing else: no status, no score, no opponent.
+    GameSnapshot g;
+    CHECK(parse_event_str(
+        R"({"id":"1","status":null,"competitions":[{"situation":null,"odds":null,"competitors":[{"id":"3","score":null,"team":null},{"homeAway":"away"}]}]})",
+        sport, 3, g, "1"));
+    CHECK(g.valid);
+    CHECK(g.state == GameState::PRE);
+    CHECK_EQ(g.team_score, 0);
+    CHECK_EQ(g.opp_id, (uint32_t) 0);
+    CHECK(g.opp_abbr.empty());
+    CHECK(g.over_under.empty());
+    TickerOptions all;
+    status_text(g, all, "");
+    clock_text(g);
+    ha_status_text(g, "");
+  }
+  GameSnapshot x;
+  CHECK(!parse_scoreboard_str(R"({"events":null})", "1", 3, x));
+  CHECK(!parse_scoreboard_str(R"({"events":[{"id":"1","competitions":[]}]})", "1", 3, x));
+  std::vector<LiveGame> live;
+  int64_t next = 5;
+  std::string scan = R"({"events":[{"status":{"type":{"state":"in"}},"competitions":[]}]})";
+  CHECK(parse_live_games(scan, live, &next));
+  CHECK(live.empty());  // a live game with no id or sides is not followed
+  CHECK_EQ(next, (int64_t) 0);
+  std::vector<Upcoming> up;
+  CHECK(parse_upcoming_str(R"({"events":[]})", 3, 4, up));
+  CHECK(up.empty());
+  Schedule s;
+  CHECK(parse_team_str(R"({"team":{}})", s));
+  CHECK(s.valid);
+  CHECK(s.event_id.empty());
+  CHECK(!parse_team_str(R"({"code":404})", s));
+}
+
 static bool same_snapshot(const GameSnapshot &a, const GameSnapshot &b) {
   return a.valid == b.valid && a.state == b.state && a.event_id == b.event_id && a.kickoff_epoch == b.kickoff_epoch &&
          a.completed == b.completed && a.short_detail == b.short_detail && a.display_clock == b.display_clock &&
@@ -4308,6 +4358,7 @@ int main() {
   test_scoreboard_post();
   test_event_live();
   test_over_under_values();
+  test_odd_documents();
   test_event_matches_scoreboard();
   test_scoreboard_pre_nfl();
   test_splash();
