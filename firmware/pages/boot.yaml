@@ -602,7 +602,8 @@ script:
             return;
           }
           const int stage = held >= 30000 ? 5 : held >= 20000 ? 4 : held >= 10000 ? 3 : 2;
-          // Whole seconds left in this stage, so the countdown reads 10..1.
+          // Whole seconds left in this stage, so the countdown reads 5..1 in
+          // stage 2 and 10..1 in stages 3 and 4.
           const uint32_t stage_end = stage == 2 ? 10000 : stage == 3 ? 20000 : 30000;
           const unsigned left = stage == 5 ? 0 : (unsigned) ((stage_end - held + 999) / 1000);
           static int shown = -1;
