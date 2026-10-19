@@ -17,7 +17,7 @@ A board you built installs from the [DIY installer](https://apolloautomation.git
 
 ## Layout default
 
-The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where Factory Reset returns it. If you installed the 128x64 choice and then reset, pick the 128x64 layout again on the device page.
+The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where a factory reset returns it. A board installed with the 128x64 choice switches to the one-panel build at its first update. A factory reset after that returns it to 64x64 too, so pick the 128x64 layout again on the device page.
 
 ## The boot button
 
