@@ -1059,6 +1059,23 @@ test("the timezone line's choose manually and follow this browser work from the 
   await expectSet(request, { tzauto: "1" });
 });
 
+test("the timezone line's button keeps the keyboard focus through the page's regular re-read", async ({ page, request }) => {
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  let reads = 0;
+  page.on("request", (r) => { if (r.url().includes("/gameday/state")) reads++; });
+  const choose = page.getByRole("button", { name: "choose manually" });
+  await choose.focus();
+  await page.clock.fastForward(16000);
+  await expect.poll(() => reads).toBeGreaterThan(0);
+  await sleep(300);
+  await expect(choose).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#tzpick")).toBeVisible();
+});
+
 test("the panel picker posts the new layout", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");

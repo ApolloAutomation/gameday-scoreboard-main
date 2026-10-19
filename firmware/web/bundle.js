@@ -1127,37 +1127,39 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   const tzsel = $("#tzsel");
   TZS.forEach((z, i) => { const o = el("option", null, z[0]); o.value = String(i); tzsel.appendChild(o); });
   tzsel.onchange = () => { setGD({ tzauto: 0, tz: tzsel.value }); $("#tzpick").hidden = true; };
+  // The line's parts are made once and only their words change, so a redraw
+  // never takes the keyboard focus off the button. A button, not a bare
+  // link, so the keyboard and screen readers reach it.
+  const tzName = el("b");
+  const tzHow = el("span", "muted");
+  const tzLink = el("button", "lnk");
   const renderTime = () => {
     if (!S) return;
+    if (!tzName.isConnected) $("#tzline").replaceChildren(tzName, tzHow, tzLink);
     const cur = S.tz_name || "";
     const auto = !!S.tz_auto;
     const mine = browserZoneName();
     const mineIdx = mine ? TZS.findIndex((z) => z[0] === mine) : -1;
-    const line = $("#tzline");
     const pick = $("#tzpick");
     if (document.activeElement !== tzsel) tzsel.value = String(S.tz);
-    line.innerHTML = "";
-    line.appendChild(el("b", null, cur || "Not set"));
-    // A button, not a bare link, so the keyboard and screen readers reach it.
-    const link = el("button", "lnk");
+    tzName.textContent = cur || "Not set";
     if (auto) {
-      line.appendChild(el("span", "muted", mine ? " · set from this browser" : " · this browser's zone is not in the list"));
-      link.textContent = "choose manually";
-      link.onclick = () => { pick.hidden = !pick.hidden; };
+      tzHow.textContent = mine ? " · set from this browser" : " · this browser's zone is not in the list";
+      tzLink.textContent = "choose manually";
+      tzLink.onclick = () => { pick.hidden = !pick.hidden; };
       if (mine && mine !== cur && mineIdx >= 0 && !tzApplied) {
         tzApplied = true;
         setGD({ tz: mineIdx });
         toast("Timezone set to " + mine + " from this browser");
       }
     } else {
-      line.appendChild(el("span", "muted", " · chosen by hand"));
-      link.textContent = mine ? "follow this browser (" + mine + ")" : "change";
-      link.onclick = () => {
+      tzHow.textContent = " · chosen by hand";
+      tzLink.textContent = mine ? "follow this browser (" + mine + ")" : "change";
+      tzLink.onclick = () => {
         if (mine) { tzApplied = false; setGD({ tzauto: 1 }); pick.hidden = true; }
         else pick.hidden = !pick.hidden;
       };
     }
-    line.appendChild(link);
   };
 
   // ---- up next + splash (from the state document) -------------------------------
