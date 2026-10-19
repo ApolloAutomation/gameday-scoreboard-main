@@ -1,5 +1,11 @@
 # Game Day Scoreboard
 
+## Credits and thanks
+
+- **Brandon Harvey ([@bharvey88](https://github.com/bharvey88))** built Game Day Scoreboard for Apollo Automation. Thank you, Brandon, for all the work that went into it, and for releasing it under the MIT license, so everyone can use, change and share it (see [LICENSE](LICENSE)).
+- Apollo Automation maintains the project.
+- It is built on [hub75-studio](https://github.com/pavlov-net/hub75-studio)'s LVGL pages and controller packages, and on the attribute model of the [ha-teamtracker](https://github.com/vasqued2/ha-teamtracker) integration. Thanks to both projects.
+
 ![Touchdown fireworks on the panel](docs/site/media/touchdown.gif)
 
 A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League.
@@ -96,10 +102,6 @@ updates are not password protected. That is a deliberate trade: it keeps
 setup to one tap in the app and keeps the panel working when your phone
 is the only thing that knows it exists. It is not designed to be exposed
 to the internet, so do not forward a port to it.
-
-## Credits
-
-Built on hub75-studio's LVGL pages and controller packages, and on the attribute model of the ha-teamtracker integration. Thanks to both projects.
 
 ## Contributing
 
