@@ -160,10 +160,16 @@ inline void fill_team_game_filter(JsonDocument &f) {
   comp["competitors"].add<JsonObject>()["id"] = true;
 }
 
+// Totals run from 2.5 (soccer) to the 200s (basketball). A value this far out
+// is not one, and casting it to int would be undefined behavior.
+static const float kOverUnderLimit = 10000.0f;
+
 inline std::string format_over_under(JsonVariantConst v) {
   if (v.isNull())
     return "";
   float f = v.as<float>();
+  if (!(f > -kOverUnderLimit && f < kOverUnderLimit))  // also false for NaN
+    return "";
   char buf[16];
   if (f == (int) f)
     snprintf(buf, sizeof(buf), "%d", (int) f);

@@ -238,6 +238,42 @@ static void test_event_live() {
   CHECK_EQ(sea.game_name, std::string("Super Bowl LX"));
 }
 
+// The over/under as ESPN sends it, and values no total can have. A huge one
+// was undefined behavior in the cast to int (found by fuzz_espn); it now reads
+// as no over/under at all. Everything that read before reads the same.
+static void test_over_under_values() {
+  const std::string json = slurp("fixtures/event_nfl_pre.json");
+  const std::string from = "\"overUnder\":49.5";
+  CHECK(json.find(from) != std::string::npos);
+  auto with = [&](const char *value) {
+    std::string doc = json;
+    doc.replace(doc.find(from), from.size(), std::string("\"overUnder\":") + value);
+    GameSnapshot s;
+    CHECK(parse_event_str(doc, Sport::FOOTBALL, 3, s, "401872999"));
+    return s.over_under;
+  };
+  CHECK_EQ(with("49.5"), std::string("49.5"));
+  CHECK_EQ(with("47"), std::string("47"));
+  CHECK_EQ(with("2.5"), std::string("2.5"));
+  CHECK_EQ(with("228.5"), std::string("228.5"));
+  CHECK_EQ(with("2164294967296.5"), std::string(""));
+  CHECK_EQ(with("1e300"), std::string(""));
+  CHECK_EQ(with("-1e300"), std::string(""));
+  CHECK_EQ(with("-9999.5"), std::string("-9999.5"));
+  CHECK_EQ(with("9999.5"), std::string("9999.5"));
+  CHECK_EQ(with("10000"), std::string(""));
+  CHECK_EQ(with("-10000"), std::string(""));
+  CHECK_EQ(with("0"), std::string("0"));
+  CHECK_EQ(with("\"49.5\""), std::string("49.5"));  // ArduinoJson reads a number in a string
+  CHECK_EQ(with("null"), std::string(""));
+  // The ticker leaves the part out rather than showing "O/U " with nothing.
+  std::string doc = json;
+  doc.replace(doc.find(from), from.size(), "\"overUnder\":2164294967296.5");
+  GameSnapshot s;
+  CHECK(parse_event_str(doc, Sport::FOOTBALL, 3, s, "401872999"));
+  CHECK(status_text(s, TickerOptions{}, "Sun 1:00 PM").find("O/U") == std::string::npos);
+}
+
 static bool same_snapshot(const GameSnapshot &a, const GameSnapshot &b) {
   return a.valid == b.valid && a.state == b.state && a.event_id == b.event_id && a.kickoff_epoch == b.kickoff_epoch &&
          a.completed == b.completed && a.short_detail == b.short_detail && a.display_clock == b.display_clock &&
@@ -4250,6 +4286,7 @@ int main() {
   test_scoreboard_live();
   test_scoreboard_post();
   test_event_live();
+  test_over_under_values();
   test_event_matches_scoreboard();
   test_scoreboard_pre_nfl();
   test_splash();
