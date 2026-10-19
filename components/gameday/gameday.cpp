@@ -122,6 +122,9 @@ static const int LOOKAHEAD_DAYS = 3;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
+// apply_set_ and publish_selects_ index this with any mode parse_set takes.
+static_assert(sizeof(MODE_OPTIONS) / sizeof(MODE_OPTIONS[0]) == (size_t) ::espn::kModeCount,
+              "MODE_OPTIONS needs a name for every mode parse_set takes");
 static const uint32_t FAV_TICK = 1000;  // playlist / lock decisions re-run this often
 
 // Feeds ArduinoJson straight from the HTTP socket so a scoreboard document
