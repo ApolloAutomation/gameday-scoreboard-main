@@ -52,6 +52,8 @@ Want to change the firmware itself, for example to add your own API key? Build i
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
 
+The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
+
 Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues and the panel layout have no entities. Set them on the device page or in the app.
 
 :::note[Coming in the next release]

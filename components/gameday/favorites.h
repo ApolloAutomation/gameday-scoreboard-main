@@ -1,4 +1,4 @@
-// Favorite Teams mode: which of the four favorites the panel shows right now.
+// Favorite Teams mode: which of the favorites (up to 16) the panel shows right now.
 // Pure logic on epoch seconds, no ESPHome includes, so the host tests cover
 // the timing rules (lock-on, release, collisions, the idle playlist).
 #pragma once

@@ -15,14 +15,30 @@ CONF_MAX_COLS = "max_cols"
 panel_layout_ns = cg.esphome_ns.namespace("panel_layout")
 PanelLayout = panel_layout_ns.class_("PanelLayout", cg.Component)
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(): cv.declare_id(PanelLayout),
-        cv.Required(CONF_DISPLAY_ID): cv.use_id(hub75_display.HUB75Display),
-        cv.Optional(CONF_DEFAULT_COLS, default=1): cv.int_range(min=1, max=8),
-        cv.Optional(CONF_MAX_COLS, default=2): cv.int_range(min=1, max=8),
-    }
-).extend(cv.COMPONENT_SCHEMA)
+def _default_within_max(config):
+    # PanelLayout::setup() replaces a saved count above max_cols with the
+    # default, so a default above it would be saved again on every boot and
+    # drive more panels than set_cols() accepts.
+    if config[CONF_DEFAULT_COLS] > config[CONF_MAX_COLS]:
+        raise cv.Invalid(
+            f"default_cols ({config[CONF_DEFAULT_COLS]}) can't be more than "
+            f"max_cols ({config[CONF_MAX_COLS]})",
+            path=[CONF_DEFAULT_COLS],
+        )
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(PanelLayout),
+            cv.Required(CONF_DISPLAY_ID): cv.use_id(hub75_display.HUB75Display),
+            cv.Optional(CONF_DEFAULT_COLS, default=1): cv.int_range(min=1, max=8),
+            cv.Optional(CONF_MAX_COLS, default=2): cv.int_range(min=1, max=8),
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    _default_within_max,
+)
 
 
 async def to_code(config):

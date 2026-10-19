@@ -34,7 +34,8 @@ the same ground for people; this file is the short version.
   remembers (ESPHome keeps one), handed to the Wi-Fi component at boot.
 - `firmware/pages`: the LVGL pages drawn on the panel.
 - `firmware/web`: the device page. `bundle.js` is generated from `app.js`
-  and `app.css`.
+  and the team and timezone tables, and `bundle-demo.js` is the same plus
+  `demo.js` (both by `scripts/build_web.py`); `app.css` is served as is.
 - `docs/site`: the installer and support site. Every page needs its own
   title, description, canonical link and share tags;
   `python3 scripts/site_seo.py check docs/site` lists what's missing.
@@ -61,8 +62,8 @@ the same ground for people; this file is the short version.
 - Host tests: `make -C tests` (needs g++). CI also builds
   `make -C tests replay` and runs the `--selftest` of
   `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
-  `improv_scan.py`, `crash_report.py`, `site_seo.py` and
-  `tests/web/mock_device.py`. The last checks the device page's mock
+  `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`
+  and `tests/web/mock_device.py`. The last checks the device page's mock
   against `tests/fixtures/set_cases.json`, the same table the host tests
   run through `components/gameday/set_request.h`.
 - A panel that restarted from a crash, a watchdog or a brownout keeps the
@@ -74,9 +75,10 @@ the same ground for people; this file is the short version.
   sanitizers for about a minute, as CI does on every PR;
   `make -C tests fuzz-long` runs 30 minutes a target. clang with libFuzzer
   makes it coverage guided; other compilers get a random mutator. A crash
-  leaves its input in `tests/build/crash-*`; pass that file to
-  `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a host test
-  with the fix.
+  leaves its input in `tests/build/crash-*`, and libFuzzer's timeouts,
+  memory overruns and leaks in `timeout-*`, `oom-*` and `leak-*`; pass that
+  file to `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a
+  host test with the fix.
 - Size budget: CI's "Size budget" job checks each build's flash (the OTA
   image) and static internal RAM (from the ELF), and the memory each ESPN
   read takes on the host (`make -C tests heap`, `tests/heap_budget.cpp`),
@@ -88,7 +90,7 @@ the same ground for people; this file is the short version.
   10% headroom (at least 1 KB).
 - Device page tests: in `tests/web`, `npm ci` and
   `npx playwright install chromium` once, then `npm test`.
-- After editing `firmware/web/app.js` or `app.css`, run
+- After editing `firmware/web/app.js`, `app.css` or `demo.js`, run
   `python3 scripts/build_web.py` and commit `bundle.js` and `bundle-demo.js`.
   CI fails if either is stale.
 - `components/gameday/teams.h`, `team_colors.h` and `timezones_parsed.h`

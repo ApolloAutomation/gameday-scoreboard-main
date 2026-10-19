@@ -220,7 +220,7 @@
         </div>
         <div id="netsCard" hidden>
           <div class="sub">Wi-Fi networks</div>
-          <p class="hint">The panel joins the first of these it can see, the last one that worked first. Set up another with the Game Day app and it is added here.</p>
+          <p class="hint">The panel joins the first of these it can see, the last one that worked first. A network you set it up on through its Game Day hotspot, or the Game Day app, is added here.</p>
           <div id="nets"></div>
           <p class="hint" id="netsEmpty" hidden>No saved networks.</p>
         </div>
@@ -258,11 +258,11 @@
   </div>
 
   <div class="modal" id="modal">
-    <div class="sheet">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Choose a team">
       <div class="head">
         <input type="search" id="q" placeholder="Search teams" aria-label="Search teams" autocomplete="off">
-        <div class="tabs" role="tablist" aria-label="Leagues"><button data-lg="now" class="on" role="tab" aria-selected="true" aria-controls="tiles">On now</button></div>
         <button class="btn" id="close">Close</button>
+        <div class="tabs" role="tablist" aria-label="Leagues"><button data-lg="now" class="on" role="tab" aria-selected="true" aria-controls="tiles">On now</button></div>
       </div>
       <div class="tiles" id="tiles" role="tabpanel"></div>
     </div>
@@ -318,7 +318,7 @@
   const stateForm = {
     mode: Number, rotate: Number, lockon: Number, release: Number, collide: Number,
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
-    bootaddr: (v) => v === "1", today: (v) => v === "1",
+    bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -514,8 +514,9 @@
       msg.hidden = false;
       const mode = S ? String(S.mode || 0) : "0";
       const favMode = mode === "4" && S && (S.favs || []).some(refKey);
-      // With no team picked the panel runs the live board, unless Favorites has teams.
-      const liveMode = S && !favMode && (mode !== "0" || S.recap || !(S.team && S.team.id));
+      // With no team picked the panel runs the live board, unless Favorites
+      // has teams. Favorites with none follows the team, like My team.
+      const liveMode = S && !favMode && (isLive(mode) || S.recap || !(S.team && S.team.id));
       // why is the panel's own reason ("Can't reach ESPN", "Getting ready"),
       // sent only when its board says something other than its default.
       msg.textContent = !g ? "Waiting for the first fetch"
@@ -618,26 +619,27 @@
     $("#liveAuto").hidden = auto || String(S.mode || 0) !== "5";
     renderLiveChips();
   };
+  // One chip per league with teams, built once: a redraw only sets each one's
+  // state, so it never takes the keyboard focus off the chip it is on.
+  const liveChips = Object.keys(LEAGUES).filter((lg) => TEAMS.some((t) => t[0] === lg)).map((lg) => {
+    const b = el("button", "chip", LEAGUES[lg].tab);
+    setOn(b, false, "aria-pressed");
+    // From the list as it is now, not as it was when the chips were drawn:
+    // a second tap can come before the redraw.
+    b.onclick = () => {
+      const cur = liveKeys();
+      const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
+      if (!next.length) return toast("Pick at least one league");
+      const params = { live: next.join(",") };
+      if (String(S.mode || 0) !== "5") params.mode = 5;
+      setGD(params);
+    };
+    $("#liveChips").appendChild(b);
+    return [lg, b];
+  });
   const renderLiveChips = () => {
-    const host = $("#liveChips");
-    host.innerHTML = "";
     const on = liveKeys();
-    for (const lg of Object.keys(LEAGUES)) {
-      if (!TEAMS.some((t) => t[0] === lg)) continue;
-      const b = el("button", "chip", LEAGUES[lg].tab);
-      setOn(b, on.includes(lg), "aria-pressed");
-      // From the list as it is now, not as it was when the chips were drawn:
-      // a second tap can come before the redraw.
-      b.onclick = () => {
-        const cur = liveKeys();
-        const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
-        if (!next.length) return toast("Pick at least one league");
-        const params = { live: next.join(",") };
-        if (String(S.mode || 0) !== "5") params.mode = 5;
-        setGD(params);
-      };
-      host.appendChild(b);
-    }
+    for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
   };
   const renderMode = () => {
     if (!S) return;
@@ -677,22 +679,34 @@
   // Favorites: one row per team in priority order. Every change posts the
   // whole list (favs=) so the device always sees one ordered list.
   let favKeys = [];
+  // Each favorite's slot on the panel, which is its WizMote button for the
+  // first four. A slot emptied on its own (fav1=none, as the app can post)
+  // leaves a gap the list skips.
+  let favSlots = [];
   const favMax = () => (S && S.favmax) || 4;
   // renderSettings() redraws the list from S, which already carries the post.
   const postFavs = (keys) => setGD({ favs: keys.join(",") });
   const renderFavs = () => {
     const host = $("#favCtls");
+    // Where the keyboard was, so the rebuilt list puts it back: the same
+    // button on the same team's row, or on the row now in a removed one's place.
+    const a = document.activeElement;
+    const was = a && host.contains(a) && a.closest(".ctl.fav")
+      ? { key: a.closest(".ctl.fav").dataset.key, title: a.title, at: Array.from(host.children).indexOf(a.closest(".ctl.fav")) }
+      : null;
     host.innerHTML = "";
     favKeys.forEach((key, i) => {
       const t = teamByKey(key);
       const row = el("div", "ctl fav");
+      row.dataset.key = key;
       const img = el("img");
       img.loading = "lazy";
       img.alt = "";
       if (t) img.src = logoUrl(t[0], t[1], t[2]);
       row.appendChild(img);
       const name = el("label", null, (i + 1) + ". " + (t ? t[3] : key));
-      if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (i < 4 ? " · remote button " + (i + 1) : "")));
+      const slot = favSlots[i] ?? i;
+      if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (slot < 4 ? " · remote button " + (slot + 1) : "")));
       row.appendChild(name);
       const ctl = el("span", "favmove");
       const mk = (label, title, fn) => {
@@ -717,6 +731,12 @@
     });
     if (!favKeys.length) host.appendChild(el("p", "hint", "No favorites yet."));
     $("#favAdd").hidden = favKeys.length >= favMax();
+    if (was) {
+      const rows = Array.from(host.querySelectorAll(".ctl.fav"));
+      const row = rows.find((r) => r.dataset.key === was.key) || rows[Math.min(was.at, rows.length - 1)];
+      const b = row && Array.from(row.querySelectorAll("button")).find((x) => x.title === was.title);
+      (b || $("#favAdd")).focus();
+    }
   };
   const addFav = (t) => {
     const key = keyOf(t);
@@ -728,9 +748,11 @@
   const renderSettings = () => {
     if (!S) return;
     document.querySelectorAll(".sw[data-set]").forEach((sw) => setOn(sw, !!S[sw.dataset.set], "aria-checked"));
-    const keys = (S.favs || []).map(refKey).filter(Boolean);
-    if (keys.join(",") !== favKeys.join(",")) {
+    const keys = [], slots = [];
+    (S.favs || []).forEach((t, i) => { if (refKey(t)) { keys.push(refKey(t)); slots.push(i); } });
+    if (keys.join(",") !== favKeys.join(",") || slots.join(",") !== favSlots.join(",")) {
       favKeys = keys;
+      favSlots = slots;
       renderFavs();
     } else {
       $("#favAdd").hidden = favKeys.length >= favMax();
@@ -770,10 +792,15 @@
     const cur = String(S.panels);
     document.querySelectorAll("#panels .panelpick").forEach((b) => {
       setOn(b, b.dataset.cols === cur, "aria-pressed");
-      b.onclick = () => {
+      b.onclick = async () => {
         if (b.dataset.cols === cur) return;
-        document.querySelectorAll("#panels .panelpick").forEach((x) => (x.disabled = true));
-        setGD({ panels: b.dataset.cols });
+        const picks = document.querySelectorAll("#panels .panelpick");
+        picks.forEach((x) => (x.disabled = true));
+        // Only a layout the panel took restarts it; a failed post has said so.
+        if (!(await setGD({ panels: b.dataset.cols }))) {
+          picks.forEach((x) => (x.disabled = false));
+          return;
+        }
         const as = "Restarting as " + (b.dataset.cols === "2" ? "128x64" : "64x64");
         toast(as);
         waitForReboot("", as + ". This page reconnects when the panel is back.");
@@ -949,7 +976,7 @@
           if (pickFav) return choose(t);
           setGD({ team: keyOf(t) });
           toast("Now following the " + t[3]);
-          $("#modal").classList.remove("open");
+          closePicker();
         };
         return b;
       };
@@ -972,7 +999,7 @@
       setGD({ team: keyOf(t) });
       toast("Now following the " + t[3]);
     }
-    $("#modal").classList.remove("open");
+    closePicker();
   };
   let league = "now";
   const renderTiles = () => {
@@ -1006,8 +1033,13 @@
   };
   $("#pick").onclick = () => openPicker(false);
   $("#favAdd").onclick = () => openPicker(true);
+  // A dialog: Tab stays inside it, and closing hands focus back to the
+  // button that opened it.
+  let pickerFrom = null;
   const openPicker = async (fav) => {
     pickFav = fav;
+    pickerFrom = document.activeElement;
+    $(".sheet").setAttribute("aria-label", fav ? "Add a favorite" : "Choose a team");
     const cur = S ? teamByKey(refKey(S.team)) : null;
     league = cur ? cur[0] : "nfl";
     try {
@@ -1048,9 +1080,23 @@
     };
   });
   $("#q").oninput = renderTiles;
-  $("#close").onclick = () => $("#modal").classList.remove("open");
-  $("#modal").onclick = (ev) => { if (ev.target.id === "modal") $("#modal").classList.remove("open"); };
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") $("#modal").classList.remove("open"); });
+  const closePicker = () => {
+    if (!$("#modal").classList.contains("open")) return;
+    $("#modal").classList.remove("open");
+    if (pickerFrom && pickerFrom.isConnected) pickerFrom.focus();
+    pickerFrom = null;
+  };
+  $("#close").onclick = closePicker;
+  $("#modal").onclick = (ev) => { if (ev.target.id === "modal") closePicker(); };
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closePicker(); });
+  $("#modal").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Tab") return;
+    const all = Array.from($(".sheet").querySelectorAll("input, button:not([disabled])")).filter((n) => n.tabIndex >= 0);
+    if (!all.length) return;
+    const first = all[0], last = all[all.length - 1];
+    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+  });
 
   const renderCurrentTeam = () => {
     const t = S ? teamByKey(refKey(S.team)) : null;
@@ -1070,8 +1116,8 @@
     "America/Detroit": "America/New_York", "America/Toronto": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
     "America/Kentucky/Louisville": "America/New_York", "America/Montreal": "America/New_York", "America/Nassau": "America/New_York",
     "America/Winnipeg": "America/Chicago", "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
-    "America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago",
-    "America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ojinaga": "America/Denver",
+    "America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago", "America/Ojinaga": "America/Chicago",
+    "America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver",
     "America/Vancouver": "America/Los_Angeles", "America/Tijuana": "America/Los_Angeles",
     "America/Juneau": "America/Anchorage", "America/Sitka": "America/Anchorage", "America/Nome": "America/Anchorage",
     "Europe/Dublin": "Europe/London", "Europe/Paris": "Europe/Berlin", "Europe/Madrid": "Europe/Berlin", "Europe/Rome": "Europe/Berlin",
@@ -1097,36 +1143,39 @@
   const tzsel = $("#tzsel");
   TZS.forEach((z, i) => { const o = el("option", null, z[0]); o.value = String(i); tzsel.appendChild(o); });
   tzsel.onchange = () => { setGD({ tzauto: 0, tz: tzsel.value }); $("#tzpick").hidden = true; };
+  // The line's parts are made once and only their words change, so a redraw
+  // never takes the keyboard focus off the button. A button, not a bare
+  // link, so the keyboard and screen readers reach it.
+  const tzName = el("b");
+  const tzHow = el("span", "muted");
+  const tzLink = el("button", "lnk");
   const renderTime = () => {
     if (!S) return;
+    if (!tzName.isConnected) $("#tzline").replaceChildren(tzName, tzHow, tzLink);
     const cur = S.tz_name || "";
     const auto = !!S.tz_auto;
     const mine = browserZoneName();
     const mineIdx = mine ? TZS.findIndex((z) => z[0] === mine) : -1;
-    const line = $("#tzline");
     const pick = $("#tzpick");
     if (document.activeElement !== tzsel) tzsel.value = String(S.tz);
-    line.innerHTML = "";
-    line.appendChild(el("b", null, cur || "Not set"));
-    const link = el("a", "lnk");
+    tzName.textContent = cur || "Not set";
     if (auto) {
-      line.appendChild(el("span", "muted", mine ? " · set from this browser" : " · this browser's zone is not in the list"));
-      link.textContent = "choose manually";
-      link.onclick = () => { pick.hidden = !pick.hidden; };
+      tzHow.textContent = mine ? " · set from this browser" : " · this browser's zone is not in the list";
+      tzLink.textContent = "choose manually";
+      tzLink.onclick = () => { pick.hidden = !pick.hidden; };
       if (mine && mine !== cur && mineIdx >= 0 && !tzApplied) {
         tzApplied = true;
         setGD({ tz: mineIdx });
         toast("Timezone set to " + mine + " from this browser");
       }
     } else {
-      line.appendChild(el("span", "muted", " · chosen by hand"));
-      link.textContent = mine ? "follow this browser (" + mine + ")" : "change";
-      link.onclick = () => {
+      tzHow.textContent = " · chosen by hand";
+      tzLink.textContent = mine ? "follow this browser (" + mine + ")" : "change";
+      tzLink.onclick = () => {
         if (mine) { tzApplied = false; setGD({ tzauto: 1 }); pick.hidden = true; }
         else pick.hidden = !pick.hidden;
       };
     }
-    line.appendChild(link);
   };
 
   // ---- up next + splash (from the state document) -------------------------------
@@ -1167,8 +1216,11 @@
   };
   const renderUpNext = () => {
     const box = $("#upnext");
-    if (S && (S.mode || 0) === 4) { renderFavNext(box); return; }
-    if (!S || (S.mode || 0) !== 0) { box.hidden = true; return; }
+    const mode = S ? S.mode || 0 : -1;
+    // Favorite teams with no favorites follows the team, so it lists the
+    // team's games like My team.
+    if (mode === 4 && (S.favs || []).some(refKey)) { renderFavNext(box); return; }
+    if (mode !== 0 && mode !== 4) { box.hidden = true; return; }
     const curId = game && game.s !== "NOT_FOUND" ? String(game.id || "") : "";
     const list = (S.next || []).filter((u) => String(u.id) !== curId).slice(0, 3);
     box.hidden = !list.length;
@@ -1249,8 +1301,11 @@
     if (h < 24) return h + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
     return Math.floor(h / 24) + " d" + (h % 24 ? " " + (h % 24) + " h" : "");
   };
+  // An empty health block (the firmware's fallback when it doesn't fit its
+  // buffer) counts as none.
+  const healthOf = () => (S && S.health && S.health.up != null ? S.health : null);
   const renderHealth = () => {
-    const h = S && S.health;
+    const h = healthOf();
     $("#health").hidden = !h;
     if (!h) return;
     $("#hStart").textContent = restartName(h.start) + ", " + span(h.up) + " ago";
@@ -1392,6 +1447,12 @@
       // Not back in five minutes: stop saying it's restarting and listen again.
       restart = "";
       renderGone();
+      // An install that never restarted the panel didn't happen: the firmware
+      // box goes back to what the panel offers.
+      if (installing) {
+        installing = false;
+        if (ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+      }
       connect();
     };
     setTimeout(tick, 3000);
@@ -1405,7 +1466,7 @@
     clearTimeout(stateTimer);
     setConn(false);
     const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-    showRestart(why + " To set it up again, use the Game Day app or join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
+    showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
   };
 
   // ---- check for updates -----------------------------------------------------
@@ -1498,9 +1559,13 @@
       .catch(() => {});
   };
   // A release has its own section on the site's changelog, in owner words; a
-  // beta has none, so it keeps the manifest's link to its commit.
-  const notesLink = (u) =>
-    /^\d+(\.\d+)+$/.test(String(u.value || "")) ? SITE_URL + "/changelog/#v" + u.value : u.release_url;
+  // beta has none, so it keeps the manifest's link to its commit, and only
+  // an https one, since any other kind of address could run script on a tap.
+  const notesLink = (u) => {
+    if (/^\d+(\.\d+)+$/.test(String(u.value || ""))) return SITE_URL + "/changelog/#v" + u.value;
+    const url = String(u.release_url || "");
+    return /^https:\/\//i.test(url) ? url : "";
+  };
   let installing = false;
   let fwFailed = "";     // S.update_failed as the firmware box last drew it
   const renderUpdate = (u) => {
@@ -1533,12 +1598,17 @@
       }
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;
         installing = true;
         renderUpdate(u);
-        post(u.id, "install");
+        // Only an install the panel took is waited out; a failed post has said so.
+        if (!(await post(u.id, "install"))) {
+          installing = false;
+          renderUpdate(u);
+          return;
+        }
         toast("Installing " + latest);
         waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
       };
@@ -1580,7 +1650,13 @@
         b.disabled = true;
         try {
           const r = await fetch("/gameday/wifi?forget=" + encodeURIComponent(n.ssid), { method: "POST" });
-          toast(r.ok ? "Forgot " + n.ssid + (n.connected ? "; it stays connected until the next restart" : "") : "Could not forget " + n.ssid);
+          // A forgotten network the panel is on stays connected only until
+          // that connection drops or the panel restarts; the last saved one
+          // stays in ESPHome's own slot, so the panel joins it again.
+          const after = !n.connected ? ""
+            : nets.length === 1 ? "; the panel keeps using it and saves it again when it reconnects"
+            : "; it stays connected until this connection drops or the panel restarts";
+          toast(r.ok ? "Forgot " + n.ssid + after : "Could not forget " + n.ssid);
         } catch (_) {
           toast("Could not forget " + n.ssid);
         }
@@ -1619,8 +1695,8 @@
       case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
       case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
       case "IP": $("#ip").textContent = e.value || ""; break;
-      case "RSSI": if (!(S && (S.wifi || S.health))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
-      case "Free Heap (PSRAM)": if (!(S && S.health)) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
+      case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
+      case "Free Heap (PSRAM)": if (!healthOf()) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
     }
   };
 

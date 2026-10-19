@@ -132,14 +132,18 @@ class GamedaySelect : public select::Select, public Component {
 // one JSON document and posts settings there instead of driving entities.
 //   GET  /gameday/state              full snapshot + settings, and "wifi" (wifi_history.h)
 //   GET  /gameday/heap               free heap now: internal, largest internal block, PSRAM (KiB)
-//   POST /gameday/set?key=value...   team=nfl:6|none mode=0-4 rotate=2-30 fav1..fav4=nfl:6|none
+//   POST /gameday/set?key=value...   (the keys and limits are in set_request.h)
+//                                    team=nfl:6|none mode=0-5 rotate=1-30 fav1..fav4=nfl:6|none
+//                                    favs=nfl:6,mlb:10,... (up to FAV_MAX in order, "" clears)
+//                                    today=0/1 live=nfl,mlb,... ("" = the leagues you follow)
 //                                    tz=<name, IANA name or index> tzauto=0/1
-//                                    down/count/match/play/odds/opp=0/1 panels=1/2
+//                                    down/count/match/play/odds/opp/bootaddr=0/1 panels=1/2
 //                                    (down: football, count: baseball, match: soccer)
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc   (qc: the factory check, firmware/pages/qc.yaml)
+//   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
+//                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
 //                                    names only (components/saved_networks)
 //   POST /gameday/wifi?forget=<ssid> drops one saved network; 404 when it is not saved
@@ -740,10 +744,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   int64_t recap_scan_next_{0};  // the last scan's next kickoff today, 0 for none
   static_assert(::espn::leagues_fill_indexes(), "League values must run 0 to kLeagueCount - 1");
   // Per league, indexed by League. walk: next day back (or ahead) to read,
-  // 1 to kRecapMaxDays; 0 not started; kRecapMaxDays + 1 done. walk_day:
-  // the league's ESPN day a walk finished, so a fruitless one is tried again
-  // the next day rather than every scan. fwd_match: "BOS at NYR", the first
-  // game on the day the forward walk found.
+  // 1 to kRecapBackDays back (kRecapMaxDays ahead); 0 not started;
+  // kRecapMaxDays + 1 done. walk_day: the league's ESPN day a walk finished,
+  // so a fruitless one is tried again the next day rather than every scan.
+  // fwd_match: "BOS at NYR", the first game on the day the forward walk
+  // found.
   uint8_t recap_back_[::espn::kLeagueCount]{};
   int32_t recap_back_day_[::espn::kLeagueCount]{};
   uint8_t recap_fwd_[::espn::kLeagueCount]{};
@@ -829,12 +834,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // a game, or its default or a live mode's words.
   std::string no_game_why_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
-  uint32_t worker_seq_{0};     // bumped when a worker is abandoned
+  // Bumped by the main loop when it abandons a worker, read by the worker.
+  std::atomic<uint32_t> worker_seq_{0};
   Job job_;
   uint32_t generation_{0};
   bool busy_{false};
   bool selects_published_{false};
-  volatile bool job_done_{false};
+  // Set by the worker once job_ is complete. An atomic store and load (not
+  // volatile) order the worker's writes to job_ before the main loop's reads
+  // of it on the other core.
+  std::atomic<bool> job_done_{false};
   // Written by the fetch task, read by the main loop.
   std::atomic<uint64_t> espn_bytes_{0};
   std::atomic<uint32_t> espn_requests_{0};

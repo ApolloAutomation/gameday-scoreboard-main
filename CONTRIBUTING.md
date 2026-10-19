@@ -114,7 +114,7 @@ Use `compile`, not `config`: `config` doesn't catch C++ errors.
 The device page has browser tests against a mock panel. In `tests/web`,
 run `npm ci` and `npx playwright install chromium` once, then `npm test`.
 
-If you edit `firmware/web/app.js` or `app.css`, run
+If you edit `firmware/web/app.js`, `app.css` or `demo.js`, run
 `python3 scripts/build_web.py` and commit the regenerated `bundle.js` and
 `bundle-demo.js`. CI fails the PR if either is stale.
 

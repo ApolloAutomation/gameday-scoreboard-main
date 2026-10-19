@@ -57,12 +57,18 @@ static_assert(::espn::kResetPowerOn == ESP_RST_POWERON && ::espn::kResetSoftware
                   ::espn::kResetPowerGlitch == ESP_RST_PWR_GLITCH && ::espn::kResetCpuLockup == ESP_RST_CPU_LOCKUP,
               "health.h reset reasons no longer match esp_reset_reason_t");
 
-// Survives a restart, a crash and a watchdog (health.h)
+// Survives a restart, a crash and a watchdog (health.h). Keep it the only
+// RTC_NOINIT variable in the firmware: one placed before it in link order
+// would move it, and the first start after an update would read an invalid
+// log and lose the boot count, the last fault and the planned flag.
 RTC_NOINIT_ATTR static ::espn::BootLog boot_log;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-// ESPN's edge returns 403 to most unfamiliar agents, ESPHome's own among
-// them, but accepts curl.
-static const char *const USER_AGENT = "curl/8.0";
+// For the crash report (components/crash_report): this start is a restart
+// the firmware asked for. It sets up before setup() below clears the flag.
+bool boot_was_planned() { return ::espn::boot_log_valid(boot_log) && boot_log.planned != 0; }
+
+// curl's, which ESPN's edge accepts (poll_timing.h).
+static const char *const USER_AGENT = ::espn::kUserAgent;
 
 static const uint32_t MINUTE = 60 * 1000;
 static const uint32_t SCHEDULE_INTERVAL = 6 * 60 * MINUTE;
@@ -123,6 +129,9 @@ static const int LOOKAHEAD_DAYS = 3;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
+// apply_set_ and publish_selects_ index this with any mode parse_set takes.
+static_assert(sizeof(MODE_OPTIONS) / sizeof(MODE_OPTIONS[0]) == (size_t) ::espn::kModeCount,
+              "MODE_OPTIONS needs a name for every mode parse_set takes");
 static const uint32_t FAV_TICK = 1000;  // playlist / lock decisions re-run this often
 
 // Feeds ArduinoJson straight from the HTTP socket so a scoreboard document
@@ -869,7 +878,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     this->fav_poll_ms_ = now == 0 ? 1 : now;
   if (j.need_schedule) {
     if (!j.schedule_ok) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       this->emit_({});  // the miss shows on the ticker and the page, as in My team
       this->back_off_();  // start_fav_job_ waits it out and keeps the playlist ticking
       this->schedule_next_(0);
@@ -905,7 +914,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     }
   }
   if (!j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     this->emit_({});
     this->back_off_();
     this->schedule_next_(0);
@@ -1454,6 +1463,8 @@ void GamedayComponent::settle_update_mark_() {
   this->update_mark_pref_ = global_preferences->make_preference<::espn::UpdateMark>(fnv1_hash("gameday_update_mark_v1"));
   if (!this->update_mark_pref_.load(&this->update_mark_))
     this->update_mark_ = ::espn::UpdateMark{};
+  // Ended first so the copy the log lines below print is a string too.
+  ::espn::update_mark_terminate(this->update_mark_);
   const ::espn::UpdateMark before = this->update_mark_;
   const std::string running = ESPHOME_PROJECT_VERSION;
   // A power cut in the new firmware's first minute rolls it back too, but
@@ -1891,7 +1902,7 @@ bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, 
   }
   ESP_LOGI(TAG, "Schedule: event %s kickoff %lld group %u (%u bytes)", s.event_id.c_str(),
            (long long) s.kickoff_epoch, (unsigned) s.group, (unsigned) reader.total());
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -2015,7 +2026,7 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   }
   ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
            g.team_score, g.opp_abbr.c_str(), g.opp_score, g.short_detail.c_str(), (unsigned) reader.total());
-  out = g;
+  out = std::move(g);
   return true;
 }
 
@@ -2365,7 +2376,7 @@ void GamedayComponent::apply_job_() {
   }
   if (j.need_scan) {
     if (!j.scan_ok && j.live.empty()) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       if (this->recap_on_)
         this->live_started_ms_ = 0;  // retry the scan, not the long wait
       this->drop_team_placeholder_();  // "Looking for a live game", not a bare logo
@@ -2491,7 +2502,7 @@ void GamedayComponent::apply_job_() {
   }
   if (j.need_schedule) {
     if (!j.schedule_ok) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       this->drop_team_placeholder_();
       this->emit_({});
       this->schedule_next_(this->back_off_());
@@ -2525,7 +2536,7 @@ void GamedayComponent::apply_job_() {
     }
   }
   if (!j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     if (this->cache_unconfirmed_ && !j.throttled) {
       // ESPN has no such game any more, or the read failed: the cache may be
       // wrong, so read the team endpoint now, not in six hours.
@@ -2613,7 +2624,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->emit_({});
     this->mark_board_ready_();
   } else if (j.polled && !j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     this->drop_team_placeholder_();
     this->emit_({});
   } else if (j.polled) {
@@ -2881,9 +2892,10 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
 // ---- finals rotation ------------------------------------------------------------
 
 // Main loop: the next day the rotation needs read, if any. Going back, per
-// league, until it has kRecapMinFinals or has looked a week back. Going
-// forward, only when no game is left today, until a day has a kickoff. Each
-// league counts days its own way (recap.h, espn_day).
+// league, until it has kRecapMinFinals or has read the oldest day the
+// rotation keeps (kRecapBackDays). Going forward, only when no game is left
+// today, until a day has a kickoff. Each league counts days its own way
+// (recap.h, espn_day).
 bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
   const uint8_t done = ::espn::kRecapMaxDays + 1;
   const uint16_t leagues = this->recap_leagues_();
@@ -2902,7 +2914,7 @@ bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
       }
       w = 1;
     }
-    if (w <= ::espn::kRecapMaxDays) {
+    if (::espn::recap_back_reads(w)) {
       j.need_recap = true;
       j.recap_forward = false;
       j.recap_league = i;
@@ -2976,7 +2988,7 @@ void GamedayComponent::apply_recap_job_() {
     d.finals = std::move(j.finals);
     ::espn::recap_merge(this->recap_days_, std::move(d));
     if (::espn::recap_count(this->recap_days_, i) >= ::espn::kRecapMinFinals ||
-        ++this->recap_back_[i] > ::espn::kRecapMaxDays) {
+        !::espn::recap_back_reads(++this->recap_back_[i])) {
       this->recap_back_[i] = done;
       this->recap_back_day_[i] = today;
       ESP_LOGI(TAG, "Recent %s finals: %u", ::espn::recap_league_word(i),
@@ -3420,12 +3432,12 @@ std::string GamedayComponent::health_json_() {
 #else
   h.channel = "none";
 #endif
-  char buf[384];
+  char buf[::espn::kHealthJsonSize];
   int n = ::espn::health_json(buf, sizeof(buf), h);
   if (n <= 0 || n >= (int) sizeof(buf))
     return "{}";
   // The heat and power keys go in before its closing brace (guard.h)
-  char guard[96];
+  char guard[::espn::kGuardJsonSize];
   int g = ::espn::guard_json_keys(guard, sizeof(guard), this->heat_.last_c, this->heat_.step, this->power_log_);
   if (g <= 0 || g >= (int) sizeof(guard))
     return std::string(buf, n);

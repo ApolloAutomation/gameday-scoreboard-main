@@ -303,8 +303,10 @@ std::string soccer_situation(const GameSnapshot &s, size_t max) {
 std::string soccer_board_record(const std::string &wdl) {
   if (wdl.size() <= 7)
     return wdl;
+  // Three digits at most each, like any real season: a longer run of digits
+  // is not a record, and would overflow an int on its way to points.
   int w = 0, d = 0, l = 0;
-  if (sscanf(wdl.c_str(), "%d-%d-%d", &w, &d, &l) != 3)
+  if (sscanf(wdl.c_str(), "%3d-%3d-%3d", &w, &d, &l) != 3)
     return wdl;
   return std::to_string(3 * w + d) + " pts";
 }
@@ -476,21 +478,15 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
 // game.
 Splash soccer_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
   Splash none;
-  if (!prev.valid || !cur.valid || prev.event_id != cur.event_id)
+  if (!detail::same_game(prev, cur))
     return none;
-  if (prev.state == GameState::IN && cur.state == GameState::POST) {
-    if (!cur.completed)
-      return none;
+  if (detail::went_final(prev, cur)) {
     int us = cur.team_score, them = cur.opp_score;
     if (us == them && cur.soc.team_shootout >= 0 && cur.soc.opp_shootout >= 0) {
       us = cur.soc.team_shootout;
       them = cur.soc.opp_shootout;
     }
-    if (us > them)
-      return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
-    if (neutral && them > us)
-      return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
-    return none;
+    return detail::win_splash(cur, neutral, us, them);
   }
   if (prev.state != GameState::IN || cur.state != GameState::IN)
     return none;

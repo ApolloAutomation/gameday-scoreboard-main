@@ -55,7 +55,7 @@ A new team shows on the panel within a few seconds, with nothing to restart. The
 
 ## Before you pick a team
 
-A panel nobody has picked a team for doesn't follow one. It shows live games, and when nothing is on, the latest final scores and when the next game starts. The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
+A panel nobody has picked a team for doesn't follow one. It shows live NFL and college football games, and when nothing is on, the latest final scores and when the next game starts. See [A panel with no team picked](/using/modes/#a-panel-with-no-team-picked). The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
 
 ## More than one team
 

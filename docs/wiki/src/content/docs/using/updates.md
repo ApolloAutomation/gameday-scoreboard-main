@@ -59,3 +59,5 @@ The Firmware box says when this happened: **The update to** a version **didn't t
 ## Beta versions
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
+
+The **Follow beta** switch in the Device card moves a panel to the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. Turn **Follow beta** off and the panel stays on its beta until the next release.

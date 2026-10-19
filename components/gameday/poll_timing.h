@@ -8,6 +8,11 @@
 
 namespace espn {
 
+// The User-Agent on every request to ESPN and its logo server. ESPN's edge
+// returns 403 to most unfamiliar agents, ESPHome's own among them, but
+// accepts curl.
+static constexpr const char *kUserAgent = "curl/8.0";
+
 // ---- Backoff ------------------------------------------------------------------
 
 // After an ordinary failure (timeout, 5xx, a parse that came up empty) the
@@ -77,6 +82,11 @@ struct Backoff {
     this->throttled = false;
   }
 };
+
+// One more read missed. The ticker and the device page warn from three in a
+// row, so the count stops at 255 instead of wrapping to 0 and dropping the
+// warning while ESPN is still out of reach.
+inline uint8_t add_miss(uint8_t misses) { return misses < 255 ? (uint8_t) (misses + 1) : misses; }
 
 // Whether a soccer cup job (one cup's team read, then the game poll when the
 // pick moved) must back off. A poll is the job's last read, so its result

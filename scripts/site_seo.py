@@ -42,10 +42,13 @@ class Head(HTMLParser):
         self.canonical = None
         self.ld = []
         self._in = None
+        self._svg = 0  # depth inside <svg>, whose <title> names the drawing
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag == "title":
+        if tag == "svg":
+            self._svg += 1
+        elif tag == "title" and not self._svg:
             self._in = "title"
         elif tag == "meta":
             key = a.get("property") or a.get("name")
@@ -58,7 +61,9 @@ class Head(HTMLParser):
             self.ld.append("")
 
     def handle_endtag(self, tag):
-        if tag in ("title", "script"):
+        if tag == "svg" and self._svg:
+            self._svg -= 1
+        elif tag in ("title", "script"):
             self._in = None
 
     def handle_data(self, data):
@@ -210,6 +215,12 @@ def page(path, title, desc, extra=""):
 
 
 def selftest():
+    # An inline SVG's <title> (its accessible name) is not the page's title.
+    head = Head()
+    head.feed('<html><head><title>Support</title></head><body><svg viewBox="0 0 1 1"><title>Logo</title>'
+              '<path d="M0 0"/></svg><svg/><p>text</p></body></html>')
+    assert squash(head.title) == "Support", head.title
+
     with tempfile.TemporaryDirectory() as site:
         desc = "A description long enough to pass the fifty character floor, page "
         for rel in ["index.html", "support/index.html", "install/diy/index.html", "firmware/x/index.html"]:

@@ -44,6 +44,10 @@ The first tab, **On now**, lists today's games in every league, under **Live now
 
 The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. See [Favorite teams](/using/favorites/).
 
+:::note[Coming in the next release]
+The league tabs sit on their own row under the search box, so every league and the **Close** button fit on the screen, even on a small phone.
+:::
+
 ## Settings
 
 Settings are grouped in cards. In the order the page shows them:

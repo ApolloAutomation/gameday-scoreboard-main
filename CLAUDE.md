@@ -59,8 +59,8 @@ contributors; read it too.
   Feature PRs leave both alone.
 - Use `esphome compile`, not `esphome config`, to catch C++ errors. Host
   tests: `make -C tests`. Rebuild the web bundle with
-  `python3 scripts/build_web.py` after editing firmware/web/app.js or
-  app.css, and commit bundle.js and bundle-demo.js with it.
+  `python3 scripts/build_web.py` after editing firmware/web/app.js, app.css
+  or demo.js, and commit bundle.js and bundle-demo.js with it.
 - The size budget in firmware/budget.json is a ceiling. A change that needs
   more raises that one entry in the same PR and says why.
 - Never hand-edit components/gameday/teams.h, team_colors.h or

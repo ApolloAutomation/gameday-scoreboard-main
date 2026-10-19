@@ -286,22 +286,46 @@ jobs:
           set -uo pipefail
           # The base commit's own run first, then the base branch's newest
           # runs: a push that lands while dev builds cancels the older run,
-          # sometimes before it uploaded its figures.
+          # sometimes before it uploaded its figures, or after only some of
+          # them (Parser tests uploads minutes before the builds do). The
+          # first run with every figure set this run has is the base; failing
+          # that, the one with the most, and the job warns which are missing.
           runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$BASE_SHA&event=push&per_page=5" \
                    --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)
           runs="$runs
           $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$BASE_REF&event=push&per_page=10" \
               --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)"
+          want=$(ls sizes)
+          total=0
+          for a in $want; do total=$((total + 1)); done
+          rm -rf base
+          best="" best_has=-1
           while read -r id sha; do
             [ -n "$id" ] || continue
+            rm -rf try
+            # A download that fails part way is not used, whatever it left.
+            gh run download "$id" -p 'sizes-*' -D try 2>/dev/null && [ -n "$(ls -A try 2>/dev/null)" ] || continue
+            has=0
+            for a in $want; do [ -d "try/$a" ] && has=$((has + 1)); done
+            echo "Run $id ($sha) has $has of the $total figure sets"
+            [ "$has" -gt "$best_has" ] || continue
             rm -rf base
-            if gh run download "$id" -p 'sizes-*' -D base 2>/dev/null && [ -n "$(ls -A base 2>/dev/null)" ]; then
-              echo "label=$BASE_REF ${sha::7} (run $id)" >> "$GITHUB_OUTPUT"
-              echo "Base figures from run $id ($sha)"
-              exit 0
-            fi
+            mv try base
+            best="$BASE_REF ${sha::7} (run $id)"
+            best_has=$has
+            [ "$has" -lt "$total" ] || break
           done <<< "$runs"
-          echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+          rm -rf try
+          if [ -z "$best" ]; then
+            echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+            exit 0
+          fi
+          if [ "$best_has" -lt "$total" ]; then
+            missing=$(for a in $want; do [ -d "base/$a" ] || printf ' %s' "$a"; done)
+            echo "::warning::No $BASE_REF build had every figure set, so growth is checked against $best, which has no$missing."
+          fi
+          echo "label=$best" >> "$GITHUB_OUTPUT"
+          echo "Base figures from $best"
       - name: Check the budget
         env:
           BASE_LABEL: ${{ steps.base.outputs.label }}
@@ -539,18 +563,25 @@ jobs:
           python3 scripts/improv_scan.py --selftest
           python3 scripts/crash_report.py --selftest
           python3 scripts/site_seo.py --selftest
+          python3 scripts/release_notes.py --selftest
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
         run: python3 tests/web/mock_device.py --selftest
       - name: Fuzz the parsers (30 s a target)
         run: make -C tests fuzz
-      - name: Keep the input a fuzz crash left
+      # libFuzzer names the input by what went wrong: a crash, a run over
+      # -timeout, one over -rss_limit_mb, or a leak.
+      - name: Keep the input a fuzz failure left
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes
-          path: tests/build/crash-*
+          path: |
+            tests/build/crash-*
+            tests/build/timeout-*
+            tests/build/oom-*
+            tests/build/leak-*
           if-no-files-found: ignore
 
   web-tests:
@@ -567,7 +598,7 @@ jobs:
         run: |
           python3 ../../scripts/build_web.py
           git diff --exit-code -- ../../firmware/web/bundle.js ../../firmware/web/bundle-demo.js || {
-            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python scripts/build_web.py and commit both."
+            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python3 scripts/build_web.py and commit both."
             exit 1
           }
       - uses: actions/setup-node@v7
@@ -611,7 +642,7 @@ jobs:
           # docs/site/. (not docs/site/*) so .well-known/ is copied too.
           cp -r docs/site/. site/
           # This tag's release is created after the deploy, so its date comes from --date.
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-drafts --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
           python3 scripts/release_notes.py --page site/changelog/index.html --dates /tmp/releases.json --date "$GITHUB_REF_NAME=$(TZ=America/Chicago date +%F)"
           cp -r artifacts/* site/firmware/
           sed -i "s/__VERSION__/${GITHUB_REF_NAME}/g" site/index.html

@@ -56,11 +56,22 @@ int main(int argc, char **argv) {
     {
       JsonDocument doc;
       std::string first = slurp(g.second.front());
-      if (deserializeJson(doc, first, DeserializationOption::NestingLimit(40)) == DeserializationError::Ok)
-      {
+      DeserializationError err = deserializeJson(doc, first, DeserializationOption::NestingLimit(40));
+      if (err == DeserializationError::Ok) {
         JsonArrayConst competitors = doc["competitions"][0]["competitors"];
-        for (JsonObjectConst c : competitors)
-          sides.push_back((uint32_t) atol(c["id"].as<const char *>()));
+        for (JsonObjectConst c : competitors) {
+          uint32_t id = (uint32_t) atol(c["id"] | "0");
+          if (id != 0)
+            sides.push_back(id);
+        }
+        if (sides.empty())
+          note("no team ids: " + g.second.front().filename().string());
+      } else {
+        // A first document that doesn't parse names no teams either, but it is
+        // a broken recording, not a game without team ids: count it as failed.
+        docs++;
+        fails++;
+        note("parse failed: " + g.second.front().filename().string() + " (" + err.c_str() + ")");
       }
     }
     for (uint32_t team : sides) {
