@@ -1,0 +1,156 @@
+name: Site
+
+# Republish gamedayscoreboard.app, and the update mirror
+# (scripts/publish_mirror.sh), when only docs/site changed, without a
+# firmware release. The firmware files come from the latest release tag's
+# firmware-moonhub75.zip asset, so panels see the same manifest and binaries
+# they saw before. Falls back to the tag's Build artifact for a release that
+# predates that asset (v1.4.3 and earlier); Build artifacts expire after 90
+# days, so that fallback is only good for 90 days after such a release.
+#
+# Runs by itself on a push to main that touches docs/site, and by hand.
+# Only main publishes: a run by hand from dev or beta would put that
+# branch's unreleased pages on the live site, so the gate fails it.
+# Pages keys deployments by commit sha, so deploying a commit here and then
+# tagging that same commit makes the tag's deploy a silent no-op (v1.4.3,
+# 2026-09-23). A push therefore skips the deploy while a release is pending:
+# when the version in firmware/gameday-common.yaml has no release yet, the
+# next tag's deploy publishes docs/site anyway. A commit whose version is
+# already released can never be tagged again, so deploying it is safe.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/site/**"
+  workflow_dispatch:
+    inputs:
+      from_beta:
+        description: Started by a beta channel publish (build.yml), not by hand
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Skip while a release is pending
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - name: Only main publishes
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Site publishes only from main; this run is on $GITHUB_REF. Start it with --ref main."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROM_BETA: ${{ inputs.from_beta }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml | head -n1)
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          echo "source version $VERSION, latest release $TAG"
+          if { [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$FROM_BETA" != true ]; } || [ "v$VERSION" = "$TAG" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$VERSION is not released yet; its tag deploy will publish the site (and the beta channel)"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: Publish site only
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    # actions: read is for the Build artifact fallback (gh run download).
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assemble site from docs/site and the latest release's firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          echo "release $TAG"
+          mkdir -p site/firmware
+          cp -r docs/site/. site/
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
+          python3 scripts/release_notes.py --page site/changelog/index.html --dates /tmp/releases.json
+          ASSETS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          RUN=""
+          for v in moonhub75 moonhub75-2panel scoreboard75; do
+            if echo "$ASSETS" | grep -qx "firmware-$v.zip"; then
+              echo "$v firmware from the $TAG release asset firmware-$v.zip"
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "firmware-$v.zip" -O "/tmp/firmware-$v.zip"
+              unzip -o "/tmp/firmware-$v.zip" -d site/firmware
+            else
+              echo "no firmware-$v.zip asset on $TAG, falling back to its Build artifact"
+              if [ -z "$RUN" ]; then
+                RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --branch "$TAG" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+                echo "build run $RUN"
+              fi
+              gh run download "$RUN" --repo "$GITHUB_REPOSITORY" -n "firmware-$v" -D site/firmware || echo "no $v firmware for $TAG"
+            fi
+          done
+          bash scripts/check_site_firmware.sh site "$TAG"
+          bash scripts/add_beta_channel.sh site
+          # Releases up to v2026.10.0 carry the ESPHome project name.
+          ./scripts/set_manifest_name.sh site/firmware
+          sed -i "s/__VERSION__/${TAG}/g" site/index.html
+          # Support's FAQPage JSON-LD, sitemap.xml and robots.txt.
+          python3 scripts/site_seo.py build site
+          ls -laR site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+          # docs/site/.well-known has to reach the site; v4 and later drop
+          # dotfiles unless asked.
+          include-hidden-files: true
+      - id: deployment
+        uses: actions/deploy-pages@v5
+      # A deploy of a commit Pages had deployed before once reported success
+      # and changed nothing (v1.4.3). Beta publishes redeploy main's commit,
+      # so check the beta really went live instead of leaving the bars on the
+      # old one without a word. The query string gets past the CDN's cache.
+      - name: The beta channel is live
+        id: beta_live
+        run: |
+          set -uo pipefail
+          m=site/firmware/beta/scoreboard75/manifest.json
+          if [ ! -f "$m" ]; then echo "No beta channel in this deploy."; exit 0; fi
+          want=$(jq -r .version "$m")
+          got=""
+          for i in $(seq 1 30); do
+            got=$(curl -fsS "https://gamedayscoreboard.app/firmware/beta/scoreboard75/manifest.json?run=$GITHUB_RUN_ID-$i" | jq -r .version)
+            if [ "$got" = "$want" ]; then echo "Live: beta $got"; exit 0; fi
+            sleep 20
+          done
+          echo "::error::gamedayscoreboard.app still serves beta '$got' 10 minutes after deploying $want"
+          exit 1
+      # The same update feed on updates.gameday-scoreboard.com, which panels
+      # read when gamedayscoreboard.app fails. Goes even if the check above
+      # gave up on GitHub Pages.
+      - name: Publish the update mirror
+        if: success() || steps.beta_live.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_MIRROR_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/publish_mirror.sh site

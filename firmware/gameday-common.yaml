@@ -1,0 +1,886 @@
+# Game Day Scoreboard, shared configuration.
+# Do not build this file directly: build gameday.yaml, which includes it.
+
+substitutions:
+  # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
+  name: "gameday"
+  friendly_name: "Game Day Scoreboard"
+  version: "2026.10.0"
+  # Set by each board's top-level file; names the manifest folder.
+  variant: "moonhub75"
+  # Where the panel looks for new releases. A bench build can point it at a
+  # test manifest with -s update_source <url>.
+  update_source: "https://gamedayscoreboard.app/firmware/${variant}/manifest.json"
+  # Where it looks instead with "Follow beta" on: release firmware built from
+  # the beta branch, published there by CI (.github/workflows/build.yml).
+  beta_update_source: "https://gamedayscoreboard.app/firmware/${variant}-beta/manifest.json"
+  # The same files on a second host. When a manifest read fails, the panel
+  # reads the same path here instead (components/gameday/update_mirror.h).
+  update_mirror_host: "https://updates.gameday-scoreboard.com"
+
+  display_panel_width: "64"
+  display_panel_height: "64"
+  display_layout: HORIZONTAL
+  display_layout_rows: "1"
+  # The widest chain this firmware supports. The count actually driven comes
+  # from the saved "Panels" choice, applied by panel_layout at boot.
+  display_layout_cols: "2"
+  # Panels driven before anyone picks: 1 for a DIY 64x64, 2 on boards that ship
+  # with a 128x64. Also what Factory Reset returns to.
+  default_panel_cols: "1"
+  display_scan_wiring: STANDARD_TWO_SCAN
+
+  # hub75-studio packages (ESPHome version, theme, clock page). Pinned to a
+  # commit so a release always builds the same thing.
+  hub75_studio_ref: "2c121972321cc1e3c2c87d9647fd3beb9a5e2271"
+
+# The controller package (included by each board's top-level file, e.g.
+# gameday.yaml) already sets board/framework/psram; this only
+# adds sdkconfig options, which ESPHome merges into that package's esp32:
+# block. Bluetooth setup (improv_ble) and HTTPS fetches (ESPN, update
+# manifest) were both starving internal RAM once BT was added, causing
+# mbedtls_ssl_setup to fail (MBEDTLS_ERR_SSL_ALLOC_FAILED) and the panel to
+# reboot ~50s after boot. Move the BT stack and TLS buffers into PSRAM.
+#
+# The main loop task gets 16 KB of stack instead of ESPHome's 8 KB. A
+# Favorites switch puts the new game on the board from deep in the loop
+# (fav_choose_ -> emit_ -> the display callbacks). On ESPHome 2026.10, during
+# QC with the device page's log stream open, that took the loop to about 9 KB
+# and overflowed it (backlog #84); the multi-sport build overflows the same
+# way on 2026.8.2. With 16 KB, internal RAM still never dropped below 32 KB
+# free on the bench.
+esp32:
+  framework:
+    advanced:
+      loop_task_stack_size: 16384
+    sdkconfig_options:
+      CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST: y
+      CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY: y
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: y
+      CONFIG_MBEDTLS_DYNAMIC_BUFFER: y
+      CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA: y
+      # The first time request waits a random 0 to 5 s by default, all of it
+      # boot screen. One panel at a time doesn't need that much spread.
+      CONFIG_LWIP_SNTP_MAXIMUM_STARTUP_DELAY: "1000"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+  comment: "v${version}"
+  build_path: build/gameday-${variant}
+  project:
+    name: bharvey88.gameday-scoreboard
+    version: "${version}"
+  on_boot:
+    # The Brightness number restores its saved value before the HUB75 driver
+    # exists (template entities set up at priority ~800, the display at 400),
+    # and the driver starts at its config default instead. Apply the number
+    # once the display is up, or the panel lights at the wrong brightness.
+    # The Power switch is ALWAYS_ON now, so there is no saved off state to
+    # restore; the ternary stays because the switch can be turned off in the
+    # moment it takes to get here. The repaint is belt and braces: nothing has
+    # rendered this early and HUB75Display::setup leaves the driver enabled,
+    # so on this path there should be nothing dropped to redraw.
+    - priority: 300.0
+      then:
+        - hub75.set_brightness:
+            id: matrix
+            brightness: !lambda 'return id(power).state ? id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state) : 0;'
+        - if:
+            condition:
+              switch.is_on: power
+            then:
+              - script.execute: gd_repaint
+    # Name the hotspot after this panel, "Game Day 2f6a70", so two panels
+    # waiting for setup in one house can be told apart. The six characters are
+    # the end of the panel's network name (gameday-2f6a70), the same ones the
+    # setup screen shows. Wi-Fi sets up at 250 and reads the name then.
+    - priority: 260.0
+      then:
+        - lambda: |-
+            auto *w = wifi::global_wifi_component;
+            const std::string &name = App.get_name();
+            const size_t dash = name.rfind('-');
+            if (w == nullptr || dash == std::string::npos)
+              return;
+            wifi::WiFiAP ap = w->get_ap();
+            ap.set_ssid("Game Day " + name.substr(dash + 1));
+            w->set_ap(ap);
+    # After "Reset Wi-Fi" the network in memory is blank (components/saved_networks
+    # keeps the saved ones for the next boot). ESPHome still counts it as a
+    # configured network and would wait a minute before the hotspot and
+    # Bluetooth setup appear. Cut both waits to a second in that one case.
+    # Otherwise a saved network list means a real network whatever get_sta()
+    # reads. A blank network with no list is a reset from older firmware,
+    # which blanked ESPHome's slot.
+    - priority: 240.0
+      then:
+        - lambda: |-
+            auto *w = wifi::global_wifi_component;
+            if (w != nullptr && w->has_sta() && w->get_sta().get_ssid().empty() &&
+                (id(gd_networks).in_setup() || id(gd_networks).count() == 0)) {
+              w->set_ap_timeout(1000);
+              if (improv_ble::global_improv_component != nullptr) {
+                improv_ble::global_improv_component->set_wifi_timeout(1000);
+              }
+            }
+        - if:
+            condition:
+              lambda: 'return id(gd_networks).in_setup();'
+            then:
+              - script.execute: gd_setup_window
+        # Keep Bluetooth off at boot because it shares the radio with the Wi-Fi
+        # scan. With it on, Wi-Fi was ready 12 s after boot instead of 5.
+        # A panel with no saved network, or in setup after a reset, turns it on
+        # now for setup. A panel with a saved network gets the dropout grace,
+        # which on_connect cancels.
+        - if:
+            condition:
+              lambda: |-
+                auto *w = wifi::global_wifi_component;
+                return w != nullptr && w->has_sta() && !id(gd_networks).in_setup() &&
+                       (id(gd_networks).count() > 0 || !w->get_sta().get_ssid().empty());
+            then:
+              - script.execute: gd_ble_grace
+            else:
+              - ble.enable:
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    # improv_ble is ESPHome 2026.10's own, plus answering the app's "which
+    # Wi-Fi networks can you see" request and going back to the saved network
+    # when a handover fails (components/improv_ble). saved_networks keeps up
+    # to five Wi-Fi networks where ESPHome keeps one. crash_report keeps the
+    # last crash's backtrace in flash.
+    components: [gameday, panel_layout, improv_ble, saved_networks, crash_report]
+  - source: github://pavlov-net/lvgl-page-manager@v0.3.0
+    components: [lvgl_page_manager]
+  # Fireworks behind the touchdown and win splashes
+  - source: github://pavlov-net/lvgl-canvas-fx@v0.4.1
+    components: [lvgl_canvas_fx]
+
+packages:
+  hub75_studio:
+    url: https://github.com/pavlov-net/hub75-studio
+    ref: "${hub75_studio_ref}"
+    refresh: 1d
+    files:
+      - path: packages/common/esphome-version.yaml
+      - path: packages/common/theme.yaml
+      - path: packages/pages/clock.yaml
+        vars:
+          page_friendly_name: "Clock"
+  boot: !include pages/boot.yaml
+  scoreboard: !include pages/gameday-live.yaml
+  wizmote: !include pages/wizmote.yaml
+  # Factory check (five quick boot button presses in the first 30 s)
+  qc: !include pages/qc.yaml
+  # Dims a hot panel and caps one on a weak power brick, and says why
+  guard: !include pages/guard.yaml
+
+# The theme's Spleen fonts, with Latin-1 added to ESPHome's default ASCII so
+# accented names (São Paulo, Atlético) draw. Text from outside the panel goes
+# through panel_text() (components/gameday/panel_text.h), which only puts out
+# these characters, so all three sizes carry the same list. A glyph listed
+# here that a font lacks fails the build rather than drawing a box.
+font:
+  - id: !extend spleen_8
+    glyphs: &panel_glyphs
+      - ' !"#$%&''()*+,-./0123456789:;<=>?@'
+      - 'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`'
+      - 'abcdefghijklmnopqrstuvwxyz{|}~'
+      - '¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿'
+      - 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß'
+      - 'àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ'
+  - id: !extend spleen_12
+    glyphs: *panel_glyphs
+  - id: !extend spleen_16
+    glyphs: *panel_glyphs
+
+# Panel count from the saved preference, applied before the display starts.
+panel_layout:
+  id: gd_panels
+  display_id: matrix
+  default_cols: ${default_panel_cols}
+  max_cols: 2
+
+logger:
+  baud_rate: 115200
+
+# No Home Assistant required: never reboot for lack of an API client.
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+  - platform: http_request
+    id: gd_ota_http
+
+# The panel remembers up to five networks (home, a phone hotspot, a friend's
+# house) and tries the last one that worked first. Setup from the app or the
+# hotspot page adds to the list; Factory Reset empties it. "Reset Wi-Fi"
+# keeps it: the panel restarts into setup for 15 minutes (gd_setup_window),
+# and an unplug or the end of the 15 minutes brings it back.
+# GET /gameday/wifi lists them (names only) and POST /gameday/wifi?forget=
+# drops one.
+saved_networks:
+  id: gd_networks
+
+# The last crash, watchdog or brownout restart, with the backtrace ESPHome's
+# crash handler saved, kept in flash until cleared: GET /gameday/crash, and
+# scripts/crash_report.py decodes it against the release's ELF.
+crash_report:
+  id: gd_crash
+  variant: "${variant}"
+
+wifi:
+  power_save_mode: none
+  # Named per panel in on_boot.
+  ap: {}
+  # Bluetooth (improv_ble) is only needed to hand the panel Wi-Fi
+  # credentials, but Bluedroid's buffers keep starving internal RAM for the
+  # ESPN/update HTTPS fetches even after moving BT and TLS to PSRAM (v1.3.4),
+  # causing mbedtls_ssl_setup to fail and the panel to reboot. Once Wi-Fi is
+  # up there's nothing left for Bluetooth to do, so tear the BLE stack down
+  # and give that memory back. on_boot turns Bluetooth on for a panel with no
+  # saved network, and for the boot after "Reset Wi-Fi", which starts in setup
+  # mode with BLE on.
+  on_connect:
+    - script.stop: gd_ble_grace
+    - script.stop: gd_offline_count
+    - script.stop: gd_setup_window
+    - script.stop: boot_wifi_lost_later
+    - ble.disable:
+    - lambda: |-
+        // Arms the offline restart below. Until the panel has been on its
+        // network once this boot there is nothing to recover, so that
+        // counter stays parked at zero.
+        id(gd_ever_connected) = true;
+        id(gd_offline_seconds) = 0;
+        if (improv_ble::global_improv_component != nullptr)
+          improv_ble::global_improv_component->remember_sta(wifi::global_wifi_component->get_sta());
+        // The network that just worked is the first one tried next boot.
+        id(gd_networks).note_connected(wifi::global_wifi_component->get_sta());
+        ESP_LOGI("wifi", "Connected. Internal heap free: %u bytes",
+                 (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  # Wi-Fi is gone. Turn Bluetooth back on so the Game Day app can find the
+  # panel and hand it new credentials (a changed router password is the
+  # common case, and there is no other way back in), and say so on the
+  # screen instead of leaving a stale score up. A drop shorter than
+  # boot_wifi_lost_later's wait never covers the scoreboard. boot_check's poll
+  # repaints the normal lines by itself once Wi-Fi returns, so a router
+  # reboot resolves with no reboot of our own.
+  on_disconnect:
+    - script.execute: gd_ble_grace
+    - script.execute: boot_wifi_lost_later
+    - script.execute: gd_offline_count
+    - lambda: |-
+        ESP_LOGW("wifi", "Disconnected. Internal heap free: %u bytes",
+                 (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+
+script:
+  # The HUB75 driver turns itself off at brightness 0 and drops every pixel
+  # write while it is off, LVGL's flushes included. LVGL has no idea: it marks
+  # those areas clean, so when the panel comes back only what is invalidated
+  # afterwards (the ticker) is redrawn and the rest of the board stays black.
+  # Mark the whole screen dirty so the next flush sends all of it.
+  - id: gd_repaint
+    then:
+      - lambda: |-
+          lv_obj_t *screen = lv_screen_active();
+          if (screen != nullptr)
+            lv_obj_invalidate(screen);
+          lv_obj_t *top = lv_layer_top();
+          if (top != nullptr)
+            lv_obj_invalidate(top);
+
+  # The update component checks the manifest as soon as WiFi is up, which
+  # is before the clock is set; with verify_ssl that first check fails and
+  # the state reads "unknown" for six hours. Check once more once the clock
+  # is first set, by a time server or from ESPN's Date header.
+  - id: gd_check_after_clock
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(gd_update_checked);'
+          then:
+            - lambda: 'id(gd_update_checked) = true;'
+            - delay: 3s
+            # Every update entity rather than id(gd_firmware_update), which
+            # the demo build removes (firmware/pages/demo.yaml).
+            - lambda: |-
+                #ifdef USE_UPDATE
+                for (auto *u : App.get_updates())
+                  u->check();
+                #endif
+
+  # Point both logo slots at the cached logos. A logo that is still
+  # downloading shows blank until the logo_ready action runs this again.
+  # A failed download is retried by the cache itself on a later board update.
+  - id: gd_show_logos
+    then:
+      - lambda: |-
+          auto &logos = id(gameday_ctl).logos();
+          logos.pin(id(gd_team_logo_url), id(gd_opp_logo_url));
+          image::Image *team = logos.get(id(gd_team_logo_url));
+          image::Image *opp = logos.get(id(gd_opp_logo_url));
+          lv_image_set_src(id(gd_team_logo_img), team != nullptr ? team : id(gd_logo_blank));
+          lv_image_set_src(id(gd_opp_logo_img), opp != nullptr ? opp : id(gd_logo_blank));
+
+  # Bluetooth back on, but not for every two second blip. Bringing Bluedroid
+  # up and down is a large internal-RAM alloc and free each time, and that
+  # churn is the v1.3.4 territory this release is stepping back into, so do
+  # it once the panel is properly off the network instead of on every flap.
+  # ble.enable alone does not advertise. improv_ble starts once the panel
+  # has been offline for its wifi_timeout, set to match this delay below.
+  # on_connect stops this script, so a blip shorter than the delay never
+  # touches Bluetooth at all.
+  - id: gd_ble_grace
+    mode: restart
+    then:
+      - delay: 30s
+      - ble.enable:
+
+  # A panel that has a saved network but cannot get back on it is stuck in a
+  # way nothing else recovers from. ESPHome's own reboot_timeout is disabled
+  # while an ap: block is present (wifi_component.cpp guards it with
+  # !has_ap()), so restart from here one minute into an outage. Not armed on a
+  # panel with no network to fail to reach: a fresh unit, or one in setup
+  # after "Reset Wi-Fi", is legitimately sitting in setup mode
+  # (gd_setup_window below ends that one).
+  #
+  # Nor on a panel that has not been on its network yet this boot. Whole-house
+  # power restoration is the common case: the ESP32 is up in seconds and the
+  # router and the ISP take minutes. ESPHome's own Wi-Fi retry is the thing
+  # doing useful work in that window, so leave it to it. That also caps this
+  # at one restart per outage: gd_ever_connected is not restored, so the panel
+  # that comes back from the restart is a panel that has not connected this
+  # boot.
+  #
+  # Hold off while the Game Day app is connected over Bluetooth, and start the
+  # minute over once it leaves, so a restart never cuts off an owner who is
+  # picking a network or typing a password.
+  #
+  # on_disconnect starts this and on_connect stops it, so the minute is
+  # counted from the moment of the drop.
+  - id: gd_offline_count
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: return true;
+          then:
+            - delay: 10s
+            - lambda: |-
+                auto *w = wifi::global_wifi_component;
+                if (w == nullptr) return;
+                // A panel that has connected this boot has a real saved network,
+                // and "Reset Wi-Fi" restarts. get_sta() must not be checked here:
+                // it is blank while ESPHome rescans between reconnect attempts.
+                if (w->is_connected() || !w->has_sta()) {
+                  id(gd_offline_seconds) = 0;
+                  return;
+                }
+                // Never been on the network this boot: nothing has been lost, so
+                // there is nothing for a restart to recover. Keep waiting.
+                if (!id(gd_ever_connected)) {
+                  id(gd_offline_seconds) = 0;
+                  return;
+                }
+                const bool provisioning =
+                    improv_ble::global_improv_component != nullptr &&
+                    improv_ble::global_improv_component->get_improv_state() ==
+                        improv::STATE_PROVISIONING;
+                const bool app_connected =
+                    esp32_ble_server::global_ble_server != nullptr &&
+                    esp32_ble_server::global_ble_server->get_connected_client_count() > 0;
+                if (provisioning || app_connected) {
+                  if (id(gd_offline_seconds) > 0)
+                    ESP_LOGI("wifi", "App connected, holding the offline restart");
+                  id(gd_offline_seconds) = 0;
+                  return;
+                }
+                id(gd_offline_seconds) += 10;
+                ESP_LOGW("wifi", "Offline for %d s", id(gd_offline_seconds));
+                if (id(gd_offline_seconds) >= 60) {
+                  ESP_LOGW("wifi", "A minute with no Wi-Fi, restarting");
+                  id(gd_offline_seconds) = 0;
+                  App.safe_reboot();
+                }
+
+  # "Reset Wi-Fi" restarts the panel into setup mode with its saved networks
+  # kept (components/saved_networks). Fifteen minutes is time to find the app
+  # or the hotspot and finish; then restart, and the next boot is a normal one
+  # back on the saved networks, the same as unplugging it, which the setup
+  # screen offers. on_connect stops this, so finishing setup on a network ends
+  # it. Someone still at it over Bluetooth or on the hotspot at 15 minutes
+  # gets up to 10 more.
+  - id: gd_setup_window
+    then:
+      - delay: 15min
+      - while:
+          condition:
+            lambda: |-
+              const bool app =
+                  (esp32_ble_server::global_ble_server != nullptr &&
+                   esp32_ble_server::global_ble_server->get_connected_client_count() > 0) ||
+                  (improv_ble::global_improv_component != nullptr &&
+                   improv_ble::global_improv_component->get_improv_state() == improv::STATE_PROVISIONING);
+              wifi_sta_list_t hotspot{};
+              const bool on_hotspot = esp_wifi_ap_get_sta_list(&hotspot) == ESP_OK && hotspot.num > 0;
+              return (app || on_hotspot) && millis() < 25 * 60 * 1000;
+          then:
+            - delay: 10s
+      - lambda: |-
+          ESP_LOGW("wifi", "Setup not finished in 15 minutes, restarting onto the saved networks");
+          App.safe_reboot();
+
+captive_portal:
+
+improv_serial:
+
+esp32_ble:
+  enable_on_boot: false
+
+improv_ble:
+  authorizer: none
+  # Ready when Bluetooth comes on (gd_ble_grace) and well before the offline
+  # restart, so the app can reach a panel early in an outage.
+  wifi_timeout: 30s
+
+web_server:
+  version: 3
+  # Custom page (firmware/web). Regenerate bundle.js with scripts/build_web.py.
+  js_include: web/bundle.js
+  css_include: web/app.css
+
+http_request:
+  id: http_client
+  timeout: 20s
+  watchdog_timeout: 30s
+  # ESPN, its logo CDN and GitHub Pages all use Let's Encrypt, and the update
+  # mirror (Cloudflare) Google Trust Services; both are in the ESP-IDF
+  # certificate bundle, so every fetch (including firmware) is verified.
+  verify_ssl: true
+  buffer_size_rx: 2048
+
+# Over-the-air updates from the release manifest. Checked every 6 hours and
+# on demand from the device page.
+update:
+  - platform: http_request
+    id: gd_firmware_update
+    name: "Firmware"
+    source: ${update_source}
+    update_interval: 6h
+
+time:
+  - platform: sntp
+    id: ha_time  # the clock page extends this id
+    on_time_sync:
+      - script.execute: gd_check_after_clock
+    # Overridden at boot by the saved Timezone choice. Present so ESPHome
+    # 2026.9+ compiles its timezone support at all (posix_tz.cpp is only
+    # built when a timezone is configured).
+    timezone: "CST6CDT,M3.2.0,M11.1.0"
+
+# Team logos come from the gameday component's logo cache (logo_cache.cpp).
+# This blank stands in while one downloads.
+image:
+  - platform: file
+    file: images/logo-blank.png
+    id: gd_logo_blank
+    type: RGB565
+    transparency: alpha_channel
+
+globals:
+  - id: gd_update_checked
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  # The sport on the board (0 football), so the page layout can leave the
+  # timeout pips hidden for other sports until the next board update.
+  - id: gd_sport
+    type: int
+    restore_value: no
+    initial_value: '0'
+  # The off-season clock's second line shows the date (true) rather than the
+  # next game, so the minute refresh keeps it current (gameday-live.yaml).
+  - id: gd_clock_date
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+  # The logos the board wants right now, from the latest board update.
+  - id: gd_team_logo_url
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: gd_opp_logo_url
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  # Seconds the panel has been off its saved network, counted only once it has
+  # been on that network at least once this boot. Not restored, and neither is
+  # gd_ever_connected: the panel that comes back from the offline restart has
+  # not connected this boot, so it waits and retries instead of restarting
+  # again. One restart per outage, which is what the CHANGELOG promises.
+  - id: gd_offline_seconds
+    type: int
+    restore_value: no
+    initial_value: '0'
+  # True once Wi-Fi has connected this boot (wifi: on_connect). Arms the
+  # restart above. Deliberately a second global rather than a read of
+  # boot_last_connected_ms in firmware/pages/boot.yaml: that one is maintained
+  # by the boot overlay's 500ms poll, which stops when the overlay hides, and
+  # the recovery restart should not depend on a display page being built into
+  # the image or on when that poll happens to be running.
+  - id: gd_ever_connected
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# The device page talks to /gameday/state, /gameday/set and /gameday/action
+# (components/gameday). Only the entities worth having in Home Assistant stay.
+gameday:
+  id: gameday_ctl
+  http_request_id: http_client
+  time_id: ha_time
+  panel_layout_id: gd_panels
+  # "Follow beta" on the device page switches the update entity between these.
+  beta_channel:
+    update_id: gd_firmware_update
+    stable: ${update_source}
+    beta: ${beta_update_source}
+  update_mirror:
+    update_id: gd_firmware_update
+    source: ${update_source}
+    host: ${update_mirror_host}
+  on_action:
+    - if:
+        condition:
+          lambda: 'return x == "logo_ready";'
+        then:
+          - script.execute: gd_show_logos
+    # The heat or power hold changed (pages/guard.yaml)
+    - if:
+        condition:
+          lambda: 'return x == "guard";'
+        then:
+          - script.execute: gd_guard
+    # No time server answered, so the clock came from ESPN's Date header.
+    - if:
+        condition:
+          lambda: 'return x == "clock_approx";'
+        then:
+          - script.execute: gd_check_after_clock
+    # The QC screen (pages/qc.yaml), for a panel already on Wi-Fi
+    - if:
+        condition:
+          lambda: 'return x == "qc";'
+        then:
+          - script.execute: qc_start
+    - if:
+        condition:
+          lambda: 'return x == "team_picked";'
+        then:
+          - script.stop: boot_hide_later
+          - script.execute: boot_hide
+    # The boot screen holds until the first scoreboard (boot.yaml, boot_hide).
+    # A team change starts a new hold; board_ready ends one, unless the boot
+    # button owns the screen (its address, or the reset warning).
+    - if:
+        condition:
+          lambda: 'return x == "board_pending";'
+        then:
+          - lambda: 'id(boot_hold_since_ms) = 0;'
+          - script.stop: boot_hide_later
+          - if:
+              condition:
+                lambda: |-
+                  return id(boot_hold_stage) < 2 && !id(boot_show_address).is_running();
+              then:
+                - script.execute: boot_hide
+    - if:
+        condition:
+          lambda: |-
+            return x == "board_ready" && id(boot_hold_since_ms) != 0 && id(boot_hold_stage) < 2 &&
+                   !id(boot_show_address).is_running();
+        then:
+          - script.execute: boot_hide
+    # Sign-in Wi-Fi (components/gameday/captive.h): the boot screen comes up
+    # over the board to say so (boot.yaml, boot_hide keeps it up), and goes
+    # once ESPN answers. Left alone while the boot button owns the screen,
+    # and on the way out while a join's QR or a no-team QR turn is up, which
+    # hide it themselves.
+    - if:
+        condition:
+          lambda: |-
+            if (id(boot_hold_stage) >= 2 || id(boot_show_address).is_running())
+              return false;
+            if (x == "captive")
+              return true;
+            return x == "captive_clear" && !id(boot_hide_later).is_running() && !id(boot_app_qr_on);
+        then:
+          - script.execute: boot_hide
+    # Picking a team or a mode is somebody standing in front of a dark panel
+    # wondering why nothing happened. Light it back up.
+    - if:
+        condition:
+          and:
+            - lambda: 'return x == "user_pick";'
+            - switch.is_off: power
+        then:
+          - switch.turn_on: power
+  on_update:
+    # Published on every update, though the value often repeats: Home
+    # Assistant only logs a change, and the device page takes each Game
+    # Status event as its cue to re-read /gameday/state.
+    - text_sensor.template.publish:
+        id: gd_status_sensor
+        state: !lambda 'return x.ha_status_text;'
+    - text_sensor.template.publish:
+        id: gd_last_play_sensor
+        state: !lambda 'return x.ha_last_play;'
+    # The board gets the text through panel_text() so a character the fonts
+    # lack never draws as a box; Home Assistant keeps the original above.
+    - script.execute:
+        id: gd_update
+        game_state: !lambda 'return x.game_state;'
+        team_abbr: !lambda 'return gameday::panel_text(x.team_abbr);'
+        team_score: !lambda 'return x.team_score;'
+        opponent_abbr: !lambda 'return gameday::panel_text(x.opponent_abbr);'
+        opponent_score: !lambda 'return x.opponent_score;'
+        status_text: !lambda 'return gameday::panel_text(x.status_text);'
+        clock_text: !lambda 'return gameday::panel_text(x.clock_text);'
+        down_distance: !lambda 'return gameday::panel_text(x.down_distance);'
+        is_red_zone: !lambda 'return x.is_red_zone;'
+        team_color: !lambda 'return (int) x.team_color;'
+        opponent_color: !lambda 'return (int) x.opponent_color;'
+        team_badge: !lambda 'return x.team_badge;'
+        opponent_badge: !lambda 'return x.opponent_badge;'
+        team_ring: !lambda 'return (int) x.team_ring;'
+        opponent_ring: !lambda 'return (int) x.opponent_ring;'
+        possession: !lambda 'return x.possession;'
+        team_timeouts: !lambda 'return x.team_timeouts;'
+        opponent_timeouts: !lambda 'return x.opponent_timeouts;'
+        team_record: !lambda 'return gameday::panel_text(x.team_record);'
+        opponent_record: !lambda 'return gameday::panel_text(x.opponent_record);'
+        splash_text: !lambda 'return gameday::panel_text(x.splash_text);'
+        splash_color: !lambda 'return (int) x.splash_color;'
+        sport: !lambda 'return (int) x.sport;'
+        situation: !lambda 'return x.situation;'
+        outs: !lambda 'return x.outs;'
+        bases: !lambda 'return (int) x.bases;'
+        highlight: !lambda 'return x.highlight;'
+        team_marks: !lambda 'return x.team_marks;'
+        opp_marks: !lambda 'return x.opp_marks;'
+        message: !lambda 'return gameday::panel_text(x.message);'
+        clock_card: !lambda 'return x.clock;'
+        # Built from panel_text() pieces with a line break that panel_text()
+        # would turn into a space, so it goes to the board as it is.
+        next_line: !lambda 'return x.next_line;'
+    - lambda: |-
+        id(gd_team_logo_url) = x.team_logo;
+        id(gd_opp_logo_url) = x.opponent_logo;
+    - script.execute: gd_show_logos
+
+lvgl_page_manager:
+  sort: by_order
+  default_page: gameday_live
+  select:
+    name: "Select Page"
+    icon: "mdi:book-open-page-variant"
+  next_button:
+    name: "Page Next"
+    icon: "mdi:page-next"
+  prev_button:
+    name: "Page Previous"
+    icon: "mdi:page-previous"
+
+select:
+  - platform: gameday
+    gameday_id: gameday_ctl
+    type: team
+    name: "Team"
+    icon: "mdi:football"
+  - platform: gameday
+    gameday_id: gameday_ctl
+    type: mode
+    name: "Mode"
+    icon: "mdi:shuffle-variant"
+
+switch:
+  - platform: template
+    name: "Power"
+    id: power
+    icon: "mdi:power"
+    restore_mode: ALWAYS_ON
+    optimistic: true
+    turn_on_action:
+      - hub75.set_brightness:
+          id: matrix
+          brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state);'
+      - script.execute: gd_repaint
+    turn_off_action:
+      - hub75.set_brightness:
+          id: matrix
+          brightness: 0
+  # Off unless the owner turns it on. The setting itself lives in the gameday
+  # component (auto_update.h) with the rest of the device page's settings;
+  # this switch is how Home Assistant sees and changes it.
+  - platform: template
+    name: "Install Updates Automatically"
+    id: gd_auto_update
+    icon: "mdi:update"
+    entity_category: config
+    # The component keeps the setting; the switch must not set it at boot.
+    restore_mode: DISABLED
+    lambda: 'return id(gameday_ctl).auto_update();'
+    turn_on_action:
+      - lambda: 'id(gameday_ctl).set_auto_update(true);'
+    turn_off_action:
+      - lambda: 'id(gameday_ctl).set_auto_update(false);'
+number:
+  - platform: template
+    name: "Brightness"
+    id: brightness
+    icon: "mdi:brightness-6"
+    min_value: 1
+    max_value: 255
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 128
+    on_value:
+      then:
+        - if:
+            condition:
+              switch.is_on: power
+            then:
+              - hub75.set_brightness:
+                  id: matrix
+                  brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) x);'
+  - platform: template
+    name: "Scroll Speed"
+    id: shared_scroll_speed
+    icon: "mdi:speedometer"
+    min_value: 1
+    max_value: 10
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 5
+    entity_category: config
+
+button:
+  - platform: template
+    name: "Check for Updates"
+    id: gd_check_update
+    icon: "mdi:update"
+    entity_category: config
+    on_press:
+      - lambda: 'id(gd_firmware_update).update();'
+  - platform: template
+    name: "Refresh Now"
+    id: gd_refresh
+    icon: "mdi:refresh"
+    on_press:
+      - lambda: 'id(gameday_ctl).refresh_now();'
+  - platform: restart
+    icon: mdi:power-cycle
+    name: "Reboot"
+    entity_category: "diagnostic"
+  - platform: template
+    name: "Reset Wi-Fi"
+    id: reset_wifi
+    icon: mdi:wifi-remove
+    entity_category: config
+    on_press:
+      - lambda: |-
+          // The next boot starts in setup mode and keeps the saved networks
+          // for the one after (components/saved_networks).
+          id(gd_networks).start_setup();
+      - delay: 500ms
+      - lambda: |-
+          App.safe_reboot();
+  - platform: factory_reset
+    name: "Factory Reset"
+    id: factory_reset_btn
+    entity_category: config
+
+text_sensor:
+  - platform: template
+    name: "Game Status"
+    id: gd_status_sensor
+    icon: "mdi:scoreboard"
+  - platform: template
+    name: "Last Play"
+    id: gd_last_play_sensor
+    icon: "mdi:message-text-outline"
+  - platform: wifi_info
+    ip_address:
+      name: "IP"
+      icon: "mdi:ip-outline"
+      entity_category: "diagnostic"
+
+# The heap sensors are off in Home Assistant until someone turns them on, and
+# read every 5 minutes: free heap moves a little all the time, and at 30 s it
+# was a recorder row a minute per sensor. Bench and burn-in scripts read
+# GET /gameday/heap, which is live.
+sensor:
+  - platform: template
+    name: "Free Heap (PSRAM)"
+    device_class: data_size
+    state_class: measurement
+    entity_category: diagnostic
+    unit_of_measurement: "KiB"
+    update_interval: 5min
+    lambda: |-
+      #include "esp_heap_caps.h"
+      return (float) heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024;
+    disabled_by_default: true
+  # Internal RAM is what ran out in v1.3.4, and Bluetooth coming back on a
+  # Wi-Fi drop is what can run it out again.
+  - platform: template
+    name: "Free Heap (internal)"
+    device_class: data_size
+    state_class: measurement
+    entity_category: diagnostic
+    unit_of_measurement: "KiB"
+    update_interval: 5min
+    lambda: |-
+      #include "esp_heap_caps.h"
+      return (float) heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024;
+    disabled_by_default: true
+  # The biggest single piece of that free internal RAM. A large allocation
+  # needs one piece, so this can run low while the total above looks fine.
+  - platform: template
+    name: "Largest Free Block (internal)"
+    device_class: data_size
+    state_class: measurement
+    entity_category: diagnostic
+    unit_of_measurement: "KiB"
+    update_interval: 5min
+    lambda: |-
+      #include "esp_heap_caps.h"
+      return (float) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024;
+    disabled_by_default: true
+  # Scores and logos downloaded from ESPN since the panel started, for owners
+  # on a capped plan. It leaves out about 6 KB a read of connection overhead.
+  - platform: template
+    name: "ESPN Data"
+    icon: "mdi:download-network"
+    device_class: data_size
+    state_class: total_increasing
+    entity_category: diagnostic
+    unit_of_measurement: "MB"
+    accuracy_decimals: 1
+    update_interval: 5min
+    lambda: 'return (float) id(gameday_ctl).espn_bytes() / 1e6;'
+  - platform: wifi_signal
+    name: RSSI
+    update_interval: 60s
+    entity_category: "diagnostic"
+    disabled_by_default: true

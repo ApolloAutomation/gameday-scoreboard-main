@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy - Game Day Scoreboard</title>
+  <meta name="description" content="No account, no cloud service and no tracking. What the Game Day Scoreboard panel and app talk to, and what they never collect.">
+  <link rel="canonical" href="https://gamedayscoreboard.app/privacy/">
+  <meta property="og:site_name" content="Game Day Scoreboard">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Privacy - Game Day Scoreboard">
+  <meta property="og:description" content="No account, no cloud service and no tracking. What the Game Day Scoreboard panel and app talk to, and what they never collect.">
+  <meta property="og:url" content="https://gamedayscoreboard.app/privacy/">
+  <meta property="og:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@GameDayScore">
+  <meta name="twitter:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta name="twitter:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0b0f14; color: #e6edf3; }
+    main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+    h1 { font-size: 2rem; margin: 0 0 4px; }
+    .sub { color: #9da7b3; margin: 0 0 32px; }
+    .card { background: #151b23; border: 1px solid #262e38; border-radius: 12px; padding: 20px 24px; margin: 0 0 20px; }
+    .card h2 { margin: 0 0 6px; font-size: 1.2rem; }
+    .card p { margin: 0 0 14px; color: #c3ccd6; }
+    .note { font-size: 0.9rem; color: #9da7b3; }
+    a { color: #7cc4ff; }
+    footer { margin-top: 40px; font-size: 0.85rem; color: #6f7a86; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="sub">Effective 2026-10-18.</p>
+
+  <div class="card">
+    <h2>The short version</h2>
+    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores and to GitHub for firmware updates. That's the whole picture.</p>
+  </div>
+
+  <div class="card">
+    <h2>What the panel does</h2>
+    <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked and a request for the current schedule.</p>
+    <p>The panel's own web page, opened in your browser, asks ESPN for today's games and team logos and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it.</p>
+  </div>
+
+  <div class="card">
+    <h2>What the app does</h2>
+    <p>The app finds and talks to panels on your home Wi-Fi network only, using Bonjour to discover them and HTTP to read scores and send settings. First-time Wi-Fi setup happens over Bluetooth, directly between your phone and the panel. Your Wi-Fi password goes from the phone straight to the panel and is stored only on the panel. The app also fetches team logos from ESPN's image servers so you can see them while picking a team. The app has no server of its own, no account or sign-in, and does not collect analytics or usage data.</p>
+  </div>
+
+  <div class="card" id="launch-list">
+    <h2>The launch list</h2>
+    <p>If you type your email into the launch list form on this site, it goes to our store on Shopify, where it joins the same email list as the signup on the store itself. We use it to tell you when scoreboards are ready to order and for launch news, nothing else. Every email has an unsubscribe link, or write to <a href="mailto:support@gameday-scoreboard.com">support@gameday-scoreboard.com</a> to be taken off.</p>
+    <p class="note">On its way to Shopify the email passes through our support system, which holds it only until Shopify has it.</p>
+  </div>
+  <div class="card">
+    <h2>Buying a scoreboard</h2>
+    <p>Orders, the launch list and support email are handled by our store at <a href="https://gameday-scoreboard.com">gameday-scoreboard.com</a>, which has its own privacy policy. This page covers the app, the panel and this site.</p>
+  </div>
+
+  <div class="card">
+    <h2>What we don't do</h2>
+    <p>No accounts. No analytics or crash reporting. No advertising. The app and the panel collect nothing, and the launch list is only used for our own emails, so there's nothing to sell or share.</p>
+    <p>Like any website, ESPN and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
+  </div>
+
+  <div class="card">
+    <h2>Questions</h2>
+    <p>Use the <a href="/support/">support page</a>.</p>
+  </div>
+
+  <footer>
+    <a href="/">Game Day Scoreboard</a>
+  </footer>
+</main>
+</body>
+</html>
