@@ -472,7 +472,12 @@ jobs:
           # its header); the beta then goes live with that release.
           git fetch -q --depth=1 origin main
           v=$(git show origin/main:firmware/gameday-common.yaml | sed -n 's/^  version: "\(.*\)"$/\1/p' | head -n1)
-          tag=$(gh release view --json tagName --jq .tagName)
+          # A repo with no release yet has no live site to republish; the
+          # files wait on the beta-firmware prerelease for the first release.
+          if ! tag=$(gh release view --json tagName --jq .tagName 2>/dev/null); then
+            echo "::warning::There is no release yet, so the site isn't live and this beta reaches it with the first release. The files are on the beta-firmware prerelease."
+            exit 0
+          fi
           if [ "v$v" != "$tag" ]; then
             echo "::warning::main is at v$v and the latest release is $tag, so this beta reaches the site with the v$v release, not now."
           fi
@@ -654,9 +659,10 @@ jobs:
           } > release/body.md
           gh release create "$GITHUB_REF_NAME" $ASSETS --title "$GITHUB_REF_NAME" --notes-file release/body.md || \
           { gh release upload "$GITHUB_REF_NAME" $ASSETS --clobber; gh release edit "$GITHUB_REF_NAME" --notes-file release/body.md; }
-      # The same update feed on updates.gameday-scoreboard.com, which panels
-      # read when gamedayscoreboard.app fails. Last, so a mirror problem never
-      # holds up the release.
+      # A copy of the update feed on a second host, for a project that has one
+      # (scripts/publish_mirror.sh). Without the Cloudflare secrets it warns
+      # and does nothing; firmware built from this repo reads no mirror. Last,
+      # so a mirror problem never holds up the release.
       - name: Publish the update mirror
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_MIRROR_TOKEN }}

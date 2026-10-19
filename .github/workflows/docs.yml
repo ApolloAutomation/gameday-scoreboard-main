@@ -4,10 +4,8 @@ name: Docs
 # request that touches it or CHANGELOG.md, so a broken page or link fails
 # the PR. The changelog page is generated from CHANGELOG.md at build time.
 #
-# Publishing is not done here. The gameday-scoreboard/docs repo's Publish
-# workflow builds this repo's main every 15 minutes and deploys it to
-# GitHub Pages at docs.gameday-scoreboard.com, so what is live is always
-# what main has.
+# Publishing is not done here: the docs have no published home yet, and
+# links point at the markdown in this repo.
 
 on:
   pull_request:
