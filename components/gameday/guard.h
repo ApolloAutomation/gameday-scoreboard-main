@@ -145,10 +145,11 @@ inline GuardMark guard_mark(uint8_t heat_step, bool power_capped) {
 }
 
 // The keys added to the health object: ,"temp":41.5,"heat":0,"brownouts":0,"power":"ok"
-// temp is left out before the first reading.
+// temp is left out before the first reading, and for one that isn't a finite
+// number (JSON has no inf).
 inline int guard_json_keys(char *buf, size_t size, float temp_c, uint8_t heat_step, const PowerLog &log) {
   char temp[24] = "";
-  if (!std::isnan(temp_c))
+  if (std::isfinite(temp_c))
     snprintf(temp, sizeof(temp), ",\"temp\":%.1f", temp_c);
   return snprintf(buf, size, "%s,\"heat\":%u,\"brownouts\":%u,\"power\":\"%s\"", temp, (unsigned) heat_step,
                   (unsigned) log.brownouts, log.capped ? "capped" : "ok");

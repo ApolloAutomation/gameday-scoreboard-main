@@ -4679,6 +4679,21 @@ static void test_guard_steps() {
   CHECK(n > 0 && n < (int) sizeof(buf));
 }
 
+// JSON has no inf or nan, so a reading that is neither a number nor finite
+// leaves temp out like no reading at all, and the state document stays JSON.
+static void test_guard_json_finite() {
+  char buf[96];
+  PowerLog log{};
+  const std::string no_temp = ",\"heat\":3,\"brownouts\":0,\"power\":\"ok\"";
+  for (float c : {INFINITY, -INFINITY, NAN}) {
+    int n = guard_json_keys(buf, sizeof(buf), c, kHeatSteps, log);
+    CHECK(n > 0 && n < (int) sizeof(buf));
+    CHECK_EQ(std::string(buf), no_temp);
+  }
+  guard_json_keys(buf, sizeof(buf), 0.0f, kHeatSteps, log);
+  CHECK_EQ(std::string(buf), std::string(",\"temp\":0.0") + no_temp);
+}
+
 static void test_offseason() {
   const int64_t now = 1792080000;  // any fixed instant
   const int64_t day = 24 * 3600;
@@ -5224,6 +5239,7 @@ int main() {
   test_power_log();
   test_guarded_brightness();
   test_guard_steps();
+  test_guard_json_finite();
   test_offseason();
   test_offseason_edges();
   test_panel_text();
