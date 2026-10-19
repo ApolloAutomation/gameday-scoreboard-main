@@ -462,6 +462,36 @@ static void test_splash() {
   CHECK_EQ(decide_splash(live(20, 21), halted, true, true).text, std::string(""));
 }
 
+// The victory splash follows the same rules in every sport: the game went
+// from live to over between two reads of it, completed, with a winner.
+static void test_win_splash_every_sport() {
+  for (Sport sport : {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER}) {
+    auto at = [sport](int us, int them, GameState st, bool completed) {
+      GameSnapshot s = live(us, them, st);
+      s.sport = sport;
+      s.completed = completed;
+      return s;
+    };
+    const GameSnapshot was = at(3, 3, GameState::IN, false);
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), true).text, std::string("DAL WINS!"));
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), false).color, (uint32_t) 0x002a5c);
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true).text, std::string(""));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).text, std::string("PHI WINS!"));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).color, (uint32_t) 0x004c54);
+    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, std::string(""));  // a draw
+    // Suspended or canceled: post, never completed, no winner
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, false), true).text, std::string(""));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, false), true, true).text, std::string(""));
+    // Already over at the read before, after a boot, or another game
+    CHECK_EQ(decide_splash(at(4, 3, GameState::POST, true), at(4, 3, GameState::POST, true), true).text,
+             std::string(""));
+    CHECK_EQ(decide_splash(GameSnapshot{}, at(4, 3, GameState::POST, true), true).text, std::string(""));
+    GameSnapshot other = at(4, 3, GameState::POST, true);
+    other.event_id = "2";
+    CHECK_EQ(decide_splash(was, other, true).text, std::string(""));
+  }
+}
+
 static void test_status_text() {
   TickerOptions all;
   GameSnapshot s = live(24, 24);
@@ -4380,6 +4410,7 @@ int main() {
   test_event_matches_scoreboard();
   test_scoreboard_pre_nfl();
   test_splash();
+  test_win_splash_every_sport();
   test_status_text();
   test_no_game_text();
   test_captive();
