@@ -131,6 +131,7 @@ ENTITIES = [
      "current_version": "1.5.4", "summary": "", "release_url": ""},
     {"id": "text_sensor/IP", "domain": "text_sensor", "name": "IP", "state": "10.10.10.97", "value": "10.10.10.97"},
     {"id": "button/Refresh Now", "domain": "button", "name": "Refresh Now", "state": ""},
+    {"id": "button/Check for Updates", "domain": "button", "name": "Check for Updates", "state": ""},
     {"id": "button/Reboot", "domain": "button", "name": "Reboot", "state": ""},
     {"id": "button/Reset Wi-Fi", "domain": "button", "name": "Reset Wi-Fi", "state": ""},
     {"id": "button/Factory Reset", "domain": "button", "name": "Factory Reset", "state": ""},

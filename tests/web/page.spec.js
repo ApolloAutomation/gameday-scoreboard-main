@@ -850,6 +850,10 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await page.reload();
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest beta, v1.5.6");
   await expect(page.locator("#fwInstall")).toBeHidden();
+  // Check for updates says nothing about the older beta it found.
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest beta, v1.5.6", { timeout: 8000 });
+  await expect(page.locator("#toast")).not.toContainText("Update available");
 
   // Beta turned off on a beta build: the release it led up to replaces it.
   await reset(request, { beta: false });
@@ -857,6 +861,8 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await page.reload();
   await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
   await expect(page.locator("#fwInstall")).toBeVisible();
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#toast")).toHaveText("Update available: v1.5.6", { timeout: 8000 });
 
   // An older release is still behind a beta of the next one.
   entity = { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" };
