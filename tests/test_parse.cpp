@@ -891,6 +891,28 @@ static void test_favorites() {
   CHECK_EQ(c.index, 0);
 }
 
+// The list is only the favorites set, so it can get shorter while a later
+// slot is up or pinned. A slot past the end is skipped like an empty one.
+static void test_favorites_shrunk() {
+  FavRules r;
+  const int64_t T = 1000000;
+  std::vector<FavGame> idle = {fav(GameState::PRE, T + 86400), fav(GameState::PRE, T + 2 * 86400)};
+  FavChoice c = pick_favorite(idle, T, r, 5, T, 5);
+  CHECK_EQ(c.index, 0);
+  CHECK(!c.locked);
+  c = pick_favorite(idle, T, r, 1, T - 60, 7);
+  CHECK_EQ(c.index, 0);
+  std::vector<FavGame> live = {fav(GameState::PRE, T + 86400), fav(GameState::IN, T - 600)};
+  c = pick_favorite(live, T, r, 6, T, 9);
+  CHECK_EQ(c.index, 1);
+  CHECK(c.locked);
+  r.alternate = true;
+  c = pick_favorite(live, T, r, 6, T, -1);
+  CHECK_EQ(c.index, 1);
+  c = pick_favorite({}, T, r, 3, T, 3);
+  CHECK_EQ(c.index, -1);
+}
+
 // A schedule parsed from the team endpoint does not know its own league, so
 // the caller has to stamp it. Without the stamp a college favorite polls the
 // NFL scoreboard and never finds its game.
@@ -4997,6 +5019,7 @@ int main() {
   test_clock_text();
   test_color();
   test_favorites();
+  test_favorites_shrunk();
   test_followed_favorite();
   test_schedule_league();
   test_schedule_due();
