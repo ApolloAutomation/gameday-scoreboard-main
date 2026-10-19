@@ -3786,6 +3786,7 @@ static void test_update_mark() {
   m.installing[0] = '\0';
   update_mark_boot(m, "1.0", false);
   CHECK(strlen(m.failed) < kUpdateVersionLen);
+  CHECK(m.failed[0] == '\0');  // no readable version, so it never holds back a release
 }
 
 // Every byte of a panel_text() result is printable ASCII or part of a Latin-1
