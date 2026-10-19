@@ -3419,7 +3419,7 @@ std::string GamedayComponent::health_json_() {
 #else
   h.channel = "none";
 #endif
-  char buf[384];
+  char buf[::espn::kHealthJsonSize];
   int n = ::espn::health_json(buf, sizeof(buf), h);
   if (n <= 0 || n >= (int) sizeof(buf))
     return "{}";

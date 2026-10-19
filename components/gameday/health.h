@@ -216,6 +216,10 @@ struct Health {
   const char *channel;  // stable, beta, bar or none
 };
 
+// Room for the longest "health" object (GamedayComponent::health_json_
+// sends "{}" when it doesn't fit, and the device page hides Diagnostics).
+static const size_t kHealthJsonSize = 384;
+
 // The "health" object in /gameday/state. Optional keys are left out rather
 // than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read.
 // Returns what snprintf does; the strings are the firmware's own, no quotes.

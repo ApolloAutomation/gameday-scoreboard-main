@@ -3980,6 +3980,35 @@ static void test_health_json() {
   CHECK(doc["fault"].isNull());
   CHECK_EQ(doc["espn"].as<int>(), 0);
   CHECK_EQ(doc["espn_ago"].as<int>(), 30);
+
+  // The longest it gets fits the firmware's buffer: every optional key, the
+  // widest numbers each field can hold (an ESPN read's age is millis() / 1000
+  // and its status three digits) and a version as long as the crash report
+  // keeps.
+  h.uptime_s = INT64_MAX;
+  h.start = Restart::WATCHDOG;
+  h.boots = UINT32_MAX;
+  h.fault = Restart::WATCHDOG;
+  h.fault_ago = INT64_MAX;
+  h.heap_kb = 512.0f;
+  h.block_kb = 512.0f;
+  h.psram_kb = 32768.0f;
+  h.wifi = true;
+  h.rssi = INT32_MIN;
+  h.espn_status = 999;
+  h.espn_ago = UINT32_MAX / 1000;
+  h.version = "2026.12.31-beta.1234567";
+  h.built = INT64_MAX;
+  h.channel = "stable";
+  n = health_json(buf, sizeof(buf), h);
+  CHECK(n > 0 && n < (int) kHealthJsonSize);
+  doc.clear();
+  CHECK(!deserializeJson(doc, buf));
+  CHECK_EQ(std::string(doc["channel"].as<const char *>()), std::string("stable"));
+  CHECK_EQ(doc["espn_ago"].as<int64_t>(), (int64_t) (UINT32_MAX / 1000));
+  CHECK_EQ(doc["fault_ago"].as<int64_t>(), INT64_MAX);
+  // Too small a buffer says so, as snprintf does.
+  CHECK(health_json(buf, 64, h) >= 64);
 }
 
 // The crash handler's console line for one of its ESP_LOGE calls, as
