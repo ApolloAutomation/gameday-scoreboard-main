@@ -57,11 +57,7 @@ Then install the pinned version:
 pip install esphome==2026.10.0b3
 ```
 
-The `dev` and `beta` branches may build on an ESPHome beta. `main`, which every release and the update feed come from, builds only on a final ESPHome release.
-
-:::note[Coming in the next release]
-CI checks the rule: a pull request into `main` or a release tag fails when the pin isn't a final release like 2026.10.0.
-:::
+The `dev` and `beta` branches may build on an ESPHome beta. `main`, which every release and the update feed come from, builds only on a final ESPHome release. CI checks it: a pull request into `main`, or a release tag, fails when the pin isn't a final release like 2026.10.0. A maintainer can let an ESPHome beta through with the `esphome-beta-ok` label on the pull request that promotes it.
 
 ## Get the code
 

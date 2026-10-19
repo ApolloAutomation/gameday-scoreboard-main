@@ -7,13 +7,9 @@ sidebar:
 
 The panel updates its own firmware over Wi-Fi. There is nothing to plug in. What changed in each release is on the [What's new](/changelog/) page.
 
-:::note[Coming in the next release]
-The panel reads its updates from the Apollo Automation release feed, on the project's site at `apolloautomation.github.io/gameday-scoreboard-main`, and the **Release notes** link in the Firmware box opens the changelog there. The first Apollo Automation release starts that feed. Until then the Firmware box says **Not checked yet**, and **Check for updates** says it could not reach the update server. Nothing is wrong with the panel.
-:::
-
 ## How the panel checks
 
-The panel checks for a new release every 6 hours, and once a few seconds after it first sets its clock when it starts. **Check for updates** in the Device card on the device page checks right away.
+The panel reads its updates from the Apollo Automation release feed, on the project's site at `apolloautomation.github.io/gameday-scoreboard-main`. It checks for a new release every 6 hours, and once a few seconds after it first sets its clock when it starts. **Check for updates** in the Device card on the device page checks right away.
 
 The **Firmware** box in the Device card says what it found:
 
@@ -21,8 +17,11 @@ The **Firmware** box in the Device card says what it found:
 | --- | --- |
 | **You're up to date** and the version | The panel runs the newest release. |
 | **Update available** and the version | A newer release is out. The box lists what's in it, with a **Release notes** link, and shows an **Install** button. |
-| **You're ahead of the latest release** | The panel runs something newer than the published release, like a test build. Nothing to install. |
+| **You're ahead of the latest release** and the version, or **You're ahead of the latest beta** with **Follow beta** on | The panel runs something newer than the newest published version, which the box names, like a test build. Nothing to install. With betas, see [Beta versions](#beta-versions). |
 | **Not checked yet** | The panel hasn't heard from the update server since it started. Tap **Check for updates**. |
+| **The update to** a version **didn't take** | That version crashed as it started, and the panel went back to the one it had. See [An update that didn't take](#an-update-that-didnt-take). |
+
+For a release, the **Release notes** link in the box opens that release's section of the changelog on the project's site.
 
 If the check can't reach the update server, the page says **Could not reach the update server. Try again in a minute.**
 
@@ -52,12 +51,16 @@ With the switch off, the panel still checks and the device page tells you when a
 
 If a new version crashes as it starts, the panel goes back to the firmware it had. It remembers that version and doesn't install it on its own again, so it never restarts into the same bad update every night. A later release still installs, and **Install** on the device page still tries the one that failed.
 
-:::note[Coming in the next release]
-The Firmware box says when this happened: **The update to** a version **didn't take and the panel went back to** the version it runs now, with **Install tries it again.**
-:::
+While that version is the one on offer, the Firmware box says **The update to** that version **didn't take and the panel went back to** the version it runs now, with **Install tries it again.** With **Install updates automatically** on, it adds **It won't install this one on its own.**
 
 ## Beta versions
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
 
-The **Follow beta** switch in the Device card moves a panel to the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. Turn **Follow beta** off and the panel stays on its beta until the next release.
+A beta carries the number of the release it leads up to, plus a build number, like 2026.10.1-beta.20. A higher build number is a newer beta, and every beta comes before the release with the same number: 2026.10.1 is newer than any 2026.10.1 beta.
+
+The **Follow beta** switch in the Device card moves a panel to the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
+
+Turn **Follow beta** on while the panel runs a release, and it waits for a beta of the next release. The betas of the release it already runs are older, so they aren't offered, and the Firmware box says **You're ahead of the latest beta** until a newer beta is out.
+
+Turn **Follow beta** off while the panel runs a beta, and it stays on that beta. The Firmware box says **You're ahead of the latest release** until the release that beta leads up to ships. Then the box offers that release, and with **Install updates automatically** on, the panel installs it overnight.

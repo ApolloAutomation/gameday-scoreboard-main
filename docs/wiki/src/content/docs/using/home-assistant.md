@@ -29,11 +29,10 @@ Once it's added, the panel shows up as a device under the ESPHome integration, w
 
 Picking a team or a mode from Home Assistant counts as setting the panel up, the same as the device page, so the ticker stops asking you to pick a team.
 
-Want to change the firmware itself, for example to add your own API key? Build it from the YAML with ESPHome. See [Build it yourself](/diy/build-from-source/).
+Want to change the firmware itself, for example to add your own API key? Adopt the panel in [ESPHome Device Builder](#adopting-it-in-esphome-device-builder), or build it from the YAML with ESPHome (see [Build it yourself](/diy/build-from-source/)).
 
 ## Adopting it in ESPHome Device Builder
 
-:::note[Coming in the next release]
 If you run ESPHome Device Builder (the ESPHome add-on in Home Assistant, or ESPHome's dashboard running on a computer), it can adopt the panel. You then build and install the panel's firmware from Device Builder, and you can add your own lines to it. You don't need this to use the panel in Home Assistant.
 
 1. Open Device Builder with the panel on the same network. It shows the panel as discovered, with an **Adopt** button.
@@ -42,8 +41,7 @@ If you run ESPHome Device Builder (the ESPHome add-on in Home Assistant, or ESPH
 
 The adopted firmware has an API key, so Home Assistant needs that key to stay connected. With Device Builder running as a Home Assistant add-on, Home Assistant gets the key from it. Otherwise Home Assistant asks for it: the key is in the panel's configuration in Device Builder, under `api:`.
 
-Device Builder builds from the current release in the firmware repo, with its own ESPHome version, so keep Device Builder up to date. To update an adopted panel, install it again from Device Builder. Leave **Install updates automatically** off (see [Firmware updates](/using/updates/)): a release installed from the device page or from Home Assistant's **Firmware** entity puts the prebuilt firmware back, without the key or your changes, and Home Assistant then asks you to set up the connection again.
-:::
+Device Builder builds from the firmware repo's `main` branch, which the releases come from. It uses its own ESPHome version, so keep Device Builder up to date. To update an adopted panel, install it again from Device Builder. Leave **Install updates automatically** off (see [Firmware updates](/using/updates/)): a release installed from the device page or from Home Assistant's **Firmware** entity puts the prebuilt firmware back, without the key or your changes, and Home Assistant then asks you to set up the connection again.
 
 ## What appears
 
@@ -63,16 +61,13 @@ Device Builder builds from the current release in the firmware repo, with its ow
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
+| **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
 
 The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
 
 Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues and the panel layout have no entities. Set them on the device page or in the app.
-
-:::note[Coming in the next release]
-A **Chip Temperature** sensor reports the controller's temperature, the reading the panel uses to dim itself when it runs hot.
-:::
 
 ## What you can automate
 
