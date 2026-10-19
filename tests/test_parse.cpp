@@ -4652,6 +4652,31 @@ static void test_tbd_kickoff() {
   CHECK(!team_cache_load(c, League::NCAA, kIowa, placeholder - 5 * 86400 + 60, back));
 }
 
+// Each ESP-IDF disconnect reason wifi_cause() names, and the keys the device
+// page reads (WIFI_CAUSES in app.js).
+static void test_wifi_causes() {
+  const int signal[] = {200, 201, 205, 209, 212, 34, 39};
+  const int router[] = {2, 3, 4, 5, 6, 7, 47, 206};
+  const int password[] = {14, 15, 16, 23, 202, 204};
+  for (int r : signal)
+    CHECK(wifi_cause(r) == WifiCause::SIGNAL);
+  for (int r : router)
+    CHECK(wifi_cause(r) == WifiCause::ROUTER);
+  for (int r : password)
+    CHECK(wifi_cause(r) == WifiCause::PASSWORD);
+  CHECK(wifi_cause(12) == WifiCause::ROAM);
+  CHECK(wifi_cause(207) == WifiCause::ROAM);
+  CHECK(wifi_cause(8) == WifiCause::PANEL);
+  // A link lost with no disconnect event comes in as 0.
+  CHECK(wifi_cause(0) == WifiCause::OTHER);
+  CHECK(wifi_cause(-1) == WifiCause::OTHER);
+  CHECK(wifi_cause(203) == WifiCause::OTHER);  // ASSOC_FAIL
+  const char *keys[] = {"signal", "router", "password", "roam", "other", "panel"};
+  for (uint8_t c = 0; c <= (uint8_t) WifiCause::PANEL; c++)
+    CHECK_EQ(std::string(wifi_cause_key((WifiCause) c)), std::string(keys[c]));
+  CHECK_EQ((int) kWifiCauses, (int) WifiCause::PANEL);  // the counted ones come before PANEL
+}
+
 static void test_wifi_history() {
   CHECK(wifi_cause(200) == WifiCause::SIGNAL);  // beacon timeout
   CHECK(wifi_cause(3) == WifiCause::ROUTER);    // deauth from the router
@@ -4878,6 +4903,7 @@ int main() {
   test_offseason();
   test_panel_text();
   test_wifi_history();
+  test_wifi_causes();
   failures += run_set_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
