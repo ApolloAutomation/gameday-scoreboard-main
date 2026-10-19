@@ -829,12 +829,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // a game, or its default or a live mode's words.
   std::string no_game_why_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
-  uint32_t worker_seq_{0};     // bumped when a worker is abandoned
+  // Bumped by the main loop when it abandons a worker, read by the worker.
+  std::atomic<uint32_t> worker_seq_{0};
   Job job_;
   uint32_t generation_{0};
   bool busy_{false};
   bool selects_published_{false};
-  volatile bool job_done_{false};
+  // Set by the worker once job_ is complete. An atomic store and load (not
+  // volatile) order the worker's writes to job_ before the main loop's reads
+  // of it on the other core.
+  std::atomic<bool> job_done_{false};
   // Written by the fetch task, read by the main loop.
   std::atomic<uint64_t> espn_bytes_{0};
   std::atomic<uint32_t> espn_requests_{0};
