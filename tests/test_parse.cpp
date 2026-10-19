@@ -3025,6 +3025,50 @@ static void test_recap() {
   CHECK(!legacy_team_unpicked(NCAA, 6, false, false));
 }
 
+// How a loop's cards are shared between leagues: one each in league order,
+// round and round, so the split is as even as it can be and a league with
+// fewer games leaves the rest to the others.
+static void test_recap_share() {
+  const size_t NFL = (size_t) League::NFL, NCAA = (size_t) League::NCAA, NHL = (size_t) League::NHL;
+  size_t have[kLeagueCount] = {}, got[kLeagueCount];
+  have[NFL] = 20;
+  have[NCAA] = 20;
+  recap_share(have, 22, got);
+  CHECK_EQ(got[NFL], (size_t) 11);
+  CHECK_EQ(got[NCAA], (size_t) 11);
+  // An odd card goes to the league that comes first.
+  recap_share(have, 7, got);
+  CHECK_EQ(got[NFL], (size_t) 4);
+  CHECK_EQ(got[NCAA], (size_t) 3);
+  // A league with one game keeps it and the other takes the rest.
+  have[NFL] = 1;
+  recap_share(have, 22, got);
+  CHECK_EQ(got[NFL], (size_t) 1);
+  CHECK_EQ(got[NCAA], (size_t) 20);
+  // Room for more than there is: everything, and nothing for a league with none.
+  have[NHL] = 3;
+  recap_share(have, 100, got);
+  CHECK_EQ(got[NFL] + got[NCAA] + got[NHL], (size_t) 24);
+  CHECK_EQ(got[(size_t) League::MLB], (size_t) 0);
+  // Three leagues, eight later-today cards.
+  have[NFL] = have[NCAA] = have[NHL] = 8;
+  recap_share(have, kRecapLaterCap, got);
+  CHECK_EQ(got[NFL], (size_t) 3);
+  CHECK_EQ(got[NCAA], (size_t) 3);
+  CHECK_EQ(got[NHL], (size_t) 2);
+  // No room, or nothing to show: every share is 0, whatever got held before.
+  recap_share(have, 0, got);
+  size_t total = 0;
+  for (size_t l = 0; l < kLeagueCount; l++)
+    total += got[l];
+  CHECK_EQ(total, (size_t) 0);
+  size_t none[kLeagueCount] = {};
+  recap_share(none, 22, got);
+  for (size_t l = 0; l < kLeagueCount; l++)
+    total += got[l];
+  CHECK_EQ(total, (size_t) 0);
+}
+
 static Pending mkpending(uint8_t league, int rank, int64_t kick, const char *abbr) {
   Pending p;
   p.league = league;
@@ -4774,6 +4818,7 @@ int main() {
   test_badge();
   test_demo();
   test_recap();
+  test_recap_share();
   test_later_today();
   test_backoff();
   test_miss_count();
