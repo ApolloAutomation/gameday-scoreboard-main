@@ -206,7 +206,10 @@ with `power_ok` on the device page.
   own.
 - **Follow beta**: release firmware built from the `beta` branch, at
   `${site_base}/firmware/<variant>-beta/manifest.json`, chosen with the
-  "Follow beta" switch (`beta_channel` in the component).
+  "Follow beta" switch (`beta_channel` in the component). Betas are
+  `<version>-beta.<run>`; `version_newer` puts every beta before the release
+  with its number, so turning the switch off moves a panel to that release
+  once it ships.
 - **Bar builds**: `${site_base}/firmware/beta/<variant>/manifest.json`,
   checked every 15 minutes and installed on their own at night, or right away
   when the beta's summary says "Install now:" with the panel's name.

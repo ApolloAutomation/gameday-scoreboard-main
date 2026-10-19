@@ -407,11 +407,14 @@ Recommendations follow each.
 - **Rollback detection can blame a later release** because the invalid mark
   in otadata stays until the next successful install into that slot. Record
   at install time whether an invalid partition already existed.
-- **Beta versions sort above their release.** CI names betas
-  `<version>-beta.<run>`, and the firmware treats `-beta.N` as newer than the
-  plain number. If the version is bumped before a release reaches beta, a
-  panel on Follow beta will not take that release. See "Cutting the first
-  Apollo release".
+- **Beta versions sorted above their release.** Settled in the first
+  release's pull request: a release now sorts after every beta with its
+  number (`version_newer` and the device page's `isNewer`), so a panel that
+  turns Follow beta off is offered the release its beta led up to. Bar builds
+  off `beta` are `<version>-beta.0`, so a bar panel flashed from one still
+  takes the next beta. Bump `version` on `dev` right after each release, or
+  panels running it take no beta until the next bump; the beta publish warns
+  when its version is already released.
 - **Update URLs accept http://.** Every shipped build uses https; rejecting
   plain http in the schema is a policy choice (bench builds may use a local
   server).
@@ -535,37 +538,37 @@ and option 3 or 4 only together with per-panel secrets.
    in `.github/workflows/build.yml` on `dev` in its own pull request, compile
    every build, run every check, and re-diff `components/improv_ble` against
    the new upstream component (it is a marked override of 2026.10.0b3's).
-2. **A version and its changelog.** Bump `version` in
-   `firmware/gameday-common.yaml` above 2026.10.0 (for example 2026.10.1) and
-   add a matching `## v2026.10.1` section to `CHANGELOG.md` in owner words. A
-   tag without a matching section fails CI. Decide the beta ordering first:
-   if the bump reaches `beta` before the release, betas are named
-   `2026.10.1-beta.N`, which the firmware sorts above `2026.10.1`, so panels
-   on Follow beta would skip the release. Either bump in the same promotion
-   that goes on to `main`, or change the ordering (and its tests) first.
-3. **Docs.** Remove the "Coming in the next release" asides and rewrite the
-   text they replace.
-4. **Promote.** Open "Promote dev to beta" (head `dev`, base `beta`), let the
+2. **The release pull request.** A draft pull request into `dev` holds the
+   rest: `version` 2026.10.1 in `firmware/gameday-common.yaml`, its
+   `## v2026.10.1` section in `CHANGELOG.md` (a tag without a matching
+   section fails CI), the docs with every "Coming in the next release" aside
+   folded in, and the beta order above. Merge it once step 1 is on `dev`,
+   after a last check that no change merged since needs a changelog line or
+   an aside folded in.
+3. **Promote.** Open "Promote dev to beta" (head `dev`, base `beta`), let the
    beta channel run, then "Promote beta to main" (head `beta`, base `main`).
    CI's Branch rules check the source branch and the final ESPHome.
-5. **Tag `main`.** `git tag v2026.10.1` on `main`'s merge commit and push the
+4. **Tag `main`.** `git tag v2026.10.1` on `main`'s merge commit and push the
    tag. The tag's Build run checks the tag against the version and the
    changelog, builds the three release variants, and its publish job
    assembles the site (docs/site, the firmware manifests and images, the
    rendered changelog, the beta channel folders), deploys it to GitHub Pages,
    and creates the GitHub release with the factory images and the manifest
    zips. The update mirror step warns and skips.
-6. **The Pages environment.** The repository's `github-pages` environment
+5. **The Pages environment.** The repository's `github-pages` environment
    allows deployments from `dev`, `main` and `v*` tags. Keep `main` and `v*`;
    `dev` can go, since only `main` (site.yml) and release tags (build.yml)
    publish the site.
-7. **Check the live site.** After the deploy, read
+6. **Check the live site.** After the deploy, read
    `https://apolloautomation.github.io/gameday-scoreboard-main/firmware/<variant>/manifest.json`
    for `moonhub75`, `moonhub75-2panel` and `scoreboard75` (and the `-beta`
    and `beta/` folders once a beta is published) and check each names the new
    version; open the installer, the DIY installer and the changelog page; and
    check a panel's device page offers the release with a working Release notes
    link.
+7. **Bump `dev`.** Right after the tag, move `version` on `dev` to the next
+   number (2026.10.2), with no changelog section yet, so the betas built from
+   then on sort above the release and reach panels on Follow beta.
 
 ## End state
 
@@ -588,15 +591,11 @@ and option 3 or 4 only together with per-panel secrets.
 
 In priority order:
 
-1. **Device Builder adoption.** Change `file: images/guard-heat.png` and
-   `file: images/guard-power.png` in `firmware/pages/guard.yaml` to
-   `../images/...`, then add back `dashboard_import` with
-   `package_import_url: github://ApolloAutomation/gameday-scoreboard-main/firmware/<build>.yaml@main`
-   and `import_full_config: false` to `gameday.yaml` and
-   `gameday-scoreboard75.yaml`. A stub with only the package compiled with
-   the path change; add a CI job that compiles such a stub.
+1. **Device Builder adoption.** Done in
+   [#4](https://github.com/ApolloAutomation/gameday-scoreboard-main/pull/4).
+   Still open: a CI job that compiles a stub with only the package.
 2. **The first Apollo release**, as above, once ESPHome 2026.10 ships.
-3. **The beta version ordering** decision.
+3. **The beta version ordering.** Settled in the release pull request.
 4. **A home for the docs.** Publish `docs/wiki` (for example under the Pages
    site with a base path) so its links between pages work, and point the
    README and the site at it.
@@ -604,7 +603,8 @@ In priority order:
    QR code still opens another project's page; a short address would let the
    64 pixel code point at Apollo's setup page. Test the new code on a panel.
 6. **List Game Day Scoreboard on the Apollo wiki's M-1 "Choose your firmware"
-   page**, with the DIY installer as the M-1's install path.
+   page**, with the DIY installer as the M-1's install path. Written; it goes
+   live with that wiki's next publish, after the first release.
 7. **The protected-area recommendations** above, starting with the Live games
    scan refusal handling, the per-job fetch task, the short waits after Reset
    Wi-Fi, and the Follow beta and rollback edges.
