@@ -629,6 +629,19 @@ static void test_kickoff_label() {
   CHECK_EQ(kickoff_label(mk(1900, -1, -1, 0, 0, -1, 0), now), std::string(""));
   // A year far enough out to overflow the day count in int.
   CHECK_EQ(kickoff_label(mk(2147481747, 0, 4, 19, 30, 0, 1), now), std::string("Jan 1 7:30 PM"));
+  // Across New Year: Thu Dec 31 2026 (day 364 of a 365-day year) to the bowl
+  // games on Fri Jan 1 2027 and the days after.
+  struct tm eve = mk(2026, 364, 4, 20, 0, 11, 31);
+  CHECK_EQ(kickoff_label(mk(2027, 0, 5, 12, 0, 0, 1), eve), std::string("Tomorrow 12:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2027, 5, 3, 19, 0, 0, 6), eve), std::string("Wed 7:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2027, 6, 4, 19, 0, 0, 7), eve), std::string("Jan 7 7:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2026, 364, 4, 21, 0, 11, 31), eve), std::string("Today 9:00 PM"));
+  // and back: a kickoff on Dec 31 seen on Jan 1 is a past date
+  CHECK_EQ(kickoff_label(mk(2026, 364, 4, 21, 0, 11, 31), mk(2027, 0, 5, 1, 0, 0, 1)),
+           std::string("Dec 31 9:00 PM"));
+  // A leap year's Dec 31 is day 365
+  CHECK_EQ(kickoff_label(mk(2029, 0, 1, 12, 0, 0, 1), mk(2028, 365, 0, 20, 0, 11, 31)),
+           std::string("Tomorrow 12:00 PM"));
 }
 
 static void test_upcoming() {
