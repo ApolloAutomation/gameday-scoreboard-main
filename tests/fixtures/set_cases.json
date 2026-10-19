@@ -61,6 +61,7 @@
     {"name": "unknown team id is refused", "set": [["team", "nfl:99999"]], "expect": {"team": "nfl:6"}},
     {"name": "unknown league is refused", "set": [["team", "xfl:6"]], "expect": {"team": "nfl:6"}},
     {"name": "team id 0 is refused", "set": [["team", "nfl:0"]], "expect": {"team": "nfl:6"}},
+    {"name": "a team id past 32 bits is refused, not wrapped to another team", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:4294967302"]], "expect": {"team": "mlb:15"}},
     {"name": "empty team is refused", "set": [["team", ""]], "expect": {"team": "nfl:6"}},
 
     {"name": "fav slot 1", "set": [["fav1", "mlb:15"]], "expect": {"favs": ["mlb:15", "", "", ""]}},

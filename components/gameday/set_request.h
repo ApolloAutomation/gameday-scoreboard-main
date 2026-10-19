@@ -55,7 +55,9 @@ inline int read_int(const std::string &v) {
   return n > INT_MAX ? INT_MAX : n < INT_MIN ? INT_MIN : (int) n;
 }
 
-// "nfl:6" -> league + id. False for "none"/"" (id 0) or garbage.
+// "nfl:6" -> league + id. False for "none"/"" (id 0) or garbage. An id past
+// 32 bits is garbage too, not wrapped to a small one (on the panel strtoul
+// stops at 32 bits; a 64-bit host would wrap "4294967302" to 6).
 inline bool parse_team_ref(const std::string &v, uint8_t &league, uint32_t &id) {
   league = 0;
   id = 0;
@@ -63,7 +65,8 @@ inline bool parse_team_ref(const std::string &v, uint8_t &league, uint32_t &id) 
   if (colon == std::string::npos)
     return false;
   std::string lg = v.substr(0, colon);
-  id = (uint32_t) strtoul(v.c_str() + colon + 1, nullptr, 10);
+  unsigned long long n = strtoull(v.c_str() + colon + 1, nullptr, 10);
+  id = n > UINT32_MAX ? 0 : (uint32_t) n;
   const LeagueInfo *info = league_by_key(lg.c_str());
   if (info == nullptr)
     return false;
