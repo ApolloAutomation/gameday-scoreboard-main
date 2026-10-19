@@ -1618,6 +1618,11 @@ static void test_soccer_text_helpers() {
   CHECK_EQ(soccer_board_record("6-10-12"), std::string("6-10-12"));
   CHECK_EQ(soccer_board_record("12-10-12"), std::string("46 pts"));  // too wide under a logo
   CHECK_EQ(soccer_board_record(""), std::string(""));
+  // No season has a thousand of anything: such a "record" is left as it
+  // came, never multiplied into an int it overflows (fuzz_espn under UBSan).
+  CHECK_EQ(soccer_board_record("999999999-0-0"), std::string("999999999-0-0"));
+  CHECK_EQ(soccer_board_record("1000-0-0"), std::string("1000-0-0"));
+  CHECK_EQ(soccer_board_record("999-99-9"), std::string("3096 pts"));
 }
 
 // A club's next game across its league and cups (team endpoints recorded

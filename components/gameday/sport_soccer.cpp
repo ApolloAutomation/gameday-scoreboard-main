@@ -303,8 +303,10 @@ std::string soccer_situation(const GameSnapshot &s, size_t max) {
 std::string soccer_board_record(const std::string &wdl) {
   if (wdl.size() <= 7)
     return wdl;
+  // Three digits at most each, like any real season: a longer run of digits
+  // is not a record, and would overflow an int on its way to points.
   int w = 0, d = 0, l = 0;
-  if (sscanf(wdl.c_str(), "%d-%d-%d", &w, &d, &l) != 3)
+  if (sscanf(wdl.c_str(), "%3d-%3d-%3d", &w, &d, &l) != 3)
     return wdl;
   return std::to_string(3 * w + d) + " pts";
 }
