@@ -31,10 +31,11 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 
 Building your own? [Runs on your own panel](https://apolloautomation.github.io/gameday-scoreboard-main/diy/) lists the boards and panels it runs on, how to wire a bare ESP32-S3, and what differs from a Game Day Scoreboard.
 
-- The Game Day Scoreboard controller (build `gameday-scoreboard75.yaml`), or an ESP32-S3 HUB75 controller on the [MoonHub75](https://github.com/MoonModules/Hardware/tree/main/MOONHUB75) pinout, with 16MB flash, octal PSRAM, and a button on GPIO0 (build `gameday.yaml`)
+- The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6), or any ESP32-S3 HUB75 controller on the [MoonHub75](https://github.com/MoonModules/Hardware/tree/main/MOONHUB75) pinout, with 16MB flash, octal PSRAM, and a button on GPIO0 (build `gameday.yaml`). The M-1 Rev6 uses the MoonHub75 pinout, microphone and button pins; the M-1 Rev4 uses other pins and needs its own build
+- The scoreboard75 controller board (build `gameday-scoreboard75.yaml`)
 - One 64x64 HUB75 panel, or a 128x64 display: one 128x64 panel or two 64x64 side by side (one firmware; pick the size on the device page)
 
-The MoonHub75 pinout, under the names ESPHome uses (that board's README calls the upper half R0/G0/B0):
+The MoonHub75 pinout, which the M-1 Rev6 shares, under the names ESPHome uses (that board's README calls the upper half R0/G0/B0):
 
 | R1 | G1 | B1 | R2 | G2 | B2 | A | B | C | D | E | LAT | OE | CLK |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -42,7 +43,7 @@ The MoonHub75 pinout, under the names ESPHome uses (that board's README calls th
 
 ## Install
 
-1. Open the [installer page](https://apolloautomation.github.io/gameday-scoreboard-main/), plug the controller in over USB, and click Install. That page is for the Game Day Scoreboard controller, which starts on a 128x64 display. Built your own on the MoonHub75 pinout? Use the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) instead: it asks whether yours drives one 64x64 panel or a 128x64 display before you click Install, so the first boot uses the right layout.
+1. Open the [installer page](https://apolloautomation.github.io/gameday-scoreboard-main/), plug the controller in over USB, and click Install. That page is for the scoreboard75 controller board, which starts on a 128x64 display. Have an Apollo M-1 (Rev6) or another controller on the MoonHub75 pinout? Use the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) instead: it asks whether yours drives one 64x64 panel or a 128x64 display before you click Install, so the first boot uses the right layout.
 2. Enter your WiFi details in the dialog that follows the install. If you skip it, the panel shows a QR code for the Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70; join it and a setup page opens.
 3. Once it's on WiFi the panel shows a QR code for the Game Day app, then the `gameday-xxxxxx.local` name of its own page. Pick your team in the app, or open that name on your phone and pick it there. Until you pick a team or a mode, from that page, the Game Day app or Home Assistant, the ticker asks you to and gives the panel's IP address for phones that can't resolve `.local` names. Holding the controller's boot button for 1.5 seconds shows the name and the IP address again any time.
 

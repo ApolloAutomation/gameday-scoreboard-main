@@ -1,14 +1,14 @@
 ---
 title: "Install the firmware"
-description: "Flash the Game Day Scoreboard firmware onto a MoonHub75-pinout board from your browser with the DIY installer, and how updates reach it."
+description: "Flash the Game Day Scoreboard firmware onto an Apollo M-1 or another MoonHub75-pinout board from your browser with the DIY installer, and how updates reach it."
 sidebar:
   order: 4
 ---
 
-The [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout from your browser. You don't need ESPHome or any other software.
+The [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares, from your browser. You don't need ESPHome or any other software.
 
 :::caution
-Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only. If you have a Game Day Scoreboard controller, use the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/) instead.
+Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only, the Apollo M-1 Rev6 among them. If you have a scoreboard75 controller board, use the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/) instead.
 :::
 
 ## Before you start
@@ -45,7 +45,7 @@ Each build has a variant name, and the variant names the folder the panel reads 
 | --- | --- | --- | --- |
 | `moonhub75` | `firmware/gameday.yaml` | DIY installer, 64x64 choice | `moonhub75` |
 | `moonhub75-2panel` | `firmware/gameday-2panel.yaml` | DIY installer, 128x64 choice | `moonhub75` |
-| `scoreboard75` | `firmware/gameday-scoreboard75.yaml` | The Game Day Scoreboard controller only | `scoreboard75` |
+| `scoreboard75` | `firmware/gameday-scoreboard75.yaml` | The scoreboard75 controller board only | `scoreboard75` |
 
 The 128x64 build reads its updates from the `moonhub75` folder too. The panel saves its layout the first time it starts, so that update keeps it two panels wide.
 

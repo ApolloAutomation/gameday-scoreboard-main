@@ -1,5 +1,4 @@
-# Game Day Scoreboard for a HUB75 matrix on the Game Day Scoreboard controller
-# board (scoreboard75 pinout). Same firmware as gameday.yaml, which targets the
+# Game Day Scoreboard for a HUB75 matrix on the scoreboard75 controller board. Same firmware as gameday.yaml, which targets the
 # MoonHub75 pinout; only the controller package differs.
 substitutions:
   variant: "scoreboard75"

@@ -43,4 +43,4 @@ For a panel you built, [open an issue on GitHub](https://github.com/ApolloAutoma
 
 ## Rather buy one?
 
-The Game Day Scoreboard comes with the Game Day Scoreboard controller, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).
+The Game Day Scoreboard comes with the scoreboard75 controller board, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).

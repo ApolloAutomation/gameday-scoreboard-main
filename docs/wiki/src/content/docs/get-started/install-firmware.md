@@ -22,7 +22,7 @@ A USB install from the browser installer is different. It erases whatever was on
 
 You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 
-1. Open the [installer](https://apolloautomation.github.io/gameday-scoreboard-main/). It's for the Game Day Scoreboard controller.
+1. Open the [installer](https://apolloautomation.github.io/gameday-scoreboard-main/). It's for the scoreboard75 controller board.
 2. Plug the controller into the computer with the USB cable.
 3. Click **Install Game Day Scoreboard**.
 4. Wait for the install to finish.
@@ -34,4 +34,4 @@ If the installer says the browser can't talk to the controller over USB, switch 
 
 ## Built your own?
 
-The installer above is for the Game Day Scoreboard controller. For a MoonHub75 board or your own ESP32-S3 board, use the DIY installer instead. See [Install on your own board](/diy/install/).
+The installer above is for the scoreboard75 controller board. For an Apollo M-1 (Rev6), a MoonHub75 board or your own ESP32-S3 board, use the DIY installer instead. See [Install on your own board](/diy/install/).
