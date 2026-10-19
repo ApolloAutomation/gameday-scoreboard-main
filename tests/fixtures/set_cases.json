@@ -21,6 +21,7 @@
     {"name": "negative mode is refused", "start": {"mode": 4}, "set": [["mode", "-1"]], "expect": {"mode": 4}},
     {"name": "mode reads like atoi, so text is My team", "start": {"mode": 4}, "set": [["mode", "abc"]], "expect": {"mode": 0}},
     {"name": "a mode past int's range is refused, not wrapped to My team", "start": {"mode": 4}, "set": [["mode", "4294967296"]], "expect": {"mode": 4}},
+    {"name": "a mode in other digits reads as text, so My team", "start": {"mode": 4}, "set": [["mode", "\u0665"]], "expect": {"mode": 0}},
 
     {"name": "rotate in range", "set": [["rotate", "15"]], "expect": {"rotate": 15}},
     {"name": "rotate below 1 clamps up", "start": {"rotate": 10}, "set": [["rotate", "0"]], "expect": {"rotate": 1}},
@@ -55,6 +56,7 @@
     {"name": "tz index past the list is refused", "set": [["tz", "999"]], "expect": {"tz": 1}},
     {"name": "unknown tz is refused", "set": [["tz", "Mars/Olympus"]], "expect": {"tz": 1}},
     {"name": "empty tz is refused", "set": [["tz", ""]], "expect": {"tz": 1}},
+    {"name": "a zone index in other digits is refused", "set": [["tz", "\u0663"]], "expect": {"tz": 1}},
 
     {"name": "team in another league", "set": [["team", "mlb:15"]], "expect": {"team": "mlb:15"}},
     {"name": "team none clears it", "set": [["team", "none"]], "expect": {"team": ""}},
@@ -62,6 +64,7 @@
     {"name": "unknown league is refused", "set": [["team", "xfl:6"]], "expect": {"team": "nfl:6"}},
     {"name": "team id 0 is refused", "set": [["team", "nfl:0"]], "expect": {"team": "nfl:6"}},
     {"name": "a team id past 32 bits is refused, not wrapped to another team", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:4294967302"]], "expect": {"team": "mlb:15"}},
+    {"name": "a team id in other digits is refused", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:\u0666"]], "expect": {"team": "mlb:15"}},
     {"name": "empty team is refused", "set": [["team", ""]], "expect": {"team": "nfl:6"}},
 
     {"name": "fav slot 1", "set": [["fav1", "mlb:15"]], "expect": {"favs": ["mlb:15", "", "", ""]}},
