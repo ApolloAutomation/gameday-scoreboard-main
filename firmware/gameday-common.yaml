@@ -111,8 +111,10 @@ esphome:
             w->set_ap(ap);
     # After "Reset Wi-Fi" the network in memory is blank (components/saved_networks
     # keeps the saved ones for the next boot). ESPHome still counts it as a
-    # configured network and would wait a minute before the hotspot and
-    # Bluetooth setup appear. Cut both waits to a second in that one case.
+    # configured network and would wait 90 s (ESPHome's ap_timeout) before
+    # the hotspot and 30 s (improv_ble's wifi_timeout below) before Bluetooth
+    # setup appear. Cut both waits to a second in that one case. Nothing puts
+    # them back once setup connects; the next restart does.
     # Otherwise a saved network list means a real network whatever get_sta()
     # reads. A blank network with no list is a reset from older firmware,
     # which blanked ESPHome's slot.
