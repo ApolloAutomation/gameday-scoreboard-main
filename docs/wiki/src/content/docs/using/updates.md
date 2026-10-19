@@ -7,6 +7,10 @@ sidebar:
 
 The panel updates its own firmware over Wi-Fi. There is nothing to plug in. What changed in each release is on the [What's new](/changelog/) page.
 
+:::note[Coming in the next release]
+The panel reads its updates from the Apollo Automation release feed, on the project's site at `apolloautomation.github.io/gameday-scoreboard-main`, and the **Release notes** link in the Firmware box opens the changelog there. The first Apollo Automation release starts that feed; until then a check finds no update.
+:::
+
 ## How the panel checks
 
 The panel checks for a new release every 6 hours, and once a few seconds after it first sets its clock when it starts. **Check for updates** in the Device card on the device page checks right away.
@@ -49,7 +53,7 @@ With the switch off, the panel still checks and the device page tells you when a
 If a new version crashes as it starts, the panel goes back to the firmware it had. It remembers that version and doesn't install it on its own again, so it never restarts into the same bad update every night. A later release still installs, and **Install** on the device page still tries the one that failed.
 
 :::note[Coming in the next release]
-The Firmware box says when this happened: **The update to** a version **didn't take and the panel went back to** the version it runs now, with **Install tries it again.** If the panel can't read the update server, it tries a second update server at once, so an outage at one doesn't hold up an update.
+The Firmware box says when this happened: **The update to** a version **didn't take and the panel went back to** the version it runs now, with **Install tries it again.**
 :::
 
 ## Beta versions
