@@ -1556,9 +1556,13 @@
       .catch(() => {});
   };
   // A release has its own section on the site's changelog, in owner words; a
-  // beta has none, so it keeps the manifest's link to its commit.
-  const notesLink = (u) =>
-    /^\d+(\.\d+)+$/.test(String(u.value || "")) ? SITE_URL + "/changelog/#v" + u.value : u.release_url;
+  // beta has none, so it keeps the manifest's link to its commit, and only
+  // an https one, since any other kind of address could run script on a tap.
+  const notesLink = (u) => {
+    if (/^\d+(\.\d+)+$/.test(String(u.value || ""))) return SITE_URL + "/changelog/#v" + u.value;
+    const url = String(u.release_url || "");
+    return /^https:\/\//i.test(url) ? url : "";
+  };
   let installing = false;
   let fwFailed = "";     // S.update_failed as the firmware box last drew it
   const renderUpdate = (u) => {
