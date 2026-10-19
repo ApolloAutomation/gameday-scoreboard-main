@@ -68,10 +68,6 @@ It checks for a new release every six hours, and the device page shows an **Inst
 
 Your team and settings stay through an update. See [Updates](/using/updates/).
 
-:::note[Coming in the next release]
-If the update server doesn't answer, the panel checks a second copy of the same files at `updates.gameday-scoreboard.com`.
-:::
-
 ## Where do I get support?
 
 Support is on GitHub: [open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues). See [Get support](/help/support/) for what to include.
