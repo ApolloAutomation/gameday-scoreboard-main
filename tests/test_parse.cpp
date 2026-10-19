@@ -4028,6 +4028,45 @@ static void test_boot_log() {
   CHECK_EQ(std::string(restart_key(Restart::OTHER)), std::string("other"));
 }
 
+// Every reset reason the chip can give lands somewhere, and the keys are the
+// ones the device page and the app name (RESTARTS in app.js).
+static void test_restart_reasons() {
+  CHECK(classify_restart(kResetUnknown, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetSdio, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetEfuse, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetJtag, false, false) == Restart::USB);
+  CHECK(classify_restart(-1, true, true) == Restart::OTHER);
+  // The restart mark only tells a software reset or the S3's stray watchdog
+  // apart. A crash, a hang or a power dip on the way down is still one, and
+  // power on is power on.
+  CHECK(classify_restart(kResetPanic, true, true) == Restart::CRASH);
+  CHECK(classify_restart(kResetIntWdt, true, false) == Restart::WATCHDOG);
+  CHECK(classify_restart(kResetBrownout, true, false) == Restart::BROWNOUT);
+  CHECK(classify_restart(kResetPowerGlitch, true, true) == Restart::BROWNOUT);
+  CHECK(classify_restart(kResetPowerOn, true, true) == Restart::POWER);
+  CHECK(classify_restart(kResetUsb, true, false) == Restart::USB);
+  // Unmarked, a new build is no update: the firmware didn't ask for it.
+  CHECK(classify_restart(kResetSoftware, false, true) == Restart::RESTART);
+  CHECK(classify_restart(kResetWdt, false, true) == Restart::WATCHDOG);
+  // Only a crash, a hang or a power dip is kept as the last fault.
+  for (uint8_t r = 0; r <= (uint8_t) Restart::OTHER; r++) {
+    const Restart k = (Restart) r;
+    CHECK_EQ(restart_is_fault(k), k == Restart::CRASH || k == Restart::WATCHDOG || k == Restart::BROWNOUT);
+  }
+  const char *keys[] = {"none", "power", "restart", "update", "crash", "watchdog", "brownout", "usb", "other"};
+  for (uint8_t r = 0; r <= (uint8_t) Restart::OTHER; r++)
+    CHECK_EQ(std::string(restart_key((Restart) r)), std::string(keys[r]));
+  // A sealed log is valid only with a fault this firmware knows.
+  BootLog log{};
+  log.magic = kBootLogMagic;
+  log.fault = (uint8_t) Restart::OTHER;
+  boot_log_seal(log);
+  CHECK(boot_log_valid(log));
+  log.fault = (uint8_t) Restart::OTHER + 1;
+  boot_log_seal(log);
+  CHECK(!boot_log_valid(log));
+}
+
 static void test_health_json() {
   Health h{};
   h.uptime_s = 7260;
@@ -4828,6 +4867,7 @@ int main() {
   test_update_mirror();
   test_update_mark();
   test_boot_log();
+  test_restart_reasons();
   test_health_json();
   test_crash_capture();
   test_crash_save();
