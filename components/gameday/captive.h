@@ -59,12 +59,19 @@ inline char first_char(const std::string &body) {
   return '\0';
 }
 
-// The host of an absolute URL, lower case; empty for a relative one.
+// The host of an absolute URL, or of one that starts with "//", lower case;
+// empty for a relative one. A "://" after the path has started is in the
+// query ("/login?next=http://..."), not a scheme.
 inline std::string url_host(const std::string &url) {
-  size_t p = url.find("://");
-  if (p == std::string::npos)
-    return "";
-  p += 3;
+  size_t p;
+  if (url.compare(0, 2, "//") == 0) {
+    p = 2;
+  } else {
+    p = url.find("://");
+    if (p == std::string::npos || url.find_first_of("/?#") < p)
+      return "";
+    p += 3;
+  }
   size_t at = url.find('@', p);
   size_t end = url.find_first_of("/?#", p);
   if (at != std::string::npos && (end == std::string::npos || at < end))

@@ -636,6 +636,21 @@ static void test_captive() {
   CHECK(probe_due(true, false, true, kProbeFailingRecheckMs));
 }
 
+// Where a portal's redirect points. A relative link stays on whoever
+// answered, even when its query carries ESPN's address back, and a link
+// that starts with "//" names another host.
+static void test_captive_redirect_host() {
+  CHECK_EQ(::espn::detail::url_host("/login?next=http://site.api.espn.com/x"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("login.php?u=https://espn.com"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("#a://espn.com"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("//Portal.Example:8080/login"), std::string("portal.example"));
+  CHECK_EQ(::espn::detail::url_host("http://portal.example/x?r=https://espn.com"), std::string("portal.example"));
+  CHECK(classify_probe(302, "/login?next=http://site.api.espn.com/apis/x", "", "") == Probe::UNKNOWN);
+  CHECK(classify_probe(302, "/portal?u=http://espn.com", "text/html", "") == Probe::UNKNOWN);
+  CHECK(classify_probe(302, "//portal.example/login?mac=aa:bb", "", "") == Probe::CAPTIVE);
+  CHECK(classify_probe(301, "//www.espn.com/x", "", "") == Probe::OPEN);
+}
+
 static struct tm mk(int year, int yday, int wday, int hour, int min, int mon = 8, int mday = 5) {
   struct tm t{};
   t.tm_year = year - 1900;
@@ -4429,6 +4444,7 @@ int main() {
   test_status_text();
   test_no_game_text();
   test_captive();
+  test_captive_redirect_host();
   test_ha_status_text();
   test_short_game_name();
   test_kickoff_label();
