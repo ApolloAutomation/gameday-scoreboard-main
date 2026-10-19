@@ -125,11 +125,13 @@ npm test
 
 ## Edit the device page
 
-The device page is plain HTML and JavaScript in `firmware/web`. The firmware embeds a generated bundle, so after you edit `app.js` or `app.css`, rebuild it:
+The device page is plain HTML and JavaScript in `firmware/web`. The firmware embeds a generated bundle, so after you edit `app.js`, `app.css` or `demo.js`, rebuild it:
 
 ```sh
-python scripts/build_web.py
+python3 scripts/build_web.py
 ```
+
+That rewrites `firmware/web/bundle.js` and `firmware/web/bundle-demo.js`. A pull request commits both with the change, since CI fails when they don't match the sources.
 
 ## Contributing
 

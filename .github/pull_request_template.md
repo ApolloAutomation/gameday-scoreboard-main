@@ -15,6 +15,6 @@
 
 ## Checklist
 
-- [ ] Edited firmware/web/app.js or app.css? Ran `python scripts/build_web.py` and committed bundle.js
+- [ ] Edited firmware/web/app.js, app.css or demo.js? Ran `python3 scripts/build_web.py` and committed bundle.js and bundle-demo.js
 - [ ] Changed what an owner or DIY builder sees or does? Updated the page under docs/wiki/src/content/docs/ (or this PR needs the `docs: not needed` label)
 - [ ] No secrets.yaml, Wi-Fi details, notes or plans in the diff

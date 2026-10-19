@@ -598,7 +598,7 @@ jobs:
         run: |
           python3 ../../scripts/build_web.py
           git diff --exit-code -- ../../firmware/web/bundle.js ../../firmware/web/bundle-demo.js || {
-            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python scripts/build_web.py and commit both."
+            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python3 scripts/build_web.py and commit both."
             exit 1
           }
       - uses: actions/setup-node@v7
