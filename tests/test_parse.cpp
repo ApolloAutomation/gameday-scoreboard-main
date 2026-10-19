@@ -3949,6 +3949,21 @@ static void test_heat_guard() {
   CHECK_EQ((int) w.step, 2);
 }
 
+// The first cool reading landing on millis() == 0 (at the wrap) starts the
+// cool wait there, the same as at any other moment: no step back up until it
+// has read cool for a whole kCoolStepMs.
+static void test_heat_guard_cool_at_zero() {
+  HeatGuard g;
+  const uint32_t hot_at = 0u - 6 * 60 * 1000;  // six minutes before the wrap
+  CHECK(g.feed(kHotC, hot_at));
+  CHECK_EQ((int) g.step, 1);
+  CHECK(!g.feed(kCoolC - 1, 0));
+  CHECK_EQ((int) g.step, 1);
+  CHECK(!g.feed(kCoolC - 1, kCoolStepMs - 1));
+  CHECK(g.feed(kCoolC - 1, kCoolStepMs));
+  CHECK_EQ((int) g.step, 0);
+}
+
 static void test_power_log() {
   PowerLog log{};
   CHECK(!power_log_start(log, false));
@@ -4480,6 +4495,7 @@ int main() {
   test_boot_log();
   test_health_json();
   test_heat_guard();
+  test_heat_guard_cool_at_zero();
   test_power_log();
   test_guarded_brightness();
   test_offseason();
