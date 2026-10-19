@@ -84,14 +84,18 @@ script:
             - lambda: 'lv_obj_add_flag(id(gd_guard_line), LV_OBJ_FLAG_HIDDEN);'
             - delay: 105s
 
+# ESPHome looks for an image in the config folder first, then next to the
+# YAML that names it. For a panel adopted in Device Builder the config folder
+# is the adopter's and this file sits in ESPHome's copy of the repo, so the
+# path goes from here to firmware/images.
 image:
   - platform: file
-    file: images/guard-heat.png
+    file: ../images/guard-heat.png
     id: gd_guard_heat_img
     type: RGB565
     transparency: alpha_channel
   - platform: file
-    file: images/guard-power.png
+    file: ../images/guard-power.png
     id: gd_guard_power_img
     type: RGB565
     transparency: alpha_channel
