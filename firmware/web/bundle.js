@@ -621,26 +621,27 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     $("#liveAuto").hidden = auto || String(S.mode || 0) !== "5";
     renderLiveChips();
   };
+  // One chip per league with teams, built once: a redraw only sets each one's
+  // state, so it never takes the keyboard focus off the chip it is on.
+  const liveChips = Object.keys(LEAGUES).filter((lg) => TEAMS.some((t) => t[0] === lg)).map((lg) => {
+    const b = el("button", "chip", LEAGUES[lg].tab);
+    setOn(b, false, "aria-pressed");
+    // From the list as it is now, not as it was when the chips were drawn:
+    // a second tap can come before the redraw.
+    b.onclick = () => {
+      const cur = liveKeys();
+      const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
+      if (!next.length) return toast("Pick at least one league");
+      const params = { live: next.join(",") };
+      if (String(S.mode || 0) !== "5") params.mode = 5;
+      setGD(params);
+    };
+    $("#liveChips").appendChild(b);
+    return [lg, b];
+  });
   const renderLiveChips = () => {
-    const host = $("#liveChips");
-    host.innerHTML = "";
     const on = liveKeys();
-    for (const lg of Object.keys(LEAGUES)) {
-      if (!TEAMS.some((t) => t[0] === lg)) continue;
-      const b = el("button", "chip", LEAGUES[lg].tab);
-      setOn(b, on.includes(lg), "aria-pressed");
-      // From the list as it is now, not as it was when the chips were drawn:
-      // a second tap can come before the redraw.
-      b.onclick = () => {
-        const cur = liveKeys();
-        const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
-        if (!next.length) return toast("Pick at least one league");
-        const params = { live: next.join(",") };
-        if (String(S.mode || 0) !== "5") params.mode = 5;
-        setGD(params);
-      };
-      host.appendChild(b);
-    }
+    for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
   };
   const renderMode = () => {
     if (!S) return;

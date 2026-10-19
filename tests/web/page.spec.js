@@ -618,6 +618,25 @@ test("chip taps faster than the page re-reads each save the list on screen", asy
   expect((await deviceState(request)).live).toEqual(["nba", "nhl"]);
 });
 
+test("a league chip keeps the keyboard focus through its post and the re-reads after it", async ({ page, request }) => {
+  await reset(request, { mode: 5, live: ["mlb"], live_auto: false });
+  await page.goto("/");
+  await expect(chipsOn(page)).toHaveText(["MLB"]);
+  await chip(page, "NBA").focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { live: "mlb,nba" });
+  await expect(chipsOn(page)).toHaveText(["MLB", "NBA"]);
+  // A Game Status event re-reads the state document, as a live game does every few seconds.
+  await sleep(800);
+  await expect(chip(page, "NBA")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(chip(page, "WNBA")).toBeFocused();
+  await page.keyboard.press("Space");
+  await expectSet(request, { live: "mlb,nba,wnba" });
+  await sleep(800);
+  await expect(chip(page, "WNBA")).toBeFocused();
+});
+
 test("Live games bar says when the leagues are automatic, and goes back to automatic", async ({ page, request }) => {
   const lg = page.locator("#liveLg");
   const back = page.locator("#liveAuto");
