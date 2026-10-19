@@ -3330,6 +3330,8 @@ static void test_backoff() {
   CHECK(is_throttle_status(429));
   CHECK(!is_throttle_status(404));
   CHECK(!is_throttle_status(503));
+  // ESPN's edge refuses most other agents: every read and logo sends this one.
+  CHECK_EQ(std::string(kUserAgent), std::string("curl/8.0"));
 }
 
 // The miss count the ticker's "no update" and the page's warning go by (three

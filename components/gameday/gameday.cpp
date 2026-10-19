@@ -60,9 +60,8 @@ static_assert(::espn::kResetPowerOn == ESP_RST_POWERON && ::espn::kResetSoftware
 // Survives a restart, a crash and a watchdog (health.h)
 RTC_NOINIT_ATTR static ::espn::BootLog boot_log;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-// ESPN's edge returns 403 to most unfamiliar agents, ESPHome's own among
-// them, but accepts curl.
-static const char *const USER_AGENT = "curl/8.0";
+// curl's, which ESPN's edge accepts (poll_timing.h).
+static const char *const USER_AGENT = ::espn::kUserAgent;
 
 static const uint32_t MINUTE = 60 * 1000;
 static const uint32_t SCHEDULE_INTERVAL = 6 * 60 * MINUTE;
