@@ -33,6 +33,7 @@ MLB, recorded 2026-10-07 (postseason) from the single-event endpoint
 | `event_mlb_final.json` | 401907992 CLE @ CHW, Final 9-3, series line |
 | `event_mlb_pre.json` | 401908005 MIL @ SD, pre-game with probable pitchers and odds |
 | `event_mlb_hr_before.json`, `event_mlb_hr.json` | 401907987 TB @ NYY, the polls either side of a two-run home run (Top 6th) |
+| `event_mlb_postponed.json` | 401814798 CHC @ CLE, 2026-04-04, rained out: state `post` with `completed` false and status `STATUS_POSTPONED` (recorded after the fact) |
 | `team_mlb_atl.json` | `.../baseball/mlb/teams/15` (next event is the game in progress) |
 
 Soccer, from the single-event endpoint `.../soccer/<league>/scoreboard/<event id>`.
