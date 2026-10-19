@@ -17,9 +17,9 @@ Use your main network, not a guest network. A guest network can let the panel jo
 
 The panel remembers up to five Wi-Fi networks, like your home, a phone hotspot and a friend's house. At start-up it joins whichever saved network it can see, trying the last one that worked first. Set it up on a phone hotspot for a tailgate and it still knows your home network when you get back.
 
-The Device card on the device page lists the saved networks under **Wi-Fi networks**, in the order the panel tries them, with **Connected** beside the one it's on, or **Tried first** beside the top one. **Forget** takes a network off the list. If the panel is on that network now, it stays connected until that connection drops or the panel restarts, and it doesn't join that network again.
+The Device card on the device page lists the saved networks under **Wi-Fi networks**, in the order the panel tries them, with **Connected** beside the one it's on, or **Tried first** beside the top one. **Forget** takes a network off the list. If the panel is on that network now, it stays connected until that connection drops or the panel restarts, and after that it doesn't join that network again, unless it was the only one on the list (see below).
 
-When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and [Factory reset](/using/buttons-and-resets/#factory-reset) clear them all.
+When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi: the panel keeps joining that network and puts it back on the list the next time it connects. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and [Factory reset](/using/buttons-and-resets/#factory-reset) clear them all.
 
 :::note[Coming in the next release]
 Reset Wi-Fi keeps the saved networks. Only Factory reset clears them.
