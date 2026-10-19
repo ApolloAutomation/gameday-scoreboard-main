@@ -106,15 +106,25 @@ def clear(host):
         return r.status == 200
 
 
-def release_published(version):
+def lookup_failed(version, why):
+    return (f"Couldn't look up release v{version} on GitHub ({why}). Try again in a while, "
+            "or pass the build's ELF with --elf.")
+
+
+def release_published(version, urlopen=urllib.request.urlopen):
+    """When release v<version> was published (Unix time), or None when there is
+    no such release. Any other failure to ask GitHub (the API's 403 rate limit,
+    no network) stops with a note instead of a traceback."""
     url = f"https://api.github.com/repos/{REPO}/releases/tags/v{version}"
     try:
-        with urllib.request.urlopen(url, timeout=20) as r:
+        with urlopen(url, timeout=20) as r:
             rel = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        raise
+        raise SystemExit(lookup_failed(version, f"HTTP {e.code} {e.reason}"))
+    except OSError as e:  # URLError, a timeout or a dropped connection
+        raise SystemExit(lookup_failed(version, getattr(e, "reason", None) or e))
     stamp = rel.get("published_at") or rel.get("created_at")
     return int(datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp())
 
@@ -196,6 +206,31 @@ def selftest():
     assert build_matches(1760000000, 1760000000 + 600)
     assert not build_matches(1760000000, 1760000000 + 86400)
     assert not build_matches(0, 1760000000)
+
+    # The release lookup, with GitHub stood in for: a missing release is None,
+    # and a rate limit or no network stops with the --elf advice, not a traceback.
+    def github(answer):
+        def urlopen(url, timeout):
+            assert url.endswith("/releases/tags/v2026.10.0"), url
+            if isinstance(answer, Exception):
+                raise answer
+            return io.BytesIO(answer)
+        return urlopen
+    published = release_published("2026.10.0", urlopen=github(b'{"published_at": "2026-10-19T12:00:00Z"}'))
+    assert published == int(datetime.datetime(2026, 10, 19, 12, tzinfo=datetime.timezone.utc).timestamp()), published
+    url = f"https://api.github.com/repos/{REPO}/releases/tags/v2026.10.0"
+    assert release_published("2026.10.0", urlopen=github(urllib.error.HTTPError(url, 404, "Not Found", None, None))) is None
+    for err, why in ((urllib.error.HTTPError(url, 403, "rate limit exceeded", None, None), "HTTP 403 rate limit exceeded"),
+                     (urllib.error.URLError("nodename nor servname provided"), "nodename nor servname provided"),
+                     (TimeoutError("timed out"), "timed out")):
+        try:
+            release_published("2026.10.0", urlopen=github(err))
+        except SystemExit as e:
+            assert str(e) == lookup_failed("2026.10.0", why), str(e)
+            assert "look up release v2026.10.0" in str(e) and "--elf" in str(e), str(e)
+        else:
+            raise AssertionError(f"{err!r} did not stop with a note")
+
     assert fmt_time(0) == "unknown (no clock yet)"
     assert fmt_time(datetime.datetime(2026, 10, 19, 0, 5).timestamp()) == "2026-10-19 12:05 AM"
     assert fmt_time(datetime.datetime(2026, 10, 19, 13, 5).timestamp()) == "2026-10-19 1:05 PM"
