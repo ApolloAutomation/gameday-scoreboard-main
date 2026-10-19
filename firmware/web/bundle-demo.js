@@ -1743,10 +1743,17 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   card.querySelectorAll("button[data-demo]").forEach((b) => {
     b.onclick = () => post(b.dataset.demo === "stop" ? { do: "stop" } : { do: "start", kind: b.dataset.demo });
   });
+  // A switch to screen readers too, like the page's own switches.
   const madeup = $("#demoMadeup");
+  const showMadeup = (on) => {
+    madeup.classList.toggle("on", on);
+    madeup.setAttribute("aria-checked", String(on));
+  };
+  madeup.setAttribute("role", "switch");
+  showMadeup(false);
   madeup.onclick = () => {
     const on = !madeup.classList.contains("on");
-    madeup.classList.toggle("on", on);
+    showMadeup(on);
     post({ madeup: on ? 1 : 0 });
   };
 
@@ -1764,7 +1771,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       const t = D[kind] && D[kind][end];
       if (t) s.value = t.l + ":" + t.id;
     });
-    madeup.classList.toggle("on", !!D.madeup);
+    showMadeup(!!D.madeup);
   };
 
   let inflight = false;

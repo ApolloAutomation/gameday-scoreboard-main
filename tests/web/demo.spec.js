@@ -60,8 +60,11 @@ test("picks teams per league and switches to made-up teams", async ({ page, requ
   await home.selectOption("nfl:26");
   await expect.poll(() => demoPosts(request)).toContainEqual({ pro_home: "nfl:26" });
 
-  await page.locator("#demoMadeup").click();
+  const madeup = page.getByRole("switch", { name: "Made-up teams" });
+  await expect(madeup).not.toBeChecked();
+  await madeup.click();
   await expect.poll(() => demoPosts(request)).toContainEqual({ madeup: "1" });
+  await expect(madeup).toBeChecked();
   await page.locator("#demo").getByRole("button", { name: "Start pro" }).click();
   await expect(page.locator("#demoNow")).toHaveText("Pro: Harbor City Hawks vs Iron Valley Miners");
   await expect(page.locator("#demoMadeup")).toHaveClass(/\bon\b/);
