@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DIY installer - Game Day Scoreboard</title>
   <meta name="description" content="Install the open-source Game Day Scoreboard firmware from your browser onto a HUB75 controller you built yourself on the MoonHub75 pinout.">
-  <link rel="canonical" href="https://gamedayscoreboard.app/install/diy/">
+  <link rel="canonical" href="https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/">
   <meta property="og:site_name" content="Game Day Scoreboard">
   <meta property="og:type" content="website">
   <meta property="og:title" content="DIY installer - Game Day Scoreboard">
   <meta property="og:description" content="Install the open-source Game Day Scoreboard firmware from your browser onto a HUB75 controller you built yourself on the MoonHub75 pinout.">
-  <meta property="og:url" content="https://gamedayscoreboard.app/install/diy/">
-  <meta property="og:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta property="og:url" content="https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/">
+  <meta property="og:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@GameDayScore">
-  <meta name="twitter:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta name="twitter:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta name="twitter:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <style>
     :root { color-scheme: dark; }
@@ -59,11 +59,11 @@
     <h2>Install</h2>
     <p>Which panels does yours drive? Click the picture that matches, so the scoreboard starts with the right layout. You can change it later on the device page.</p>
     <div class="panels" id="panels">
-      <button type="button" class="panelpick" data-manifest="/firmware/moonhub75/manifest.json" aria-pressed="false">
+      <button type="button" class="panelpick" data-manifest="../../firmware/moonhub75/manifest.json" aria-pressed="false">
         <svg viewBox="0 0 96 48" aria-hidden="true"><rect x="30" y="6" width="36" height="36" rx="3"/></svg>
         <span>One 64x64 panel</span>
       </button>
-      <button type="button" class="panelpick" data-manifest="/firmware/moonhub75-2panel/manifest.json" aria-pressed="false">
+      <button type="button" class="panelpick" data-manifest="../../firmware/moonhub75-2panel/manifest.json" aria-pressed="false">
         <svg viewBox="0 0 96 48" aria-hidden="true"><rect x="10" y="6" width="36" height="36" rx="3"/><rect x="50" y="6" width="36" height="36" rx="3"/></svg>
         <span>One 128x64 panel</span>
         <small>or two 64x64 side by side</small>
@@ -71,7 +71,7 @@
     </div>
     <p>Then plug the controller into this computer over USB and click Install.</p>
     <p id="install" hidden>
-      <esp-web-install-button manifest="/firmware/moonhub75/manifest.json">
+      <esp-web-install-button manifest="../../firmware/moonhub75/manifest.json">
         <button slot="activate">Install for MoonHub75</button>
         <span slot="unsupported">This browser cannot talk to the controller over USB. Try a desktop browser.</span>
         <span slot="not-allowed">Open this page over HTTPS to install.</span>
@@ -90,21 +90,21 @@
         }));
       })();
     </script>
-    <p class="note">Needs an ESP32-S3 HUB75 controller on the <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> pinout, with 16MB flash and octal PSRAM. Have a Game Day Scoreboard controller? Use the <a href="/">main installer</a>.</p>
-    <p class="note">Other boards, panel sizes and wiring a bare ESP32-S3 are on <a href="/diy/">Runs on your own panel</a>.</p>
+    <p class="note">Needs an ESP32-S3 HUB75 controller on the <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> pinout, with 16MB flash and octal PSRAM. Have a Game Day Scoreboard controller? Use the <a href="../../">main installer</a>.</p>
+    <p class="note">Other boards, panel sizes and wiring a bare ESP32-S3 are on <a href="../../diy/">Runs on your own panel</a>.</p>
     <p class="note">Installing erases whatever firmware was on the controller. Your WiFi details and team choice are asked for afterwards.</p>
   </div>
 
   <div class="card">
     <h2>After installing</h2>
-    <p>Joining WiFi and picking your team work the same as on the Game Day Scoreboard controller. Follow steps 2 and 3 on the <a href="/">main installer page</a>. Updates arrive over WiFi from then on, built for your pinout.</p>
+    <p>Joining WiFi and picking your team work the same as on the Game Day Scoreboard controller. Follow steps 2 and 3 on the <a href="../../">main installer page</a>. Updates arrive over WiFi from then on, built for your pinout.</p>
   </div>
 
   <footer>
     Source, issues and the YAML for building it yourself: <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main">ApolloAutomation/gameday-scoreboard-main</a>.
     Built on <a href="https://github.com/pavlov-net/hub75-studio">hub75-studio</a> and ESPHome.
     <br>
-    <a href="/setup/">Setup</a> &middot; <a href="/privacy/">Privacy</a> &middot; <a href="/support/">Support</a>
+    <a href="../../setup/">Setup</a> &middot; <a href="../../privacy/">Privacy</a> &middot; <a href="../../support/">Support</a>
   </footer>
 </main>
 </body>

@@ -22,7 +22,10 @@ import sys
 import tempfile
 from html.parser import HTMLParser
 
-BASE = "https://gamedayscoreboard.app"
+# The site's address with no trailing slash, the same value as site_base in
+# firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a new address").
+# The site's own links are relative, so only these absolute tags name it.
+BASE = "https://apolloautomation.github.io/gameday-scoreboard-main"
 FAQ_PAGE = "support/index.html"
 REQUIRED_PROPS = ["og:title", "og:description", "og:url", "og:image", "og:type"]
 REQUIRED_NAMES = ["description", "twitter:card", "twitter:image"]
