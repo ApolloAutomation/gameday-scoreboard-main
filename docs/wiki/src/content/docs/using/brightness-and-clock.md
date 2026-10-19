@@ -9,7 +9,7 @@ The Panel card on the device page holds the settings for the screen itself: **Pa
 
 ## Brightness
 
-**Brightness** runs from 1 (dimmest) to 255 (brightest). A new panel starts at 128. The panel keeps your setting through restarts.
+**Brightness** runs from 1 (dimmest) to 255 (brightest). A new panel starts at 128. The panel keeps your setting through restarts. It can run dimmer than your setting when it's too warm or its power supply is too weak; see [Heat and power protection](#heat-and-power-protection).
 
 A WizMote remote's brightness buttons move the same setting, a tenth of full at a time, and **NIGHT** dims the panel right down to a night level, about 8% of full. See [WizMote remote](/using/remote/).
 
@@ -43,10 +43,12 @@ On a single 64x64 panel the date goes under the time, and the next game goes in 
 
 ## Heat and power protection
 
-:::note[Coming in the next release]
-**Too warm.** If the controller's chip reads above 75 C, in a sunny window or a closed cabinet for example, the panel dims itself a step at a time: to 70%, then 45%, then 25% of your brightness, one step every two minutes while it stays hot, and straight to 25% at 85 C. A small thermometer pulses slowly in the top right corner, and every two minutes the bottom line says **Too warm, dimming** in orange for 15 seconds. Once the chip is back under 70 C, the panel steps back up every five minutes until it's at your brightness again. Keep it out of direct sun and give it some air behind it.
+The panel holds its brightness down by itself when it gets too warm or its power supply can't keep up, and says so on the screen.
 
-**Weak power supply.** If the panel restarts twice in a row because its power dipped, as on a phone charger or a supply too weak for it, it holds its brightness at about a quarter of full so it stays on. A small plug pulses slowly in the top right corner, and every two minutes the bottom line says **Check power supply** in red. Use the power supply that came with the panel, not a phone charger or a USB port, then press **Clear** in the notice on the device page.
+**Too warm.** If the controller's chip reaches 75 C, in a sunny window or a closed cabinet for example, the panel dims itself a step at a time: to 70%, then 45%, then 25% of your brightness, one step every two minutes while it stays hot. At 85 C it goes straight to 25%. A small thermometer pulses slowly in the top right corner, and every two minutes the bottom line says **Too warm, dimming** in orange for 15 seconds. Once the chip is back under 70 C, the panel steps back up every five minutes until it's at your brightness again. Keep it out of direct sun and give it some air behind it.
 
-The device page shows both notices under the board, and the chip temperature under Diagnostics.
-:::
+**Weak power supply.** If the panel restarts twice in a row because its power dipped, as on a phone charger or a supply too weak for it, it holds its brightness at no more than about a quarter of full so it stays on. It keeps that cap through restarts until you clear it. A small plug pulses slowly in the top right corner, and every two minutes the bottom line says **Check power supply** in red for 15 seconds. Use the power supply that came with the panel, not a phone charger or a USB port, then press **Clear** in the notice on the device page.
+
+If both happen at once, the panel shows the power warning.
+
+The device page says the same in a notice under the board, **Too warm, dimming** or **Check the power supply**. Under **Diagnostics** in the Device card it shows the chip temperature and how many times a power dip has restarted the panel. See [The device page](/using/device-page/#diagnostics).
