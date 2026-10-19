@@ -27,6 +27,7 @@ The components in `components/` are:
 - `panel_layout`: the one-panel or two-panel layout, applied at boot from a saved choice, so one binary serves both layouts.
 - `improv_ble`: Bluetooth Wi-Fi setup for the Game Day app.
 - `saved_networks`: the up to five Wi-Fi networks the panel remembers.
+- `crash_report`: keeps a record of the last crash, freeze or power dip restart in flash, with the log and backtrace of a crash or freeze, for `/gameday/crash`.
 
 `gameday-common.yaml` also pulls in [lvgl-page-manager](https://github.com/pavlov-net/lvgl-page-manager) and [lvgl-canvas-fx](https://github.com/pavlov-net/lvgl-canvas-fx) at fixed versions, and the theme and clock packages from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit so a build always gets the same thing.
 
