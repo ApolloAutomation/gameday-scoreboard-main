@@ -6,7 +6,7 @@ from esphome.components import logger
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
-CODEOWNERS = ["@bharvey88"]
+CODEOWNERS = ["@ApolloAutomation"]
 DEPENDENCIES = ["esp32", "logger"]
 AUTO_LOAD = ["json"]
 

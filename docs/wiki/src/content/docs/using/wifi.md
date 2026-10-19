@@ -17,9 +17,9 @@ Use your main network, not a guest network. A guest network can let the panel jo
 
 The panel remembers up to five Wi-Fi networks, like your home, a phone hotspot and a friend's house. At start-up it joins whichever saved network it can see, trying the last one that worked first. Set it up on a phone hotspot for a tailgate and it still knows your home network when you get back.
 
-The Device card on the device page lists the saved networks under **Wi-Fi networks**, in the order the panel tries them, with **Connected** beside the one it's on, or **Tried first** beside the top one. **Forget** takes a network off the list. If the panel is on that network now, it stays connected until it next restarts.
+The Device card on the device page lists the saved networks under **Wi-Fi networks**, in the order the panel tries them, with **Connected** beside the one it's on, or **Tried first** beside the top one. **Forget** takes a network off the list. If the panel is on that network now, it stays connected until that connection drops or the panel restarts, and after that it doesn't join that network again, unless it was the only one on the list (see below).
 
-When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and [Factory reset](/using/buttons-and-resets/#factory-reset) clear them all.
+When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi: the panel keeps joining that network and puts it back on the list the next time it connects. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and [Factory reset](/using/buttons-and-resets/#factory-reset) clear them all.
 
 :::note[Coming in the next release]
 Reset Wi-Fi keeps the saved networks. Only Factory reset clears them.
@@ -29,20 +29,20 @@ Reset Wi-Fi keeps the saved networks. Only Factory reset clears them.
 
 Every network you set the panel up on is added to the top of the list. There are two ways:
 
-- **The Game Day app** finds the panel over Bluetooth and hands it the network and password. While the panel joins, it shows **JOINING** and the network's name. See [The Game Day app](/get-started/the-app/).
 - **The panel's hotspot.** While it shows **SETUP**, the panel starts its own Wi-Fi network named **Game Day** and six letters and numbers, like **Game Day 2f6a70**. The screen shows the name. Join it from any phone or laptop and a setup page opens. Pick your Wi-Fi network, enter the password and save.
+- **The Game Day app**, a separate project that may not find panels running this firmware, finds the panel over Bluetooth where it works and hands it the network and password. While the panel joins, it shows **JOINING** and the network's name. See [The Game Day app](/get-started/the-app/).
 
 The six characters are the same as in the panel's address, so two panels in one house are easy to tell apart. See [Set up your panel](/get-started/setup/).
 
-Taking the panel somewhere new? When it can't find any saved network, it says **Wi-Fi lost** and the app can reach it over Bluetooth, as below, so you can give it the new network there. To put it into setup straight away, use [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
+Taking the panel somewhere new? When it can't find any saved network, it says **Wi-Fi lost** and, within a few minutes, brings up its hotspot, as below, so you can give it the new network there. To put it into setup straight away, use [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
 
 ## When Wi-Fi drops
 
 A short drop, like a mesh system moving the panel to another access point, doesn't show. After 10 seconds without Wi-Fi the panel covers the board with **Wi-Fi lost** and the QR code for the Game Day app, so a stale score isn't left up.
 
-- After 30 seconds, the panel turns Bluetooth back on so the Game Day app can reach it. A changed router password is the common case: open the app and give the panel the new password.
+- Join the panel's **Game Day** hotspot as above. It comes up within a few minutes of the panel losing Wi-Fi. A changed router password is the common case: give the panel the new password there.
+- After 30 seconds, the panel turns Bluetooth back on so the Game Day app can reach it, where the app works with this firmware.
 - After a minute without its network, a panel that was on it earlier restarts itself once, to recover. It never restarts while the app is connected to it.
-- Without the app, join the panel's **Game Day** hotspot as above. It comes up within a few minutes of the panel losing Wi-Fi.
 
 When the network comes back, the panel rejoins and the board comes back by itself.
 

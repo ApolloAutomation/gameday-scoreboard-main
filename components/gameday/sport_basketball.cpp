@@ -142,16 +142,9 @@ std::string basketball_clock_text(const GameSnapshot &s) {
 // Win only: a basketball game has around a hundred scoring plays.
 Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool /*opponent_splashes*/,
                          bool neutral) {
-  Splash none;
-  if (!prev.valid || !cur.valid || prev.event_id != cur.event_id)
-    return none;
-  if (prev.state != GameState::IN || cur.state != GameState::POST || !cur.completed)
-    return none;
-  if (cur.team_score > cur.opp_score)
-    return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
-  if (neutral && cur.opp_score > cur.team_score)
-    return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
-  return none;
+  if (!detail::same_game(prev, cur) || !detail::went_final(prev, cur))
+    return Splash{};
+  return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
 }
 
 }  // namespace espn

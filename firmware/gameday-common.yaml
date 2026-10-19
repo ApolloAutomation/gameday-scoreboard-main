@@ -8,15 +8,17 @@ substitutions:
   version: "2026.10.0"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
+  # The project's site, GitHub Pages today, with no trailing slash. The
+  # installer, the changelog and every update manifest live under it.
+  # CONTRIBUTING.md's "Moving to a new address" lists the other places that
+  # name it.
+  site_base: "https://apolloautomation.github.io/gameday-scoreboard-main"
   # Where the panel looks for new releases. A bench build can point it at a
   # test manifest with -s update_source <url>.
-  update_source: "https://gamedayscoreboard.app/firmware/${variant}/manifest.json"
+  update_source: "${site_base}/firmware/${variant}/manifest.json"
   # Where it looks instead with "Follow beta" on: release firmware built from
   # the beta branch, published there by CI (.github/workflows/build.yml).
-  beta_update_source: "https://gamedayscoreboard.app/firmware/${variant}-beta/manifest.json"
-  # The same files on a second host. When a manifest read fails, the panel
-  # reads the same path here instead (components/gameday/update_mirror.h).
-  update_mirror_host: "https://updates.gameday-scoreboard.com"
+  beta_update_source: "${site_base}/firmware/${variant}-beta/manifest.json"
 
   display_panel_width: "64"
   display_panel_height: "64"
@@ -46,9 +48,8 @@ substitutions:
 # Favorites switch puts the new game on the board from deep in the loop
 # (fav_choose_ -> emit_ -> the display callbacks). On ESPHome 2026.10, during
 # QC with the device page's log stream open, that took the loop to about 9 KB
-# and overflowed it (backlog #84); the multi-sport build overflows the same
-# way on 2026.8.2. With 16 KB, internal RAM still never dropped below 32 KB
-# free on the bench.
+# and overflowed it; the multi-sport build overflows the same way on 2026.8.2.
+# With 16 KB, internal RAM still never dropped below 32 KB free on the bench.
 esp32:
   framework:
     advanced:
@@ -70,7 +71,7 @@ esphome:
   comment: "v${version}"
   build_path: build/gameday-${variant}
   project:
-    name: bharvey88.gameday-scoreboard
+    name: ApolloAutomation.gameday-scoreboard
     version: "${version}"
   on_boot:
     # The Brightness number restores its saved value before the HUB75 driver
@@ -109,8 +110,10 @@ esphome:
             w->set_ap(ap);
     # After "Reset Wi-Fi" the network in memory is blank (components/saved_networks
     # keeps the saved ones for the next boot). ESPHome still counts it as a
-    # configured network and would wait a minute before the hotspot and
-    # Bluetooth setup appear. Cut both waits to a second in that one case.
+    # configured network and would wait 90 s (ESPHome's ap_timeout) before
+    # the hotspot and 30 s (improv_ble's wifi_timeout below) before Bluetooth
+    # setup appear. Cut both waits to a second in that one case. Nothing puts
+    # them back once setup connects; the next restart does.
     # Otherwise a saved network list means a real network whatever get_sta()
     # reads. A blank network with no list is a reset from older firmware,
     # which blanked ESPHome's slot.
@@ -176,7 +179,8 @@ packages:
   boot: !include pages/boot.yaml
   scoreboard: !include pages/gameday-live.yaml
   wizmote: !include pages/wizmote.yaml
-  # Factory check (five quick boot button presses in the first 30 s)
+  # Factory check, started by the flag scripts/factory_flash.py leaves in NVS
+  # or by POST /gameday/action?do=qc
   qc: !include pages/qc.yaml
   # Dims a hot panel and caps one on a weak power brick, and says why
   guard: !include pages/guard.yaml
@@ -461,9 +465,9 @@ http_request:
   id: http_client
   timeout: 20s
   watchdog_timeout: 30s
-  # ESPN, its logo CDN and GitHub Pages all use Let's Encrypt, and the update
-  # mirror (Cloudflare) Google Trust Services; both are in the ESP-IDF
-  # certificate bundle, so every fetch (including firmware) is verified.
+  # ESPN, its logo CDN and GitHub Pages all use Let's Encrypt, which is in
+  # the ESP-IDF certificate bundle, so every fetch (including firmware) is
+  # verified.
   verify_ssl: true
   buffer_size_rx: 2048
 
@@ -553,10 +557,6 @@ gameday:
     update_id: gd_firmware_update
     stable: ${update_source}
     beta: ${beta_update_source}
-  update_mirror:
-    update_id: gd_firmware_update
-    source: ${update_source}
-    host: ${update_mirror_host}
   on_action:
     - if:
         condition:

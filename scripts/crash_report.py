@@ -34,7 +34,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO = "gameday-scoreboard/gameday-scoreboard"
+REPO = "ApolloAutomation/gameday-scoreboard-main"
 CACHE = Path.home() / ".cache" / "gameday-scoreboard" / "elf"
 # A release build is made by CI a few minutes before the release is published.
 BUILD_SLACK_S = 3 * 3600
@@ -49,16 +49,29 @@ ADDR2LINE_GLOBS = [
 ADDR_RE = re.compile(r"^\s*(PC|BT\d+):\s*0x([0-9A-Fa-f]{8})")
 FOREIGN_ADDR_RE = re.compile(r"^\s*(pc|bt\d+):\s*0x([0-9A-Fa-f]{8})")
 FOREIGN_MARK = "Captured by a different firmware build"
+# "Other core (1) backtrace:", or "other core (1):" in a foreign report.
+OTHER_CORE_RE = re.compile(r"^\s*[Oo]ther core \((\d)\)")
+
+
+def address_groups(report, foreign_ok=False):
+    """[(title, [(label, '0x...')])]: the crashed core's PC and backtrace, then
+    the other core's when the report has one. They are separate stacks, so
+    each is decoded on its own; one list would read as a single call chain."""
+    groups = [("Crashed core", [])]
+    for line in report.splitlines():
+        m = OTHER_CORE_RE.match(line)
+        if m:
+            groups.append((f"Other core ({m.group(1)})", []))
+            continue
+        m = ADDR_RE.match(line) or (foreign_ok and FOREIGN_ADDR_RE.match(line))
+        if m:
+            groups[-1][1].append((m.group(1), "0x" + m.group(2).upper()))
+    return [(title, addrs) for title, addrs in groups if addrs]
 
 
 def addresses(report, foreign_ok=False):
     """[(label, '0x...')] for the PC and backtrace lines, in order."""
-    out = []
-    for line in report.splitlines():
-        m = ADDR_RE.match(line) or (foreign_ok and FOREIGN_ADDR_RE.match(line))
-        if m:
-            out.append((m.group(1), "0x" + m.group(2).upper()))
-    return out
+    return [a for _, addrs in address_groups(report, foreign_ok) for a in addrs]
 
 
 def is_foreign(report):
@@ -77,7 +90,9 @@ def build_matches(build_time, published):
 def fmt_time(t):
     if not t:
         return "unknown (no clock yet)"
-    return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %-I:%M %p")
+    d = datetime.datetime.fromtimestamp(t)
+    # Not strftime's %-I: Windows has no hour without its leading zero.
+    return f"{d:%Y-%m-%d} {d.hour % 12 or 12}:{d:%M %p}"
 
 
 def fetch(host):
@@ -91,15 +106,25 @@ def clear(host):
         return r.status == 200
 
 
-def release_published(version):
+def lookup_failed(version, why):
+    return (f"Couldn't look up release v{version} on GitHub ({why}). Try again in a while, "
+            "or pass the build's ELF with --elf.")
+
+
+def release_published(version, urlopen=urllib.request.urlopen):
+    """When release v<version> was published (Unix time), or None when there is
+    no such release. Any other failure to ask GitHub (the API's 403 rate limit,
+    no network) stops with a note instead of a traceback."""
     url = f"https://api.github.com/repos/{REPO}/releases/tags/v{version}"
     try:
-        with urllib.request.urlopen(url, timeout=20) as r:
+        with urlopen(url, timeout=20) as r:
             rel = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        raise
+        raise SystemExit(lookup_failed(version, f"HTTP {e.code} {e.reason}"))
+    except OSError as e:  # URLError, a timeout or a dropped connection
+        raise SystemExit(lookup_failed(version, getattr(e, "reason", None) or e))
     stamp = rel.get("published_at") or rel.get("created_at")
     return int(datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp())
 
@@ -142,6 +167,8 @@ def decode(addr2line, elf, addrs):
 
 
 def selftest():
+    # The report the firmware saves (the same text tests/test_parse.cpp's
+    # test_crash_capture builds): the other core's backtrace counts from BT0.
     report = (
         "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
         "  Reason: Fault - LoadProhibited (cause 28)\n"
@@ -151,11 +178,14 @@ def selftest():
         "  BT0: 0x40386CDF  (backtrace)\n"
         "  BT1: 0x421736DD  (backtrace)\n"
         "  Other core (1) backtrace:\n"
-        "  BT2: 0x4038665D  (backtrace)\n"
+        "  BT0: 0x4038665D  (backtrace)\n"
     )
     got = addresses(report)
     assert got == [("PC", "0x40055EBF"), ("BT0", "0x40386CDF"), ("BT1", "0x421736DD"),
-                   ("BT2", "0x4038665D")], got
+                   ("BT0", "0x4038665D")], got
+    groups = address_groups(report)
+    assert groups == [("Crashed core", [("PC", "0x40055EBF"), ("BT0", "0x40386CDF"), ("BT1", "0x421736DD")]),
+                      ("Other core (1)", [("BT0", "0x4038665D")])], groups
     assert not is_foreign(report)
     foreign = (
         "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
@@ -164,14 +194,46 @@ def selftest():
         "  Captured by a different firmware build; addresses belong to that build's ELF\n"
         "  pc: 0x40055ebf\n"
         "  bt0: 0x40386cdf\n"
+        "  other core (0):\n"
+        "  bt1: 0x4038665d\n"
     )
     assert is_foreign(foreign)
     assert addresses(foreign) == [], addresses(foreign)
-    assert addresses(foreign, foreign_ok=True) == [("pc", "0x40055EBF"), ("bt0", "0x40386CDF")]
+    assert address_groups(foreign, foreign_ok=True) == [
+        ("Crashed core", [("pc", "0x40055EBF"), ("bt0", "0x40386CDF")]),
+        ("Other core (0)", [("bt1", "0x4038665D")])], address_groups(foreign, foreign_ok=True)
     assert asset_name("scoreboard75") == "firmware-scoreboard75.zip"
     assert build_matches(1760000000, 1760000000 + 600)
     assert not build_matches(1760000000, 1760000000 + 86400)
     assert not build_matches(0, 1760000000)
+
+    # The release lookup, with GitHub stood in for: a missing release is None,
+    # and a rate limit or no network stops with the --elf advice, not a traceback.
+    def github(answer):
+        def urlopen(url, timeout):
+            assert url.endswith("/releases/tags/v2026.10.0"), url
+            if isinstance(answer, Exception):
+                raise answer
+            return io.BytesIO(answer)
+        return urlopen
+    published = release_published("2026.10.0", urlopen=github(b'{"published_at": "2026-10-19T12:00:00Z"}'))
+    assert published == int(datetime.datetime(2026, 10, 19, 12, tzinfo=datetime.timezone.utc).timestamp()), published
+    url = f"https://api.github.com/repos/{REPO}/releases/tags/v2026.10.0"
+    assert release_published("2026.10.0", urlopen=github(urllib.error.HTTPError(url, 404, "Not Found", None, None))) is None
+    for err, why in ((urllib.error.HTTPError(url, 403, "rate limit exceeded", None, None), "HTTP 403 rate limit exceeded"),
+                     (urllib.error.URLError("nodename nor servname provided"), "nodename nor servname provided"),
+                     (TimeoutError("timed out"), "timed out")):
+        try:
+            release_published("2026.10.0", urlopen=github(err))
+        except SystemExit as e:
+            assert str(e) == lookup_failed("2026.10.0", why), str(e)
+            assert "look up release v2026.10.0" in str(e) and "--elf" in str(e), str(e)
+        else:
+            raise AssertionError(f"{err!r} did not stop with a note")
+
+    assert fmt_time(0) == "unknown (no clock yet)"
+    assert fmt_time(datetime.datetime(2026, 10, 19, 0, 5).timestamp()) == "2026-10-19 12:05 AM"
+    assert fmt_time(datetime.datetime(2026, 10, 19, 13, 5).timestamp()) == "2026-10-19 1:05 PM"
     print("selftest ok")
 
 
@@ -201,8 +263,8 @@ def main():
     print(report.rstrip() or "(no backtrace: a brownout, or the crash handler had nothing)")
 
     foreign = is_foreign(report)
-    addrs = addresses(report, foreign_ok=foreign)
-    if addrs:
+    groups = address_groups(report, foreign_ok=foreign)
+    if groups:
         elf = args.elf
         if foreign and not elf:
             print("\nThis report came from a different build than the one that saved it (an update that "
@@ -218,8 +280,12 @@ def main():
             else:
                 elf = release_elf(version, variant)
         if elf:
+            addr2line = find_addr2line(args.addr2line)
             print(f"\nDecoded with {elf}:")
-            print(decode(find_addr2line(args.addr2line), elf, addrs).rstrip())
+            for title, addrs in groups:
+                if len(groups) > 1:
+                    print(f"\n{title}:")
+                print(decode(addr2line, elf, addrs).rstrip())
 
     if args.clear and args.host:
         print("\nCleared." if clear(args.host) else "\nClear failed.")

@@ -22,8 +22,10 @@ static const int kWifiWeakDbm = -75;           // "weak" is a median below this
 // stopped hearing the panel or the panel stopped hearing it. ROUTER: the
 // router sent the panel away or restarted. PASSWORD: the router refused the
 // panel's sign-in. ROAM: the panel moved to another access point of the same
-// network. PANEL: the panel left on purpose (Reset Wi-Fi, a forgotten
-// network), which isn't counted.
+// network. PANEL: the panel left on purpose, as ESPHome does when it moves
+// to a stronger access point of the same network (it disconnects first), so
+// those moves are neither counted nor listed as roams. Forgetting a network
+// never disconnects.
 enum class WifiCause : uint8_t { SIGNAL, ROUTER, PASSWORD, ROAM, OTHER, PANEL };
 static const uint8_t kWifiCauses = 5;  // the counted ones, SIGNAL to OTHER
 

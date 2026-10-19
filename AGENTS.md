@@ -4,14 +4,15 @@ ESPHome firmware for a standalone sports scoreboard on an ESP32-S3
 driving HUB75 LED panels: the NFL, college football, MLB, the NBA, the
 WNBA, men's college basketball, the NHL, MLS and the Premier League. It
 follows games from ESPN's public API by itself and serves its own
-settings page. CONTRIBUTING.md has the same ground for people; this file
-is the short version.
+settings page. Apollo Automation owns and maintains it at
+github.com/ApolloAutomation/gameday-scoreboard-main. CONTRIBUTING.md has
+the same ground for people; this file is the short version.
 
 ## Layout
 
 - `firmware/gameday.yaml` (MoonHub75 pinout) and
-  `firmware/gameday-scoreboard75.yaml` (our controller board) are the two
-  release builds. Each only names itself and picks a pin map from
+  `firmware/gameday-scoreboard75.yaml` (the scoreboard75 controller board)
+  are the two release builds. Each only names itself and picks a pin map from
   `firmware/controllers/`; everything else is in
   `firmware/gameday-common.yaml`. `firmware/gameday-2panel.yaml` is
   gameday.yaml booting two panels wide, offered by the DIY installer.
@@ -21,8 +22,9 @@ is the short version.
 - `firmware/gameday-bar.yaml` and `firmware/gameday-scoreboard75-bar.yaml`
   are the bar builds, for the free panels in bars: the same firmware plus
   `firmware/pages/bar.yaml`, which reads the beta channel
-  (`gamedayscoreboard.app/firmware/beta/<variant>/`) and installs from it
-  on its own at night. CI publishes them only from `beta`. Release
+  (`firmware/beta/<variant>/` on the project's site, the `site_base`
+  substitution in `firmware/gameday-common.yaml`) and installs from it on
+  its own at night. CI publishes them only from `beta`. Release
   firmware never installs anything unless the owner turns on "Install
   updates automatically".
 - `components/gameday`: ESPN fetching, parsing and game logic (C++).
@@ -32,16 +34,17 @@ is the short version.
   remembers (ESPHome keeps one), handed to the Wi-Fi component at boot.
 - `firmware/pages`: the LVGL pages drawn on the panel.
 - `firmware/web`: the device page. `bundle.js` is generated from `app.js`
-  and `app.css`.
+  and the team and timezone tables, and `bundle-demo.js` is the same plus
+  `demo.js` (both by `scripts/build_web.py`); `app.css` is served as is.
 - `docs/site`: the installer and support site. Every page needs its own
   title, description, canonical link and share tags;
   `python3 scripts/site_seo.py check docs/site` lists what's missing.
   `docs/site/diy` is the page for DIY owners (boards, panels, wiring);
   keep it in step with `firmware/controllers/` and the README's Hardware
   section.
-- `docs/wiki`: the documentation site (Astro + Starlight). The
-  gameday-scoreboard/docs repo publishes this repo's `main` to
-  docs.gameday-scoreboard.com on GitHub Pages. Pages are markdown under
+- `docs/wiki`: the documentation site (Astro + Starlight). CI builds it
+  on every PR that touches it; it has no published home of its own yet, so
+  links point at the markdown in this repo. Pages are markdown under
   `docs/wiki/src/content/docs/`; `docs/wiki/README.md` has the
   conventions.
 - `scripts`: generators (`build_web.py`, `build_teams.py`,
@@ -58,8 +61,9 @@ is the short version.
   `esphome config` misses C++ errors.
 - Host tests: `make -C tests` (needs g++). CI also builds
   `make -C tests replay` and runs the `--selftest` of
-  `scripts/factory_flash.py`, `burnin_monitor.py`, `improv_scan.py`,
-  `crash_report.py` and `tests/web/mock_device.py`. The last checks the device page's mock
+  `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
+  `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`
+  and `tests/web/mock_device.py`. The last checks the device page's mock
   against `tests/fixtures/set_cases.json`, the same table the host tests
   run through `components/gameday/set_request.h`.
 - A panel that restarted from a crash, a watchdog or a brownout keeps the
@@ -71,9 +75,10 @@ is the short version.
   sanitizers for about a minute, as CI does on every PR;
   `make -C tests fuzz-long` runs 30 minutes a target. clang with libFuzzer
   makes it coverage guided; other compilers get a random mutator. A crash
-  leaves its input in `tests/build/crash-*`; pass that file to
-  `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a host test
-  with the fix.
+  leaves its input in `tests/build/crash-*`, and libFuzzer's timeouts,
+  memory overruns and leaks in `timeout-*`, `oom-*` and `leak-*`; pass that
+  file to `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a
+  host test with the fix.
 - Size budget: CI's "Size budget" job checks each build's flash (the OTA
   image) and static internal RAM (from the ELF), and the memory each ESPN
   read takes on the host (`make -C tests heap`, `tests/heap_budget.cpp`),
@@ -85,8 +90,8 @@ is the short version.
   10% headroom (at least 1 KB).
 - Device page tests: in `tests/web`, `npm ci` and
   `npx playwright install chromium` once, then `npm test`.
-- After editing `firmware/web/app.js` or `app.css`, run
-  `python scripts/build_web.py` and commit `bundle.js` and `bundle-demo.js`.
+- After editing `firmware/web/app.js`, `app.css` or `demo.js`, run
+  `python3 scripts/build_web.py` and commit `bundle.js` and `bundle-demo.js`.
   CI fails if either is stale.
 - `components/gameday/teams.h`, `team_colors.h` and `timezones_parsed.h`
   are generated by `build_teams.py`, `build_team_colors.py` and
@@ -97,18 +102,19 @@ is the short version.
 - Branch from `dev` and open PRs against `dev`. `beta` and `main` only take
   promotion PRs, and CI enforces that.
 - A PR description says what changed and how it was tested. No links to
-  private repos or trackers, no ticket numbers from them, and no AI
-  attribution in PR text or comments. Maintainers keep reviews and
-  progress notes privately.
+  private repos or trackers and no ticket numbers from them. Maintainers
+  keep reviews and progress notes privately.
 - Commit messages are one plain sentence about the behavior that changed
   ("Name each panel's hotspot after its suffix"), not "fix bug" or a
   conventional-commit prefix.
 - Never commit `secrets.yaml`, Wi-Fi details, session notes, plans or
   specs. This repo is public; CI rejects common notes files.
+  `ARCHITECTURE.md` and `REVIEW_REPORT.md` at the root are public
+  documents and are fine.
 - The panel trusts the home network on purpose: OTA has no password, the
-  ESPHome API has no key and the device page is open. Don't add
-  passwords or keys to the default build. The README section "On your
-  network" explains why.
+  ESPHome API has no key and the device page is open. Apollo Automation
+  decides that posture; don't add passwords or keys to the default build
+  in a feature PR. The README section "On your network" explains why.
 - Team logos come from ESPN at runtime. Don't commit league or team logos.
 - Version bumps and CHANGELOG sections are written by maintainers at
   release time. Leave both alone in a feature PR.

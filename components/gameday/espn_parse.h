@@ -2,6 +2,7 @@
 // binary can compile this file directly.
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <ctime>
 #include <string>
@@ -361,6 +362,28 @@ void add_odds(std::string &out, const GameSnapshot &s, const TickerOptions &o, c
 // The last play, cut to 160 characters so one long description doesn't fill
 // the ticker.
 void add_last_play(std::string &out, std::string play);
+// Splash rules shared by every sport. Two reads of one game: a splash is
+// never decided across a boot, a team change or a new game.
+bool same_game(const GameSnapshot &prev, const GameSnapshot &cur);
+// The game went from in progress to over between the two reads.
+inline bool went_final(const GameSnapshot &prev, const GameSnapshot &cur) {
+  return prev.state == GameState::IN && cur.state == GameState::POST;
+}
+// What one side scored between the two reads, 0 when its score held or went
+// down (a correction). Scores are atoi of ESPN's text, so any int can arrive:
+// the difference is taken in 64 bits, and a gain past what an int holds
+// counts as the largest int.
+inline int score_gain(int before, int after) {
+  const int64_t d = (int64_t) after - (int64_t) before;
+  if (d <= 0)
+    return 0;
+  return d > INT_MAX ? INT_MAX : (int) d;
+}
+// The victory splash once a game is over: our side's "DAL WINS!", or the
+// other side's when neutral (live modes). us and them are what decides it,
+// the score or a soccer shootout's. Nothing for a draw, or for a game ESPN
+// moved to post without finishing it (suspended or canceled).
+Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them);
 }  // namespace detail
 
 // Does this cycle need to re-read the team endpoint, or only re-poll the game

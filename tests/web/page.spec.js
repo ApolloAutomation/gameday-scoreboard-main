@@ -115,6 +115,7 @@ test("an upcoming game shows kickoff and network", async ({ page, request }) => 
 // in the page's US Central) and the panel marks it tbd: its day and "TBD".
 test("a game with no kickoff time yet shows its day and TBD", async ({ page, request }) => {
   const sat = 1792814400; // 2026-10-24T04:00Z
+  await reset(request);
   const g = (await deviceState(request)).game;
   await reset(request, {
     game: { ...g, id: "1", oa: "MINN", kick: sat, tbd: true, k: "Oct 24 TBD", detail: "TBD" },
@@ -198,6 +199,24 @@ test("no game renders the empty board for my team and for live modes", async ({ 
   await page.reload();
   await expect(page.locator("#msg")).toHaveText("No live games right now");
   await expect(page.locator("#curName")).toHaveText("No team chosen");
+});
+
+test("Favorite teams with no favorites follows the team, and the page says so", async ({ page, request }) => {
+  const none = [{}, {}, {}, {}];
+  await reset(request, { mode: 4, favs: none, game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+  await page.goto("/");
+  await expect(page.locator("#msg")).toHaveText("No upcoming game for this team");
+  await expect(page.locator("#favName")).toHaveText("No favorites set yet");
+
+  // The team's next games, as in My team.
+  await reset(request, { mode: 4, favs: none });
+  await page.reload();
+  await expect(page.locator("#upnextList .un .n")).toHaveText(["@ Commanders", "vs Texans"]);
+
+  // No team either: the live board.
+  await reset(request, { mode: 4, favs: none, team: {}, game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+  await page.reload();
+  await expect(page.locator("#msg")).toHaveText("No live games right now");
 });
 
 test("an empty board shows the panel's reason, and the default only when the panel has none", async ({ page, request }) => {
@@ -515,6 +534,34 @@ test("favorites post the whole list in order on add, move and remove", async ({ 
   ]);
 });
 
+test("moving and removing favorites from the keyboard keeps the focus on the list", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const rows = page.locator("#favCtls .ctl.fav");
+  await expect(rows).toHaveCount(3);
+  // Move down follows the team it moved, so Enter again moves it on.
+  await rows.nth(0).getByRole("button", { name: "Move down" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "nfl:34,nfl:6,ncaa:145" });
+  await expect(rows.nth(1).getByRole("button", { name: "Move down" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "nfl:34,ncaa:145,nfl:6" });
+  await expect(rows.nth(2).getByRole("button", { name: "Move down" })).toBeFocused();
+  // Remove lands on the row that took its place, or on the one above for the last row.
+  await rows.nth(0).getByRole("button", { name: "Remove" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "ncaa:145,nfl:6" });
+  await expect(rows.nth(0).getByRole("button", { name: "Remove" })).toBeFocused();
+  await rows.nth(1).getByRole("button", { name: "Remove" }).focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "ncaa:145" });
+  await expect(rows.nth(0).getByRole("button", { name: "Remove" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { favs: "" });
+  await expect(page.locator("#favAdd")).toBeFocused();
+  await expect(page.locator("#favCtls .ctl.fav label")).toHaveCount(0);
+});
+
 test("the favorites list stops offering Add a favorite at the panel's limit", async ({ page, request }) => {
   const mlb = (n) => Array.from({ length: n }, (_, i) => ({ l: "mlb", id: i + 1 }));
   await reset(request, { favs: mlb(15) });
@@ -528,6 +575,21 @@ test("the favorites list stops offering Add a favorite at the panel's limit", as
   await expect(page.locator("#favAdd")).toBeHidden();
   // Past the four remote slots a row has no remote button.
   await expect(page.locator("#favCtls .ctl.fav").nth(4).locator("small")).toHaveText("MLB");
+});
+
+test("a favorite names the remote button the panel gives it, with an empty slot before it", async ({ page, request }) => {
+  // Slots 1 and 3 emptied on their own (fav1=none, fav3=none): the panel keeps
+  // the Texans on button 2 and the Cowboys on button 4.
+  await reset(request, { favs: [{}, { l: "nfl", id: 34 }, {}, { l: "nfl", id: 6 }] });
+  await page.goto("/");
+  const rows = page.locator("#favCtls .ctl.fav");
+  await expect(rows.locator("label")).toHaveText([/^1\. Houston Texans/, /^2\. Dallas Cowboys/]);
+  await expect(rows.locator("small")).toHaveText(["NFL · remote button 2", "NFL · remote button 4"]);
+
+  // A move posts the whole list, which the panel saves from slot 1.
+  await rows.nth(0).getByRole("button", { name: "Move down" }).click();
+  await expectSet(request, { favs: "nfl:6,nfl:34" });
+  await expect(rows.locator("small")).toHaveText(["NFL · remote button 1", "NFL · remote button 2"]);
 });
 
 test("Live games chips post the leagues, and move an old live mode to mode 5", async ({ page, request }) => {
@@ -601,6 +663,25 @@ test("chip taps faster than the page re-reads each save the list on screen", asy
   await expect.poll(() => sets(request)).toEqual([{ live: "mlb,nba" }, { live: "mlb,nba,nhl" }, { live: "nba,nhl" }]);
   await staysAs(chipsOn(page), ["NBA", "NHL"], 2500);
   expect((await deviceState(request)).live).toEqual(["nba", "nhl"]);
+});
+
+test("a league chip keeps the keyboard focus through its post and the re-reads after it", async ({ page, request }) => {
+  await reset(request, { mode: 5, live: ["mlb"], live_auto: false });
+  await page.goto("/");
+  await expect(chipsOn(page)).toHaveText(["MLB"]);
+  await chip(page, "NBA").focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { live: "mlb,nba" });
+  await expect(chipsOn(page)).toHaveText(["MLB", "NBA"]);
+  // A Game Status event re-reads the state document, as a live game does every few seconds.
+  await sleep(800);
+  await expect(chip(page, "NBA")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(chip(page, "WNBA")).toBeFocused();
+  await page.keyboard.press("Space");
+  await expectSet(request, { live: "mlb,nba,wnba" });
+  await sleep(800);
+  await expect(chip(page, "WNBA")).toBeFocused();
 });
 
 test("Live games bar says when the leagues are automatic, and goes back to automatic", async ({ page, request }) => {
@@ -737,6 +818,19 @@ test("follow beta: off by default, posts 0 and 1, hidden when the firmware has n
   await expect(page.locator("#betaRow")).toBeHidden();
 });
 
+test("the update switches show a tap at once and keep it through a slow re-read", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator('.sw[data-set="autoupd"]')).not.toHaveClass(/\bon\b/);
+  await slowReads(page, 1000);
+  await page.locator('.sw[data-set="autoupd"]').click();
+  await page.locator('.sw[data-set="beta"]').click();
+  await staysAs(page.locator('.sw.on[data-set="autoupd"], .sw.on[data-set="beta"]'), ["", ""], 2500);
+  expect(await sets(request)).toEqual([{ autoupd: "1" }, { beta: "1" }]);
+  const st = await deviceState(request);
+  expect([st.autoupd, st.beta]).toEqual([true, true]);
+});
+
 test("a beta is newer than its release number, and a release is behind the beta before it", async ({ page, request }) => {
   await reset(request, { beta: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
@@ -786,24 +880,77 @@ test("an update that rolled back says so and still offers Install", async ({ pag
   await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
 });
 
+test("an install that never restarts the panel stops saying Installing once the page gives up waiting", async ({ page, request }) => {
+  await reset(request);
+  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
+  await expect(page.locator("#gone")).toHaveText("Installing v2026.10.1. This page reloads when the panel is back.");
+  // The download failed: the panel stays up, still offering the same version.
+  await page.clock.fastForward("05:01");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+});
+
+test("an install the panel never got doesn't claim it's installing", async ({ page, request }) => {
+  await reset(request);
+  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.route("**/update/Firmware/install*", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+});
+
 test("release notes link to the release's section of the site changelog, a beta to its commit", async ({ page, request }) => {
   await reset(request);
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };
-  const commit = "https://github.com/gameday-scoreboard/gameday-scoreboard/commit/abc1234";
-  let entity = { ...fw, value: "2026.10.1", current_version: "2026.10.0", release_url: "https://github.com/gameday-scoreboard/gameday-scoreboard/releases/tag/v2026.10.1" };
+  const commit = "https://github.com/ApolloAutomation/gameday-scoreboard-main/commit/abc1234";
+  let entity = { ...fw, value: "2026.10.1", current_version: "2026.10.0", release_url: "https://github.com/ApolloAutomation/gameday-scoreboard-main/releases/tag/v2026.10.1" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
   const link = page.locator("#fwSub a", { hasText: "Release notes" });
   await page.goto("/");
-  await expect(link).toHaveAttribute("href", "https://gamedayscoreboard.app/changelog/#v2026.10.1");
+  await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.1");
 
   // Up to date: the running release's section.
   entity = { ...fw, state: "NO UPDATE", value: "2026.10.0", current_version: "2026.10.0", release_url: "" };
   await page.reload();
-  await expect(link).toHaveAttribute("href", "https://gamedayscoreboard.app/changelog/#v2026.10.0");
+  await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.0");
 
   entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: commit };
   await page.reload();
   await expect(link).toHaveAttribute("href", commit);
+});
+
+test("release notes link only to an https address", async ({ page, request }) => {
+  await reset(request);
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };
+  let entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: "javascript:alert(1)" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  const link = page.locator("#fwSub a", { hasText: "Release notes" });
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1-beta.9");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  await expect(link).toHaveCount(0);
+
+  // A release still links to its changelog section.
+  entity = { ...entity, value: "2026.10.1" };
+  await page.reload();
+  await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.1");
 });
 
 test("a team picked in My team stays on the page through a slow re-read", async ({ page, request }) => {
@@ -900,6 +1047,48 @@ test("the picker has a tab per league and follows a team from another sport", as
   await expect(page.locator("#curLg")).toHaveText("NHL");
 });
 
+test("the picker's league tabs and Close fit on screen, on a small phone and on a computer", async ({ page, request }) => {
+  await reset(request);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto("/");
+    await page.locator("#pick").click();
+    await expect(page.locator("#modal")).toHaveClass(/open/);
+    const sheet = await page.locator(".sheet").evaluate((s) => [s.scrollWidth, s.clientWidth]);
+    expect(sheet[0], `the sheet scrolls sideways at ${width}px`).toBeLessThanOrEqual(sheet[1]);
+    await expect(page.locator("#close")).toBeInViewport({ ratio: 1 });
+    for (const tab of await page.locator(".tabs button").all()) await expect(tab).toBeInViewport({ ratio: 1 });
+    await page.locator("#close").click();
+    await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  }
+});
+
+test("the picker is a dialog that keeps the keyboard inside and hands focus back when it closes", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#curName")).toHaveText("Dallas Cowboys");
+  const inDialog = () => page.evaluate(() => !!document.activeElement.closest('[role="dialog"]'));
+  await page.locator("#pick").focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Choose a team" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(page.getByRole("searchbox", { name: "Search teams" })).toBeFocused();
+  // Shift+Tab from the first control wraps to the last, Tab from the last back to the first.
+  await page.keyboard.press("Shift+Tab");
+  expect(await inDialog()).toBe(true);
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("searchbox", { name: "Search teams" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("#pick")).toBeFocused();
+
+  await page.locator("#favAdd").click();
+  await expect(page.getByRole("dialog", { name: "Add a favorite" })).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("#favAdd")).toBeFocused();
+});
+
 test("other sports show their situation line and no timeout pips", async ({ page, request }) => {
   const mlb = {
     s: "IN", l: "mlb", sport: 1, ta: "NYY", ti: 10, ts: 3, oa: "TOR", oi: 14, os: 2, p: 0, tt: 0, ot: 0,
@@ -926,11 +1115,71 @@ test("timezone follows the browser, or a zone picked by hand", async ({ page, re
   await expect(page.locator("#toast")).toHaveText("Timezone set to US Central from this browser");
   await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
 
-  await page.locator("#tzline a", { hasText: "choose manually" }).click();
+  await page.locator("#tzline .lnk", { hasText: "choose manually" }).click();
   await expect(page.locator("#tzpick")).toBeVisible();
   await page.locator("#tzsel").selectOption({ label: "US Pacific" });
   await expectSet(request, { tzauto: "0", tz: "4" });
   await expect(page.locator("#tzline")).toContainText("US Pacific · chosen by hand");
+});
+
+// Ojinaga keeps US Central time and Ciudad Juarez US Mountain time, both on
+// US daylight saving dates, so a browser in either sets the matching US zone.
+test.describe("a browser in Ojinaga", () => {
+  test.use({ timezoneId: "America/Ojinaga" });
+  test("sets the panel to US Central", async ({ page, request }) => {
+    await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+    await page.goto("/");
+    await expectSet(request, { tz: "1" });
+    await expect(page.locator("#toast")).toHaveText("Timezone set to US Central from this browser");
+    await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  });
+});
+
+test.describe("a browser in Ciudad Juarez", () => {
+  test.use({ timezoneId: "America/Ciudad_Juarez" });
+  test("sets the panel to US Mountain", async ({ page, request }) => {
+    await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+    await page.goto("/");
+    await expectSet(request, { tz: "2" });
+    await expect(page.locator("#toast")).toHaveText("Timezone set to US Mountain from this browser");
+    await expect(page.locator("#tzline")).toContainText("US Mountain · set from this browser");
+  });
+});
+
+test("the timezone line's choose manually and follow this browser work from the keyboard", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  const choose = page.locator("#tzline .lnk");
+  await expect(choose).toHaveRole("button");
+  await choose.focus();
+  await expect(choose).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#tzpick")).toBeVisible();
+
+  await reset(request, { tz: 4, tz_name: "US Pacific", tz_auto: false });
+  await page.reload();
+  const follow = page.getByRole("button", { name: "follow this browser (US Central)" });
+  await follow.focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { tzauto: "1" });
+});
+
+test("the timezone line's button keeps the keyboard focus through the page's regular re-read", async ({ page, request }) => {
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  let reads = 0;
+  page.on("request", (r) => { if (r.url().includes("/gameday/state")) reads++; });
+  const choose = page.getByRole("button", { name: "choose manually" });
+  await choose.focus();
+  await page.clock.fastForward(16000);
+  await expect.poll(() => reads).toBeGreaterThan(0);
+  await sleep(300);
+  await expect(choose).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#tzpick")).toBeVisible();
 });
 
 test("the panel picker posts the new layout", async ({ page, request }) => {
@@ -942,6 +1191,18 @@ test("the panel picker posts the new layout", async ({ page, request }) => {
   await expectSet(request, { panels: "1" });
   await expect(page.locator("#toast")).toHaveText("Restarting as 64x64");
   await expect(page.locator('#panels .panelpick[data-cols="2"]')).toBeDisabled();
+});
+
+test("a layout change the panel never got doesn't claim it's restarting", async ({ page, request }) => {
+  await reset(request, {}, ["set"]);
+  await page.goto("/");
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
+  await page.locator('#panels .panelpick[data-cols="1"]').click();
+  await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator('#panels .panelpick[data-cols="1"]')).toBeEnabled();
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
 });
 
 test("the device box shows what the panel downloaded from ESPN", async ({ page, request }) => {
@@ -1005,6 +1266,12 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("UPCOMING");
   await expect(page.locator("#health")).toBeHidden();
+
+  // An empty block (the firmware's fallback when it doesn't fit) counts as none.
+  await reset(request, { health: {} });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  await expect(page.locator("#health")).toBeHidden();
 });
 
 test("a hot or under-powered panel says why it is dimmed, and the power cap clears", async ({ page, request }) => {
@@ -1059,6 +1326,11 @@ test("saved Wi-Fi networks are listed in order and one can be forgotten", async 
   await expect(rows.nth(0).locator("label small")).toHaveText("Connected");
   await expect(rows.nth(1).locator("label")).toContainText("iPhone");
   await expect(page.locator("#netsEmpty")).toBeHidden();
+  // Any network the panel is set up on is saved, so the hint leads with the
+  // panel's own hotspot.
+  await expect(page.locator("#netsCard > p.hint").first()).toHaveText(
+    "The panel joins the first of these it can see, the last one that worked first."
+    + " A network you set it up on through its Game Day hotspot, or the Game Day app, is added here.");
 
   // Forget asks first; declining posts nothing.
   page.once("dialog", (d) => d.dismiss());
@@ -1071,14 +1343,26 @@ test("saved Wi-Fi networks are listed in order and one can be forgotten", async 
   page.once("dialog", (d) => d.accept());
   await rows.nth(1).locator("button").click();
   await expect.poll(forgets).toEqual([{ forget: "iPhone" }]);
+  await expect(page.locator("#toast")).toHaveText("Forgot iPhone");
   await expect(rows).toHaveCount(1);
   await expect(rows.nth(0).locator("label")).toContainText("Home");
 
-  // Forgetting the last one leaves the empty line.
+  // Forgetting the last one leaves the empty line. The panel stays on it and
+  // joins it again, since ESPHome's own slot keeps the last network.
   page.once("dialog", (d) => d.accept());
   await rows.nth(0).locator("button").click();
   await expect(rows).toHaveCount(0);
   await expect(page.locator("#netsEmpty")).toBeVisible();
+  await expect(page.locator("#toast")).toHaveText("Forgot Home; the panel keeps using it and saves it again when it reconnects");
+
+  // The connected one, with another saved: it stays only until that
+  // connection drops or the panel restarts.
+  await reset(request);
+  await page.reload();
+  await expect(rows).toHaveCount(2);
+  page.once("dialog", (d) => d.accept());
+  await rows.nth(0).locator("button").click();
+  await expect(page.locator("#toast")).toHaveText("Forgot Home; it stays connected until this connection drops or the panel restarts");
 
   // Firmware without the list: the section stays hidden.
   await reset(request, {}, [], null);
@@ -1198,7 +1482,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept,"
     + " and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows."
-    + " To set it up again, use the Game Day app or join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
   await expect(page.locator("#board")).toHaveClass(/dim/);
   await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
 
@@ -1207,7 +1491,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await page.locator("#actions button", { hasText: "Factory reset" }).click();
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into setup with everything erased, so this page won't reconnect."
-    + " To set it up again, use the Game Day app or join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
   // The mock still answers, but the page has stopped asking it.
   const asked = [];
   page.on("request", (r) => { if (r.url().startsWith(baseURL)) asked.push(r.url()); });

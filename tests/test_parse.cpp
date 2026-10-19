@@ -24,6 +24,7 @@
 #include "timezones.h"
 #include "update_mirror.h"
 #include "wifi_history.h"
+#include "../components/crash_report/capture.h"
 
 using namespace espn;
 
@@ -238,6 +239,92 @@ static void test_event_live() {
   CHECK_EQ(sea.game_name, std::string("Super Bowl LX"));
 }
 
+// The over/under as ESPN sends it, and values no total can have. A huge one
+// was undefined behavior in the cast to int (found by fuzz_espn); it now reads
+// as no over/under at all. Everything that read before reads the same.
+static void test_over_under_values() {
+  const std::string json = slurp("fixtures/event_nfl_pre.json");
+  const std::string from = "\"overUnder\":49.5";
+  CHECK(json.find(from) != std::string::npos);
+  auto with = [&](const char *value) {
+    std::string doc = json;
+    doc.replace(doc.find(from), from.size(), std::string("\"overUnder\":") + value);
+    GameSnapshot s;
+    CHECK(parse_event_str(doc, Sport::FOOTBALL, 3, s, "401872999"));
+    return s.over_under;
+  };
+  CHECK_EQ(with("49.5"), std::string("49.5"));
+  CHECK_EQ(with("47"), std::string("47"));
+  CHECK_EQ(with("2.5"), std::string("2.5"));
+  CHECK_EQ(with("228.5"), std::string("228.5"));
+  CHECK_EQ(with("2164294967296.5"), std::string(""));
+  CHECK_EQ(with("1e300"), std::string(""));
+  CHECK_EQ(with("-1e300"), std::string(""));
+  CHECK_EQ(with("-9999.5"), std::string("-9999.5"));
+  CHECK_EQ(with("9999.5"), std::string("9999.5"));
+  CHECK_EQ(with("10000"), std::string(""));
+  CHECK_EQ(with("-10000"), std::string(""));
+  CHECK_EQ(with("0"), std::string("0"));
+  CHECK_EQ(with("\"49.5\""), std::string("49.5"));  // ArduinoJson reads a number in a string
+  CHECK_EQ(with("null"), std::string(""));
+  // The ticker leaves the part out rather than showing "O/U " with nothing.
+  std::string doc = json;
+  doc.replace(doc.find(from), from.size(), "\"overUnder\":2164294967296.5");
+  GameSnapshot s;
+  CHECK(parse_event_str(doc, Sport::FOOTBALL, 3, s, "401872999"));
+  CHECK(status_text(s, TickerOptions{}, "Sun 1:00 PM").find("O/U") == std::string::npos);
+}
+
+// Documents with parts missing, empty or null, in every sport: each parser
+// says no rather than inventing a game, and a game with only some fields
+// still reads and draws.
+static void test_odd_documents() {
+  const Sport sports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
+  for (Sport sport : sports) {
+    GameSnapshot x;
+    CHECK(!parse_event_str(R"({"id":"1"})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":null})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":[]}]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":null}]})", sport, 3, x, "1"));
+    CHECK(!parse_event_str(R"({"id":"1","competitions":[{"competitors":[{"id":"4"},{"id":"5"}]}]})", sport, 3, x,
+                           "1"));  // not our game
+    CHECK(!x.valid);
+    // Our side and nothing else: no status, no score, no opponent.
+    GameSnapshot g;
+    CHECK(parse_event_str(
+        R"({"id":"1","status":null,"competitions":[{"situation":null,"odds":null,"competitors":[{"id":"3","score":null,"team":null},{"homeAway":"away"}]}]})",
+        sport, 3, g, "1"));
+    CHECK(g.valid);
+    CHECK(g.state == GameState::PRE);
+    CHECK_EQ(g.team_score, 0);
+    CHECK_EQ(g.opp_id, (uint32_t) 0);
+    CHECK(g.opp_abbr.empty());
+    CHECK(g.over_under.empty());
+    TickerOptions all;
+    status_text(g, all, "");
+    clock_text(g);
+    ha_status_text(g, "");
+  }
+  GameSnapshot x;
+  CHECK(!parse_scoreboard_str(R"({"events":null})", "1", 3, x));
+  CHECK(!parse_scoreboard_str(R"({"events":[{"id":"1","competitions":[]}]})", "1", 3, x));
+  std::vector<LiveGame> live;
+  int64_t next = 5;
+  std::string scan = R"({"events":[{"status":{"type":{"state":"in"}},"competitions":[]}]})";
+  CHECK(parse_live_games(scan, live, &next));
+  CHECK(live.empty());  // a live game with no id or sides is not followed
+  CHECK_EQ(next, (int64_t) 0);
+  std::vector<Upcoming> up;
+  CHECK(parse_upcoming_str(R"({"events":[]})", 3, 4, up));
+  CHECK(up.empty());
+  Schedule s;
+  CHECK(parse_team_str(R"({"team":{}})", s));
+  CHECK(s.valid);
+  CHECK(s.event_id.empty());
+  CHECK(!parse_team_str(R"({"code":404})", s));
+}
+
 static bool same_snapshot(const GameSnapshot &a, const GameSnapshot &b) {
   return a.valid == b.valid && a.state == b.state && a.event_id == b.event_id && a.kickoff_epoch == b.kickoff_epoch &&
          a.completed == b.completed && a.short_detail == b.short_detail && a.display_clock == b.display_clock &&
@@ -374,6 +461,126 @@ static void test_splash() {
   halted.short_detail = "Suspended";
   CHECK_EQ(decide_splash(live(21, 20), halted, true).text, std::string(""));
   CHECK_EQ(decide_splash(live(20, 21), halted, true, true).text, std::string(""));
+}
+
+// The victory splash follows the same rules in every sport: the game went
+// from live to over between two reads of it, completed, with a winner.
+static void test_win_splash_every_sport() {
+  for (Sport sport : {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER}) {
+    auto at = [sport](int us, int them, GameState st, bool completed) {
+      GameSnapshot s = live(us, them, st);
+      s.sport = sport;
+      s.completed = completed;
+      return s;
+    };
+    const GameSnapshot was = at(3, 3, GameState::IN, false);
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), true).text, std::string("DAL WINS!"));
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), false).color, (uint32_t) 0x002a5c);
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true).text, std::string(""));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).text, std::string("PHI WINS!"));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).color, (uint32_t) 0x004c54);
+    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, std::string(""));  // a draw
+    // Suspended or canceled: post, never completed, no winner
+    CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, false), true).text, std::string(""));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, false), true, true).text, std::string(""));
+    // Already over at the read before, after a boot, or another game
+    CHECK_EQ(decide_splash(at(4, 3, GameState::POST, true), at(4, 3, GameState::POST, true), true).text,
+             std::string(""));
+    CHECK_EQ(decide_splash(GameSnapshot{}, at(4, 3, GameState::POST, true), true).text, std::string(""));
+    GameSnapshot other = at(4, 3, GameState::POST, true);
+    other.event_id = "2";
+    CHECK_EQ(decide_splash(was, other, true).text, std::string(""));
+  }
+}
+
+// A live document with its two competitors' scores replaced, in the order
+// the document lists them.
+static std::string with_scores(std::string doc, const char *first, const char *second) {
+  const std::string key = "\"score\":\"";
+  size_t at = 0;
+  for (const char *v : {first, second}) {
+    at = doc.find(key, at);
+    CHECK(at != std::string::npos);
+    if (at == std::string::npos)
+      return doc;
+    at += key.size();
+    doc.replace(at, doc.find('"', at) - at, v);
+    at += strlen(v);
+  }
+  return doc;
+}
+
+// Scores are atoi of ESPN's text, so a broken document can carry any int.
+// One live game read twice with its scores jumping between the extremes:
+// working out what was scored never overflows, a drop is a correction with
+// no splash, and a gain too big to be real gets the plainest splash, the
+// same one a jump from 0 to the largest int gets.
+static void test_splash_extreme_scores() {
+  const char *kMax = "2147483647", *kMin = "-2147483648", *kZero = "0";
+  const char *values[] = {kMax, kMin, kZero};
+  struct Live {
+    Sport sport;
+    const char *file;
+    uint32_t first;  // the document's first competitor, followed here
+    const char *event;
+  };
+  const Live games[] = {
+      {Sport::FOOTBALL, "fixtures/event_ncaa_live.json", 55, "401871053"},            // JXST, then FIU
+      {Sport::BASEBALL, "fixtures/event_mlb_top.json", 15, "401908016"},              // ATL, then LAD
+      {Sport::SOCCER, "fixtures/event_soccer_second_half.json", 6079, "401841253"},  // BRA, then MIR
+      {Sport::HOCKEY, "fixtures/event_nhl_live.json", 28, "401892455"},               // WPG, then COL
+      {Sport::BASKETBALL, "fixtures/event_nba_live.json", 11, "401914123"},           // IND, then MIN
+  };
+  for (const Live &g : games) {
+    const std::string doc = slurp(g.file);
+    GameSnapshot reads[3][3];
+    for (int us = 0; us < 3; us++)
+      for (int them = 0; them < 3; them++) {
+        CHECK(parse_event_str(with_scores(doc, values[us], values[them]), g.sport, g.first, reads[us][them], g.event));
+        CHECK_EQ(reads[us][them].team_score, atoi(values[us]));
+        CHECK_EQ(reads[us][them].opp_score, atoi(values[them]));
+      }
+    for (const auto &row0 : reads)
+      for (const GameSnapshot &before : row0)
+        for (const auto &row1 : reads)
+          for (const GameSnapshot &after : row1)
+            for (int flags = 0; flags < 4; flags++) {
+              const Splash s = decide_splash(before, after, (flags & 1) != 0, (flags & 2) != 0);
+              if (after.team_score <= before.team_score && after.opp_score <= before.opp_score)
+                CHECK_EQ(s.text, std::string(""));
+            }
+  }
+  // read(game, us, them) indexes games and values: 0 the largest int, 1 the
+  // smallest, 2 zero.
+  auto read = [&](int game, int us, int them) {
+    GameSnapshot s;
+    const Live &g = games[game];
+    CHECK(parse_event_str(with_scores(slurp(g.file), values[us], values[them]), g.sport, g.first, s, g.event));
+    return s;
+  };
+  // Football: up from the smallest to the largest is a score, the other way
+  // a correction (it used to wrap to 1 and splash "EXTRA POINT!").
+  CHECK_EQ(decide_splash(read(0, 1, 2), read(0, 0, 2), true).text, std::string("SCORE!"));
+  CHECK_EQ(decide_splash(read(0, 2, 2), read(0, 0, 2), true).text, std::string("SCORE!"));
+  CHECK_EQ(decide_splash(read(0, 1, 2), read(0, 0, 2), true, true).text, std::string("JXST SCORE"));
+  CHECK_EQ(decide_splash(read(0, 0, 2), read(0, 1, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 0, 2), read(0, 2, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 2, 1), read(0, 2, 0), true).text, std::string("FIU SCORE"));
+  CHECK_EQ(decide_splash(read(0, 2, 1), read(0, 2, 0), false).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 2, 0), read(0, 2, 1), true).text, std::string(""));
+  // Baseball: the count tops out at the largest int.
+  CHECK_EQ(decide_splash(read(1, 1, 2), read(1, 0, 2), true).text, std::string("2147483647 RUNS!"));
+  CHECK_EQ(decide_splash(read(1, 2, 2), read(1, 0, 2), true).text, std::string("2147483647 RUNS!"));
+  CHECK_EQ(decide_splash(read(1, 0, 2), read(1, 1, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(1, 2, 1), read(1, 2, 0), true).text, std::string("LAD 2147483647 RUNS"));
+  CHECK_EQ(decide_splash(read(1, 2, 0), read(1, 2, 1), true).text, std::string(""));
+  // Soccer and hockey only compare: a goal up, nothing down.
+  for (int game : {2, 3}) {
+    CHECK_EQ(decide_splash(read(game, 1, 2), read(game, 0, 2), true).text, std::string("GOAL!"));
+    CHECK_EQ(decide_splash(read(game, 0, 2), read(game, 1, 2), true).text, std::string(""));
+  }
+  // Basketball splashes only the win.
+  CHECK_EQ(decide_splash(read(4, 1, 2), read(4, 0, 2), true).text, std::string(""));
 }
 
 static void test_status_text() {
@@ -520,6 +727,21 @@ static void test_captive() {
   CHECK(probe_due(true, false, true, kProbeFailingRecheckMs));
 }
 
+// Where a portal's redirect points. A relative link stays on whoever
+// answered, even when its query carries ESPN's address back, and a link
+// that starts with "//" names another host.
+static void test_captive_redirect_host() {
+  CHECK_EQ(::espn::detail::url_host("/login?next=http://site.api.espn.com/x"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("login.php?u=https://espn.com"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("#a://espn.com"), std::string(""));
+  CHECK_EQ(::espn::detail::url_host("//Portal.Example:8080/login"), std::string("portal.example"));
+  CHECK_EQ(::espn::detail::url_host("http://portal.example/x?r=https://espn.com"), std::string("portal.example"));
+  CHECK(classify_probe(302, "/login?next=http://site.api.espn.com/apis/x", "", "") == Probe::UNKNOWN);
+  CHECK(classify_probe(302, "/portal?u=http://espn.com", "text/html", "") == Probe::UNKNOWN);
+  CHECK(classify_probe(302, "//portal.example/login?mac=aa:bb", "", "") == Probe::CAPTIVE);
+  CHECK(classify_probe(301, "//www.espn.com/x", "", "") == Probe::OPEN);
+}
+
 static struct tm mk(int year, int yday, int wday, int hour, int min, int mon = 8, int mday = 5) {
   struct tm t{};
   t.tm_year = year - 1900;
@@ -543,6 +765,19 @@ static void test_kickoff_label() {
   CHECK_EQ(kickoff_label(mk(1900, -1, -1, 0, 0, -1, 0), now), std::string(""));
   // A year far enough out to overflow the day count in int.
   CHECK_EQ(kickoff_label(mk(2147481747, 0, 4, 19, 30, 0, 1), now), std::string("Jan 1 7:30 PM"));
+  // Across New Year: Thu Dec 31 2026 (day 364 of a 365-day year) to the bowl
+  // games on Fri Jan 1 2027 and the days after.
+  struct tm eve = mk(2026, 364, 4, 20, 0, 11, 31);
+  CHECK_EQ(kickoff_label(mk(2027, 0, 5, 12, 0, 0, 1), eve), std::string("Tomorrow 12:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2027, 5, 3, 19, 0, 0, 6), eve), std::string("Wed 7:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2027, 6, 4, 19, 0, 0, 7), eve), std::string("Jan 7 7:00 PM"));
+  CHECK_EQ(kickoff_label(mk(2026, 364, 4, 21, 0, 11, 31), eve), std::string("Today 9:00 PM"));
+  // and back: a kickoff on Dec 31 seen on Jan 1 is a past date
+  CHECK_EQ(kickoff_label(mk(2026, 364, 4, 21, 0, 11, 31), mk(2027, 0, 5, 1, 0, 0, 1)),
+           std::string("Dec 31 9:00 PM"));
+  // A leap year's Dec 31 is day 365
+  CHECK_EQ(kickoff_label(mk(2029, 0, 1, 12, 0, 0, 1), mk(2028, 365, 0, 20, 0, 11, 31)),
+           std::string("Tomorrow 12:00 PM"));
 }
 
 static void test_upcoming() {
@@ -746,6 +981,28 @@ static void test_favorites() {
   CHECK_EQ(c.index, 0);
 }
 
+// The list is only the favorites set, so it can get shorter while a later
+// slot is up or pinned. A slot past the end is skipped like an empty one.
+static void test_favorites_shrunk() {
+  FavRules r;
+  const int64_t T = 1000000;
+  std::vector<FavGame> idle = {fav(GameState::PRE, T + 86400), fav(GameState::PRE, T + 2 * 86400)};
+  FavChoice c = pick_favorite(idle, T, r, 5, T, 5);
+  CHECK_EQ(c.index, 0);
+  CHECK(!c.locked);
+  c = pick_favorite(idle, T, r, 1, T - 60, 7);
+  CHECK_EQ(c.index, 0);
+  std::vector<FavGame> live = {fav(GameState::PRE, T + 86400), fav(GameState::IN, T - 600)};
+  c = pick_favorite(live, T, r, 6, T, 9);
+  CHECK_EQ(c.index, 1);
+  CHECK(c.locked);
+  r.alternate = true;
+  c = pick_favorite(live, T, r, 6, T, -1);
+  CHECK_EQ(c.index, 1);
+  c = pick_favorite({}, T, r, 3, T, 3);
+  CHECK_EQ(c.index, -1);
+}
+
 // A schedule parsed from the team endpoint does not know its own league, so
 // the caller has to stamp it. Without the stamp a college favorite polls the
 // NFL scoreboard and never finds its game.
@@ -881,6 +1138,42 @@ static void test_team_cache() {
   // A blank record (nothing saved yet reads back as zeros) is never used.
   TeamCache blank{};
   CHECK(!team_cache_load(blank, League::NFL, 0, 0, s));
+}
+
+// The boot cache's edges: the longest event id the record holds, a game with
+// no date, and a record that is all the record's 16 id bytes with no end.
+static void test_team_cache_edges() {
+  const int64_t now = 1792000000;
+  Schedule d;
+  d.valid = true;
+  d.event_id = "123456789012345";  // 15 characters and the end: fits
+  d.kickoff_epoch = now + 3600;
+  d.group = 80;
+  TeamCache c;
+  CHECK(team_cache_save(d, League::NCAA, 2294, now, c));
+  Schedule s;
+  CHECK(team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  CHECK_EQ(s.event_id, d.event_id);
+  CHECK_EQ(s.group, (uint32_t) 80);
+  CHECK(!s.time_tbd);
+  CHECK(s.comp_slug == nullptr);
+  // A record from flash whose id fills all 16 bytes still reads as a string.
+  memset(c.event_id, '7', sizeof(c.event_id));
+  CHECK(team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  CHECK_EQ(s.event_id, std::string(16, '7'));
+  // A game ESPN gave no date saves, and never loads: its kickoff reads as long over.
+  Schedule undated = d;
+  undated.kickoff_epoch = 0;
+  CHECK(team_cache_save(undated, League::NCAA, 2294, now, c));
+  CHECK(!team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  // A schedule that isn't valid saves nothing and leaves the record alone.
+  Schedule bad = d;
+  bad.valid = false;
+  TeamCache kept = c;
+  CHECK(!team_cache_save(bad, League::NCAA, 2294, now, c));
+  CHECK(memcmp(&kept, &c, sizeof(c)) == 0);
+  // A negative clock is no clock.
+  CHECK(!team_cache_save(d, League::NCAA, 2294, -5, c));
 }
 
 static void test_boot_hold() {
@@ -1519,6 +1812,11 @@ static void test_soccer_text_helpers() {
   CHECK_EQ(soccer_board_record("6-10-12"), std::string("6-10-12"));
   CHECK_EQ(soccer_board_record("12-10-12"), std::string("46 pts"));  // too wide under a logo
   CHECK_EQ(soccer_board_record(""), std::string(""));
+  // No season has a thousand of anything: such a "record" is left as it
+  // came, never multiplied into an int it overflows (fuzz_espn under UBSan).
+  CHECK_EQ(soccer_board_record("999999999-0-0"), std::string("999999999-0-0"));
+  CHECK_EQ(soccer_board_record("1000-0-0"), std::string("1000-0-0"));
+  CHECK_EQ(soccer_board_record("999-99-9"), std::string("3096 pts"));
 }
 
 // A club's next game across its league and cups (team endpoints recorded
@@ -2248,12 +2546,16 @@ int run_set_tests(int &checks);  // test_set.cpp
 static void test_logo_lru() {
   using espn::LogoSlot;
   // Oldest idle, off-screen slot goes first.
-  CHECK_EQ(espn::pick_evict({{300, false, false}, {100, false, false}, {200, false, false}}), 1);
+  CHECK_EQ(espn::pick_evict({{300, false, false}, {100, false, false}, {200, false, false}}, 1000), 1);
   // On screen or still downloading: never dropped, even when oldest.
-  CHECK_EQ(espn::pick_evict({{100, false, true}, {150, true, false}, {200, false, false}}), 2);
+  CHECK_EQ(espn::pick_evict({{100, false, true}, {150, true, false}, {200, false, false}}, 1000), 2);
   // Nothing droppable.
-  CHECK_EQ(espn::pick_evict({{100, true, false}, {200, false, true}}), -1);
-  CHECK_EQ(espn::pick_evict({}), -1);
+  CHECK_EQ(espn::pick_evict({{100, true, false}, {200, false, true}}, 1000), -1);
+  CHECK_EQ(espn::pick_evict({}, 1000), -1);
+  // Age counts across the millis() wrap (49.7 days): a logo used just before
+  // it is older than one used just after, though its stamp is larger.
+  CHECK_EQ(espn::pick_evict({{0x00000100u, false, false}, {0xFFFFFF00u, false, false}}, 0x00000200u), 1);
+  CHECK_EQ(espn::pick_evict({{0xFFFFFF00u, false, false}, {0x00000100u, false, false}}, 0x00000200u), 0);
   // A failed logo is due once its wait has passed, including across the millis() wrap.
   CHECK(!espn::logo_retry_due(1000, 30000, 1000 + 30000 - 1));
   CHECK(espn::logo_retry_due(1000, 30000, 1000 + 30000));
@@ -2276,6 +2578,20 @@ static void test_logo_lru() {
            std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/scoreboard/dal.png&w=64&h=64"));
   CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/combiner/i?img=/i/teamlogos/soccer/500/436.png&w=64&h=64"),
            std::string());
+}
+
+// Ties in the logo cache go to the first slot, and the plain-logo fallback
+// only rewrites a dark logo's path.
+static void test_logo_lru_edges() {
+  using espn::LogoSlot;
+  CHECK_EQ(espn::pick_evict({{500, false, false}, {200, true, false}, {500, false, false}}, 1000), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, false}}, 1000), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, true}}, 1000), -1);
+  CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500-dark/dal.png"),
+           std::string("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"));
+  CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"), std::string());
+  CHECK_EQ(espn::plain_logo_url(""), std::string());
+  CHECK_EQ(espn::plain_logo_url(espn::dark_logo("")), std::string());  // no logo, no fallback
 }
 
 // The wait before a failed logo is asked for again: per logo, growing with each
@@ -2580,6 +2896,26 @@ static void test_badge() {
   CHECK(b.dark_text && b.has_ring && b.ring == 0x1E5AA8);
 }
 
+// The badge thresholds to the step, on grays: black text only above 600, the
+// gray ring only below 120, as in the app.
+static void test_badge_thresholds() {
+  CHECK_EQ(badge_luminance(0x999999), kBadgeDarkTextLum);
+  CHECK(!badge_style(0x999999, 0x999999).dark_text);
+  CHECK(badge_style(0x9A9A9A, 0x9A9A9A).dark_text);
+  CHECK(badge_luminance(0x1E1E1E) < kBadgeNearBlackLum);
+  CHECK(badge_luminance(0x1F1F1F) > kBadgeNearBlackLum);
+  BadgeStyle b = badge_style(0x1E1E1E, 0x1E1E1E);
+  CHECK(b.has_ring && b.ring == kBadgeNeutralRing);
+  b = badge_style(0x1F1F1F, 0x1F1F1F);
+  CHECK(!b.has_ring);
+  // A near-black fill with a ring just light enough keeps it.
+  b = badge_style(0x000000, 0x1F1F1F);
+  CHECK(b.has_ring && b.ring == 0x1F1F1F);
+  // Green weighs most: a pure green is light, a pure blue dark.
+  CHECK(badge_style(0x00FF00, 0x00FF00).dark_text);
+  CHECK(!badge_style(0x0000FF, 0x0000FF).dark_text);
+}
+
 // The demo build's matchups, made-up teams and script (demo.h).
 static void test_demo() {
   auto abbrs = [](DemoMatchup m) { return std::string(m.home->abbr) + "-" + m.away->abbr; };
@@ -2871,6 +3207,88 @@ static void test_recap() {
   CHECK(!legacy_team_unpicked(NCAA, 6, false, false));
 }
 
+// The walk back for older finals reads 1 to kRecapBackDays days before today,
+// and recap_trim keeps every one of those days and none older, so no read is
+// thrown away the moment it lands.
+static void test_recap_back_days() {
+  const uint8_t NHL = (uint8_t) League::NHL;
+  CHECK_EQ(kRecapBackDays, 6);
+  const int64_t now = parse_iso8601_z("2026-10-19T16:00Z");
+  const int32_t today = espn_day(now, NHL);
+  CHECK(recap_day_kept(today, today));
+  for (int w = 1; w <= kRecapBackDays; w++)
+    CHECK(recap_day_kept(today - w, today));
+  CHECK(!recap_day_kept(today - kRecapBackDays - 1, today));
+  // The walk reads steps 1 to kRecapBackDays (gameday.cpp uses recap_back_reads
+  // for both its read and its stop), and every day it reads is one kept.
+  CHECK(!recap_back_reads(0));
+  for (int w = 1; w <= kRecapBackDays; w++) {
+    CHECK(recap_back_reads(w));
+    CHECK(recap_day_kept(today - w, today));
+  }
+  CHECK(!recap_back_reads(kRecapBackDays + 1));
+  CHECK(!recap_back_reads(kRecapMaxDays + 1));  // the walk's done value
+  // One final on the oldest day the walk reads and one the day before it:
+  // short of kRecapMinFinals, so only age decides.
+  std::vector<RecapDay> days;
+  for (int w : {kRecapBackDays, kRecapBackDays + 1}) {
+    RecapDay d;
+    d.league = NHL;
+    d.day = today - w;
+    d.finals = {mkfinal(NHL, 99, espn_day_epoch(d.day), "OLD")};
+    recap_merge(days, d);
+  }
+  CHECK_EQ(days.size(), (size_t) 2);
+  recap_trim(days, now);
+  CHECK_EQ(days.size(), (size_t) 1);
+  if (days.size() == 1)
+    CHECK_EQ(days[0].day, today - kRecapBackDays);
+}
+
+// How a loop's cards are shared between leagues: one each in league order,
+// round and round, so the split is as even as it can be and a league with
+// fewer games leaves the rest to the others.
+static void test_recap_share() {
+  const size_t NFL = (size_t) League::NFL, NCAA = (size_t) League::NCAA, NHL = (size_t) League::NHL;
+  size_t have[kLeagueCount] = {}, got[kLeagueCount];
+  have[NFL] = 20;
+  have[NCAA] = 20;
+  recap_share(have, 22, got);
+  CHECK_EQ(got[NFL], (size_t) 11);
+  CHECK_EQ(got[NCAA], (size_t) 11);
+  // An odd card goes to the league that comes first.
+  recap_share(have, 7, got);
+  CHECK_EQ(got[NFL], (size_t) 4);
+  CHECK_EQ(got[NCAA], (size_t) 3);
+  // A league with one game keeps it and the other takes the rest.
+  have[NFL] = 1;
+  recap_share(have, 22, got);
+  CHECK_EQ(got[NFL], (size_t) 1);
+  CHECK_EQ(got[NCAA], (size_t) 20);
+  // Room for more than there is: everything, and nothing for a league with none.
+  have[NHL] = 3;
+  recap_share(have, 100, got);
+  CHECK_EQ(got[NFL] + got[NCAA] + got[NHL], (size_t) 24);
+  CHECK_EQ(got[(size_t) League::MLB], (size_t) 0);
+  // Three leagues, eight later-today cards.
+  have[NFL] = have[NCAA] = have[NHL] = 8;
+  recap_share(have, kRecapLaterCap, got);
+  CHECK_EQ(got[NFL], (size_t) 3);
+  CHECK_EQ(got[NCAA], (size_t) 3);
+  CHECK_EQ(got[NHL], (size_t) 2);
+  // No room, or nothing to show: every share is 0, whatever got held before.
+  recap_share(have, 0, got);
+  size_t total = 0;
+  for (size_t l = 0; l < kLeagueCount; l++)
+    total += got[l];
+  CHECK_EQ(total, (size_t) 0);
+  size_t none[kLeagueCount] = {};
+  recap_share(none, 22, got);
+  for (size_t l = 0; l < kLeagueCount; l++)
+    total += got[l];
+  CHECK_EQ(total, (size_t) 0);
+}
+
 static Pending mkpending(uint8_t league, int rank, int64_t kick, const char *abbr) {
   Pending p;
   p.league = league;
@@ -2888,7 +3306,7 @@ static bool sorted_by_kickoff(const std::vector<Pending> &v) {
   return true;
 }
 
-// The rotation's later-today cards (card 160) and finals for every league.
+// The rotation's later-today cards and finals for every league.
 static void test_later_today() {
   const uint8_t NFL = (uint8_t) League::NFL, NCAA = (uint8_t) League::NCAA, NBA = (uint8_t) League::NBA,
                 NHL = (uint8_t) League::NHL, MLB = (uint8_t) League::MLB, MCBB = (uint8_t) League::MCBB;
@@ -3290,6 +3708,75 @@ static void test_backoff() {
   CHECK(is_throttle_status(429));
   CHECK(!is_throttle_status(404));
   CHECK(!is_throttle_status(503));
+  // ESPN's edge refuses most other agents: every read and logo sends this one.
+  CHECK_EQ(std::string(kUserAgent), std::string("curl/8.0"));
+}
+
+// The miss count the ticker's "no update" and the page's warning go by (three
+// or more). A panel cut off from ESPN for a day or two reached 255 and wrapped
+// to 0, and the warning went away while it was still cut off.
+static void test_miss_count() {
+  uint8_t m = 0;
+  m = add_miss(m);
+  CHECK_EQ((int) m, 1);
+  m = add_miss(add_miss(m));
+  CHECK_EQ((int) m, 3);
+  for (int i = 0; i < 1000; i++)
+    m = add_miss(m);
+  CHECK_EQ((int) m, 255);
+  CHECK(m >= 3);
+}
+
+// Every wait lands in the upper half of its doubled delay, for any run length
+// and any random number, so a fleet that failed together spreads out and no
+// panel ever waits past its schedule. Retry-After only lengthens a refusal's
+// wait, to at most the cap plus a quarter.
+static void test_backoff_windows() {
+  const uint32_t rnds[] = {0u, 1u, 7919u, 150000u, 2654435761u, 0xFFFFFFFFu};
+  for (int throttled = 0; throttled < 2; throttled++) {
+    const uint32_t base = throttled ? kThrottleBaseMs : kBackoffBaseMs;
+    const uint32_t cap = throttled ? kThrottleCapMs : kBackoffCapMs;
+    uint32_t d = base;  // the doubled delay for this many failures in a row
+    bool inside = true;
+    for (uint32_t fails = 1; fails <= 300 && inside; fails++) {
+      for (uint32_t rnd : rnds) {
+        uint32_t w = backoff_ms(fails, throttled != 0, 0, rnd);
+        if (w < d / 2 || w > d) {
+          printf("  fails %u throttled %d rnd %u: %u outside %u to %u\n", (unsigned) fails, throttled,
+                 (unsigned) rnd, (unsigned) w, (unsigned) (d / 2), (unsigned) d);
+          inside = false;
+        }
+      }
+      d = d >= cap / 2 ? cap : d * 2;
+    }
+    CHECK(inside);
+  }
+  // No failure counted yet waits like the first one.
+  CHECK_EQ(backoff_ms(0, false, 0, 0), backoff_ms(1, false, 0, 0));
+  CHECK_EQ(backoff_ms(0, true, 0, 0xFFFFFFFFu), backoff_ms(1, true, 0, 0xFFFFFFFFu));
+
+  // A first refusal with a Retry-After past its window: the Retry-After, up
+  // to the hour, plus up to a quarter, whatever the random number.
+  const uint32_t ras[] = {300001u, 900000u, kThrottleCapMs - 1, kThrottleCapMs, kThrottleCapMs + 1, 999999000u};
+  for (uint32_t ra : ras) {
+    const uint32_t lo = ra < kThrottleCapMs ? ra : kThrottleCapMs;
+    for (uint32_t rnd : rnds) {
+      uint32_t w = backoff_ms(1, true, ra, rnd);
+      CHECK(w >= lo && w <= lo + lo / 4);
+    }
+  }
+  // The longest Retry-After the header can carry still stops at the hour.
+  CHECK_EQ(backoff_ms(1, true, parse_retry_after_ms("999999"), 0), kThrottleCapMs);
+
+  // Retry-After is whole seconds and nothing else.
+  CHECK_EQ(parse_retry_after_ms("999999"), 999999000u);
+  CHECK_EQ(parse_retry_after_ms("000120"), 120000u);
+  CHECK_EQ(parse_retry_after_ms(" 120"), 0u);
+  CHECK_EQ(parse_retry_after_ms("120 "), 0u);
+  CHECK_EQ(parse_retry_after_ms("+120"), 0u);
+  CHECK_EQ(parse_retry_after_ms("-1"), 0u);
+  CHECK_EQ(parse_retry_after_ms("1.5"), 0u);
+  CHECK_EQ(parse_retry_after_ms("12a"), 0u);
 }
 
 static void test_cup_backoff() {
@@ -3417,6 +3904,33 @@ static void test_auto_update() {
   t.newer = false;  // a different version, but not a newer one
   CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
 
+  // Daylight saving in a zone that changes at 3 or 4 AM. Spring forward
+  // skips 3:00 to 3:59: a panel whose minute was in it still goes at 4:00.
+  t = in;
+  t.slot = 59;
+  t.checked_day = auto_update_day(2026, 285);
+  t.hour = 4;
+  t.minute = 0;
+  CHECK(auto_update_step(t) == AutoUpdateStep::CHECK);
+  // Fall back repeats an hour: the try counts for the date, so the second
+  // pass through 3 AM installs nothing.
+  t = in;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+  t.tried_day = t.today;
+  t.hour = 3;
+  t.minute = 30;
+  CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
+  // New Year: a try on December 31 leaves January 1 its own night.
+  t = in;
+  t.tried_day = auto_update_day(2026, 365);
+  t.today = auto_update_day(2027, 1);
+  t.checked_day = t.today;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+  t.tried_day = auto_update_day(2028, 366);  // a leap year's last night
+  t.today = auto_update_day(2029, 1);
+  t.checked_day = t.today;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+
   // Beta channel versions: the build number after "-beta." is the next part.
   CHECK(version_newer("2026.10.0-beta.813", "2026.10.0-beta.812"));
   CHECK(!version_newer("2026.10.0-beta.812", "2026.10.0-beta.812"));
@@ -3426,6 +3940,18 @@ static void test_auto_update() {
   CHECK(version_newer("2026.10.0-beta.1000", "2026.10.0-beta.999"));
   CHECK(!version_newer("2026.10.0-beta.", "2026.10.0"));
   CHECK(!version_newer("2026.10.0-dev", "2026.10.0"));
+  // Malformed: a number must be plain digits, right after its separator.
+  CHECK(!version_newer("2026.+11.0", "2026.10.0"));
+  CHECK(!version_newer("2026. 11.0", "2026.10.0"));
+  CHECK(!version_newer("2026..1", "2026.0.0"));
+  CHECK(!version_newer("2026.10.0-beta.+5", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0-beta. 5", "2026.10.0"));
+  CHECK(!version_newer("2026.10.1.", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0-beta.1234567890", "2026.10.0-beta.5"));
+  CHECK(!version_newer("2026.10.1", "2026.-10.0"));  // or the panel's own
+  CHECK(version_newer("2026.10.0-beta.123456789", "2026.10.0-beta.5"));
+  CHECK(version_newer("2026.10.1", "2026.10.0-dev"));  // a bench build's suffix still ends the numbers
+  CHECK(!version_newer("2026.10.0", "2026.10.1-dev"));
 
   // Install now: names in the release summary.
   const std::string me = "gameday-aba970";
@@ -3440,6 +3966,14 @@ static void test_auto_update() {
   CHECK(!install_now_listed("Beta 2026.10.0-beta.812", me));
   CHECK(!install_now_listed("gameday-aba970", me));  // named, but not in the list
   CHECK(!install_now_listed("Install now: all", ""));
+  // The publish form takes capitals (build.yml), but a panel's name is lower
+  // case and network names match either way.
+  CHECK(install_now_listed("Install now: Gameday-ABA970", me));
+  CHECK(install_now_listed("Install now: gameday-500ebc, GAMEDAY-aba970", me));
+  CHECK(install_now_listed("Install now: All", me));
+  CHECK(install_now_listed("Install now: ALL", me));
+  CHECK(!install_now_listed("Install now: GAMEDAY-500EBC", me));
+  CHECK(!install_now_listed("Install now: ALLX", me));
 
   // Listed: installs at any hour, even off, unless a game is live.
   t = in;
@@ -3483,6 +4017,49 @@ static void test_auto_update() {
   CHECK(auto_update_step(t) == AutoUpdateStep::SKIP_FAILED);
   t.hour = 15;
   CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
+}
+
+// Versions with a part missing or a fifth part, the publisher's list without
+// a space, and a panel whose minute is the last of the first hour.
+static void test_auto_update_edges() {
+  CHECK(version_newer("2026.10.1", "2026.10"));  // a missing part counts as 0
+  CHECK(!version_newer("2026.10", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0", "2026.10"));
+  CHECK(version_newer("2026.010.0", "2026.9.0"));  // parts are numbers, not text
+  CHECK(version_newer("10.0.0", "9.99.99"));
+  CHECK(!version_newer("1.5.6", "v1.5.5"));  // a running version that isn't a number never updates
+  CHECK(!version_newer("1.5.5.1.1", "1.5.5.1"));  // four parts are compared, no more
+
+  CHECK(install_now_listed("Install now:gameday-aba970", "gameday-aba970"));
+  CHECK(install_now_listed("Install now: gameday-500ebc all", "gameday-aba970"));
+  CHECK(!install_now_listed("install now: gameday-aba970", "gameday-aba970"));  // the tag as CI writes it
+  CHECK(install_now_listed("Install now: ALL", "gameday-aba970"));  // names and "all" match in any case
+
+  CHECK_EQ(auto_update_slot(0xFF, 0xFF), 0xFFFF % kAutoUpdateSpreadMinutes);
+  AutoUpdateInputs in;
+  in.enabled = true;
+  in.clock_valid = true;
+  in.today = auto_update_day(2026, 300);
+  in.tried_day = auto_update_day(2026, 299);
+  in.checked_day = in.today;
+  in.check_done = true;
+  in.available = true;
+  in.newer = true;
+  in.slot = kAutoUpdateSpreadMinutes - 1;
+  in.hour = kAutoUpdateStartHour;
+  in.minute = 58;
+  CHECK(auto_update_step(in) == AutoUpdateStep::IDLE);
+  in.minute = 59;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.hour = kAutoUpdateEndHour - 1;
+  in.minute = 0;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.slot = 0;
+  in.hour = kAutoUpdateStartHour;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.hour = kAutoUpdateStartHour - 1;
+  in.minute = 59;
+  CHECK(auto_update_step(in) == AutoUpdateStep::IDLE);
 }
 
 static void test_update_mirror() {
@@ -3596,6 +4173,35 @@ static void test_update_mark() {
   m.installing[0] = '\0';
   update_mark_boot(m, "1.0", false);
   CHECK(strlen(m.failed) < kUpdateVersionLen);
+  CHECK(m.failed[0] == '\0');  // no readable version, so it never holds back a release
+  // Both fields full with no end in either: each reads as its first
+  // kUpdateVersionLen - 1 bytes, never on into the next field or past the
+  // mark. The bytes after the mark end so a misread stays inside `g`.
+  struct {
+    UpdateMark m;
+    char after[8];
+  } g;
+  auto garbage = [&g]() {
+    memset(&g, '9', sizeof(g));
+    memset(g.m.failed, '7', sizeof(g.m.failed));
+    g.after[sizeof(g.after) - 1] = '\0';
+  };
+  garbage();
+  CHECK(update_mark_boot(g.m, std::string(kUpdateVersionLen - 1, '9'), false) == UpdateOutcome::PENDING);
+  CHECK_EQ(strlen(g.m.installing), kUpdateVersionLen - 1);
+  CHECK(g.m.failed[0] == '\0');  // 23 sevens is no version
+  garbage();
+  CHECK(update_mark_boot(g.m, "1.0", false) == UpdateOutcome::NOT_INSTALLED);
+  CHECK(g.m.installing[0] == '\0');
+  CHECK(g.m.failed[0] == '\0');
+  garbage();
+  CHECK(update_mark_boot(g.m, "1.0", true) == UpdateOutcome::ROLLED_BACK);
+  CHECK(g.m.installing[0] == '\0');
+  CHECK(g.m.failed[0] == '\0');  // nor is 23 nines, so nothing is held back
+  garbage();
+  update_mark_terminate(g.m);
+  CHECK_EQ(strlen(g.m.installing), kUpdateVersionLen - 1);
+  CHECK_EQ(strlen(g.m.failed), kUpdateVersionLen - 1);
 }
 
 // Every byte of a panel_text() result is printable ASCII or part of a Latin-1
@@ -3672,6 +4278,13 @@ static void test_boot_log() {
   CHECK_EQ(log.fault_at, (int64_t) now);
   CHECK_EQ(boot_log_fault_ago(log, now + 90, 30), (int64_t) 90);
   CHECK(boot_log_start(log, kResetPowerGlitch, build_b, now) == Restart::BROWNOUT);
+  // A fault at a start that already had the clock keeps that time.
+  boot_log_clock(log, now + 30);
+  CHECK_EQ(log.fault_at, (int64_t) now);
+  // A clock that reads before the fault (set back, or wrong) gives no age.
+  CHECK(boot_log_start(log, kResetSoftware, build_b, now + 60) == Restart::RESTART);
+  CHECK_EQ(boot_log_fault_ago(log, now - 100, 10), (int64_t) -1);
+  CHECK_EQ(boot_log_fault_ago(log, now + 100, 10), (int64_t) 100);
 
   // Power: a log that survived it is cleared anyway, faults and all.
   CHECK(boot_log_start(log, kResetPowerOn, build_b, now) == Restart::POWER);
@@ -3695,9 +4308,54 @@ static void test_boot_log() {
   CHECK(classify_restart(kResetUsb, false, false) == Restart::USB);
   CHECK(classify_restart(kResetExternal, false, false) == Restart::POWER);
   CHECK(classify_restart(kResetDeepSleep, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetUnknown, true, true) == Restart::OTHER);
+  CHECK(classify_restart(kResetJtag, false, false) == Restart::USB);
+  CHECK(classify_restart(kResetSdio, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetEfuse, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetSoftware, true, false) == Restart::RESTART);
+  CHECK(classify_restart(kResetSoftware, false, true) == Restart::RESTART);  // unmarked: not an update
   CHECK(classify_restart(99, false, false) == Restart::OTHER);
   CHECK_EQ(std::string(restart_key(Restart::BROWNOUT)), std::string("brownout"));
   CHECK_EQ(std::string(restart_key(Restart::OTHER)), std::string("other"));
+}
+
+// Every reset reason the chip can give lands somewhere, and the keys are the
+// ones the device page and the app name (RESTARTS in app.js).
+static void test_restart_reasons() {
+  CHECK(classify_restart(kResetUnknown, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetSdio, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetEfuse, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetJtag, false, false) == Restart::USB);
+  CHECK(classify_restart(-1, true, true) == Restart::OTHER);
+  // The restart mark only tells a software reset or the S3's stray watchdog
+  // apart. A crash, a hang or a power dip on the way down is still one, and
+  // power on is power on.
+  CHECK(classify_restart(kResetPanic, true, true) == Restart::CRASH);
+  CHECK(classify_restart(kResetIntWdt, true, false) == Restart::WATCHDOG);
+  CHECK(classify_restart(kResetBrownout, true, false) == Restart::BROWNOUT);
+  CHECK(classify_restart(kResetPowerGlitch, true, true) == Restart::BROWNOUT);
+  CHECK(classify_restart(kResetPowerOn, true, true) == Restart::POWER);
+  CHECK(classify_restart(kResetUsb, true, false) == Restart::USB);
+  // Unmarked, a new build is no update: the firmware didn't ask for it.
+  CHECK(classify_restart(kResetSoftware, false, true) == Restart::RESTART);
+  CHECK(classify_restart(kResetWdt, false, true) == Restart::WATCHDOG);
+  // Only a crash, a hang or a power dip is kept as the last fault.
+  for (uint8_t r = 0; r <= (uint8_t) Restart::OTHER; r++) {
+    const Restart k = (Restart) r;
+    CHECK_EQ(restart_is_fault(k), k == Restart::CRASH || k == Restart::WATCHDOG || k == Restart::BROWNOUT);
+  }
+  const char *keys[] = {"none", "power", "restart", "update", "crash", "watchdog", "brownout", "usb", "other"};
+  for (uint8_t r = 0; r <= (uint8_t) Restart::OTHER; r++)
+    CHECK_EQ(std::string(restart_key((Restart) r)), std::string(keys[r]));
+  // A sealed log is valid only with a fault this firmware knows.
+  BootLog log{};
+  log.magic = kBootLogMagic;
+  log.fault = (uint8_t) Restart::OTHER;
+  boot_log_seal(log);
+  CHECK(boot_log_valid(log));
+  log.fault = (uint8_t) Restart::OTHER + 1;
+  boot_log_seal(log);
+  CHECK(!boot_log_valid(log));
 }
 
 static void test_health_json() {
@@ -3748,6 +4406,165 @@ static void test_health_json() {
   CHECK(doc["fault"].isNull());
   CHECK_EQ(doc["espn"].as<int>(), 0);
   CHECK_EQ(doc["espn_ago"].as<int>(), 30);
+
+  // The longest it gets fits the firmware's buffer: every optional key, the
+  // widest numbers each field can hold (an ESPN read's age is millis() / 1000
+  // and its status three digits) and a version as long as the crash report
+  // keeps.
+  h.uptime_s = INT64_MAX;
+  h.start = Restart::WATCHDOG;
+  h.boots = UINT32_MAX;
+  h.fault = Restart::WATCHDOG;
+  h.fault_ago = INT64_MAX;
+  h.heap_kb = 512.0f;
+  h.block_kb = 512.0f;
+  h.psram_kb = 32768.0f;
+  h.wifi = true;
+  h.rssi = INT32_MIN;
+  h.espn_status = 999;
+  h.espn_ago = UINT32_MAX / 1000;
+  h.version = "2026.12.31-beta.1234567";
+  h.built = INT64_MAX;
+  h.channel = "stable";
+  n = health_json(buf, sizeof(buf), h);
+  CHECK(n > 0 && n < (int) kHealthJsonSize);
+  doc.clear();
+  CHECK(!deserializeJson(doc, buf));
+  CHECK_EQ(std::string(doc["channel"].as<const char *>()), std::string("stable"));
+  CHECK_EQ(doc["espn_ago"].as<int64_t>(), (int64_t) (UINT32_MAX / 1000));
+  CHECK_EQ(doc["fault_ago"].as<int64_t>(), INT64_MAX);
+  // Too small a buffer says so, as snprintf does.
+  CHECK(health_json(buf, 64, h) >= 64);
+}
+
+// The crash handler's console line for one of its ESP_LOGE calls, as
+// ESPHome's logger hands it to a log listener: color, header, text, reset.
+static std::string crash_line(const std::string &text) {
+  return "\033[1;31m[E][esp32.crash:439]: " + text + "\033[0m";
+}
+
+static size_t crash_feed(char *report, size_t size, size_t len, const std::string &line) {
+  return esphome::crash_report::report_append(report, size, len, line.data(), line.size());
+}
+
+static void test_crash_capture() {
+  using namespace esphome::crash_report;
+  // What the crash handler logs for a fault on core 0, with the other core's
+  // backtrace and the two addr2line hints (ESPHome 2026.10).
+  const char *lines[] = {
+      "*** CRASH DETECTED ON PREVIOUS BOOT ***",
+      "  Reason: Fault - LoadProhibited (cause 28)",
+      "  Crashed core: 0",
+      "  PC:  0x40055EBF  (fault location)",
+      "  EXCVADDR: 0x00000008  (faulting address)",
+      "  BT0: 0x40386CDF  (backtrace)",
+      "  BT1: 0x421736DD  (backtrace)",
+      "  Other core (1) backtrace:",
+      "  BT0: 0x4038665D  (backtrace)",
+      "Use: addr2line -pfiaC -e firmware.elf 0x40055EBF 0x40386CDF 0x421736DD",
+      "Other core: addr2line -pfiaC -e firmware.elf 0x4038665D",
+  };
+  char report[REPORT_SIZE];
+  report[0] = '\0';
+  size_t len = 0;
+  for (const char *l : lines)
+    len = crash_feed(report, sizeof(report), len, crash_line(l));
+  // The text of each line, one per line, without the hints; the same text
+  // scripts/crash_report.py --selftest reads.
+  const std::string want =
+      "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
+      "  Reason: Fault - LoadProhibited (cause 28)\n"
+      "  Crashed core: 0\n"
+      "  PC:  0x40055EBF  (fault location)\n"
+      "  EXCVADDR: 0x00000008  (faulting address)\n"
+      "  BT0: 0x40386CDF  (backtrace)\n"
+      "  BT1: 0x421736DD  (backtrace)\n"
+      "  Other core (1) backtrace:\n"
+      "  BT0: 0x4038665D  (backtrace)\n";
+  CHECK_EQ(std::string(report), want);
+  CHECK_EQ(len, want.size());
+
+  // A line without the header's ": " is not one of the handler's; one
+  // without the color reset keeps all its text.
+  len = crash_feed(report, sizeof(report), len, "no header here\033[0m");
+  CHECK_EQ(len, want.size());
+  len = crash_feed(report, sizeof(report), len, "[E][esp32.crash:1]: plain");
+  CHECK_EQ(std::string(report), want + "plain\n");
+
+  // The longest report the handler writes still fits: the longest reason,
+  // a faulting address and 16 backtrace addresses for each core.
+  std::string full = crash_line("*** CRASH DETECTED ON PREVIOUS BOOT ***");
+  len = 0;
+  len = crash_feed(report, sizeof(report), len, full);
+  len = crash_feed(report, sizeof(report), len,
+                   crash_line("  Reason: Debug exception - Interrupt wdt timeout on CPU0 (cause 63)"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  Crashed core: 1"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  PC:  0x40055EBF  (fault location)"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  EXCVADDR: 0x3FCEBF00  (faulting address)"));
+  for (int core = 0; core < 2; core++) {
+    if (core == 1)
+      len = crash_feed(report, sizeof(report), len, crash_line("  Other core (0) backtrace:"));
+    for (int i = 0; i < 16; i++) {
+      char bt[64];
+      snprintf(bt, sizeof(bt), "  BT%d: 0x%08X  (backtrace)", i, 0x42000000u + i * 0x100u);
+      len = crash_feed(report, sizeof(report), len, crash_line(bt));
+    }
+  }
+  CHECK(len < REPORT_SIZE);
+  const std::string last = "  BT15: 0x42000F00  (backtrace)\n";
+  CHECK_EQ(std::string(report).substr(len - last.size()), last);
+
+  // A line that doesn't fit is left out, and the report stays terminated.
+  char small[64];
+  small[0] = '\0';
+  len = crash_feed(small, sizeof(small), 0, crash_line("*** CRASH DETECTED ON PREVIOUS BOOT ***"));
+  len = crash_feed(small, sizeof(small), len, crash_line("  Reason: Abort"));
+  CHECK_EQ(len, (size_t) 56);
+  len = crash_feed(small, sizeof(small), len, crash_line("  Crashed core: 0"));
+  CHECK_EQ(len, (size_t) 56);
+  CHECK_EQ(std::string(small), std::string("*** CRASH DETECTED ON PREVIOUS BOOT ***\n  Reason: Abort\n"));
+
+  // The starts that read the crash handler, and their names.
+  CHECK(reset_crashed(kResetPanic) && reset_crashed(kResetIntWdt) && reset_crashed(kResetTaskWdt) &&
+        reset_crashed(kResetWdt));
+  CHECK(!reset_crashed(kResetPowerOn) && !reset_crashed(kResetSoftware) && !reset_crashed(kResetBrownout));
+  CHECK_EQ(std::string(reason_name(kResetPanic)), std::string("crash"));
+  CHECK_EQ(std::string(reason_name(kResetTaskWdt)), std::string("task watchdog"));
+  CHECK_EQ(std::string(reason_name(kResetBrownout)), std::string("brownout"));
+  CHECK_EQ(std::string(reason_name(kResetSoftware)), std::string("other"));
+}
+
+static void test_crash_save() {
+  using namespace esphome::crash_report;
+  CHECK(save_for_start(kResetPanic, false) == Save::REPORT);
+  CHECK(save_for_start(kResetPanic, true) == Save::REPORT);  // a crash on the way down is still one
+  CHECK(save_for_start(kResetTaskWdt, true) == Save::REPORT);
+  CHECK(save_for_start(kResetIntWdt, false) == Save::REPORT);
+  CHECK(save_for_start(kResetWdt, false) == Save::REPORT);
+  // The owner's Reboot or an update that came back as the RTC watchdog.
+  CHECK(save_for_start(kResetWdt, true) == Save::NOTHING);
+  CHECK(save_for_start(kResetBrownout, false) == Save::REASON);
+  CHECK(save_for_start(kResetBrownout, true) == Save::REASON);
+  CHECK(save_for_start(kResetPowerOn, false) == Save::NOTHING);
+  CHECK(save_for_start(kResetSoftware, true) == Save::NOTHING);
+  CHECK(save_for_start(kResetUsb, false) == Save::NOTHING);
+  // The crash report saves exactly the starts the health block calls a
+  // fault (health.h), for every reason the S3 gives (up to kResetEfuse).
+  for (int reason = kResetUnknown; reason <= kResetEfuse; reason++) {
+    for (int planned = 0; planned < 2; planned++) {
+      const bool saves = save_for_start(reason, planned != 0) != Save::NOTHING;
+      const bool fault = restart_is_fault(classify_restart(reason, planned != 0, false));
+      if (saves != fault)
+        printf("  reason %d planned %d: crash report %d, health %d\n", reason, planned, (int) saves, (int) fault);
+      CHECK(saves == fault);
+    }
+  }
+  // The time saved is the start's, also when the clock comes minutes later.
+  const int64_t now = 1792000000;  // 2026-10-16
+  CHECK_EQ(boot_time(now, 2), (uint32_t) (now - 2));
+  CHECK_EQ(boot_time(now + 3600, 3600), (uint32_t) now);
+  CHECK_EQ(boot_time(1000, 5), 0u);  // no clock yet
+  CHECK_EQ(boot_time(CLOCK_VALID - 1, 0), 0u);
 }
 
 static void test_heat_guard() {
@@ -3792,6 +4609,21 @@ static void test_heat_guard() {
   CHECK(w.feed(kHotC, m));
   CHECK(w.feed(kHotC, m + kHotStepMs));
   CHECK_EQ((int) w.step, 2);
+}
+
+// The first cool reading landing on millis() == 0 (at the wrap) starts the
+// cool wait there, the same as at any other moment: no step back up until it
+// has read cool for a whole kCoolStepMs.
+static void test_heat_guard_cool_at_zero() {
+  HeatGuard g;
+  const uint32_t hot_at = 0u - 6 * 60 * 1000;  // six minutes before the wrap
+  CHECK(g.feed(kHotC, hot_at));
+  CHECK_EQ((int) g.step, 1);
+  CHECK(!g.feed(kCoolC - 1, 0));
+  CHECK_EQ((int) g.step, 1);
+  CHECK(!g.feed(kCoolC - 1, kCoolStepMs - 1));
+  CHECK(g.feed(kCoolC - 1, kCoolStepMs));
+  CHECK_EQ((int) g.step, 0);
 }
 
 static void test_power_log() {
@@ -3846,6 +4678,58 @@ static void test_guarded_brightness() {
   log.capped = 0;
   guard_json_keys(buf, sizeof(buf), NAN, 0, log);
   CHECK_EQ(std::string(buf), std::string(",\"heat\":0,\"brownouts\":4,\"power\":\"ok\""));
+}
+
+// Full brightness at each heat step, the cap's edge, a panel turned off, and
+// a missed temperature reading in the middle of a cool-down.
+static void test_guard_steps() {
+  const int full[kHeatSteps + 1] = {255, 179, 115, 64};
+  for (uint8_t s = 0; s <= kHeatSteps; s++)
+    CHECK_EQ((int) guarded_brightness(255, s, false), full[s]);
+  CHECK_EQ((int) guarded_brightness(kPowerCap, 0, true), (int) kPowerCap);
+  CHECK_EQ((int) guarded_brightness(kPowerCap + 1, 0, true), (int) kPowerCap);
+  CHECK_EQ((int) guarded_brightness(0, kHeatSteps, true), 0);  // off stays off
+  CHECK_EQ((int) guarded_brightness(2, kHeatSteps, false), 1);
+  CHECK(guard_mark(0, true) == GuardMark::POWER);
+
+  // A reading the sensor missed (NAN) neither restarts the cool-down nor
+  // counts as warm.
+  HeatGuard g;
+  uint32_t t = 5000;
+  CHECK(g.feed(kHotFloorC, t));
+  CHECK_EQ((int) g.step, (int) kHeatSteps);
+  t += kCoolStepMs;
+  CHECK(!g.feed(kCoolC - 5, t));  // cool from here
+  CHECK(!g.feed(NAN, t + kCoolStepMs / 2));
+  CHECK(g.last_c == kCoolC - 5);
+  CHECK(g.feed(kCoolC - 5, t + kCoolStepMs));
+  CHECK_EQ((int) g.step, (int) kHeatSteps - 1);
+
+  // The keys fit the buffer guard.h sets for health_json_, cold or hot.
+  char buf[kGuardJsonSize];
+  PowerLog log{};
+  log.brownouts = 0xFFFFFFFFu;
+  log.capped = 1;
+  int n = guard_json_keys(buf, sizeof(buf), -40.0f, kHeatSteps, log);
+  CHECK(n > 0 && n < (int) sizeof(buf));
+  CHECK_EQ(std::string(buf), std::string(",\"temp\":-40.0,\"heat\":3,\"brownouts\":4294967295,\"power\":\"capped\""));
+  n = guard_json_keys(buf, sizeof(buf), 125.0f, 0, log);
+  CHECK(n > 0 && n < (int) sizeof(buf));
+}
+
+// JSON has no inf or nan, so a reading that is neither a number nor finite
+// leaves temp out like no reading at all, and the state document stays JSON.
+static void test_guard_json_finite() {
+  char buf[kGuardJsonSize];
+  PowerLog log{};
+  const std::string no_temp = ",\"heat\":3,\"brownouts\":0,\"power\":\"ok\"";
+  for (float c : {INFINITY, -INFINITY, NAN}) {
+    int n = guard_json_keys(buf, sizeof(buf), c, kHeatSteps, log);
+    CHECK(n > 0 && n < (int) sizeof(buf));
+    CHECK_EQ(std::string(buf), no_temp);
+  }
+  guard_json_keys(buf, sizeof(buf), 0.0f, kHeatSteps, log);
+  CHECK_EQ(std::string(buf), std::string(",\"temp\":0.0") + no_temp);
 }
 
 static void test_offseason() {
@@ -3910,9 +4794,36 @@ static void test_offseason() {
   CHECK_EQ(clock_color(true, parse_color("")), (uint32_t) 0xFFFFFF);  // a team with no color from ESPN
 }
 
+// The off-season clock's edges: the horizon to the second on either side of
+// a season, a home game with no abbreviation of our own, the last minute of
+// the day, and colors at the lift's edge.
+static void test_offseason_edges() {
+  const int64_t now = 1792080000;
+  const int64_t h = kSeasonHorizon;
+  CHECK(!off_season(GameState::POST, now - h, now, h));
+  CHECK(off_season(GameState::POST, now - h - 1, now, h));
+  CHECK(!off_season(GameState::PRE, now + h, now, h));
+  CHECK(off_season(GameState::PRE, now + h + 1, now, h));
+  CHECK(!off_season(GameState::PRE, now + 400 * 86400, now, -1));  // no horizon either way
+  CHECK(off_season(GameState::NOT_FOUND, 0, now, -1));
+
+  struct tm wed = mk(2026, 251, 3, 10, 0, 8, 9);
+  CHECK_EQ(next_line("", "PHI", true, mk(2026, 251, 3, 19, 0, 8, 9), wed),
+           std::string("Next: vs PHI Today 7:00 PM"));
+  CHECK_EQ(next_line("", "", false, mk(2026, 252, 4, 19, 0, 8, 10), wed),
+           std::string("Next game Tomorrow 7:00 PM"));
+  CHECK_EQ(clock_time_text(mk(2026, 251, 3, 23, 59, 8, 9)), std::string("11:59 PM"));
+  CHECK_EQ(clock_time_text(mk(2026, 251, 3, 11, 59, 8, 9)), std::string("11:59 AM"));
+
+  // One channel carries the lift; a color already at the floor stays as it is.
+  CHECK_EQ(clock_color(true, 0x00007F), (uint32_t) 0x0000C0);
+  CHECK_EQ(clock_color(true, 0xC0C0C0), (uint32_t) 0xC0C0C0);
+  CHECK_EQ(clock_color(true, 0x010101), (uint32_t) 0xC0C0C0);
+}
+
 static void test_panel_text() {
   using esphome::gameday::panel_text;
-  // An iPhone hotspot name (backlog #144)
+  // An iPhone hotspot name
   CHECK_EQ(panel_text("Sam\xE2\x80\x99s iPhone"), std::string("Sam's iPhone"));
   CHECK_EQ(panel_text("\xE2\x80\x98Hi\xE2\x80\x99"), std::string("'Hi'"));
   CHECK_EQ(panel_text("Hawai\xCA\xBBi"), std::string("Hawai'i"));
@@ -4111,6 +5022,31 @@ static void test_tbd_kickoff() {
   CHECK(!team_cache_load(c, League::NCAA, kIowa, placeholder - 5 * 86400 + 60, back));
 }
 
+// Each ESP-IDF disconnect reason wifi_cause() names, and the keys the device
+// page reads (WIFI_CAUSES in app.js).
+static void test_wifi_causes() {
+  const int signal[] = {200, 201, 205, 209, 212, 34, 39};
+  const int router[] = {2, 3, 4, 5, 6, 7, 47, 206};
+  const int password[] = {14, 15, 16, 23, 202, 204};
+  for (int r : signal)
+    CHECK(wifi_cause(r) == WifiCause::SIGNAL);
+  for (int r : router)
+    CHECK(wifi_cause(r) == WifiCause::ROUTER);
+  for (int r : password)
+    CHECK(wifi_cause(r) == WifiCause::PASSWORD);
+  CHECK(wifi_cause(12) == WifiCause::ROAM);
+  CHECK(wifi_cause(207) == WifiCause::ROAM);
+  CHECK(wifi_cause(8) == WifiCause::PANEL);
+  // A link lost with no disconnect event comes in as 0.
+  CHECK(wifi_cause(0) == WifiCause::OTHER);
+  CHECK(wifi_cause(-1) == WifiCause::OTHER);
+  CHECK(wifi_cause(203) == WifiCause::OTHER);  // ASSOC_FAIL
+  const char *keys[] = {"signal", "router", "password", "roam", "other", "panel"};
+  for (uint8_t c = 0; c <= (uint8_t) WifiCause::PANEL; c++)
+    CHECK_EQ(std::string(wifi_cause_key((WifiCause) c)), std::string(keys[c]));
+  CHECK_EQ((int) kWifiCauses, (int) WifiCause::PANEL);  // the counted ones come before PANEL
+}
+
 static void test_wifi_history() {
   CHECK(wifi_cause(200) == WifiCause::SIGNAL);  // beacon timeout
   CHECK(wifi_cause(3) == WifiCause::ROUTER);    // deauth from the router
@@ -4250,12 +5186,17 @@ int main() {
   test_scoreboard_live();
   test_scoreboard_post();
   test_event_live();
+  test_over_under_values();
+  test_odd_documents();
   test_event_matches_scoreboard();
   test_scoreboard_pre_nfl();
   test_splash();
+  test_win_splash_every_sport();
+  test_splash_extreme_scores();
   test_status_text();
   test_no_game_text();
   test_captive();
+  test_captive_redirect_host();
   test_ha_status_text();
   test_short_game_name();
   test_kickoff_label();
@@ -4264,11 +5205,13 @@ int main() {
   test_clock_text();
   test_color();
   test_favorites();
+  test_favorites_shrunk();
   test_followed_favorite();
   test_schedule_league();
   test_schedule_due();
   test_no_live_rescan();
   test_team_cache();
+  test_team_cache_edges();
   test_boot_hold();
   test_rotate_minutes();
   test_mlb_urls();
@@ -4305,27 +5248,42 @@ int main() {
   checks++;
   failures += run_football_golden();
   test_logo_lru();
+  test_logo_lru_edges();
   test_logo_backoff();
   test_json_allocator();
   test_timezone_index();
   test_postseason();
   test_badge();
+  test_badge_thresholds();
   test_demo();
   test_recap();
+  test_recap_back_days();
+  test_recap_share();
   test_later_today();
   test_backoff();
+  test_miss_count();
+  test_backoff_windows();
   test_cup_backoff();
   test_auto_update();
+  test_auto_update_edges();
   test_update_mirror();
   test_update_mark();
   test_boot_log();
+  test_restart_reasons();
   test_health_json();
+  test_crash_capture();
+  test_crash_save();
   test_heat_guard();
+  test_heat_guard_cool_at_zero();
   test_power_log();
   test_guarded_brightness();
+  test_guard_steps();
+  test_guard_json_finite();
   test_offseason();
+  test_offseason_edges();
   test_panel_text();
   test_wifi_history();
+  test_wifi_causes();
   failures += run_set_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;

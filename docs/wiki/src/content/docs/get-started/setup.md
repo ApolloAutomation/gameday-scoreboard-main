@@ -1,11 +1,11 @@
 ---
 title: "Set up your panel"
-description: "Plug in the panel, put it on your Wi-Fi with the Game Day app or its own hotspot, and find its device page."
+description: "Plug in the panel, put it on your Wi-Fi from the installer or its own hotspot, and find its device page or add it to Home Assistant."
 sidebar:
   order: 2
 ---
 
-You need a phone and your Wi-Fi password. It takes a few minutes.
+You need a phone or computer with a web browser, and your Wi-Fi password. It takes a few minutes.
 
 ## Plug it in
 
@@ -13,19 +13,13 @@ Connect the power supply that came with the panel. The panel lights up with **GA
 
 A panel that isn't on Wi-Fi yet then shows **SETUP** and a QR code. On the 128x64 panel the QR code sits on the left half and the words **SETUP / Game Day / app** sit beside it. On a single 64x64 panel there is no room for both, so the words and the QR code take turns: about 5 seconds of words, then 8 seconds of QR code.
 
-The QR code opens `https://gamedayscoreboard.app/setup`. On an iPhone, point the Camera at it: it opens the Game Day app if you have it, or the setup page in your browser if you don't.
+The QR code opens `https://gamedayscoreboard.app/setup`, a page of the separate Game Day app project, which Apollo Automation does not maintain (see [The Game Day app](/get-started/the-app/)). You don't need it: the installer's Wi-Fi dialog or the panel's hotspot below sets the panel up.
 
-## Set it up in the Game Day app
+## Put it on Wi-Fi from the installer
 
-Open the [Game Day app](/get-started/the-app/). It finds the new panel over Bluetooth and lists it as a new panel nearby.
+If you just installed the firmware from your browser, the installer offers to put the panel on your Wi-Fi as soon as the install finishes. Enter your network name and password in that dialog and the panel joins. Then [pick your team](/get-started/pick-your-team/) on its device page.
 
-1. Tap the panel to set it up.
-2. Pick your Wi-Fi network from the list. The list comes from the panel itself, strongest network first, so it shows what the panel can actually reach.
-3. Enter the password.
-
-While the panel joins, it shows **JOINING** and the name of the network the app sent it. If that's the wrong network, you can see it right there. Once the panel is on your Wi-Fi, the app lets you pick your team.
-
-## Without the app: use the panel's hotspot
+## Use the panel's hotspot
 
 While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`. Once the hotspot is up, the panel takes a turn showing **Join WiFi / Game Day** and those six characters, so you know which network is yours. Two panels in one house each get their own name.
 
@@ -34,6 +28,22 @@ While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game 
 3. Save.
 
 The panel joins your Wi-Fi. Then [pick your team](/get-started/pick-your-team/) on its device page.
+
+## Pick your team, or add it to Home Assistant
+
+Once the panel is on your Wi-Fi, its own web page, the device page, holds every setting. Open the address the panel shows (below) in a browser on the same Wi-Fi. See [The device page](/using/device-page/).
+
+If you run Home Assistant, it finds the panel as a new ESPHome device, and picking a team or a mode there sets the panel up too. See [Home Assistant](/using/home-assistant/).
+
+## The Game Day app
+
+The Game Day app is a separate phone app that Apollo Automation does not maintain. It may not find panels running this firmware, so use the steps above if it doesn't. Where it does find a new panel over Bluetooth, it lists it as a new panel nearby:
+
+1. Tap the panel to set it up.
+2. Pick your Wi-Fi network from the list. The list comes from the panel itself, strongest network first, so it shows what the panel can actually reach.
+3. Enter the password.
+
+While the panel joins, it shows **JOINING** and the name of the network the app sent it. If that's the wrong network, you can see it right there. Once the panel is on your Wi-Fi, the app lets you pick your team.
 
 ## Use 2.4 GHz Wi-Fi
 
@@ -65,10 +75,9 @@ To skip the QR code and the address when the panel starts, turn off **Show how t
 
 When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi lost / open app** next to the QR code for the app. A shorter drop, like a mesh system moving the panel to another access point, never covers the score.
 
-1. Open the Game Day app. About 30 seconds into the outage the panel turns Bluetooth back on, so the app can find it.
-2. Give it the new network or password, the same way as the first time.
+Join the panel's **Game Day** hotspot as above and give it the new network or password. The hotspot comes up within a few minutes of the panel losing Wi-Fi.
 
-If the app hands the panel a wrong password while it's in an outage, the panel goes back to the network it had. Without the app, join the panel's **Game Day** hotspot as above. It comes up within a few minutes of the panel losing Wi-Fi.
+If you use the Game Day app: about 30 seconds into the outage the panel turns Bluetooth back on, so the app can find it, and you give it the new network or password the same way as the first time. If the app hands the panel a wrong password while it's in an outage, the panel goes back to the network it had.
 
 A panel that can't get back on its Wi-Fi restarts itself once, a minute into the outage. It never does that while you're connected to it from the app.
 

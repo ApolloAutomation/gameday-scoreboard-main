@@ -52,29 +52,48 @@ inline const char *next_version_part(const char *p) {
   return p;
 }
 
+static const int kVersionParts = 4;
+static const int kVersionPartDigits = 9;  // fits a 32-bit long
+
+// The numbers of a version, missing ones 0: "2026.10.0-beta.812" is 2026, 10,
+// 0, 812. A number is plain digits (no sign or space), and a separator needs
+// one right after it. Anything else after a number ends the version and is
+// ignored ("-dev"). False when malformed: no number at the start or after a
+// separator, or one longer than kVersionPartDigits.
+inline bool version_parts(const char *p, long out[kVersionParts]) {
+  for (int i = 0; i < kVersionParts; i++)
+    out[i] = 0;
+  for (int i = 0; i < kVersionParts; i++) {
+    int digits = 0;
+    long v = 0;
+    while (*p >= '0' && *p <= '9') {
+      if (++digits > kVersionPartDigits)
+        return false;
+      v = v * 10 + (*p++ - '0');
+    }
+    if (digits == 0)
+      return false;
+    out[i] = v;
+    const char *next = next_version_part(p);
+    if (next == p)
+      break;  // the numbers end here
+    p = next;
+  }
+  return true;
+}
+
 // True when `latest` is a higher version than `current`. Both are dotted
 // numbers ("1.5.5", "2026.10.0"); anything after the numbers other than the
 // beta tag ("-dev") is ignored. A panel on a test build newer than the
 // release never "updates" down to it, and a malformed version never installs.
 inline bool version_newer(const std::string &latest, const std::string &current) {
-  const char *a = latest.c_str();
-  const char *b = current.c_str();
-  if (*a < '0' || *a > '9' || *b < '0' || *b > '9')
+  long a[kVersionParts];
+  long b[kVersionParts];
+  if (!version_parts(latest.c_str(), a) || !version_parts(current.c_str(), b))
     return false;
-  for (int part = 0; part < 4; part++) {
-    char *ea;
-    char *eb;
-    long x = strtol(a, &ea, 10);
-    long y = strtol(b, &eb, 10);
-    if (ea == a)
-      x = 0;
-    if (eb == b)
-      y = 0;
-    if (x != y)
-      return x > y;
-    a = next_version_part(ea);
-    b = next_version_part(eb);
-  }
+  for (int i = 0; i < kVersionParts; i++)
+    if (a[i] != b[i])
+      return a[i] > b[i];
   return false;
 }
 
@@ -97,6 +116,13 @@ inline void update_mark_set(char *dst, const std::string &version) {
   dst[kUpdateVersionLen - 1] = '\0';
 }
 
+// Flash can hold anything, so both fields end inside the mark before either
+// is read as a string.
+inline void update_mark_terminate(UpdateMark &m) {
+  m.installing[kUpdateVersionLen - 1] = '\0';
+  m.failed[kUpdateVersionLen - 1] = '\0';
+}
+
 enum class UpdateOutcome : uint8_t {
   NONE,         // nothing was being installed
   PENDING,      // running the version being installed, not yet a good boot
@@ -109,6 +135,7 @@ enum class UpdateOutcome : uint8_t {
 // unless it is PENDING (the caller clears that once the boot is good), and
 // drops `failed` once the panel runs that version or a newer one.
 inline UpdateOutcome update_mark_boot(UpdateMark &m, const std::string &running, bool rolled_back) {
+  update_mark_terminate(m);
   UpdateOutcome out = UpdateOutcome::NONE;
   if (m.installing[0] != '\0') {
     if (running == m.installing) {
@@ -120,7 +147,6 @@ inline UpdateOutcome update_mark_boot(UpdateMark &m, const std::string &running,
       m.installing[0] = '\0';
     }
   }
-  m.failed[kUpdateVersionLen - 1] = '\0';
   if (m.failed[0] != '\0' && !version_newer(m.failed, running))
     m.failed[0] = '\0';
   return out;
@@ -143,13 +169,23 @@ enum class AutoUpdateStep : uint8_t {
 // "Install now" for the beta channel: the publisher names panels in the
 // release summary ("... Install now: gameday-aba970 gameday-500ebc", or
 // "all"), and a listed bar panel installs at its next manifest read, any hour,
-// instead of waiting for the night. Names are separated by spaces or commas.
+// instead of waiting for the night. Names are separated by spaces or commas,
+// and capitals match too: the publish form (build.yml) takes them, and a
+// panel's name is lower case.
 static const char kInstallNowTag[] = "Install now:";
+
+inline std::string ascii_lower(std::string s) {
+  for (char &c : s)
+    if (c >= 'A' && c <= 'Z')
+      c = (char) (c - 'A' + 'a');
+  return s;
+}
 
 inline bool install_now_listed(const std::string &summary, const std::string &name) {
   size_t at = summary.find(kInstallNowTag);
   if (at == std::string::npos || name.empty())
     return false;
+  const std::string me = ascii_lower(name);
   size_t i = at + sizeof(kInstallNowTag) - 1;
   while (i < summary.size()) {
     while (i < summary.size() && (summary[i] == ' ' || summary[i] == ','))
@@ -157,8 +193,8 @@ inline bool install_now_listed(const std::string &summary, const std::string &na
     size_t start = i;
     while (i < summary.size() && summary[i] != ' ' && summary[i] != ',')
       i++;
-    std::string word = summary.substr(start, i - start);
-    if (word == name || word == "all")
+    std::string word = ascii_lower(summary.substr(start, i - start));
+    if (word == me || word == "all")
       return true;
   }
   return false;

@@ -222,7 +222,7 @@ script:
     then:
       - lambda: |-
           auto put = [](lv_obj_t *l, const std::string &text) {
-            // A network name can hold characters the fonts lack (backlog #144).
+            // A network name can hold characters the fonts lack.
             const std::string t = gameday::panel_text(text);
             const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
             lv_point_t sz;
@@ -602,7 +602,8 @@ script:
             return;
           }
           const int stage = held >= 30000 ? 5 : held >= 20000 ? 4 : held >= 10000 ? 3 : 2;
-          // Whole seconds left in this stage, so the countdown reads 10..1.
+          // Whole seconds left in this stage, so the countdown reads 5..1 in
+          // stage 2 and 10..1 in stages 3 and 4.
           const uint32_t stage_end = stage == 2 ? 10000 : stage == 3 ? 20000 : 30000;
           const unsigned left = stage == 5 ? 0 : (unsigned) ((stage_end - held + 999) / 1000);
           static int shown = -1;
@@ -635,7 +636,9 @@ script:
           const int key = stage * 100 + (int) left;
           if (key != shown) {
             shown = key;
-            char n[16];
+            // left is 10 at most, but sized for any unsigned so GCC's
+            // -Wformat-truncation has nothing to warn about.
+            char n[24];
             if (stage == 2) {
               snprintf(n, sizeof(n), "in %us", left);
               id(boot_set_lines).execute("Keep holding", "Wi-Fi reset", n, "", true);

@@ -9,17 +9,17 @@ Game Day Scoreboard is an LED panel that shows your team's live score, game cloc
 
 ## What you need
 
-- The Game Day Scoreboard: the 128x64 LED panel, the Game Day Scoreboard controller and the 5 V power supply that came with them.
+- A panel running Game Day Scoreboard: the scoreboard75 controller board with its 128x64 LED panel and 5 V power supply, or an [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6).
 - A 2.4 GHz Wi-Fi network and its password. The panel can't join a 5 GHz network.
-- A phone. The Game Day app sets the panel up over Bluetooth. Without the app, any phone or laptop with a web browser works.
+- A phone or laptop with a web browser.
 
-Built your own on a MoonHub75 board or another ESP32-S3 board? Start with the [DIY pages](/diy/) instead.
+Built your own on a MoonHub75 board or another ESP32-S3 board, or putting the firmware on an Apollo M-1? Start with the [DIY pages](/diy/).
 
 ## From the box to your team
 
 1. **Plug it in.** Connect the power supply. After a few seconds the panel shows **SETUP** and a QR code. See [Set up your panel](/get-started/setup/).
-2. **Put it on your Wi-Fi.** Use the [Game Day app](/get-started/the-app/), which finds the panel over Bluetooth, or join the panel's own **Game Day** hotspot from any phone or laptop. Both are on [Set up your panel](/get-started/setup/).
-3. **Pick your team.** Choose it in the app, or on the panel's own web page, the device page. See [Pick your team](/get-started/pick-your-team/).
+2. **Put it on your Wi-Fi.** Use the Wi-Fi dialog the installer offers right after an install, or join the panel's own **Game Day** hotspot from any phone or laptop. Both are on [Set up your panel](/get-started/setup/).
+3. **Pick your team.** Choose it on the panel's own web page, the device page, or from [Home Assistant](/using/home-assistant/). See [Pick your team](/get-started/pick-your-team/).
 
 That's all the setup there is. Before a game the panel shows the matchup and the start time. When the game starts it switches to the live board, celebrates scores, and stays on the final for a while before it looks up the next game.
 

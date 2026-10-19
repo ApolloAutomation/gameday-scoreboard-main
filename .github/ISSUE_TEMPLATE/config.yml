@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Help with a scoreboard you bought
-    url: https://gamedayscoreboard.app/support/
-    about: Common fixes, and the support email. Support answers faster than an issue here.
+  - name: Common fixes for a scoreboard
+    url: https://apolloautomation.github.io/gameday-scoreboard-main/support/
+    about: Common fixes for Wi-Fi, a blank board, resets and updates. Try these before opening an issue.

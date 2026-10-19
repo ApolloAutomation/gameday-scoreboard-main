@@ -21,8 +21,12 @@ import re
 import sys
 import tempfile
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
-BASE = "https://gamedayscoreboard.app"
+# The site's address with no trailing slash, the same value as site_base in
+# firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a new address").
+# The site's own links are relative, so only these absolute tags name it.
+BASE = "https://apolloautomation.github.io/gameday-scoreboard-main"
 FAQ_PAGE = "support/index.html"
 REQUIRED_PROPS = ["og:title", "og:description", "og:url", "og:image", "og:type"]
 REQUIRED_NAMES = ["description", "twitter:card", "twitter:image"]
@@ -38,10 +42,13 @@ class Head(HTMLParser):
         self.canonical = None
         self.ld = []
         self._in = None
+        self._svg = 0  # depth inside <svg>, whose <title> names the drawing
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag == "title":
+        if tag == "svg":
+            self._svg += 1
+        elif tag == "title" and not self._svg:
             self._in = "title"
         elif tag == "meta":
             key = a.get("property") or a.get("name")
@@ -54,7 +61,9 @@ class Head(HTMLParser):
             self.ld.append("")
 
     def handle_endtag(self, tag):
-        if tag in ("title", "script"):
+        if tag == "svg" and self._svg:
+            self._svg -= 1
+        elif tag in ("title", "script"):
             self._in = None
 
     def handle_data(self, data):
@@ -183,8 +192,11 @@ def build(site):
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write(f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n')
     # The firmware files are for panels and the installer, not search results.
+    # Crawlers read robots.txt only at a host's root, so under a GitHub Pages
+    # project path this file does nothing until the site has its own domain.
+    prefix = urlsplit(BASE).path.rstrip("/")
     with open(os.path.join(site, "robots.txt"), "w", encoding="utf-8") as f:
-        f.write(f"User-agent: *\nDisallow: /firmware/\n\nSitemap: {BASE}/sitemap.xml\n")
+        f.write(f"User-agent: *\nDisallow: {prefix}/firmware/\n\nSitemap: {BASE}/sitemap.xml\n")
     return []
 
 
@@ -203,6 +215,12 @@ def page(path, title, desc, extra=""):
 
 
 def selftest():
+    # An inline SVG's <title> (its accessible name) is not the page's title.
+    head = Head()
+    head.feed('<html><head><title>Support</title></head><body><svg viewBox="0 0 1 1"><title>Logo</title>'
+              '<path d="M0 0"/></svg><svg/><p>text</p></body></html>')
+    assert squash(head.title) == "Support", head.title
+
     with tempfile.TemporaryDirectory() as site:
         desc = "A description long enough to pass the fifty character floor, page "
         for rel in ["index.html", "support/index.html", "install/diy/index.html", "firmware/x/index.html"]:
@@ -228,7 +246,9 @@ def selftest():
         assert f"<loc>{BASE}/</loc>" in sitemap and f"<loc>{BASE}/install/diy/</loc>" in sitemap
         assert "firmware" not in sitemap
         with open(os.path.join(site, "robots.txt"), encoding="utf-8") as f:
-            assert f"Sitemap: {BASE}/sitemap.xml" in f.read()
+            robots = f.read()
+        assert f"Sitemap: {BASE}/sitemap.xml" in robots
+        assert f"Disallow: {urlsplit(BASE).path.rstrip('/')}/firmware/" in robots
 
         # A copied page, a wrong canonical, a missing image and broken JSON-LD all fail.
         with open(os.path.join(site, "install/diy/index.html"), "w", encoding="utf-8") as f:

@@ -9,9 +9,27 @@ Nothing about the panel needs Home Assistant. It reads ESPN, runs its own device
 
 ## Adding it
 
-With Home Assistant on the same network, it discovers the panel as a new ESPHome device and offers to add it. The prebuilt firmware has no API encryption key, so there is no key to enter.
+The panel joins Home Assistant through the ESPHome integration, which comes with Home Assistant. Put the panel on your Wi-Fi first (see [Set up your panel](/get-started/setup/)).
 
-Picking a team or a mode from Home Assistant counts as setting the panel up, the same as the app or the device page, so the ticker stops asking you to pick a team.
+1. With Home Assistant on the same network, it discovers the panel as a new ESPHome device. A notification says a new device was discovered, and **Settings → Devices & services** lists it under **Discovered**.
+2. Press **Add** (or **Configure**) and confirm. The prebuilt firmware has no API encryption key, so there is no key to enter.
+3. Pick an area for the panel if you like, and finish.
+
+This button opens Home Assistant at **Settings → Devices & services**, where a discovered panel waits:
+
+[![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
+
+Not discovered? Add it by its address instead. Press **Add integration**, pick **ESPHome**, and enter the panel's `gameday-xxxxxx.local` name (with your panel's six characters) or its IP address. Leave the port at 6053. This button opens the same window:
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=esphome)
+
+Once it's added, the panel shows up as a device under the ESPHome integration, with the entities below. This button opens that integration:
+
+[![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=esphome)
+
+Picking a team or a mode from Home Assistant counts as setting the panel up, the same as the device page, so the ticker stops asking you to pick a team.
+
+Want to change the firmware itself, for example to add your own API key? Build it from the YAML with ESPHome. See [Build it yourself](/diy/build-from-source/).
 
 ## What appears
 
@@ -33,6 +51,8 @@ Picking a team or a mode from Home Assistant counts as setting the panel up, the
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
+
+The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
 
 Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues and the panel layout have no entities. Set them on the device page or in the app.
 

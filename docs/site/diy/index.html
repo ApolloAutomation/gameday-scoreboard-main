@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Runs on your own panel - Game Day Scoreboard</title>
   <meta name="description" content="Run the open-source Game Day Scoreboard firmware on your own ESP32-S3 HUB75 board: supported boards and panels, the MoonHub75 wiring and the web installer.">
-  <link rel="canonical" href="https://gamedayscoreboard.app/diy/">
+  <link rel="canonical" href="https://apolloautomation.github.io/gameday-scoreboard-main/diy/">
   <meta property="og:site_name" content="Game Day Scoreboard">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Runs on your own panel - Game Day Scoreboard">
   <meta property="og:description" content="Run the open-source Game Day Scoreboard firmware on your own ESP32-S3 HUB75 board: supported boards and panels, the MoonHub75 wiring and the web installer.">
-  <meta property="og:url" content="https://gamedayscoreboard.app/diy/">
-  <meta property="og:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta property="og:url" content="https://apolloautomation.github.io/gameday-scoreboard-main/diy/">
+  <meta property="og:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@GameDayScore">
-  <meta name="twitter:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta name="twitter:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta name="twitter:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <style>
     :root { color-scheme: dark; }
@@ -56,8 +56,8 @@
   <div class="card">
     <h2>Boards</h2>
 
-    <h3>MoonHub75</h3>
-    <p>The <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> has a prebuilt firmware. Install it from your browser with the DIY installer and it takes updates over Wi-Fi like any other panel.</p>
+    <h3>Apollo M-1 and MoonHub75</h3>
+    <p>The <a href="https://apolloautomation.com/products/m-1-led-matrix">Apollo Automation M-1 LED Matrix</a> (Rev6) and the <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> share a pinout, and it has a prebuilt firmware. The M-1 Rev4 uses other pins. Install it from your browser with the DIY installer and it takes updates over Wi-Fi like any other panel.</p>
 
     <h3>An ESP32-S3 board wired to the MoonHub75 pinout</h3>
     <p>The same prebuilt firmware runs on a bare ESP32-S3 board if you wire it to the same pins. It needs:</p>
@@ -99,31 +99,25 @@
   <div class="card">
     <h2>Install</h2>
     <p>Plug the board into a computer over USB, open the DIY installer in Chrome or Edge, pick one panel or two, and click Install.</p>
-    <a class="button" href="/install/diy/">Open the DIY installer</a>
-    <p>Joining Wi-Fi, picking a team and the Game Day app work the same as on a Game Day Scoreboard. <a href="/setup/">Setup</a> covers the rest.</p>
-    <p class="note">Building from YAML instead? The <a href="https://github.com/gameday-scoreboard/gameday-scoreboard#build-it-yourself">README</a> has the steps.</p>
+    <a class="button" href="../install/diy/">Open the DIY installer</a>
+    <p>Joining Wi-Fi and picking a team work the same as on a Game Day Scoreboard. <a href="../setup/">Setup</a> covers the rest.</p>
+    <p class="note">Building from YAML instead? The <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main#build-it-yourself">README</a> has the steps.</p>
   </div>
 
   <div class="card">
     <h2>What's different from a Game Day Scoreboard</h2>
     <ul>
       <li>You supply the case, stand and power supply.</li>
-      <li>Email support is for Game Day Scoreboards we sold. For a panel you built, <a href="https://github.com/gameday-scoreboard/gameday-scoreboard/issues">open an issue on GitHub</a>. Bug reports from DIY builds are welcome.</li>
+      <li>Support is on GitHub: <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main/issues">open an issue</a>. Bug reports from DIY builds are welcome.</li>
       <li>The firmware is the same, with every league and setting. The prebuilt firmware for the MoonHub75 pinout gets every release.</li>
     </ul>
   </div>
 
-  <div class="card">
-    <h2>Built one?</h2>
-    <p>Show us. Post a photo and the parts you used in Show and tell on GitHub. It helps the next person pick a board and panels.</p>
-    <a class="button" href="https://github.com/gameday-scoreboard/gameday-scoreboard/discussions/categories/show-and-tell">Post it in Show and tell</a>
-  </div>
-
   <footer>
-    Source, issues and the YAML for building it yourself: <a href="https://github.com/gameday-scoreboard/gameday-scoreboard">gameday-scoreboard/gameday-scoreboard</a>.
+    Source, issues and the YAML for building it yourself: <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main">ApolloAutomation/gameday-scoreboard-main</a>.
     Built on <a href="https://github.com/pavlov-net/hub75-studio">hub75-studio</a> and ESPHome.
     <br>
-    <a href="/setup/">Setup</a> &middot; <a href="/changelog/">What's new</a> &middot; <a href="/privacy/">Privacy</a> &middot; <a href="/support/">Support</a>
+    <a href="../setup/">Setup</a> &middot; <a href="../changelog/">What's new</a> &middot; <a href="../privacy/">Privacy</a> &middot; <a href="../support/">Support</a>
   </footer>
 </main>
 </body>

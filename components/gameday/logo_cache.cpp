@@ -9,7 +9,7 @@
 namespace esphome::gameday {
 
 static const char *const TAG = "gameday.logo";
-static const char *const USER_AGENT = "curl/8.0";
+static const char *const USER_AGENT = ::espn::kUserAgent;  // the same as every ESPN read (poll_timing.h)
 // About four logos per team on screen at once in the busiest playlist, times
 // a full favorites list plus live games, with room to spare. Each is ~3 KB.
 static const size_t MAX_LOGOS = 48;
@@ -48,7 +48,7 @@ image::Image *LogoCache::get(const std::string &url) {
     }
     return nullptr;
   }
-  this->make_room_();
+  this->make_room_(now);
   auto e = std::make_unique<Entry>();
   e->url.assign(url.data(), url.size());
   e->used_ms = now;
@@ -123,7 +123,7 @@ void LogoCache::retry_pinned_(uint32_t now) {
 
 // Caller holds the lock. Drops the least recently used logo that is idle and
 // off screen, so the image it frees is not one LVGL is drawing.
-void LogoCache::make_room_() {
+void LogoCache::make_room_(uint32_t now) {
   if (this->entries_.size() < MAX_LOGOS)
     return;
   std::vector<::espn::LogoSlot> slots;
@@ -133,7 +133,7 @@ void LogoCache::make_room_() {
     bool pinned = this->pinned_url_(e->url);
     slots.push_back({e->used_ms, busy, pinned});
   }
-  int i = ::espn::pick_evict(slots);
+  int i = ::espn::pick_evict(slots, now);
   if (i >= 0)
     this->entries_.erase(this->entries_.begin() + i);
 }

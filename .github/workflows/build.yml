@@ -25,6 +25,11 @@ permissions:
 # Branch rules checks.
 env:
   ESPHOME_VERSION: "2026.10.0b3"
+  # The project's site (GitHub Pages today), with no trailing slash: the
+  # flasher, the changelog and the update manifests. The same value as
+  # site_base in firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a
+  # new address").
+  SITE_URL: "https://apolloautomation.github.io/gameday-scoreboard-main"
 
 # A newer push to the same ref cancels the older run. That stays on for dev
 # too: a merge that lands within a few minutes of the last one leaves the
@@ -212,7 +217,7 @@ jobs:
           set -euo pipefail
           summary=$NOTES
           # The release's section of the site's changelog, which this tag's deploy renders.
-          url="https://gamedayscoreboard.app/changelog/#$GITHUB_REF_NAME"
+          url="$SITE_URL/changelog/#$GITHUB_REF_NAME"
           if [ "$GITHUB_REF" = refs/heads/beta ]; then
             v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
             v="$v-beta.$GITHUB_RUN_NUMBER"
@@ -236,7 +241,7 @@ jobs:
           mkdir -p out
           cp -r "${{ steps.esphome.outputs.name }}" out/${{ matrix.variant }}
           ls -R out
-      # The installer would say "Installing bharvey88.gameday-scoreboard".
+      # The installer would say "Installing ApolloAutomation.gameday-scoreboard".
       - name: Product name in the manifest
         run: ./scripts/set_manifest_name.sh out
       - uses: actions/upload-artifact@v7
@@ -281,22 +286,46 @@ jobs:
           set -uo pipefail
           # The base commit's own run first, then the base branch's newest
           # runs: a push that lands while dev builds cancels the older run,
-          # sometimes before it uploaded its figures.
+          # sometimes before it uploaded its figures, or after only some of
+          # them (Parser tests uploads minutes before the builds do). The
+          # first run with every figure set this run has is the base; failing
+          # that, the one with the most, and the job warns which are missing.
           runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$BASE_SHA&event=push&per_page=5" \
                    --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)
           runs="$runs
           $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$BASE_REF&event=push&per_page=10" \
               --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)"
+          want=$(ls sizes)
+          total=0
+          for a in $want; do total=$((total + 1)); done
+          rm -rf base
+          best="" best_has=-1
           while read -r id sha; do
             [ -n "$id" ] || continue
+            rm -rf try
+            # A download that fails part way is not used, whatever it left.
+            gh run download "$id" -p 'sizes-*' -D try 2>/dev/null && [ -n "$(ls -A try 2>/dev/null)" ] || continue
+            has=0
+            for a in $want; do [ -d "try/$a" ] && has=$((has + 1)); done
+            echo "Run $id ($sha) has $has of the $total figure sets"
+            [ "$has" -gt "$best_has" ] || continue
             rm -rf base
-            if gh run download "$id" -p 'sizes-*' -D base 2>/dev/null && [ -n "$(ls -A base 2>/dev/null)" ]; then
-              echo "label=$BASE_REF ${sha::7} (run $id)" >> "$GITHUB_OUTPUT"
-              echo "Base figures from run $id ($sha)"
-              exit 0
-            fi
+            mv try base
+            best="$BASE_REF ${sha::7} (run $id)"
+            best_has=$has
+            [ "$has" -lt "$total" ] || break
           done <<< "$runs"
-          echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+          rm -rf try
+          if [ -z "$best" ]; then
+            echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+            exit 0
+          fi
+          if [ "$best_has" -lt "$total" ]; then
+            missing=$(for a in $want; do [ -d "base/$a" ] || printf ' %s' "$a"; done)
+            echo "::warning::No $BASE_REF build had every figure set, so growth is checked against $best, which has no$missing."
+          fi
+          echo "label=$best" >> "$GITHUB_OUTPUT"
+          echo "Base figures from $best"
       - name: Check the budget
         env:
           BASE_LABEL: ${{ steps.base.outputs.label }}
@@ -402,9 +431,9 @@ jobs:
 
   publish-beta:
     # The beta channels, from one build of the beta branch:
-    # - gamedayscoreboard.app/firmware/beta/<variant>/, the bar builds, read
-    #   only by bar panels.
-    # - gamedayscoreboard.app/firmware/<variant>-beta/, the release builds,
+    # - $SITE_URL/firmware/beta/<variant>/, the bar builds, read only by bar
+    #   panels.
+    # - $SITE_URL/firmware/<variant>-beta/, the release builds,
     #   read by panels with "Follow beta" on (the two-panel build follows
     #   moonhub75's, as it does for releases).
     # Runs when someone pushes (promotes) to beta, or runs Build on beta by
@@ -451,7 +480,7 @@ jobs:
             (cd stage/firmware/beta && zip -r "../../../release/firmware-beta-$v.zip" "$v")
             (cd stage/firmware && zip -r "../../release/firmware-$v-beta.zip" "$v-beta")
           done
-          notes="Beta firmware, not for customers. $BETA from $GITHUB_SHA. Bar panels read it from gamedayscoreboard.app/firmware/beta/, and panels with Follow beta on from gamedayscoreboard.app/firmware/<variant>-beta/; this prerelease only stores the files between site deploys."
+          notes="Beta firmware, not for customers. $BETA from $GITHUB_SHA. Bar panels read it from $SITE_URL/firmware/beta/, and panels with Follow beta on from $SITE_URL/firmware/<variant>-beta/; this prerelease only stores the files between site deploys."
           if gh release view beta-firmware >/dev/null 2>&1; then
             gh release upload beta-firmware release/*.zip --clobber
             gh release edit beta-firmware --prerelease --title "Beta $BETA" --notes "$notes"
@@ -467,7 +496,17 @@ jobs:
           # its header); the beta then goes live with that release.
           git fetch -q --depth=1 origin main
           v=$(git show origin/main:firmware/gameday-common.yaml | sed -n 's/^  version: "\(.*\)"$/\1/p' | head -n1)
-          tag=$(gh release view --json tagName --jq .tagName)
+          # A repo with no release yet has no live site to republish; the
+          # files wait on the beta-firmware prerelease for the first release.
+          # Only gh's "release not found" counts; any other error fails here.
+          if ! tag=$(gh release view --json tagName --jq .tagName 2>"$RUNNER_TEMP/release.err"); then
+            if grep -q 'release not found' "$RUNNER_TEMP/release.err"; then
+              echo "::warning::There is no release yet, so the site isn't live and this beta reaches it with the first release. The files are on the beta-firmware prerelease."
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/release.err" >&2
+            exit 1
+          fi
           if [ "v$v" != "$tag" ]; then
             echo "::warning::main is at v$v and the latest release is $tag, so this beta reaches the site with the v$v release, not now."
           fi
@@ -524,18 +563,25 @@ jobs:
           python3 scripts/improv_scan.py --selftest
           python3 scripts/crash_report.py --selftest
           python3 scripts/site_seo.py --selftest
+          python3 scripts/release_notes.py --selftest
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
         run: python3 tests/web/mock_device.py --selftest
       - name: Fuzz the parsers (30 s a target)
         run: make -C tests fuzz
-      - name: Keep the input a fuzz crash left
+      # libFuzzer names the input by what went wrong: a crash, a run over
+      # -timeout, one over -rss_limit_mb, or a leak.
+      - name: Keep the input a fuzz failure left
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes
-          path: tests/build/crash-*
+          path: |
+            tests/build/crash-*
+            tests/build/timeout-*
+            tests/build/oom-*
+            tests/build/leak-*
           if-no-files-found: ignore
 
   web-tests:
@@ -552,7 +598,7 @@ jobs:
         run: |
           python3 ../../scripts/build_web.py
           git diff --exit-code -- ../../firmware/web/bundle.js ../../firmware/web/bundle-demo.js || {
-            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python scripts/build_web.py and commit both."
+            echo "::error::firmware/web/bundle.js or bundle-demo.js is out of date. Run python3 scripts/build_web.py and commit both."
             exit 1
           }
       - uses: actions/setup-node@v7
@@ -596,7 +642,7 @@ jobs:
           # docs/site/. (not docs/site/*) so .well-known/ is copied too.
           cp -r docs/site/. site/
           # This tag's release is created after the deploy, so its date comes from --date.
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-drafts --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
           python3 scripts/release_notes.py --page site/changelog/index.html --dates /tmp/releases.json --date "$GITHUB_REF_NAME=$(TZ=America/Chicago date +%F)"
           cp -r artifacts/* site/firmware/
           sed -i "s/__VERSION__/${GITHUB_REF_NAME}/g" site/index.html
@@ -641,7 +687,7 @@ jobs:
           {
             cat notes/notes.md
             echo
-            echo "Install or update from the [flasher page](https://gamedayscoreboard.app/), or let a panel already running v0.2.2 or later update itself from its device page."
+            echo "Install or update from the [flasher page]($SITE_URL/), or let a panel already running a release from this repository update itself from its device page."
             if [ -n "$PREV" ]; then
               echo
               echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${GITHUB_REF_NAME}"
@@ -649,9 +695,10 @@ jobs:
           } > release/body.md
           gh release create "$GITHUB_REF_NAME" $ASSETS --title "$GITHUB_REF_NAME" --notes-file release/body.md || \
           { gh release upload "$GITHUB_REF_NAME" $ASSETS --clobber; gh release edit "$GITHUB_REF_NAME" --notes-file release/body.md; }
-      # The same update feed on updates.gameday-scoreboard.com, which panels
-      # read when gamedayscoreboard.app fails. Last, so a mirror problem never
-      # holds up the release.
+      # A copy of the update feed on a second host, for a project that has one
+      # (scripts/publish_mirror.sh). Without the Cloudflare secrets it warns
+      # and does nothing; firmware built from this repo reads no mirror. Last,
+      # so a mirror problem never holds up the release.
       - name: Publish the update mirror
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_MIRROR_TOKEN }}

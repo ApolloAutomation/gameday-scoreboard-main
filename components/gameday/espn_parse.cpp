@@ -289,27 +289,18 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
   if (cur.sport == Sport::HOCKEY)
     return hockey_splash(prev, cur, opponent_splashes, neutral);
   Splash none;
-  if (!prev.valid || !cur.valid || prev.event_id != cur.event_id)
+  if (!detail::same_game(prev, cur))
     return none;
-  if (prev.state == GameState::IN && cur.state == GameState::POST) {
-    // ESPN also moves a suspended or canceled game to post, with completed
-    // false. Only a completed game has a winner.
-    if (!cur.completed)
-      return none;
-    if (cur.team_score > cur.opp_score)
-      return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
-    if (neutral && cur.opp_score > cur.team_score)
-      return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
-    return none;
-  }
+  if (detail::went_final(prev, cur))
+    return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
   if (prev.state != GameState::IN || cur.state != GameState::IN)
     return none;
-  int delta = cur.team_score - prev.team_score;
+  int delta = detail::score_gain(prev.team_score, cur.team_score);
   if (delta > 0 && neutral)
     return Splash{cur.team_abbr + " " + score_word(delta, false), parse_color(cur.team_color)};
   if (delta > 0)
     return Splash{score_word(delta, true), parse_color(cur.team_color)};
-  int odelta = cur.opp_score - prev.opp_score;
+  int odelta = detail::score_gain(prev.opp_score, cur.opp_score);
   if (odelta > 0 && opponent_splashes)
     return Splash{cur.opp_abbr + " " + score_word(odelta, false), parse_color(cur.opp_color)};
   return none;
@@ -349,6 +340,22 @@ void add_last_play(std::string &out, std::string play) {
   if (play.size() > 160)
     play = play.substr(0, 157) + "...";
   add_part(out, play);
+}
+
+bool same_game(const GameSnapshot &prev, const GameSnapshot &cur) {
+  return prev.valid && cur.valid && prev.event_id == cur.event_id;
+}
+
+Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
+  // ESPN also moves a suspended or canceled game to post, with completed
+  // false. Only a completed game has a winner.
+  if (!cur.completed)
+    return Splash{};
+  if (us > them)
+    return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
+  if (neutral && them > us)
+    return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
+  return Splash{};
 }
 
 }  // namespace detail
@@ -517,6 +524,15 @@ static std::string clock_12h(const struct tm &t) {
   return buf;
 }
 
+// Days since a fixed day for a struct tm's date, from its year and day of the
+// year, counting leap years, so Dec 31 and Jan 1 are one day apart. In int64
+// for any year a struct tm can hold.
+static int64_t tm_day_number(const struct tm &t) {
+  int64_t y = (int64_t) t.tm_year + 1899;  // whole years before this one
+  auto floor_div = [](int64_t a, int64_t b) { return a / b - (a % b != 0 && a < 0 ? 1 : 0); };
+  return y * 365 + floor_div(y, 4) - floor_div(y, 100) + floor_div(y, 400) + t.tm_yday;
+}
+
 std::string kickoff_label(const struct tm &kick_local, const struct tm &now_local, bool time_tbd) {
   static const char *kDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
   static const char *kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -525,9 +541,7 @@ std::string kickoff_label(const struct tm &kick_local, const struct tm &now_loca
   // -1: no kickoff time to show.
   if (kick_local.tm_mon < 0 || kick_local.tm_mon > 11 || kick_local.tm_wday < 0 || kick_local.tm_wday > 6)
     return "";
-  int64_t now_day = (int64_t) now_local.tm_year * 366 + now_local.tm_yday;
-  int64_t kick_day = (int64_t) kick_local.tm_year * 366 + kick_local.tm_yday;
-  int64_t diff = kick_day - now_day;
+  int64_t diff = tm_day_number(kick_local) - tm_day_number(now_local);
   std::string when;
   if (diff == 0)
     when = "Today";

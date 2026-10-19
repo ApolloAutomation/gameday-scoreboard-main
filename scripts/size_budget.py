@@ -95,6 +95,9 @@ def check(budget: dict, sizes: dict, base: dict, base_label: str) -> tuple:
                 errors.append(f"{group}.{name} has no budget. Add it to firmware/budget.json "
                               f"(seed: python3 scripts/size_budget.py seed <sizes>).")
                 continue
+            for metric in sorted(set(limits[name]) - set(measured[name])):
+                errors.append(f"budget.json has {group}.{name}.{metric} but nothing measured it. "
+                              "Remove the entry if it is gone.")
             for metric, now in sorted(measured[name].items()):
                 cap = limits[name].get(metric)
                 was = base.get(group, {}).get(name, {}).get(metric)
@@ -174,6 +177,10 @@ def selftest() -> None:
     assert len(new) == 1 and "no budget" in new[0]
     gone, _ = check(budget, {}, {}, "dev")
     assert len(gone) == 1 and "nothing measured" in gone[0]
+    # A figure the budget caps but the build no longer reports is not a pass.
+    half, rows = check(budget, {"firmware": {"a": {"flash": 900}}}, {}, "dev")
+    assert len(half) == 1 and "a.static_ram" in half[0] and "nothing measured" in half[0], half
+    assert len(rows) == 1
     assert seed({"host": {"x": {"json": 20000, "heap": 18}}}) == {"firmware": {}, "host": {"x": {"json": 22000, "heap": 1042}}}
 
     with tempfile.TemporaryDirectory() as d:
