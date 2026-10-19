@@ -38,8 +38,16 @@ struct RecapDay {
 
 // Walking back for older finals stops once a league has this many.
 static const size_t kRecapMinFinals = 4;
-// How far back the walk, and the forward search for the next kickoff, look.
+// How far ahead the search for the next kickoff looks, and the age at which
+// a day of finals drops out of the rotation.
 static const int kRecapMaxDays = 7;
+// The oldest day the rotation keeps, in days before today. The walk back
+// for older finals reads no further, so it never downloads a day only for
+// recap_trim to drop it.
+static const int kRecapBackDays = kRecapMaxDays - 1;
+
+// A day of finals stays while it is no older than kRecapBackDays.
+inline bool recap_day_kept(int32_t day, int32_t today) { return (int64_t) today - day <= kRecapBackDays; }
 // Game cards in one loop, later today and finals together, shared between
 // the leagues shown. Two logos each, so 22 stays inside the 48-logo cache
 // (four are kept pinned) and a loop does not download the same logos again
@@ -139,7 +147,7 @@ inline void recap_trim(std::vector<RecapDay> &days, int64_t now) {
     if (d.league >= kLeagueCount)
       continue;
     int32_t today = espn_day(now, d.league);
-    if (today - d.day >= kRecapMaxDays || have[d.league] >= kRecapMinFinals)
+    if (!recap_day_kept(d.day, today) || have[d.league] >= kRecapMinFinals)
       continue;
     if (d.day != today)
       std::vector<Pending>().swap(d.later);

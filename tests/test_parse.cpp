@@ -3207,6 +3207,35 @@ static void test_recap() {
   CHECK(!legacy_team_unpicked(NCAA, 6, false, false));
 }
 
+// The walk back for older finals reads 1 to kRecapBackDays days before today,
+// and recap_trim keeps every one of those days and none older, so no read is
+// thrown away the moment it lands.
+static void test_recap_back_days() {
+  const uint8_t NHL = (uint8_t) League::NHL;
+  CHECK_EQ(kRecapBackDays, 6);
+  const int64_t now = parse_iso8601_z("2026-10-19T16:00Z");
+  const int32_t today = espn_day(now, NHL);
+  CHECK(recap_day_kept(today, today));
+  for (int w = 1; w <= kRecapBackDays; w++)
+    CHECK(recap_day_kept(today - w, today));
+  CHECK(!recap_day_kept(today - kRecapBackDays - 1, today));
+  // One final on the oldest day the walk reads and one the day before it:
+  // short of kRecapMinFinals, so only age decides.
+  std::vector<RecapDay> days;
+  for (int w : {kRecapBackDays, kRecapBackDays + 1}) {
+    RecapDay d;
+    d.league = NHL;
+    d.day = today - w;
+    d.finals = {mkfinal(NHL, 99, espn_day_epoch(d.day), "OLD")};
+    recap_merge(days, d);
+  }
+  CHECK_EQ(days.size(), (size_t) 2);
+  recap_trim(days, now);
+  CHECK_EQ(days.size(), (size_t) 1);
+  if (days.size() == 1)
+    CHECK_EQ(days[0].day, today - kRecapBackDays);
+}
+
 // How a loop's cards are shared between leagues: one each in league order,
 // round and round, so the split is as even as it can be and a league with
 // fewer games leaves the rest to the others.
@@ -5219,6 +5248,7 @@ int main() {
   test_badge_thresholds();
   test_demo();
   test_recap();
+  test_recap_back_days();
   test_recap_share();
   test_later_today();
   test_backoff();

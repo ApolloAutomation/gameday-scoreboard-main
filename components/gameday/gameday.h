@@ -744,10 +744,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   int64_t recap_scan_next_{0};  // the last scan's next kickoff today, 0 for none
   static_assert(::espn::leagues_fill_indexes(), "League values must run 0 to kLeagueCount - 1");
   // Per league, indexed by League. walk: next day back (or ahead) to read,
-  // 1 to kRecapMaxDays; 0 not started; kRecapMaxDays + 1 done. walk_day:
-  // the league's ESPN day a walk finished, so a fruitless one is tried again
-  // the next day rather than every scan. fwd_match: "BOS at NYR", the first
-  // game on the day the forward walk found.
+  // 1 to kRecapBackDays back (kRecapMaxDays ahead); 0 not started;
+  // kRecapMaxDays + 1 done. walk_day: the league's ESPN day a walk finished,
+  // so a fruitless one is tried again the next day rather than every scan.
+  // fwd_match: "BOS at NYR", the first game on the day the forward walk
+  // found.
   uint8_t recap_back_[::espn::kLeagueCount]{};
   int32_t recap_back_day_[::espn::kLeagueCount]{};
   uint8_t recap_fwd_[::espn::kLeagueCount]{};

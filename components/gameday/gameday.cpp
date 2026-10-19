@@ -2885,9 +2885,10 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
 // ---- finals rotation ------------------------------------------------------------
 
 // Main loop: the next day the rotation needs read, if any. Going back, per
-// league, until it has kRecapMinFinals or has looked a week back. Going
-// forward, only when no game is left today, until a day has a kickoff. Each
-// league counts days its own way (recap.h, espn_day).
+// league, until it has kRecapMinFinals or has read the oldest day the
+// rotation keeps (kRecapBackDays). Going forward, only when no game is left
+// today, until a day has a kickoff. Each league counts days its own way
+// (recap.h, espn_day).
 bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
   const uint8_t done = ::espn::kRecapMaxDays + 1;
   const uint16_t leagues = this->recap_leagues_();
@@ -2906,7 +2907,7 @@ bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
       }
       w = 1;
     }
-    if (w <= ::espn::kRecapMaxDays) {
+    if (w <= ::espn::kRecapBackDays) {
       j.need_recap = true;
       j.recap_forward = false;
       j.recap_league = i;
@@ -2980,7 +2981,7 @@ void GamedayComponent::apply_recap_job_() {
     d.finals = std::move(j.finals);
     ::espn::recap_merge(this->recap_days_, std::move(d));
     if (::espn::recap_count(this->recap_days_, i) >= ::espn::kRecapMinFinals ||
-        ++this->recap_back_[i] > ::espn::kRecapMaxDays) {
+        ++this->recap_back_[i] > ::espn::kRecapBackDays) {
       this->recap_back_[i] = done;
       this->recap_back_day_[i] = today;
       ESP_LOGI(TAG, "Recent %s finals: %u", ::espn::recap_league_word(i),
