@@ -115,6 +115,7 @@ test("an upcoming game shows kickoff and network", async ({ page, request }) => 
 // in the page's US Central) and the panel marks it tbd: its day and "TBD".
 test("a game with no kickoff time yet shows its day and TBD", async ({ page, request }) => {
   const sat = 1792814400; // 2026-10-24T04:00Z
+  await reset(request);
   const g = (await deviceState(request)).game;
   await reset(request, {
     game: { ...g, id: "1", oa: "MINN", kick: sat, tbd: true, k: "Oct 24 TBD", detail: "TBD" },
