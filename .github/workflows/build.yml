@@ -286,22 +286,46 @@ jobs:
           set -uo pipefail
           # The base commit's own run first, then the base branch's newest
           # runs: a push that lands while dev builds cancels the older run,
-          # sometimes before it uploaded its figures.
+          # sometimes before it uploaded its figures, or after only some of
+          # them (Parser tests uploads minutes before the builds do). The
+          # first run with every figure set this run has is the base; failing
+          # that, the one with the most, and the job warns which are missing.
           runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$BASE_SHA&event=push&per_page=5" \
                    --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)
           runs="$runs
           $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?branch=$BASE_REF&event=push&per_page=10" \
               --jq '.workflow_runs[] | "\(.id) \(.head_sha)"' || true)"
+          want=$(ls sizes)
+          total=0
+          for a in $want; do total=$((total + 1)); done
+          rm -rf base
+          best="" best_has=-1
           while read -r id sha; do
             [ -n "$id" ] || continue
+            rm -rf try
+            # A download that fails part way is not used, whatever it left.
+            gh run download "$id" -p 'sizes-*' -D try 2>/dev/null && [ -n "$(ls -A try 2>/dev/null)" ] || continue
+            has=0
+            for a in $want; do [ -d "try/$a" ] && has=$((has + 1)); done
+            echo "Run $id ($sha) has $has of the $total figure sets"
+            [ "$has" -gt "$best_has" ] || continue
             rm -rf base
-            if gh run download "$id" -p 'sizes-*' -D base 2>/dev/null && [ -n "$(ls -A base 2>/dev/null)" ]; then
-              echo "label=$BASE_REF ${sha::7} (run $id)" >> "$GITHUB_OUTPUT"
-              echo "Base figures from run $id ($sha)"
-              exit 0
-            fi
+            mv try base
+            best="$BASE_REF ${sha::7} (run $id)"
+            best_has=$has
+            [ "$has" -lt "$total" ] || break
           done <<< "$runs"
-          echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+          rm -rf try
+          if [ -z "$best" ]; then
+            echo "::warning::No figures from a $BASE_REF build found, so only the budget is checked, not the growth."
+            exit 0
+          fi
+          if [ "$best_has" -lt "$total" ]; then
+            missing=$(for a in $want; do [ -d "base/$a" ] || printf ' %s' "$a"; done)
+            echo "::warning::No $BASE_REF build had every figure set, so growth is checked against $best, which has no$missing."
+          fi
+          echo "label=$best" >> "$GITHUB_OUTPUT"
+          echo "Base figures from $best"
       - name: Check the budget
         env:
           BASE_LABEL: ${{ steps.base.outputs.label }}
