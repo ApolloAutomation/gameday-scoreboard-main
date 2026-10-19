@@ -39,6 +39,8 @@ From here a board you built works like any Game Day Scoreboard. Follow [Set up y
 
 A DIY board gets every release, built for its pinout, from the same release feed as a Game Day Scoreboard. It checks for a new release every 6 hours. When one is out, an Install button appears on the device page and the update goes over Wi-Fi. Turn on **Install updates automatically** and the panel installs a new release on its own between 3 and 5 AM, never during a game it is showing. It's off unless you turn it on. See [Updates](/using/updates/).
 
+A **Follow beta** switch in the Device card gets test versions of the next release before everyone else. They can have bugs. A beta is named for the release it leads up to, plus a build number, like `2026.10.1-beta.20`. With **Follow beta** on, the panel is offered each newer beta, to take with **Install**, or overnight with **Install updates automatically** on. Turn it on while the panel runs a release and it waits for a beta of the next release; until one is out, the Firmware box says **You're ahead of the latest beta**. Turn it off while the panel runs a beta and it waits for the release that beta leads up to. Once that release ships, the Firmware box offers it with **Install**, and the panel installs it overnight with **Install updates automatically** on.
+
 Each build has a variant name, and the variant names the folder the panel reads updates from:
 
 | Variant | Build | Used for | Updates from |
@@ -50,7 +52,3 @@ Each build has a variant name, and the variant names the folder the panel reads 
 The 128x64 build reads its updates from the `moonhub75` folder too. The panel saves its layout the first time it starts, so that update keeps it two panels wide.
 
 Each release on [GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
-
-:::note[Coming in the next release]
-A **Follow beta** switch on the device page gets test versions of the next release before everyone else. They can have bugs. Turned off, the panel stays on its beta until the next release.
-:::

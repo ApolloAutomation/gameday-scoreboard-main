@@ -51,9 +51,7 @@ The panel only joins 2.4 GHz networks. If your router has separate names for 2.4
 
 Use your main network, not a guest network. A guest network can let the panel join but keep your phone from reaching it afterwards.
 
-:::note[Coming in the next release]
-Some bar, hotel and dorm Wi-Fi lets the panel join and then wants a sign-in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it says **Wi-Fi needs sign-in, use home or a hotspot** with the QR code for the app. Set it up on a home network or a phone hotspot instead. The message goes away by itself once scores come through.
-:::
+Some bar, hotel and dorm Wi-Fi lets the panel join and then wants a sign-in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it says **Wi-Fi needs / sign-in / use home or / a hotspot** next to the QR code for the app. Set it up on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes away by itself once scores come through.
 
 ## What the panel shows once it's online
 
@@ -87,8 +85,4 @@ Every network you set up is added to a list of up to five. Set the panel up on a
 
 The Device card on the device page lists the saved networks under **Wi-Fi networks**. **Connected** marks the one in use, and **Tried first** marks the one it tries first. **Forget** takes a network off the list.
 
-**Reset Wi-Fi** and **Factory reset** on the device page clear the whole list. See [Wi-Fi](/using/wifi/) for more.
-
-:::note[Coming in the next release]
-**Reset Wi-Fi** keeps the saved networks. The panel restarts into setup for 15 minutes so you can give it a new network. If you unplug it and plug it back in, or the 15 minutes run out, it goes back to the networks it already knows. While it's in setup, the panel takes a turn saying **Unplug it to rejoin saved Wi-Fi**. **Factory reset** still erases everything.
-:::
+[Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) keeps the saved networks. The panel restarts into setup for 15 minutes so you can give it a new network. While it's in setup, the panel takes a turn saying **Unplug it to / rejoin / saved Wi-Fi**. If you unplug it and plug it back in, or the 15 minutes run out, it goes back to the networks it already knows. Only [Factory reset](/using/buttons-and-resets/#factory-reset) clears the list, along with everything else. See [Wi-Fi](/using/wifi/) for more.

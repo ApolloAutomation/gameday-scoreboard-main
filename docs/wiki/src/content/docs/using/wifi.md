@@ -13,17 +13,17 @@ The panel only joins 2.4 GHz networks. If your router has separate names for 2.4
 
 Use your main network, not a guest network. A guest network can let the panel join but keep your phone from reaching it afterwards, so the app and the device page can't find it.
 
+Some bar, hotel and dorm Wi-Fi lets the panel join and then wants you to sign in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it covers the board with **Wi-Fi needs / sign-in / use home or / a hotspot** and the QR code for the app, and the device page says **Wi-Fi needs a sign-in**. Put the panel on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes away by itself once scores come through.
+
 ## Saved networks
 
 The panel remembers up to five Wi-Fi networks, like your home, a phone hotspot and a friend's house. At start-up it joins whichever saved network it can see, trying the last one that worked first. Set it up on a phone hotspot for a tailgate and it still knows your home network when you get back.
 
 The Device card on the device page lists the saved networks under **Wi-Fi networks**, in the order the panel tries them, with **Connected** beside the one it's on, or **Tried first** beside the top one. **Forget** takes a network off the list. If the panel is on that network now, it stays connected until that connection drops or the panel restarts, and after that it doesn't join that network again, unless it was the only one on the list (see below).
 
-When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi: the panel keeps joining that network and puts it back on the list the next time it connects. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and [Factory reset](/using/buttons-and-resets/#factory-reset) clear them all.
+When the list is full, adding a sixth network drops the one at the bottom. The panel always keeps one network to join, so forgetting the last one doesn't take it off Wi-Fi: the panel keeps joining that network and puts it back on the list the next time it connects. Only [Factory reset](/using/buttons-and-resets/#factory-reset) clears them all.
 
-:::note[Coming in the next release]
-Reset Wi-Fi keeps the saved networks. Only Factory reset clears them.
-:::
+[Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) keeps the saved networks. The panel restarts into setup for 15 minutes so you can add a network, and takes a turn saying **Unplug it to / rejoin / saved Wi-Fi**. Unplug it and plug it back in, or let the 15 minutes run out, and it goes back to the saved networks. If you're still connected to its hotspot or the app when the time is up, it waits a little longer.
 
 ## Adding a network
 
@@ -46,11 +46,7 @@ A short drop, like a mesh system moving the panel to another access point, doesn
 
 When the network comes back, the panel rejoins and the board comes back by itself.
 
-:::note[Coming in the next release]
-On a bar, hotel or dorm Wi-Fi that lets the panel join but then wants you to sign in on a web page, the panel says **Wi-Fi needs sign-in, use home or a hotspot**, with the QR code for the app. The panel can't sign in to those pages, so set it up on a home network or a phone hotspot. The message goes away by itself once scores come through.
-
-The device page's Diagnostics count every Wi-Fi drop and its cause, and draw the last day of signal. See [The device page](/using/device-page/#the-device-card).
-:::
+To see how often it happens, look under **Diagnostics** in the Device card on the device page. Under **Signal** the page draws the last day of Wi-Fi signal, says when the signal is weak, and counts the **Wi-Fi drops** of the last day with the cause of the last one. See [The device page](/using/device-page/#the-device-card).
 
 ## The panel's address
 
