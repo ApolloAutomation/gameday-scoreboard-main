@@ -154,6 +154,35 @@ visible changed. `docs/wiki/README.md` has the page conventions, and
 - League or team logos committed to the repo. The panel fetches logos
   from ESPN at runtime.
 
+## Moving to a new address
+
+The project's site is the repo's GitHub Pages address today,
+https://apolloautomation.github.io/gameday-scoreboard-main. The installer,
+the changelog and every update manifest the panels read live under it.
+Moving to another address (a domain of its own, say) is a short edit in
+these places:
+
+- `site_base` in `firmware/gameday-common.yaml`. Every update URL is built
+  from it, the bar builds' included.
+- `SITE_URL` in the `env:` block of `.github/workflows/build.yml` and of
+  `.github/workflows/site.yml`.
+- `SITE_URL` in `firmware/web/app.js` (the device page's changelog link).
+  Run `python3 scripts/build_web.py` afterwards and commit both bundles.
+- `BASE` in `scripts/site_seo.py`, then the canonical, `og:url`,
+  `og:image` and `twitter:image` tags in each `docs/site` page, which must
+  be absolute. `python3 scripts/site_seo.py check docs/site` lists every
+  tag that doesn't match yet. The site's own links are relative, so they
+  need nothing.
+- The links in the README, this file, `docs/wiki` and
+  `.github/ISSUE_TEMPLATE`, and the expectations in `tests/web/page.spec.js`
+  and the `--selftest` of `scripts/factory_flash.py`:
+  `git grep apolloautomation.github.io` finds them all.
+- The custom domain in the repo's Pages settings, and its DNS.
+
+Panels already running firmware keep reading the old address until they
+install a release built with the new one, so keep the old address serving
+the update manifests (or redirecting to the new ones) until they have.
+
 ## License
 
 By contributing you agree that your work is released under this repo's
