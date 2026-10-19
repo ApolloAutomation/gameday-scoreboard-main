@@ -1105,6 +1105,30 @@ test("timezone follows the browser, or a zone picked by hand", async ({ page, re
   await expect(page.locator("#tzline")).toContainText("US Pacific · chosen by hand");
 });
 
+// Ojinaga keeps US Central time and Ciudad Juarez US Mountain time, both on
+// US daylight saving dates, so a browser in either sets the matching US zone.
+test.describe("a browser in Ojinaga", () => {
+  test.use({ timezoneId: "America/Ojinaga" });
+  test("sets the panel to US Central", async ({ page, request }) => {
+    await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+    await page.goto("/");
+    await expectSet(request, { tz: "1" });
+    await expect(page.locator("#toast")).toHaveText("Timezone set to US Central from this browser");
+    await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  });
+});
+
+test.describe("a browser in Ciudad Juarez", () => {
+  test.use({ timezoneId: "America/Ciudad_Juarez" });
+  test("sets the panel to US Mountain", async ({ page, request }) => {
+    await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+    await page.goto("/");
+    await expectSet(request, { tz: "2" });
+    await expect(page.locator("#toast")).toHaveText("Timezone set to US Mountain from this browser");
+    await expect(page.locator("#tzline")).toContainText("US Mountain · set from this browser");
+  });
+});
+
 test("the timezone line's choose manually and follow this browser work from the keyboard", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");
