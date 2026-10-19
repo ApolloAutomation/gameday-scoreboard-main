@@ -9,3 +9,9 @@ substitutions:
 packages:
   controller: !include controllers/scoreboard75.yaml
   common: !include gameday-common.yaml
+
+# Lets ESPHome Device Builder adopt a panel it discovers: the adopted config
+# is a short file that pulls this one in from GitHub.
+dashboard_import:
+  package_import_url: github://ApolloAutomation/gameday-scoreboard-main/firmware/gameday-scoreboard75.yaml@main
+  import_full_config: false
