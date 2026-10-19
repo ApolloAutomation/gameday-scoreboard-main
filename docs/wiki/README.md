@@ -1,6 +1,6 @@
 # Game Day Scoreboard docs
 
-This is the documentation site for Game Day Scoreboard, built with [Astro](https://astro.build) and [Starlight](https://starlight.astro.build). It covers setting up a panel, using it, fixing problems, and building one on your own board. It has no published home yet; the pages read fine as markdown on GitHub.
+This is the documentation site for Game Day Scoreboard, built with [Astro](https://astro.build) and [Starlight](https://starlight.astro.build). It covers setting up a panel, using it, fixing problems, and building one on your own board. It has no published home yet. You can read the pages on GitHub under `src/content/docs/`, but links between pages and the note and caution boxes only work in the built site, so run it locally (below) to browse it properly.
 
 ## Run it locally
 

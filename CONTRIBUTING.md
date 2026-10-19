@@ -115,8 +115,8 @@ The device page has browser tests against a mock panel. In `tests/web`,
 run `npm ci` and `npx playwright install chromium` once, then `npm test`.
 
 If you edit `firmware/web/app.js` or `app.css`, run
-`python scripts/build_web.py` and commit the regenerated `bundle.js`. CI
-fails the PR if it is stale.
+`python3 scripts/build_web.py` and commit the regenerated `bundle.js` and
+`bundle-demo.js`. CI fails the PR if either is stale.
 
 If you change what the panel does, run it on a panel for a while
 (during a game if the change touches live scoring) and say in the PR
@@ -127,7 +127,9 @@ what you tested on: controller, layout, how long, what it showed.
 The docs are built from `docs/wiki` (Astro + Starlight); the pages are
 the markdown under [docs/wiki/src/content/docs/](docs/wiki/src/content/docs/).
 They have no published home of their own yet, and CI builds them on every
-pull request that touches them. If your change alters what
+pull request that touches them. On GitHub the pages read as plain markdown:
+links between pages and the note boxes only work in the built site, which
+`npm run dev` in `docs/wiki` previews. If your change alters what
 the panel shows, a setting, a button hold or anything else an owner or
 DIY builder would notice, update or add the page for it under
 `docs/wiki/src/content/docs/` in the same pull request. CI fails a PR

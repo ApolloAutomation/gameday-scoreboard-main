@@ -8,7 +8,7 @@ sidebar:
 The panel updates its own firmware over Wi-Fi. There is nothing to plug in. What changed in each release is on the [What's new](/changelog/) page.
 
 :::note[Coming in the next release]
-The panel reads its updates from the Apollo Automation release feed, on the project's site at `apolloautomation.github.io/gameday-scoreboard-main`, and the **Release notes** link in the Firmware box opens the changelog there. The first Apollo Automation release starts that feed; until then a check finds no update.
+The panel reads its updates from the Apollo Automation release feed, on the project's site at `apolloautomation.github.io/gameday-scoreboard-main`, and the **Release notes** link in the Firmware box opens the changelog there. The first Apollo Automation release starts that feed. Until then the Firmware box says **Not checked yet**, and **Check for updates** says it could not reach the update server. Nothing is wrong with the panel.
 :::
 
 ## How the panel checks

@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting it. Issues here are public, so leave out Wi-Fi passwords and anything else private.
-        Bought a scoreboard and need help with it? The [support page](https://apolloautomation.github.io/gameday-scoreboard-main/support/) has the common fixes and the support email.
+        Bought a scoreboard and need help with it? The [support page](https://apolloautomation.github.io/gameday-scoreboard-main/support/) has the common fixes. If none of them helps, carry on with this form.
   - type: textarea
     id: what-happened
     attributes:
@@ -37,7 +37,8 @@ body:
       label: Controller
       options:
         - Game Day Scoreboard (bought it)
-        - Game Day Scoreboard controller, built it myself
+        - scoreboard75 controller board, built it myself
+        - Apollo M-1 LED Matrix (Rev6)
         - MoonHub75 or another ESP32-S3 HUB75 board, built it myself
         - Not sure
     validations:

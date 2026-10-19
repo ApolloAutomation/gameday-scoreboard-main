@@ -1,6 +1,6 @@
 ---
 title: "FAQ"
-description: "Common questions about Game Day Scoreboard: the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and how fast support answers."
+description: "Common questions about Game Day Scoreboard: the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and where to get support."
 sidebar:
   order: 4
 ---
