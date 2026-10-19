@@ -1111,7 +1111,8 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     if (document.activeElement !== tzsel) tzsel.value = String(S.tz);
     line.innerHTML = "";
     line.appendChild(el("b", null, cur || "Not set"));
-    const link = el("a", "lnk");
+    // A button, not a bare link, so the keyboard and screen readers reach it.
+    const link = el("button", "lnk");
     if (auto) {
       line.appendChild(el("span", "muted", mine ? " · set from this browser" : " · this browser's zone is not in the list"));
       link.textContent = "choose manually";

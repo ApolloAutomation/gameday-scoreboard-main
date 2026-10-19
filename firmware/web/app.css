@@ -258,7 +258,7 @@ button { font: inherit; color: inherit; }
 /* Time card */
 .tzline { padding: 6px 0 2px; font-size: 14px; }
 .tzline .muted { color: var(--muted); }
-.tzline .lnk { margin-left: 10px; font-size: 12px; cursor: pointer; }
+.tzline .lnk { margin-left: 10px; font-size: 12px; cursor: pointer; background: none; border: 0; padding: 0; color: var(--accent); }
 
 /* Mode bar */
 /* mode pills */

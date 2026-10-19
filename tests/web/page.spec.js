@@ -942,11 +942,30 @@ test("timezone follows the browser, or a zone picked by hand", async ({ page, re
   await expect(page.locator("#toast")).toHaveText("Timezone set to US Central from this browser");
   await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
 
-  await page.locator("#tzline a", { hasText: "choose manually" }).click();
+  await page.locator("#tzline .lnk", { hasText: "choose manually" }).click();
   await expect(page.locator("#tzpick")).toBeVisible();
   await page.locator("#tzsel").selectOption({ label: "US Pacific" });
   await expectSet(request, { tzauto: "0", tz: "4" });
   await expect(page.locator("#tzline")).toContainText("US Pacific · chosen by hand");
+});
+
+test("the timezone line's choose manually and follow this browser work from the keyboard", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#tzline")).toContainText("US Central · set from this browser");
+  const choose = page.locator("#tzline .lnk");
+  await expect(choose).toHaveRole("button");
+  await choose.focus();
+  await expect(choose).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#tzpick")).toBeVisible();
+
+  await reset(request, { tz: 4, tz_name: "US Pacific", tz_auto: false });
+  await page.reload();
+  const follow = page.getByRole("button", { name: "follow this browser (US Central)" });
+  await follow.focus();
+  await page.keyboard.press("Enter");
+  await expectSet(request, { tzauto: "1" });
 });
 
 test("the panel picker posts the new layout", async ({ page, request }) => {
