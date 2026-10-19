@@ -216,7 +216,9 @@ with `power_ok` on the device page.
 ## Crash reports and health
 
 `components/crash_report` keeps the last crash (log lines and backtrace)
-across restarts; `python3 scripts/crash_report.py <panel>` prints it and
+across restarts, and leaves out a restart the firmware asked for (it reads
+the planned flag in the health block's restart log, the firmware's only
+RTC_NOINIT variable); `python3 scripts/crash_report.py <panel>` prints it and
 decodes the backtrace with the release's ELF. `health.h` records why the
 panel last started (planned, power on, crash, watchdog, brownout) in RTC
 memory and reports it, with uptime, memory and the ESPN status, in the
@@ -282,8 +284,10 @@ Generators (`build_web.py`, `build_teams.py`, `build_team_colors.py`,
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.
-- `make -C tests fuzz`: mutated ESPN documents and settings requests under
-  the address and undefined behavior sanitizers, seeded from the fixtures.
+- `make -C tests fuzz`: mutated ESPN documents, the Date and Retry-After
+  headers, the sign-in probe's answer, the boot cache and settings requests,
+  under the address and undefined behavior sanitizers, seeded from the
+  fixtures.
 - `tests/web`: Playwright tests of the device page against
   `tests/web/mock_device.py`, which reads the settings keys and limits from
   the C++ headers.
