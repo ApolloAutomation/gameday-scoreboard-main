@@ -22,7 +22,7 @@ A USB install from the browser installer is different. It erases whatever was on
 
 You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 
-1. Open the installer at [gamedayscoreboard.app](https://gamedayscoreboard.app/). It's for the Game Day Scoreboard controller.
+1. Open the [installer](https://apolloautomation.github.io/gameday-scoreboard-main/). It's for the Game Day Scoreboard controller.
 2. Plug the controller into the computer with the USB cable.
 3. Click **Install Game Day Scoreboard**.
 4. Wait for the install to finish.

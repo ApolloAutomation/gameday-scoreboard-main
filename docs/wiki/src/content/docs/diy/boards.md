@@ -57,11 +57,11 @@ Any other ESP32-S3 HUB75 board with at least 16 MB of flash and octal PSRAM, the
 
 Give your copy its own `variant` name in the top-level file. The variant picks the folder the panel checks for updates. A build that keeps `moonhub75` installs the MoonHub75 release over itself when an update comes out, with the wrong pins. With its own name, the panel updates when you rebuild it.
 
-A pin map in `firmware/controllers/` and a line on the DIY page make a good first pull request. Say which panel you used and how long it ran. See [CONTRIBUTING.md](https://github.com/gameday-scoreboard/gameday-scoreboard/blob/dev/CONTRIBUTING.md#where-help-is-wanted).
+A pin map in `firmware/controllers/` and a line on the DIY page make a good first pull request. Say which panel you used and how long it ran. See [CONTRIBUTING.md](https://github.com/ApolloAutomation/gameday-scoreboard-main/blob/dev/CONTRIBUTING.md#where-help-is-wanted).
 
 ## The Game Day Scoreboard controller is a different board
 
-The Game Day Scoreboard controller uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own installer at [gamedayscoreboard.app](https://gamedayscoreboard.app/).
+The Game Day Scoreboard controller uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own installer, the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/).
 
 :::caution
 On a board you built, use the DIY installer or build `gameday.yaml`. Never flash `gameday-scoreboard75.yaml` or the main installer's firmware to a MoonHub75-pinout board. The panel pins won't match, and that build takes its updates from the controller's feed.

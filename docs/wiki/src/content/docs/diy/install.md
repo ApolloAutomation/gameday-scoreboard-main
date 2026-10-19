@@ -5,10 +5,10 @@ sidebar:
   order: 4
 ---
 
-The [DIY installer](https://gamedayscoreboard.app/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout from your browser. You don't need ESPHome or any other software.
+The [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout from your browser. You don't need ESPHome or any other software.
 
 :::caution
-Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only. If you have a Game Day Scoreboard controller, use the [main installer](https://gamedayscoreboard.app/) instead.
+Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only. If you have a Game Day Scoreboard controller, use the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/) instead.
 :::
 
 ## Before you start
@@ -19,7 +19,7 @@ Installing erases whatever firmware was on the board. This installer is for boar
 
 ## Install
 
-1. Open the [DIY installer](https://gamedayscoreboard.app/install/diy/) in Chrome or Edge.
+1. Open the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) in Chrome or Edge.
 2. Click the picture that matches your panels: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). This sets the layout the scoreboard starts with. The Install button appears once you pick.
 3. Plug the board into the computer over USB.
 4. Click **Install for MoonHub75** and pick the board's port when the browser asks.
@@ -49,7 +49,7 @@ Each build has a variant name, and the variant names the folder the panel reads 
 
 The 128x64 build reads its updates from the `moonhub75` folder too. The panel saves its layout the first time it starts, so that update keeps it two panels wide.
 
-Each release on [GitHub](https://github.com/gameday-scoreboard/gameday-scoreboard/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
+Each release on [GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
 
 :::note[Coming in the next release]
 When the release feed can't be read, the panel tries the same files on a second host, updates.gameday-scoreboard.com. A **Follow beta** switch on the device page gets test versions of the next release before everyone else. They can have bugs. Turned off, the panel stays on its beta until the next release.

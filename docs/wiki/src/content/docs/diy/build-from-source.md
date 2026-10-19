@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-Build from the YAML when your board has its own pins, when you want to change something, or when you want your own keys on the panel. Everything you need is in the [firmware repo](https://github.com/gameday-scoreboard/gameday-scoreboard).
+Build from the YAML when your board has its own pins, when you want to change something, or when you want your own keys on the panel. Everything you need is in the [firmware repo](https://github.com/ApolloAutomation/gameday-scoreboard-main).
 
 ## What's in the repo
 
@@ -65,11 +65,11 @@ CI checks the rule: a pull request into `main` or a release tag fails when the p
 ## Get the code
 
 ```sh
-git clone https://github.com/gameday-scoreboard/gameday-scoreboard
+git clone https://github.com/ApolloAutomation/gameday-scoreboard-main
 ```
 
 ```sh
-cd gameday-scoreboard
+cd gameday-scoreboard-main
 ```
 
 ## Compile
@@ -132,4 +132,4 @@ python scripts/build_web.py
 
 ## Contributing
 
-Bug reports, test fixtures from odd games, pin maps for new boards and device page fixes are all welcome. [CONTRIBUTING.md](https://github.com/gameday-scoreboard/gameday-scoreboard/blob/dev/CONTRIBUTING.md) says where help is wanted, how to branch and what CI checks.
+Bug reports, test fixtures from odd games, pin maps for new boards and device page fixes are all welcome. [CONTRIBUTING.md](https://github.com/ApolloAutomation/gameday-scoreboard-main/blob/dev/CONTRIBUTING.md) says where help is wanted, how to branch and what CI checks.

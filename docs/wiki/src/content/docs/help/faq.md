@@ -72,6 +72,6 @@ Your team and settings stay through an update. See [Updates](/using/updates/).
 If the update server doesn't answer, the panel checks a second copy of the same files at `updates.gameday-scoreboard.com`.
 :::
 
-## How fast does support answer?
+## Where do I get support?
 
-Email [support@gameday-scoreboard.com](mailto:support@gameday-scoreboard.com) and we reply within one business day. See [Get support](/help/support/) for what to include.
+Support is on GitHub: [open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues). See [Get support](/help/support/) for what to include.

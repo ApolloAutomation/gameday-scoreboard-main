@@ -46,7 +46,7 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-REPO = "gameday-scoreboard/gameday-scoreboard"
+REPO = "ApolloAutomation/gameday-scoreboard-main"
 CHIP = "esp32s3"
 ESPRESSIF_VID = 0x303A
 LOG_FIELDS = ["time", "name", "mac", "variant", "version", "image", "sha256", "result", "boot_log"]

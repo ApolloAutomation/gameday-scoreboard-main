@@ -34,7 +34,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-REPO = "gameday-scoreboard/gameday-scoreboard"
+REPO = "ApolloAutomation/gameday-scoreboard-main"
 CACHE = Path.home() / ".cache" / "gameday-scoreboard" / "elf"
 # A release build is made by CI a few minutes before the release is published.
 BUILD_SLACK_S = 3 * 3600
