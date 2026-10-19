@@ -41,8 +41,6 @@ class CrashReport : public Component {
   void setup() override;
   void loop() override;
   void dump_config() override;
-  // Marks the restart as asked for, for the next start.
-  void on_shutdown() override;
   // After the preferences are ready and before the API, so a log client
   // that connects and clears the crash handler's report can't beat us to it.
   float get_setup_priority() const override { return setup_priority::BUS; }

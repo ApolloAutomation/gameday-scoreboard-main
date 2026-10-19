@@ -57,8 +57,15 @@ static_assert(::espn::kResetPowerOn == ESP_RST_POWERON && ::espn::kResetSoftware
                   ::espn::kResetPowerGlitch == ESP_RST_PWR_GLITCH && ::espn::kResetCpuLockup == ESP_RST_CPU_LOCKUP,
               "health.h reset reasons no longer match esp_reset_reason_t");
 
-// Survives a restart, a crash and a watchdog (health.h)
+// Survives a restart, a crash and a watchdog (health.h). Keep it the only
+// RTC_NOINIT variable in the firmware: one placed before it in link order
+// would move it, and the first start after an update would read an invalid
+// log and lose the boot count, the last fault and the planned flag.
 RTC_NOINIT_ATTR static ::espn::BootLog boot_log;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+// For the crash report (components/crash_report): this start is a restart
+// the firmware asked for. It sets up before setup() below clears the flag.
+bool boot_was_planned() { return ::espn::boot_log_valid(boot_log) && boot_log.planned != 0; }
 
 // curl's, which ESPN's edge accepts (poll_timing.h).
 static const char *const USER_AGENT = ::espn::kUserAgent;

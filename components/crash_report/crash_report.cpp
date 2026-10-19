@@ -28,13 +28,20 @@ static const char *const HANDLER_TAG = "esp32.crash";
 
 CrashReport *global_crash_report = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-// Set on the way down from a restart the firmware asked for, and read and
-// cleared at the next start (save_for_start in capture.h). RTC memory keeps
-// it through a restart, a crash and a watchdog; after a power cut it holds
-// noise, which matches by a one in four billion chance, and a power-on start
-// saves nothing anyway.
-RTC_NOINIT_ATTR static uint32_t planned_mark;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-static constexpr uint32_t PLANNED = 0x47444352;  // "GDCR"
+}  // namespace crash_report
+
+namespace gameday {
+// Whether this start is a restart the firmware asked for, read from the
+// restart log the gameday component keeps in RTC memory (gameday.cpp, the
+// planned flag its on_shutdown sets). The crash report sets up before that
+// component clears the flag. Weak, so a build without the gameday component
+// treats every start as unplanned. The crash report keeps no RTC variable of
+// its own: a second one would move the restart log in RTC memory and void it
+// on the first start after an update.
+__attribute__((weak)) bool boot_was_planned() { return false; }
+}  // namespace gameday
+
+namespace crash_report {
 
 static_assert(RESET_PANIC == ESP_RST_PANIC && RESET_INT_WDT == ESP_RST_INT_WDT && RESET_TASK_WDT == ESP_RST_TASK_WDT &&
                   RESET_WDT == ESP_RST_WDT && RESET_BROWNOUT == ESP_RST_BROWNOUT,
@@ -42,8 +49,7 @@ static_assert(RESET_PANIC == ESP_RST_PANIC && RESET_INT_WDT == ESP_RST_INT_WDT &
 
 void CrashReport::setup() {
   global_crash_report = this;
-  const bool planned = planned_mark == PLANNED;
-  planned_mark = 0;
+  const bool planned = gameday::boot_was_planned();
   if (logger::global_logger != nullptr) {
     logger::global_logger->add_log_callback(
         this, [](void *self, uint8_t level, const char *tag, const char *message, size_t len) {
@@ -128,8 +134,6 @@ void CrashReport::loop() {
   if (!this->need_time_ && !this->clear_pending_)
     this->disable_loop();
 }
-
-void CrashReport::on_shutdown() { planned_mark = PLANNED; }
 
 void CrashReport::dump_config() {
   ESP_LOGCONFIG(TAG, "Crash report:");
