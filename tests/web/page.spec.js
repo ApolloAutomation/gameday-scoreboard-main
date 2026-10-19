@@ -737,6 +737,19 @@ test("follow beta: off by default, posts 0 and 1, hidden when the firmware has n
   await expect(page.locator("#betaRow")).toBeHidden();
 });
 
+test("the update switches show a tap at once and keep it through a slow re-read", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator('.sw[data-set="autoupd"]')).not.toHaveClass(/\bon\b/);
+  await slowReads(page, 1000);
+  await page.locator('.sw[data-set="autoupd"]').click();
+  await page.locator('.sw[data-set="beta"]').click();
+  await staysAs(page.locator('.sw.on[data-set="autoupd"], .sw.on[data-set="beta"]'), ["", ""], 2500);
+  expect(await sets(request)).toEqual([{ autoupd: "1" }, { beta: "1" }]);
+  const st = await deviceState(request);
+  expect([st.autoupd, st.beta]).toEqual([true, true]);
+});
+
 test("a beta is newer than its release number, and a release is behind the beta before it", async ({ page, request }) => {
   await reset(request, { beta: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
