@@ -570,12 +570,18 @@ jobs:
         run: python3 tests/web/mock_device.py --selftest
       - name: Fuzz the parsers (30 s a target)
         run: make -C tests fuzz
-      - name: Keep the input a fuzz crash left
+      # libFuzzer names the input by what went wrong: a crash, a run over
+      # -timeout, one over -rss_limit_mb, or a leak.
+      - name: Keep the input a fuzz failure left
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes
-          path: tests/build/crash-*
+          path: |
+            tests/build/crash-*
+            tests/build/timeout-*
+            tests/build/oom-*
+            tests/build/leak-*
           if-no-files-found: ignore
 
   web-tests:

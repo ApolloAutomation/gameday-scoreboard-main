@@ -74,9 +74,10 @@ the same ground for people; this file is the short version.
   sanitizers for about a minute, as CI does on every PR;
   `make -C tests fuzz-long` runs 30 minutes a target. clang with libFuzzer
   makes it coverage guided; other compilers get a random mutator. A crash
-  leaves its input in `tests/build/crash-*`; pass that file to
-  `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a host test
-  with the fix.
+  leaves its input in `tests/build/crash-*`, and libFuzzer's timeouts,
+  memory overruns and leaks in `timeout-*`, `oom-*` and `leak-*`; pass that
+  file to `tests/build/fuzz_espn` (or `fuzz_set`) to replay it, and add a
+  host test with the fix.
 - Size budget: CI's "Size budget" job checks each build's flash (the OTA
   image) and static internal RAM (from the ELF), and the memory each ESPN
   read takes on the host (`make -C tests heap`, `tests/heap_budget.cpp`),
