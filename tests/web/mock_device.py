@@ -173,7 +173,9 @@ def clamp(v, lo, hi):
 def parse_team_ref(v):
     """parse_team_ref() plus known_team(): (league, id) of a team in teams.h, else None."""
     lg, colon, tid = v.partition(":")
-    m = re.match(r"\s*\d+", tid, re.ASCII)
+    # strtoull: leading spaces and a plus sign are fine; a minus sign wraps
+    # past 32 bits and is refused.
+    m = re.match(r"\s*\+?\d+", tid, re.ASCII)
     ref = (lg, int(m.group())) if colon and lg in LEAGUES and m else None
     return ref if ref in TEAMS else None
 

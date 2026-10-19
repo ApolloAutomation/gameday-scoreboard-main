@@ -64,6 +64,8 @@
     {"name": "unknown league is refused", "set": [["team", "xfl:6"]], "expect": {"team": "nfl:6"}},
     {"name": "team id 0 is refused", "set": [["team", "nfl:0"]], "expect": {"team": "nfl:6"}},
     {"name": "a team id past 32 bits is refused, not wrapped to another team", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:4294967302"]], "expect": {"team": "mlb:15"}},
+    {"name": "a team id with a plus sign is read as the number", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:+6"]], "expect": {"team": "nfl:6"}},
+    {"name": "a team id with a minus sign is refused", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:-6"]], "expect": {"team": "mlb:15"}},
     {"name": "a team id in other digits is refused", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:\u0666"]], "expect": {"team": "mlb:15"}},
     {"name": "empty team is refused", "set": [["team", ""]], "expect": {"team": "nfl:6"}},
 
@@ -71,6 +73,7 @@
     {"name": "fav slot 4", "set": [["fav4", "nhl:25"]], "expect": {"favs": ["", "", "", "nhl:25"]}},
     {"name": "fav slot none clears it", "start": {"favs": ["mlb:15", "nfl:6", "", ""]}, "set": [["fav2", "none"]], "expect": {"favs": ["mlb:15", "", "", ""]}},
     {"name": "empty fav slot clears it", "start": {"favs": ["mlb:15", "nfl:6", "nhl:25", ""]}, "set": [["fav3", ""]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
+    {"name": "a fav team id with a plus sign is read as the number", "start": {"favs": ["mlb:15", "", "", ""]}, "set": [["fav2", "nfl:+6"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
     {"name": "unknown fav team is refused", "start": {"favs": ["mlb:15", "nfl:6", "", ""]}, "set": [["fav2", "nfl:99999"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
     {"name": "garbage fav is refused", "start": {"favs": ["mlb:15", "nfl:6", "", ""]}, "set": [["fav2", "cowboys"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
     {"name": "fav slot 5 is not a key", "set": [["fav5", "mlb:15"]], "status": 400, "expect": {"favs": ["", "", "", ""]}},
