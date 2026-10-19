@@ -3437,7 +3437,7 @@ std::string GamedayComponent::health_json_() {
   if (n <= 0 || n >= (int) sizeof(buf))
     return "{}";
   // The heat and power keys go in before its closing brace (guard.h)
-  char guard[96];
+  char guard[::espn::kGuardJsonSize];
   int g = ::espn::guard_json_keys(guard, sizeof(guard), this->heat_.last_c, this->heat_.step, this->power_log_);
   if (g <= 0 || g >= (int) sizeof(guard))
     return std::string(buf, n);

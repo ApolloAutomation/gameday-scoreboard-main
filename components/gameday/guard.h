@@ -144,6 +144,10 @@ inline GuardMark guard_mark(uint8_t heat_step, bool power_capped) {
   return heat_step > 0 ? GuardMark::HEAT : GuardMark::NONE;
 }
 
+// Room for the keys below; GamedayComponent::health_json_ leaves them out
+// when they don't fit, and tests/test_parse.cpp checks the longest fits.
+static const size_t kGuardJsonSize = 96;
+
 // The keys added to the health object: ,"temp":41.5,"heat":0,"brownouts":0,"power":"ok"
 // temp is left out before the first reading, and for one that isn't a finite
 // number (JSON has no inf).

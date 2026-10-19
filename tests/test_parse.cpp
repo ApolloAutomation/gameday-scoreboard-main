@@ -4696,8 +4696,8 @@ static void test_guard_steps() {
   CHECK(g.feed(kCoolC - 5, t + kCoolStepMs));
   CHECK_EQ((int) g.step, (int) kHeatSteps - 1);
 
-  // The keys fit the 96 bytes health_json_ gives them, cold or hot.
-  char buf[96];
+  // The keys fit the buffer guard.h sets for health_json_, cold or hot.
+  char buf[kGuardJsonSize];
   PowerLog log{};
   log.brownouts = 0xFFFFFFFFu;
   log.capped = 1;
@@ -4711,7 +4711,7 @@ static void test_guard_steps() {
 // JSON has no inf or nan, so a reading that is neither a number nor finite
 // leaves temp out like no reading at all, and the state document stays JSON.
 static void test_guard_json_finite() {
-  char buf[96];
+  char buf[kGuardJsonSize];
   PowerLog log{};
   const std::string no_temp = ",\"heat\":3,\"brownouts\":0,\"power\":\"ok\"";
   for (float c : {INFINITY, -INFINITY, NAN}) {
