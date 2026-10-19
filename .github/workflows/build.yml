@@ -236,7 +236,7 @@ jobs:
           mkdir -p out
           cp -r "${{ steps.esphome.outputs.name }}" out/${{ matrix.variant }}
           ls -R out
-      # The installer would say "Installing bharvey88.gameday-scoreboard".
+      # The installer would say "Installing ApolloAutomation.gameday-scoreboard".
       - name: Product name in the manifest
         run: ./scripts/set_manifest_name.sh out
       - uses: actions/upload-artifact@v7

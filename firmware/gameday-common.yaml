@@ -70,7 +70,7 @@ esphome:
   comment: "v${version}"
   build_path: build/gameday-${variant}
   project:
-    name: bharvey88.gameday-scoreboard
+    name: ApolloAutomation.gameday-scoreboard
     version: "${version}"
   on_boot:
     # The Brightness number restores its saved value before the HUB75 driver
