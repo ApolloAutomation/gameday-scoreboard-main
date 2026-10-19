@@ -20,15 +20,18 @@
     {"name": "mode past Live games is refused", "set": [["mode", "6"]], "expect": {"mode": 0}},
     {"name": "negative mode is refused", "start": {"mode": 4}, "set": [["mode", "-1"]], "expect": {"mode": 4}},
     {"name": "mode reads like atoi, so text is My team", "start": {"mode": 4}, "set": [["mode", "abc"]], "expect": {"mode": 0}},
+    {"name": "a mode past int's range is refused, not wrapped to My team", "start": {"mode": 4}, "set": [["mode", "4294967296"]], "expect": {"mode": 4}},
 
     {"name": "rotate in range", "set": [["rotate", "15"]], "expect": {"rotate": 15}},
     {"name": "rotate below 1 clamps up", "start": {"rotate": 10}, "set": [["rotate", "0"]], "expect": {"rotate": 1}},
     {"name": "rotate above 30 clamps down", "set": [["rotate", "31"]], "expect": {"rotate": 30}},
     {"name": "empty rotate is the minimum", "start": {"rotate": 10}, "set": [["rotate", ""]], "expect": {"rotate": 1}},
+    {"name": "rotate past int's range clamps down, not around", "set": [["rotate", "99999999999999999999"]], "expect": {"rotate": 30}},
 
     {"name": "lockon in range", "set": [["lockon", "60"]], "expect": {"lockon": 60}},
     {"name": "lockon below 5 clamps up", "set": [["lockon", "4"]], "expect": {"lockon": 5}},
     {"name": "lockon above 120 clamps down", "set": [["lockon", "121"]], "expect": {"lockon": 120}},
+    {"name": "lockon past int's range clamps down, not around", "set": [["lockon", "4294967300"]], "expect": {"lockon": 120}},
 
     {"name": "release in range", "set": [["release", "600"]], "expect": {"release": 600}},
     {"name": "release below 30 clamps up", "start": {"release": 600}, "set": [["release", "29"]], "expect": {"release": 30}},

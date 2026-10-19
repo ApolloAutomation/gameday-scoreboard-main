@@ -5,6 +5,7 @@
 // table as tests/web/mock_device.py (tests/fixtures/set_cases.json).
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -43,6 +44,15 @@ inline int clamp_lockon_minutes(int minutes) {
 
 inline int clamp_release_seconds(int seconds) {
   return seconds < kReleaseMinSeconds ? kReleaseMinSeconds : seconds > kReleaseMaxSeconds ? kReleaseMaxSeconds : seconds;
+}
+
+// A number read the way atoi reads one ("12abc" is 12, "abc" and "" are 0),
+// except that a value past int's range stops at its end. atoi leaves that
+// undefined: the panel's 32-bit library stops at the end, a 64-bit host wraps
+// "4294967296" to 0, so the host tests would check another panel than ours.
+inline int read_int(const std::string &v) {
+  long n = strtol(v.c_str(), nullptr, 10);
+  return n > INT_MAX ? INT_MAX : n < INT_MIN ? INT_MIN : (int) n;
 }
 
 // "nfl:6" -> league + id. False for "none"/"" (id 0) or garbage.
@@ -176,7 +186,7 @@ struct SetOp {
 
 // Decodes one key=value from the request. False when the key is unknown or
 // the value is refused: the firmware logs it and changes nothing. Switches
-// are on for "1" only; numbers read like atoi, so "abc" is 0.
+// are on for "1" only; numbers read like atoi (read_int), so "abc" is 0.
 inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, size_t fav_max) {
   op = SetOp{};
   auto on = [&](SetKind kind) {
@@ -192,27 +202,27 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   }
   if (k == "mode") {
     op.kind = SetKind::MODE;
-    op.value = atoi(v.c_str());
+    op.value = read_int(v);
     return op.value >= 0 && op.value < kModeCount;
   }
   if (k == "rotate") {
     op.kind = SetKind::ROTATE;
-    op.value = clamp_rotate_minutes(atoi(v.c_str()));
+    op.value = clamp_rotate_minutes(read_int(v));
     return true;
   }
   if (k == "lockon") {
     op.kind = SetKind::LOCKON;
-    op.value = clamp_lockon_minutes(atoi(v.c_str()));
+    op.value = clamp_lockon_minutes(read_int(v));
     return true;
   }
   if (k == "release") {
     op.kind = SetKind::RELEASE;
-    op.value = clamp_release_seconds(atoi(v.c_str()));
+    op.value = clamp_release_seconds(read_int(v));
     return true;
   }
   if (k == "panels") {
     op.kind = SetKind::PANELS;
-    op.value = atoi(v.c_str());
+    op.value = read_int(v);
     return true;
   }
   if (k == "tz") {
