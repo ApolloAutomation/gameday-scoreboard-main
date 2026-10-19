@@ -220,7 +220,7 @@
         </div>
         <div id="netsCard" hidden>
           <div class="sub">Wi-Fi networks</div>
-          <p class="hint">The panel joins the first of these it can see, the last one that worked first. Set up another with the Game Day app and it is added here.</p>
+          <p class="hint">The panel joins the first of these it can see, the last one that worked first. A network you set it up on through its Game Day hotspot, or the Game Day app, is added here.</p>
           <div id="nets"></div>
           <p class="hint" id="netsEmpty" hidden>No saved networks.</p>
         </div>

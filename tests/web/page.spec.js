@@ -1320,6 +1320,11 @@ test("saved Wi-Fi networks are listed in order and one can be forgotten", async 
   await expect(rows.nth(0).locator("label small")).toHaveText("Connected");
   await expect(rows.nth(1).locator("label")).toContainText("iPhone");
   await expect(page.locator("#netsEmpty")).toBeHidden();
+  // Any network the panel is set up on is saved, so the hint leads with the
+  // panel's own hotspot.
+  await expect(page.locator("#netsCard > p.hint").first()).toHaveText(
+    "The panel joins the first of these it can see, the last one that worked first."
+    + " A network you set it up on through its Game Day hotspot, or the Game Day app, is added here.");
 
   // Forget asks first; declining posts nothing.
   page.once("dialog", (d) => d.dismiss());
