@@ -48,6 +48,10 @@ static const int kRecapBackDays = kRecapMaxDays - 1;
 
 // A day of finals stays while it is no older than kRecapBackDays.
 inline bool recap_day_kept(int32_t day, int32_t today) { return (int64_t) today - day <= kRecapBackDays; }
+
+// The walk back for older finals reads today - w at step w. It reads only the
+// days recap_day_kept keeps, so nothing downloaded is thrown away at once.
+inline bool recap_back_reads(int w) { return w >= 1 && w <= kRecapBackDays; }
 // Game cards in one loop, later today and finals together, shared between
 // the leagues shown. Two logos each, so 22 stays inside the 48-logo cache
 // (four are kept pinned) and a loop does not download the same logos again

@@ -2914,7 +2914,7 @@ bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
       }
       w = 1;
     }
-    if (w <= ::espn::kRecapBackDays) {
+    if (::espn::recap_back_reads(w)) {
       j.need_recap = true;
       j.recap_forward = false;
       j.recap_league = i;
@@ -2988,7 +2988,7 @@ void GamedayComponent::apply_recap_job_() {
     d.finals = std::move(j.finals);
     ::espn::recap_merge(this->recap_days_, std::move(d));
     if (::espn::recap_count(this->recap_days_, i) >= ::espn::kRecapMinFinals ||
-        ++this->recap_back_[i] > ::espn::kRecapBackDays) {
+        !::espn::recap_back_reads(++this->recap_back_[i])) {
       this->recap_back_[i] = done;
       this->recap_back_day_[i] = today;
       ESP_LOGI(TAG, "Recent %s finals: %u", ::espn::recap_league_word(i),

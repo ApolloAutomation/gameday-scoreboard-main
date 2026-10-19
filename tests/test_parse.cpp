@@ -3219,6 +3219,15 @@ static void test_recap_back_days() {
   for (int w = 1; w <= kRecapBackDays; w++)
     CHECK(recap_day_kept(today - w, today));
   CHECK(!recap_day_kept(today - kRecapBackDays - 1, today));
+  // The walk reads steps 1 to kRecapBackDays (gameday.cpp uses recap_back_reads
+  // for both its read and its stop), and every day it reads is one kept.
+  CHECK(!recap_back_reads(0));
+  for (int w = 1; w <= kRecapBackDays; w++) {
+    CHECK(recap_back_reads(w));
+    CHECK(recap_day_kept(today - w, today));
+  }
+  CHECK(!recap_back_reads(kRecapBackDays + 1));
+  CHECK(!recap_back_reads(kRecapMaxDays + 1));  // the walk's done value
   // One final on the oldest day the walk reads and one the day before it:
   // short of kRecapMinFinals, so only age decides.
   std::vector<RecapDay> days;
