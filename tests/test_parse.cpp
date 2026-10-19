@@ -2490,6 +2490,20 @@ static void test_logo_lru() {
            std::string());
 }
 
+// Ties in the logo cache go to the first slot, and the plain-logo fallback
+// only rewrites a dark logo's path.
+static void test_logo_lru_edges() {
+  using espn::LogoSlot;
+  CHECK_EQ(espn::pick_evict({{500, false, false}, {200, true, false}, {500, false, false}}), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, false}}), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, true}}), -1);
+  CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500-dark/dal.png"),
+           std::string("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"));
+  CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"), std::string());
+  CHECK_EQ(espn::plain_logo_url(""), std::string());
+  CHECK_EQ(espn::plain_logo_url(espn::dark_logo("")), std::string());  // no logo, no fallback
+}
+
 // The wait before a failed logo is asked for again: per logo, growing with each
 // failure in a row, longer after a refusal, cleared when it loads.
 static void test_logo_backoff() {
@@ -5062,6 +5076,7 @@ int main() {
   checks++;
   failures += run_football_golden();
   test_logo_lru();
+  test_logo_lru_edges();
   test_logo_backoff();
   test_json_allocator();
   test_timezone_index();
