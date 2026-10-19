@@ -14,6 +14,30 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.10.1
+
+The first release from Apollo Automation, which now maintains Game Day Scoreboard.
+
+- Apollo Automation now maintains Game Day Scoreboard. Updates, the installers and the release notes come from its site, and the device page's links point there.
+- Reset Wi-Fi keeps your saved networks. The panel restarts into setup for 15 minutes so you can give it a new network, and says "Unplug it to rejoin saved Wi-Fi": unplug it, or let the 15 minutes run out, and it goes back to the networks it knows. Factory reset still erases everything.
+- Diagnostics on the device page count the panel's Wi-Fi drops and show the cause of the last one, with a graph of the signal over the last day. Below -75 dBm the page says "Weak signal".
+- If the panel restarts by itself, it keeps a crash report until it's cleared, even across an unplug. Open http://<your panel's address>/gameday/crash and paste what it shows into an issue. A Reboot or an update no longer counts as a crash there.
+- A Follow beta switch on the device page puts a test panel on test versions of the next release. They can have bugs, so leave it off on a panel you rely on. Turn it off and the panel offers the release once it ships.
+- Home Assistant gets a Chip Temperature sensor, the reading the panel uses to dim itself when it runs hot.
+- ESPHome Device Builder can adopt the panel, so you can build and install its firmware from Device Builder and add your own lines to it.
+- The DIY installer's firmware runs on the Apollo Automation M-1 LED Matrix (Rev6), which shares the MoonHub75's pins.
+- Kickoffs across New Year say "Tomorrow" and the right weekday. After December 31 of a year with 365 days they were a day off.
+- Through a long ESPN outage, the "no update" warning and "Can't reach ESPN" stay up instead of dropping out for a moment every 256 failed checks.
+- The ticker leaves out an over/under that is no real betting total, and the panel tells a Wi-Fi sign-in page apart more reliably.
+- The panel never installs an update on its own when the version number is malformed.
+- The team chooser's league tabs sit on their own row, so every league and Close fit on a phone screen.
+- The device page works better with a keyboard and a screen reader: the team chooser is a labeled dialog, and the Time line, the league chips and the favorites list keep your place as the page updates.
+- Install updates automatically and Follow beta flip as soon as you tap them, like the other switches. The firmware box no longer says "Installing" for good when an install never restarts the panel, and a layout change that fails leaves the picker as it was.
+- After Reset Wi-Fi or Factory reset, the device page sends you to the panel's Game Day hotspot to set it up again.
+- On the device page, each favorite's WizMote button number matches its slot after you empty one, and Favorite teams with no favorites shows your team's games, as the panel does.
+- A device page opened in a browser in Ojinaga sets the panel to US Central, and one in Ciudad Juarez to US Mountain.
+- After 49 days without a restart, the logo cache still makes room by dropping the logo used longest ago, not one it just showed.
+
 ## v2026.10.0
 
 - Pick a team from MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS or the Premier League on the device page, and the panel follows it the way it follows football.
