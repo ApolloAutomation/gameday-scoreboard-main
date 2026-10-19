@@ -78,6 +78,11 @@ struct Backoff {
   }
 };
 
+// One more read missed. The ticker and the device page warn from three in a
+// row, so the count stops at 255 instead of wrapping to 0 and dropping the
+// warning while ESPN is still out of reach.
+inline uint8_t add_miss(uint8_t misses) { return misses < 255 ? (uint8_t) (misses + 1) : misses; }
+
 // Whether a soccer cup job (one cup's team read, then the game poll when the
 // pick moved) must back off. A poll is the job's last read, so its result
 // decides. Without one, a failed or refused cup read backs off.

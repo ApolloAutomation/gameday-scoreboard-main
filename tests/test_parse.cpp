@@ -3332,6 +3332,21 @@ static void test_backoff() {
   CHECK(!is_throttle_status(503));
 }
 
+// The miss count the ticker's "no update" and the page's warning go by (three
+// or more). A panel cut off from ESPN for a day or two reached 255 and wrapped
+// to 0, and the warning went away while it was still cut off.
+static void test_miss_count() {
+  uint8_t m = 0;
+  m = add_miss(m);
+  CHECK_EQ((int) m, 1);
+  m = add_miss(add_miss(m));
+  CHECK_EQ((int) m, 3);
+  for (int i = 0; i < 1000; i++)
+    m = add_miss(m);
+  CHECK_EQ((int) m, 255);
+  CHECK(m >= 3);
+}
+
 static void test_cup_backoff() {
   // A cup job backs off when its last read failed or was refused.
   CHECK(cup_read_backs_off(true, true, false, false));   // the poll failed
@@ -4355,6 +4370,7 @@ int main() {
   test_recap();
   test_later_today();
   test_backoff();
+  test_miss_count();
   test_cup_backoff();
   test_auto_update();
   test_update_mirror();

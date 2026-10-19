@@ -869,7 +869,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     this->fav_poll_ms_ = now == 0 ? 1 : now;
   if (j.need_schedule) {
     if (!j.schedule_ok) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       this->emit_({});  // the miss shows on the ticker and the page, as in My team
       this->back_off_();  // start_fav_job_ waits it out and keeps the playlist ticking
       this->schedule_next_(0);
@@ -905,7 +905,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     }
   }
   if (!j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     this->emit_({});
     this->back_off_();
     this->schedule_next_(0);
@@ -2365,7 +2365,7 @@ void GamedayComponent::apply_job_() {
   }
   if (j.need_scan) {
     if (!j.scan_ok && j.live.empty()) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       if (this->recap_on_)
         this->live_started_ms_ = 0;  // retry the scan, not the long wait
       this->drop_team_placeholder_();  // "Looking for a live game", not a bare logo
@@ -2491,7 +2491,7 @@ void GamedayComponent::apply_job_() {
   }
   if (j.need_schedule) {
     if (!j.schedule_ok) {
-      this->misses_++;
+      this->misses_ = ::espn::add_miss(this->misses_);
       this->drop_team_placeholder_();
       this->emit_({});
       this->schedule_next_(this->back_off_());
@@ -2525,7 +2525,7 @@ void GamedayComponent::apply_job_() {
     }
   }
   if (!j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     if (this->cache_unconfirmed_ && !j.throttled) {
       // ESPN has no such game any more, or the read failed: the cache may be
       // wrong, so read the team endpoint now, not in six hours.
@@ -2613,7 +2613,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->emit_({});
     this->mark_board_ready_();
   } else if (j.polled && !j.game_ok) {
-    this->misses_++;
+    this->misses_ = ::espn::add_miss(this->misses_);
     this->drop_team_placeholder_();
     this->emit_({});
   } else if (j.polled) {
