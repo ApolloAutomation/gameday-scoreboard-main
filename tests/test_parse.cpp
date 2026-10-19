@@ -2996,7 +2996,7 @@ static bool sorted_by_kickoff(const std::vector<Pending> &v) {
   return true;
 }
 
-// The rotation's later-today cards (card 160) and finals for every league.
+// The rotation's later-today cards and finals for every league.
 static void test_later_today() {
   const uint8_t NFL = (uint8_t) League::NFL, NCAA = (uint8_t) League::NCAA, NBA = (uint8_t) League::NBA,
                 NHL = (uint8_t) League::NHL, MLB = (uint8_t) League::MLB, MCBB = (uint8_t) League::MCBB;
@@ -4037,7 +4037,7 @@ static void test_offseason() {
 
 static void test_panel_text() {
   using esphome::gameday::panel_text;
-  // An iPhone hotspot name (backlog #144)
+  // An iPhone hotspot name
   CHECK_EQ(panel_text("Sam\xE2\x80\x99s iPhone"), std::string("Sam's iPhone"));
   CHECK_EQ(panel_text("\xE2\x80\x98Hi\xE2\x80\x99"), std::string("'Hi'"));
   CHECK_EQ(panel_text("Hawai\xCA\xBBi"), std::string("Hawai'i"));
