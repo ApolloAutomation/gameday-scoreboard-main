@@ -21,6 +21,7 @@ import re
 import sys
 import tempfile
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 # The site's address with no trailing slash, the same value as site_base in
 # firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a new address").
@@ -186,8 +187,11 @@ def build(site):
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write(f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n')
     # The firmware files are for panels and the installer, not search results.
+    # Crawlers read robots.txt only at a host's root, so under a GitHub Pages
+    # project path this file does nothing until the site has its own domain.
+    prefix = urlsplit(BASE).path.rstrip("/")
     with open(os.path.join(site, "robots.txt"), "w", encoding="utf-8") as f:
-        f.write(f"User-agent: *\nDisallow: /firmware/\n\nSitemap: {BASE}/sitemap.xml\n")
+        f.write(f"User-agent: *\nDisallow: {prefix}/firmware/\n\nSitemap: {BASE}/sitemap.xml\n")
     return []
 
 
@@ -231,7 +235,9 @@ def selftest():
         assert f"<loc>{BASE}/</loc>" in sitemap and f"<loc>{BASE}/install/diy/</loc>" in sitemap
         assert "firmware" not in sitemap
         with open(os.path.join(site, "robots.txt"), encoding="utf-8") as f:
-            assert f"Sitemap: {BASE}/sitemap.xml" in f.read()
+            robots = f.read()
+        assert f"Sitemap: {BASE}/sitemap.xml" in robots
+        assert f"Disallow: {urlsplit(BASE).path.rstrip('/')}/firmware/" in robots
 
         # A copied page, a wrong canonical, a missing image and broken JSON-LD all fail.
         with open(os.path.join(site, "install/diy/index.html"), "w", encoding="utf-8") as f:
