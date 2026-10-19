@@ -29,22 +29,10 @@
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 
+#include "capture.h"
+
 namespace esphome {
 namespace crash_report {
-
-// Room for the crash handler's lines: the reason, the PC, the faulting
-// address and up to 16 backtrace addresses for each core, about 1.2 KB.
-static constexpr size_t REPORT_SIZE = 1536;
-static constexpr size_t VERSION_SIZE = 24;
-
-struct Record {
-  uint32_t count;       // unexpected restarts since the last clear; 0 is none
-  uint32_t time;        // the clock on the boot after the crash (Unix time), 0 until it had one
-  uint32_t build_time;  // ESPHOME_BUILD_TIME of the firmware that saved it
-  uint8_t reason;       // esp_reset_reason_t of that boot
-  char version[VERSION_SIZE];
-  char report[REPORT_SIZE];  // the crash handler's lines, one per line; empty for a brownout
-};
 
 class CrashReport : public Component {
  public:

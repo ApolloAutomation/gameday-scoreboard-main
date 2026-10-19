@@ -24,6 +24,7 @@
 #include "timezones.h"
 #include "update_mirror.h"
 #include "wifi_history.h"
+#include "../components/crash_report/capture.h"
 
 using namespace espn;
 
@@ -3968,6 +3969,103 @@ static void test_health_json() {
   CHECK_EQ(doc["espn_ago"].as<int>(), 30);
 }
 
+// The crash handler's console line for one of its ESP_LOGE calls, as
+// ESPHome's logger hands it to a log listener: color, header, text, reset.
+static std::string crash_line(const std::string &text) {
+  return "\033[1;31m[E][esp32.crash:439]: " + text + "\033[0m";
+}
+
+static size_t crash_feed(char *report, size_t size, size_t len, const std::string &line) {
+  return esphome::crash_report::report_append(report, size, len, line.data(), line.size());
+}
+
+static void test_crash_capture() {
+  using namespace esphome::crash_report;
+  // What the crash handler logs for a fault on core 0, with the other core's
+  // backtrace and the two addr2line hints (ESPHome 2026.10).
+  const char *lines[] = {
+      "*** CRASH DETECTED ON PREVIOUS BOOT ***",
+      "  Reason: Fault - LoadProhibited (cause 28)",
+      "  Crashed core: 0",
+      "  PC:  0x40055EBF  (fault location)",
+      "  EXCVADDR: 0x00000008  (faulting address)",
+      "  BT0: 0x40386CDF  (backtrace)",
+      "  BT1: 0x421736DD  (backtrace)",
+      "  Other core (1) backtrace:",
+      "  BT0: 0x4038665D  (backtrace)",
+      "Use: addr2line -pfiaC -e firmware.elf 0x40055EBF 0x40386CDF 0x421736DD",
+      "Other core: addr2line -pfiaC -e firmware.elf 0x4038665D",
+  };
+  char report[REPORT_SIZE];
+  report[0] = '\0';
+  size_t len = 0;
+  for (const char *l : lines)
+    len = crash_feed(report, sizeof(report), len, crash_line(l));
+  // The text of each line, one per line, without the hints; the same text
+  // scripts/crash_report.py --selftest reads.
+  const std::string want =
+      "*** CRASH DETECTED ON PREVIOUS BOOT ***\n"
+      "  Reason: Fault - LoadProhibited (cause 28)\n"
+      "  Crashed core: 0\n"
+      "  PC:  0x40055EBF  (fault location)\n"
+      "  EXCVADDR: 0x00000008  (faulting address)\n"
+      "  BT0: 0x40386CDF  (backtrace)\n"
+      "  BT1: 0x421736DD  (backtrace)\n"
+      "  Other core (1) backtrace:\n"
+      "  BT0: 0x4038665D  (backtrace)\n";
+  CHECK_EQ(std::string(report), want);
+  CHECK_EQ(len, want.size());
+
+  // A line without the header's ": " is not one of the handler's; one
+  // without the color reset keeps all its text.
+  len = crash_feed(report, sizeof(report), len, "no header here\033[0m");
+  CHECK_EQ(len, want.size());
+  len = crash_feed(report, sizeof(report), len, "[E][esp32.crash:1]: plain");
+  CHECK_EQ(std::string(report), want + "plain\n");
+
+  // The longest report the handler writes still fits: the longest reason,
+  // a faulting address and 16 backtrace addresses for each core.
+  std::string full = crash_line("*** CRASH DETECTED ON PREVIOUS BOOT ***");
+  len = 0;
+  len = crash_feed(report, sizeof(report), len, full);
+  len = crash_feed(report, sizeof(report), len,
+                   crash_line("  Reason: Debug exception - Interrupt wdt timeout on CPU0 (cause 63)"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  Crashed core: 1"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  PC:  0x40055EBF  (fault location)"));
+  len = crash_feed(report, sizeof(report), len, crash_line("  EXCVADDR: 0x3FCEBF00  (faulting address)"));
+  for (int core = 0; core < 2; core++) {
+    if (core == 1)
+      len = crash_feed(report, sizeof(report), len, crash_line("  Other core (0) backtrace:"));
+    for (int i = 0; i < 16; i++) {
+      char bt[64];
+      snprintf(bt, sizeof(bt), "  BT%d: 0x%08X  (backtrace)", i, 0x42000000u + i * 0x100u);
+      len = crash_feed(report, sizeof(report), len, crash_line(bt));
+    }
+  }
+  CHECK(len < REPORT_SIZE);
+  const std::string last = "  BT15: 0x42000F00  (backtrace)\n";
+  CHECK_EQ(std::string(report).substr(len - last.size()), last);
+
+  // A line that doesn't fit is left out, and the report stays terminated.
+  char small[64];
+  small[0] = '\0';
+  len = crash_feed(small, sizeof(small), 0, crash_line("*** CRASH DETECTED ON PREVIOUS BOOT ***"));
+  len = crash_feed(small, sizeof(small), len, crash_line("  Reason: Abort"));
+  CHECK_EQ(len, (size_t) 56);
+  len = crash_feed(small, sizeof(small), len, crash_line("  Crashed core: 0"));
+  CHECK_EQ(len, (size_t) 56);
+  CHECK_EQ(std::string(small), std::string("*** CRASH DETECTED ON PREVIOUS BOOT ***\n  Reason: Abort\n"));
+
+  // The starts that read the crash handler, and their names.
+  CHECK(reset_crashed(kResetPanic) && reset_crashed(kResetIntWdt) && reset_crashed(kResetTaskWdt) &&
+        reset_crashed(kResetWdt));
+  CHECK(!reset_crashed(kResetPowerOn) && !reset_crashed(kResetSoftware) && !reset_crashed(kResetBrownout));
+  CHECK_EQ(std::string(reason_name(kResetPanic)), std::string("crash"));
+  CHECK_EQ(std::string(reason_name(kResetTaskWdt)), std::string("task watchdog"));
+  CHECK_EQ(std::string(reason_name(kResetBrownout)), std::string("brownout"));
+  CHECK_EQ(std::string(reason_name(kResetSoftware)), std::string("other"));
+}
+
 static void test_heat_guard() {
   HeatGuard g;
   uint32_t t = 1000;
@@ -4558,6 +4656,7 @@ int main() {
   test_update_mark();
   test_boot_log();
   test_health_json();
+  test_crash_capture();
   test_heat_guard();
   test_heat_guard_cool_at_zero();
   test_power_log();

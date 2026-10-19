@@ -28,26 +28,9 @@ static constexpr time_t CLOCK_VALID = 1700000000;
 
 CrashReport *global_crash_report = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-static bool crashed(esp_reset_reason_t r) {
-  return r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
-}
-
-static const char *reason_name(uint8_t r) {
-  switch (r) {
-    case ESP_RST_PANIC:
-      return "crash";
-    case ESP_RST_INT_WDT:
-      return "interrupt watchdog";
-    case ESP_RST_TASK_WDT:
-      return "task watchdog";
-    case ESP_RST_WDT:
-      return "watchdog";
-    case ESP_RST_BROWNOUT:
-      return "brownout";
-    default:
-      return "other";
-  }
-}
+static_assert(RESET_PANIC == ESP_RST_PANIC && RESET_INT_WDT == ESP_RST_INT_WDT && RESET_TASK_WDT == ESP_RST_TASK_WDT &&
+                  RESET_WDT == ESP_RST_WDT && RESET_BROWNOUT == ESP_RST_BROWNOUT,
+              "capture.h reset reasons no longer match esp_reset_reason_t");
 
 void CrashReport::setup() {
   global_crash_report = this;
@@ -68,7 +51,7 @@ void CrashReport::setup() {
   this->record_->version[VERSION_SIZE - 1] = '\0';
 
   const esp_reset_reason_t reason = esp_reset_reason();
-  if (crashed(reason) || reason == ESP_RST_BROWNOUT) {
+  if (reset_crashed(reason) || reason == ESP_RST_BROWNOUT) {
     Record &r = *this->record_;
     r.count++;
     r.reason = (uint8_t) reason;
@@ -84,7 +67,7 @@ void CrashReport::setup() {
     r.report[0] = '\0';
     this->report_len_ = 0;
 #ifdef USE_ESP32_CRASH_HANDLER
-    if (crashed(reason) && esp32::crash_handler_has_data()) {
+    if (reset_crashed(reason) && esp32::crash_handler_has_data()) {
       this->capturing_ = true;
       esp32::crash_handler_log();
       this->capturing_ = false;
@@ -177,26 +160,7 @@ void CrashReport::clear() {
 void CrashReport::on_log_(const char *tag, const char *message, size_t len) {
   if (!this->capturing_ || this->record_ == nullptr || strcmp(tag, HANDLER_TAG) != 0)
     return;
-  // message is the whole console line: a color code, "[E][esp32.crash:123]",
-  // ": ", the text and a color reset. Keep the text.
-  const char *end = message + len;
-  const char *start = strstr(message, ": ");
-  if (start == nullptr)
-    return;
-  start += 2;
-  if (end - start >= 4 && memcmp(end - 4, "\033[0m", 4) == 0)
-    end -= 4;
-  // The addr2line hints repeat the addresses above them; the script builds
-  // its own command.
-  if (strncmp(start, "Use: ", 5) == 0 || strncmp(start, "Other core: addr2line", 21) == 0)
-    return;
-  const size_t n = end - start;
-  if (this->report_len_ + n + 2 > REPORT_SIZE)
-    return;
-  memcpy(this->record_->report + this->report_len_, start, n);
-  this->report_len_ += n;
-  this->record_->report[this->report_len_++] = '\n';
-  this->record_->report[this->report_len_] = '\0';
+  this->report_len_ = report_append(this->record_->report, REPORT_SIZE, this->report_len_, message, len);
 }
 
 void CrashReport::save_() { this->pref_.save(this->record_); }
