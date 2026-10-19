@@ -3463,6 +3463,58 @@ static void test_miss_count() {
   CHECK(m >= 3);
 }
 
+// Every wait lands in the upper half of its doubled delay, for any run length
+// and any random number, so a fleet that failed together spreads out and no
+// panel ever waits past its schedule. Retry-After only lengthens a refusal's
+// wait, to at most the cap plus a quarter.
+static void test_backoff_windows() {
+  const uint32_t rnds[] = {0u, 1u, 7919u, 150000u, 2654435761u, 0xFFFFFFFFu};
+  for (int throttled = 0; throttled < 2; throttled++) {
+    const uint32_t base = throttled ? kThrottleBaseMs : kBackoffBaseMs;
+    const uint32_t cap = throttled ? kThrottleCapMs : kBackoffCapMs;
+    uint32_t d = base;  // the doubled delay for this many failures in a row
+    bool inside = true;
+    for (uint32_t fails = 1; fails <= 300 && inside; fails++) {
+      for (uint32_t rnd : rnds) {
+        uint32_t w = backoff_ms(fails, throttled != 0, 0, rnd);
+        if (w < d / 2 || w > d) {
+          printf("  fails %u throttled %d rnd %u: %u outside %u to %u\n", (unsigned) fails, throttled,
+                 (unsigned) rnd, (unsigned) w, (unsigned) (d / 2), (unsigned) d);
+          inside = false;
+        }
+      }
+      d = d >= cap / 2 ? cap : d * 2;
+    }
+    CHECK(inside);
+  }
+  // No failure counted yet waits like the first one.
+  CHECK_EQ(backoff_ms(0, false, 0, 0), backoff_ms(1, false, 0, 0));
+  CHECK_EQ(backoff_ms(0, true, 0, 0xFFFFFFFFu), backoff_ms(1, true, 0, 0xFFFFFFFFu));
+
+  // A first refusal with a Retry-After past its window: the Retry-After, up
+  // to the hour, plus up to a quarter, whatever the random number.
+  const uint32_t ras[] = {300001u, 900000u, kThrottleCapMs - 1, kThrottleCapMs, kThrottleCapMs + 1, 999999000u};
+  for (uint32_t ra : ras) {
+    const uint32_t lo = ra < kThrottleCapMs ? ra : kThrottleCapMs;
+    for (uint32_t rnd : rnds) {
+      uint32_t w = backoff_ms(1, true, ra, rnd);
+      CHECK(w >= lo && w <= lo + lo / 4);
+    }
+  }
+  // The longest Retry-After the header can carry still stops at the hour.
+  CHECK_EQ(backoff_ms(1, true, parse_retry_after_ms("999999"), 0), kThrottleCapMs);
+
+  // Retry-After is whole seconds and nothing else.
+  CHECK_EQ(parse_retry_after_ms("999999"), 999999000u);
+  CHECK_EQ(parse_retry_after_ms("000120"), 120000u);
+  CHECK_EQ(parse_retry_after_ms(" 120"), 0u);
+  CHECK_EQ(parse_retry_after_ms("120 "), 0u);
+  CHECK_EQ(parse_retry_after_ms("+120"), 0u);
+  CHECK_EQ(parse_retry_after_ms("-1"), 0u);
+  CHECK_EQ(parse_retry_after_ms("1.5"), 0u);
+  CHECK_EQ(parse_retry_after_ms("12a"), 0u);
+}
+
 static void test_cup_backoff() {
   // A cup job backs off when its last read failed or was refused.
   CHECK(cup_read_backs_off(true, true, false, false));   // the poll failed
@@ -4725,6 +4777,7 @@ int main() {
   test_later_today();
   test_backoff();
   test_miss_count();
+  test_backoff_windows();
   test_cup_backoff();
   test_auto_update();
   test_update_mirror();
