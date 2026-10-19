@@ -2494,9 +2494,9 @@ static void test_logo_lru() {
 // only rewrites a dark logo's path.
 static void test_logo_lru_edges() {
   using espn::LogoSlot;
-  CHECK_EQ(espn::pick_evict({{500, false, false}, {200, true, false}, {500, false, false}}), 0);
-  CHECK_EQ(espn::pick_evict({{0, false, false}}), 0);
-  CHECK_EQ(espn::pick_evict({{0, false, true}}), -1);
+  CHECK_EQ(espn::pick_evict({{500, false, false}, {200, true, false}, {500, false, false}}, 1000), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, false}}, 1000), 0);
+  CHECK_EQ(espn::pick_evict({{0, false, true}}, 1000), -1);
   CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500-dark/dal.png"),
            std::string("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"));
   CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"), std::string());
