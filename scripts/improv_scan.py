@@ -16,6 +16,7 @@ Bluetooth connection at a time.
 
 import argparse
 import asyncio
+import re
 import sys
 import time
 
@@ -59,6 +60,30 @@ def decode_result(frame):
     return frame[0], strings
 
 
+def verdict(networks):
+    """What is wrong with the panel's list of networks: one line per failure, none for a pass.
+
+    Each result should be three strings: the SSID, the RSSI in dBm and YES or
+    NO for whether it needs a password. A result of another shape is a
+    failure too, not a crash, and the other checks look at the rest.
+    """
+    fails = []
+    shaped = [n for n in networks if len(n) == 3 and re.fullmatch(r"-?\d+", n[1])]
+    if len(shaped) != len(networks):
+        fails.append("a result is not three strings: SSID, RSSI in dBm, YES or NO")
+    ssids = [n[0] for n in shaped]
+    rssis = [int(n[1]) for n in shaped]
+    if len(set(ssids)) != len(ssids):
+        fails.append("duplicate SSIDs")
+    if rssis != sorted(rssis, reverse=True):
+        fails.append("not sorted strongest first")
+    if len(networks) > 20:
+        fails.append("more than 20 networks")
+    if any(n[2] not in ("YES", "NO") for n in shaped):
+        fails.append("third string is not YES or NO")
+    return fails
+
+
 def selftest():
     # The request the app sends, and the two shapes of answer the panel sends.
     assert build_command(GET_WIFI_NETWORKS) == bytes([0x04, 0x00, 0x04])
@@ -71,6 +96,17 @@ def selftest():
         raise AssertionError("bad checksum accepted")
     except ValueError:
         pass
+
+    home, guest = ["Home", "-52", "YES"], ["Guest", "-60", "NO"]
+    assert verdict([home, guest]) == []
+    assert verdict([]) == []
+    assert verdict([home, home]) == ["duplicate SSIDs"]
+    assert verdict([guest, home]) == ["not sorted strongest first"]
+    assert verdict([home, ["Guest", "-60", "maybe"]]) == ["third string is not YES or NO"]
+    assert verdict([[f"n{i}", str(-40 - i), "NO"] for i in range(21)]) == ["more than 20 networks"]
+    # A result with two strings, or an RSSI that isn't a number, fails instead of crashing.
+    assert verdict([home, ["Guest", "-60"]]) == ["a result is not three strings: SSID, RSSI in dBm, YES or NO"]
+    assert verdict([["Home", "strong", "YES"], guest]) == ["a result is not three strings: SSID, RSSI in dBm, YES or NO"]
     print("selftest ok")
 
 
@@ -125,23 +161,11 @@ async def run(name, timeout):
             print(f"No end-of-list result within {timeout}s")
             return 1
 
-    ssids = [n[0] for n in networks]
-    rssis = [int(n[1]) for n in networks]
     print(f"{len(networks)} networks")
-    ok = True
-    if len(set(ssids)) != len(ssids):
-        print("FAIL: duplicate SSIDs")
-        ok = False
-    if rssis != sorted(rssis, reverse=True):
-        print("FAIL: not sorted strongest first")
-        ok = False
-    if len(networks) > 20:
-        print("FAIL: more than 20 networks")
-        ok = False
-    if any(n[2] not in ("YES", "NO") for n in networks):
-        print("FAIL: third string is not YES or NO")
-        ok = False
-    return 0 if ok else 1
+    fails = verdict(networks)
+    for f in fails:
+        print(f"FAIL: {f}")
+    return 1 if fails else 0
 
 
 def main():
