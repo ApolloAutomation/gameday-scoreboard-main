@@ -18,6 +18,7 @@
 #include "panel_text.h"
 #include "poll_timing.h"
 #include "recap.h"
+#include "startup.h"
 
 using namespace espn;
 
@@ -241,6 +242,27 @@ size_t probe(const std::string &text) {
   return n;
 }
 
+// The boot cache (startup.h) a team read leaves in flash: it loads back as
+// the same game or not at all, and only for the team it was saved for.
+size_t boot_cache(const Schedule &team, int64_t now) {
+  TeamCache c;
+  if (!team_cache_save(team, League::NFL, 6, now, c))
+    return 0;
+  Schedule back;
+  const bool loaded = team_cache_load(c, League::NFL, 6, now, back);
+  const std::string id = team.event_id.c_str();
+  const bool want = team.comp_slug == nullptr && !team.time_tbd && !id.empty() &&
+                    team.kickoff_epoch >= now - TEAM_CACHE_GAME_OVER;
+  if (loaded != want)
+    abort();
+  if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
+                 back.league != (uint8_t) League::NFL))
+    abort();
+  if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
+    abort();
+  return back.event_id.size();
+}
+
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
 
 }  // namespace
@@ -293,6 +315,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       std::vector<Schedule> comps{team, team};
       comps[1].kickoff_epoch = now + 3600;
       sink = sink + (size_t) (pick_schedule(comps, now, team.event_id) + 1);
+      sink = sink + boot_cache(team, now);
     }
   }
 
