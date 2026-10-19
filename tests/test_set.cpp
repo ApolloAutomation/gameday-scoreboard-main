@@ -3,6 +3,7 @@
 // the same one tests/web/mock_device.py checks itself against.
 #include <ArduinoJson.h>
 
+#include <climits>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -275,6 +276,62 @@ void test_parse_set() {
   }
 }
 
+// The edges of each limit, and the team references and lists set_cases.json
+// leaves out.
+void test_set_limits() {
+  SCHECK(clamp_lockon_minutes(4) == kLockonMinMinutes && clamp_lockon_minutes(5) == 5, "lockon floor");
+  SCHECK(clamp_lockon_minutes(120) == 120 && clamp_lockon_minutes(121) == kLockonMaxMinutes, "lockon ceiling");
+  SCHECK(clamp_lockon_minutes(INT_MIN) == kLockonMinMinutes && clamp_lockon_minutes(INT_MAX) == kLockonMaxMinutes,
+         "lockon at the ends of int");
+  SCHECK(clamp_release_seconds(29) == kReleaseMinSeconds && clamp_release_seconds(30) == 30, "release floor");
+  SCHECK(clamp_release_seconds(3600) == 3600 && clamp_release_seconds(3601) == kReleaseMaxSeconds,
+         "release ceiling");
+  SCHECK(clamp_release_seconds(INT_MIN) == kReleaseMinSeconds && clamp_release_seconds(INT_MAX) == kReleaseMaxSeconds,
+         "release at the ends of int");
+
+  // The limits themselves are kept as sent.
+  SetOp op;
+  SCHECK(parse_set("lockon", "5", op, kFavMax) && op.value == 5, "lockon 5");
+  SCHECK(parse_set("lockon", "120", op, kFavMax) && op.value == 120, "lockon 120");
+  SCHECK(parse_set("release", "30", op, kFavMax) && op.value == 30, "release 30");
+  SCHECK(parse_set("release", "3600", op, kFavMax) && op.value == 3600, "release 3600");
+  SCHECK(parse_set("rotate", "1", op, kFavMax) && op.value == 1, "rotate 1");
+  SCHECK(parse_set("rotate", "30", op, kFavMax) && op.value == 30, "rotate 30");
+  // Numbers read like atoi: leading spaces skipped, trailing text ignored.
+  SCHECK(parse_set("mode", " 3", op, kFavMax) && op.value == 3, "mode with a leading space");
+  SCHECK(parse_set("mode", "4x", op, kFavMax) && op.value == 4, "mode with trailing text");
+  // A zone's position may carry leading zeros; a sign makes it a name, and no zone has that name.
+  const std::string last = std::to_string(kTimezoneCount - 1);
+  SCHECK(parse_set("tz", "0" + last, op, kFavMax) && (size_t) op.value == kTimezoneCount - 1, "tz 0%s", last.c_str());
+  SCHECK(!parse_set("tz", "+1", op, kFavMax), "tz +1");
+  SCHECK(parse_set("tz", last, op, kFavMax) && (size_t) op.value == kTimezoneCount - 1, "tz last");
+  SCHECK(!parse_set("tz", std::to_string(kTimezoneCount), op, kFavMax), "tz one past the last");
+
+  // Team references: league key, colon, ESPN id.
+  uint8_t league = 0;
+  uint32_t id = 0;
+  SCHECK(parse_team_ref("nfl:6", league, id) && league == (uint8_t) League::NFL && id == 6, "nfl:6");
+  SCHECK(parse_team_ref("nhl:25:7", league, id) && league == (uint8_t) League::NHL && id == 25,
+         "an id reads up to its first non-digit");
+  SCHECK(!parse_team_ref("nfl:", league, id) && id == 0, "no id");
+  SCHECK(!parse_team_ref(":6", league, id), "no league");
+  SCHECK(!parse_team_ref("NFL:6", league, id) && league == 0, "league keys are lower case");
+  SCHECK(!parse_team_ref("nfl6", league, id) && league == 0 && id == 0, "no colon");
+  SCHECK(!parse_team_ref("", league, id), "empty");
+
+  // favs: a trailing comma is nothing, an empty item is refused, repeats
+  // don't use up a place, and reading stops once the list is full.
+  SCHECK(parse_set("favs", "nfl:6,", op, kFavMax) && op.teams.size() == 1 && op.refused.empty(), "trailing comma");
+  SCHECK(parse_set("favs", "nfl:6,,mlb:15", op, kFavMax) && op.teams.size() == 2 && op.refused.size() == 1 &&
+             op.refused[0].empty(),
+         "empty item");
+  SCHECK(parse_set("favs", "nfl:1,nfl:1,nfl:2", op, 2) && op.teams.size() == 2 && op.teams[1].id == 2,
+         "a repeat doesn't take a place");
+  SCHECK(parse_set("favs", "nfl:1,nfl:2,bogus", op, 2) && op.teams.size() == 2 && op.refused.empty(),
+         "nothing past a full list is read");
+  SCHECK(parse_set("favs", "nfl:1", op, 0) && op.teams.empty(), "no room at all");
+}
+
 void test_live_leagues() {
   std::vector<uint8_t> none;
   SCHECK(keys(live_leagues(0, (uint8_t) League::NFL, none)) == "nfl", "auto, nothing saved");
@@ -340,6 +397,7 @@ void test_live_scan_changed() {
 
 int run_set_tests(int &total_checks) {
   test_parse_set();
+  test_set_limits();
   test_live_leagues();
   test_scan_leagues();
   test_live_scan_changed();
