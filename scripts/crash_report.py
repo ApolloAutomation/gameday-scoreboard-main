@@ -90,7 +90,9 @@ def build_matches(build_time, published):
 def fmt_time(t):
     if not t:
         return "unknown (no clock yet)"
-    return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %-I:%M %p")
+    d = datetime.datetime.fromtimestamp(t)
+    # Not strftime's %-I: Windows has no hour without its leading zero.
+    return f"{d:%Y-%m-%d} {d.hour % 12 or 12}:{d:%M %p}"
 
 
 def fetch(host):
@@ -194,6 +196,9 @@ def selftest():
     assert build_matches(1760000000, 1760000000 + 600)
     assert not build_matches(1760000000, 1760000000 + 86400)
     assert not build_matches(0, 1760000000)
+    assert fmt_time(0) == "unknown (no clock yet)"
+    assert fmt_time(datetime.datetime(2026, 10, 19, 0, 5).timestamp()) == "2026-10-19 12:05 AM"
+    assert fmt_time(datetime.datetime(2026, 10, 19, 13, 5).timestamp()) == "2026-10-19 1:05 PM"
     print("selftest ok")
 
 
