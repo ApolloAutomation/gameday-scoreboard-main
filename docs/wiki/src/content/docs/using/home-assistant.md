@@ -31,6 +31,20 @@ Picking a team or a mode from Home Assistant counts as setting the panel up, the
 
 Want to change the firmware itself, for example to add your own API key? Build it from the YAML with ESPHome. See [Build it yourself](/diy/build-from-source/).
 
+## Adopting it in ESPHome Device Builder
+
+:::note[Coming in the next release]
+If you run ESPHome Device Builder (the ESPHome add-on in Home Assistant, or ESPHome's dashboard running on a computer), it can adopt the panel. You then build and install the panel's firmware from Device Builder, and you can add your own lines to it. You don't need this to use the panel in Home Assistant.
+
+1. Open Device Builder with the panel on the same network. It shows the panel as discovered, with an **Adopt** button.
+2. Press **Adopt** and confirm. Device Builder writes a short configuration that pulls the panel's firmware from the [firmware repo](https://github.com/ApolloAutomation/gameday-scoreboard-main), and adds your Wi-Fi from its secrets and a new encryption key for the ESPHome API.
+3. Install it when Device Builder offers to, and pick the wireless install. Device Builder builds the firmware and sends it to the panel, which restarts with the same name.
+
+The adopted firmware has an API key, so Home Assistant needs that key to stay connected. With Device Builder running as a Home Assistant add-on, Home Assistant gets the key from it. Otherwise Home Assistant asks for it: the key is in the panel's configuration in Device Builder, under `api:`.
+
+Device Builder builds from the current release in the firmware repo, with its own ESPHome version, so keep Device Builder up to date. To update an adopted panel, install it again from Device Builder. Leave **Install updates automatically** off (see [Firmware updates](/using/updates/)): a release installed from the device page or from Home Assistant's **Firmware** entity puts the prebuilt firmware back, without the key or your changes, and Home Assistant then asks you to set up the connection again.
+:::
+
 ## What appears
 
 | Entity | What it is |
