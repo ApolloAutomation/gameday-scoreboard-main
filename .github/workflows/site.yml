@@ -147,12 +147,24 @@ jobs:
       # and changed nothing (v1.4.3). Beta publishes redeploy main's commit,
       # so check the beta really went live instead of leaving the bars on the
       # old one without a word. The query string gets past the CDN's cache.
+      # A run a beta publish started that deployed no beta channel at all
+      # (add_beta_channel.sh left it out) took the bars' channel off the
+      # site, so it fails too.
       - name: The beta channel is live
         id: beta_live
+        env:
+          FROM_BETA: ${{ inputs.from_beta }}
         run: |
           set -uo pipefail
           m=site/firmware/beta/scoreboard75/manifest.json
-          if [ ! -f "$m" ]; then echo "No beta channel in this deploy."; exit 0; fi
+          if [ ! -f "$m" ]; then
+            if [ "$FROM_BETA" = true ]; then
+              echo "::error::A beta publish started this run, but the deploy has no beta channel (Assemble site says why), so bar panels find no manifest until the next deploy."
+              exit 1
+            fi
+            echo "No beta channel in this deploy."
+            exit 0
+          fi
           want=$(jq -r .version "$m")
           got=""
           for i in $(seq 1 30); do
