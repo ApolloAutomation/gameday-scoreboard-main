@@ -59,10 +59,15 @@ int main(int argc, char **argv) {
       if (deserializeJson(doc, first, DeserializationOption::NestingLimit(40)) == DeserializationError::Ok)
       {
         JsonArrayConst competitors = doc["competitions"][0]["competitors"];
-        for (JsonObjectConst c : competitors)
-          sides.push_back((uint32_t) atol(c["id"].as<const char *>()));
+        for (JsonObjectConst c : competitors) {
+          uint32_t id = (uint32_t) atol(c["id"] | "0");
+          if (id != 0)
+            sides.push_back(id);
+        }
       }
     }
+    if (sides.empty())
+      note("no team ids: " + g.second.front().filename().string());
     for (uint32_t team : sides) {
       GameSnapshot prev;
       for (auto &f : g.second) {
