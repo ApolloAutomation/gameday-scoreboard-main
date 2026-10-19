@@ -3596,6 +3596,18 @@ static void test_auto_update() {
   CHECK(version_newer("2026.10.0-beta.1000", "2026.10.0-beta.999"));
   CHECK(!version_newer("2026.10.0-beta.", "2026.10.0"));
   CHECK(!version_newer("2026.10.0-dev", "2026.10.0"));
+  // Malformed: a number must be plain digits, right after its separator.
+  CHECK(!version_newer("2026.+11.0", "2026.10.0"));
+  CHECK(!version_newer("2026. 11.0", "2026.10.0"));
+  CHECK(!version_newer("2026..1", "2026.0.0"));
+  CHECK(!version_newer("2026.10.0-beta.+5", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0-beta. 5", "2026.10.0"));
+  CHECK(!version_newer("2026.10.1.", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0-beta.1234567890", "2026.10.0-beta.5"));
+  CHECK(!version_newer("2026.10.1", "2026.-10.0"));  // or the panel's own
+  CHECK(version_newer("2026.10.0-beta.123456789", "2026.10.0-beta.5"));
+  CHECK(version_newer("2026.10.1", "2026.10.0-dev"));  // a bench build's suffix still ends the numbers
+  CHECK(!version_newer("2026.10.0", "2026.10.1-dev"));
 
   // Install now: names in the release summary.
   const std::string me = "gameday-aba970";
