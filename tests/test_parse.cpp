@@ -3905,7 +3905,7 @@ static void test_auto_update_edges() {
   CHECK(install_now_listed("Install now:gameday-aba970", "gameday-aba970"));
   CHECK(install_now_listed("Install now: gameday-500ebc all", "gameday-aba970"));
   CHECK(!install_now_listed("install now: gameday-aba970", "gameday-aba970"));  // the tag as CI writes it
-  CHECK(!install_now_listed("Install now: ALL", "gameday-aba970"));
+  CHECK(install_now_listed("Install now: ALL", "gameday-aba970"));  // names and "all" match in any case
 
   CHECK_EQ(auto_update_slot(0xFF, 0xFF), 0xFFFF % kAutoUpdateSpreadMinutes);
   AutoUpdateInputs in;
