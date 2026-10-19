@@ -1523,13 +1523,19 @@
   };
 
   // true if a is newer than b, false if older, null if either is unreadable.
-  // A beta's build number ("2026.10.0-beta.812") counts as a fourth part, as
-  // in the firmware (auto_update.h), so a beta is newer than its plain number.
+  // As in the firmware (auto_update.h), betas ("2026.10.1-beta.812") order by
+  // their build number and come before the release they lead up to.
   const isNewer = (a, b) => {
-    const parse = (v) => String(v || "").replace(/^v/, "").replace("-beta.", ".").split(".").map((n) => parseInt(n, 10));
+    const parse = (v) => {
+      const [base, beta] = String(v || "").replace(/^v/, "").split("-beta.");
+      const p = base.split(".").map((n) => parseInt(n, 10));
+      const build = beta === undefined ? Infinity : parseInt(beta, 10);
+      if (p.length < 3 || p.some(isNaN) || isNaN(build)) return null;
+      return [p[0], p[1], p[2], p[3] || 0, build];
+    };
     const pa = parse(a), pb = parse(b);
-    if (pa.length < 3 || pb.length < 3 || pa.some(isNaN) || pb.some(isNaN)) return null;
-    for (let i = 0; i < 4; i++) { const x = pa[i] || 0, y = pb[i] || 0; if (x !== y) return x > y; }
+    if (!pa || !pb) return null;
+    for (let i = 0; i < 5; i++) if (pa[i] !== pb[i]) return pa[i] > pb[i];
     return false;
   };
 
@@ -1583,7 +1589,7 @@
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
-      $("#fwText").textContent = "You're ahead of the latest release, " + cur;
+      $("#fwText").textContent = "You're ahead of the latest " + (S && (S.beta || S.bar) ? "beta, " : "release, ") + cur;
       sub.textContent = "The newest published version is " + latest + ". Nothing to install.";
     } else if (st.includes("AVAILABLE")) {
       // The panel rolled back from this very version (a crash in its first

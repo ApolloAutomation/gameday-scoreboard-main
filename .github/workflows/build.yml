@@ -389,6 +389,9 @@ jobs:
         run: |
           set -euo pipefail
           v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
+          # Off the beta branch, "-beta.0": a bar panel flashed by hand from
+          # this build sorts before every published beta of its version
+          # (auto_update.h), so it still installs the next one.
           summary="Development build"
           if [ "$GITHUB_REF" = refs/heads/beta ]; then
             v="$v-beta.$GITHUB_RUN_NUMBER"
@@ -402,8 +405,12 @@ jobs:
               fi
               summary="$summary Install now: $NOW"
             fi
-          elif [ -n "$NOW" ]; then
-            echo "::warning::install_now only does something on the beta branch"
+          else
+            v="$v-beta.0"
+            sed -i "s/^  version: \".*\"$/  version: \"$v\"/" firmware/gameday-common.yaml
+            if [ -n "$NOW" ]; then
+              echo "::warning::install_now only does something on the beta branch"
+            fi
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "summary=$summary" >> "$GITHUB_OUTPUT"
@@ -475,6 +482,11 @@ jobs:
           ls -R stage
           bash scripts/check_site_firmware.sh --beta stage
           bash scripts/check_site_firmware.sh --follow-beta stage "$BETA"
+          # Betas come before their release (auto_update.h), so once a version
+          # ships, panels running it take no beta until dev's version moves on.
+          if git ls-remote --exit-code --tags origin "refs/tags/v${BETA%-beta.*}" >/dev/null; then
+            echo "::warning::v${BETA%-beta.*} is already released, so panels running it won't take $BETA. Bump version in firmware/gameday-common.yaml on dev."
+          fi
           mkdir -p release
           for v in moonhub75 scoreboard75; do
             (cd stage/firmware/beta && zip -r "../../../release/firmware-beta-$v.zip" "$v")

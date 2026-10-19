@@ -38,60 +38,68 @@ inline int auto_update_slot(uint8_t mac4, uint8_t mac5) {
 // A number that changes once per local calendar day, for "tried tonight".
 inline int32_t auto_update_day(int year, int day_of_year) { return (int32_t) year * 1000 + day_of_year; }
 
-// The beta channel's versions are the release number plus "-beta.<build>"
-// ("2026.10.0-beta.812"), and the build number counts as the next part, so
-// each beta is newer than the one before and than the plain number.
+// The beta channel's versions are the next release's number plus
+// "-beta.<build>" ("2026.10.1-beta.812"). Each beta is newer than the one
+// before, and the release is newer than all of its betas, so a panel that
+// turns Follow beta off goes to the release once it ships.
 static const char kBetaTag[] = "-beta.";
-
-// Past the separator after a version part: a dot or the beta tag.
-inline const char *next_version_part(const char *p) {
-  if (*p == '.')
-    return p + 1;
-  if (strncmp(p, kBetaTag, sizeof(kBetaTag) - 1) == 0)
-    return p + sizeof(kBetaTag) - 1;
-  return p;
-}
 
 static const int kVersionParts = 4;
 static const int kVersionPartDigits = 9;  // fits a 32-bit long
+// A release's place after its betas: above any build number.
+static const long kNotBeta = 1000000000L;
 
-// The numbers of a version, missing ones 0: "2026.10.0-beta.812" is 2026, 10,
-// 0, 812. A number is plain digits (no sign or space), and a separator needs
-// one right after it. Anything else after a number ends the version and is
-// ignored ("-dev"). False when malformed: no number at the start or after a
-// separator, or one longer than kVersionPartDigits.
-inline bool version_parts(const char *p, long out[kVersionParts]) {
+// Plain digits at p, at most kVersionPartDigits of them, into *out. The end
+// of the number, or nullptr when there is none or it is too long.
+inline const char *version_number(const char *p, long *out) {
+  int digits = 0;
+  long v = 0;
+  while (*p >= '0' && *p <= '9') {
+    if (++digits > kVersionPartDigits)
+      return nullptr;
+    v = v * 10 + (*p++ - '0');
+  }
+  if (digits == 0)
+    return nullptr;
+  *out = v;
+  return p;
+}
+
+// The numbers of a version, missing ones 0, then its beta build number or
+// kNotBeta: "2026.10.1-beta.812" is 2026, 10, 1, 0, 812 and "2026.10.1" is
+// 2026, 10, 1, 0, kNotBeta. A number is plain digits (no sign or space), and
+// a dot or the beta tag needs one right after it. Anything else after the
+// numbers ends the version and is ignored ("-dev"), as is anything after a
+// fourth number other than the beta tag. False when malformed: no number at
+// the start or after a separator, or one longer than kVersionPartDigits.
+inline bool version_parts(const char *p, long out[kVersionParts + 1]) {
   for (int i = 0; i < kVersionParts; i++)
     out[i] = 0;
+  out[kVersionParts] = kNotBeta;
   for (int i = 0; i < kVersionParts; i++) {
-    int digits = 0;
-    long v = 0;
-    while (*p >= '0' && *p <= '9') {
-      if (++digits > kVersionPartDigits)
-        return false;
-      v = v * 10 + (*p++ - '0');
-    }
-    if (digits == 0)
+    p = version_number(p, &out[i]);
+    if (p == nullptr)
       return false;
-    out[i] = v;
-    const char *next = next_version_part(p);
-    if (next == p)
-      break;  // the numbers end here
-    p = next;
+    if (*p != '.' || i == kVersionParts - 1)
+      break;
+    p++;
   }
+  if (strncmp(p, kBetaTag, sizeof(kBetaTag) - 1) == 0)
+    return version_number(p + sizeof(kBetaTag) - 1, &out[kVersionParts]) != nullptr;
   return true;
 }
 
 // True when `latest` is a higher version than `current`. Both are dotted
-// numbers ("1.5.5", "2026.10.0"); anything after the numbers other than the
-// beta tag ("-dev") is ignored. A panel on a test build newer than the
-// release never "updates" down to it, and a malformed version never installs.
+// numbers ("1.5.5", "2026.10.0"), a beta with the beta tag; anything else
+// after the numbers ("-dev") is ignored. A panel on a test build newer than
+// the release never "updates" down to it, and a malformed version never
+// installs.
 inline bool version_newer(const std::string &latest, const std::string &current) {
-  long a[kVersionParts];
-  long b[kVersionParts];
+  long a[kVersionParts + 1];
+  long b[kVersionParts + 1];
   if (!version_parts(latest.c_str(), a) || !version_parts(current.c_str(), b))
     return false;
-  for (int i = 0; i < kVersionParts; i++)
+  for (int i = 0; i <= kVersionParts; i++)
     if (a[i] != b[i])
       return a[i] > b[i];
   return false;
