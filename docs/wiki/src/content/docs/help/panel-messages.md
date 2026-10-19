@@ -14,11 +14,11 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | The panel says | What it means | What to do |
 | --- | --- | --- |
 | **Starting** | The panel has power and is starting up. | Wait a few seconds. |
-| **SETUP / Game Day / app**, with a QR code | The panel has no Wi-Fi network yet. | Set it up in the Game Day app, or scan the QR code. See [Set up your panel](/get-started/setup/). |
-| **Join WiFi / Game Day / 2f6a70** | The panel's own hotspot is up, named `Game Day 2f6a70`. | Join that network from any phone or laptop to set it up without the app. |
+| **SETUP / Game Day / app**, with a QR code | The panel has no Wi-Fi network yet. | Join its hotspot (the panel shows the name in turn), or use the installer's Wi-Fi dialog. The QR code is for the separate Game Day app. See [Set up your panel](/get-started/setup/). |
+| **Join WiFi / Game Day / 2f6a70** | The panel's own hotspot is up, named `Game Day 2f6a70`. | Join that network from any phone or laptop to set it up. |
 | **Connecting to** and a network name | The panel is joining a network it already knows. | Wait. |
 | **JOINING** and a network name | The app sent the panel a network, and it's joining it. | Wait. If the name is wrong, pick again in the app. |
-| A QR code with **Scan for Game Day app** | The panel joined your Wi-Fi. | Scan it to open the app, or wait for the address. |
+| A QR code with **Scan for Game Day app** | The panel joined your Wi-Fi. | Wait for the address. The QR code is for the separate Game Day app. |
 | **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
 | **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
@@ -32,7 +32,7 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
-| **Wi-Fi lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one in the app. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
+| **Wi-Fi lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
 
 :::note[Coming in the next release]
 | The panel says | What it means | What to do |
@@ -46,7 +46,7 @@ These show on the board or in the ticker.
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
-| **Pick a team in the Game Day app or at** and an IP address | Nobody has picked a team or a mode yet. | Pick one in the app, or open that address in a browser. See [Pick your team](/get-started/pick-your-team/). |
+| **Pick a team in the Game Day app or at** and an IP address | Nobody has picked a team or a mode yet. | Open that address in a browser and pick one. See [Pick your team](/get-started/pick-your-team/). |
 | **Getting ready** | The panel is on Wi-Fi but hasn't set its clock yet. It can't read scores before it has. | Wait a few seconds. If it lasts, see [Troubleshooting](/help/troubleshooting/#the-panel-says-getting-ready-for-a-long-time). |
 | **Can't reach ESPN** | The panel is on Wi-Fi but gets no answer from ESPN, where the scores come from. | Check the internet connection. The panel keeps trying. |
 | **no update yet** at the end of the ticker | Three reads from ESPN in a row failed, and none has worked since the panel started. | Check the internet connection. |

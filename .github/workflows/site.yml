@@ -1,6 +1,6 @@
 name: Site
 
-# Republish gamedayscoreboard.app, and the update mirror
+# Republish the site at SITE_URL, and the update mirror if one is set up
 # (scripts/publish_mirror.sh), when only docs/site changed, without a
 # firmware release. The firmware files come from the latest release tag's
 # firmware-moonhub75.zip asset, so panels see the same manifest and binaries
@@ -17,6 +17,8 @@ name: Site
 # when the version in firmware/gameday-common.yaml has no release yet, the
 # next tag's deploy publishes docs/site anyway. A commit whose version is
 # already released can never be tagged again, so deploying it is safe.
+# Before the first release there is no firmware to put on the site, so the
+# gate skips the deploy; the first tag's deploy publishes the site.
 
 on:
   push:
@@ -32,6 +34,12 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The project's site (GitHub Pages today), with no trailing slash. The same
+  # value as site_base in firmware/gameday-common.yaml (CONTRIBUTING.md,
+  # "Moving to a new address").
+  SITE_URL: "https://apolloautomation.github.io/gameday-scoreboard-main"
 
 concurrency:
   group: pages
@@ -58,7 +66,16 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml | head -n1)
-          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          # Only gh's "release not found" counts; any other error fails here.
+          if ! TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>"$RUNNER_TEMP/release.err"); then
+            if grep -q 'release not found' "$RUNNER_TEMP/release.err"; then
+              echo "::warning::There is no release yet, so there is no firmware to publish with the site. The first release's tag deploy publishes it."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/release.err" >&2
+            exit 1
+          fi
           echo "source version $VERSION, latest release $TAG"
           if { [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$FROM_BETA" != true ]; } || [ "v$VERSION" = "$TAG" ]; then
             echo "go=true" >> "$GITHUB_OUTPUT"
@@ -139,15 +156,16 @@ jobs:
           want=$(jq -r .version "$m")
           got=""
           for i in $(seq 1 30); do
-            got=$(curl -fsS "https://gamedayscoreboard.app/firmware/beta/scoreboard75/manifest.json?run=$GITHUB_RUN_ID-$i" | jq -r .version)
+            got=$(curl -fsS "$SITE_URL/firmware/beta/scoreboard75/manifest.json?run=$GITHUB_RUN_ID-$i" | jq -r .version)
             if [ "$got" = "$want" ]; then echo "Live: beta $got"; exit 0; fi
             sleep 20
           done
-          echo "::error::gamedayscoreboard.app still serves beta '$got' 10 minutes after deploying $want"
+          echo "::error::$SITE_URL still serves beta '$got' 10 minutes after deploying $want"
           exit 1
-      # The same update feed on updates.gameday-scoreboard.com, which panels
-      # read when gamedayscoreboard.app fails. Goes even if the check above
-      # gave up on GitHub Pages.
+      # A copy of the update feed on a second host, for a project that has one
+      # (scripts/publish_mirror.sh). Without the Cloudflare secrets it warns
+      # and does nothing; firmware built from this repo reads no mirror. Goes
+      # even if the check above gave up on GitHub Pages.
       - name: Publish the update mirror
         if: success() || steps.beta_live.outcome == 'failure'
         env:

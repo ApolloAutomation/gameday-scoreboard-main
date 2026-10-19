@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Support - Game Day Scoreboard</title>
-  <meta name="description" content="Fixes for Wi-Fi, an app that can't find the panel, a half-blank board, resets and firmware updates, and how to reach support by email.">
-  <link rel="canonical" href="https://gamedayscoreboard.app/support/">
+  <meta name="description" content="Fixes for Wi-Fi, an app that can't find the panel, a half-blank board, resets and firmware updates, and how to open an issue on GitHub.">
+  <link rel="canonical" href="https://apolloautomation.github.io/gameday-scoreboard-main/support/">
   <meta property="og:site_name" content="Game Day Scoreboard">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Support - Game Day Scoreboard">
-  <meta property="og:description" content="Fixes for Wi-Fi, an app that can't find the panel, a half-blank board, resets and firmware updates, and how to reach support by email.">
-  <meta property="og:url" content="https://gamedayscoreboard.app/support/">
-  <meta property="og:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta property="og:description" content="Fixes for Wi-Fi, an app that can't find the panel, a half-blank board, resets and firmware updates, and how to open an issue on GitHub.">
+  <meta property="og:url" content="https://apolloautomation.github.io/gameday-scoreboard-main/support/">
+  <meta property="og:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@GameDayScore">
-  <meta name="twitter:image" content="https://gamedayscoreboard.app/media/og.jpg">
+  <meta name="twitter:image" content="https://apolloautomation.github.io/gameday-scoreboard-main/media/og.jpg">
   <meta name="twitter:image:alt" content="An LED scoreboard showing a final score, HBR 24, IRN 10, and HBR WINS!">
   <!-- The FAQPage JSON-LD for these cards is added at deploy (scripts/site_seo.py). -->
   <style>
@@ -42,7 +42,7 @@
 
   <div class="card">
     <h2>The app can't find my panel</h2>
-    <p>Add it by address instead. Open the panel's own page at <code>gameday-xxxxxx.local</code> (the name it shows on screen), or the numeric address underneath if your phone can't resolve <code>.local</code> names, and enter that in the app.</p>
+    <p>The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own page. To try the app anyway, add the panel by address. Open the panel's own page at <code>gameday-xxxxxx.local</code> (the name it shows on screen), or the numeric address underneath if your phone can't resolve <code>.local</code> names, and enter that in the app.</p>
   </div>
 
   <div class="card">
@@ -55,7 +55,7 @@
     <h2>I don't have an iPhone</h2>
     <p>You can set the panel up from any phone or laptop through its own hotspot. While the panel shows SETUP, join the Wi-Fi network it names, like <code>Game Day 2f6a70</code>, and a setup page opens. Pick your Wi-Fi network, enter the password and save.</p>
     <p>Once it's on your Wi-Fi, the panel shows its address. Open that in a browser to pick your team and everything else the app would set.</p>
-    <p class="note">More on the hotspot in <a href="/setup/">Setup</a>.</p>
+    <p class="note">More on the hotspot in <a href="../setup/">Setup</a>.</p>
   </div>
 
   <div class="card">
@@ -65,12 +65,12 @@
 
   <div class="card">
     <h2>Lines on the panel, or the wrong colors</h2>
-    <p>Unplug the panel for 10 seconds and plug it back in. Reboot from the app or the page doesn't cut the power, so it won't clear this. If the lines or the colors come back, <a href="mailto:support@gameday-scoreboard.com">email support</a>.</p>
+    <p>Unplug the panel for 10 seconds and plug it back in. Reboot from the app or the page doesn't cut the power, so it won't clear this. If the lines or the colors come back, <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main/issues">open an issue on GitHub</a>.</p>
   </div>
 
   <div class="card">
     <h2>I need to reset Wi-Fi</h2>
-    <p>Hold the button on the controller. At 5 seconds the screen starts counting down, and at 10 seconds it says <strong>Release to reset Wi-Fi</strong>. Let go then. Nothing resets while you hold it, and letting go before 10 seconds resets nothing. Once it resets, the panel restarts into setup mode for 15 minutes, so you can set it up on a new network from the Game Day app or its hotspot. Your team, favorites and other settings stay as they were. Changed your mind? Unplug the panel and plug it back in, and it rejoins the Wi-Fi it already knows. It does that on its own after the 15 minutes too.</p>
+    <p>Hold the button on the controller. At 5 seconds the screen starts counting down, and at 10 seconds it says <strong>Release to reset Wi-Fi</strong>. Let go then. Nothing resets while you hold it, and letting go before 10 seconds resets nothing. Once it resets, the panel restarts into setup mode for 15 minutes, so you can set it up on a new network from its hotspot. Your team, favorites and other settings stay as they were. Changed your mind? Unplug the panel and plug it back in, and it rejoins the Wi-Fi it already knows. It does that on its own after the 15 minutes too.</p>
     <p class="note">A shorter hold (about 1.5 seconds) just shows the panel's address again, without resetting anything. Held past 20 seconds, the button moves on to a factory reset (below).</p>
   </div>
 
@@ -98,18 +98,17 @@
 
   <div class="card">
     <h2>The panel won't start</h2>
-    <p>If it stays dark or keeps restarting, reinstall the firmware from the <a href="/">installer page</a>, with a USB cable and a desktop browser such as Chrome or Edge. That erases its settings, so set it up again afterwards.</p>
+    <p>If it stays dark or keeps restarting, reinstall the firmware from the <a href="../">installer page</a>, with a USB cable and a desktop browser such as Chrome or Edge. That erases its settings, so set it up again afterwards.</p>
   </div>
 
   <div class="card">
     <h2>Something else</h2>
-    <p>Email <a href="mailto:support@gameday-scoreboard.com">support@gameday-scoreboard.com</a>. Say what the panel or the app was doing, and include the firmware version from the panel's page if you can. We reply within one business day.</p>
-    <p class="note">Built your own and found a bug? GitHub issues work too: <a href="https://github.com/gameday-scoreboard/gameday-scoreboard/issues">github.com/gameday-scoreboard/gameday-scoreboard/issues</a>.</p>
-    <p class="note">The full guide to setup, every setting, each sport and more fixes is at <a href="https://docs.gameday-scoreboard.com/">docs.gameday-scoreboard.com</a>.</p>
+    <p><a href="https://github.com/ApolloAutomation/gameday-scoreboard-main/issues">Open an issue on GitHub</a>. Say what the panel was doing, and include the firmware version from the panel's page if you can. Issues are public, so leave out Wi-Fi passwords.</p>
+    <p class="note">The full guide to setup, every setting, each sport and more fixes is in the <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main/tree/main/docs/wiki/src/content/docs">docs</a>.</p>
   </div>
 
   <footer>
-    <a href="/">Game Day Scoreboard</a>
+    <a href="../">Game Day Scoreboard</a>
   </footer>
 </main>
 </body>

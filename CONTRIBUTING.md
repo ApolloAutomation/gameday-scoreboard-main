@@ -37,7 +37,7 @@ shows: open an issue first so we can agree on it before you build it.
 
 ## Reporting a bug or asking for a feature
 
-[Open an issue](https://github.com/gameday-scoreboard/gameday-scoreboard/issues/new/choose)
+[Open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues/new/choose)
 and pick the bug or feature form. For a bug, the firmware version (the
 Firmware row on the panel's page), the controller and the panel layout
 save a round of questions. A photo or short video of the panel helps
@@ -45,11 +45,9 @@ more than anything.
 
 Issues are public. Leave out Wi-Fi passwords and anything else private.
 
-Bought a scoreboard and need help with it? The
-[docs](https://docs.gameday-scoreboard.com/) cover setup, every setting
-and the common fixes, and the
-[support page](https://gamedayscoreboard.app/support/) has the support
-email, which answers faster than an issue.
+Need help with a panel? The [docs](docs/wiki/src/content/docs/) cover
+setup, every setting and the common fixes, and the
+[support page](https://apolloautomation.github.io/gameday-scoreboard-main/support/) has the quick answers.
 
 ## Changing the code
 
@@ -117,8 +115,8 @@ The device page has browser tests against a mock panel. In `tests/web`,
 run `npm ci` and `npx playwright install chromium` once, then `npm test`.
 
 If you edit `firmware/web/app.js` or `app.css`, run
-`python scripts/build_web.py` and commit the regenerated `bundle.js`. CI
-fails the PR if it is stale.
+`python3 scripts/build_web.py` and commit the regenerated `bundle.js` and
+`bundle-demo.js`. CI fails the PR if either is stale.
 
 If you change what the panel does, run it on a panel for a while
 (during a game if the change touches live scoring) and say in the PR
@@ -126,9 +124,12 @@ what you tested on: controller, layout, how long, what it showed.
 
 ### Docs
 
-The docs at [docs.gameday-scoreboard.com](https://docs.gameday-scoreboard.com/)
-are built from `docs/wiki` (Astro + Starlight). GitHub Pages publishes
-this repo's `main`, so they always describe what customers run. If your change alters what
+The docs are built from `docs/wiki` (Astro + Starlight); the pages are
+the markdown under [docs/wiki/src/content/docs/](docs/wiki/src/content/docs/).
+They have no published home of their own yet, and CI builds them on every
+pull request that touches them. On GitHub the pages read as plain markdown:
+links between pages and the note boxes only work in the built site, which
+`npm run dev` in `docs/wiki` previews. If your change alters what
 the panel shows, a setting, a button hold or anything else an owner or
 DIY builder would notice, update or add the page for it under
 `docs/wiki/src/content/docs/` in the same pull request. CI fails a PR
@@ -154,6 +155,35 @@ visible changed. `docs/wiki/README.md` has the page conventions, and
   want them on your own panel.
 - League or team logos committed to the repo. The panel fetches logos
   from ESPN at runtime.
+
+## Moving to a new address
+
+The project's site is the repo's GitHub Pages address today,
+https://apolloautomation.github.io/gameday-scoreboard-main. The installer,
+the changelog and every update manifest the panels read live under it.
+Moving to another address (a domain of its own, say) is a short edit in
+these places:
+
+- `site_base` in `firmware/gameday-common.yaml`. Every update URL is built
+  from it, the bar builds' included.
+- `SITE_URL` in the `env:` block of `.github/workflows/build.yml` and of
+  `.github/workflows/site.yml`.
+- `SITE_URL` in `firmware/web/app.js` (the device page's changelog link).
+  Run `python3 scripts/build_web.py` afterwards and commit both bundles.
+- `BASE` in `scripts/site_seo.py`, then the canonical, `og:url`,
+  `og:image` and `twitter:image` tags in each `docs/site` page, which must
+  be absolute. `python3 scripts/site_seo.py check docs/site` lists every
+  tag that doesn't match yet. The site's own links are relative, so they
+  need nothing.
+- The links in the README, this file, `docs/wiki` and
+  `.github/ISSUE_TEMPLATE`, and the expectations in `tests/web/page.spec.js`
+  and the `--selftest` of `scripts/factory_flash.py`:
+  `git grep apolloautomation.github.io` finds them all.
+- The custom domain in the repo's Pages settings, and its DNS.
+
+Panels already running firmware keep reading the old address until they
+install a release built with the new one, so keep the old address serving
+the update manifests (or redirecting to the new ones) until they have.
 
 ## License
 

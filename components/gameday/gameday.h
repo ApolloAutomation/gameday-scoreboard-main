@@ -287,7 +287,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
 #endif
   void set_follow_beta(bool on);
   // The update feed's second host (update_mirror.h): `mirror` is `source`
-  // on the mirror, `beta_mirror` the beta manifest there (release builds).
+  // on the mirror, `beta_mirror` the beta manifest there. Only in a build
+  // that configures update_mirror; the release builds have none.
 #ifdef GAMEDAY_UPDATE_MIRROR
   void set_update_mirror(http_request::HttpRequestUpdate *update, const char *source, const char *mirror,
                          const char *beta_mirror) {

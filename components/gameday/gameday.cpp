@@ -94,7 +94,8 @@ static const int64_t PRE_NEAR_SECONDS = 60 * 60;
 static const uint32_t NO_LIVE_RESCAN = 2 * MINUTE;
 // Install updates automatically: how often loop() looks, and how long a
 // manifest read gets before its answer is used (the HTTP timeout is 20 s,
-// and a failed read is followed by one from the mirror, update_mirror.h).
+// plus one read from the mirror in a build that configures update_mirror,
+// update_mirror.h).
 static const uint32_t AUTO_UPDATE_TICK = 10 * 1000;
 static const uint32_t AUTO_UPDATE_CHECK_WAIT = 2 * MINUTE;
 // After an install, how long the new firmware runs before the update counts

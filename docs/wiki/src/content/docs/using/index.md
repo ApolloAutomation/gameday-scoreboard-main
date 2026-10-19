@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-You control the panel from three places. The **Game Day app** sets it up and changes your team and settings from your phone. The **device page** is a web page the panel serves itself, with the same settings, a live copy of the board and the firmware updates; open it in any browser on your Wi-Fi. The **button on the controller** turns the panel on and off, shows its address and resets it, and a **WizMote remote** handles power, brightness and your first four favorite teams from across the room.
+You control the panel from its **device page**, a web page the panel serves itself, with every setting, a live copy of the board and the firmware updates; open it in any browser on your Wi-Fi. Home Assistant can change the team, the mode and the rest of its entities. The separate **Game Day app** may work too, but Apollo Automation does not maintain it (see [The Game Day app](/get-started/the-app/)). The **button on the controller** turns the panel on and off, shows its address and resets it, and a **WizMote remote** handles power, brightness and your first four favorite teams from across the room.
 
 ## In this section
 

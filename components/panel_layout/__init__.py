@@ -6,7 +6,7 @@ from esphome.components.hub75 import display as hub75_display
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
-CODEOWNERS = ["@bharvey88"]
+CODEOWNERS = ["@ApolloAutomation"]
 
 CONF_DISPLAY_ID = "display_id"
 CONF_DEFAULT_COLS = "default_cols"

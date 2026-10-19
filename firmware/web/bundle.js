@@ -30,6 +30,12 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     n.setAttribute(attr, String(on));
   };
 
+  // Where the project lives. SITE_URL is the installer and changelog site,
+  // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
+  // address" lists every place it is set); REPO is the GitHub repository.
+  const SITE_URL = "https://apolloautomation.github.io/gameday-scoreboard-main";
+  const REPO = "ApolloAutomation/gameday-scoreboard-main";
+
   // The leagues the firmware knows (components/gameday/leagues.h), in tab
   // order. prefix: team list label; tab: picker tab; name: the long name;
   // path: ESPN's; byId: logo files named by team id; scan: extra query for
@@ -249,7 +255,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
 
     <p class="foot">
       <span id="ver"></span><span>·</span>
-      <a href="https://github.com/gameday-scoreboard/gameday-scoreboard" target="_blank" rel="noopener">gameday-scoreboard</a>
+      <a href="https://github.com/${REPO}" target="_blank" rel="noopener">gameday-scoreboard</a>
       <span>·</span><span>scores from ESPN</span>
     </p>
   </div>
@@ -1486,7 +1492,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     if (quick.length) fill(quick);
     if (!tag) return;
     if (notesCache[tag]) { fill(notesCache[tag]); return; }
-    fetch("https://api.github.com/repos/gameday-scoreboard/gameday-scoreboard/releases/tags/" + encodeURIComponent(tag), { headers: { Accept: "application/vnd.github+json" } })
+    fetch("https://api.github.com/repos/" + REPO + "/releases/tags/" + encodeURIComponent(tag), { headers: { Accept: "application/vnd.github+json" } })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         const items = j ? bulletsFrom(j.body) : [];
@@ -1497,7 +1503,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   // A release has its own section on the site's changelog, in owner words; a
   // beta has none, so it keeps the manifest's link to its commit.
   const notesLink = (u) =>
-    /^\d+(\.\d+)+$/.test(String(u.value || "")) ? "https://gamedayscoreboard.app/changelog/#v" + u.value : u.release_url;
+    /^\d+(\.\d+)+$/.test(String(u.value || "")) ? SITE_URL + "/changelog/#v" + u.value : u.release_url;
   let installing = false;
   let fwFailed = "";     // S.update_failed as the firmware box last drew it
   const renderUpdate = (u) => {

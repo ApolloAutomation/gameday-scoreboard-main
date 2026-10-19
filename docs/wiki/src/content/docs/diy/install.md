@@ -1,14 +1,14 @@
 ---
 title: "Install the firmware"
-description: "Flash the Game Day Scoreboard firmware onto a MoonHub75-pinout board from your browser with the DIY installer, and how updates reach it."
+description: "Flash the Game Day Scoreboard firmware onto an Apollo M-1 or another MoonHub75-pinout board from your browser with the DIY installer, and how updates reach it."
 sidebar:
   order: 4
 ---
 
-The [DIY installer](https://gamedayscoreboard.app/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout from your browser. You don't need ESPHome or any other software.
+The [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares, from your browser. You don't need ESPHome or any other software.
 
 :::caution
-Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only. If you have a Game Day Scoreboard controller, use the [main installer](https://gamedayscoreboard.app/) instead.
+Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only, the Apollo M-1 Rev6 among them. If you have a scoreboard75 controller board, use the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/) instead.
 :::
 
 ## Before you start
@@ -19,7 +19,7 @@ Installing erases whatever firmware was on the board. This installer is for boar
 
 ## Install
 
-1. Open the [DIY installer](https://gamedayscoreboard.app/install/diy/) in Chrome or Edge.
+1. Open the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) in Chrome or Edge.
 2. Click the picture that matches your panels: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). This sets the layout the scoreboard starts with. The Install button appears once you pick.
 3. Plug the board into the computer over USB.
 4. Click **Install for MoonHub75** and pick the board's port when the browser asks.
@@ -29,7 +29,7 @@ The two pictures install two builds of the same firmware. The 64x64 choice insta
 
 ## If you skip the Wi-Fi dialog
 
-If you close the dialog, the panel shows a QR code for the Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70. Set it up from the app, or join the hotspot and a setup page opens. The panel only joins 2.4 GHz networks.
+If you close the dialog, the panel shows a QR code for the separate Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70. Join the hotspot and a setup page opens. The panel only joins 2.4 GHz networks.
 
 ## Set it up
 
@@ -45,12 +45,12 @@ Each build has a variant name, and the variant names the folder the panel reads 
 | --- | --- | --- | --- |
 | `moonhub75` | `firmware/gameday.yaml` | DIY installer, 64x64 choice | `moonhub75` |
 | `moonhub75-2panel` | `firmware/gameday-2panel.yaml` | DIY installer, 128x64 choice | `moonhub75` |
-| `scoreboard75` | `firmware/gameday-scoreboard75.yaml` | The Game Day Scoreboard controller only | `scoreboard75` |
+| `scoreboard75` | `firmware/gameday-scoreboard75.yaml` | The scoreboard75 controller board only | `scoreboard75` |
 
 The 128x64 build reads its updates from the `moonhub75` folder too. The panel saves its layout the first time it starts, so that update keeps it two panels wide.
 
-Each release on [GitHub](https://github.com/gameday-scoreboard/gameday-scoreboard/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
+Each release on [GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
 
 :::note[Coming in the next release]
-When the release feed can't be read, the panel tries the same files on a second host, updates.gameday-scoreboard.com. A **Follow beta** switch on the device page gets test versions of the next release before everyone else. They can have bugs. Turned off, the panel stays on its beta until the next release.
+A **Follow beta** switch on the device page gets test versions of the next release before everyone else. They can have bugs. Turned off, the panel stays on its beta until the next release.
 :::

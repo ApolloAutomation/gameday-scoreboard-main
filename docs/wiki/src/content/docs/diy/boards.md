@@ -1,17 +1,17 @@
 ---
 title: "Boards"
-description: "Which ESP32-S3 boards run the Game Day Scoreboard firmware, the MoonHub75 pinout, and the flash and PSRAM it needs."
+description: "Which ESP32-S3 boards run the Game Day Scoreboard firmware, the Apollo M-1 and MoonHub75 pinout, and the flash and PSRAM it needs."
 sidebar:
   order: 2
 ---
 
 The prebuilt firmware for DIY builds targets one pinout, the [MoonHub75](https://github.com/MoonModules/Hardware/tree/main/MOONHUB75)'s. Any board wired to those pins runs it. A board with different pins needs its own build.
 
-## MoonHub75
+## Apollo M-1 and MoonHub75
 
-The MoonHub75 has a prebuilt firmware. Install it from your browser with the [DIY installer](/diy/install/) and it takes updates over Wi-Fi like any other panel.
+The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [DIY installer](/diy/install/) and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
 
-Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as the MoonHub75 carries one. The scoreboard pages don't use it.
+Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as both boards carry one. The scoreboard pages don't use it.
 
 ## An ESP32-S3 board wired to the MoonHub75 pinout
 
@@ -57,11 +57,11 @@ Any other ESP32-S3 HUB75 board with at least 16 MB of flash and octal PSRAM, the
 
 Give your copy its own `variant` name in the top-level file. The variant picks the folder the panel checks for updates. A build that keeps `moonhub75` installs the MoonHub75 release over itself when an update comes out, with the wrong pins. With its own name, the panel updates when you rebuild it.
 
-A pin map in `firmware/controllers/` and a line on the DIY page make a good first pull request. Say which panel you used and how long it ran. See [CONTRIBUTING.md](https://github.com/gameday-scoreboard/gameday-scoreboard/blob/dev/CONTRIBUTING.md#where-help-is-wanted).
+A pin map in `firmware/controllers/` and a line on the DIY page make a good first pull request. Say which panel you used and how long it ran. See [CONTRIBUTING.md](https://github.com/ApolloAutomation/gameday-scoreboard-main/blob/dev/CONTRIBUTING.md#where-help-is-wanted).
 
-## The Game Day Scoreboard controller is a different board
+## The scoreboard75 controller board is a different board
 
-The Game Day Scoreboard controller uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own installer at [gamedayscoreboard.app](https://gamedayscoreboard.app/).
+The scoreboard75 controller board uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own installer, the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/).
 
 :::caution
 On a board you built, use the DIY installer or build `gameday.yaml`. Never flash `gameday-scoreboard75.yaml` or the main installer's firmware to a MoonHub75-pinout board. The panel pins won't match, and that build takes its updates from the controller's feed.

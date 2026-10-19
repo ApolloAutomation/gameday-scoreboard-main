@@ -9,11 +9,13 @@ Find what you're seeing, then try the fix. Each entry ends with why it happens, 
 
 ## The app can't find my panel
 
-Check that your phone is on the same Wi-Fi network as the panel. Then add the panel by address: tap the add button in the app and enter the panel's name, like `gameday-2f6a70.local`, or its IP address. If you don't have either, hold the button on the controller for about 1.5 seconds and the panel shows both for 20 seconds.
+The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own [device page](/using/device-page/), and its hotspot sets up Wi-Fi (see [Set up your panel](/get-started/setup/)).
+
+To try the app anyway, check that your phone is on the same Wi-Fi network as the panel. Then add the panel by address: tap the add button in the app and enter the panel's name, like `gameday-2f6a70.local`, or its IP address. If you don't have either, hold the button on the controller for about 1.5 seconds and the panel shows both for 20 seconds.
 
 A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluetooth, so keep Bluetooth on and the phone near the panel.
 
-**Why:** the app finds a new panel over Bluetooth and a panel that's already set up over your Wi-Fi. A guest network, or a phone on mobile data, can keep the phone and the panel apart. Some phones won't open `.local` names, and the IP address works there.
+**Why:** where the app works with this firmware, it finds a new panel over Bluetooth and a panel that's already set up over your Wi-Fi. A guest network, or a phone on mobile data, can keep the phone and the panel apart. Some phones won't open `.local` names, and the IP address works there.
 
 ## The panel won't join my Wi-Fi
 
@@ -33,7 +35,7 @@ If the panel says **Wi-Fi needs sign-in, use home or a hotspot**, the network wa
 
 If your router restarted or the internet dropped, wait. The panel rejoins by itself when the network comes back and the score returns.
 
-If you changed your router or your Wi-Fi password, open the Game Day app and give the panel the new network or password, the same way as the first time. Without the app, join the panel's **Game Day** hotspot once it comes up, within a few minutes. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
+If you changed your router or your Wi-Fi password, join the panel's **Game Day** hotspot once it comes up, within a few minutes, and give it the new network or password. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
 
 **Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, and restarts itself once, a minute into the outage.
 
@@ -70,7 +72,7 @@ The panel restarts with the new layout.
 
 1. Unplug the panel's power for 10 seconds and plug it back in. **Reboot** on the device page or in the app doesn't cut the power, so it won't clear this.
 2. If the lines or colors come back, unplug the power and reseat the connection between the controller and the panel's input: the ribbon cable, or the controller itself where it plugs onto the panel. Push it in firmly and straight, then plug the power back in.
-3. If they still come back, [email support](/help/support/).
+3. If they still come back, [open an issue on GitHub](/help/support/).
 
 **Why:** this is almost always the connection between the controller and the panel, not the firmware. A HUB75 panel gets its top half and its bottom half over separate data lines. When a problem starts or stops exactly at the middle row, it follows that split. Colors tell you which line: text that should be white but shows purple is missing its green, since purple is red and blue without the green.
 
