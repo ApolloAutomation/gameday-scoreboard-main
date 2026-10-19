@@ -1591,12 +1591,17 @@
       }
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;
         installing = true;
         renderUpdate(u);
-        post(u.id, "install");
+        // Only an install the panel took is waited out; a failed post has said so.
+        if (!(await post(u.id, "install"))) {
+          installing = false;
+          renderUpdate(u);
+          return;
+        }
         toast("Installing " + latest);
         waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
       };

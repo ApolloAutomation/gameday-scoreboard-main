@@ -891,9 +891,27 @@ test("an install that never restarts the panel stops saying Installing once the 
   page.once("dialog", (d) => d.accept());
   await page.locator("#fwInstall").click();
   await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
+  await expect(page.locator("#gone")).toHaveText("Installing v2026.10.1. This page reloads when the panel is back.");
   // The download failed: the panel stays up, still offering the same version.
   await page.clock.fastForward("05:01");
   await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+});
+
+test("an install the panel never got doesn't claim it's installing", async ({ page, request }) => {
+  await reset(request);
+  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.route("**/update/Firmware/install*", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
   await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
   await expect(page.locator("#fwInstall")).toBeVisible();
 });
