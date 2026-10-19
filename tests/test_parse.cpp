@@ -3610,6 +3610,14 @@ static void test_auto_update() {
   CHECK(!install_now_listed("Beta 2026.10.0-beta.812", me));
   CHECK(!install_now_listed("gameday-aba970", me));  // named, but not in the list
   CHECK(!install_now_listed("Install now: all", ""));
+  // The publish form takes capitals (build.yml), but a panel's name is lower
+  // case and network names match either way.
+  CHECK(install_now_listed("Install now: Gameday-ABA970", me));
+  CHECK(install_now_listed("Install now: gameday-500ebc, GAMEDAY-aba970", me));
+  CHECK(install_now_listed("Install now: All", me));
+  CHECK(install_now_listed("Install now: ALL", me));
+  CHECK(!install_now_listed("Install now: GAMEDAY-500EBC", me));
+  CHECK(!install_now_listed("Install now: ALLX", me));
 
   // Listed: installs at any hour, even off, unless a game is live.
   t = in;

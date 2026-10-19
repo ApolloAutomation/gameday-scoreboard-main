@@ -143,13 +143,23 @@ enum class AutoUpdateStep : uint8_t {
 // "Install now" for the beta channel: the publisher names panels in the
 // release summary ("... Install now: gameday-aba970 gameday-500ebc", or
 // "all"), and a listed bar panel installs at its next manifest read, any hour,
-// instead of waiting for the night. Names are separated by spaces or commas.
+// instead of waiting for the night. Names are separated by spaces or commas,
+// and capitals match too: the publish form (build.yml) takes them, and a
+// panel's name is lower case.
 static const char kInstallNowTag[] = "Install now:";
+
+inline std::string ascii_lower(std::string s) {
+  for (char &c : s)
+    if (c >= 'A' && c <= 'Z')
+      c = (char) (c - 'A' + 'a');
+  return s;
+}
 
 inline bool install_now_listed(const std::string &summary, const std::string &name) {
   size_t at = summary.find(kInstallNowTag);
   if (at == std::string::npos || name.empty())
     return false;
+  const std::string me = ascii_lower(name);
   size_t i = at + sizeof(kInstallNowTag) - 1;
   while (i < summary.size()) {
     while (i < summary.size() && (summary[i] == ' ' || summary[i] == ','))
@@ -157,8 +167,8 @@ inline bool install_now_listed(const std::string &summary, const std::string &na
     size_t start = i;
     while (i < summary.size() && summary[i] != ' ' && summary[i] != ',')
       i++;
-    std::string word = summary.substr(start, i - start);
-    if (word == name || word == "all")
+    std::string word = ascii_lower(summary.substr(start, i - start));
+    if (word == me || word == "all")
       return true;
   }
   return false;
