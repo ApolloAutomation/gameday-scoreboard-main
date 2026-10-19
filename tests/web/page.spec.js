@@ -814,6 +814,24 @@ test("an update that rolled back says so and still offers Install", async ({ pag
   await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
 });
 
+test("an install that never restarts the panel stops saying Installing once the page gives up waiting", async ({ page, request }) => {
+  await reset(request);
+  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
+  // The download failed: the panel stays up, still offering the same version.
+  await page.clock.fastForward("05:01");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+});
+
 test("release notes link to the release's section of the site changelog, a beta to its commit", async ({ page, request }) => {
   await reset(request);
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };

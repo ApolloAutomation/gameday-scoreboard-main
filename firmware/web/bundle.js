@@ -1422,6 +1422,12 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       // Not back in five minutes: stop saying it's restarting and listen again.
       restart = "";
       renderGone();
+      // An install that never restarted the panel didn't happen: the firmware
+      // box goes back to what the panel offers.
+      if (installing) {
+        installing = false;
+        if (ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+      }
       connect();
     };
     setTimeout(tick, 3000);
