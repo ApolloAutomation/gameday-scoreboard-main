@@ -72,9 +72,9 @@ The panel restarts with the new layout.
 
 ## The panel keeps losing Wi-Fi
 
-Open the device page and find **Signal** under Diagnostics in the Device card. It's in dBm, and the closer the number is to zero, the stronger the signal. Under it, a graph shows the signal over the last day, with a dashed line at -75 dBm. When the signal has stayed below that line for the last half hour, the page says **Weak signal**. Move the panel closer to the router, or the router closer to the panel.
+Open the device page and find **Signal** under Diagnostics in the Device card. It's in dBm, and the closer the number is to zero, the stronger the signal. Under it, a graph shows the signal over the last day, or since the panel last started if that's more recent, with a dashed line at -75 dBm. When the signal has been below that line for most of the last half hour, the page says **Weak signal**. Move the panel closer to the router, or the router closer to the panel.
 
-**Wi-Fi drops** counts how often the panel lost its network over the last day, and says what caused the last drop and how long ago it was.
+**Wi-Fi drops** counts how often the panel lost its network in that time, and says what caused the last drop and how long ago it was.
 
 **Why:** a drop marked **signal lost** means the panel and the router stopped hearing each other, which is what a weak signal does. One marked **dropped by the router** means the router sent the panel away or restarted.
 
