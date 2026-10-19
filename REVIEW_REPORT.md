@@ -1,9 +1,10 @@
 # Review report
 
-Apollo Automation took over maintenance of Game Day Scoreboard in October
-2026 and then reviewed the whole repository. This report covers both: the
-takeover changes, every change the review made and why, what it left alone
-on purpose, and what to do next. It describes `dev` as of the review's merge.
+Apollo Automation started maintaining this fork of Game Day Scoreboard in
+October 2026 and then reviewed the whole repository. This report covers
+both: the changes that set up the fork, every change the review made and
+why, what it left alone on purpose, and what to do next. It describes `dev`
+as of the review's merge.
 
 ## Summary
 
@@ -59,13 +60,13 @@ under the undefined behavior sanitizer alone (CI runs both on Ubuntu); and
 the local Node was older than the docs build needs, so CI's "Build docs" job
 is the docs check.
 
-## Takeover changes
+## Setting up the fork
 
 Merged into `dev` as
 [#1](https://github.com/ApolloAutomation/gameday-scoreboard-main/pull/1).
 
 - **Credits.** A "Credits and thanks" section at the top of the README
-  credits Brandon Harvey, who built Game Day Scoreboard, and the hub75-studio
+  credits Brandon Harvey, who started Game Day Scoreboard, and the hub75-studio
   and ha-teamtracker projects it builds on. LICENSE keeps its existing line
   and adds one for Apollo Automation.
 - **Maintainers.** Code owners of the project's own components are
@@ -290,9 +291,9 @@ conservative reasonable option:
   and the linker map now shows the restart log alone at the start of RTC
   memory again. The comment next to it says to keep it the only RTC
   variable.
-- **The takeover merged with a known, pre-existing fuzz finding.** A local
-  fuzz run found the over/under overflow on the takeover branch; it
-  reproduced on the import commit, so it was not a takeover regression, and
+- **The fork setup merged with a known, pre-existing fuzz finding.** A local
+  fuzz run found the over/under overflow on the setup branch; it reproduced
+  on the import commit, so it was not a regression of the setup, and
   the audit fixed it.
 - **The Device Builder adoption link was removed** when its stub failed; the fix is verified and listed below.
 - **The main installer still offers the scoreboard75 build**; the Apollo M-1
@@ -568,7 +569,7 @@ and option 3 or 4 only together with per-panel secrets.
 
 ## End state
 
-- **Merged into `dev`:** the takeover
+- **Merged into `dev`:** the fork setup
   ([#1](https://github.com/ApolloAutomation/gameday-scoreboard-main/pull/1))
   and this review
   ([#2](https://github.com/ApolloAutomation/gameday-scoreboard-main/pull/2)).
