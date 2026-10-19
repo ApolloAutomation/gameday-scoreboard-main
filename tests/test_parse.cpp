@@ -493,6 +493,96 @@ static void test_win_splash_every_sport() {
   }
 }
 
+// A live document with its two competitors' scores replaced, in the order
+// the document lists them.
+static std::string with_scores(std::string doc, const char *first, const char *second) {
+  const std::string key = "\"score\":\"";
+  size_t at = 0;
+  for (const char *v : {first, second}) {
+    at = doc.find(key, at);
+    CHECK(at != std::string::npos);
+    if (at == std::string::npos)
+      return doc;
+    at += key.size();
+    doc.replace(at, doc.find('"', at) - at, v);
+    at += strlen(v);
+  }
+  return doc;
+}
+
+// Scores are atoi of ESPN's text, so a broken document can carry any int.
+// One live game read twice with its scores jumping between the extremes:
+// working out what was scored never overflows, a drop is a correction with
+// no splash, and a gain too big to be real gets the plainest splash, the
+// same one a jump from 0 to the largest int gets.
+static void test_splash_extreme_scores() {
+  const char *kMax = "2147483647", *kMin = "-2147483648", *kZero = "0";
+  const char *values[] = {kMax, kMin, kZero};
+  struct Live {
+    Sport sport;
+    const char *file;
+    uint32_t first;  // the document's first competitor, followed here
+    const char *event;
+  };
+  const Live games[] = {
+      {Sport::FOOTBALL, "fixtures/event_ncaa_live.json", 55, "401871053"},            // JXST, then FIU
+      {Sport::BASEBALL, "fixtures/event_mlb_top.json", 15, "401908016"},              // ATL, then LAD
+      {Sport::SOCCER, "fixtures/event_soccer_second_half.json", 6079, "401841253"},  // BRA, then MIR
+      {Sport::HOCKEY, "fixtures/event_nhl_live.json", 28, "401892455"},               // WPG, then COL
+      {Sport::BASKETBALL, "fixtures/event_nba_live.json", 11, "401914123"},           // IND, then MIN
+  };
+  for (const Live &g : games) {
+    const std::string doc = slurp(g.file);
+    GameSnapshot reads[3][3];
+    for (int us = 0; us < 3; us++)
+      for (int them = 0; them < 3; them++) {
+        CHECK(parse_event_str(with_scores(doc, values[us], values[them]), g.sport, g.first, reads[us][them], g.event));
+        CHECK_EQ(reads[us][them].team_score, atoi(values[us]));
+        CHECK_EQ(reads[us][them].opp_score, atoi(values[them]));
+      }
+    for (const auto &row0 : reads)
+      for (const GameSnapshot &before : row0)
+        for (const auto &row1 : reads)
+          for (const GameSnapshot &after : row1)
+            for (int flags = 0; flags < 4; flags++) {
+              const Splash s = decide_splash(before, after, (flags & 1) != 0, (flags & 2) != 0);
+              if (after.team_score <= before.team_score && after.opp_score <= before.opp_score)
+                CHECK_EQ(s.text, std::string(""));
+            }
+  }
+  // read(game, us, them) indexes games and values: 0 the largest int, 1 the
+  // smallest, 2 zero.
+  auto read = [&](int game, int us, int them) {
+    GameSnapshot s;
+    const Live &g = games[game];
+    CHECK(parse_event_str(with_scores(slurp(g.file), values[us], values[them]), g.sport, g.first, s, g.event));
+    return s;
+  };
+  // Football: up from the smallest to the largest is a score, the other way
+  // a correction (it used to wrap to 1 and splash "EXTRA POINT!").
+  CHECK_EQ(decide_splash(read(0, 1, 2), read(0, 0, 2), true).text, std::string("SCORE!"));
+  CHECK_EQ(decide_splash(read(0, 2, 2), read(0, 0, 2), true).text, std::string("SCORE!"));
+  CHECK_EQ(decide_splash(read(0, 1, 2), read(0, 0, 2), true, true).text, std::string("JXST SCORE"));
+  CHECK_EQ(decide_splash(read(0, 0, 2), read(0, 1, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 0, 2), read(0, 2, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 2, 1), read(0, 2, 0), true).text, std::string("FIU SCORE"));
+  CHECK_EQ(decide_splash(read(0, 2, 1), read(0, 2, 0), false).text, std::string(""));
+  CHECK_EQ(decide_splash(read(0, 2, 0), read(0, 2, 1), true).text, std::string(""));
+  // Baseball: the count tops out at the largest int.
+  CHECK_EQ(decide_splash(read(1, 1, 2), read(1, 0, 2), true).text, std::string("2147483647 RUNS!"));
+  CHECK_EQ(decide_splash(read(1, 2, 2), read(1, 0, 2), true).text, std::string("2147483647 RUNS!"));
+  CHECK_EQ(decide_splash(read(1, 0, 2), read(1, 1, 2), true).text, std::string(""));
+  CHECK_EQ(decide_splash(read(1, 2, 1), read(1, 2, 0), true).text, std::string("LAD 2147483647 RUNS"));
+  CHECK_EQ(decide_splash(read(1, 2, 0), read(1, 2, 1), true).text, std::string(""));
+  // Soccer and hockey only compare: a goal up, nothing down.
+  for (int game : {2, 3}) {
+    CHECK_EQ(decide_splash(read(game, 1, 2), read(game, 0, 2), true).text, std::string("GOAL!"));
+    CHECK_EQ(decide_splash(read(game, 0, 2), read(game, 1, 2), true).text, std::string(""));
+  }
+  // Basketball splashes only the win.
+  CHECK_EQ(decide_splash(read(4, 1, 2), read(4, 0, 2), true).text, std::string(""));
+}
+
 static void test_status_text() {
   TickerOptions all;
   GameSnapshot s = live(24, 24);
@@ -5049,6 +5139,7 @@ int main() {
   test_scoreboard_pre_nfl();
   test_splash();
   test_win_splash_every_sport();
+  test_splash_extreme_scores();
   test_status_text();
   test_no_game_text();
   test_captive();

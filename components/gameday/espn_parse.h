@@ -2,6 +2,7 @@
 // binary can compile this file directly.
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <ctime>
 #include <string>
@@ -367,6 +368,16 @@ bool same_game(const GameSnapshot &prev, const GameSnapshot &cur);
 // The game went from in progress to over between the two reads.
 inline bool went_final(const GameSnapshot &prev, const GameSnapshot &cur) {
   return prev.state == GameState::IN && cur.state == GameState::POST;
+}
+// What one side scored between the two reads, 0 when its score held or went
+// down (a correction). Scores are atoi of ESPN's text, so any int can arrive:
+// the difference is taken in 64 bits, and a gain past what an int holds
+// counts as the largest int.
+inline int score_gain(int before, int after) {
+  const int64_t d = (int64_t) after - (int64_t) before;
+  if (d <= 0)
+    return 0;
+  return d > INT_MAX ? INT_MAX : (int) d;
 }
 // The victory splash once a game is over: our side's "DAL WINS!", or the
 // other side's when neutral (live modes). us and them are what decides it,

@@ -97,10 +97,10 @@ Splash baseball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool o
   if (prev.state != GameState::IN || cur.state != GameState::IN)
     return none;
   bool hr = home_run(cur);
-  int delta = cur.team_score - prev.team_score;
+  int delta = detail::score_gain(prev.team_score, cur.team_score);
   if (delta > 0)
     return Splash{runs_word(delta, hr, !neutral, cur.team_abbr), parse_color(cur.team_color)};
-  int odelta = cur.opp_score - prev.opp_score;
+  int odelta = detail::score_gain(prev.opp_score, cur.opp_score);
   if (odelta > 0 && opponent_splashes)
     return Splash{runs_word(odelta, hr, false, cur.opp_abbr), parse_color(cur.opp_color)};
   return none;

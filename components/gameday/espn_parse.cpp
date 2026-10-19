@@ -295,12 +295,12 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
     return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
   if (prev.state != GameState::IN || cur.state != GameState::IN)
     return none;
-  int delta = cur.team_score - prev.team_score;
+  int delta = detail::score_gain(prev.team_score, cur.team_score);
   if (delta > 0 && neutral)
     return Splash{cur.team_abbr + " " + score_word(delta, false), parse_color(cur.team_color)};
   if (delta > 0)
     return Splash{score_word(delta, true), parse_color(cur.team_color)};
-  int odelta = cur.opp_score - prev.opp_score;
+  int odelta = detail::score_gain(prev.opp_score, cur.opp_score);
   if (odelta > 0 && opponent_splashes)
     return Splash{cur.opp_abbr + " " + score_word(odelta, false), parse_color(cur.opp_color)};
   return none;
