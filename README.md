@@ -2,8 +2,8 @@
 
 ## Credits and thanks
 
-- **Brandon Harvey ([@bharvey88](https://github.com/bharvey88))** built Game Day Scoreboard for Apollo Automation. Thank you, Brandon, for all the work that went into it, and for releasing it under the MIT license, so everyone can use, change and share it (see [LICENSE](LICENSE)).
-- Apollo Automation maintains the project.
+- **Brandon Harvey ([@bharvey88](https://github.com/bharvey88))** started Game Day Scoreboard. Thank you, Brandon, for all the work that went into it, and for releasing it under the MIT license, so everyone can use, change and share it (see [LICENSE](LICENSE)).
+- Apollo Automation maintains this fork of the project.
 - It is built on [hub75-studio](https://github.com/pavlov-net/hub75-studio)'s LVGL pages and controller packages, and on the attribute model of the [ha-teamtracker](https://github.com/vasqued2/ha-teamtracker) integration. Thanks to both projects.
 
 ![Touchdown fireworks on the panel](docs/site/media/touchdown.gif)

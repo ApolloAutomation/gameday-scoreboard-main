@@ -2,7 +2,7 @@
 
 ESPHome firmware for a standalone sports scoreboard (NFL, college football,
 MLB, NBA, WNBA, men's college basketball, NHL, MLS and the Premier League) on
-an ESP32-S3 HUB75 controller. Apollo Automation owns and maintains it, at
+an ESP32-S3 HUB75 controller. Apollo Automation maintains this fork, at
 github.com/ApolloAutomation/gameday-scoreboard-main; the product name is
 "Game Day Scoreboard". One top-level YAML per pinout: gameday.yaml
 (MoonHub75) and gameday-scoreboard75.yaml (the scoreboard75 controller
