@@ -1891,7 +1891,7 @@ bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, 
   }
   ESP_LOGI(TAG, "Schedule: event %s kickoff %lld group %u (%u bytes)", s.event_id.c_str(),
            (long long) s.kickoff_epoch, (unsigned) s.group, (unsigned) reader.total());
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -2015,7 +2015,7 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   }
   ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
            g.team_score, g.opp_abbr.c_str(), g.opp_score, g.short_detail.c_str(), (unsigned) reader.total());
-  out = g;
+  out = std::move(g);
   return true;
 }
 

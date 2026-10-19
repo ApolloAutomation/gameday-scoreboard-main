@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace espn {
 namespace detail {
@@ -247,7 +248,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   s.venue = str_or_empty(comp["venue"]["fullName"]);
   s.game_name = short_game_name(str_or_empty(comp["notes"][0]["headline"]));
   s.valid = true;
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -348,7 +349,7 @@ template<typename TInput> bool parse_team(TInput &input, Schedule &out) {
     }
   }
   s.valid = true;
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -580,7 +581,7 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     detail::basketball_from_event(doc.as<JsonObjectConst>(), s);
   if (sport == Sport::HOCKEY)
     detail::hockey_from_event(doc.as<JsonObjectConst>(), s);
-  out = s;
+  out = std::move(s);
   return true;
 }
 
