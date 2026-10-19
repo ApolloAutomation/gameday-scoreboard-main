@@ -4468,6 +4468,43 @@ static void test_guarded_brightness() {
   CHECK_EQ(std::string(buf), std::string(",\"heat\":0,\"brownouts\":4,\"power\":\"ok\""));
 }
 
+// Full brightness at each heat step, the cap's edge, a panel turned off, and
+// a missed temperature reading in the middle of a cool-down.
+static void test_guard_steps() {
+  const int full[kHeatSteps + 1] = {255, 179, 115, 64};
+  for (uint8_t s = 0; s <= kHeatSteps; s++)
+    CHECK_EQ((int) guarded_brightness(255, s, false), full[s]);
+  CHECK_EQ((int) guarded_brightness(kPowerCap, 0, true), (int) kPowerCap);
+  CHECK_EQ((int) guarded_brightness(kPowerCap + 1, 0, true), (int) kPowerCap);
+  CHECK_EQ((int) guarded_brightness(0, kHeatSteps, true), 0);  // off stays off
+  CHECK_EQ((int) guarded_brightness(2, kHeatSteps, false), 1);
+  CHECK(guard_mark(0, true) == GuardMark::POWER);
+
+  // A reading the sensor missed (NAN) neither restarts the cool-down nor
+  // counts as warm.
+  HeatGuard g;
+  uint32_t t = 5000;
+  CHECK(g.feed(kHotFloorC, t));
+  CHECK_EQ((int) g.step, (int) kHeatSteps);
+  t += kCoolStepMs;
+  CHECK(!g.feed(kCoolC - 5, t));  // cool from here
+  CHECK(!g.feed(NAN, t + kCoolStepMs / 2));
+  CHECK(g.last_c == kCoolC - 5);
+  CHECK(g.feed(kCoolC - 5, t + kCoolStepMs));
+  CHECK_EQ((int) g.step, (int) kHeatSteps - 1);
+
+  // The keys fit the 96 bytes health_json_ gives them, cold or hot.
+  char buf[96];
+  PowerLog log{};
+  log.brownouts = 0xFFFFFFFFu;
+  log.capped = 1;
+  int n = guard_json_keys(buf, sizeof(buf), -40.0f, kHeatSteps, log);
+  CHECK(n > 0 && n < (int) sizeof(buf));
+  CHECK_EQ(std::string(buf), std::string(",\"temp\":-40.0,\"heat\":3,\"brownouts\":4294967295,\"power\":\"capped\""));
+  n = guard_json_keys(buf, sizeof(buf), 125.0f, 0, log);
+  CHECK(n > 0 && n < (int) sizeof(buf));
+}
+
 static void test_offseason() {
   const int64_t now = 1792080000;  // any fixed instant
   const int64_t day = 24 * 3600;
@@ -4981,6 +5018,7 @@ int main() {
   test_heat_guard_cool_at_zero();
   test_power_log();
   test_guarded_brightness();
+  test_guard_steps();
   test_offseason();
   test_panel_text();
   test_wifi_history();
