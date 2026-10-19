@@ -289,19 +289,10 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
   if (cur.sport == Sport::HOCKEY)
     return hockey_splash(prev, cur, opponent_splashes, neutral);
   Splash none;
-  if (!prev.valid || !cur.valid || prev.event_id != cur.event_id)
+  if (!detail::same_game(prev, cur))
     return none;
-  if (prev.state == GameState::IN && cur.state == GameState::POST) {
-    // ESPN also moves a suspended or canceled game to post, with completed
-    // false. Only a completed game has a winner.
-    if (!cur.completed)
-      return none;
-    if (cur.team_score > cur.opp_score)
-      return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
-    if (neutral && cur.opp_score > cur.team_score)
-      return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
-    return none;
-  }
+  if (detail::went_final(prev, cur))
+    return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
   if (prev.state != GameState::IN || cur.state != GameState::IN)
     return none;
   int delta = cur.team_score - prev.team_score;
@@ -349,6 +340,22 @@ void add_last_play(std::string &out, std::string play) {
   if (play.size() > 160)
     play = play.substr(0, 157) + "...";
   add_part(out, play);
+}
+
+bool same_game(const GameSnapshot &prev, const GameSnapshot &cur) {
+  return prev.valid && cur.valid && prev.event_id == cur.event_id;
+}
+
+Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
+  // ESPN also moves a suspended or canceled game to post, with completed
+  // false. Only a completed game has a winner.
+  if (!cur.completed)
+    return Splash{};
+  if (us > them)
+    return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
+  if (neutral && them > us)
+    return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
+  return Splash{};
 }
 
 }  // namespace detail
