@@ -1028,6 +1028,42 @@ static void test_team_cache() {
   CHECK(!team_cache_load(blank, League::NFL, 0, 0, s));
 }
 
+// The boot cache's edges: the longest event id the record holds, a game with
+// no date, and a record that is all the record's 16 id bytes with no end.
+static void test_team_cache_edges() {
+  const int64_t now = 1792000000;
+  Schedule d;
+  d.valid = true;
+  d.event_id = "123456789012345";  // 15 characters and the end: fits
+  d.kickoff_epoch = now + 3600;
+  d.group = 80;
+  TeamCache c;
+  CHECK(team_cache_save(d, League::NCAA, 2294, now, c));
+  Schedule s;
+  CHECK(team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  CHECK_EQ(s.event_id, d.event_id);
+  CHECK_EQ(s.group, (uint32_t) 80);
+  CHECK(!s.time_tbd);
+  CHECK(s.comp_slug == nullptr);
+  // A record from flash whose id fills all 16 bytes still reads as a string.
+  memset(c.event_id, '7', sizeof(c.event_id));
+  CHECK(team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  CHECK_EQ(s.event_id, std::string(16, '7'));
+  // A game ESPN gave no date saves, and never loads: its kickoff reads as long over.
+  Schedule undated = d;
+  undated.kickoff_epoch = 0;
+  CHECK(team_cache_save(undated, League::NCAA, 2294, now, c));
+  CHECK(!team_cache_load(c, League::NCAA, 2294, now + 60, s));
+  // A schedule that isn't valid saves nothing and leaves the record alone.
+  Schedule bad = d;
+  bad.valid = false;
+  TeamCache kept = c;
+  CHECK(!team_cache_save(bad, League::NCAA, 2294, now, c));
+  CHECK(memcmp(&kept, &c, sizeof(c)) == 0);
+  // A negative clock is no clock.
+  CHECK(!team_cache_save(d, League::NCAA, 2294, -5, c));
+}
+
 static void test_boot_hold() {
   // Holding: no board yet, inside the cap.
   CHECK(boot_hold(false, 1000, 1000));
@@ -4839,6 +4875,7 @@ int main() {
   test_schedule_due();
   test_no_live_rescan();
   test_team_cache();
+  test_team_cache_edges();
   test_boot_hold();
   test_rotate_minutes();
   test_mlb_urls();
