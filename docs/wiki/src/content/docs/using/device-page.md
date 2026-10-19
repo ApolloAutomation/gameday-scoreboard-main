@@ -21,6 +21,8 @@ Three warnings can appear on the board:
 - **Wi-Fi needs a sign-in**: the panel's Wi-Fi wants a sign-in on a web page, like many hotel and dorm networks, and the panel can't sign in. It shows in place of **data stale**. An empty board says **This Wi-Fi needs a sign-in. Use a home network or a hotspot.**
 - **Panel not answering since** and a time: the page can't reach the panel. The board dims until it answers again.
 
+When the panel holds its brightness down by itself, a notice under the board says why: **Too warm, dimming**, or **Check the power supply** with a **Clear** button to press once you've fixed the supply. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
+
 The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
 
 ## Up next
@@ -67,7 +69,7 @@ Settings are grouped in cards. In the order the page shows them:
 | Timezone | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
 | **Show how to connect when the panel starts** | After it joins Wi-Fi, the panel shows a QR code for the Game Day app, then its address, for about 20 seconds. Turn it off to go straight to the scoreboard. |
 | **Install updates automatically** | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
-| **Follow beta** | Off unless you turn it on. Moves the panel to beta versions, test builds of the next release. See [Follow beta](#follow-beta). |
+| **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
 Only the ticker switches for sports your panel follows are shown. Hockey and basketball have no game situation line, so they have no switch of their own.
@@ -98,12 +100,13 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 - **Last restart**: why the panel last started and how long ago: **Power on**, **Restart** (one the panel asked for, like **Reboot** or a layout change), **Update**, **Crash**, **Froze (watchdog)**, **Power dip (brownout)** or **USB reset**. When the panel has started more than once since the power came on, the line under it counts the starts.
 - **Trouble since power on**: the last crash, freeze or power dip since the panel was plugged in, and how long ago, or **None**.
 - **Free memory**: how much memory the panel has left, and the largest piece of it.
-- **Chip temperature**: the controller chip's temperature, and how far the panel has dimmed itself when it's too warm. Above 75 C the panel dims until it cools. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
+- **Chip temperature**: the controller chip's temperature, and how far the panel has dimmed itself when it's too warm. At 75 C or more, the panel dims until it cools. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 - **Power dips**: how many times the panel has restarted because its power dipped, and **brightness capped** while it holds its brightness down for that.
 - **Last ESPN read**: how the last read from ESPN went, **OK**, **No answer** or an HTTP error like **HTTP 503**, and how long ago.
 - **Firmware**: the version, **stable** or **beta**, and when it was built.
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
+- **Free PSRAM**: how much of the panel's second, larger memory is left.
 - **ESPN data**: how much the panel has downloaded from ESPN since it started, for anyone on a capped internet plan.
 
 ### Follow beta
