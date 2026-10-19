@@ -2284,12 +2284,16 @@ int run_set_tests(int &checks);  // test_set.cpp
 static void test_logo_lru() {
   using espn::LogoSlot;
   // Oldest idle, off-screen slot goes first.
-  CHECK_EQ(espn::pick_evict({{300, false, false}, {100, false, false}, {200, false, false}}), 1);
+  CHECK_EQ(espn::pick_evict({{300, false, false}, {100, false, false}, {200, false, false}}, 1000), 1);
   // On screen or still downloading: never dropped, even when oldest.
-  CHECK_EQ(espn::pick_evict({{100, false, true}, {150, true, false}, {200, false, false}}), 2);
+  CHECK_EQ(espn::pick_evict({{100, false, true}, {150, true, false}, {200, false, false}}, 1000), 2);
   // Nothing droppable.
-  CHECK_EQ(espn::pick_evict({{100, true, false}, {200, false, true}}), -1);
-  CHECK_EQ(espn::pick_evict({}), -1);
+  CHECK_EQ(espn::pick_evict({{100, true, false}, {200, false, true}}, 1000), -1);
+  CHECK_EQ(espn::pick_evict({}, 1000), -1);
+  // Age counts across the millis() wrap (49.7 days): a logo used just before
+  // it is older than one used just after, though its stamp is larger.
+  CHECK_EQ(espn::pick_evict({{0x00000100u, false, false}, {0xFFFFFF00u, false, false}}, 0x00000200u), 1);
+  CHECK_EQ(espn::pick_evict({{0xFFFFFF00u, false, false}, {0x00000100u, false, false}}, 0x00000200u), 0);
   // A failed logo is due once its wait has passed, including across the millis() wrap.
   CHECK(!espn::logo_retry_due(1000, 30000, 1000 + 30000 - 1));
   CHECK(espn::logo_retry_due(1000, 30000, 1000 + 30000));
