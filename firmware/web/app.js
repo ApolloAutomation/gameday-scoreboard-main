@@ -792,10 +792,15 @@
     const cur = String(S.panels);
     document.querySelectorAll("#panels .panelpick").forEach((b) => {
       setOn(b, b.dataset.cols === cur, "aria-pressed");
-      b.onclick = () => {
+      b.onclick = async () => {
         if (b.dataset.cols === cur) return;
-        document.querySelectorAll("#panels .panelpick").forEach((x) => (x.disabled = true));
-        setGD({ panels: b.dataset.cols });
+        const picks = document.querySelectorAll("#panels .panelpick");
+        picks.forEach((x) => (x.disabled = true));
+        // Only a layout the panel took restarts it; a failed post has said so.
+        if (!(await setGD({ panels: b.dataset.cols }))) {
+          picks.forEach((x) => (x.disabled = false));
+          return;
+        }
         const as = "Restarting as " + (b.dataset.cols === "2" ? "128x64" : "64x64");
         toast(as);
         waitForReboot("", as + ". This page reconnects when the panel is back.");

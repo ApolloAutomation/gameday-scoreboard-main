@@ -1134,6 +1134,18 @@ test("the panel picker posts the new layout", async ({ page, request }) => {
   await expect(page.locator('#panels .panelpick[data-cols="2"]')).toBeDisabled();
 });
 
+test("a layout change the panel never got doesn't claim it's restarting", async ({ page, request }) => {
+  await reset(request, {}, ["set"]);
+  await page.goto("/");
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
+  await page.locator('#panels .panelpick[data-cols="1"]').click();
+  await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator('#panels .panelpick[data-cols="1"]')).toBeEnabled();
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
+});
+
 test("the device box shows what the panel downloaded from ESPN", async ({ page, request }) => {
   await reset(request, { espn_kb: 850, espn_reads: 1 });
   await page.goto("/");
