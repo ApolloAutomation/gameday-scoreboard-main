@@ -636,7 +636,9 @@ script:
           const int key = stage * 100 + (int) left;
           if (key != shown) {
             shown = key;
-            char n[16];
+            // left is 10 at most, but sized for any unsigned so GCC's
+            // -Wformat-truncation has nothing to warn about.
+            char n[24];
             if (stage == 2) {
               snprintf(n, sizeof(n), "in %us", left);
               id(boot_set_lines).execute("Keep holding", "Wi-Fi reset", n, "", true);
