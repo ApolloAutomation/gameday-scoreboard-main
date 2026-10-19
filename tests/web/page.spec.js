@@ -200,6 +200,24 @@ test("no game renders the empty board for my team and for live modes", async ({ 
   await expect(page.locator("#curName")).toHaveText("No team chosen");
 });
 
+test("Favorite teams with no favorites follows the team, and the page says so", async ({ page, request }) => {
+  const none = [{}, {}, {}, {}];
+  await reset(request, { mode: 4, favs: none, game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+  await page.goto("/");
+  await expect(page.locator("#msg")).toHaveText("No upcoming game for this team");
+  await expect(page.locator("#favName")).toHaveText("No favorites set yet");
+
+  // The team's next games, as in My team.
+  await reset(request, { mode: 4, favs: none });
+  await page.reload();
+  await expect(page.locator("#upnextList .un .n")).toHaveText(["@ Commanders", "vs Texans"]);
+
+  // No team either: the live board.
+  await reset(request, { mode: 4, favs: none, team: {}, game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+  await page.reload();
+  await expect(page.locator("#msg")).toHaveText("No live games right now");
+});
+
 test("an empty board shows the panel's reason, and the default only when the panel has none", async ({ page, request }) => {
   await reset(request, { game: { s: "NOT_FOUND", l: "nfl", why: "Can't reach ESPN" }, next: [] });
   await page.goto("/");

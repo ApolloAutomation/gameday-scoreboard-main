@@ -514,8 +514,9 @@
       msg.hidden = false;
       const mode = S ? String(S.mode || 0) : "0";
       const favMode = mode === "4" && S && (S.favs || []).some(refKey);
-      // With no team picked the panel runs the live board, unless Favorites has teams.
-      const liveMode = S && !favMode && (mode !== "0" || S.recap || !(S.team && S.team.id));
+      // With no team picked the panel runs the live board, unless Favorites
+      // has teams. Favorites with none follows the team, like My team.
+      const liveMode = S && !favMode && (isLive(mode) || S.recap || !(S.team && S.team.id));
       // why is the panel's own reason ("Can't reach ESPN", "Getting ready"),
       // sent only when its board says something other than its default.
       msg.textContent = !g ? "Waiting for the first fetch"
@@ -1210,8 +1211,11 @@
   };
   const renderUpNext = () => {
     const box = $("#upnext");
-    if (S && (S.mode || 0) === 4) { renderFavNext(box); return; }
-    if (!S || (S.mode || 0) !== 0) { box.hidden = true; return; }
+    const mode = S ? S.mode || 0 : -1;
+    // Favorite teams with no favorites follows the team, so it lists the
+    // team's games like My team.
+    if (mode === 4 && (S.favs || []).some(refKey)) { renderFavNext(box); return; }
+    if (mode !== 0 && mode !== 4) { box.hidden = true; return; }
     const curId = game && game.s !== "NOT_FOUND" ? String(game.id || "") : "";
     const list = (S.next || []).filter((u) => String(u.id) !== curId).slice(0, 3);
     box.hidden = !list.length;
