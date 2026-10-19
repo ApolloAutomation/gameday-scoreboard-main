@@ -71,7 +71,7 @@ To skip the QR code and the address when the panel starts, turn off **Show how t
 
 ## New router or Wi-Fi password
 
-When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi lost / open app** next to the QR code for the app. A shorter drop, like a mesh system moving the panel to another access point, never covers the score.
+When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi / lost / open app** next to the QR code for the app. A shorter drop, like a mesh system moving the panel to another access point, never covers the score.
 
 Join the panel's **Game Day** hotspot as above and give it the new network or password. The hotspot comes up within a few minutes of the panel losing Wi-Fi.
 

@@ -18,7 +18,7 @@ Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and
 The same prebuilt firmware runs on a bare ESP32-S3 board if you wire it to the same pins. It needs:
 
 - An ESP32-S3 with 16 MB of flash and 8 MB of octal PSRAM, like a dev board with an N16R8 module.
-- A button from GPIO0 to ground. The BOOT button on most dev boards is already wired that way. A click turns the panel on or off, and holding it shows the panel's address and resets Wi-Fi. See [Buttons and resets](/using/buttons-and-resets/).
+- A button from GPIO0 to ground. The BOOT button on most dev boards is already wired that way. A click turns the panel on or off, and holding it shows the panel's address, resets Wi-Fi or does a factory reset. See [Buttons and resets](/using/buttons-and-resets/).
 - The panel wired to the pins below.
 
 These are the GPIO numbers under the names ESPHome uses. The MoonHub75 README calls the upper half R0, G0 and B0, so its R0, G0 and B0 are R1, G1 and B1 here.

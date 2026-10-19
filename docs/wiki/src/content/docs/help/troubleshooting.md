@@ -120,7 +120,7 @@ A small icon pulsing slowly in the top right corner means the panel is holding i
 
 ## The device page says an update didn't take
 
-The Firmware box on the device page says **The update to** the new version **didn't take and the panel went back to** the version it's running, with **Install tries it again.** under it.
+The Firmware box on the device page says **The update to** the new version **didn't take and the panel went back to** the version it's running, with **Install tries it again.** under it. With **Install updates automatically** on, it adds **It won't install this one on its own.**
 
 Nothing needs doing. The panel is running the version it had before, and it works as it did.
 

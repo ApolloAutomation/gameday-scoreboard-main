@@ -43,7 +43,7 @@ If the two halves of the board show up in the wrong order, swap the two panels.
 
 In the Setup card on the device page, click the picture that matches your panels. The panel saves the choice and restarts with the new layout. Nothing needs reflashing.
 
-Factory Reset returns the layout to the build's default. The one-panel build starts as one 64x64 panel. A board installed with the 128x64 choice switches to the one-panel build at its first update, so after a factory reset on that board, pick the 128x64 layout again.
+**Factory reset** returns the layout to the build's default. The one-panel build starts as one 64x64 panel. A board installed with the 128x64 choice switches to the one-panel build at its first update, so after a factory reset on that board, pick the 128x64 layout again.
 
 ## Power
 

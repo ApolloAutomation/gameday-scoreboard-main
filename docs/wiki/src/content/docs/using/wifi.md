@@ -46,7 +46,7 @@ A short drop, like a mesh system moving the panel to another access point, doesn
 
 When the network comes back, the panel rejoins and the board comes back by itself.
 
-To see how often it happens, look under **Diagnostics** in the Device card on the device page. Under **Signal** the page draws the last day of Wi-Fi signal, says when the signal is weak, and counts the **Wi-Fi drops** of the last day with the cause of the last one. See [The device page](/using/device-page/#the-device-card).
+To see how often it happens, look under **Diagnostics** in the Device card on the device page. Under **Signal** the page draws the last day of Wi-Fi signal, says when the signal is weak, and counts the **Wi-Fi drops** of the last day with the cause of the last one. See [Diagnostics](/using/device-page/#diagnostics).
 
 ## The panel's address
 
