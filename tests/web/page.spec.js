@@ -1266,6 +1266,12 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("UPCOMING");
   await expect(page.locator("#health")).toBeHidden();
+
+  // An empty block (the firmware's fallback when it doesn't fit) counts as none.
+  await reset(request, { health: {} });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  await expect(page.locator("#health")).toBeHidden();
 });
 
 test("a hot or under-powered panel says why it is dimmed, and the power cap clears", async ({ page, request }) => {
@@ -1337,14 +1343,26 @@ test("saved Wi-Fi networks are listed in order and one can be forgotten", async 
   page.once("dialog", (d) => d.accept());
   await rows.nth(1).locator("button").click();
   await expect.poll(forgets).toEqual([{ forget: "iPhone" }]);
+  await expect(page.locator("#toast")).toHaveText("Forgot iPhone");
   await expect(rows).toHaveCount(1);
   await expect(rows.nth(0).locator("label")).toContainText("Home");
 
-  // Forgetting the last one leaves the empty line.
+  // Forgetting the last one leaves the empty line. The panel stays on it and
+  // joins it again, since ESPHome's own slot keeps the last network.
   page.once("dialog", (d) => d.accept());
   await rows.nth(0).locator("button").click();
   await expect(rows).toHaveCount(0);
   await expect(page.locator("#netsEmpty")).toBeVisible();
+  await expect(page.locator("#toast")).toHaveText("Forgot Home; the panel keeps using it and saves it again when it reconnects");
+
+  // The connected one, with another saved: it stays only until that
+  // connection drops or the panel restarts.
+  await reset(request);
+  await page.reload();
+  await expect(rows).toHaveCount(2);
+  page.once("dialog", (d) => d.accept());
+  await rows.nth(0).locator("button").click();
+  await expect(page.locator("#toast")).toHaveText("Forgot Home; it stays connected until this connection drops or the panel restarts");
 
   // Firmware without the list: the section stays hidden.
   await reset(request, {}, [], null);

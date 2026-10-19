@@ -1301,8 +1301,11 @@
     if (h < 24) return h + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
     return Math.floor(h / 24) + " d" + (h % 24 ? " " + (h % 24) + " h" : "");
   };
+  // An empty health block (the firmware's fallback when it doesn't fit its
+  // buffer) counts as none.
+  const healthOf = () => (S && S.health && S.health.up != null ? S.health : null);
   const renderHealth = () => {
-    const h = S && S.health;
+    const h = healthOf();
     $("#health").hidden = !h;
     if (!h) return;
     $("#hStart").textContent = restartName(h.start) + ", " + span(h.up) + " ago";
@@ -1647,7 +1650,13 @@
         b.disabled = true;
         try {
           const r = await fetch("/gameday/wifi?forget=" + encodeURIComponent(n.ssid), { method: "POST" });
-          toast(r.ok ? "Forgot " + n.ssid + (n.connected ? "; it stays connected until the next restart" : "") : "Could not forget " + n.ssid);
+          // A forgotten network the panel is on stays connected only until
+          // that connection drops or the panel restarts; the last saved one
+          // stays in ESPHome's own slot, so the panel joins it again.
+          const after = !n.connected ? ""
+            : nets.length === 1 ? "; the panel keeps using it and saves it again when it reconnects"
+            : "; it stays connected until this connection drops or the panel restarts";
+          toast(r.ok ? "Forgot " + n.ssid + after : "Could not forget " + n.ssid);
         } catch (_) {
           toast("Could not forget " + n.ssid);
         }
@@ -1686,8 +1695,8 @@
       case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
       case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
       case "IP": $("#ip").textContent = e.value || ""; break;
-      case "RSSI": if (!(S && (S.wifi || S.health))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
-      case "Free Heap (PSRAM)": if (!(S && S.health)) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
+      case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
+      case "Free Heap (PSRAM)": if (!healthOf()) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
     }
   };
 
