@@ -34,7 +34,8 @@ the same ground for people; this file is the short version.
   remembers (ESPHome keeps one), handed to the Wi-Fi component at boot.
 - `firmware/pages`: the LVGL pages drawn on the panel.
 - `firmware/web`: the device page. `bundle.js` is generated from `app.js`
-  and `app.css`.
+  and the team and timezone tables, and `bundle-demo.js` is the same plus
+  `demo.js` (both by `scripts/build_web.py`); `app.css` is served as is.
 - `docs/site`: the installer and support site. Every page needs its own
   title, description, canonical link and share tags;
   `python3 scripts/site_seo.py check docs/site` lists what's missing.
@@ -89,7 +90,7 @@ the same ground for people; this file is the short version.
   10% headroom (at least 1 KB).
 - Device page tests: in `tests/web`, `npm ci` and
   `npx playwright install chromium` once, then `npm test`.
-- After editing `firmware/web/app.js` or `app.css`, run
+- After editing `firmware/web/app.js`, `app.css` or `demo.js`, run
   `python3 scripts/build_web.py` and commit `bundle.js` and `bundle-demo.js`.
   CI fails if either is stale.
 - `components/gameday/teams.h`, `team_colors.h` and `timezones_parsed.h`
