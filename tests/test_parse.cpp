@@ -4567,6 +4567,33 @@ static void test_offseason() {
   CHECK_EQ(clock_color(true, parse_color("")), (uint32_t) 0xFFFFFF);  // a team with no color from ESPN
 }
 
+// The off-season clock's edges: the horizon to the second on either side of
+// a season, a home game with no abbreviation of our own, the last minute of
+// the day, and colors at the lift's edge.
+static void test_offseason_edges() {
+  const int64_t now = 1792080000;
+  const int64_t h = kSeasonHorizon;
+  CHECK(!off_season(GameState::POST, now - h, now, h));
+  CHECK(off_season(GameState::POST, now - h - 1, now, h));
+  CHECK(!off_season(GameState::PRE, now + h, now, h));
+  CHECK(off_season(GameState::PRE, now + h + 1, now, h));
+  CHECK(!off_season(GameState::PRE, now + 400 * 86400, now, -1));  // no horizon either way
+  CHECK(off_season(GameState::NOT_FOUND, 0, now, -1));
+
+  struct tm wed = mk(2026, 251, 3, 10, 0, 8, 9);
+  CHECK_EQ(next_line("", "PHI", true, mk(2026, 251, 3, 19, 0, 8, 9), wed),
+           std::string("Next: vs PHI Today 7:00 PM"));
+  CHECK_EQ(next_line("", "", false, mk(2026, 252, 4, 19, 0, 8, 10), wed),
+           std::string("Next game Tomorrow 7:00 PM"));
+  CHECK_EQ(clock_time_text(mk(2026, 251, 3, 23, 59, 8, 9)), std::string("11:59 PM"));
+  CHECK_EQ(clock_time_text(mk(2026, 251, 3, 11, 59, 8, 9)), std::string("11:59 AM"));
+
+  // One channel carries the lift; a color already at the floor stays as it is.
+  CHECK_EQ(clock_color(true, 0x00007F), (uint32_t) 0x0000C0);
+  CHECK_EQ(clock_color(true, 0xC0C0C0), (uint32_t) 0xC0C0C0);
+  CHECK_EQ(clock_color(true, 0x010101), (uint32_t) 0xC0C0C0);
+}
+
 static void test_panel_text() {
   using esphome::gameday::panel_text;
   // An iPhone hotspot name
@@ -5020,6 +5047,7 @@ int main() {
   test_guarded_brightness();
   test_guard_steps();
   test_offseason();
+  test_offseason_edges();
   test_panel_text();
   test_wifi_history();
   test_wifi_causes();
