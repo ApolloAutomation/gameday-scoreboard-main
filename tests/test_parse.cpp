@@ -4066,6 +4066,33 @@ static void test_crash_capture() {
   CHECK_EQ(std::string(reason_name(kResetSoftware)), std::string("other"));
 }
 
+static void test_crash_save() {
+  using namespace esphome::crash_report;
+  CHECK(save_for_start(kResetPanic, false) == Save::REPORT);
+  CHECK(save_for_start(kResetPanic, true) == Save::REPORT);  // a crash on the way down is still one
+  CHECK(save_for_start(kResetTaskWdt, true) == Save::REPORT);
+  CHECK(save_for_start(kResetIntWdt, false) == Save::REPORT);
+  CHECK(save_for_start(kResetWdt, false) == Save::REPORT);
+  // The owner's Reboot or an update that came back as the RTC watchdog.
+  CHECK(save_for_start(kResetWdt, true) == Save::NOTHING);
+  CHECK(save_for_start(kResetBrownout, false) == Save::REASON);
+  CHECK(save_for_start(kResetBrownout, true) == Save::REASON);
+  CHECK(save_for_start(kResetPowerOn, false) == Save::NOTHING);
+  CHECK(save_for_start(kResetSoftware, true) == Save::NOTHING);
+  CHECK(save_for_start(kResetUsb, false) == Save::NOTHING);
+  // The crash report saves exactly the starts the health block calls a
+  // fault (health.h), for every reason the S3 gives (up to kResetEfuse).
+  for (int reason = kResetUnknown; reason <= kResetEfuse; reason++) {
+    for (int planned = 0; planned < 2; planned++) {
+      const bool saves = save_for_start(reason, planned != 0) != Save::NOTHING;
+      const bool fault = restart_is_fault(classify_restart(reason, planned != 0, false));
+      if (saves != fault)
+        printf("  reason %d planned %d: crash report %d, health %d\n", reason, planned, (int) saves, (int) fault);
+      CHECK(saves == fault);
+    }
+  }
+}
+
 static void test_heat_guard() {
   HeatGuard g;
   uint32_t t = 1000;
@@ -4657,6 +4684,7 @@ int main() {
   test_boot_log();
   test_health_json();
   test_crash_capture();
+  test_crash_save();
   test_heat_guard();
   test_heat_guard_cool_at_zero();
   test_power_log();

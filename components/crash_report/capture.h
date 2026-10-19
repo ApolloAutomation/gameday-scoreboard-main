@@ -41,6 +41,29 @@ inline bool reset_crashed(int reason) {
   return reason == RESET_PANIC || reason == RESET_INT_WDT || reason == RESET_TASK_WDT || reason == RESET_WDT;
 }
 
+// What a start saves.
+enum class Save : uint8_t {
+  NOTHING,
+  REPORT,  // the reason and the crash handler's report, if it has one
+  REASON,  // the reason alone: a brownout, since any report still in RAM then is from an earlier crash
+};
+
+// planned: the firmware marked the restart on its way down (on_shutdown).
+// esp_restart() arms the RTC watchdog, and on the S3 with PSRAM a restart
+// sometimes comes back as it (health.h tells them apart the same way). A
+// marked one is a restart, not a crash: it saves nothing, so it doesn't
+// count, and the crash handler's report from an earlier crash, which soft
+// restarts keep, isn't saved a second time.
+inline Save save_for_start(int reason, bool planned) {
+  if (reason == RESET_WDT && planned)
+    return Save::NOTHING;
+  if (reset_crashed(reason))
+    return Save::REPORT;
+  if (reason == RESET_BROWNOUT)
+    return Save::REASON;
+  return Save::NOTHING;
+}
+
 // The "reason" in GET /gameday/crash, which scripts/crash_report.py prints.
 inline const char *reason_name(int reason) {
   switch (reason) {

@@ -11,6 +11,7 @@
 #include "esphome/components/esp32/crash_handler.h"
 #endif
 
+#include <esp_attr.h>
 #include <esp_system.h>
 
 #include <cinttypes>
@@ -28,12 +29,22 @@ static constexpr time_t CLOCK_VALID = 1700000000;
 
 CrashReport *global_crash_report = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+// Set on the way down from a restart the firmware asked for, and read and
+// cleared at the next start (save_for_start in capture.h). RTC memory keeps
+// it through a restart, a crash and a watchdog; after a power cut it holds
+// noise, which matches by a one in four billion chance, and a power-on start
+// saves nothing anyway.
+RTC_NOINIT_ATTR static uint32_t planned_mark;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static constexpr uint32_t PLANNED = 0x47444352;  // "GDCR"
+
 static_assert(RESET_PANIC == ESP_RST_PANIC && RESET_INT_WDT == ESP_RST_INT_WDT && RESET_TASK_WDT == ESP_RST_TASK_WDT &&
                   RESET_WDT == ESP_RST_WDT && RESET_BROWNOUT == ESP_RST_BROWNOUT,
               "capture.h reset reasons no longer match esp_reset_reason_t");
 
 void CrashReport::setup() {
   global_crash_report = this;
+  const bool planned = planned_mark == PLANNED;
+  planned_mark = 0;
   if (logger::global_logger != nullptr) {
     logger::global_logger->add_log_callback(
         this, [](void *self, uint8_t level, const char *tag, const char *message, size_t len) {
@@ -51,7 +62,8 @@ void CrashReport::setup() {
   this->record_->version[VERSION_SIZE - 1] = '\0';
 
   const esp_reset_reason_t reason = esp_reset_reason();
-  if (reset_crashed(reason) || reason == ESP_RST_BROWNOUT) {
+  const Save save = save_for_start(reason, planned);
+  if (save != Save::NOTHING) {
     Record &r = *this->record_;
     r.count++;
     r.reason = (uint8_t) reason;
@@ -67,7 +79,7 @@ void CrashReport::setup() {
     r.report[0] = '\0';
     this->report_len_ = 0;
 #ifdef USE_ESP32_CRASH_HANDLER
-    if (reset_crashed(reason) && esp32::crash_handler_has_data()) {
+    if (save == Save::REPORT && esp32::crash_handler_has_data()) {
       this->capturing_ = true;
       esp32::crash_handler_log();
       this->capturing_ = false;
@@ -118,6 +130,8 @@ void CrashReport::loop() {
   if (!this->need_time_ && !this->clear_pending_)
     this->disable_loop();
 }
+
+void CrashReport::on_shutdown() { planned_mark = PLANNED; }
 
 void CrashReport::dump_config() {
   ESP_LOGCONFIG(TAG, "Crash report:");

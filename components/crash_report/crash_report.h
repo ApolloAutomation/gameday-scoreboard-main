@@ -19,8 +19,10 @@
 //
 // Only a crash or watchdog boot reads the crash handler: its report also
 // survives the soft restarts that follow (OTA, the Reboot button), and those
-// must not save it a second time. A brownout saves the reason alone, since
-// any report still in RAM then is from an earlier crash.
+// must not save it a second time. A restart the firmware asked for that comes
+// back as the RTC watchdog is one of them (save_for_start in capture.h). A
+// brownout saves the reason alone, since any report still in RAM then is
+// from an earlier crash.
 
 #include <atomic>
 #include <mutex>
@@ -39,6 +41,8 @@ class CrashReport : public Component {
   void setup() override;
   void loop() override;
   void dump_config() override;
+  // Marks the restart as asked for, for the next start.
+  void on_shutdown() override;
   // After the preferences are ready and before the API, so a log client
   // that connects and clears the crash handler's report can't beat us to it.
   float get_setup_priority() const override { return setup_priority::BUS; }
