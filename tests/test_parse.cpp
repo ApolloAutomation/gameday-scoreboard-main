@@ -3587,6 +3587,33 @@ static void test_auto_update() {
   t.newer = false;  // a different version, but not a newer one
   CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
 
+  // Daylight saving in a zone that changes at 3 or 4 AM. Spring forward
+  // skips 3:00 to 3:59: a panel whose minute was in it still goes at 4:00.
+  t = in;
+  t.slot = 59;
+  t.checked_day = auto_update_day(2026, 285);
+  t.hour = 4;
+  t.minute = 0;
+  CHECK(auto_update_step(t) == AutoUpdateStep::CHECK);
+  // Fall back repeats an hour: the try counts for the date, so the second
+  // pass through 3 AM installs nothing.
+  t = in;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+  t.tried_day = t.today;
+  t.hour = 3;
+  t.minute = 30;
+  CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
+  // New Year: a try on December 31 leaves January 1 its own night.
+  t = in;
+  t.tried_day = auto_update_day(2026, 365);
+  t.today = auto_update_day(2027, 1);
+  t.checked_day = t.today;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+  t.tried_day = auto_update_day(2028, 366);  // a leap year's last night
+  t.today = auto_update_day(2029, 1);
+  t.checked_day = t.today;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+
   // Beta channel versions: the build number after "-beta." is the next part.
   CHECK(version_newer("2026.10.0-beta.813", "2026.10.0-beta.812"));
   CHECK(!version_newer("2026.10.0-beta.812", "2026.10.0-beta.812"));
