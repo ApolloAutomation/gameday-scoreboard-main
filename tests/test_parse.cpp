@@ -3891,6 +3891,13 @@ static void test_boot_log() {
   CHECK_EQ(log.fault_at, (int64_t) now);
   CHECK_EQ(boot_log_fault_ago(log, now + 90, 30), (int64_t) 90);
   CHECK(boot_log_start(log, kResetPowerGlitch, build_b, now) == Restart::BROWNOUT);
+  // A fault at a start that already had the clock keeps that time.
+  boot_log_clock(log, now + 30);
+  CHECK_EQ(log.fault_at, (int64_t) now);
+  // A clock that reads before the fault (set back, or wrong) gives no age.
+  CHECK(boot_log_start(log, kResetSoftware, build_b, now + 60) == Restart::RESTART);
+  CHECK_EQ(boot_log_fault_ago(log, now - 100, 10), (int64_t) -1);
+  CHECK_EQ(boot_log_fault_ago(log, now + 100, 10), (int64_t) 100);
 
   // Power: a log that survived it is cleared anyway, faults and all.
   CHECK(boot_log_start(log, kResetPowerOn, build_b, now) == Restart::POWER);
@@ -3914,6 +3921,12 @@ static void test_boot_log() {
   CHECK(classify_restart(kResetUsb, false, false) == Restart::USB);
   CHECK(classify_restart(kResetExternal, false, false) == Restart::POWER);
   CHECK(classify_restart(kResetDeepSleep, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetUnknown, true, true) == Restart::OTHER);
+  CHECK(classify_restart(kResetJtag, false, false) == Restart::USB);
+  CHECK(classify_restart(kResetSdio, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetEfuse, false, false) == Restart::OTHER);
+  CHECK(classify_restart(kResetSoftware, true, false) == Restart::RESTART);
+  CHECK(classify_restart(kResetSoftware, false, true) == Restart::RESTART);  // unmarked: not an update
   CHECK(classify_restart(99, false, false) == Restart::OTHER);
   CHECK_EQ(std::string(restart_key(Restart::BROWNOUT)), std::string("brownout"));
   CHECK_EQ(std::string(restart_key(Restart::OTHER)), std::string("other"));
