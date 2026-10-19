@@ -3835,6 +3835,49 @@ static void test_auto_update() {
   CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
 }
 
+// Versions with a part missing or a fifth part, the publisher's list without
+// a space, and a panel whose minute is the last of the first hour.
+static void test_auto_update_edges() {
+  CHECK(version_newer("2026.10.1", "2026.10"));  // a missing part counts as 0
+  CHECK(!version_newer("2026.10", "2026.10.0"));
+  CHECK(!version_newer("2026.10.0", "2026.10"));
+  CHECK(version_newer("2026.010.0", "2026.9.0"));  // parts are numbers, not text
+  CHECK(version_newer("10.0.0", "9.99.99"));
+  CHECK(!version_newer("1.5.6", "v1.5.5"));  // a running version that isn't a number never updates
+  CHECK(!version_newer("1.5.5.1.1", "1.5.5.1"));  // four parts are compared, no more
+
+  CHECK(install_now_listed("Install now:gameday-aba970", "gameday-aba970"));
+  CHECK(install_now_listed("Install now: gameday-500ebc all", "gameday-aba970"));
+  CHECK(!install_now_listed("install now: gameday-aba970", "gameday-aba970"));  // the tag as CI writes it
+  CHECK(!install_now_listed("Install now: ALL", "gameday-aba970"));
+
+  CHECK_EQ(auto_update_slot(0xFF, 0xFF), 0xFFFF % kAutoUpdateSpreadMinutes);
+  AutoUpdateInputs in;
+  in.enabled = true;
+  in.clock_valid = true;
+  in.today = auto_update_day(2026, 300);
+  in.tried_day = auto_update_day(2026, 299);
+  in.checked_day = in.today;
+  in.check_done = true;
+  in.available = true;
+  in.newer = true;
+  in.slot = kAutoUpdateSpreadMinutes - 1;
+  in.hour = kAutoUpdateStartHour;
+  in.minute = 58;
+  CHECK(auto_update_step(in) == AutoUpdateStep::IDLE);
+  in.minute = 59;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.hour = kAutoUpdateEndHour - 1;
+  in.minute = 0;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.slot = 0;
+  in.hour = kAutoUpdateStartHour;
+  CHECK(auto_update_step(in) == AutoUpdateStep::INSTALL);
+  in.hour = kAutoUpdateStartHour - 1;
+  in.minute = 59;
+  CHECK(auto_update_step(in) == AutoUpdateStep::IDLE);
+}
+
 static void test_update_mirror() {
   // On the primary: nothing until a read or install fails.
   MirrorInputs in;
@@ -4926,6 +4969,7 @@ int main() {
   test_backoff_windows();
   test_cup_backoff();
   test_auto_update();
+  test_auto_update_edges();
   test_update_mirror();
   test_update_mark();
   test_boot_log();
