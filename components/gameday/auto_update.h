@@ -116,6 +116,13 @@ inline void update_mark_set(char *dst, const std::string &version) {
   dst[kUpdateVersionLen - 1] = '\0';
 }
 
+// Flash can hold anything, so both fields end inside the mark before either
+// is read as a string.
+inline void update_mark_terminate(UpdateMark &m) {
+  m.installing[kUpdateVersionLen - 1] = '\0';
+  m.failed[kUpdateVersionLen - 1] = '\0';
+}
+
 enum class UpdateOutcome : uint8_t {
   NONE,         // nothing was being installed
   PENDING,      // running the version being installed, not yet a good boot
@@ -128,6 +135,7 @@ enum class UpdateOutcome : uint8_t {
 // unless it is PENDING (the caller clears that once the boot is good), and
 // drops `failed` once the panel runs that version or a newer one.
 inline UpdateOutcome update_mark_boot(UpdateMark &m, const std::string &running, bool rolled_back) {
+  update_mark_terminate(m);
   UpdateOutcome out = UpdateOutcome::NONE;
   if (m.installing[0] != '\0') {
     if (running == m.installing) {
@@ -139,7 +147,6 @@ inline UpdateOutcome update_mark_boot(UpdateMark &m, const std::string &running,
       m.installing[0] = '\0';
     }
   }
-  m.failed[kUpdateVersionLen - 1] = '\0';
   if (m.failed[0] != '\0' && !version_newer(m.failed, running))
     m.failed[0] = '\0';
   return out;

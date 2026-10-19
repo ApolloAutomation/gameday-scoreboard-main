@@ -1456,6 +1456,8 @@ void GamedayComponent::settle_update_mark_() {
   this->update_mark_pref_ = global_preferences->make_preference<::espn::UpdateMark>(fnv1_hash("gameday_update_mark_v1"));
   if (!this->update_mark_pref_.load(&this->update_mark_))
     this->update_mark_ = ::espn::UpdateMark{};
+  // Ended first so the copy the log lines below print is a string too.
+  ::espn::update_mark_terminate(this->update_mark_);
   const ::espn::UpdateMark before = this->update_mark_;
   const std::string running = ESPHOME_PROJECT_VERSION;
   // A power cut in the new firmware's first minute rolls it back too, but

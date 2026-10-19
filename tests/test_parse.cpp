@@ -4046,6 +4046,34 @@ static void test_update_mark() {
   update_mark_boot(m, "1.0", false);
   CHECK(strlen(m.failed) < kUpdateVersionLen);
   CHECK(m.failed[0] == '\0');  // no readable version, so it never holds back a release
+  // Both fields full with no end in either: each reads as its first
+  // kUpdateVersionLen - 1 bytes, never on into the next field or past the
+  // mark. The bytes after the mark end so a misread stays inside `g`.
+  struct {
+    UpdateMark m;
+    char after[8];
+  } g;
+  auto garbage = [&g]() {
+    memset(&g, '9', sizeof(g));
+    memset(g.m.failed, '7', sizeof(g.m.failed));
+    g.after[sizeof(g.after) - 1] = '\0';
+  };
+  garbage();
+  CHECK(update_mark_boot(g.m, std::string(kUpdateVersionLen - 1, '9'), false) == UpdateOutcome::PENDING);
+  CHECK_EQ(strlen(g.m.installing), kUpdateVersionLen - 1);
+  CHECK(g.m.failed[0] == '\0');  // 23 sevens is no version
+  garbage();
+  CHECK(update_mark_boot(g.m, "1.0", false) == UpdateOutcome::NOT_INSTALLED);
+  CHECK(g.m.installing[0] == '\0');
+  CHECK(g.m.failed[0] == '\0');
+  garbage();
+  CHECK(update_mark_boot(g.m, "1.0", true) == UpdateOutcome::ROLLED_BACK);
+  CHECK(g.m.installing[0] == '\0');
+  CHECK(g.m.failed[0] == '\0');  // nor is 23 nines, so nothing is held back
+  garbage();
+  update_mark_terminate(g.m);
+  CHECK_EQ(strlen(g.m.installing), kUpdateVersionLen - 1);
+  CHECK_EQ(strlen(g.m.failed), kUpdateVersionLen - 1);
 }
 
 // Every byte of a panel_text() result is printable ASCII or part of a Latin-1
