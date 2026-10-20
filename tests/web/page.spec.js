@@ -928,6 +928,21 @@ test("a check right after a Follow beta flip that still finds the release feed's
   await expect(page.locator("#fwSub")).toContainText("The newest release is v1.5.5.");
 });
 
+test("a setting changed during Check for updates leaves the firmware box checking", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.6", current_version: "1.5.5" } }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Checking for updates");
+  await page.locator('.sw[data-set="autoupd"]').click();
+  await staysAs(page.locator("#fwText"), ["Checking for updates"], 2500);
+  await expect(page.locator("#fwInstall")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6", { timeout: 8000 });
+  await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
+});
+
 test("the firmware box's overnight note shows when the panel's settings land after the update", async ({ page, request }) => {
   await reset(request, { autoupd: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };

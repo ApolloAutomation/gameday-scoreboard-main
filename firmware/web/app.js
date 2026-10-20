@@ -772,8 +772,9 @@
     // Older firmware and the bar and demo builds have no beta to follow.
     $("#betaRow").hidden = S.beta === undefined;
     // The firmware box's rollback line and overnight note read this document,
-    // which can land after the update entity does.
-    if (fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+    // which can land after the update entity does. A check in progress keeps
+    // saying so; its answer redraws the box.
+    if (!fwChecking && fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
     if (S.bar) {
@@ -1481,7 +1482,9 @@
     $("#fwText").textContent = "Checking for updates";
     $("#fwSub").textContent = "";
     $("#fwInstall").hidden = true;
+    fwChecking = true;
     await new Promise((r) => setTimeout(r, 4000));
+    fwChecking = false;
     try {
       // detail=all carries current_version; the plain state does not
       const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
@@ -1574,6 +1577,7 @@
     return /^https:\/\//i.test(url) ? url : "";
   };
   let installing = false;
+  let fwChecking = false;  // Check for updates is waiting for the panel's answer
   // What the firmware box reads from the state document, and what it last drew with.
   const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
   let fwDrawn = fwInputs();

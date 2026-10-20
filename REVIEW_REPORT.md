@@ -414,9 +414,9 @@ Recommendations follow each.
   each beta for a release still to come (`scripts/beta_version.sh`):
   `<version>-beta.<run>` while that version has no tag, and the next patch
   number once it does (2026.10.1 builds 2026.10.2-beta.<run>), so betas built
-  between releases stay newer than the release panels run. Bar builds off
-  `beta` are `<version>-beta.0`, so a bar panel flashed from one still takes
-  the next beta.
+  between releases stay newer than the release panels run. Bar builds from
+  any other branch are `<version>-beta.0`, so a bar panel flashed from one
+  still takes the next beta.
 - **Update URLs accept http://.** Every shipped build uses https; rejecting
   plain http in the schema is a policy choice (bench builds may use a local
   server).
