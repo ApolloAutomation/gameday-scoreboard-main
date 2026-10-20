@@ -571,12 +571,14 @@ and option 3 or 4 only together with per-panel secrets.
 6. **Check the live site.** After the deploy, read
    `https://apolloautomation.github.io/gameday-scoreboard-main/firmware/<variant>/manifest.json`
    for `moonhub75`, `moonhub75-2panel` and `scoreboard75` and check each
-   names 2026.10.1. The `<variant>-beta` and `beta/<variant>` folders keep the
-   last beta, 2026.10.1-beta.<run>, until the next beta build. Open the
-   installer, the DIY installer and the changelog page, and check that a
-   panel running a beta with Follow beta off (one flashed from the
-   prerelease's `firmware-<variant>-beta.zip`) is offered the release with a
-   working Release notes link. A bar panel is never offered a release.
+   names 2026.10.1. The `moonhub75-beta`, `scoreboard75-beta`,
+   `beta/moonhub75` and `beta/scoreboard75` folders keep the last beta,
+   2026.10.1-beta.<run>, until the next beta build (the two-panel build reads
+   moonhub75's). Open the installer, the DIY installer and the changelog page,
+   and check that a panel running a beta with Follow beta off (one flashed
+   from the prerelease's `firmware-moonhub75-beta.zip` or
+   `firmware-scoreboard75-beta.zip`) is offered the release with a working
+   Release notes link. A bar panel is never offered a release.
 
 `version` on `dev` stays 2026.10.1 until the next release's pull request.
 Betas built in between are named 2026.10.2-beta.<run>, so panels on the
