@@ -779,13 +779,13 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     // The firmware box's rollback line and overnight note read this document,
     // which can land after the update entity does, and so can the feed an
     // entity that came first was read from.
-    // The feed comes from the panel's own answer (D, not taps it hasn't
-    // confirmed), read after the entity arrived.
+    // The feed an update came from, taken again from the first read that left
+    // after it arrived.
     const fwEnt = ents[byName["Firmware"]];
     if (fwEnt && D) {
       const fresh = fwEnt.stampAfter && dLeft > fwEnt.stampAfter;
       const restamp = fresh || fwEnt.fromBeta === undefined;
-      if (restamp) fwEnt.fromBeta = !!(D.beta || D.bar);
+      if (restamp) fwEnt.fromBeta = feedOf(D);
       if (fresh) fwEnt.stampAfter = 0;
       if (restamp || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
     }
@@ -1592,12 +1592,13 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   // What the firmware box reads from the state document, and what it last drew with.
   const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
   // Whether the update entity reads the beta feed (Follow beta on, or a bar
-  // build), as the state document says; undefined until the document is in.
-  // Each entity keeps the answer from when it arrived (fromBeta), so a box
-  // drawn from the release feed isn't renamed the moment Follow beta flips,
-  // and takes it again from the first read of the document that leaves after
-  // it arrived (stampAfter), which catches a flip made on another page.
-  const fromBetaFeed = () => (S ? !!(S.beta || S.bar) : undefined);
+  // build), from the panel's own state document (D, never taps it hasn't
+  // confirmed); undefined until the document is in. Each entity keeps the
+  // answer from when it arrived (fromBeta), so a box drawn from the release
+  // feed isn't renamed the moment Follow beta flips, and takes it again from
+  // the first read that leaves after it arrived (stampAfter), which catches a
+  // flip made on another page.
+  const feedOf = (doc) => (doc ? !!(doc.beta || doc.bar) : undefined);
   let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
     const box = $("#fw");
@@ -1725,7 +1726,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       // Home Assistant's shorter line, so the ticker and last play come from there.
       case "Game Status": scheduleState(150); break;
       case "Firmware":
-        ents[e.id].fromBeta = fromBetaFeed();
+        ents[e.id].fromBeta = feedOf(D);
         ents[e.id].stampAfter = Date.now();
         scheduleState(150);
         renderUpdate(ents[e.id]);

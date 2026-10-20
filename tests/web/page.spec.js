@@ -941,18 +941,45 @@ test("a settings read already on its way when the update arrives doesn't decide 
 });
 
 test("a Follow beta tap the panel refuses leaves the firmware box's wording alone", async ({ page, request }) => {
+  test.setTimeout(60000);
   await reset(request, { beta: false }, ["set"]);
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
   await page.goto("/");
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
   await slowReads(page, 3000);
+  const checked = page.waitForResponse((r) => r.url().includes("/update/Firmware"), { timeout: 8000 });
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
-  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813", { timeout: 8000 });
-  // Tapped while the read after that answer is still out.
+  await checked;
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
+  // Tapped while the read after that answer is still out. The panel takes
+  // 4 seconds to refuse, so that read lands while the tap is still unanswered.
+  await page.route("**/gameday/set*", async (route) => {
+    await sleep(4000);
+    await route.continue();
+  });
   await page.locator('.sw[data-set="beta"]').click();
-  await expect(page.locator('.sw[data-set="beta"]')).toHaveAttribute("aria-checked", "false", { timeout: 8000 });
-  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 4000);
+  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 10000);
+  await expect(page.locator('.sw[data-set="beta"]')).toHaveAttribute("aria-checked", "false");
+});
+
+test("an update that arrives while a Follow beta tap is unanswered keeps the release wording", async ({ page, request }) => {
+  test.setTimeout(60000);
+  await reset(request, { beta: false }, ["set"]);
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
+  // The panel takes 6 seconds to refuse the tap, so the release feed's answer lands first.
+  await page.route("**/gameday/set*", async (route) => {
+    await sleep(6000);
+    await route.continue();
+  });
+  await page.locator('.sw[data-set="beta"]').click();
+  const checked = page.waitForResponse((r) => r.url().includes("/update/Firmware"), { timeout: 8000 });
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await checked;
+  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 6000);
 });
 
 test("the firmware box's overnight note shows when the panel's settings land after the update", async ({ page, request }) => {
