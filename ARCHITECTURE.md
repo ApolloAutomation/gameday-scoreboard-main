@@ -206,10 +206,10 @@ with `power_ok` on the device page.
   own.
 - **Follow beta**: release firmware built from the `beta` branch, at
   `${site_base}/firmware/<variant>-beta/manifest.json`, chosen with the
-  "Follow beta" switch (`beta_channel` in the component). Betas are
-  `<version>-beta.<run>`; `version_newer` puts every beta before the release
-  with its number, so turning the switch off moves a panel to that release
-  once it ships.
+  "Follow beta" switch (`beta_channel` in the component). Betas are named
+  for a release still to come (`scripts/beta_version.sh`), and
+  `version_newer` puts every beta before the release with its number, so
+  turning the switch off gets a panel offered that release once it ships.
 - **Bar builds**: `${site_base}/firmware/beta/<variant>/manifest.json`,
   checked every 15 minutes and installed on their own at night, or right away
   when the beta's summary says "Install now:" with the panel's name.
@@ -273,10 +273,11 @@ state document.
 Generators (`build_web.py`, `build_teams.py`, `build_team_colors.py`,
 `build_timezones.py`), release and site helpers (`release_notes.py`,
 `site_seo.py`, `check_site_firmware.sh`, `add_beta_channel.sh`,
-`set_manifest_name.sh`, `publish_mirror.sh`), the size budget
-(`size_budget.py`), and bench and factory tools (`factory_flash.py`,
+`beta_version.sh`, `set_manifest_name.sh`, `publish_mirror.sh`), the size
+budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 `burnin_monitor.py`, `improv_scan.py`, `crash_report.py`,
-`bar_report_qr.sh`). The Python tools have `--selftest`.
+`bar_report_qr.sh`). The Python tools and `beta_version.sh` have
+`--selftest`.
 
 ## Tests (`tests/`)
 

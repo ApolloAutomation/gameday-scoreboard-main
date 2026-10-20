@@ -99,14 +99,14 @@ A fix we want that is only in an ESPHome beta, in order:
 
 A release sets `version` in `firmware/gameday-common.yaml`, adds its
 `## vX.Y.Z` section to CHANGELOG.md, goes from `dev` to `beta` to `main`,
-and gets its `vX.Y.Z` tag on `main`. Each build of `beta` is
-`<version>-beta.<run>`, and a panel puts every beta before the release with
-the same number: 2026.10.1-beta.20 comes after 2026.10.1-beta.19 and before
-2026.10.1. So right after a release, the maintainers move `version` on
-`dev` to the next number. Until then, new betas carry the released number
-and panels that run that release don't take them; the beta publish warns
-about it. A bar build from any other branch is `<version>-beta.0`, below
-every published beta, so a bar panel flashed from it takes the next one.
+and gets its `vX.Y.Z` tag on `main`. Between releases, `version` stays at
+the last release's number. A panel puts every beta before the release with
+its number: 2026.10.1-beta.20 comes after 2026.10.1-beta.19 and before
+2026.10.1. So `scripts/beta_version.sh` names each build of `beta` for a
+release still to come: `<version>-beta.<run>` while that version has no
+tag, on its way to release, and the next patch number once it's released,
+so 2026.10.1 builds 2026.10.2-beta.<run>. A bar build from any other branch
+is `<version>-beta.0`, so a bar panel flashed from it takes the next beta.
 
 ### Setup
 

@@ -410,11 +410,13 @@ Recommendations follow each.
 - **Beta versions sorted above their release.** Settled in the first
   release's pull request: a release now sorts after every beta with its
   number (`version_newer` and the device page's `isNewer`), so a panel that
-  turns Follow beta off is offered the release its beta led up to. Bar builds
-  off `beta` are `<version>-beta.0`, so a bar panel flashed from one still
-  takes the next beta. Bump `version` on `dev` right after each release, or
-  panels running it take no beta until the next bump; the beta publish warns
-  when its version is already released.
+  turns Follow beta off is offered the release its beta led up to. CI names
+  each beta for a release still to come (`scripts/beta_version.sh`):
+  `<version>-beta.<run>` while that version has no tag, and the next patch
+  number once it does (2026.10.1 builds 2026.10.2-beta.<run>), so betas built
+  between releases stay newer than the release panels run. Bar builds off
+  `beta` are `<version>-beta.0`, so a bar panel flashed from one still takes
+  the next beta.
 - **Update URLs accept http://.** Every shipped build uses https; rejecting
   plain http in the schema is a policy choice (bench builds may use a local
   server).
@@ -538,6 +540,9 @@ and option 3 or 4 only together with per-panel secrets.
    in `.github/workflows/build.yml` on `dev` in its own pull request, compile
    every build, run every check, and re-diff `components/improv_ble` against
    the new upstream component (it is a marked override of 2026.10.0b3's).
+   The same pull request updates every other place that quotes the pin
+   (`git grep 2026.10.0b3`): the DIY "Build it yourself" page, CONTRIBUTING.md's
+   Setup and AGENTS.md.
 2. **The release pull request.** A draft pull request into `dev` holds the
    rest: `version` 2026.10.1 in `firmware/gameday-common.yaml`, its
    `## v2026.10.1` section in `CHANGELOG.md` (a tag without a matching
@@ -547,7 +552,11 @@ and option 3 or 4 only together with per-panel secrets.
    an aside folded in.
 3. **Promote.** Open "Promote dev to beta" (head `dev`, base `beta`), let the
    beta channel run, then "Promote beta to main" (head `beta`, base `main`).
-   CI's Branch rules check the source branch and the final ESPHome.
+   CI's Branch rules check the source branch and the final ESPHome. This
+   first time, no panel can take the beta over the air, since the site only
+   goes live with the first tag; test it by flashing test panels by hand
+   from the beta run's `bar-*` artifacts or the `beta-firmware` prerelease's
+   zips before promoting to `main`.
 4. **Tag `main`.** `git tag v2026.10.1` on `main`'s merge commit and push the
    tag. The tag's Build run checks the tag against the version and the
    changelog, builds the three release variants, and its publish job
@@ -566,9 +575,10 @@ and option 3 or 4 only together with per-panel secrets.
    version; open the installer, the DIY installer and the changelog page; and
    check a panel's device page offers the release with a working Release notes
    link.
-7. **Bump `dev`.** Right after the tag, move `version` on `dev` to the next
-   number (2026.10.2), with no changelog section yet, so the betas built from
-   then on sort above the release and reach panels on Follow beta.
+
+`version` on `dev` stays 2026.10.1 until the next release's pull request.
+Betas built in between are named 2026.10.2-beta.<run>, so panels on the
+release with Follow beta on take them.
 
 ## End state
 

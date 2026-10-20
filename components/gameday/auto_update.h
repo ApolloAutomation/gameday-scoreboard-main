@@ -38,10 +38,11 @@ inline int auto_update_slot(uint8_t mac4, uint8_t mac5) {
 // A number that changes once per local calendar day, for "tried tonight".
 inline int32_t auto_update_day(int year, int day_of_year) { return (int32_t) year * 1000 + day_of_year; }
 
-// The beta channel's versions are the next release's number plus
-// "-beta.<build>" ("2026.10.1-beta.812"). Each beta is newer than the one
-// before, and the release is newer than all of its betas, so a panel that
-// turns Follow beta off goes to the release once it ships.
+// The beta channel's versions are a coming release's number plus
+// "-beta.<build>" ("2026.10.1-beta.812", scripts/beta_version.sh). Each beta
+// is newer than the one before, and the release is newer than all of its
+// betas, so a panel that turns Follow beta off is offered the release once
+// it ships.
 static const char kBetaTag[] = "-beta.";
 
 static const int kVersionParts = 4;
