@@ -341,6 +341,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   };
 
   let stateTimer = null;
+  let dLeft = 0;  // when the read that brought D left
   let stateInflight = false;
   let stateAgain = false;
   const fetchState = async () => {
@@ -362,6 +363,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       if (!connected && !restart && Date.now() - streamAt > 10000) connect();
       if (r.ok) {
         D = await r.json();
+        dLeft = left;
         for (const k of Object.keys(held)) {
           const h = held[k];
           if (h.ack && (same(k, D[k], h.v) || left > h.ack + APPLY_MS)) delete held[k];
@@ -777,13 +779,14 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     // The firmware box's rollback line and overnight note read this document,
     // which can land after the update entity does, and so can the feed an
     // entity that came first was read from.
+    // The feed comes from the panel's own answer (D, not taps it hasn't
+    // confirmed), read after the entity arrived.
     const fwEnt = ents[byName["Firmware"]];
-    if (fwEnt) {
-      const restamp = fwEnt.fromBeta === undefined || fwEnt.restamp;
-      if (restamp) {
-        fwEnt.fromBeta = fromBetaFeed();
-        fwEnt.restamp = false;
-      }
+    if (fwEnt && D) {
+      const fresh = fwEnt.stampAfter && dLeft > fwEnt.stampAfter;
+      const restamp = fresh || fwEnt.fromBeta === undefined;
+      if (restamp) fwEnt.fromBeta = !!(D.beta || D.bar);
+      if (fresh) fwEnt.stampAfter = 0;
       if (restamp || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
     }
     // The bar build: a note, and an email to us with the panel's name in it.
@@ -1592,8 +1595,8 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   // build), as the state document says; undefined until the document is in.
   // Each entity keeps the answer from when it arrived (fromBeta), so a box
   // drawn from the release feed isn't renamed the moment Follow beta flips,
-  // and takes it again from the next read of the document, which catches a
-  // flip made on another page.
+  // and takes it again from the first read of the document that leaves after
+  // it arrived (stampAfter), which catches a flip made on another page.
   const fromBetaFeed = () => (S ? !!(S.beta || S.bar) : undefined);
   let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
@@ -1723,7 +1726,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       case "Game Status": scheduleState(150); break;
       case "Firmware":
         ents[e.id].fromBeta = fromBetaFeed();
-        ents[e.id].restamp = true;
+        ents[e.id].stampAfter = Date.now();
         scheduleState(150);
         renderUpdate(ents[e.id]);
         refreshFirmwareDetail(e.id);

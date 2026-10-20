@@ -914,6 +914,47 @@ test("a Follow beta flip made on another page reaches the firmware box with the 
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest beta, v1.5.6-beta.813", { timeout: 12000 });
 });
 
+test("a settings read already on its way when the update arrives doesn't decide the firmware box's feed", async ({ page, request }) => {
+  test.setTimeout(60000);
+  await reset(request, { beta: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
+  // The page's next settings read gets its answer with Follow beta off, and
+  // is handed to the page slowly.
+  let answered;
+  const out = new Promise((r) => (answered = r));
+  await page.route("**/gameday/state*", async (route) => {
+    const res = await route.fetch();
+    answered();
+    await sleep(6000);
+    await route.fulfill({ response: res });
+  });
+  await out;
+  // Another page turns Follow beta on, and the beta feed answers while that read is out.
+  await request.post("/gameday/set?beta=1");
+  entity = { ...fw, value: "1.5.6-beta.812", current_version: "1.5.6-beta.813" };
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest beta, v1.5.6-beta.813", { timeout: 20000 });
+});
+
+test("a Follow beta tap the panel refuses leaves the firmware box's wording alone", async ({ page, request }) => {
+  await reset(request, { beta: false }, ["set"]);
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
+  await slowReads(page, 3000);
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813", { timeout: 8000 });
+  // Tapped while the read after that answer is still out.
+  await page.locator('.sw[data-set="beta"]').click();
+  await expect(page.locator('.sw[data-set="beta"]')).toHaveAttribute("aria-checked", "false", { timeout: 8000 });
+  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 4000);
+});
+
 test("the firmware box's overnight note shows when the panel's settings land after the update", async ({ page, request }) => {
   await reset(request, { autoupd: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
