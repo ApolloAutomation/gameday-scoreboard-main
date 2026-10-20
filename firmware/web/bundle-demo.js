@@ -341,7 +341,6 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   };
 
   let stateTimer = null;
-  let dLeft = 0;  // when the read that brought D left
   let stateInflight = false;
   let stateAgain = false;
   const fetchState = async () => {
@@ -363,7 +362,6 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       if (!connected && !restart && Date.now() - streamAt > 10000) connect();
       if (r.ok) {
         D = await r.json();
-        dLeft = left;
         for (const k of Object.keys(held)) {
           const h = held[k];
           if (h.ack && (same(k, D[k], h.v) || left > h.ack + APPLY_MS)) delete held[k];
@@ -777,18 +775,8 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     // Older firmware and the bar and demo builds have no beta to follow.
     $("#betaRow").hidden = S.beta === undefined;
     // The firmware box's rollback line and overnight note read this document,
-    // which can land after the update entity does, and so can the feed an
-    // entity that came first was read from.
-    // The feed an update came from, taken again from the first read that left
-    // after it arrived.
-    const fwEnt = ents[byName["Firmware"]];
-    if (fwEnt && D) {
-      const fresh = fwEnt.stampAfter && dLeft > fwEnt.stampAfter;
-      const restamp = fresh || fwEnt.fromBeta === undefined;
-      if (restamp) fwEnt.fromBeta = feedOf(D);
-      if (fresh) fwEnt.stampAfter = 0;
-      if (restamp || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
-    }
+    // which can land after the update entity does.
+    if (fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
     if (S.bar) {
@@ -1591,14 +1579,6 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   let installing = false;
   // What the firmware box reads from the state document, and what it last drew with.
   const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
-  // Whether the update entity reads the beta feed (Follow beta on, or a bar
-  // build), from the panel's own state document (D, never taps it hasn't
-  // confirmed); undefined until the document is in. Each entity keeps the
-  // answer from when it arrived (fromBeta), so a box drawn from the release
-  // feed isn't renamed the moment Follow beta flips, and takes it again from
-  // the first read that leaves after it arrived (stampAfter), which catches a
-  // flip made on another page.
-  const feedOf = (doc) => (doc ? !!(doc.beta || doc.bar) : undefined);
   let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
     const box = $("#fw");
@@ -1615,7 +1595,10 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
-      const chan = u.fromBeta ? "beta" : "release";
+      // Only the beta feeds carry "-beta.<build>" versions (scripts/beta_version.sh),
+      // so the version on offer names the feed it came from, whatever the
+      // Follow beta switch says right now.
+      const chan = /-beta\.\d+$/.test(String(u.value || "")) ? "beta" : "release";
       $("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
       sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
     } else if (st.includes("AVAILABLE")) {
@@ -1725,13 +1708,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       // Sent on every board update: re-read the state document. Its value is
       // Home Assistant's shorter line, so the ticker and last play come from there.
       case "Game Status": scheduleState(150); break;
-      case "Firmware":
-        ents[e.id].fromBeta = feedOf(D);
-        ents[e.id].stampAfter = Date.now();
-        scheduleState(150);
-        renderUpdate(ents[e.id]);
-        refreshFirmwareDetail(e.id);
-        break;
+      case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
       case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
       case "IP": $("#ip").textContent = e.value || ""; break;
       case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
