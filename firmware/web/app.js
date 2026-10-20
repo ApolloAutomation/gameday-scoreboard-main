@@ -771,9 +771,15 @@
     $("#autoupdRow").hidden = S.autoupd === undefined;
     // Older firmware and the bar and demo builds have no beta to follow.
     $("#betaRow").hidden = S.beta === undefined;
-    // The firmware box's rollback line, beta or release wording and overnight
-    // note read this document, which can land after the update entity does.
-    if (fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+    // The firmware box's rollback line and overnight note read this document,
+    // which can land after the update entity does, and so can the feed an
+    // entity that came first was read from.
+    const fwEnt = ents[byName["Firmware"]];
+    if (fwEnt) {
+      const late = fwEnt.fromBeta === undefined;
+      if (late) fwEnt.fromBeta = fromBetaFeed();
+      if (late || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
+    }
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
     if (S.bar) {
@@ -1516,7 +1522,7 @@
       const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
       if (r.ok) {
         const j = await r.json();
-        ents[id] = Object.assign(ents[id] || {}, j, { id });
+        ents[id] = Object.assign(ents[id] || {}, j, { id, fromBeta: fromBetaFeed() });
         renderUpdate(ents[id]);
       }
     } catch (_) {}
@@ -1575,7 +1581,12 @@
   };
   let installing = false;
   // What the firmware box reads from the state document, and what it last drew with.
-  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.beta || S.bar), !!(S.autoupd || S.bar)] : null);
+  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
+  // Whether the update entity reads the beta feed (Follow beta on, or a bar
+  // build), as the state document says; undefined until the document is in.
+  // Each entity keeps the answer from when it arrived (fromBeta), so a box
+  // drawn from the release feed isn't renamed the moment Follow beta flips.
+  const fromBetaFeed = () => (S ? !!(S.beta || S.bar) : undefined);
   let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
     const box = $("#fw");
@@ -1592,7 +1603,7 @@
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
-      const chan = S && (S.beta || S.bar) ? "beta" : "release";
+      const chan = u.fromBeta ? "beta" : "release";
       $("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
       sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
     } else if (st.includes("AVAILABLE")) {
@@ -1702,7 +1713,7 @@
       // Sent on every board update: re-read the state document. Its value is
       // Home Assistant's shorter line, so the ticker and last play come from there.
       case "Game Status": scheduleState(150); break;
-      case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
+      case "Firmware": ents[e.id].fromBeta = fromBetaFeed(); renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
       case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
       case "IP": $("#ip").textContent = e.value || ""; break;
       case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;

@@ -879,6 +879,26 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812. Nothing to install.");
 });
 
+test("Follow beta doesn't rename what the firmware box found until the beta feed answers", async ({ page, request }) => {
+  await reset(request, { beta: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
+  await page.locator('.sw[data-set="beta"]').click();
+  await expectSet(request, { beta: "1" });
+  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 2000);
+});
+
+test("the firmware box's overnight note shows when the panel's settings land after the update", async ({ page, request }) => {
+  await reset(request, { autoupd: true });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.6", current_version: "1.5.5" } }));
+  await slowReads(page, 2500);
+  await page.goto("/");
+  await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.", { timeout: 8000 });
+});
+
 test("the firmware box words a beta right when the panel's settings land after the update", async ({ page, request }) => {
   await reset(request, { beta: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
