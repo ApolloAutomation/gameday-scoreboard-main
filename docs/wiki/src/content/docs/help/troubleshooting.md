@@ -47,7 +47,7 @@ Check that other devices on the same network can get online. The panel keeps try
 
 Check that other devices on the same network can get online. If they can, try another network, like your home Wi-Fi or a phone hotspot.
 
-**Why:** the panel needs the time before it can read any scores. It asks a time server on the internet. Some guest, office and school networks block time servers, and then the panel sets its clock from ESPN instead, a few seconds after it joins. So **Getting ready** that lasts means the panel can reach neither. If it says **Wi-Fi needs sign-in** instead, see [The panel won't join my Wi-Fi](#the-panel-wont-join-my-wi-fi).
+**Why:** the panel needs the time before it can read any scores. It asks a time server on the internet. Some guest, office and school networks block time servers, and then the panel sets its clock from ESPN instead, a few seconds after it joins. So **Getting ready** that lasts means the panel can reach neither. If it says **Wi-Fi needs / sign-in / use home or / a hotspot** instead, see [The panel won't join my Wi-Fi](#the-panel-wont-join-my-wi-fi).
 
 ## Half the board is blank, or the picture shows twice
 
