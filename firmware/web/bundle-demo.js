@@ -1487,7 +1487,6 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     $("#fwInstall").hidden = true;
     fwChecking = true;
     await new Promise((r) => setTimeout(r, 4000));
-    fwChecking = false;
     try {
       // detail=all carries current_version; the plain state does not
       const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
@@ -1508,6 +1507,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       if (uid) renderUpdate(ents[uid]);
       toast("Device did not respond");
     }
+    fwChecking = false;
     btn.textContent = label;
     btn.disabled = false;
   };
