@@ -14,31 +14,21 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | The panel says | What it means | What to do |
 | --- | --- | --- |
 | **Starting** | The panel has power and is starting up. | Wait a few seconds. |
-| **SETUP / Game Day / app**, with a QR code | The panel has no Wi-Fi network yet. | Join its hotspot (the panel shows the name in turn), or use the installer's Wi-Fi dialog. The QR code is for the separate Game Day app. See [Set up your panel](/get-started/setup/). |
+| **SETUP / Game Day / app**, with a QR code | The panel has no Wi-Fi network yet, or you reset its Wi-Fi. | Join its hotspot (the panel shows the name in turn), or use the installer's Wi-Fi dialog. The QR code is for the separate Game Day app. See [Set up your panel](/get-started/setup/). |
 | **Join WiFi / Game Day / 2f6a70** | The panel's own hotspot is up, named `Game Day 2f6a70`. | Join that network from any phone or laptop to set it up. |
+| **Unplug it to / rejoin / saved Wi-Fi** | The panel is in setup after a Wi-Fi reset and still knows its saved networks. It takes turns with **SETUP**. | Set it up on a new network, or unplug it and plug it back in to go back to the networks it knows. It goes back by itself after 15 minutes, or up to 10 minutes later if you're still setting it up from the app or the hotspot. See [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). |
 | **Connecting to** and a network name | The panel is joining a network it already knows. | Wait. |
 | **JOINING** and a network name | The app sent the panel a network, and it's joining it. | Wait. If the name is wrong, pick again in the app. |
 | A QR code with **Scan for Game Day app** | The panel joined your Wi-Fi. | Wait for the address. The QR code is for the separate Game Day app. |
 | **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
 | **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
-:::note[Coming in the next release]
-| The panel says | What it means | What to do |
-| --- | --- | --- |
-| **Unplug it to rejoin saved Wi-Fi** | The panel is in setup after a Wi-Fi reset and still knows its old networks. | Set it up on a new network, or unplug it and plug it back in to go back to the old one. It goes back by itself after 15 minutes. |
-:::
-
 ## When the Wi-Fi is the problem
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
-| **Wi-Fi lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
-
-:::note[Coming in the next release]
-| The panel says | What it means | What to do |
-| --- | --- | --- |
-| **Wi-Fi needs sign-in / use home or a hotspot**, with a QR code | The network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot. The message goes by itself once scores come through. |
-:::
+| **Wi-Fi / lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
+| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes by itself once scores come through. |
 
 ## On the scoreboard
 
@@ -67,28 +57,20 @@ A panel with no team picked also brings the app's QR code back over the board fo
 
 ## When you hold the button
 
-The button on the controller shows the panel's address and resets it. See [Buttons and resets](/using/buttons-and-resets/).
+The button on the controller shows the panel's address and resets it. Nothing resets until you let go, and the screen says what letting go will do. See [Buttons and resets](/using/buttons-and-resets/).
 
 | The panel says | What it means |
 | --- | --- |
 | **On your phone, open** the address **or** the IP address **then pick your team** | You held the button for about 1.5 seconds. The address shows for 20 seconds. On a 64x64 panel it shows the address over two lines, then the IP address and **pick a team**. |
-| **Keep holding to reset Wi-Fi**, with a bar filling | You've held it for 5 seconds. Let go now and nothing resets. |
-| **Wi-Fi reset / restarting** | You held it for 10 seconds. The panel forgets its Wi-Fi and restarts into setup. |
-
-:::note[Coming in the next release]
-Nothing resets until you let go, and the screen says what letting go will do.
-
-| The panel says | Let go and |
-| --- | --- |
-| **Keep holding / Wi-Fi reset / in 5s**, counting down | Nothing resets. |
-| **Release to reset Wi-Fi**, then **Hold 10s to erase all**, counting down | The Wi-Fi resets. The panel says **Wi-Fi reset / restarting**. |
-| **Release to erase all**, then **Hold 10s to cancel**, counting down | Factory reset. The panel says **Erasing all / restarting**. |
-| **Release to cancel** | Nothing resets. |
-:::
+| **Keep holding / Wi-Fi reset / in 5s**, counting down, with a bar filling | You've held it for 5 seconds. Let go now and nothing resets. |
+| **Release to / reset Wi-Fi / Hold 10s to / erase all**, counting down | You've held it for 10 seconds. Let go now to reset Wi-Fi. |
+| **Release to / erase all / Hold 10s to / cancel**, counting down | You've held it for 20 seconds. Let go now for a factory reset, which erases everything. |
+| **Release to / cancel** | You've held it for 30 seconds. Let go now and nothing resets. |
+| **Wi-Fi reset / restarting** | You let go to reset Wi-Fi. The panel restarts into setup and keeps its saved networks. |
+| **Erasing all / restarting** | You let go for a factory reset. The panel erases everything and restarts into setup. |
 
 ## Icons in the corner
 
-:::note[Coming in the next release]
 A small icon pulsing slowly in the top right corner means the panel is holding its brightness down. Every two minutes the bottom line says why, for 15 seconds.
 
 | You see | What it means | What to do |
@@ -97,7 +79,6 @@ A small icon pulsing slowly in the top right corner means the panel is holding i
 | A red plug and **Check power supply** | The panel restarted twice in a row because its power dipped, so it keeps its brightness low. | Use the power supply that came with it, not a phone charger or a USB port. Then press **Clear** on the device page. |
 
 More in [Troubleshooting](/help/troubleshooting/#the-panel-is-dim-or-shows-a-thermometer-or-plug-in-the-corner).
-:::
 
 ## Red, green, blue and white screens
 
@@ -109,14 +90,11 @@ The panel shows no message of its own while it updates. It restarts when the upd
 
 | The device page says | What it means |
 | --- | --- |
-| **Update available** and a version | A newer release is out. Press **Install** to install it. |
+| **Update available** and a version | A newer release is out, or a newer beta with **Follow beta** on. Press **Install** to install it. |
 | **Installing** and a version | The update is running. Keep the panel powered. The page reconnects when the panel is back. |
-| **You're up to date** | The panel has the latest release. |
+| **You're up to date** | The panel has the latest release, or the latest beta with **Follow beta** on. |
+| **You're ahead of the latest release** and a version | The panel runs a newer version than the latest release, like a beta. Nothing to install. Once the next release is out, the page offers it. |
+| **You're ahead of the latest beta** and a version | With **Follow beta** on, the panel runs a newer version than the latest beta, like a release that came out after that beta. It waits for a beta of the next release. Nothing to install. |
+| **The update to** a version **didn't take and the panel went back to** another | The new version crashed as it started, so the panel went back to the one it had. It won't install that version on its own again. **Install** tries it again. See [Troubleshooting](/help/troubleshooting/#the-device-page-says-an-update-didnt-take). |
 | **Could not reach the update server. Try again in a minute.** | After you tap **Check for updates**, the check didn't get an answer. |
 | **Not checked yet** | The panel hasn't checked for updates since it started. It checks a few seconds after its clock is set, or tap **Check for updates**. |
-
-:::note[Coming in the next release]
-| The device page says | What it means |
-| --- | --- |
-| **The update to** a version **didn't take and the panel went back to** another | The new version crashed as it started, so the panel went back to the one it had. It won't install that version on its own again. **Install** tries it once more. |
-:::

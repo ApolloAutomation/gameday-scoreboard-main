@@ -13,40 +13,31 @@ The page is plain HTML built into the firmware, so there is nothing to install a
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.
 
-When nothing is on, the board says why, like **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**.
+When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 
-Two warnings can appear on the board:
+Three warnings can appear on the board:
 
 - **data stale**: the panel has missed three reads from ESPN in a row, so the score may be old.
+- **Wi-Fi needs a sign-in**: the panel's Wi-Fi wants a sign-in on a web page, like many hotel and dorm networks, and the panel can't sign in. It shows in place of **data stale**. An empty board says **This Wi-Fi needs a sign-in. Use a home network or a hotspot.**
 - **Panel not answering since** and a time: the page can't reach the panel. The board dims until it answers again.
 
-The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
+When the panel holds its brightness down by itself, a notice under the board says why: **Too warm, dimming**, or **Check the power supply** with a **Clear** button to press once you've fixed the supply. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 
-:::note[Coming in the next release]
-When the board is empty, the page shows the panel's own reason, the same words the panel shows, like **Can't reach ESPN** or **Getting ready**. On a Wi-Fi that wants you to sign in on a web page, the board says **Wi-Fi needs a sign-in** instead of **data stale**. See [Panel messages](/help/panel-messages/).
-:::
+The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
 
 ## Up next
 
 In My team, a list under the board shows the next three games after the one on the board, with the opponent, the day and time (in your browser's time) and the TV channel. It appears for football and soccer teams. MLB, NBA, WNBA, men's college basketball and NHL season schedules are too large for the panel to read, so those teams have no Up next list.
 
-In Favorite teams, the list has one row per favorite: the live score, the final, or the next kickoff and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team.
-
-:::note[Coming in the next release]
-A favorite the panel hasn't read from ESPN yet says **Not checked yet**, so it no longer looks like a team with no game.
-:::
+In Favorite teams, the list has one row per favorite: the live score, the final, or the next kickoff and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add a favorite.
 
 ## Choosing a team
 
-Tap **Change team** to open the team chooser. It has a search box and a tab per league: **NFL**, **NCAAF** (college football), **MLB**, **MLS**, **EPL** (Premier League), **NBA**, **WNBA**, **NCAAM** (men's college basketball) and **NHL**. Tap a logo to follow that team. Search looks through every league at once.
+Tap **Change team** to open the team chooser. It has a search box and a **Close** button at the top, and under them a row of tabs, one per league: **NFL**, **NCAAF** (college football), **MLB**, **MLS**, **EPL** (Premier League), **NBA**, **WNBA**, **NCAAM** (men's college basketball) and **NHL**. On a narrow screen the tabs wrap onto more lines, so every league and the **Close** button stay on the screen, even on a small phone. Tap a logo to follow that team. Search looks through every league at once.
 
 The first tab, **On now**, lists today's games in every league, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
 
 The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. See [Favorite teams](/using/favorites/).
-
-:::note[Coming in the next release]
-The league tabs sit on their own row under the search box, so every league and the **Close** button fit on the screen, even on a small phone.
-:::
 
 ## Settings
 
@@ -78,6 +69,7 @@ Settings are grouped in cards. In the order the page shows them:
 | Timezone | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
 | **Show how to connect when the panel starts** | After it joins Wi-Fi, the panel shows a QR code for the Game Day app, then its address, for about 20 seconds. Turn it off to go straight to the scoreboard. |
 | **Install updates automatically** | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
+| **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
 Only the ticker switches for sports your panel follows are shown. Hockey and basketball have no game situation line, so they have no switch of their own.
@@ -99,10 +91,32 @@ The Device card has the buttons and the details about the panel itself.
 - **Reboot** restarts the panel. The page says it's restarting and reconnects when the panel is back.
 - **Reset Wi-Fi** and **Factory reset** restart the panel into setup, so the page can't follow it. See [The boot button and resets](/using/buttons-and-resets/).
 
-Under them: the **Firmware** box, the Wi-Fi networks list, the panel's **Address** and **Name**, its Wi-Fi **Signal**, free memory, and **ESPN data**, how much the panel has downloaded from ESPN since it started, for anyone on a capped internet plan.
+Under them: the **Firmware** box, the **Install updates automatically** and **Follow beta** switches, the Wi-Fi networks list, and the panel's **Address** and **Name**. The **Diagnostics** section comes last.
 
-:::note[Coming in the next release]
-A **Diagnostics** section in the Device card says why the panel last restarted and when (power on, restart, update, crash, froze or a power dip), any crash, freeze or power dip since it was plugged in, free memory, the chip temperature, power dips, the last read from ESPN and the firmware version and build. Under **Signal** it draws the last day of Wi-Fi signal, says when the signal is weak, and counts **Wi-Fi drops** with the cause of the last one.
+### Diagnostics
 
-The Device card can also show a **Follow beta** switch. Beta versions are test builds for test panels and can have bugs. Leave it off.
-:::
+**Diagnostics** helps you, or support, work out why a panel misbehaves.
+
+- **Last restart**: why the panel last started and how long ago: **Power on**, **Restart** (one the panel asked for, like **Reboot** or a layout change), **Update**, **Crash**, **Froze (watchdog)**, **Power dip (brownout)** or **USB reset**. When the panel has started more than once since the power came on, the line under it counts the starts.
+- **Trouble since power on**: the last crash, freeze or power dip since the panel was plugged in, and how long ago, or **None**.
+- **Free memory**: how much memory the panel has left, and the largest piece of it.
+- **Chip temperature**: the controller chip's temperature, and how far the panel has dimmed itself when it's too warm. At 75 C or more, the panel dims until it cools. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
+- **Power dips**: how many times the panel has restarted because its power dipped, and **brightness capped** while it holds its brightness down for that.
+- **Last ESPN read**: how the last read from ESPN went, **OK**, **No answer** or an HTTP error like **HTTP 503**, and how long ago.
+- **Firmware**: the version, then **stable**, or **beta** while **Follow beta** is on, and when it was built.
+- **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
+- **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
+- **Free PSRAM**: how much of the panel's second, larger memory is left.
+- **ESPN data**: how much the panel has downloaded from ESPN since it started, for anyone on a capped internet plan.
+
+### Follow beta
+
+**Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
+
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.10.2-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+
+- On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
+- On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
+- Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the next release comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
+
+See [Firmware updates](/using/updates/#beta-versions).

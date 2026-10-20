@@ -95,6 +95,19 @@ A fix we want that is only in an ESPHome beta, in order:
    fix customers can't wait for. Add it, then re-run the Branch rules job;
    the release tag on that PR's merge passes too.
 
+### Release versions and betas
+
+A release sets `version` in `firmware/gameday-common.yaml`, adds its
+`## vX.Y.Z` section to CHANGELOG.md, goes from `dev` to `beta` to `main`,
+and gets its `vX.Y.Z` tag on `main`. Between releases, `version` stays at
+the last release's number. A panel puts every beta before the release with
+its number: 2026.10.1-beta.20 comes after 2026.10.1-beta.19 and before
+2026.10.1. So `scripts/beta_version.sh` names each build of `beta` for a
+release still to come: `<version>-beta.<run>` while that version has no
+tag, on its way to release, and the next patch number once it's released,
+so 2026.10.1 builds 2026.10.2-beta.<run>. A bar build from any other branch
+is `<version>-beta.0`, so a bar panel flashed from it takes the next beta.
+
 ### Setup
 
 - [ESPHome](https://esphome.io/) 2026.10.0b3, the version CI builds with.

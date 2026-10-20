@@ -62,10 +62,10 @@ the same ground for people; this file is the short version.
 - Host tests: `make -C tests` (needs g++). CI also builds
   `make -C tests replay` and runs the `--selftest` of
   `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
-  `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`
-  and `tests/web/mock_device.py`. The last checks the device page's mock
-  against `tests/fixtures/set_cases.json`, the same table the host tests
-  run through `components/gameday/set_request.h`.
+  `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`,
+  `scripts/beta_version.sh` and `tests/web/mock_device.py`. The last checks
+  the device page's mock against `tests/fixtures/set_cases.json`, the same
+  table the host tests run through `components/gameday/set_request.h`.
 - A panel that restarted from a crash, a watchdog or a brownout keeps the
   report in flash (`components/crash_report`, `GET /gameday/crash`).
   `python3 scripts/crash_report.py <panel>` prints it and decodes the

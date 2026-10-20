@@ -20,11 +20,11 @@ Include what you can of this:
 
 A photo of the panel showing the problem helps too.
 
-:::note[Coming in the next release]
-If the panel restarted by itself, it keeps a crash report until it's cleared, even across an unplug. Open `http://<your panel's address>/gameday/crash` in a browser, like `http://gameday-2f6a70.local/gameday/crash`, and paste what it shows into your issue. A `count` of 0 means it hasn't restarted unexpectedly.
+### The crash report
 
-Built from source? `python3 scripts/crash_report.py <panel address>` in the firmware repo prints the same report and turns its addresses into file and line numbers, using the matching release's firmware or `--elf` for your own build.
-:::
+If the panel restarted by itself, after a crash, a freeze or a power dip, it keeps a crash report about the last one, even across an unplug, until the report is cleared. Open `http://<your panel's address>/gameday/crash` in a browser, like `http://gameday-2f6a70.local/gameday/crash`, and paste what it shows into your issue. A `count` of 0 means no crash is saved. Otherwise `count` is how many such restarts there have been since the report was last cleared.
+
+Built from source? In the firmware repo, `python3 scripts/crash_report.py <panel address>` prints the same report and turns its addresses into function names, files and line numbers. It decodes against the firmware of the matching release on GitHub, or against your own build with `--elf` and the path to its `firmware.elf`, using the tools that compiling the firmware installs. Add `--clear` to empty the panel's report after printing it.
 
 ## Orders and returns
 

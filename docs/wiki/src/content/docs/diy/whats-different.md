@@ -17,15 +17,13 @@ A board you built installs from the [DIY installer](https://apolloautomation.git
 
 ## Layout default
 
-The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where Factory Reset returns it. If you installed the 128x64 choice and then reset, pick the 128x64 layout again on the device page.
+The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where a factory reset returns it. A board installed with the 128x64 choice switches to the one-panel build at its first update. A factory reset after that returns it to 64x64 too, so pick the 128x64 layout again on the device page.
 
 ## The boot button
 
-On a Game Day Scoreboard the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and a longer hold resets Wi-Fi. See [Buttons and resets](/using/buttons-and-resets/).
+On a Game Day Scoreboard the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and longer holds reset Wi-Fi or erase everything.
 
-:::note[Coming in the next release]
-Nothing resets until you let go of the button. Hold it and the screen counts down from 5 seconds. Let go after 10 seconds to reset Wi-Fi, or after 20 seconds for a factory reset. At 30 seconds it says "Release to cancel".
-:::
+Nothing resets until you let go of the button. Hold it and the screen counts down from 5 seconds. Let go between 10 and 20 seconds to reset Wi-Fi, or between 20 and 30 seconds for a factory reset. At 30 seconds it says **Release to / cancel**, and letting go then resets nothing. See [Buttons and resets](/using/buttons-and-resets/).
 
 ## No factory check
 

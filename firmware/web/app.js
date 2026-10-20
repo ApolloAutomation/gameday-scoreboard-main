@@ -771,9 +771,10 @@
     $("#autoupdRow").hidden = S.autoupd === undefined;
     // Older firmware and the bar and demo builds have no beta to follow.
     $("#betaRow").hidden = S.beta === undefined;
-    // The rollback line in the firmware box reads this document, which can
-    // land after the update entity does.
-    if ((S.update_failed || "") !== fwFailed && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+    // The firmware box's rollback line and overnight note read this document,
+    // which can land after the update entity does. A check in progress keeps
+    // saying so; its answer redraws the box.
+    if (!fwChecking && fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
     if (S.bar) {
@@ -1481,16 +1482,21 @@
     $("#fwText").textContent = "Checking for updates";
     $("#fwSub").textContent = "";
     $("#fwInstall").hidden = true;
+    fwChecking = true;
     await new Promise((r) => setTimeout(r, 4000));
+    // A panel that lost power never closes the connection, so give up on it.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     try {
       // detail=all carries current_version; the plain state does not
-      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
+      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
       if (r.ok && uid) {
         const j = await r.json();
         onState(Object.assign({ id: uid }, j));
         const st = String(j.state || "").toUpperCase();
-        // The firmware row shows the result; only shout when there is something to do
-        if (st.includes("AVAILABLE")) toast("Update available: v" + j.value);
+        // The firmware row shows the result; only shout when there is something to
+        // do. The device offers any different version, an older one included.
+        if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
         else if (st.includes("INSTALLING")) { /* the install is running; nothing to say */ }
         else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
       } else if (uid) {
@@ -1501,6 +1507,8 @@
       if (uid) renderUpdate(ents[uid]);
       toast("Device did not respond");
     }
+    clearTimeout(timer);
+    fwChecking = false;
     btn.textContent = label;
     btn.disabled = false;
   };
@@ -1523,13 +1531,19 @@
   };
 
   // true if a is newer than b, false if older, null if either is unreadable.
-  // A beta's build number ("2026.10.0-beta.812") counts as a fourth part, as
-  // in the firmware (auto_update.h), so a beta is newer than its plain number.
+  // As in the firmware (auto_update.h), betas ("2026.10.1-beta.812") order by
+  // their build number and come before the release they lead up to.
   const isNewer = (a, b) => {
-    const parse = (v) => String(v || "").replace(/^v/, "").replace("-beta.", ".").split(".").map((n) => parseInt(n, 10));
+    const parse = (v) => {
+      const [base, beta] = String(v || "").replace(/^v/, "").split("-beta.");
+      const p = base.split(".").map((n) => parseInt(n, 10));
+      const build = beta === undefined ? Infinity : parseInt(beta, 10);
+      if (p.length < 3 || p.some(isNaN) || isNaN(build)) return null;
+      return [p[0], p[1], p[2], p[3] || 0, build];
+    };
     const pa = parse(a), pb = parse(b);
-    if (pa.length < 3 || pb.length < 3 || pa.some(isNaN) || pb.some(isNaN)) return null;
-    for (let i = 0; i < 4; i++) { const x = pa[i] || 0, y = pb[i] || 0; if (x !== y) return x > y; }
+    if (!pa || !pb) return null;
+    for (let i = 0; i < 5; i++) if (pa[i] !== pb[i]) return pa[i] > pb[i];
     return false;
   };
 
@@ -1567,7 +1581,10 @@
     return /^https:\/\//i.test(url) ? url : "";
   };
   let installing = false;
-  let fwFailed = "";     // S.update_failed as the firmware box last drew it
+  let fwChecking = false;  // Check for updates is waiting for the panel's answer
+  // What the firmware box reads from the state document, and what it last drew with.
+  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
+  let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
     const box = $("#fw");
     box.hidden = false;
@@ -1577,14 +1594,18 @@
     const btn = $("#fwInstall");
     const sub = $("#fwSub");
     btn.hidden = true;
-    fwFailed = (S && S.update_failed) || "";
+    fwDrawn = fwInputs();
     if (st.includes("INSTALLING") || installing) {
       $("#fwText").textContent = "Installing " + (latest || "update");
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
-      $("#fwText").textContent = "You're ahead of the latest release, " + cur;
-      sub.textContent = "The newest published version is " + latest + ". Nothing to install.";
+      // Only the beta feeds carry "-beta.<build>" versions (scripts/beta_version.sh),
+      // so the version on offer names the feed it came from, whatever the
+      // Follow beta switch says right now.
+      const chan = /-beta\.\d+$/.test(String(u.value || "")) ? "beta" : "release";
+      $("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
+      sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
     } else if (st.includes("AVAILABLE")) {
       // The panel rolled back from this very version (a crash in its first
       // minute); it won't install it on its own again, but Install still tries.

@@ -220,7 +220,7 @@ jobs:
           url="$SITE_URL/changelog/#$GITHUB_REF_NAME"
           if [ "$GITHUB_REF" = refs/heads/beta ]; then
             v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
-            v="$v-beta.$GITHUB_RUN_NUMBER"
+            v=$(bash scripts/beta_version.sh "$v" "$GITHUB_RUN_NUMBER")
             sed -i "s/^  version: \".*\"$/  version: \"$v\"/" firmware/gameday-common.yaml
             summary="Beta $v from ${GITHUB_SHA::7}."
             url="https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
@@ -365,8 +365,9 @@ jobs:
     # from the beta channel on its own, for the free panels in bars. Every run
     # keeps it as a downloadable file (bar-<variant>, outside publish's
     # firmware-* pattern) for flashing a new bar panel by hand. On the beta
-    # branch it is also the beta channel: its version gets "-beta.<run>" so
-    # each one is newer than the last, and publish-beta puts it on the site.
+    # branch it is also the beta channel: its version gets "-beta.<run>"
+    # (scripts/beta_version.sh) so each one is newer than the last, and
+    # publish-beta puts it on the site.
     name: Build ${{ matrix.variant }} bar
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     needs: branch-rules
@@ -389,9 +390,12 @@ jobs:
         run: |
           set -euo pipefail
           v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
+          # Off the beta branch, "-beta.0": a bar panel flashed by hand from
+          # this build sorts before every beta published from this version on
+          # (auto_update.h, scripts/beta_version.sh), so it installs the next.
           summary="Development build"
           if [ "$GITHUB_REF" = refs/heads/beta ]; then
-            v="$v-beta.$GITHUB_RUN_NUMBER"
+            v=$(bash scripts/beta_version.sh "$v" "$GITHUB_RUN_NUMBER")
             sed -i "s/^  version: \".*\"$/  version: \"$v\"/" firmware/gameday-common.yaml
             summary="Bar beta $v from ${GITHUB_SHA::7}."
             if [ -n "$NOW" ]; then
@@ -402,8 +406,12 @@ jobs:
               fi
               summary="$summary Install now: $NOW"
             fi
-          elif [ -n "$NOW" ]; then
-            echo "::warning::install_now only does something on the beta branch"
+          else
+            v="$v-beta.0"
+            sed -i "s/^  version: \".*\"$/  version: \"$v\"/" firmware/gameday-common.yaml
+            if [ -n "$NOW" ]; then
+              echo "::warning::install_now only does something on the beta branch"
+            fi
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "summary=$summary" >> "$GITHUB_OUTPUT"
@@ -564,6 +572,7 @@ jobs:
           python3 scripts/crash_report.py --selftest
           python3 scripts/site_seo.py --selftest
           python3 scripts/release_notes.py --selftest
+          bash scripts/beta_version.sh --selftest
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
