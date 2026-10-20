@@ -963,6 +963,21 @@ test("a setting changed while Check for updates waits for the panel's answer lea
   await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
 });
 
+test("Check for updates gives up on a panel that never answers", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  const entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+  await page.route("**/update/Firmware*", () => {});  // never answered
+  const btn = page.locator("#actions button", { hasText: /Check/ });
+  await btn.click();
+  await expect(page.locator("#toast")).toHaveText("Device did not respond", { timeout: 15000 });
+  await expect(btn).toHaveText("Check for updates");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+});
+
 test("the firmware box's overnight note shows when the panel's settings land after the update", async ({ page, request }) => {
   await reset(request, { autoupd: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };

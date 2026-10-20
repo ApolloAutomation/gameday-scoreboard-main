@@ -1484,9 +1484,12 @@
     $("#fwInstall").hidden = true;
     fwChecking = true;
     await new Promise((r) => setTimeout(r, 4000));
+    // A panel that lost power never closes the connection, so give up on it.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     try {
       // detail=all carries current_version; the plain state does not
-      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
+      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
       if (r.ok && uid) {
         const j = await r.json();
         onState(Object.assign({ id: uid }, j));
@@ -1504,6 +1507,7 @@
       if (uid) renderUpdate(ents[uid]);
       toast("Device did not respond");
     }
+    clearTimeout(timer);
     fwChecking = false;
     btn.textContent = label;
     btn.disabled = false;
