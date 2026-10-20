@@ -9,8 +9,6 @@ The controller has one button, the boot button. A quick press turns the panel on
 
 ## Presses and holds
 
-A quick press turns the panel on or off.
-
 Nothing resets while you hold the button. The screen says what letting go will do, and letting go does it. Hold it and watch the screen:
 
 | Hold | The screen says | Let go then and |

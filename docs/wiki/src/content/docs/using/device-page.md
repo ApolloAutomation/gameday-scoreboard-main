@@ -103,7 +103,7 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 - **Chip temperature**: the controller chip's temperature, and how far the panel has dimmed itself when it's too warm. At 75 C or more, the panel dims until it cools. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 - **Power dips**: how many times the panel has restarted because its power dipped, and **brightness capped** while it holds its brightness down for that.
 - **Last ESPN read**: how the last read from ESPN went, **OK**, **No answer** or an HTTP error like **HTTP 503**, and how long ago.
-- **Firmware**: the version, **stable** or **beta**, and when it was built.
+- **Firmware**: the version, then **stable**, or **beta** while **Follow beta** is on, and when it was built.
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
@@ -113,10 +113,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for the release it leads up to plus a build number, like **v2026.10.1-beta.20**. Betas go in build order, and every beta comes before the release it leads up to:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.10.2-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
-- Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the release that beta led up to comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
+- Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the next release comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
 
 See [Firmware updates](/using/updates/#beta-versions).

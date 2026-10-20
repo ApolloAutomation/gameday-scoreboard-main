@@ -51,7 +51,7 @@ The panel only joins 2.4 GHz networks. If your router has separate names for 2.4
 
 Use your main network, not a guest network. A guest network can let the panel join but keep your phone from reaching it afterwards.
 
-Some bar, hotel and dorm Wi-Fi lets the panel join and then wants a sign-in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it says **Wi-Fi needs / sign-in / use home or / a hotspot** next to the QR code for the app. Set it up on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes away by itself once scores come through.
+Some bar, hotel and dorm Wi-Fi lets the panel join and then wants a sign-in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it says **Wi-Fi needs / sign-in / use home or / a hotspot** with the QR code for the app. Set it up on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes away by itself once scores come through.
 
 ## What the panel shows once it's online
 
@@ -71,7 +71,7 @@ To skip the QR code and the address when the panel starts, turn off **Show how t
 
 ## New router or Wi-Fi password
 
-When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi / lost / open app** next to the QR code for the app. A shorter drop, like a mesh system moving the panel to another access point, never covers the score.
+When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi / lost / open app** with the QR code for the app. A shorter drop, like a mesh system moving the panel to another access point, never covers the score.
 
 Join the panel's **Game Day** hotspot as above and give it the new network or password. The hotspot comes up within a few minutes of the panel losing Wi-Fi.
 

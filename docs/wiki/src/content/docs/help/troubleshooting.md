@@ -25,7 +25,7 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 While it joins a network from the Game Day app, the panel shows **JOINING** and the network's name, so a wrong pick shows up there.
 
-If the panel joins but then says **Wi-Fi needs sign-in, use home or a hotspot**, with the QR code for the app, the network wants you to sign in on a web page, like many bar, hotel and dorm networks. The panel can't sign in to those pages. Set it up on a home network or a phone hotspot instead. The message goes away by itself once scores come through.
+If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotspot**, with the QR code for the app, the network wants you to sign in on a web page, like many bar, hotel and dorm networks. The panel can't sign in to those pages. Set it up on a home network or a phone hotspot instead: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. Once it's on the new network, you can forget the sign-in network under **Wi-Fi networks** on the device page so the panel doesn't go back to it. The message goes away by itself once scores come through.
 
 **Why:** the panel's Wi-Fi only works on 2.4 GHz. A guest network can let the panel join but keep your phone from reaching it afterwards. A network with a sign-in page lets the panel join, then holds back everything else until someone signs in on that page.
 
@@ -116,7 +116,7 @@ A small icon pulsing slowly in the top right corner means the panel is holding i
 
 **A red plug, and Check power supply:** the panel restarted twice in a row because its power dipped, so it keeps its brightness low to stay on. Use the power supply that came with it, not a phone charger or a USB port. Then press **Clear** on the device page. The icon stays until you do.
 
-**Why:** above a 75 C reading from the controller's chip, the panel steps its brightness down, a step every two minutes while it stays hot, as far as a quarter of your setting. Once the chip reads under 70 C, it comes back a step at a time. A power supply too weak for the panel makes it restart when it lights up, and a lower brightness draws less power. The device page says the same under the board, and shows the chip temperature under Diagnostics. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
+**Why:** at a reading of 75 C or more from the controller's chip, the panel steps its brightness down, a step every two minutes while it stays hot, as far as a quarter of your setting. Once the chip reads under 70 C, it comes back a step at a time. A power supply too weak for the panel makes it restart when it lights up, and a lower brightness draws less power. The device page says the same under the board, and shows the chip temperature under Diagnostics. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 
 ## The device page says an update didn't take
 

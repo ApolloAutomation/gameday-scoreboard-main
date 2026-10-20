@@ -17,7 +17,7 @@ The **Firmware** box in the Device card says what it found:
 | --- | --- |
 | **You're up to date** and the version | The panel runs the newest release, or the newest beta with **Follow beta** on. |
 | **Update available** and the version | A newer release is out, or a newer beta with **Follow beta** on. The box lists what's in it, with a **Release notes** link, and shows an **Install** button. |
-| **You're ahead of the latest release** and the version, or **You're ahead of the latest beta** with **Follow beta** on | The panel runs something newer than the newest published version, which the box names, like a test build. Nothing to install. With betas, see [Beta versions](#beta-versions). |
+| **You're ahead of the latest release** and the version, or **You're ahead of the latest beta** with **Follow beta** on | The panel runs something newer than the newest release, or the newest beta with **Follow beta** on, which the box names under it, like a test build. Nothing to install. With betas, see [Beta versions](#beta-versions). |
 | **Not checked yet** | The panel hasn't heard from the update server since it started. Tap **Check for updates**. |
 | **The update to** a version **didn't take** | That version crashed as it started, and the panel went back to the one it had. See [An update that didn't take](#an-update-that-didnt-take). |
 
@@ -57,10 +57,10 @@ While that version is the one on offer, the Firmware box says **The update to** 
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
 
-A beta carries the number of the release it leads up to, plus a build number, like 2026.10.1-beta.20. A higher build number is a newer beta, and every beta comes before the release with the same number: 2026.10.1 is newer than any 2026.10.1 beta.
+A beta carries the number of a coming release, plus a build number, like 2026.10.2-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.10.2 is newer than any 2026.10.2 beta.
 
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
 
 Turn **Follow beta** on while the panel runs a release, and it waits for a beta of the next release. The betas of the release it already runs are older, so they aren't offered, and the Firmware box says **You're ahead of the latest beta** until a newer beta is out.
 
-Turn **Follow beta** off while the panel runs a beta, and it stays on that beta. The Firmware box says **You're ahead of the latest release** until the release that beta leads up to ships. Then the box offers that release, and with **Install updates automatically** on, the panel installs it overnight.
+Turn **Follow beta** off while the panel runs a beta, and it stays on that beta. The Firmware box says **You're ahead of the latest release** until the next release ships. Then the box offers that release, and with **Install updates automatically** on, the panel installs it overnight.

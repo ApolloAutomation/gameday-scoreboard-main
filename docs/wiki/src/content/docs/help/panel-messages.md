@@ -28,7 +28,7 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | The panel says | What it means | What to do |
 | --- | --- | --- |
 | **Wi-Fi / lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
-| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot. The message goes by itself once scores come through. |
+| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes by itself once scores come through. |
 
 ## On the scoreboard
 
@@ -93,8 +93,8 @@ The panel shows no message of its own while it updates. It restarts when the upd
 | **Update available** and a version | A newer release is out, or a newer beta with **Follow beta** on. Press **Install** to install it. |
 | **Installing** and a version | The update is running. Keep the panel powered. The page reconnects when the panel is back. |
 | **You're up to date** | The panel has the latest release, or the latest beta with **Follow beta** on. |
-| **You're ahead of the latest release** and a version | The panel runs a newer version than the latest release, like a beta. Nothing to install. Once the release that beta leads up to is out, the page offers it. |
-| **You're ahead of the latest beta** and a version | With **Follow beta** on, the panel runs a newer version than the latest beta, like the release that beta led up to. It waits for a beta of the next release. Nothing to install. |
+| **You're ahead of the latest release** and a version | The panel runs a newer version than the latest release, like a beta. Nothing to install. Once the next release is out, the page offers it. |
+| **You're ahead of the latest beta** and a version | With **Follow beta** on, the panel runs a newer version than the latest beta, like a release that came out after that beta. It waits for a beta of the next release. Nothing to install. |
 | **The update to** a version **didn't take and the panel went back to** another | The new version crashed as it started, so the panel went back to the one it had. It won't install that version on its own again. **Install** tries it again. See [Troubleshooting](/help/troubleshooting/#the-device-page-says-an-update-didnt-take). |
 | **Could not reach the update server. Try again in a minute.** | After you tap **Check for updates**, the check didn't get an answer. |
 | **Not checked yet** | The panel hasn't checked for updates since it started. It checks a few seconds after its clock is set, or tap **Check for updates**. |
