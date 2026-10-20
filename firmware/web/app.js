@@ -776,9 +776,12 @@
     // entity that came first was read from.
     const fwEnt = ents[byName["Firmware"]];
     if (fwEnt) {
-      const late = fwEnt.fromBeta === undefined;
-      if (late) fwEnt.fromBeta = fromBetaFeed();
-      if (late || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
+      const restamp = fwEnt.fromBeta === undefined || fwEnt.restamp;
+      if (restamp) {
+        fwEnt.fromBeta = fromBetaFeed();
+        fwEnt.restamp = false;
+      }
+      if (restamp || fwInputs() !== fwDrawn) renderUpdate(fwEnt);
     }
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
@@ -1522,7 +1525,7 @@
       const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
       if (r.ok) {
         const j = await r.json();
-        ents[id] = Object.assign(ents[id] || {}, j, { id, fromBeta: fromBetaFeed() });
+        ents[id] = Object.assign(ents[id] || {}, j, { id });
         renderUpdate(ents[id]);
       }
     } catch (_) {}
@@ -1585,7 +1588,9 @@
   // Whether the update entity reads the beta feed (Follow beta on, or a bar
   // build), as the state document says; undefined until the document is in.
   // Each entity keeps the answer from when it arrived (fromBeta), so a box
-  // drawn from the release feed isn't renamed the moment Follow beta flips.
+  // drawn from the release feed isn't renamed the moment Follow beta flips,
+  // and takes it again from the next read of the document, which catches a
+  // flip made on another page.
   const fromBetaFeed = () => (S ? !!(S.beta || S.bar) : undefined);
   let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
@@ -1713,7 +1718,13 @@
       // Sent on every board update: re-read the state document. Its value is
       // Home Assistant's shorter line, so the ticker and last play come from there.
       case "Game Status": scheduleState(150); break;
-      case "Firmware": ents[e.id].fromBeta = fromBetaFeed(); renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
+      case "Firmware":
+        ents[e.id].fromBeta = fromBetaFeed();
+        ents[e.id].restamp = true;
+        scheduleState(150);
+        renderUpdate(ents[e.id]);
+        refreshFirmwareDetail(e.id);
+        break;
       case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
       case "IP": $("#ip").textContent = e.value || ""; break;
       case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
