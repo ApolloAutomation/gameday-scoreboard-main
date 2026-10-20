@@ -771,9 +771,9 @@
     $("#autoupdRow").hidden = S.autoupd === undefined;
     // Older firmware and the bar and demo builds have no beta to follow.
     $("#betaRow").hidden = S.beta === undefined;
-    // The rollback line in the firmware box reads this document, which can
-    // land after the update entity does.
-    if ((S.update_failed || "") !== fwFailed && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+    // The firmware box's rollback line, beta or release wording and overnight
+    // note read this document, which can land after the update entity does.
+    if (fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
     // The bar build: a note, and an email to us with the panel's name in it.
     $("#barRow").hidden = !S.bar;
     if (S.bar) {
@@ -1574,7 +1574,9 @@
     return /^https:\/\//i.test(url) ? url : "";
   };
   let installing = false;
-  let fwFailed = "";     // S.update_failed as the firmware box last drew it
+  // What the firmware box reads from the state document, and what it last drew with.
+  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.beta || S.bar), !!(S.autoupd || S.bar)] : null);
+  let fwDrawn = fwInputs();
   const renderUpdate = (u) => {
     const box = $("#fw");
     box.hidden = false;
@@ -1584,14 +1586,15 @@
     const btn = $("#fwInstall");
     const sub = $("#fwSub");
     btn.hidden = true;
-    fwFailed = (S && S.update_failed) || "";
+    fwDrawn = fwInputs();
     if (st.includes("INSTALLING") || installing) {
       $("#fwText").textContent = "Installing " + (latest || "update");
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
-      $("#fwText").textContent = "You're ahead of the latest " + (S && (S.beta || S.bar) ? "beta, " : "release, ") + cur;
-      sub.textContent = "The newest published version is " + latest + ". Nothing to install.";
+      const chan = S && (S.beta || S.bar) ? "beta" : "release";
+      $("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
+      sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
     } else if (st.includes("AVAILABLE")) {
       // The panel rolled back from this very version (a crash in its first
       // minute); it won't install it on its own again, but Install still tries.
