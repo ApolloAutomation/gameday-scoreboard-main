@@ -13,19 +13,17 @@ You supply the board, the panels, the case, the stand and the power supply. Size
 
 ## Your own installer
 
-A board you built installs from the [DIY installer](https://gamedayscoreboard.app/install/diy/), which asks for your layout before you install. The Game Day Scoreboard controller has its own pins and its own installer, so never use that one on a DIY board. See [Install the firmware](/diy/install/).
+A board you built installs from the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/), which asks for your layout before you install. The scoreboard75 controller board has its own pins and its own installer, the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/), so never use that one on a DIY board. See [Install the firmware](/diy/install/).
 
 ## Layout default
 
-The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where Factory Reset returns it. If you installed the 128x64 choice and then reset, pick the 128x64 layout again on the device page.
+The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where a factory reset returns it. A board installed with the 128x64 choice switches to the one-panel build at its first update. A factory reset after that returns it to 64x64 too, so pick the 128x64 layout again on the device page.
 
 ## The boot button
 
-On a Game Day Scoreboard the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and a longer hold resets Wi-Fi. See [Buttons and resets](/using/buttons-and-resets/).
+On a Game Day Scoreboard the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and longer holds reset Wi-Fi or erase everything.
 
-:::note[Coming in the next release]
-Nothing resets until you let go of the button. Hold it and the screen counts down from 5 seconds. Let go after 10 seconds to reset Wi-Fi, or after 20 seconds for a factory reset. At 30 seconds it says "Release to cancel".
-:::
+Nothing resets until you let go of the button. Hold it and the screen counts down from 5 seconds. Let go between 10 and 20 seconds to reset Wi-Fi, or between 20 and 30 seconds for a factory reset. At 30 seconds it says **Release to / cancel**, and letting go then resets nothing. See [Buttons and resets](/using/buttons-and-resets/).
 
 ## No factory check
 
@@ -39,8 +37,8 @@ Put your panel's name in place of `gameday-xxxxxx`. The panel lights red, green,
 
 ## Support is on GitHub
 
-Email support is for Game Day Scoreboards that were sold. For a panel you built, [open an issue on GitHub](https://github.com/gameday-scoreboard/gameday-scoreboard/issues). Bug reports from DIY builds are welcome. The firmware version (the Firmware row on the device page), your board and your panel layout save a round of questions, and a photo of the panel helps more than anything. Issues are public, so leave out Wi-Fi passwords.
+For a panel you built, [open an issue on GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues). Bug reports from DIY builds are welcome. The firmware version (the Firmware row on the device page), your board and your panel layout save a round of questions, and a photo of the panel helps more than anything. Issues are public, so leave out Wi-Fi passwords.
 
 ## Rather buy one?
 
-The Game Day Scoreboard comes with the Game Day Scoreboard controller, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).
+The Game Day Scoreboard comes with the scoreboard75 controller board, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).

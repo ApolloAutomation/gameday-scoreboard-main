@@ -131,6 +131,7 @@ ENTITIES = [
      "current_version": "1.5.4", "summary": "", "release_url": ""},
     {"id": "text_sensor/IP", "domain": "text_sensor", "name": "IP", "state": "10.10.10.97", "value": "10.10.10.97"},
     {"id": "button/Refresh Now", "domain": "button", "name": "Refresh Now", "state": ""},
+    {"id": "button/Check for Updates", "domain": "button", "name": "Check for Updates", "state": ""},
     {"id": "button/Reboot", "domain": "button", "name": "Reboot", "state": ""},
     {"id": "button/Reset Wi-Fi", "domain": "button", "name": "Reset Wi-Fi", "state": ""},
     {"id": "button/Factory Reset", "domain": "button", "name": "Factory Reset", "state": ""},
@@ -159,8 +160,10 @@ def reset_state(overrides):
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
 
 
+# The firmware's C library reads ASCII digits and spaces only; Python's \d and
+# \s and str.isdigit() also take other scripts' digits, like "\u0663".
 def atoi(v):
-    m = re.match(r"\s*[+-]?\d+", v)
+    m = re.match(r"\s*[+-]?\d+", v, re.ASCII)
     return int(m.group()) if m else 0
 
 
@@ -171,13 +174,15 @@ def clamp(v, lo, hi):
 def parse_team_ref(v):
     """parse_team_ref() plus known_team(): (league, id) of a team in teams.h, else None."""
     lg, colon, tid = v.partition(":")
-    m = re.match(r"\s*\d+", tid)
+    # strtoull: leading spaces and a plus sign are fine; a minus sign wraps
+    # past 32 bits and is refused.
+    m = re.match(r"\s*\+?\d+", tid, re.ASCII)
     ref = (lg, int(m.group())) if colon and lg in LEAGUES and m else None
     return ref if ref in TEAMS else None
 
 
 def timezone_index(v):
-    if v.isdigit():
+    if v.isascii() and v.isdigit():
         return int(v) if int(v) < len(TZ_ROWS) else -1
     return next((i for i, (name, _posix, iana) in enumerate(TZ_ROWS) if v in (name, iana)), -1) if v else -1
 

@@ -1,6 +1,6 @@
 ---
 title: "FAQ"
-description: "Common questions about Game Day Scoreboard: the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and how fast support answers."
+description: "Common questions about Game Day Scoreboard: the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and where to get support."
 sidebar:
   order: 4
 ---
@@ -64,14 +64,10 @@ See [Remote](/using/remote/).
 
 ## Will it update itself?
 
-It checks for a new release every six hours, and the device page shows an **Install** button when one is out. If you turn on **Install updates automatically** in the Device card, the panel installs a new release on its own between 3 and 5 AM, never during a live game it's showing. That switch is off unless you turn it on.
+It checks for a new release every six hours, and the device page shows an **Install** button when one is out. If you turn on **Install updates automatically** in the Device card, the panel installs a new release on its own between 3 and 5 AM, never while a game it follows is live. That switch is off unless you turn it on.
 
 Your team and settings stay through an update. See [Updates](/using/updates/).
 
-:::note[Coming in the next release]
-If the update server doesn't answer, the panel checks a second copy of the same files at `updates.gameday-scoreboard.com`.
-:::
+## Where do I get support?
 
-## How fast does support answer?
-
-Email [support@gameday-scoreboard.com](mailto:support@gameday-scoreboard.com) and we reply within one business day. See [Get support](/help/support/) for what to include.
+Support is on GitHub: [open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues). See [Get support](/help/support/) for what to include.

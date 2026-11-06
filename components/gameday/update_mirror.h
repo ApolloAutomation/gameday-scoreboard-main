@@ -1,8 +1,9 @@
-// The update feed's second host. Every release and beta is published to
-// gamedayscoreboard.app (GitHub Pages) and, with the same files, to a mirror
-// on our own domain (build.yml, site.yml). The manifest names its binaries by
-// relative path, so whichever host answered the manifest also serves the
-// download, and the OTA checks the same md5 either way.
+// The update feed's second host, for a build that configures one (the
+// gameday component's update_mirror option; the release builds have none).
+// The site (GitHub Pages) and the mirror would carry the same files
+// (scripts/publish_mirror.sh). The manifest names its binaries by relative
+// path, so whichever host answered the manifest also serves the download,
+// and the OTA checks the same md5 either way.
 //
 // When a manifest read fails, the panel reads the mirror's copy right away,
 // then points back at the primary, so the next check starts there again. An

@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace espn {
 namespace detail {
@@ -160,10 +161,16 @@ inline void fill_team_game_filter(JsonDocument &f) {
   comp["competitors"].add<JsonObject>()["id"] = true;
 }
 
+// Totals run from 2.5 (soccer) to the 200s (basketball). A value this far out
+// is not one, and casting it to int would be undefined behavior.
+static const float kOverUnderLimit = 10000.0f;
+
 inline std::string format_over_under(JsonVariantConst v) {
   if (v.isNull())
     return "";
   float f = v.as<float>();
+  if (!(f > -kOverUnderLimit && f < kOverUnderLimit))  // also false for NaN
+    return "";
   char buf[16];
   if (f == (int) f)
     snprintf(buf, sizeof(buf), "%d", (int) f);
@@ -241,7 +248,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   s.venue = str_or_empty(comp["venue"]["fullName"]);
   s.game_name = short_game_name(str_or_empty(comp["notes"][0]["headline"]));
   s.valid = true;
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -342,7 +349,7 @@ template<typename TInput> bool parse_team(TInput &input, Schedule &out) {
     }
   }
   s.valid = true;
-  out = s;
+  out = std::move(s);
   return true;
 }
 
@@ -574,7 +581,7 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     detail::basketball_from_event(doc.as<JsonObjectConst>(), s);
   if (sport == Sport::HOCKEY)
     detail::hockey_from_event(doc.as<JsonObjectConst>(), s);
-  out = s;
+  out = std::move(s);
   return true;
 }
 

@@ -74,6 +74,19 @@ int main(int argc, char **argv) {
     }
   }
 
+  // fuzz_espn also reads its input line by line as response headers and as
+  // the sign-in probe's answer: a Date, a Retry-After and redirects.
+  const char *const header_seeds[] = {
+      "Sat, 17 Oct 2026 23:39:29 GMT\r\n120\r\nhttp://192.168.10.1:8002/index.php?zone=guest\r\n",
+      "Sun, 01 Mar 2048 00:00:00 GMT\n3600\nhttps://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/6/record\n",
+      "2026-10-17T19:30Z\r\nhttp://user@portal.example/x\r\n",
+      "<!DOCTYPE html><html><head><title>Sign in</title></head></html>",
+  };
+  for (const char *h : header_seeds) {
+    std::ofstream(espn_out / ("header_" + std::to_string(espn_seeds) + ".txt"), std::ios::binary) << h;
+    espn_seeds++;
+  }
+
   JsonDocument cases;
   if (deserializeJson(cases, slurp(fixtures / "set_cases.json"))) {
     fprintf(stderr, "set_cases.json does not parse\n");

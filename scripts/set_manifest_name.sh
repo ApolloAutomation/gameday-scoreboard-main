@@ -2,10 +2,10 @@
 # Give every manifest.json under a folder the product name. The web installer
 # shows it ("Installing <name>") and Home Assistant titles the panel's update
 # with it. build-action fills it from the ESPHome project name,
-# bharvey88.gameday-scoreboard, which has to stay as it is: panels advertise
-# it over mDNS, the iOS app finds panels by it and factory_flash.py checks it
-# in the boot log. Only the name changes; the checksums cover the bins, not
-# the manifest, so check_site_firmware.sh still passes.
+# ApolloAutomation.gameday-scoreboard, which stays as it is: panels advertise
+# it over mDNS and factory_flash.py reads "gameday-scoreboard version" from
+# it in the boot log. Only the manifest's name changes; the checksums cover
+# the bins, not the manifest, so check_site_firmware.sh still passes.
 # Usage: scripts/set_manifest_name.sh <dir>
 set -euo pipefail
 

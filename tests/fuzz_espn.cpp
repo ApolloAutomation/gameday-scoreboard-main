@@ -1,17 +1,24 @@
 // Fuzz target: one input goes through every ESPN parser the panel runs, the
 // text built from what they read, and the finals rotation (recap.h). ESPN's
 // documents share one shape (events, competitions, competitors), so a
-// mutated scoreboard also reaches the event and team parsers. See
+// mutated scoreboard also reaches the event and team parsers. The same input,
+// line by line, is also read as the response headers the panel acts on (Date,
+// Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <string>
 #include <vector>
 
+#include "captive.h"
 #include "espn_parse.h"
+#include "logo_lru.h"
 #include "panel_text.h"
+#include "poll_timing.h"
 #include "recap.h"
+#include "startup.h"
 
 using namespace espn;
 
@@ -120,6 +127,8 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   for (int flags = 0; flags < 4; flags++)
     n += decide_splash(prev, g, (flags & 1) != 0, (flags & 2) != 0).text.size();
   n += parse_color(g.team_color) + parse_color(g.opp_color);
+  // The logo cache's second try when a dark logo is missing.
+  n += plain_logo_url(g.team_logo).size() + plain_logo_url(g.opp_logo).size();
   if (g.sport == Sport::BASEBALL)
     n += baseball_count(g).size();
   if (g.sport == Sport::SOCCER) {
@@ -172,6 +181,88 @@ size_t recap(std::vector<Final> finals, std::vector<Pending> pending, int64_t ne
   return n;
 }
 
+// One header value as the panel reads it: the Date header sets the clock
+// when NTP is silent, Retry-After stretches the wait after a refusal, and a
+// redirect's Location says whether a sign-in page answered for ESPN. Checks
+// the ranges the callers rely on. rnd stands in for esp_random().
+size_t header(const std::string &value, uint32_t rnd) {
+  size_t n = 0;
+  // 2020-01-01T00:00:00Z to the leap second at the end of 2099, or nothing.
+  int64_t date = parse_http_date(value);
+  if (date != 0 && (date < 1577836800 || date > 4102444800))
+    abort();
+  // 1970 to 9999-12-31T23:59:60Z; 0 is no date.
+  int64_t iso = parse_iso8601_z(value);
+  if (iso < 0 || iso > 253402300800)
+    abort();
+  // At most six digits of seconds.
+  uint32_t retry_after = parse_retry_after_ms(value);
+  if (retry_after > 999999000u)
+    abort();
+  // A run of failed reads, some refused: every wait stays inside its
+  // schedule, Retry-After included.
+  Backoff run;
+  for (uint32_t i = 0; i < 20; i++) {
+    uint32_t wait = run.fail(((rnd >> i) & 1) != 0, retry_after, rnd ^ (i * 2654435761u));
+    uint32_t lo = run.throttled ? kThrottleBaseMs / 2 : kBackoffBaseMs / 2;
+    uint32_t hi = run.throttled ? kThrottleCapMs + kThrottleCapMs / 4 : kBackoffCapMs;
+    if (wait < lo || wait > hi)
+      abort();
+    n += wait;
+  }
+  std::string host = espn::detail::url_host(value);
+  if (host.find_first_of(":/?#") != std::string::npos)
+    abort();
+  for (char c : host)
+    if (c >= 'A' && c <= 'Z')
+      abort();
+  static const char kDotEspn[] = ".espn.com";
+  const size_t dot = sizeof(kDotEspn) - 1;
+  if (espn::detail::espn_host(host) && host != "espn.com" &&
+      (host.size() < dot || host.compare(host.size() - dot, dot, kDotEspn) != 0))
+    abort();
+  return n + host.size();
+}
+
+// The sign-in probe's answer, with the input as its Location, Content-Type
+// and body, for each status the probe tells apart.
+size_t probe(const std::string &text) {
+  static const int kStatuses[] = {-1, 0, 200, 204, 301, 302, 307, 403, 404, 503, 511};
+  size_t n = 0;
+  for (int status : kStatuses) {
+    Probe p = classify_probe(status, text, text, text);
+    if (status <= 0 && p != Probe::UNKNOWN)
+      abort();  // no answer proves nothing
+    if (status == 511 && p != Probe::CAPTIVE)
+      abort();  // the status made for a sign-in page
+    if (status >= 300 && status < 400 && espn::detail::url_host(text).empty() && p != Probe::UNKNOWN)
+      abort();  // a relative redirect stays on whoever answered
+    n += strlen(probe_name(p));
+  }
+  return n;
+}
+
+// The boot cache (startup.h) a team read leaves in flash: it loads back as
+// the same game or not at all, and only for the team it was saved for.
+size_t boot_cache(const Schedule &team, int64_t now) {
+  TeamCache c;
+  if (!team_cache_save(team, League::NFL, 6, now, c))
+    return 0;
+  Schedule back;
+  const bool loaded = team_cache_load(c, League::NFL, 6, now, back);
+  const std::string id = team.event_id.c_str();
+  const bool want = team.comp_slug == nullptr && !team.time_tbd && !id.empty() &&
+                    team.kickoff_epoch >= now - TEAM_CACHE_GAME_OVER;
+  if (loaded != want)
+    abort();
+  if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
+                 back.league != (uint8_t) League::NFL))
+    abort();
+  if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
+    abort();
+  return back.event_id.size();
+}
+
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
 
 }  // namespace
@@ -184,6 +275,20 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   size_t chunk = size > 0 ? 1 + data[0] % 64 : 1;
   std::string json((const char *) data, size);
   std::vector<Pick> picks = find_picks(data, size);
+
+  // The headers, a line each like an HTTP response's, and the probe.
+  uint32_t rnd = 2166136261u;
+  for (size_t i = 0; i < size && i < 64; i++)
+    rnd = (rnd ^ data[i]) * 16777619u;
+  sink = sink + header(json, rnd) + probe(json);
+  const bool multiline = json.find_first_of("\r\n") != std::string::npos;
+  for (size_t start = 0, lines = 0; multiline && start < size && lines < 8; lines++) {
+    size_t end = json.find_first_of("\r\n", start);
+    if (end == std::string::npos)
+      end = size;
+    sink = sink + header(json.substr(start, end - start), rnd);
+    start = end + 1;
+  }
 
   for (uint8_t league = 0; league < kLeagueCount; league += 4) {
     std::vector<LiveGame> live;
@@ -210,6 +315,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       std::vector<Schedule> comps{team, team};
       comps[1].kickoff_epoch = now + 3600;
       sink = sink + (size_t) (pick_schedule(comps, now, team.event_id) + 1);
+      sink = sink + boot_cache(team, now);
     }
   }
 

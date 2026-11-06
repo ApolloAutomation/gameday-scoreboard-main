@@ -1,15 +1,11 @@
 ---
 title: "Pick your team"
-description: "Choose the team your panel follows, from the Game Day app or the panel's device page, in any of the nine leagues."
+description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues."
 sidebar:
   order: 3
 ---
 
-Pick your team in the Game Day app or on the panel's device page. Both change the same setting, so use whichever is closer to hand.
-
-## From the Game Day app
-
-Once the app has put the panel on your Wi-Fi, it lets you pick your team. Later, open the panel in the app and change the team the same way. See [The Game Day app](/get-started/the-app/).
+Pick your team on the panel's device page. Home Assistant can change the same setting.
 
 ## From the device page
 
@@ -20,6 +16,14 @@ Once the app has put the panel on your Wi-Fi, it lets you pick your team. Later,
 The page says **Now following the** and the team's name, and the panel switches. While the new team's scores load, the panel says **Looking up scores**, for up to 10 seconds, so you never see a half-empty board.
 
 Lost the address? Hold the button on the controller for about 1.5 seconds and the panel shows it again, with the IP address, for 20 seconds.
+
+## From Home Assistant
+
+The **Team** and **Mode** entities change the same settings. See [Home Assistant](/using/home-assistant/).
+
+## From the Game Day app
+
+The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Where it does, it can pick the team too. See [The Game Day app](/get-started/the-app/).
 
 ## The leagues
 
@@ -51,7 +55,7 @@ A new team shows on the panel within a few seconds, with nothing to restart. The
 
 ## Before you pick a team
 
-A panel nobody has picked a team for doesn't follow one. It shows live games, and when nothing is on, the latest final scores and when the next game starts. The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
+A panel nobody has picked a team for doesn't follow one. It shows live NFL and college football games, and when nothing is on, the latest final scores and when the next game starts. See [A panel with no team picked](/using/modes/#a-panel-with-no-team-picked). The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
 
 ## More than one team
 

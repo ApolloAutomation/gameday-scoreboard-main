@@ -31,8 +31,10 @@
 // Within a boot the list is only saved, never re-applied: a setup from the
 // app narrows the live list to the new network the way ESPHome always did,
 // and the one-minute offline restart in gameday-common.yaml brings the full
-// list back. Forgetting a network takes it out of flash at once; the live
-// session keeps it until the next restart.
+// list back. Forgetting a network takes it out of flash at once. Rewriting
+// the slot with save_wifi_sta() also makes the new front network the only
+// one in the live list, so a connection to the forgotten network lasts until
+// it drops or the panel restarts, and a restart brings back the rest.
 
 #include <mutex>
 #include <string>

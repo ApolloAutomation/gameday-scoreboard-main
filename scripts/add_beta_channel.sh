@@ -15,8 +15,14 @@ site=$1
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-if ! gh release view beta-firmware --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-  echo "No beta-firmware prerelease yet; the site has no beta channel."
+if ! gh release view beta-firmware --repo "$GITHUB_REPOSITORY" >/dev/null 2>"$tmp/view.err"; then
+  # Only "release not found" means there is no beta yet. Any other error
+  # still leaves the channel out, but says so.
+  if grep -q 'release not found' "$tmp/view.err"; then
+    echo "No beta-firmware prerelease yet; the site has no beta channel."
+  else
+    echo "::warning::Couldn't read the beta-firmware prerelease, so this deploy has no beta channel: $(head -n1 "$tmp/view.err")"
+  fi
   exit 0
 fi
 ok=1

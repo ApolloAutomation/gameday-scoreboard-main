@@ -5,6 +5,7 @@
 // table as tests/web/mock_device.py (tests/fixtures/set_cases.json).
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -45,7 +46,18 @@ inline int clamp_release_seconds(int seconds) {
   return seconds < kReleaseMinSeconds ? kReleaseMinSeconds : seconds > kReleaseMaxSeconds ? kReleaseMaxSeconds : seconds;
 }
 
-// "nfl:6" -> league + id. False for "none"/"" (id 0) or garbage.
+// A number read the way atoi reads one ("12abc" is 12, "abc" and "" are 0),
+// except that a value past int's range stops at its end. atoi leaves that
+// undefined: the panel's 32-bit library stops at the end, a 64-bit host wraps
+// "4294967296" to 0, so the host tests would check another panel than ours.
+inline int read_int(const std::string &v) {
+  long n = strtol(v.c_str(), nullptr, 10);
+  return n > INT_MAX ? INT_MAX : n < INT_MIN ? INT_MIN : (int) n;
+}
+
+// "nfl:6" -> league + id. False for "none"/"" (id 0) or garbage. An id past
+// 32 bits is garbage too, not wrapped to a small one (on the panel strtoul
+// stops at 32 bits; a 64-bit host would wrap "4294967302" to 6).
 inline bool parse_team_ref(const std::string &v, uint8_t &league, uint32_t &id) {
   league = 0;
   id = 0;
@@ -53,7 +65,8 @@ inline bool parse_team_ref(const std::string &v, uint8_t &league, uint32_t &id) 
   if (colon == std::string::npos)
     return false;
   std::string lg = v.substr(0, colon);
-  id = (uint32_t) strtoul(v.c_str() + colon + 1, nullptr, 10);
+  unsigned long long n = strtoull(v.c_str() + colon + 1, nullptr, 10);
+  id = n > UINT32_MAX ? 0 : (uint32_t) n;
   const LeagueInfo *info = league_by_key(lg.c_str());
   if (info == nullptr)
     return false;
@@ -143,7 +156,7 @@ enum class SetKind : uint8_t {
   PLAY,      // on
   ODDS,      // on
   OPP,       // on
-  PANELS,    // value; PanelLayout refuses a count it can't drive
+  PANELS,    // value, 1-255; PanelLayout refuses a count it can't drive
   BOOTADDR,  // on
   LOCKON,    // value, minutes
   RELEASE,   // value, seconds
@@ -176,7 +189,7 @@ struct SetOp {
 
 // Decodes one key=value from the request. False when the key is unknown or
 // the value is refused: the firmware logs it and changes nothing. Switches
-// are on for "1" only; numbers read like atoi, so "abc" is 0.
+// are on for "1" only; numbers read like atoi (read_int), so "abc" is 0.
 inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, size_t fav_max) {
   op = SetOp{};
   auto on = [&](SetKind kind) {
@@ -192,28 +205,30 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   }
   if (k == "mode") {
     op.kind = SetKind::MODE;
-    op.value = atoi(v.c_str());
+    op.value = read_int(v);
     return op.value >= 0 && op.value < kModeCount;
   }
   if (k == "rotate") {
     op.kind = SetKind::ROTATE;
-    op.value = clamp_rotate_minutes(atoi(v.c_str()));
+    op.value = clamp_rotate_minutes(read_int(v));
     return true;
   }
   if (k == "lockon") {
     op.kind = SetKind::LOCKON;
-    op.value = clamp_lockon_minutes(atoi(v.c_str()));
+    op.value = clamp_lockon_minutes(read_int(v));
     return true;
   }
   if (k == "release") {
     op.kind = SetKind::RELEASE;
-    op.value = clamp_release_seconds(atoi(v.c_str()));
+    op.value = clamp_release_seconds(read_int(v));
     return true;
   }
   if (k == "panels") {
+    // PanelLayout takes the count as a byte and refuses one it can't drive;
+    // a value that doesn't fit would wrap first (257 to one panel).
     op.kind = SetKind::PANELS;
-    op.value = atoi(v.c_str());
-    return true;
+    op.value = read_int(v);
+    return op.value >= 1 && op.value <= UINT8_MAX;
   }
   if (k == "tz") {
     op.kind = SetKind::TZ;

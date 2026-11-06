@@ -16,7 +16,7 @@ all: build/test_parse build/test_networks
 
 SRCS = test_parse.cpp golden_football.cpp test_set.cpp ../components/gameday/espn_parse.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp
 
-build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h)
+build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h)
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $@ $(LDFLAGS)
 
@@ -51,7 +51,8 @@ build/heap_budget: heap_budget.cpp $(filter-out test_parse.cpp golden_football.c
 # and undefined behavior sanitizers, seeded from fixtures/ (fuzz_seeds.cpp).
 # With clang's libFuzzer the run is coverage guided; without it (g++, Apple
 # clang) fuzz_main.cpp mutates at random. A crash leaves its input in
-# build/crash-*; `./build/fuzz_espn build/crash-...` replays it.
+# build/crash-* (libFuzzer: timeout-*, oom-* or leak-* for those failures);
+# `./build/fuzz_espn build/crash-...` replays it.
 #   make fuzz              about a minute, as CI runs it
 #   make fuzz-long         30 minutes a target (FUZZ_LONG_TIME seconds)
 FUZZ_CXX ?= $(shell command -v clang++ >/dev/null 2>&1 && echo clang++ || echo $(CXX))

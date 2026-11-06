@@ -60,6 +60,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       case SetKind::RELEASE:
         require(op.value >= kReleaseMinSeconds && op.value <= kReleaseMaxSeconds, "release is out of range", k, v);
         break;
+      case SetKind::PANELS:
+        require(op.value >= 1 && op.value <= UINT8_MAX, "the count wraps in the byte PanelLayout takes", k, v);
+        break;
       case SetKind::FAV_SLOT:
         require(op.slot >= 1 && op.slot <= 4, "the slot is not 1 to 4", k, v);
         require(op.team.id == 0 || known_team(op.team.league, op.team.id), "the team is unknown", k, v);

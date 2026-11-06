@@ -90,7 +90,7 @@ class LogoCache {
   void run_();
   bool download_(const std::string &url, Bytes &body, bool &throttled, uint32_t &retry_after_ms);
   bool decode_(std::optional<runtime_image::RuntimeImage> &image, const Bytes &body);
-  void make_room_();
+  void make_room_(uint32_t now);  // now: millis()
   void start_task_();
   bool pinned_url_(std::string_view url) const;
   void retry_pinned_(uint32_t now);

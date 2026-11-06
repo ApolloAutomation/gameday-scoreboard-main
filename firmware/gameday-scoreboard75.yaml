@@ -1,5 +1,4 @@
-# Game Day Scoreboard for a HUB75 matrix on the Game Day Scoreboard controller
-# board (scoreboard75 pinout). Same firmware as gameday.yaml, which targets the
+# Game Day Scoreboard for a HUB75 matrix on the scoreboard75 controller board. Same firmware as gameday.yaml, which targets the
 # MoonHub75 pinout; only the controller package differs.
 substitutions:
   variant: "scoreboard75"
@@ -9,3 +8,9 @@ substitutions:
 packages:
   controller: !include controllers/scoreboard75.yaml
   common: !include gameday-common.yaml
+
+# Lets ESPHome Device Builder adopt a panel it discovers: the adopted config
+# is a short file that pulls this one in from GitHub.
+dashboard_import:
+  package_import_url: github://ApolloAutomation/gameday-scoreboard-main/firmware/gameday-scoreboard75.yaml@main
+  import_full_config: false

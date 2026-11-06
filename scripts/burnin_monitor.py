@@ -22,6 +22,7 @@ import csv
 import datetime
 import http.client
 import json
+import socket
 import sys
 import time
 from pathlib import Path
@@ -82,8 +83,9 @@ def stream_lines(host, timeout):
         while time.monotonic() < deadline:
             try:
                 line = resp.readline()
-            except TimeoutError:
-                # A quiet stream ends the reading; keep what already arrived
+            except (TimeoutError, socket.timeout):
+                # A quiet stream ends the reading; keep what already arrived.
+                # socket.timeout is TimeoutError only from Python 3.10.
                 return
             if not line:
                 return
@@ -199,6 +201,38 @@ def selftest():
     assert parse_heap({"internal": 81.2, "block": 30.0, "psram": 6100.5}) == {
         "heap_internal_kib": 81.2, "heap_psram_kib": 6100.5}
     assert parse_heap({"error": "x"}) == {}
+
+    # A stream that goes quiet (a sensor the panel doesn't send) ends the
+    # reading with what arrived. Before Python 3.10 the socket's timeout is
+    # socket.timeout, not TimeoutError.
+    class QuietResponse:
+        status = 200
+        lines = [b"event: ping\n", b'data: {"uptime":5}\n', b"\n"]
+
+        def readline(self):
+            if self.lines:
+                return self.lines.pop(0)
+            raise socket.timeout("timed out")
+
+    class QuietConnection:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, *a, **k):
+            pass
+
+        def getresponse(self):
+            return QuietResponse()
+
+        def close(self):
+            pass
+
+    real_connection = http.client.HTTPConnection
+    http.client.HTTPConnection = QuietConnection
+    try:
+        assert parse_events(stream_lines("panel", 5), {"uptime_s", "rssi_dbm"}) == {"uptime_s": 5}
+    finally:
+        http.client.HTTPConnection = real_connection
 
     assert not restarted(None, 5, 100.0)
     assert not restarted((0.0, 1000), 1060, 60.0)

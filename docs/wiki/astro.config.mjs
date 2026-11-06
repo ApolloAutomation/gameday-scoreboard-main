@@ -15,11 +15,11 @@ export default defineConfig({
 				{
 					icon: 'github',
 					label: 'GitHub',
-					href: 'https://github.com/gameday-scoreboard/gameday-scoreboard',
+					href: 'https://github.com/ApolloAutomation/gameday-scoreboard-main',
 				},
 			],
 			editLink: {
-				baseUrl: 'https://github.com/gameday-scoreboard/gameday-scoreboard/edit/dev/docs/wiki/',
+				baseUrl: 'https://github.com/ApolloAutomation/gameday-scoreboard-main/edit/dev/docs/wiki/',
 			},
 			lastUpdated: true,
 			head: [

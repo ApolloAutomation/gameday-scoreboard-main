@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Publish an assembled site's update feed to the mirror, a Cloudflare Pages
-# project served at updates.gameday-scoreboard.com, then check the mirror
-# serves what the site has. A panel reads the mirror when its manifest read
-# from gamedayscoreboard.app fails (components/gameday/update_mirror.h), at
-# the same path, so every channel goes: firmware/<variant>/, the beta
-# channels, the two-panel build.
+# Publish an assembled site's update feed to a mirror, a Cloudflare Pages
+# project (MIRROR_PROJECT) served at MIRROR_HOST, then check the mirror
+# serves what the site has. A build with the gameday component's
+# update_mirror option reads the mirror when its manifest read from the site
+# fails (components/gameday/update_mirror.h), at the same path, so every
+# channel goes: firmware/<variant>/, the beta channels, the two-panel build.
+# No build in this repo sets update_mirror.
 #
 # Only each manifest and the files it names go up (the OTA and factory
 # images). The .elf next to them is for crash decoding, and at about 45 MB it
@@ -21,7 +22,7 @@ project=${MIRROR_PROJECT:-gameday-firmware}
 host=${MIRROR_HOST:-https://updates.gameday-scoreboard.com}
 
 if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-  echo "::warning::No Cloudflare token for the update mirror, so this deploy reached gamedayscoreboard.app only."
+  echo "::warning::No Cloudflare token for the update mirror, so this deploy reached ${SITE_URL:-the site} only."
   exit 0
 fi
 

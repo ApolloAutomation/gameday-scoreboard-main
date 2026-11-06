@@ -5,7 +5,7 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
-CODEOWNERS = ["@bharvey88"]
+CODEOWNERS = ["@ApolloAutomation"]
 DEPENDENCIES = ["wifi"]
 
 saved_networks_ns = cg.esphome_ns.namespace("saved_networks")

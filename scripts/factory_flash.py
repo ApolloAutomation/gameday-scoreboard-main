@@ -46,13 +46,13 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-REPO = "gameday-scoreboard/gameday-scoreboard"
+REPO = "ApolloAutomation/gameday-scoreboard-main"
 CHIP = "esp32s3"
 ESPRESSIF_VID = 0x303A
 LOG_FIELDS = ["time", "name", "mac", "variant", "version", "image", "sha256", "result", "boot_log"]
 LABEL_W_MM = 50
 LABEL_H_MM = 25
-# ESPHome logs this at boot: "Project bharvey88.gameday-scoreboard version 1.5.5"
+# ESPHome logs this at boot: "Project ApolloAutomation.gameday-scoreboard version 1.5.5"
 BOOT_VERSION_RE = re.compile(r"gameday-scoreboard version (\d+\.\d+\.\d+)")
 # And this as the flag starts QC mode (firmware/pages/qc.yaml)
 BOOT_QC_RE = re.compile(r"QC mode on \(factory flag\)")
@@ -417,8 +417,8 @@ def selftest():
     assert "header" in check_image(b"\x00" * 0x20000)
     assert "too small" in check_image(b"\xe9")
 
-    built = bytes(good) + (b"https://gamedayscoreboard.app/firmware/scoreboard75/manifest.json\x00"
-                           b"Project bharvey88.gameday-scoreboard version 1.5.5\x00")
+    built = bytes(good) + (b"https://apolloautomation.github.io/gameday-scoreboard-main/firmware/scoreboard75/manifest.json\x00"
+                           b"Project ApolloAutomation.gameday-scoreboard version 1.5.5\x00")
     assert image_info(built) == ("scoreboard75", "1.5.5")
     assert image_info(bytes(good)) == ("", "")
 
@@ -470,7 +470,7 @@ def selftest():
     fake.SerialException = OSError
     real_serial = sys.modules.get("serial")
     sys.modules["serial"] = fake
-    boot = ["[I][app:100]: Project bharvey88.gameday-scoreboard version 1.5.5\n",
+    boot = ["[I][app:100]: Project ApolloAutomation.gameday-scoreboard version 1.5.5\n",
             "[I][qc:066]: QC mode on (factory flag)\n"]
     try:
         FakeSerial.script = boot + ["[I][qc:189]: Button OK\n[I][qc:193]: Factory flag cleared\n"]
@@ -508,7 +508,9 @@ def selftest():
     assert ">gameday-2f6a70<" in svg and "v1.5.5" in svg and 'width="50mm"' in svg
     assert "v" not in label_svg("gameday-2f6a70", "34:85:18:2f:6a:70", "").split("MAC")[1].split("<")[0]
 
-    assert BOOT_VERSION_RE.search("[I][app:100]: Project bharvey88.gameday-scoreboard version 1.5.5").group(1) == "1.5.5"
+    assert BOOT_VERSION_RE.search("[I][app:100]: Project ApolloAutomation.gameday-scoreboard version 1.5.5").group(1) == "1.5.5"
+    # Images built under the earlier project name still match.
+    assert BOOT_VERSION_RE.search("[I][app:100]: Project bharvey88.gameday-scoreboard version 2026.10.0").group(1) == "2026.10.0"
 
     with tempfile.TemporaryDirectory() as d:
         log = Path(d) / "log.csv"

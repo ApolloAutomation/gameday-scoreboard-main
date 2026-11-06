@@ -107,7 +107,7 @@ void GamedayComponent::remote_number(uint8_t n) {
       this->start_demo((uint8_t) DemoKind::COLLEGE);
       break;
     case 3:
-      // The effects tour, once effects mode (backlog #39) is in this build.
+      // The effects tour, once effects mode is in this build.
       ESP_LOGI(TAG, "Remote button 3: the effects tour is not in this build yet");
       break;
     case 4:

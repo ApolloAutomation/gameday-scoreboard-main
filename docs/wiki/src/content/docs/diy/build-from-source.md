@@ -5,15 +5,15 @@ sidebar:
   order: 5
 ---
 
-Build from the YAML when your board has its own pins, when you want to change something, or when you want your own keys on the panel. Everything you need is in the [firmware repo](https://github.com/gameday-scoreboard/gameday-scoreboard).
+Build from the YAML when your board has its own pins, when you want to change something, or when you want your own keys on the panel. Everything you need is in the [firmware repo](https://github.com/ApolloAutomation/gameday-scoreboard-main).
 
 ## What's in the repo
 
 | Path | What it holds |
 | --- | --- |
-| `firmware/gameday.yaml` | The release build for the MoonHub75 pinout. It names the build and picks the pin map. |
+| `firmware/gameday.yaml` | The release build for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares. It names the build and picks the pin map. |
 | `firmware/gameday-2panel.yaml` | `gameday.yaml` starting two panels wide. The DIY installer offers it for a 128x64 display. |
-| `firmware/gameday-scoreboard75.yaml` | The release build for the Game Day Scoreboard controller. Not for DIY boards. |
+| `firmware/gameday-scoreboard75.yaml` | The release build for the scoreboard75 controller board. Not for other boards. |
 | `firmware/controllers/` | One pin map per board: `moonhub75.yaml` and `scoreboard75.yaml`. |
 | `firmware/gameday-common.yaml` | Everything else: version, update feed, Wi-Fi, the panel layout, the pages and settings. Don't build it directly. |
 | `firmware/pages/` | The pages drawn on the panel. The scoreboard is `gameday-live.yaml`. |
@@ -27,12 +27,13 @@ The components in `components/` are:
 - `panel_layout`: the one-panel or two-panel layout, applied at boot from a saved choice, so one binary serves both layouts.
 - `improv_ble`: Bluetooth Wi-Fi setup for the Game Day app.
 - `saved_networks`: the up to five Wi-Fi networks the panel remembers.
+- `crash_report`: keeps a record of the last crash, freeze or power dip restart in flash, with the log and backtrace of a crash or freeze, for `/gameday/crash`.
 
 `gameday-common.yaml` also pulls in [lvgl-page-manager](https://github.com/pavlov-net/lvgl-page-manager) and [lvgl-canvas-fx](https://github.com/pavlov-net/lvgl-canvas-fx) at fixed versions, and the theme and clock packages from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit so a build always gets the same thing.
 
 ## Install ESPHome
 
-Use the ESPHome version CI builds with. It's `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.0b3 on the `dev` branch. Install it in a Python virtual environment.
+Use the ESPHome version CI builds with. It's `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.2 on the `dev` branch. Install it in a Python virtual environment.
 
 ```sh
 python -m venv esphome-venv
@@ -53,23 +54,19 @@ esphome-venv\Scripts\activate
 Then install the pinned version:
 
 ```sh
-pip install esphome==2026.10.0b3
+pip install esphome==2026.10.2
 ```
 
-The `dev` and `beta` branches may build on an ESPHome beta. `main`, which every release and the update feed come from, builds only on a final ESPHome release.
-
-:::note[Coming in the next release]
-CI checks the rule: a pull request into `main` or a release tag fails when the pin isn't a final release like 2026.10.0.
-:::
+The `dev` and `beta` branches may build on an ESPHome beta. `main`, which every release and the update feed come from, builds only on a final ESPHome release. CI checks it: a pull request into `main`, or a release tag, fails when the pin isn't a final release like 2026.10.0. A maintainer can let an ESPHome beta through with the `esphome-beta-ok` label on the pull request that promotes it.
 
 ## Get the code
 
 ```sh
-git clone https://github.com/gameday-scoreboard/gameday-scoreboard
+git clone https://github.com/ApolloAutomation/gameday-scoreboard-main
 ```
 
 ```sh
-cd gameday-scoreboard
+cd gameday-scoreboard-main
 ```
 
 ## Compile
@@ -124,12 +121,14 @@ npm test
 
 ## Edit the device page
 
-The device page is plain HTML and JavaScript in `firmware/web`. The firmware embeds a generated bundle, so after you edit `app.js` or `app.css`, rebuild it:
+The device page is plain HTML and JavaScript in `firmware/web`. The firmware embeds a generated bundle, so after you edit `app.js`, `app.css` or `demo.js`, rebuild it:
 
 ```sh
-python scripts/build_web.py
+python3 scripts/build_web.py
 ```
+
+That rewrites `firmware/web/bundle.js` and `firmware/web/bundle-demo.js`. A pull request commits both with the change, since CI fails when they don't match the sources.
 
 ## Contributing
 
-Bug reports, test fixtures from odd games, pin maps for new boards and device page fixes are all welcome. [CONTRIBUTING.md](https://github.com/gameday-scoreboard/gameday-scoreboard/blob/dev/CONTRIBUTING.md) says where help is wanted, how to branch and what CI checks.
+Bug reports, test fixtures from odd games, pin maps for new boards and device page fixes are all welcome. [CONTRIBUTING.md](https://github.com/ApolloAutomation/gameday-scoreboard-main/blob/dev/CONTRIBUTING.md) says where help is wanted, how to branch and what CI checks.

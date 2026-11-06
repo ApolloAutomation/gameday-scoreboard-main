@@ -20,3 +20,7 @@ docs/wiki/node_modules/
 docs/wiki/dist/
 docs/wiki/.astro/
 docs/wiki/src/content/docs/changelog.md
+
+# Local agent and macOS files
+.claude/
+.DS_Store

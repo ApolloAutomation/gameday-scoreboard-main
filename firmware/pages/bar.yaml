@@ -1,14 +1,15 @@
 # The bar build: the real scoreboard firmware for the free panels in bars,
 # plus the beta channel. Included only by the *-bar.yaml top-level files,
-# which point the updater at gamedayscoreboard.app/firmware/beta/<variant>/
-# (published from the beta branch, see .github/workflows/build.yml).
+# which point the updater at firmware/beta/<variant>/ on the project's site
+# (site_base in gameday-common.yaml), published from the beta branch (see
+# .github/workflows/build.yml).
 #
 # Unlike release firmware it installs updates on its own, with no setting:
 # between 3 and 5 AM panel time, never while a game it follows is live, and
 # right away when the beta's summary names the panel ("Install now:",
 # components/gameday/auto_update.h). A failed install leaves the old
-# firmware running and tries again the next night. Release builds keep D4:
-# nothing installs unless the owner turns on "Install updates automatically".
+# firmware running and tries again the next night. Release builds still
+# install nothing unless the owner turns on "Install updates automatically".
 
 esphome:
   comment: "v${version} bar beta"

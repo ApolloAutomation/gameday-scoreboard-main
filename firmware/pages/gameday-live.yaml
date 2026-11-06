@@ -374,8 +374,8 @@ script:
             lv_obj_add_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(gd_clock_sub_lbl), LV_OBJ_FLAG_HIDDEN);
           }
-          // Records are pre/post-game info; hide them while the game is live
-          // (the layout also hides them entirely on narrow displays).
+          // Records sit under the logos on a wide display, live or not; a
+          // single panel has no room for them.
           if (W < 128) {
             lv_obj_add_flag(id(tt_away_rec_lbl), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(tt_home_rec_lbl), LV_OBJ_FLAG_HIDDEN);

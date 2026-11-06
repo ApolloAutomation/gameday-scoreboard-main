@@ -37,7 +37,8 @@ static const uint8_t kHeatPercent[kHeatSteps + 1] = {100, 70, 45, 25};
 struct HeatGuard {
   uint8_t step = 0;            // 0 is full brightness
   uint32_t changed_ms = 0;     // when step last changed
-  uint32_t cool_since_ms = 0;  // when it last went under kCoolC, 0 while it isn't
+  uint32_t cool_since_ms = 0;  // when it last went under kCoolC
+  bool cooling = false;        // under kCoolC since cool_since_ms
   float last_c = NAN;          // the last reading, NAN before the first
 
   // A new reading. True when the step changed.
@@ -53,15 +54,19 @@ struct HeatGuard {
         this->step++;
     }
     if (c < kCoolC) {
-      if (this->cool_since_ms == 0)
-        this->cool_since_ms = now_ms == 0 ? 1 : now_ms;
+      // A flag rather than 0 for "not cooling": a reading at millis() == 0
+      // must not count as cool since 49 days ago.
+      if (!this->cooling) {
+        this->cooling = true;
+        this->cool_since_ms = now_ms;
+      }
       // Cool for a whole kCoolStepMs, and that long since the last step
       const uint32_t cool_for = now_ms - this->cool_since_ms;
       const uint32_t stepped_for = now_ms - this->changed_ms;
       if (this->step > 0 && cool_for >= kCoolStepMs && stepped_for >= kCoolStepMs)
         this->step--;
     } else {
-      this->cool_since_ms = 0;
+      this->cooling = false;
     }
     if (this->step != before) {
       this->changed_ms = now_ms;
@@ -139,11 +144,16 @@ inline GuardMark guard_mark(uint8_t heat_step, bool power_capped) {
   return heat_step > 0 ? GuardMark::HEAT : GuardMark::NONE;
 }
 
+// Room for the keys below; GamedayComponent::health_json_ leaves them out
+// when they don't fit, and tests/test_parse.cpp checks the longest fits.
+static const size_t kGuardJsonSize = 96;
+
 // The keys added to the health object: ,"temp":41.5,"heat":0,"brownouts":0,"power":"ok"
-// temp is left out before the first reading.
+// temp is left out before the first reading, and for one that isn't a finite
+// number (JSON has no inf).
 inline int guard_json_keys(char *buf, size_t size, float temp_c, uint8_t heat_step, const PowerLog &log) {
   char temp[24] = "";
-  if (!std::isnan(temp_c))
+  if (std::isfinite(temp_c))
     snprintf(temp, sizeof(temp), ",\"temp\":%.1f", temp_c);
   return snprintf(buf, size, "%s,\"heat\":%u,\"brownouts\":%u,\"power\":\"%s\"", temp, (unsigned) heat_step,
                   (unsigned) log.brownouts, log.capped ? "capped" : "ok");

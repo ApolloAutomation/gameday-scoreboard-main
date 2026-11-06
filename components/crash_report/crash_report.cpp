@@ -11,7 +11,9 @@
 #include "esphome/components/esp32/crash_handler.h"
 #endif
 
+#include <esp_attr.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 
 #include <cinttypes>
 #include <cstring>
@@ -23,34 +25,31 @@ namespace crash_report {
 static const char *const TAG = "crash_report";
 // The crash handler's log tag; only its lines go into the report.
 static const char *const HANDLER_TAG = "esp32.crash";
-// Anything earlier is a clock that was never set.
-static constexpr time_t CLOCK_VALID = 1700000000;
 
 CrashReport *global_crash_report = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-static bool crashed(esp_reset_reason_t r) {
-  return r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
-}
+}  // namespace crash_report
 
-static const char *reason_name(uint8_t r) {
-  switch (r) {
-    case ESP_RST_PANIC:
-      return "crash";
-    case ESP_RST_INT_WDT:
-      return "interrupt watchdog";
-    case ESP_RST_TASK_WDT:
-      return "task watchdog";
-    case ESP_RST_WDT:
-      return "watchdog";
-    case ESP_RST_BROWNOUT:
-      return "brownout";
-    default:
-      return "other";
-  }
-}
+namespace gameday {
+// Whether this start is a restart the firmware asked for, read from the
+// restart log the gameday component keeps in RTC memory (gameday.cpp, the
+// planned flag its on_shutdown sets). The crash report sets up before that
+// component clears the flag. Weak, so a build without the gameday component
+// treats every start as unplanned. The crash report keeps no RTC variable of
+// its own: a second one would move the restart log in RTC memory and void it
+// on the first start after an update.
+__attribute__((weak)) bool boot_was_planned() { return false; }
+}  // namespace gameday
+
+namespace crash_report {
+
+static_assert(RESET_PANIC == ESP_RST_PANIC && RESET_INT_WDT == ESP_RST_INT_WDT && RESET_TASK_WDT == ESP_RST_TASK_WDT &&
+                  RESET_WDT == ESP_RST_WDT && RESET_BROWNOUT == ESP_RST_BROWNOUT,
+              "capture.h reset reasons no longer match esp_reset_reason_t");
 
 void CrashReport::setup() {
   global_crash_report = this;
+  const bool planned = gameday::boot_was_planned();
   if (logger::global_logger != nullptr) {
     logger::global_logger->add_log_callback(
         this, [](void *self, uint8_t level, const char *tag, const char *message, size_t len) {
@@ -68,7 +67,8 @@ void CrashReport::setup() {
   this->record_->version[VERSION_SIZE - 1] = '\0';
 
   const esp_reset_reason_t reason = esp_reset_reason();
-  if (crashed(reason) || reason == ESP_RST_BROWNOUT) {
+  const Save save = save_for_start(reason, planned);
+  if (save != Save::NOTHING) {
     Record &r = *this->record_;
     r.count++;
     r.reason = (uint8_t) reason;
@@ -78,13 +78,12 @@ void CrashReport::setup() {
 #endif
     r.version[VERSION_SIZE - 1] = '\0';
     // The clock survives a soft reset, so it is often already set.
-    const time_t now = ::time(nullptr);
-    r.time = now >= CLOCK_VALID ? (uint32_t) now : 0;
+    r.time = boot_time(::time(nullptr), esp_timer_get_time() / 1000000);
     this->need_time_ = r.time == 0;
     r.report[0] = '\0';
     this->report_len_ = 0;
 #ifdef USE_ESP32_CRASH_HANDLER
-    if (crashed(reason) && esp32::crash_handler_has_data()) {
+    if (save == Save::REPORT && esp32::crash_handler_has_data()) {
       this->capturing_ = true;
       esp32::crash_handler_log();
       this->capturing_ = false;
@@ -122,11 +121,11 @@ void CrashReport::loop() {
     ESP_LOGI(TAG, "Crash report cleared");
   }
   if (this->need_time_) {
-    const time_t now = ::time(nullptr);
-    if (now >= CLOCK_VALID) {
+    const uint32_t at = boot_time(::time(nullptr), esp_timer_get_time() / 1000000);
+    if (at != 0) {
       std::lock_guard<std::mutex> lock(this->mutex_);
       if (this->record_ != nullptr) {
-        this->record_->time = (uint32_t) now;
+        this->record_->time = at;
         this->save_();
       }
       this->need_time_ = false;
@@ -177,26 +176,7 @@ void CrashReport::clear() {
 void CrashReport::on_log_(const char *tag, const char *message, size_t len) {
   if (!this->capturing_ || this->record_ == nullptr || strcmp(tag, HANDLER_TAG) != 0)
     return;
-  // message is the whole console line: a color code, "[E][esp32.crash:123]",
-  // ": ", the text and a color reset. Keep the text.
-  const char *end = message + len;
-  const char *start = strstr(message, ": ");
-  if (start == nullptr)
-    return;
-  start += 2;
-  if (end - start >= 4 && memcmp(end - 4, "\033[0m", 4) == 0)
-    end -= 4;
-  // The addr2line hints repeat the addresses above them; the script builds
-  // its own command.
-  if (strncmp(start, "Use: ", 5) == 0 || strncmp(start, "Other core: addr2line", 21) == 0)
-    return;
-  const size_t n = end - start;
-  if (this->report_len_ + n + 2 > REPORT_SIZE)
-    return;
-  memcpy(this->record_->report + this->report_len_, start, n);
-  this->report_len_ += n;
-  this->record_->report[this->report_len_++] = '\n';
-  this->record_->report[this->report_len_] = '\0';
+  this->report_len_ = report_append(this->record_->report, REPORT_SIZE, this->report_len_, message, len);
 }
 
 void CrashReport::save_() { this->pref_.save(this->record_); }

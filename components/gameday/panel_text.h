@@ -21,6 +21,7 @@ static const char kLatinExtendedA[] =
     "GgGgHhHhIiIiIiIiIiIiJjKkkLlLlLlL"
     "lLlNnNnNnnNnOoOoOoOoRrRrRrSsSsSs"
     "SsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
+static_assert(sizeof(kLatinExtendedA) == 0x180 - 0x100 + 1, "one letter per code point");
 
 // Appends what the panel draws for one code point outside ASCII. Latin-1
 // itself is copied by the caller, since its bytes are already right.

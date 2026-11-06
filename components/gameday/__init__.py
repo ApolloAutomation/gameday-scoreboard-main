@@ -16,7 +16,7 @@ from esphome.const import CONF_ID, CONF_TIME_ID, CONF_TRIGGER_ID, __version__ as
 
 DEPENDENCIES = ["network", "http_request", "time"]
 AUTO_LOAD = ["json", "runtime_image", "select", "web_server_base"]
-CODEOWNERS = ["@bharvey88"]
+CODEOWNERS = ["@ApolloAutomation"]
 
 CONF_HTTP_REQUEST_ID = "http_request_id"
 CONF_PANEL_LAYOUT_ID = "panel_layout_id"

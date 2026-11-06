@@ -4,6 +4,7 @@
     python scripts/release_notes.py v0.2.2            # full section body
     python scripts/release_notes.py v0.2.2 --summary  # one line for the firmware manifest
     python scripts/release_notes.py --page site/changelog/index.html [--dates releases.json] [--date v0.2.2=2026-10-20]
+    python scripts/release_notes.py --selftest
 
 Exits non-zero when the section is missing, which is what makes a tag without
 release notes fail CI.
@@ -78,7 +79,12 @@ def release_dates(path: str | None, extra: list[str]) -> dict[str, date]:
     dates = {}
     if path:
         for r in json.loads(Path(path).read_text(encoding="utf-8")):
-            when = datetime.fromisoformat(r["publishedAt"].replace("Z", "+00:00"))
+            published = r.get("publishedAt") or ""
+            # A draft isn't published: gh gives it Go's zero time (year 1,
+            # which has no date in Chicago) or nothing. It shows no date.
+            if not published or published.startswith("0001-"):
+                continue
+            when = datetime.fromisoformat(published.replace("Z", "+00:00"))
             dates[r["tagName"]] = when.astimezone(ZONE).date()
     for item in extra:
         tag, _, day = item.partition("=")
@@ -121,9 +127,37 @@ def option(name: str) -> list[str]:
     return [sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == name]
 
 
+def selftest() -> None:
+    import tempfile
+
+    # gh lists a draft release with Go's zero time (year 1) as its publish
+    # date, or with none. It has no date to show, and must not stop the page.
+    listed = [
+        {"tagName": "v2026.11.0", "publishedAt": "0001-01-01T00:00:00Z"},
+        {"tagName": "v2026.10.1", "publishedAt": None},
+        {"tagName": "v2026.10.0", "publishedAt": "2026-10-20T03:00:00Z"},
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d, "releases.json")
+        path.write_text(json.dumps(listed), encoding="utf-8")
+        dates = release_dates(str(path), ["v2026.11.0=2026-11-02"])
+    # An evening release keeps Chicago's date, and --date adds the tag being released.
+    assert dates == {"v2026.10.0": date(2026, 10, 19), "v2026.11.0": date(2026, 11, 2)}, dates
+
+    assert summary("- One.\n- Two.\n") == "One. | Two."
+    trimmed = summary("- " + "x" * 300)
+    assert len(trimmed) == 240 and trimmed.endswith("..."), trimmed
+    assert headline("A lead line.\n\n- A bullet. More.\n") == "A lead line."
+    assert headline("- First sentence. Second one.\n") == "First sentence."
+    print("selftest ok")
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
+    if sys.argv[1] == "--selftest":
+        selftest()
+        raise SystemExit(0)
     if sys.argv[1] == "--page":
         dates_file = option("--dates")
         page(sys.argv[2], release_dates(dates_file[0] if dates_file else None, option("--date")))
