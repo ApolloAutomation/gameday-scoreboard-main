@@ -110,7 +110,7 @@ is `<version>-beta.0`, so a bar panel flashed from it takes the next beta.
 
 ### Setup
 
-- [ESPHome](https://esphome.io/) 2026.10.0b3, the version CI builds with.
+- [ESPHome](https://esphome.io/) 2026.10.2, the version CI builds with.
 - g++ for the host tests.
 - Node and Python 3 for the device page tests.
 

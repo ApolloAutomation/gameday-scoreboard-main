@@ -24,7 +24,7 @@ permissions:
 # may pin an ESPHome beta; main and release tags need a final release, which
 # Branch rules checks.
 env:
-  ESPHOME_VERSION: "2026.10.0b3"
+  ESPHOME_VERSION: "2026.10.2"
   # The project's site (GitHub Pages today), with no trailing slash: the
   # flasher, the changelog and the update manifests. The same value as
   # site_base in firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a
