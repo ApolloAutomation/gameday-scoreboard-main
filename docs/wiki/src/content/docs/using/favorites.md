@@ -45,10 +45,6 @@ Buttons 1 to 4 on a paired WizMote jump to your first four favorites. In Favorit
 
 ## On the device page
 
-The **Up next** list under the board has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team.
+The **Up next** list under the board has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
 
 If none of your favorites has any game scheduled, the board shows a clock in your first favorite's colors. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).
-
-:::note[Coming in the next release]
-A favorite the panel hasn't read from ESPN yet says **Not checked yet** in the Up next list, keeping **No game scheduled** for a team that ESPN says has no game.
-:::

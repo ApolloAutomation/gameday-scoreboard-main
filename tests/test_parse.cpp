@@ -3931,12 +3931,26 @@ static void test_auto_update() {
   t.checked_day = t.today;
   CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
 
-  // Beta channel versions: the build number after "-beta." is the next part.
+  // Beta channel versions: betas order by their build number after "-beta.",
+  // and all come before the release they lead up to.
   CHECK(version_newer("2026.10.0-beta.813", "2026.10.0-beta.812"));
   CHECK(!version_newer("2026.10.0-beta.812", "2026.10.0-beta.812"));
   CHECK(!version_newer("2026.10.0-beta.811", "2026.10.0-beta.812"));
-  CHECK(version_newer("2026.10.0-beta.812", "2026.10.0"));  // a hand-flashed bar panel takes the beta
+  CHECK(!version_newer("2026.10.1-beta.812", "2026.10.1"));  // a panel on the release skips its betas
+  CHECK(version_newer("2026.10.1", "2026.10.1-beta.812"));  // Follow beta off: the release replaces its beta
+  CHECK(version_newer("2026.10.1", "2026.10.1-beta.999999999"));
+  CHECK(version_newer("2026.10.1-beta.1", "2026.10.0"));  // the next release's first beta
+  CHECK(!version_newer("2026.10.0", "2026.10.1-beta.1"));
+  CHECK(version_newer("2026.10.1-beta.1", "2026.10.1-beta.0"));  // a bar panel flashed from a dev build
+  CHECK(!version_newer("2026.10.1-beta.0", "2026.10.1"));  // "-beta.0" still comes before the release
   CHECK(version_newer("2026.10.1-beta.900", "2026.10.0-beta.950"));
+  CHECK(version_newer("2026.10.1-beta.900", "2026.10.0"));
+  CHECK(version_newer("2026.10-beta.2", "2026.10.0-beta.1"));  // a missing part is still 0
+  CHECK(!version_newer("2026.10.1-beta", "2026.10.1"));  // no dot: not the beta tag, so ignored
+  CHECK(!version_newer("2026.10.1", "2026.10.1-rc.1"));  // only "-beta." marks a beta
+  CHECK(!version_newer("2026.10.1-rc.1", "2026.10.1"));
+  CHECK(!version_newer("1.5.5.1-beta.3", "1.5.5.1"));  // the tag also follows a fourth part
+  CHECK(version_newer("1.5.5.1", "1.5.5.1-beta.3"));
   CHECK(version_newer("2026.10.0-beta.1000", "2026.10.0-beta.999"));
   CHECK(!version_newer("2026.10.0-beta.", "2026.10.0"));
   CHECK(!version_newer("2026.10.0-dev", "2026.10.0"));
