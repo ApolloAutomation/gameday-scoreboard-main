@@ -47,7 +47,7 @@ The MoonHub75 pinout, which the M-1 Rev6 shares, under the names ESPHome uses (t
 2. Enter your WiFi details in the dialog that follows the install. If you skip it, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows the name on screen; join it and a setup page opens.
 3. Once it's on WiFi the panel shows the `gameday-xxxxxx.local` name of its own page. Open that name on your phone or computer and pick your team there, or add the panel to Home Assistant (below). Until you pick a team or a mode, from that page or Home Assistant, the ticker asks you to and gives the panel's IP address for phones that can't resolve `.local` names. Holding the controller's boot button for 1.5 seconds shows the name and the IP address again any time.
 
-The project's site at that address (the installers and demo, the DIY, support and changelog pages) and the update feed go live with the first Apollo Automation release. Until then, build the firmware from YAML (see [Build it yourself](#build-it-yourself)) and read the [docs](docs/wiki/src/content/docs/) in this repo.
+From the first Apollo Automation release on, the project's site at that address has the installers and the demo, the DIY, support and changelog pages, and the update feed the panels read. The [docs](docs/wiki/src/content/docs/) are in this repo.
 
 While it waits for WiFi, and right after it joins, the panel also shows a QR code for the Game Day app. That app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware; the hotspot and the device page do everything it does.
 

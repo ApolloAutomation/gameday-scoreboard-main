@@ -64,7 +64,7 @@ See [Remote](/using/remote/).
 
 ## Will it update itself?
 
-It checks for a new release every six hours, and the device page shows an **Install** button when one is out. If you turn on **Install updates automatically** in the Device card, the panel installs a new release on its own between 3 and 5 AM, never during a live game it's showing. That switch is off unless you turn it on.
+It checks for a new release every six hours, and the device page shows an **Install** button when one is out. If you turn on **Install updates automatically** in the Device card, the panel installs a new release on its own between 3 and 5 AM, never while a game it follows is live. That switch is off unless you turn it on.
 
 Your team and settings stay through an update. See [Updates](/using/updates/).
 
