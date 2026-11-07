@@ -23,12 +23,32 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
 | **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
+:::note[Coming in the next release]
+The start-up screen no longer mentions the app, and its QR codes need nothing but your phone's camera.
+
+| The panel says | What it means | What to do |
+| --- | --- | --- |
+| **SETUP / Scan to / join Wi-Fi**, with a QR code | The panel has no Wi-Fi network yet, or you reset its Wi-Fi, and its hotspot is up. The QR code is the hotspot's Wi-Fi code. | Point your phone's camera at the QR code and tap to join; the setup page opens. Or join the hotspot by name (the panel shows it in turn), or use the installer's Wi-Fi dialog. See [Set up your panel](/get-started/setup/). |
+| **SETUP / Starting / hotspot** | The panel's hotspot is starting. | Wait a moment. |
+| A QR code with **Scan to / pick your / team** | The panel joined your Wi-Fi. The QR code opens its device page by IP address. | Scan it with your phone's camera, on the same Wi-Fi, and pick your team. Or wait for the address. |
+
+:::
+
 ## When the Wi-Fi is the problem
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
 | **Wi-Fi / lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
 | **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes by itself once scores come through. |
+
+:::note[Coming in the next release]
+| The panel says | What it means | What to do |
+| --- | --- | --- |
+| **Wi-Fi / lost / reconnecting** | The panel has been off its Wi-Fi for more than about 10 seconds and is trying to get back on. | If the router or internet is down, wait: the panel rejoins by itself. |
+| **Wi-Fi / lost / scan to fix**, with a QR code, taking turns with **Join WiFi / Game Day / 2f6a70** | The panel is still off its Wi-Fi and its hotspot is up. The QR code is the hotspot's Wi-Fi code. | If you changed the router or the password, scan the code with your phone's camera, join, and give the panel the new one on the page that opens. If the router is only down, wait. |
+| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | As above. The QR code opens the panel's device page by IP address. | From a phone on the same Wi-Fi, scan it and tap **Reset Wi-Fi** in the Device card to put the panel back into setup. If the page won't open, use the button's [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). |
+
+:::
 
 ## On the scoreboard
 
@@ -54,6 +74,10 @@ These show on the board or in the ticker.
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
 
 A panel with no team picked also brings the app's QR code back over the board for 13 seconds every 3 minutes, until you pick one.
+
+:::note[Coming in the next release]
+**Pick a team in the Game Day app or at** becomes **Pick a team at** and the IP address, and **Favorites: add teams in the app or on the page** becomes **Favorites: add teams on the page**. The QR code that comes back over the board every 3 minutes opens the panel's device page.
+:::
 
 ## When you hold the button
 

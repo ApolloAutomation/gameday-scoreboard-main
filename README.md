@@ -51,6 +51,8 @@ From the first Apollo Automation release on, the project's site at that address 
 
 While it waits for WiFi, and right after it joins, the panel also shows a QR code for the Game Day app. That app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware; the hotspot and the device page do everything it does.
 
+From the next release the QR code needs no app: while the panel waits for WiFi it is the Wi-Fi code for the panel's hotspot, which any iPhone or Android camera joins, and once the panel is on WiFi it opens the device page by IP address. A phone's camera and browser are enough to set a panel up.
+
 Team changes take effect immediately and survive reboots. Wrong panel size? Click the matching picture in the Setup card. Nothing needs reflashing to change teams or layouts.
 
 ## The device page

@@ -31,6 +31,10 @@ The two pictures install two builds of the same firmware. The 64x64 choice insta
 
 If you close the dialog, the panel shows a QR code for the separate Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70. Join the hotspot and a setup page opens. The panel only joins 2.4 GHz networks.
 
+:::note[Coming in the next release]
+The QR code joins that hotspot instead: scan it with your phone's camera and the setup page opens.
+:::
+
 ## Set it up
 
 From here a board you built works like any Game Day Scoreboard. Follow [Set up your panel](/get-started/setup/) to finish joining Wi-Fi, then [Pick your team](/get-started/pick-your-team/).

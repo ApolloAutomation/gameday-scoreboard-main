@@ -6,28 +6,46 @@
 # title plus up to four lines: small, big, small, small. boot_refresh tests
 # them in this order: connected, wifi lost, setup, connecting.
 #
-# Three of them carry a QR code for https://gamedayscoreboard.app/setup, a
-# universal link: the iPhone Camera opens the Game Day app when it is
-# installed and the setup web page when it is not. On a 128 px chain the
-# code sits on the left half and the lines move to the right half, so
-# nothing has to take turns with it. On a single 64 px panel there is no
-# room for both, so the code takes turns with the lines. See boot_qr_box
-# below for the sizing and boot_qr_cycle for the timing.
+# Most of them carry a QR code, and a phone's own camera reads every one,
+# so setting a panel up needs no app: the camera and a browser are enough.
+# components/gameday/setup_qr.h writes the text.
 #
-#   connected   64:  QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
-#               128: QR + Scan for / Game Day / app, the address taking the
-#                    same 5 s turn on the right
-#   wifi lost   64:  Wi-Fi / lost / open app (5 s), QR (8 s)
-#               128: QR + Wi-Fi / lost / open app
-#   setup       64:  SETUP / Game Day / app (5 s), QR (8 s), then once the
-#                    hotspot is actually up Join WiFi / Game Day /
-#                    2f6a70 (5 s), the hotspot's own name
-#               128: QR + SETUP / Game Day / app (13 s), then the hotspot
-#                    lines (5 s) once it is up
+#   - Off Wi-Fi (setup and Wi-Fi lost) the code is a Wi-Fi join code for the
+#     panel's own open hotspot, "Game Day 2f6a70", named in on_boot. The
+#     iPhone and Android cameras both offer to join it, and ESPHome's captive
+#     portal then opens by itself to pick the home network. It only shows
+#     once the hotspot is really up, so it never points at a network that is
+#     not there yet; until then the lines are text only.
+#   - On Wi-Fi the code opens the panel's own device page by IP address,
+#     http://192.168.1.50/, not by its .local name, which many Android phones
+#     can't open.
+#
+# On a 128 px chain the code sits on the left half and the lines move to the
+# right half, so nothing has to take turns with it; with no code up the
+# lines use the whole width. On a single 64 px panel there is no room for
+# both, so the code takes turns with the lines. See boot_qr_box below for
+# the sizing and boot_qr_cycle for the timing.
+#
+#   connected   64:  page QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
+#               128: page QR + Scan to / pick your / team, the address taking
+#                    the same 5 s turn on the right
+#   wifi lost   Wi-Fi / lost / reconnecting, full width, no QR, until the
+#               hotspot is up, then
+#               64:  Wi-Fi / lost / scan to fix (5 s), hotspot QR (8 s),
+#                    Join WiFi / Game Day / 2f6a70 (5 s)
+#               128: hotspot QR + Wi-Fi / lost / scan to fix (13 s), then
+#                    the hotspot lines (5 s)
+#   setup       SETUP / Starting / hotspot, full width, no QR, until the
+#               hotspot is up (on a new panel, almost at once), then
+#               64:  SETUP / Scan to / join Wi-Fi (5 s), hotspot QR (8 s),
+#                    Join WiFi / Game Day / 2f6a70 (5 s), the hotspot's own
+#                    name
+#               128: hotspot QR + SETUP / Scan to / join Wi-Fi (13 s), then
+#                    the hotspot lines (5 s)
 #   connecting  Connecting to / <network name>, full width, no QR
 #   sign-in     64:  Wi-Fi needs / sign-in / use home or / a hotspot (5 s),
-#                    QR (8 s)
-#               128: QR + the same lines
+#                    page QR (8 s)
+#               128: page QR + the same lines
 #
 # "sign-in" is a connected panel on a Wi-Fi that holds everything behind a
 # sign-in page (a bar, hotel or dorm; components/gameday/captive.h). It comes
@@ -37,25 +55,28 @@
 #
 # "wifi lost" means the panel has a saved network and is not on it, either
 # because it dropped or because it never came up this boot. It sits above the
-# setup state on purpose, and never shows the hotspot text: an owner whose
-# settings are fine should never be told to re-provision the panel. The app
-# leads in setup; the hotspot keeps a turn because it is the only way in
-# without an iPhone.
+# setup state on purpose and never says SETUP: an owner whose settings are
+# fine should never be told to set the panel up again, and the panel keeps
+# trying its saved networks and rejoins by itself when the router is back.
+# Once the fallback hotspot is up (ESPHome's ap_timeout, 90 s into a boot
+# that can't reach them) its code and name are the way back in for an owner
+# whose router or password changed.
 #
-# Connected: every panel shows the QR for the app once it joins Wi-Fi,
-# with or without a team. A fresh panel keeps it up for 45 seconds, or
+# Connected: every panel shows the QR for its device page once it joins
+# Wi-Fi, with or without a team. A fresh panel keeps it up for 45 seconds, or
 # until a team is picked. A panel that already has a team gets one run of
 # turns, 18 seconds, and then its board. The address turn is what "Show
 # address at boot" on the device page controls, since it is how someone who
 # set the panel up through the hotspot finds it again; with the setting off
 # a fresh panel shows only the QR, and a panel with a team skips the screen
 # and goes straight to its board. Coming back to the same network after a
-# drop is not a new join and shows nothing: the Wi-Fi lost screen already
-# carried the QR. A boot button hold always shows the full address and IP, full
-# width, with no QR, for 20 seconds. Off Wi-Fi the overlay never hides, so
-# the button cannot blank a panel that is in setup or has lost its network.
+# drop is not a new join and shows nothing: whoever set the panel up has
+# already found its page. A boot button hold always shows the full address
+# and IP, full width, with no QR, for 20 seconds. Off Wi-Fi the overlay never
+# hides, so the button cannot blank a panel that is in setup or has lost its
+# network.
 # A panel with no team picked brings the QR back over the board for 13 s
-# every 3 minutes (boot_app_qr_turn) until one is.
+# every 3 minutes (boot_team_qr_turn) until one is.
 #
 # Nothing here should scroll. Lines are kept to 12 characters (60 px of
 # Spleen 5x8) on a 64 px column, the hostname is split at its dash to fit,
@@ -71,11 +92,13 @@
 # change asks again (board_pending in gameday-common.yaml), so the new team's
 # scores load behind this screen instead of on a half-empty board.
 #
-# improv_ble (Bluetooth setup, how the Game Day app provisions a panel)
-# also draws the setup or lost lines when it starts advertising, so they are
-# up before the next poll, and JOINING / <network> once the app hands over
-# credentials, which both off-Wi-Fi states keep up until the panel connects.
-# See the improv_ble block below.
+# improv_ble (Bluetooth setup, which the Game Day app and Home Assistant's
+# Improv via BLE integration both use) also draws the setup or lost lines
+# when it starts advertising, so they are up before the next poll, and
+# JOINING / <network> once one of them hands over credentials, which both
+# off-Wi-Fi states keep up until the panel connects. The screen never sends
+# anyone to an app; Bluetooth setup simply keeps working for those who use
+# it. See the improv_ble block below.
 
 globals:
   - id: boot_ip_shown_ms
@@ -109,7 +132,7 @@ globals:
     type: int
     initial_value: '0'
   # True once the panel has had a real saved network this boot. A failed
-  # handover from the app calls clear_sta(), which makes has_sta() false
+  # Bluetooth handover calls clear_sta(), which makes has_sta() false
   # while the panel is still in an outage; this keeps it in the Wi-Fi lost
   # state instead of dropping to the setup lines. "Reset Wi-Fi" is the only
   # deliberate way to lose the network and it restarts the panel, which
@@ -118,7 +141,8 @@ globals:
     type: bool
     initial_value: 'false'
   # The turn boot_qr_cycle picked: 0 the state's own text, 1 the QR code,
-  # 2 the hotspot text. boot_refresh reads it to choose the lines.
+  # 2 the hotspot text or the address, 3 the unplug line after "Reset
+  # Wi-Fi". boot_refresh reads it to choose the lines.
   - id: boot_qr_frame
     type: int
     initial_value: '0'
@@ -132,8 +156,8 @@ globals:
   - id: boot_hold_since_ms
     type: uint32_t
     initial_value: '0'
-  # True while boot_app_qr_turn has the overlay up.
-  - id: boot_app_qr_on
+  # True while boot_team_qr_turn has the overlay up.
+  - id: boot_team_qr_on
     type: bool
     initial_value: 'false'
   # The network the panel last joined this boot, empty before the first
@@ -141,8 +165,8 @@ globals:
   - id: boot_joined_ssid
     type: std::string
     initial_value: ''
-  # Whether this join shows the app's QR code (see boot_refresh). Decided
-  # once per join, when boot_ip_shown_ms is still 0.
+  # Whether this join shows the QR code for the device page (see
+  # boot_refresh). Decided once per join, when boot_ip_shown_ms is still 0.
   - id: boot_join_qr
     type: bool
     initial_value: 'false'
@@ -190,20 +214,31 @@ script:
             lv_obj_set_y(id(boot_ld), 46);
           }
 
-  # Pick the layout (see boot_layout) and show or hide the QR. The layout is
-  # only reapplied when it changes, since boot_refresh calls this twice a
-  # second.
+  # Pick the layout (see boot_layout) and show the QR code holding qr, or
+  # hide it when qr is empty. boot_refresh calls this twice a second, so the
+  # layout is only reapplied when it changes and the code only encoded again
+  # when its text does: lv_qrcode_update, the call behind ESPHome's
+  # lvgl.qrcode.update, redraws every module. A text LVGL can't encode
+  # leaves the code hidden rather than up as a blank square.
   - id: boot_view
     parameters:
       side: bool
-      qr: bool
+      qr: string
     then:
       - lambda: |-
           if (id(boot_layout_side) != (int) side) {
             id(boot_layout_side) = side;
             id(boot_layout).execute(side);
           }
-          if (qr) lv_obj_clear_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
+          static std::string encoded;
+          static bool encoded_ok = false;
+          if (!qr.empty() && qr != encoded) {
+            encoded = qr;
+            encoded_ok = lv_qrcode_update(id(boot_qr), qr.data(), qr.size()) == LV_RESULT_OK;
+            if (!encoded_ok)
+              ESP_LOGW("boot", "QR code would not encode: %s", qr.c_str());
+          }
+          if (!qr.empty() && encoded_ok) lv_obj_clear_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
           else lv_obj_add_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
 
   # Write the four lines. A line wider than its column scrolls at 12 px/s,
@@ -281,7 +316,8 @@ script:
           if (w == nullptr) return;
           // The boot button's countdown has the screen (boot_hold_tick).
           if (id(boot_hold_stage) >= 2) return;
-          // The app is mid-handover: no QR and no turns, just JOINING.
+          // A Bluetooth setup is mid-handover: no QR and no turns, just
+          // JOINING.
           const bool provisioning =
               improv_ble::global_improv_component != nullptr &&
               improv_ble::global_improv_component->get_improv_state() ==
@@ -304,7 +340,7 @@ script:
           // here after "Reset Wi-Fi": that panel boots with an empty network in
           // memory, which still counts as has_sta(), and is in setup, not in
           // trouble. boot_had_creds carries a real network through a failed
-          // handover from the app, which clears the one in memory.
+          // Bluetooth handover, which clears the one in memory.
           const bool have_creds = w->has_sta() && !w->get_sta().get_ssid().empty();
           if (have_creds) id(boot_had_creds) = true;
           const bool lost = id(boot_had_creds) && (id(boot_last_connected_ms) != 0 || millis() > 30000);
@@ -321,19 +357,36 @@ script:
               h2 = host.substr(dash + 1);
             }
           }
+          // The panel's IPv4 address on its network, empty while it has none.
+          auto sta_ip = [w]() -> std::string {
+            for (auto &a : w->wifi_sta_ip_addresses()) {
+              if (a.is_set() && a.is_ip4()) {
+                char buf[48];
+                a.str_to(buf);
+                return buf;
+              }
+            }
+            return std::string();
+          };
+          // The Wi-Fi join code for the panel's own hotspot, whatever on_boot
+          // named it. Only asked for while the hotspot is up.
+          auto hotspot_qr = [w]() -> std::string {
+            return gameday::wifi_join_qr(w->get_ap().get_ssid().str());
+          };
           if (w->is_connected()) {
             if (id(boot_ip_shown_ms) == 0) {
               // A new join: every boot, and any network the panel was not on
-              // before this boot (the app handing over a new router's
-              // network mid-outage). Coming back to the same network after a
-              // drop is not one; the Wi-Fi lost screen already showed the QR.
+              // before this boot (a new router's network handed over
+              // mid-outage, from the hotspot or over Bluetooth). Coming back
+              // to the same network after a drop is not one: whoever set the
+              // panel up has already found its page.
               char buf[wifi::SSID_BUFFER_SIZE];
               const std::string ssid = w->wifi_ssid_to(buf);
               const bool same = !id(boot_joined_ssid).empty() && ssid == id(boot_joined_ssid);
               id(boot_joined_ssid) = ssid;
               id(boot_join_qr) = !id(gameday_ctl).setup_done() || (!same && id(gameday_ctl).show_boot_address());
               ESP_LOGI("boot", "On Wi-Fi (%s): %s", same ? "same network" : "new join",
-                       id(boot_join_qr) ? "showing the app's QR code" : "straight to the board");
+                       id(boot_join_qr) ? "showing the QR code for the device page" : "straight to the board");
             }
             id(boot_last_connected_ms) = millis() == 0 ? 1 : millis();
             // boot_show_address keeps the button's address up for 20 s, and
@@ -341,17 +394,9 @@ script:
             if (via_button || id(boot_show_address).is_running()) {
               // Boot button hold: always the full address and IP, never the
               // QR, full width.
-              std::string ip;
-              for (auto &a : w->wifi_sta_ip_addresses()) {
-                if (a.is_set() && a.is_ip4()) {
-                  char buf[48];
-                  a.str_to(buf);
-                  ip = buf;
-                  break;
-                }
-              }
+              const std::string ip = sta_ip();
               id(boot_qr_cycle).execute(0, false);
-              id(boot_view).execute(false, false);
+              id(boot_view).execute(false, "");
               if (wide)
                 id(boot_set_lines).execute("On your phone, open", host, "or " + ip, "then pick your team", false);
               else if (h2.empty())
@@ -361,29 +406,40 @@ script:
             } else if (id(gameday_ctl).captive()) {
               // On Wi-Fi, but it holds everything behind a sign-in page
               // (components/gameday/captive.h). The panel can't sign in, so
-              // send the owner to another network: the QR opens the app,
-              // which hands the panel a home network or a phone hotspot.
+              // the lines send the owner to another network. The code opens
+              // the device page by IP. The phone that put the panel on this
+              // network is most likely on it too, and the page is where that
+              // phone can do something about it: its Reset Wi-Fi puts the
+              // panel into setup, where the hotspot's code takes over, and it
+              // says "Wi-Fi needs a sign-in" as well. A venue network that
+              // keeps devices apart won't open the page; the lines still
+              // hold there, and the boot button's Reset Wi-Fi needs no phone.
+              // No hotspot code here: the hotspot only runs off Wi-Fi.
+              const std::string page = gameday::device_page_qr(sta_ip());
               id(boot_qr_cycle).execute(5, false);
-              id(boot_view).execute(wide, wide || id(boot_qr_frame) == 1);
+              id(boot_view).execute(wide && !page.empty(), (wide || id(boot_qr_frame) == 1) ? page : std::string());
               id(boot_set_lines).execute("Wi-Fi needs", "sign-in", "use home or", "a hotspot", false);
             } else if (id(boot_hold_since_ms) != 0) {
               id(boot_hold_view).execute();
             } else {
-              // Normal connect: the QR for the app, with the address taking a
-              // turn when "Show address at boot" is on. Every panel, with or
-              // without a team: whoever just put it on Wi-Fi is the person
-              // who needs the app next. A panel with a team and the setting
-              // off, or back on its network after a drop, hides straight
-              // away (see the hide timers below) and only flashes the hold
-              // view here. boot_app_qr_turn borrows the same view.
-              if (id(boot_join_qr) || id(boot_app_qr_on)) {
+              // Normal connect: the QR for the device page, by IP, with the
+              // address taking a turn when "Show address at boot" is on.
+              // Every panel, with or without a team: whoever just put it on
+              // Wi-Fi is the person who picks the team next. A panel with a
+              // team and the setting off, or back on its network after a
+              // drop, hides straight away (see the hide timers below) and
+              // only flashes the hold view here. boot_team_qr_turn borrows
+              // the same view. With no address yet there is no code, and the
+              // address lines stand in for it.
+              if (id(boot_join_qr) || id(boot_team_qr_on)) {
                 id(boot_qr_cycle).execute(1, id(gameday_ctl).show_boot_address());
-                const bool addr = id(boot_qr_frame) == 2;
-                id(boot_view).execute(wide, wide || !addr);
+                const std::string page = gameday::device_page_qr(sta_ip());
+                const bool addr = id(boot_qr_frame) == 2 || page.empty();
+                id(boot_view).execute(wide && !page.empty(), (wide || !addr) ? page : std::string());
                 if (addr)
                   id(boot_set_lines).execute("Open", h1, h2, "", false);
                 else if (wide)
-                  id(boot_set_lines).execute("Scan for", "Game Day", "app", "", false);
+                  id(boot_set_lines).execute("Scan to", "pick your", "team", "", false);
                 else
                   id(boot_set_lines).execute("", "", "", "", false);
               } else {
@@ -414,28 +470,40 @@ script:
             //
             // Wi-Fi we already had went away. Keep saying so rather than
             // "Connecting to <network>", which reads like a first boot and
-            // does not tell the customer what to do about it. No hotspot turn
-            // here, even once the fallback AP is up, for the same reason.
-            id(boot_qr_cycle).execute(provisioning ? 0 : 2, false);
-            id(boot_view).execute(wide && !provisioning,
-                                  !provisioning && (wide || id(boot_qr_frame) == 1));
+            // does not tell the customer what to do about it, and never
+            // SETUP, for the same reason. Until the fallback AP is up the
+            // panel is only reconnecting: text, full width, no QR. Once it
+            // is, the hotspot's join code and its name take turns with the
+            // lines, for an owner whose router or password changed; the
+            // panel keeps trying its saved networks meanwhile.
+            const bool ap = !provisioning && w->is_ap_active();
+            id(boot_qr_cycle).execute(provisioning ? 0 : 2, ap);
+            const int frame = id(boot_qr_frame);
+            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
             if (provisioning) {
               const std::string joining = w->get_sta().get_ssid().str();
               id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
+            } else if (!ap) {
+              id(boot_set_lines).execute("Wi-Fi", "lost", "reconnecting", "", true);
+            } else if (frame == 2) {
+              const std::string &name = App.get_name();
+              id(boot_set_lines).execute("Join WiFi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
             } else
-              id(boot_set_lines).execute("Wi-Fi", "lost", "open app", "", true);
+              id(boot_set_lines).execute("Wi-Fi", "lost", "scan to fix", "", true);
           } else if (!w->has_sta() || w->is_ap_active()) {
             // Setup: no saved network, or a blank one after "Reset Wi-Fi".
-            // Lead with the app, then the hotspot for anyone without an
-            // iPhone. The hotspot turn waits until the AP is really up, so it
-            // never points at a network that is not there yet. On a 128 px
-            // chain the QR stays up throughout; on 64 it is frame 1. After
-            // "Reset Wi-Fi" (owner 4) a last turn says that unplugging the
-            // panel takes it back to the networks it already knows.
-            id(boot_qr_cycle).execute(provisioning ? 0 : id(gd_networks).in_setup() ? 4 : 3, w->is_ap_active());
+            // The QR joins the panel's own hotspot, and the hotspot's name
+            // takes a turn for anyone who would rather pick it from the list.
+            // Both wait until the AP is really up, so they never point at a
+            // network that is not there yet; until then the lines say it is
+            // starting. On a 128 px chain the QR stays up beside the lines
+            // throughout; on 64 it is frame 1. After "Reset Wi-Fi" (owner 4)
+            // a last turn says that unplugging the panel takes it back to the
+            // networks it already knows.
+            const bool ap = !provisioning && w->is_ap_active();
+            id(boot_qr_cycle).execute(provisioning ? 0 : id(gd_networks).in_setup() ? 4 : 3, ap);
             const int frame = id(boot_qr_frame);
-            id(boot_view).execute(wide && !provisioning,
-                                  !provisioning && (wide || frame == 1));
+            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
             if (provisioning) {
               const std::string joining = w->get_sta().get_ssid().str();
               id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
@@ -445,11 +513,13 @@ script:
               // The hotspot is "Game Day <suffix>", named in on_boot.
               const std::string &name = App.get_name();
               id(boot_set_lines).execute("Join WiFi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+            } else if (ap) {
+              id(boot_set_lines).execute("SETUP", "Scan to", "join Wi-Fi", "", true);
             } else
-              id(boot_set_lines).execute("SETUP", "Game Day", "app", "", true);
+              id(boot_set_lines).execute("SETUP", "Starting", "hotspot", "", true);
           } else {
             id(boot_qr_cycle).execute(0, false);
-            id(boot_view).execute(false, false);
+            id(boot_view).execute(false, "");
             char ssid[wifi::SSID_BUFFER_SIZE];
             id(boot_set_lines).execute(wide ? "Connecting to" : "Connecting", w->wifi_ssid_to(ssid), "", "", true);
           }
@@ -470,7 +540,7 @@ script:
       - lambda: |-
           const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
           id(boot_qr_cycle).execute(0, false);
-          id(boot_view).execute(false, false);
+          id(boot_view).execute(false, "");
           if (wide)
             id(boot_set_lines).execute("", "Looking up scores", "", "", true);
           else
@@ -624,7 +694,7 @@ script:
             // nothing else would take it down. Full width, so the warning
             // is not squeezed into half a chain.
             id(boot_qr_cycle).execute(0, false);
-            id(boot_view).execute(false, false);
+            id(boot_view).execute(false, "");
           }
           if (stage != id(boot_hold_stage)) {
             static const char *const LOG[] = {"keep holding for a Wi-Fi reset", "release to reset Wi-Fi",
@@ -660,8 +730,8 @@ script:
 
   # Wi-Fi went away. Undo boot_hide, cancel any pending hide, and say what
   # happened instead of leaving a stale score on the board. Bluetooth is
-  # switched back on by the wifi: on_disconnect handler so the app can find
-  # the panel again, exactly as it does on a fresh unit.
+  # switched back on by the wifi: on_disconnect handler so a Bluetooth setup
+  # can find the panel again, exactly as it does on a fresh unit.
   - id: boot_wifi_lost
     then:
       # boot_refresh only arms the hide timer when boot_ip_shown_ms is 0, so
@@ -688,33 +758,34 @@ script:
                 id: boot_overlay
                 hidden: false
             - lambda: |-
-                // Same lines and layout as boot_refresh's lost branch, on
-                // its first frame: text on 64, QR beside the text on 128.
-                const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
+                // Same lines and layout as boot_refresh's lost branch before
+                // the fallback hotspot is up, which it never is this soon
+                // after a drop: text only, full width. boot_refresh adds the
+                // hotspot's code once it is.
                 id(boot_qr_cycle).execute(0, false);
-                id(boot_view).execute(wide, wide);
-                id(boot_set_lines).execute("Wi-Fi", "lost", "open app", "", true);
+                id(boot_view).execute(false, "");
+                id(boot_set_lines).execute("Wi-Fi", "lost", "reconnecting", "", true);
 
   # A panel nobody has picked a team on (no_team_default in the gameday
-  # component) shows the app's QR code for one turn every 3 minutes, the
-  # fresh panel's 13 s of QR, until a team is picked. Only over the board:
-  # not while the overlay is up for anything else, during QC, or with the
-  # boot button in use.
-  - id: boot_app_qr_turn
+  # component) shows the QR code for its device page for one turn every 3
+  # minutes, the fresh panel's 13 s of QR, until a team is picked. Only over
+  # the board: not while the overlay is up for anything else, during QC, or
+  # with the boot button in use.
+  - id: boot_team_qr_turn
     mode: single
     then:
       - if:
           condition:
             lambda: |-
               auto *w = wifi::global_wifi_component;
-              return w != nullptr && w->is_connected() && id(gameday_ctl).app_qr_turns() &&
+              return w != nullptr && w->is_connected() && id(gameday_ctl).team_qr_turns() &&
                      id(gameday_ctl).board_ready() && !id(qc_active) &&
                      lv_obj_has_flag(id(boot_overlay), LV_OBJ_FLAG_HIDDEN) && id(boot_hold_since_ms) == 0 &&
                      id(boot_button_press_ms) == 0 && !id(boot_show_address).is_running();
           then:
             - lambda: |-
-                id(boot_app_qr_on) = true;
-                ESP_LOGI("boot", "No team yet: the app's QR code takes a turn");
+                id(boot_team_qr_on) = true;
+                ESP_LOGI("boot", "No team yet: the device page's QR code takes a turn");
             - component.resume: boot_check
             - script.execute:
                 id: boot_refresh
@@ -723,7 +794,7 @@ script:
                 id: boot_overlay
                 hidden: false
             - delay: 13s
-            - lambda: 'id(boot_app_qr_on) = false;'
+            - lambda: 'id(boot_team_qr_on) = false;'
             # The boot button may have taken the overlay meanwhile; it hides
             # it itself.
             - if:
@@ -768,16 +839,16 @@ interval:
   - interval: 3min
     startup_delay: 3min
     then:
-      - script.execute: boot_app_qr_turn
+      - script.execute: boot_team_qr_turn
 
 # Bluetooth setup (improv_ble, configured in gameday-common.yaml) starts
-# advertising about a second after a boot with no saved network, and the
-# Game Day app finds the panel over Bluetooth rather than someone joining the
-# AP hotspot by hand. Say so on the overlay instead of leaving it on
+# advertising about a second after a boot with no saved network, alongside
+# the hotspot, for the Game Day app and Home Assistant's Improv via BLE
+# integration. Put the setup lines up on the overlay instead of leaving it on
 # "Connecting" (or blank, before boot_check's first 500ms tick) while it
 # waits. boot_check keeps polling the whole time, so once WiFi actually
-# connects it overwrites these lines with the normal app-hint/Ready flow on
-# its own; on_stop needs no action here for that reason.
+# connects it overwrites these lines with the device page's QR code on its
+# own; on_stop needs no action here for that reason.
 improv_ble:
   on_start:
     # The overlay may already be hidden and boot_check/boot_anim suspended
@@ -799,14 +870,14 @@ improv_ble:
   on_provisioning:
     - lambda: |-
         id(boot_qr_cycle).execute(0, false);
-        id(boot_view).execute(false, false);
-        // Name the network the app just handed over, so a wrong pick shows here.
+        id(boot_view).execute(false, "");
+        // Name the network just handed over, so a wrong pick shows here.
         const std::string joining = wifi::global_wifi_component->get_sta().get_ssid().str();
         id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
   on_provisioned:
     # Credentials worked; nudge boot_check's 500ms poll now instead of
-    # waiting up to half a second for it to notice and repaint the
-    # app-hint/Ready lines itself.
+    # waiting up to half a second for it to notice and put the device page's
+    # QR code up itself.
     - script.execute:
         id: boot_refresh
         via_button: false
@@ -940,20 +1011,27 @@ lvgl:
                 indicator:
                   bg_opa: COVER
                   bg_color: 0xFFD000
-            # QR code for the app. boot_view shows and hides it. Always the
-            # left 64 px: the whole screen of a single panel, taking turns
-            # with the lines, or the left half of a 128 px chain with the
-            # lines beside it. Listed last so it draws over the lines and bar,
-            # and the black box keeps them out from under the code.
+            # The QR code: the hotspot's Wi-Fi join code off Wi-Fi, the
+            # device page on it (components/gameday/setup_qr.h). boot_view
+            # sets its text, with lv_qrcode_update, and shows and hides it.
+            # Always the left 64 px: the whole screen of a single panel,
+            # taking turns with the lines, or the left half of a 128 px chain
+            # with the lines beside it. Listed last so it draws over the
+            # lines and bar, and the black box keeps them out from under the
+            # code. No text here: it stays hidden until boot_view gives it
+            # one.
             #
-            # LVGL encodes it in byte mode at error correction M and picks the
-            # smallest version that fits: the 35 character URL is version 3,
-            # 29x29 modules (Q does not fit at version 3, so M is the
-            # strongest that keeps modules this big). At 64 px that is 2 px
-            # per module, 58 px, with a 3 px lit border as the quiet zone,
-            # which is all that is left on a 64 px panel. Apple's barcode
-            # reader decodes that offline with a dark frame right against
-            # the border; bench it with a real phone before release.
+            # LVGL (9.5) encodes it in byte mode at error correction M and
+            # picks the smallest version that fits, centered on a canvas it
+            # clears to the light color. The 33 character join code,
+            # WIFI:T:nopass;S:Game Day 2f6a70;;, is version 3, 29x29
+            # modules: at 64 px that is 2 px per module, 58 px, with a 3 px
+            # lit border as the quiet zone. The page's address,
+            # http://192.168.1.50/, is 23 characters at most, version 2,
+            # 25x25 modules: 2 px per module again, 50 px, with a 7 px
+            # border. Apple's barcode reader decodes a 3 px border offline
+            # with a dark frame right against it; bench both codes with an
+            # iPhone and an Android phone before release.
             #
             # A QR wants dark modules on a light background, so the light
             # modules and the border are the lit ones. They are grey, not
@@ -980,7 +1058,6 @@ lvgl:
                       size: 64
                       light_color: 0xA0A0A0
                       dark_color: 0x000000
-                      text: "https://gamedayscoreboard.app/setup"
 
 esphome:
   on_boot:

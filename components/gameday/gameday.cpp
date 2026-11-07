@@ -2760,8 +2760,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     f.message = why;
   }
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->fav_.empty() && !this->demo_playing_()) {
-    f.status_text = "Favorites: add teams in the app or on the page | " + f.status_text;
-    f.ha_status_text = "Favorites: add teams in the app or on the page | " + f.ha_status_text;
+    f.status_text = "Favorites: add teams on the page | " + f.status_text;
+    f.ha_status_text = "Favorites: add teams on the page | " + f.ha_status_text;
   }
   if (this->misses_ >= 3 && !this->demo_playing_()) {
     if (!this->ever_polled_good_()) {
@@ -2780,8 +2780,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     }
   }
   // Until a team, mode or favorite has been picked once, the ticker asks for
-  // one. The app comes first; the address is for setting up without an
-  // iPhone, over the hotspot and the device page.
+  // one at the device page's address. The IP rather than the .local name,
+  // which many Android phones can't open; the boot screen's QR code holds
+  // the same address (setup_qr.h).
   if (!this->flag_(FLAG_SETUP) && network::is_connected() && !this->demo_playing_()) {
     std::string ip;
     for (auto &a : network::get_ip_addresses()) {
@@ -2793,7 +2794,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       }
     }
     if (!ip.empty()) {
-      std::string pick = "Pick a team in the Game Day app or at " + ip + " | ";
+      std::string pick = "Pick a team at " + ip + " | ";
       f.status_text = pick + f.status_text;
       f.ha_status_text = pick + f.ha_status_text;
     }

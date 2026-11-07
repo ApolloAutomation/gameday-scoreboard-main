@@ -57,6 +57,10 @@ A new team shows on the panel within a few seconds, with nothing to restart. The
 
 A panel nobody has picked a team for doesn't follow one. It shows live NFL and college football games, and when nothing is on, the latest final scores and when the next game starts. See [A panel with no team picked](/using/modes/#a-panel-with-no-team-picked). The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
 
+:::note[Coming in the next release]
+That QR code opens the panel's device page by IP address. Scan it with your phone's camera, on the same Wi-Fi, to pick your team.
+:::
+
 ## More than one team
 
 **My team** follows the one team you pick here. The device page has two other modes:

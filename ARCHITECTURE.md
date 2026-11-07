@@ -65,7 +65,10 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 - `boot.yaml`: the boot and setup overlay on LVGL's top layer: starting,
   setup (QR code, hotspot name), joining, Wi-Fi lost, sign-in Wi-Fi, the
   address screen, and the boot button hold (10 s Reset Wi-Fi, 20 s factory
-  reset, 30 s cancel). The QR code holds `https://gamedayscoreboard.app/setup`.
+  reset, 30 s cancel). Off Wi-Fi the QR code is a Wi-Fi join code for the
+  panel's open hotspot, shown only once the hotspot is up; on Wi-Fi it is the
+  device page's `http://<ip>/` (`components/gameday/setup_qr.h`). `boot_view`
+  sets it with `lv_qrcode_update`, only when the text changes.
 - `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
   component sends, for 64 and 128 pixel wide layouts, with the splashes and
   fireworks.

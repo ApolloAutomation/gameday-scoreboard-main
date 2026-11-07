@@ -46,6 +46,10 @@ The ticker also says when something needs your attention:
 - **No live games, showing** and your team, like "No live NFL games, showing DAL": Live games found nothing on, so it shows your team until a game starts. See [Show: My team, Favorite teams, Live games](/using/modes/#when-nothing-is-live).
 - **Too warm, dimming** in orange, or **Check power supply** in red: the panel is holding its brightness down because it's too warm or its power supply is too weak. The line covers the ticker for 15 seconds every two minutes, until the panel has cooled and is back at your brightness, or until you fix the power and press **Clear** on the device page. See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/#heat-and-power-protection).
 
+:::note[Coming in the next release]
+The first message becomes **Pick a team at** and the panel's IP address, and the favorites one becomes **Favorites: add teams on the page**. Neither mentions the app. The IP address is the device page's: open it in a browser on the same Wi-Fi.
+:::
+
 For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).
 
 ## Ticker speed
