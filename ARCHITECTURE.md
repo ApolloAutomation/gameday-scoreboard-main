@@ -205,10 +205,13 @@ every 30 seconds during a race or sprint, a minute in practice and
 qualifying, 2 minutes while a session is suspended or delayed, closer to the
 next session as it nears, and every 6 hours while the off-season clock is up.
 A held session still holds back an automatic update (`racing_on_track`)
-until it has been stopped six hours past its start. The board is
-`gd_board_container` and `gd_board`, the same widgets as golf's: on one
-panel `BoardLines::value_narrow` false hides the value column and gives the
-names its room. Racing is not in Favorite teams or Live games either.
+until it has been stopped six hours past its start. After a final, the
+calendar's next race also starts no earlier than the finished one
+(`after_start`), so a NASCAR day's first Duel isn't next once the second is
+over. The board is `gd_board_container` and `gd_board`, the same widgets as
+golf's: on one panel `BoardLines::value_narrow` false hides the value column
+and gives the names its room. Racing is not in Favorite teams or Live games
+either.
 
 ## The device page and its routes
 

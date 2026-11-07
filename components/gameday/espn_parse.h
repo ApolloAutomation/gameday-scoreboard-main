@@ -572,7 +572,8 @@ bool golf_show_next(const GameSnapshot &g, int64_t now);
 std::string racing_session_label(RaceKind kind, uint8_t number);
 std::string racing_session_long(RaceKind kind, uint8_t number);
 // The board's status cell, at most 12 characters: "Lap 34/56", "FP3 live",
-// "Red flag", "FP2 final", "Final", "Canceled", "Upcoming".
+// "Red flag", "FP2 final", "SQ final" (the sprint shootout's label shortened
+// to fit its word), "Final", "Canceled", "Upcoming".
 std::string racing_state_text(const GameSnapshot &s);
 // The same for the ticker, Home Assistant and the device page: "Race lap
 // 34/56", "Practice 2 final", "Qualifying live".
@@ -592,8 +593,9 @@ std::string racing_detail_long(const RaceRow &r);
 // is negative.
 std::string racing_gap(const std::string &time, const std::string &leader);
 // An event name in at most max characters: a NASCAR name without its "NASCAR
-// Cup Series at" ("Miami"), an F1 name as its place and "GP" without the
-// sponsor ("Sao Paulo GP", "US GP"), then without the "GP", then whole words.
+// Cup Series at" ("Miami", and "COTA" or "Wilkesboro" when the track's whole
+// name won't fit), an F1 name as its place and "GP" without the sponsor ("Sao
+// Paulo GP", "US GP"), then without the "GP", then whole words.
 std::string racing_event_name(const std::string &name, size_t max);
 // "Today 9:30a", "Tomorrow 12:00p", "Sat 9:30a", "Nov 20 7:30p".
 std::string racing_when(const struct tm &start_local, const struct tm &now_local);

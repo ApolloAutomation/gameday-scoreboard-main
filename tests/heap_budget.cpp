@@ -204,7 +204,7 @@ int main() {
     std::string json = slurp("fixtures/racing_calendar_nascar_2026.json");
     measure("racing_calendar", [&] {
       GolfNext n;
-      return parse_racing_calendar(json, parse_iso8601_z("2026-11-02T12:00Z"), std::string("202611010020"), n) == 1;
+      return parse_racing_calendar(json, parse_iso8601_z("2026-11-02T12:00Z"), std::string("202611010020"), 0, n) == 1;
     });
   }
   {

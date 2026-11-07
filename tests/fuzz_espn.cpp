@@ -429,7 +429,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     ChunkReader r(data, size, chunk);
     int found = parse_racing(r, g);
     ChunkReader r2(data, size, chunk);
-    int ahead = parse_racing_calendar(r2, now, g.event_id, next);
+    int ahead = parse_racing_calendar(r2, now, g.event_id, g.kickoff_epoch, next);
     if ((ahead == 1) != next.valid || (found == 1) != g.valid || g.race.rows.size() > kRaceRows)
       abort();
     if (found == 1)

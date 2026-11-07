@@ -2069,8 +2069,8 @@ int GamedayComponent::fetch_board_(League league, GameSnapshot &out) {
   return r;
 }
 
-bool GamedayComponent::fetch_board_next_(League league, const std::string &after_event, int64_t now,
-                                         ::espn::GolfNext &out) {
+bool GamedayComponent::fetch_board_next_(League league, const std::string &after_event, int64_t after_start,
+                                         int64_t now, ::espn::GolfNext &out) {
   out = ::espn::GolfNext{};
   // This season's calendar first, then next season's once this one is over.
   for (int pass = 0; pass < 2; pass++) {
@@ -2080,7 +2080,7 @@ bool GamedayComponent::fetch_board_next_(League league, const std::string &after
     if (container == nullptr)
       return false;
     ContainerReader reader(container, this->espn_bytes_);
-    int r = ::espn::is_racing(league) ? ::espn::parse_racing_calendar(reader, now, after_event, out)
+    int r = ::espn::is_racing(league) ? ::espn::parse_racing_calendar(reader, now, after_event, after_start, out)
                                       : ::espn::parse_golf_calendar(reader, now, after_event, out);
     container->end();
     if (r < 0) {
@@ -2742,7 +2742,8 @@ void GamedayComponent::run_board_job_() {
   if (!j.game_ok || (!j.no_event && j.game.state != GameState::POST))
     return;
   int64_t now = (int64_t) this->time_->timestamp_now();
-  j.board_next_ok = this->fetch_board_next_(league, j.game.event_id, now, ::espn::board_next(j.game));
+  j.board_next_ok =
+      this->fetch_board_next_(league, j.game.event_id, j.game.kickoff_epoch, now, ::espn::board_next(j.game));
 }
 
 // Main loop, a leaderboard: the read takes the board unless it is an older

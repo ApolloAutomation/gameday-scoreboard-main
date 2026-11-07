@@ -346,6 +346,8 @@ int racing_from_doc(JsonObjectConst root, GameSnapshot &out) {
       Kept k{order, -1, RaceRow{}};
       RaceRow &row = k.row;
       row.place = (uint8_t) clamp_int(field(c, "place"), 0, 255, 0);
+      if (row.place == 0 && order >= 1 && order <= 99)
+        row.place = (uint8_t) order;  // a list in order with no places: the order is the place
       std::string name = ascii_fold(text(c, "lastName"));
       if (name.empty())
         name = ascii_fold(text(c, "displayName"));
@@ -398,7 +400,8 @@ int racing_from_doc(JsonObjectConst root, GameSnapshot &out) {
   return 1;
 }
 
-int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, GolfNext &out) {
+int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, int64_t after_start,
+                         GolfNext &out) {
   JsonVariantConst leagues = root["leagues"];
   if (leagues.isNull())
     return -1;
@@ -417,8 +420,10 @@ int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::str
     int64_t end = when(e, "endDate") - kCalendarSkew;
     if (end < start)
       end = start;
-    // Over once its race (the weekend's end) started six hours ago.
-    if (id.empty() || id == after_event || end + 6 * kRaceHour <= now_epoch)
+    // Over once its race (the weekend's end) started six hours ago, or
+    // before the one just over started (a NASCAR day's first Duel, once the
+    // second is final).
+    if (id.empty() || id == after_event || end + 6 * kRaceHour <= now_epoch || start < after_start)
       continue;
     if (best.valid && start >= best.start_epoch)
       continue;  // the earliest start; the first listed on a tie
@@ -487,10 +492,19 @@ static const char *held_word(const GameSnapshot &s) {
 static const char *off_word(const GameSnapshot &s) {
   return s.race.status == GolfStatus::POSTPONED ? "Postponed" : "Canceled";
 }
-// "label final" or "label live", or the label alone when that won't fit
-static std::string with_word(const std::string &label, const char *word) {
+// "FP2 final" or "Qual live"; with a shorter label when that won't fit
+// ("SQ final", "Prac live"), else the label alone
+static std::string with_word(const GameSnapshot &s, const char *word) {
+  std::string label = racing_session_label(s.race.kind, s.race.number);
   std::string t = label + " " + word;
-  return t.size() <= kRaceStatusMax ? t : label;
+  if (t.size() <= kRaceStatusMax)
+    return t;
+  const char *shorter = s.race.kind == RaceKind::SPRINT_QUALIFYING ? "SQ"
+                        : s.race.kind == RaceKind::PRACTICE         ? "Prac"
+                                                                    : nullptr;
+  if (shorter != nullptr && strlen(shorter) + 1 + strlen(word) <= kRaceStatusMax)
+    return std::string(shorter) + " " + word;
+  return label;
 }
 
 std::string racing_state_text(const GameSnapshot &s) {
@@ -511,10 +525,10 @@ std::string racing_state_text(const GameSnapshot &s) {
         std::string of = r.laps > 0 ? t + "/" + std::to_string(r.laps) : t;
         return of.size() <= kRaceStatusMax ? of : t;
       }
-      return with_word(racing_session_label(r.kind, r.number), "live");
+      return with_word(s, "live");
     }
     case RacePhase::BREAK:
-      return with_word(racing_session_label(r.kind, r.number), "final");
+      return with_word(s, "final");
     case RacePhase::FINAL:
       return "Final";
     case RacePhase::OFF:
@@ -626,6 +640,10 @@ static const char *const kTwoWordPlaces[] = {"Sao Paulo",     "Mexico City",    
                                              "Abu Dhabi",     "Saudi Arabian",  "Emilia Romagna",
                                              "Buenos Aires",  "South African",  "Great Britain"};
 
+// NASCAR tracks whose first words name nothing ("Circuit", "North"): their
+// short forms, when the whole name won't fit.
+static const char *const kShortPlaces[][2] = {{"Circuit of the Americas", "COTA"}, {"North Wilkesboro", "Wilkesboro"}};
+
 std::string racing_event_name(const std::string &name, size_t max) {
   std::string s = name;
   // 1. NASCAR's series name: "NASCAR Cup Series at Miami" is "Miami"
@@ -636,6 +654,10 @@ std::string racing_event_name(const std::string &name, size_t max) {
       break;
     }
   }
+  if (s.size() > max)
+    for (const auto &p : kShortPlaces)
+      if (s == p[0])
+        s = p[1];
   // 2. F1's place and "GP", without the sponsor in front: "MSC Cruises Sao
   // Paulo Grand Prix" is "Sao Paulo GP"
   size_t gp = s.find("Grand Prix");

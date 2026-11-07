@@ -534,9 +534,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apply_board_job_(uint32_t now);
   // 1 the league's event, 0 it lists none, -1 the read failed.
   int fetch_board_(League league, GameSnapshot &out);
-  // The next event after after_event, from this season's calendar or the
+  // The next event after after_event (a race weekend also starting no
+  // earlier than after_start, its start), from this season's calendar or the
   // next one's; false when a read failed.
-  bool fetch_board_next_(League league, const std::string &after_event, int64_t now, ::espn::GolfNext &out);
+  bool fetch_board_next_(League league, const std::string &after_event, int64_t after_start, int64_t now,
+                         ::espn::GolfNext &out);
   // Older CDN reads turned away in a row (espn::board_read_is_older), at most two.
   uint8_t board_stale_reads_{0};
   // "Nov 12-15" in the panel's time zone (espn::golf_dates): golf's days

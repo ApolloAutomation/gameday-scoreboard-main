@@ -5978,8 +5978,9 @@ static void test_golf_off_season() {
 // session (fixtures recorded 2026-11-07 05:20Z, see fixtures/README.md).
 
 static int racing_str(std::string json, GameSnapshot &s) { return parse_racing(json, s); }
-static int racing_cal_str(std::string json, int64_t now, const std::string &after, GolfNext &n) {
-  return parse_racing_calendar(json, now, after, n);
+static int racing_cal_str(std::string json, int64_t now, const std::string &after, GolfNext &n,
+                          int64_t after_start = 0) {
+  return parse_racing_calendar(json, now, after, after_start, n);
 }
 
 static GameSnapshot racing_doc(const char *file) {
@@ -6192,8 +6193,11 @@ static void test_racing_live() {
   CHECK_EQ(racing_state_long(u), std::string("Qualifying live"));
   CHECK_EQ(racing_poll_ms(u, 0), 60u * 1000);
   u.race.kind = RaceKind::SPRINT_QUALIFYING;
-  CHECK_EQ(racing_state_text(u), std::string("Sprint Q"));
+  CHECK_EQ(racing_state_text(u), std::string("SQ live"));  // "Sprint Q live" is too long
+  CHECK_EQ(racing_state_long(u), std::string("Sprint qualifying live"));
   u.race.kind = RaceKind::PRACTICE;
+  u.race.number = 0;
+  CHECK_EQ(racing_state_text(u), std::string("Prac live"));
   u.race.number = 3;
   CHECK_EQ(racing_state_text(u), std::string("FP3 live"));
   CHECK_EQ(racing_state_long(u), std::string("Practice 3 live"));
@@ -6294,7 +6298,11 @@ static void test_racing_sprint() {
   CHECK(q.race.phase == RacePhase::BREAK);
   CHECK(q.race.kind == RaceKind::SPRINT_QUALIFYING);
   CHECK_EQ(racing_session_label(q.race.kind, q.race.number), std::string("Sprint Q"));
-  CHECK_EQ(racing_state_text(q), std::string("Sprint Q"));  // "Sprint Q final" is too long
+  CHECK_EQ(racing_state_text(q), std::string("SQ final"));  // "Sprint Q final" is too long
+  CHECK_EQ(racing_lines(q, false).status, std::string("SQ final"));
+  GameSnapshot prac = q;
+  prac.race.kind = RaceKind::PRACTICE;
+  CHECK_EQ(racing_state_text(prac), std::string("Prac final"));
   CHECK_EQ(racing_state_long(q), std::string("Sprint qualifying final"));
   CHECK_EQ(q.race.rows[0].name, std::string("Verstappen"));
   CHECK_EQ(q.race.rows[0].gap, std::string("1:31.156"));
@@ -6416,6 +6424,20 @@ static void test_racing_nascar() {
   CHECK_EQ(m.race.rows[2].gap, std::string(""));  // a disqualified row's negative time
   CHECK_EQ(racing_detail_text(m.race.rows[2]), std::string("DSQ"));
   CHECK_EQ(m.race.rows[9].gap, std::string(""));  // 1:20.5, ahead of the leader
+  // A list in order with no places: the order is the place
+  GameSnapshot o;
+  CHECK_EQ(racing_str(std::string(R"({"sports":[{"leagues":[{"events":[{"id":"9","competitionType":{"id":"1",)"
+                                  R"("abbreviation":"FP1"},"fullStatus":{"type":{"name":"STATUS_IN_PROGRESS",)"
+                                  R"("state":"in"}},"competitors":[{"order":2,"lastName":"Second"},)"
+                                  R"({"order":1,"lastName":"First"},{"lastName":"None"}]}]}]}]})"),
+                      o),
+           1);
+  CHECK(o.race.phase == RacePhase::LIVE);
+  CHECK_EQ(o.race.rows.size(), (size_t) 3);
+  CHECK_EQ(o.race.rows[0].name, std::string("First"));
+  CHECK_EQ(racing_pos_text(o.race.rows[0]), std::string("1"));
+  CHECK_EQ(racing_pos_text(o.race.rows[1]), std::string("2"));
+  CHECK_EQ(racing_pos_text(o.race.rows[2]), std::string("-"));
 }
 
 static void test_racing_calendar() {
@@ -6446,6 +6468,16 @@ static void test_racing_calendar() {
   CHECK_EQ(n.name, std::string("NASCAR Cup Series at Miami"));
   CHECK_EQ(n.start_epoch, parse_iso8601_z("2026-11-08T20:00Z"));
   CHECK_EQ(racing_cal_str(nascar, parse_iso8601_z("2026-11-09T12:00Z"), "", none), 0);
+  // Daytona's Duels: after the second's final, not the first (it started
+  // before the one just over), but the Daytona 500; after the first's, the
+  // second
+  const int64_t duel1 = parse_iso8601_z("2026-02-13T00:00Z"), duel2 = parse_iso8601_z("2026-02-13T01:45Z");
+  CHECK_EQ(racing_cal_str(nascar, parse_iso8601_z("2026-02-13T03:20Z"), "202602120045", n, duel2), 1);
+  CHECK_EQ(n.event_id, std::string("202602150001"));
+  CHECK_EQ(n.name, std::string("Daytona 500"));
+  CHECK_EQ(racing_cal_str(nascar, parse_iso8601_z("2026-02-13T01:20Z"), "202602120044", n, duel1), 1);
+  CHECK_EQ(n.event_id, std::string("202602120045"));
+  CHECK_EQ(n.name, std::string("Duel #2"));
   // The id is in each entry's $ref; an entry without one is skipped
   CHECK_EQ(racing_cal_str(std::string(R"({"leagues":[{"calendar":[{"label":"No ref","startDate":"2027-03-01T00:00Z",)"
                                       R"("endDate":"2027-03-03T00:00Z","event":{"$ref":"http://x/y"}},{"label":"Ref",)"
@@ -6502,8 +6534,12 @@ static void test_racing_names() {
       {"NASCAR Cup Series at Miami", 24, "Miami"},
       {"NASCAR Cup Series All Star Race", 24, "All Star Race"},
       {"NASCAR Cup Series at World Wide Technology Raceway", 15, "World Wide"},
-      {"NASCAR Cup Series at Circuit of the Americas", 21, "Circuit"},
+      {"NASCAR Cup Series at Circuit of the Americas", 21, "COTA"},
+      {"NASCAR Cup Series at Circuit of the Americas", 12, "COTA"},
       {"NASCAR Cup Series at Circuit of the Americas", 24, "Circuit of the Americas"},
+      {"NASCAR Cup Series at North Wilkesboro", 15, "Wilkesboro"},
+      {"NASCAR Cup Series at North Wilkesboro", 13, "Wilkesboro"},
+      {"NASCAR Cup Series at North Wilkesboro", 16, "North Wilkesboro"},
       {"Clash at Bowman Gray", 21, "Clash at Bowman Gray"},
       {"Duel #1", 12, "Duel #1"},
       {"Daytona 500", 12, "Daytona 500"},

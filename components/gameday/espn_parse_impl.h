@@ -335,7 +335,8 @@ int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::strin
 void fill_racing_filter(JsonDocument &f);
 void fill_racing_calendar_filter(JsonDocument &f);
 int racing_from_doc(JsonObjectConst root, GameSnapshot &out);
-int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, GolfNext &out);
+int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, int64_t after_start,
+                         GolfNext &out);
 
 }  // namespace detail
 
@@ -658,10 +659,12 @@ template<typename TInput> int parse_racing(TInput &input, GameSnapshot &out) {
 }
 
 // A racing series' calendar (golf_calendar_url). 1: the first race weekend by
-// start that isn't over (its race started less than six hours ago) and isn't
-// after_event, in out. 0: none ahead. -1: not a scoreboard document.
+// start that isn't over (its race started less than six hours ago), isn't
+// after_event and doesn't start before after_start (the start of the event
+// just over), in out. 0: none ahead. -1: not a scoreboard document.
 template<typename TInput>
-int parse_racing_calendar(TInput &input, int64_t now_epoch, const std::string &after_event, GolfNext &out) {
+int parse_racing_calendar(TInput &input, int64_t now_epoch, const std::string &after_event, int64_t after_start,
+                          GolfNext &out) {
   JsonDocument filter(detail::json_allocator());
   detail::fill_racing_calendar_filter(filter);
   JsonDocument doc(detail::json_allocator());
@@ -669,7 +672,7 @@ int parse_racing_calendar(TInput &input, int64_t now_epoch, const std::string &a
                                               DeserializationOption::NestingLimit(40));
   if (err)
     return -1;
-  return detail::racing_next_from_doc(doc.as<JsonObjectConst>(), now_epoch, after_event, out);
+  return detail::racing_next_from_doc(doc.as<JsonObjectConst>(), now_epoch, after_event, after_start, out);
 }
 
 // Parses a scoreboard document and extracts the event with `event_id`.
