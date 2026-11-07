@@ -7,11 +7,7 @@ sidebar:
 
 Game Day Scoreboard is an LED panel that shows your team's live score, game clock and next game. It follows the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League. Once it's on your Wi-Fi it gets the scores from ESPN by itself, with no hub, account or other computer to run.
 
-:::note[Coming in the next release]
-It also follows golf: pick the PGA Tour or the LPGA Tour and the panel shows that tour's tournament and leaderboard. See [Golf](/using/golf/).
-
-And racing: pick Formula 1 or the NASCAR Cup Series and the panel shows the race weekend, the order of each session and the race's winner. See [Racing](/using/racing/).
-:::
+It follows golf and racing too. Pick the PGA Tour or the LPGA Tour and the panel shows that tour's tournament and leaderboard. See [Golf](/using/golf/). Pick Formula 1 or the NASCAR Cup Series and it shows the race weekend, the order of each session and the race's winner. See [Racing](/using/racing/).
 
 ## What you need
 
@@ -23,14 +19,10 @@ Built your own on a MoonHub75 board or another ESP32-S3 board, or putting the fi
 
 ## From the box to your team
 
-1. **Plug it in.** Connect the power supply. After a few seconds the panel shows **SETUP** and a QR code. See [Set up your panel](/get-started/setup/).
-2. **Put it on your Wi-Fi.** Use the Wi-Fi dialog the installer offers right after an install, or join the panel's own **Game Day** hotspot from any phone or laptop. Both are on [Set up your panel](/get-started/setup/).
-3. **Pick your team.** Choose it on the panel's own web page, the device page, or from [Home Assistant](/using/home-assistant/). See [Pick your team](/get-started/pick-your-team/).
+1. **Plug it in.** Connect the power supply. After a few seconds the panel shows **SETUP** and a QR code that joins its own **Game Day** hotspot. See [Set up your panel](/get-started/setup/).
+2. **Put it on your Wi-Fi.** Point your phone's camera at the QR code to join the hotspot, or join it from any phone or laptop, and pick your network on the page that opens. Right after an install, the installer's Wi-Fi dialog does it too. Both are on [Set up your panel](/get-started/setup/).
+3. **Pick your team.** Once the panel is on your Wi-Fi, its QR code opens its own web page, the device page. Choose your team there, or from [Home Assistant](/using/home-assistant/). See [Pick your team](/get-started/pick-your-team/).
 
-:::note[Coming in the next release]
-The QR code in step 1 joins the panel's hotspot: point your phone's camera at it. Once the panel is on your Wi-Fi, its QR code opens the device page for step 3. No app needed.
-:::
-
-That's all the setup there is. Before a game the panel shows the matchup and the start time. When the game starts it switches to the live board, celebrates scores, and stays on the final for a while before it looks up the next game.
+That's all the setup there is, and there's no app to install. Before a game the panel shows the matchup and the start time. When the game starts it switches to the live board, celebrates scores, and stays on the final for a while before it looks up the next game.
 
 If something doesn't go to plan, [Help](/help/) covers the common problems and what the panel's messages mean.
