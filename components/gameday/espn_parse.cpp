@@ -325,7 +325,7 @@ static const char *score_word(int delta, bool ours) {
 
 Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
   if (cur.sport == Sport::GOLF)
-    return golf_splash(prev, cur);
+    return golf_splash(prev, cur, false);  // the one-panel splash fits both widths
   if (cur.sport == Sport::BASEBALL)
     return baseball_splash(prev, cur, opponent_splashes, neutral);
   if (cur.sport == Sport::SOCCER)

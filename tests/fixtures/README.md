@@ -167,7 +167,7 @@ PGA Tour's and stand in for states the two tours the panel follows weren't in:
 | `golf_header_kft_final.json` | `league=ntw`: 401837451 Korn Ferry Tour Championship, final, the winner's `winner` flag false |
 | `golf_header_champions_pre.json` | `league=champions-tour`: 401832050 Charles Schwab Cup Championship, scheduled, no competitors yet |
 | `golf_header_liv_canceled.json` | `league=liv`: 401843582 LIV Golf Michigan, canceled |
-| `golf_header_none.json` | `league=pga` on a day ESPN listed nothing: `leagues[0]` has no `events` |
+| `golf_header_none.json` | `https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga&dates=20261103`, the Tuesday before the World Wide Technology Championship, a day with no PGA Tour round: `leagues[0]` has no `events` |
 | `golf_calendar_pga_2026.json` | `.../golf/pga/scoreboard?dates=20261103`, a Tuesday with no round: no events, the 2026 season's calendar of 49 events |
 | `golf_calendar_pga_2027.json` | `.../golf/pga/scoreboard?dates=2027`, trimmed to its first 2 events; the 2027 calendar is whole |
 | `golf_calendar_lpga_2027.json` | `.../golf/lpga/scoreboard?dates=2027`, trimmed the same way |

@@ -165,8 +165,14 @@ par, holes played and tee time (`parse_golf`, `sport_golf.cpp`). After a
 final, a canceled event or none listed, it also reads the season calendar
 from the scoreboard of the coming Tuesday (8 to 12 KB, never `dates=` the
 current year, which is 29 MB), or next season's (`golf_calendar_url`,
-`parse_golf_calendar`). `golf_read_is_older` turns away up to two CDN
-copies in a row that go back a round, a phase or an event. Timing is
+`parse_golf_calendar`); an event that started less than a day ago still
+counts as ahead, since the header can list it hours after the calendar's
+start. When that read fails and no next event is known, the final stays
+up (`Golf::next_unknown`) and the next read waits on the failure backoff.
+`golf_read_is_older` turns away up to two CDN copies in a row that go back
+a round, a phase or an event (one that started two or more days before the
+one shown: the calendar's card and the header put the same day three hours
+apart). Timing is
 `golf_poll_ms`: a minute while a round is played, 5 minutes between rounds
 and before the start, 30 minutes otherwise, 6 hours between seasons. The
 board is `gd_golf_container` in `pages/gameday-live.yaml`, filled by the

@@ -35,6 +35,7 @@ static const uint32_t kGolfBlue = 0x40A0FF;  // over par
 
 static const size_t kGolfStatusMax = 12;  // the board's status cell
 static const size_t kGolfTitleRow = 25;   // a 128-wide row of spleen_8 (5 px a character)
+static const int64_t kGolfDay = 24 * 3600;
 
 static std::string cut(const std::string &s, size_t max) { return s.size() > max ? s.substr(0, max) : s; }
 
@@ -164,9 +165,9 @@ int golf_from_doc(JsonObjectConst root, GameSnapshot &out) {
   s.tv = text(ev, "broadcast");
   JsonVariantConst fs = field(ev, "fullStatus");
   JsonVariantConst type = field(fs, "type");
-  s.short_detail = text(type, "shortDetail");
+  s.short_detail = ascii_fold(text(type, "shortDetail"));
   if (s.short_detail.empty())
-    s.short_detail = text(ev, "summary");
+    s.short_detail = ascii_fold(text(ev, "summary"));
   s.period = clamp_int(field(fs, "period"), 0, 99, clamp_int(field(ev, "period"), 0, 99, 0));
   g.status = status_of(text(type, "name"));
   g.phase = phase_of(g.status, text(type, "state"));
@@ -235,7 +236,12 @@ int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::strin
   for (JsonVariantConst e : field(leagues[0], "calendar").as<JsonArrayConst>()) {
     std::string id = text(e, "id");
     int64_t start = when(e, "startDate");
-    if (id.empty() || id == after_event || start <= now_epoch)
+    // An event that started less than a day ago is still the one ahead: the
+    // calendar starts it at midnight Pacific, and the header can list it
+    // hours later (an edge's older copy, or ESPN moving on late). No longer,
+    // so an opposite-field event that started with the final just shown
+    // stays behind.
+    if (id.empty() || id == after_event || start + kGolfDay <= now_epoch)
       continue;
     if (best.valid && start >= best.start_epoch)
       continue;  // the earliest start; the first listed on a tie
@@ -256,6 +262,76 @@ int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::strin
 }  // namespace detail
 
 // ---- board text ---------------------------------------------------------------
+
+static std::string lower(std::string s) {
+  for (char &c : s)
+    c = (char) tolower((unsigned char) c);
+  return s;
+}
+
+static void trim_right(std::string &s) {
+  while (!s.empty() && (s.back() == ' ' || s.back() == ',' || s.back() == '-' || s.back() == ':'))
+    s.pop_back();
+}
+
+static std::string last_word(const std::string &s) {
+  size_t sp = s.rfind(' ');
+  return sp == std::string::npos ? s : s.substr(sp + 1);
+}
+
+// Whole words up to max, without a dangling "of", "in" or "at the", or a
+// bracket left open; one long word is cut.
+static std::string whole_words(const std::string &s, size_t max) {
+  if (s.size() <= max)
+    return s;
+  std::string t = s.substr(0, max + 1);
+  size_t sp = t.rfind(' ');
+  t = sp == std::string::npos ? std::string() : t.substr(0, sp);
+  static const char *const kDangling[] = {"of", "at", "the", "and", "&", "-", "by", "in", "for", "on"};
+  for (bool dropped = true; dropped && !t.empty();) {
+    dropped = false;
+    trim_right(t);
+    std::string lw = lower(last_word(t));
+    if (lw.size() == t.size())
+      break;
+    bool open = lw[0] == '(' && lw.find(')') == std::string::npos;  // "TBD (Additional"
+    for (const char *d : kDangling)
+      if (open || lw == d) {
+        t.erase(t.size() - lw.size());
+        dropped = true;
+        break;
+      }
+  }
+  trim_right(t);
+  return t.empty() ? s.substr(0, max) : t;
+}
+
+// Each word (split at spaces and after hyphens, where LVGL breaks a line) in
+// at most line characters, so a wrapping label never breaks one in the
+// middle: "International" is "Int'l", a longer word is cut.
+static std::string fit_words(const std::string &s, size_t line) {
+  std::string out, word;
+  auto flush = [&]() {
+    if (word.size() > line && lower(word) == "international")
+      word = word.substr(0, 3) + (isupper((unsigned char) word[3]) ? "'L" : "'l");
+    if (word.size() > line && line > 1)
+      word = word.back() == '-' ? word.substr(0, line - 1) + "-" : word.substr(0, line);
+    out += word;
+    word.clear();
+  };
+  for (char c : s) {
+    if (c == ' ') {
+      flush();
+      out += c;
+      continue;
+    }
+    word += c;
+    if (c == '-')
+      flush();
+  }
+  flush();
+  return out;
+}
 
 static bool suspended(const GameSnapshot &s) { return s.golf.status == GolfStatus::SUSPENDED; }
 static bool delayed(const GameSnapshot &s) { return s.golf.status == GolfStatus::DELAYED; }
@@ -282,7 +358,7 @@ std::string golf_round_text(const GameSnapshot &s) {
         return short_round(s) ? "R" + r + " delayed" : "Delayed";
       if (play_complete(s) && s.period > 0)
         return "After R" + r;
-      return cut(s.short_detail.empty() ? std::string("Break") : s.short_detail, kGolfStatusMax);
+      return whole_words(s.short_detail.empty() ? std::string("Break") : s.short_detail, kGolfStatusMax);
     case GolfPhase::FINAL:
       return "Final";
     case GolfPhase::OFF:
@@ -307,7 +383,7 @@ std::string golf_round_long(const GameSnapshot &s) {
         return s.period > 0 ? "Round " + r + " delayed" : "Delayed";
       if (play_complete(s) && s.period > 0)
         return "After round " + r;
-      return cut(s.short_detail, 40);
+      return whole_words(s.short_detail, 40);
     case GolfPhase::FINAL:
       return "Final";
     case GolfPhase::OFF:
@@ -401,27 +477,11 @@ std::string golf_dates(const struct tm &a, const struct tm &b) {
   return buf;
 }
 
-static std::string lower(std::string s) {
-  for (char &c : s)
-    c = (char) tolower((unsigned char) c);
-  return s;
-}
-
-static void trim_right(std::string &s) {
-  while (!s.empty() && (s.back() == ' ' || s.back() == ',' || s.back() == '-' || s.back() == ':'))
-    s.pop_back();
-}
-
-static std::string last_word(const std::string &s) {
-  size_t sp = s.rfind(' ');
-  return sp == std::string::npos ? s : s.substr(sp + 1);
-}
-
 std::string golf_event_name(const std::string &name, size_t max) {
   std::string s = name;
   // 1. The sponsor tail: "... pres. by Compliance Solutions"
   std::string low = lower(s);
-  for (const char *tail : {" presented by ", " pres. by ", " powered by ", " hosted by "}) {
+  for (const char *tail : {" presented by ", " pres. by ", " pres by ", " powered by ", " hosted by ", " driven by "}) {
     size_t at = low.find(tail);
     if (at != std::string::npos) {
       s.erase(at);
@@ -431,40 +491,46 @@ std::string golf_event_name(const std::string &name, size_t max) {
   trim_right(s);
   if (s.size() <= max)
     return s;
-  // 2. One trailing word every event has: "TOTO Japan Classic" is "TOTO Japan"
+  // 2. The place or the cause: "Sony Open in Hawaii", "Riviera Maya Open at
+  // Mayakoba", "Meijer LPGA Classic for Simply Give"
+  for (const char *place : {" in ", " at ", " for "}) {
+    size_t at = low.find(place);
+    if (at != std::string::npos && at > 0) {
+      s.erase(at);
+      low.erase(at);
+    }
+  }
+  trim_right(s);
+  if (s.size() <= max)
+    return s;
+  // 3. One trailing word every event has: "TOTO Japan Classic" is "TOTO
+  // Japan". Not down to one short word: "PGA Championship" is "PGA Champ",
+  // and "The Championship" is "Championship".
   static const char *const kGeneric[] = {"championships", "championship", "classic", "invitational",
                                          "challenge",     "tournament"};
   std::string w = lower(last_word(s));
   if (w.size() < s.size())
     for (const char *g : kGeneric)
       if (w == g) {
-        s.erase(s.size() - w.size());
-        trim_right(s);
+        std::string rest = s.substr(0, s.size() - w.size());
+        trim_right(rest);
+        if (rest.find(' ') == std::string::npos && rest.size() <= 4) {
+          std::string brief;
+          if (lower(rest) == "the")
+            brief = s.substr(s.size() - w.size());
+          else if (w.compare(0, 12, "championship") == 0)
+            brief = rest + (w.size() > 12 ? " Champs" : " Champ");
+          if (!brief.empty() && brief.size() <= max)
+            return brief;
+        } else {
+          s = rest;
+        }
         break;
       }
   if (s.size() <= max)
     return s;
-  // 3. Whole words up to max, without a dangling "of" or "at the"
-  std::string t = s.substr(0, max + 1);
-  size_t sp = t.rfind(' ');
-  t = sp == std::string::npos ? std::string() : t.substr(0, sp);
-  static const char *const kDangling[] = {"of", "at", "the", "and", "&", "-", "by"};
-  for (bool dropped = true; dropped && !t.empty();) {
-    dropped = false;
-    trim_right(t);
-    std::string lw = lower(last_word(t));
-    if (lw.size() == t.size())
-      break;
-    for (const char *d : kDangling)
-      if (lw == d) {
-        t.erase(t.size() - lw.size());
-        dropped = true;
-        break;
-      }
-  }
-  trim_right(t);
-  // 4. One long word: cut it
-  return t.empty() ? s.substr(0, max) : t;
+  // 4. Whole words up to max
+  return whole_words(s, max);
 }
 
 static bool golf_has_board(const GameSnapshot &s) {
@@ -494,7 +560,8 @@ GolfLines golf_lines(const GameSnapshot &s, bool wide) {
 }
 
 std::string golf_card_text(const GameSnapshot &s, bool wide, const std::string &dates) {
-  std::string out = golf_event_name(s.game_name, wide ? 42 : 36);
+  // Two lines of spleen_12 on a wide board, three of spleen_8 on one panel
+  std::string out = fit_words(golf_event_name(s.game_name, wide ? 42 : 36), wide ? 21 : 12);
   std::string second;
   if (s.event_id.empty())
     second = "";  // the tour's name while the first read runs
@@ -630,7 +697,7 @@ std::string golf_ha_status_text(const GameSnapshot &s, const std::string &dates)
   return out;
 }
 
-Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur) {
+Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide) {
   if (!detail::same_game(prev, cur) || prev.sport != Sport::GOLF || cur.sport != Sport::GOLF)
     return Splash{};
   if (prev.golf.phase != GolfPhase::LIVE && prev.golf.phase != GolfPhase::BREAK)
@@ -641,6 +708,9 @@ Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur) {
   std::string name = w->name;
   for (char &c : name)
     c = (char) toupper((unsigned char) c);
+  // spleen_16 on a wide board, spleen_12 on one panel
+  name = fit_words(name, wide ? 16 : 10);
+  trim_right(name);
   return Splash{name + " WINS!", kGolfGold};
 }
 
@@ -677,8 +747,12 @@ bool golf_read_is_older(const GameSnapshot &shown, const GameSnapshot &read) {
   if (!shown.valid || !read.valid || shown.sport != Sport::GOLF || read.sport != Sport::GOLF ||
       shown.event_id.empty())
     return false;
+  // Another event is older when it started days before the one shown (an
+  // edge's copy of last week's). Not hours: the calendar's card starts at
+  // midnight Pacific and the header's at midnight Eastern, and an opposite-
+  // field event plays the same days.
   if (shown.event_id != read.event_id)
-    return read.kickoff_epoch < shown.kickoff_epoch;
+    return read.kickoff_epoch + 2 * kGolfDay <= shown.kickoff_epoch;
   if (read.period < shown.period)
     return true;
   return phase_rank(read.golf.phase) < phase_rank(shown.golf.phase);
@@ -715,7 +789,9 @@ bool golf_off_season(const GameSnapshot &g, int64_t now) {
     return false;
   if (now - last_day(g) <= kSeasonHorizon)
     return false;
-  return !g.golf.next.valid || g.golf.next.start_epoch - now > kSeasonHorizon;
+  if (!g.golf.next.valid)
+    return !g.golf.next_unknown;  // none ahead; or the calendar failed, and the final stays up
+  return g.golf.next.start_epoch - now > kSeasonHorizon;
 }
 
 bool golf_show_next(const GameSnapshot &g, int64_t now) {

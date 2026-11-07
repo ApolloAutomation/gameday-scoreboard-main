@@ -117,7 +117,7 @@ struct GolfRow {
   bool winner{false};     // won the event (final): place 1 held alone, or ESPN's flag
   int16_t to_par{0};
   int64_t tee_epoch{0};   // this round's (or the next round's) tee time, 0 for none
-  char name[16]{};        // last name, ascii_fold()ed, at most 15 chars: "McIlroy", "Hojgaard"
+  char name[24]{};        // last name, ascii_fold()ed, at most 23 chars: "McIlroy", "Neergaard-Petersen"
   char score[5]{};        // to par as ESPN writes it, at most 4 chars: "-12", "E", "+3"
   char tee[8]{};          // "8:27p" in the panel's time zone; filled on the main loop
   void set_tee(const std::string &t) { put(this->tee, sizeof(this->tee), t); }
@@ -145,6 +145,7 @@ struct Golf {
   std::string defending;      // "Ben Griffin"
   std::vector<GolfRow> rows;  // leaderboard order, at most kGolfRows
   GolfNext next;              // after a final, canceled event or none listed
+  bool next_unknown{false};   // after a final or a canceled event, the calendar read failed
 };
 
 // One scoreboard event, resolved to "us" and "them".
@@ -448,8 +449,9 @@ std::string golf_tee_label(const struct tm &t);
 // "Nov 12-15", "Oct 29-Nov 1", "Aug 30".
 std::string golf_dates(const struct tm &start, const struct tm &end);
 // An event name in at most max characters: the sponsor tail goes first, then
-// a trailing "Championship" or "Classic", then words from the end ("World
-// Wide Technology Championship" is "World Wide" in 17).
+// a place or a cause ("Sony Open in Hawaii" is "Sony Open"), then a trailing
+// "Championship" or "Classic" ("PGA Championship" is "PGA Champ"), then words
+// from the end ("World Wide Technology Championship" is "World Wide" in 17).
 std::string golf_event_name(const std::string &name, size_t max);
 // The leaderboard cut to the board's columns (kGolfBoardRows rows, none
 // before the event or for a canceled one: the board shows golf_card_text).
@@ -462,21 +464,28 @@ struct GolfLines {
 GolfLines golf_lines(const GameSnapshot &s, bool wide);
 // The no-leaderboard card on the no-game screen: the event name, a line
 // break, then dates (before the event), Canceled or Postponed, or the round.
+// No word is longer than a line (12 characters on one panel, 21 on two):
+// "International" is "Int'l".
 std::string golf_card_text(const GameSnapshot &s, bool wide, const std::string &dates);
 // The ticker and Home Assistant's Game Status. dates: the event's own before
 // it starts, the next event's after a final or a canceled one.
 std::string golf_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &dates);
 std::string golf_ha_status_text(const GameSnapshot &s, const std::string &dates);
-// "HITT WINS!" when the event went final between the two reads.
-Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur);
+// "SCHEFFLER WINS!" when the event went final between the two reads. Each
+// word of the name fits a line of the splash (10 characters on one panel, 16
+// on two), so LVGL never breaks one: "YELLAMARAJ WINS!" on one panel.
+Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide);
 // The calendar's next event as a board: a PRE golf snapshot.
 GameSnapshot golf_next_snapshot(const GolfNext &n);
 // ESPN's CDN edges serve snapshots of different ages: a read that goes back to
-// an earlier event, an earlier round or an earlier phase of the one shown.
+// an earlier event (one that started two days or more before), an earlier
+// round or an earlier phase of the one shown.
 bool golf_read_is_older(const GameSnapshot &shown, const GameSnapshot &read);
 // How long until the next header read.
 uint32_t golf_poll_ms(const GameSnapshot &g, int64_t now);
-// Between seasons: the board shows the off-season clock (offseason.h).
+// Between seasons: the board shows the off-season clock (offseason.h). Not
+// while a failed calendar read leaves the next event unknown (next_unknown):
+// the final stays up rather than the clock saying there is none.
 bool golf_off_season(const GameSnapshot &g, int64_t now);
 // A final (or a canceled event) over kSeasonHorizon old that ESPN still has in
 // its header, with the next event known: the board shows that one instead.

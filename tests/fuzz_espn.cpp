@@ -263,6 +263,17 @@ size_t boot_cache(const Schedule &team, int64_t now) {
   return back.event_id.size();
 }
 
+// No word of a wrapping label longer than its line: LVGL would break it in
+// the middle.
+static void words_fit(const std::string &text, size_t line) {
+  size_t word = 0;
+  for (char c : text) {
+    word = c == ' ' || c == '\n' || c == '-' ? 0 : word + 1;
+    if (word > line)
+      abort();
+  }
+}
+
 // A golf tour's board from its header: the columns, the card, the ticker and
 // Home Assistant, the splash and the timing, with next as the calendar's next
 // event. Every column stays inside its width at both board widths.
@@ -287,12 +298,17 @@ size_t golf(GameSnapshot g, const GolfNext &next, int64_t now) {
     std::string card = golf_card_text(g, wide, dates);
     if (card.substr(0, card.find('\n')).size() > (wide ? 42u : 36u))
       abort();
+    words_fit(card, wide ? 21 : 12);
     n += card.size() + l.title.size();
   }
   n += render(GameSnapshot{}, g, now);
   GameSnapshot before = g;
   before.golf.phase = GolfPhase::LIVE;
-  n += golf_splash(before, g).text.size();
+  for (bool wide : {false, true}) {
+    std::string splash = golf_splash(before, g, wide).text;
+    words_fit(splash, wide ? 16 : 10);
+    n += splash.size();
+  }
   n += golf_poll_ms(g, now) + (golf_off_season(g, now) ? 1 : 0) + (golf_show_next(g, now) ? 1 : 0) +
        (golf_read_is_older(before, g) ? 1 : 0) + (golf_read_is_older(g, before) ? 1 : 0);
   n += golf_status_text(golf_next_snapshot(g.golf.next), TickerOptions{}, dates).size();

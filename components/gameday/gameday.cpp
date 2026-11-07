@@ -2747,12 +2747,12 @@ void GamedayComponent::apply_golf_job_(uint32_t now) {
     this->schedule_next_(this->back_off_());
     return;
   }
-  this->clear_backoff_();
   this->force_schedule_ = false;  // Refresh Now is a plain re-read for golf
   if (j.no_event) {
     if (!j.game.golf.next.valid) {
       // ESPN lists nothing, now or ahead
       ESP_LOGI(TAG, "No upcoming event for this tour");
+      this->clear_backoff_();
       this->no_game_confirmed_ = true;
       this->game_ = GameSnapshot{};
       this->prev_ = GameSnapshot{};
@@ -2767,6 +2767,13 @@ void GamedayComponent::apply_golf_job_(uint32_t now) {
   // A failed calendar read keeps the next event this final already had.
   if (calendar_failed && this->game_.valid && this->game_.event_id == j.game.event_id)
     j.game.golf.next = this->game_.golf.next;
+  // With none to keep, what comes next is unknown, not "no upcoming event":
+  // the final stays on the board and the calendar is read again on the
+  // failure schedule, not in 6 hours.
+  const bool next_unknown = calendar_failed && !j.game.golf.next.valid;
+  j.game.golf.next_unknown = next_unknown;
+  if (!next_unknown)
+    this->clear_backoff_();
   // ESPN keeps a tour's last final in its header for weeks: once it is
   // stale, the board moves on to the next event.
   if (::espn::golf_show_next(j.game, tnow))
@@ -2776,7 +2783,7 @@ void GamedayComponent::apply_golf_job_(uint32_t now) {
     ESP_LOGI(TAG, "Golf: an older copy of the leaderboard, keeping the board");
     this->mark_good_poll_();
     this->rebuild_state_(&this->last_fields_);
-    this->schedule_next_(this->interval_for_phase_());
+    this->schedule_next_(next_unknown ? this->back_off_() : this->interval_for_phase_());
     return;
   }
   this->golf_stale_reads_ = 0;
@@ -2788,11 +2795,12 @@ void GamedayComponent::apply_golf_job_(uint32_t now) {
   this->game_ = std::move(j.game);  // leaves job_ without the rows
   this->no_game_confirmed_ = false;
   this->mark_good_poll_();
-  ::espn::Splash splash = ::espn::decide_splash(this->prev_, this->game_, false, false);
+  const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
+  ::espn::Splash splash = ::espn::golf_splash(this->prev_, this->game_, wide);
   this->prev_.golf.rows = {};  // only its event and phase are read later
   this->emit_(splash);
   this->mark_board_ready_();
-  this->schedule_next_(this->interval_for_phase_());
+  this->schedule_next_(next_unknown ? this->back_off_() : this->interval_for_phase_());
 }
 
 std::string GamedayComponent::no_game_why_() const {

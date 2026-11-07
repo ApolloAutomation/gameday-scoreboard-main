@@ -5410,8 +5410,11 @@ static void test_golf_suspended() {
   CHECK_EQ(w.title, std::string("World Wide"));
   CHECK_EQ(w.status, std::string("R2 suspended"));
   CHECK_EQ(w.thru[3], std::string("F"));
-  CHECK_EQ(s.golf.rows[6].name, std::string("Neergaard-Peter"));  // kept to 15
+  // The whole name, cut only in the board's columns
+  CHECK_EQ(s.golf.rows[6].name, std::string("Neergaard-Petersen"));
+  CHECK_EQ(w.name.size(), (size_t) 6);
   std::string t = status_text(s, TickerOptions{}, "");
+  CHECK(contains(t, "T6 Yellamaraju -10, T6 Neergaard-Petersen -10"));
   CHECK(contains(t, "World Wide Technology Championship | Round 2 suspended | 1 James -15, 2 Malnati -14,"));
   CHECK(contains(t, "T4 Jaeger -11, T4 McCarthy -11"));
   CHECK(!contains(t, " F,"));  // between rounds the rows have no thru
@@ -5430,7 +5433,20 @@ static void test_golf_suspended() {
   CHECK_EQ(golf_round_text(d), std::string("Suspended"));
   d.golf.status = GolfStatus::OTHER;  // a status name the panel doesn't know
   d.short_detail = "Round 2 - Weather delay";
-  CHECK_EQ(golf_round_text(d), std::string("Round 2 - We"));
+  CHECK_EQ(golf_round_text(d), std::string("Round 2"));  // whole words
+  CHECK_EQ(golf_round_long(d), std::string("Round 2 - Weather delay"));
+  // ESPN's words, folded to the board's characters
+  std::string doc = slurp("fixtures/golf_header_pga_suspended.json");
+  const std::string from = "\"shortDetail\":\"";
+  size_t at = doc.find(from);
+  CHECK(at != std::string::npos);
+  doc.replace(at + from.size(), doc.find('"', at + from.size()) - at - from.size(), "Round 2 \u2013 Fr\u00e9d\u00e9ric");
+  doc.replace(doc.find("STATUS_SUSPENDED"), 16, "STATUS_UNKNOWN");  // a name the panel doesn't know, state post
+  GameSnapshot u;
+  CHECK_EQ(golf_str(doc, u), 1);
+  CHECK(u.golf.phase == GolfPhase::BREAK);
+  CHECK_EQ(u.short_detail, std::string("Round 2 - Frederic"));
+  CHECK_EQ(golf_round_text(u), std::string("Round 2"));
 }
 
 // DP World Tour, Abu Dhabi, round 2 play complete with round 3's tee times
@@ -5497,16 +5513,28 @@ static void test_golf_final() {
   GameSnapshot prev = s;
   prev.golf.phase = GolfPhase::LIVE;
   prev.state = GameState::IN;
-  Splash sp = golf_splash(prev, s);
+  Splash sp = golf_splash(prev, s, false);
   CHECK_EQ(sp.text, std::string("HITT WINS!"));
   CHECK_EQ(sp.color, (uint32_t) 0xFFD000);
   CHECK_EQ(decide_splash(prev, s, true, false).text, std::string("HITT WINS!"));
   prev.golf.phase = GolfPhase::BREAK;
-  CHECK_EQ(golf_splash(prev, s).text, std::string("HITT WINS!"));
-  CHECK(golf_splash(s, s).text.empty());              // final to final
-  CHECK(golf_splash(GameSnapshot{}, s).text.empty());  // a boot or a team change
+  CHECK_EQ(golf_splash(prev, s, true).text, std::string("HITT WINS!"));
+  CHECK(golf_splash(s, s, false).text.empty());              // final to final
+  CHECK(golf_splash(GameSnapshot{}, s, false).text.empty());  // a boot or a team change
+  // A long name: each word fits a line of the splash, 10 characters on one
+  // panel and 16 on two, and a hyphenated one breaks at its hyphen
+  GameSnapshot longer = s;
+  GolfRow::put(longer.golf.rows[0].name, sizeof(longer.golf.rows[0].name), "Yellamaraju");
+  CHECK_EQ(golf_splash(prev, longer, false).text, std::string("YELLAMARAJ WINS!"));
+  CHECK_EQ(golf_splash(prev, longer, true).text, std::string("YELLAMARAJU WINS!"));
+  GolfRow::put(longer.golf.rows[0].name, sizeof(longer.golf.rows[0].name), "Neergaard-Petersen");
+  CHECK_EQ(golf_splash(prev, longer, false).text, std::string("NEERGAARD-PETERSEN WINS!"));
+  GolfRow::put(longer.golf.rows[0].name, sizeof(longer.golf.rows[0].name), "Abcdefghijkl-Mnopqrstuvwxyz");
+  CHECK_EQ(longer.golf.rows[0].name, std::string("Abcdefghijkl-Mnopqrstuv"));  // 23 characters kept
+  CHECK_EQ(golf_splash(prev, longer, false).text, std::string("ABCDEFGHI-MNOPQRSTUV WINS!"));
+  CHECK_EQ(golf_splash(prev, longer, true).text, std::string("ABCDEFGHIJKL-MNOPQRSTUV WINS!"));
   prev.event_id = "1";
-  CHECK(golf_splash(prev, s).text.empty());  // another event
+  CHECK(golf_splash(prev, s, false).text.empty());  // another event
   // Two players listed at place 1 in a final and no flag: no winner named
   GameSnapshot two = s;
   two.golf.rows[1].place = 1;
@@ -5514,7 +5542,7 @@ static void test_golf_final() {
   two.golf.rows[0].winner = false;
   prev = s;
   prev.golf.phase = GolfPhase::LIVE;
-  CHECK(golf_splash(prev, two).text.empty());
+  CHECK(golf_splash(prev, two, false).text.empty());
   CHECK_EQ(ha_status_text(two, ""), std::string("Korn Ferry Tour Championship | Final"));
 }
 
@@ -5646,6 +5674,20 @@ static void test_golf_calendar() {
   CHECK_EQ(n.event_id, std::string("401850980"));
   CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-11-04T12:00Z"), "", n), 1);
   CHECK_EQ(n.event_id, std::string("401850979"));
+  // The first morning of the Austin Championship, past the calendar's 08:00Z
+  // start, with the header not listing it yet: still that event, not the RSM
+  for (const char *at : {"2026-11-12T07:59Z", "2026-11-12T08:00:30Z", "2026-11-12T20:00Z", "2026-11-13T07:59Z"}) {
+    CHECK_EQ(golf_cal_str(pga, parse_iso8601_z(at), "", n), 1);
+    CHECK_EQ(n.event_id, std::string("401850980"));
+  }
+  GameSnapshot card = golf_next_snapshot(n);
+  CHECK_EQ(golf_poll_ms(card, parse_iso8601_z("2026-11-12T08:00:30Z")), 5u * 60 * 1000);
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-11-13T08:00Z"), "", n), 1);
+  CHECK_EQ(n.event_id, std::string("401850981"));  // a day on, the next one
+  // After the Truist Championship's final, ONEflight Myrtle Beach Classic
+  // (the same week's opposite-field event) is behind it too
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-05-10T23:00Z"), "401811945", n), 1);
+  CHECK_EQ(n.name, std::string("PGA Championship"));
   // The season is over: nothing ahead in this year's list
   GolfNext none;
   CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-12-14T12:00Z"), "", none), 0);
@@ -5673,6 +5715,12 @@ static void test_golf_calendar() {
   CHECK_EQ(g.golf.end_epoch, n.end_epoch);
   CHECK(!is_team_placeholder(g));
   CHECK_EQ(golf_card_text(g, false, "Feb 4-7"), std::string("Hilton Grand Vacations Tournament\nFeb 4-7"));
+  // No word longer than the card's line, 12 characters on one panel
+  g.game_name = "Hanwha LIFEPLUS International Crown";
+  CHECK_EQ(golf_card_text(g, false, "Sep 9-12"), std::string("Hanwha LIFEPLUS Int'l Crown\nSep 9-12"));
+  CHECK_EQ(golf_card_text(g, true, "Sep 9-12"), std::string("Hanwha LIFEPLUS International Crown\nSep 9-12"));
+  g.game_name = "Supercalifragilistic Pro-Amateurs";
+  CHECK_EQ(golf_card_text(g, false, ""), std::string("Supercalifra Pro-Amateurs"));
 }
 
 // No line over its column at either width (fixtures, the placeholder, a card)
@@ -5716,6 +5764,11 @@ static void test_golf_budgets() {
       CHECK(card.substr(0, nl).size() <= (wide ? 42u : 36u));
       if (nl != std::string::npos)
         CHECK(card.size() - nl - 1 <= (wide ? 21u : 12u));
+      size_t word = 0;
+      for (char c : card) {
+        word = c == ' ' || c == '\n' || c == '-' ? 0 : word + 1;
+        CHECK(word <= (wide ? 21u : 12u));
+      }
     }
   }
 }
@@ -5738,6 +5791,22 @@ static void test_golf_event_name() {
       {"Korn Ferry Tour Championship", 17, "Korn Ferry Tour"},
       {"PGA TOUR Q-School presented by Korn Ferry", 17, "PGA TOUR Q-School"},
       {"Mitsubishi Electric Championship at Hualalai", 36, "Mitsubishi Electric Championship"},
+      // Real names from ESPN's calendars
+      {"The ANNIKA driven by Gainbridge at Pelican", 17, "The ANNIKA"},
+      {"The ANNIKA driven by Gainbridge at Pelican", 36, "The ANNIKA"},
+      {"Kroger Queen City Championship pres by P&G", 36, "Kroger Queen City Championship"},
+      {"Sony Open in Hawaii", 12, "Sony Open"},
+      {"Sony Open in Hawaii", 17, "Sony Open"},
+      {"Sony Open in Hawaii", 19, "Sony Open in Hawaii"},
+      {"Cognizant Classic in The Palm Beaches", 36, "Cognizant Classic"},
+      {"Riviera Maya Open at Mayakoba", 19, "Riviera Maya Open"},
+      {"TOUR Championship", 16, "TOUR Champ"},
+      {"PGA Championship", 12, "PGA Champ"},
+      {"PGA Championship", 16, "PGA Championship"},
+      {"BMW Championship", 15, "BMW Champ"},
+      {"The Championship", 12, "Championship"},
+      {"TBD (Additional Event)", 17, "TBD"},
+      {"Meijer LPGA Classic for Simply Give", 30, "Meijer LPGA Classic"},
       {"Championship", 5, "Champ"},
       {"Supercalifragilistic Open", 10, "Supercalif"},
       {"", 10, ""},
@@ -5807,6 +5876,17 @@ static void test_golf_older() {
   read.period = 0;
   read.golf.phase = GolfPhase::PRE;
   CHECK(!golf_read_is_older(shown, read));
+  // The calendar's card (midnight Pacific) and the header's event the same
+  // days (midnight Eastern), another event id: not an older copy
+  GameSnapshot card = golf_next_snapshot(
+      GolfNext{true, "401811946", "ONEflight Myrtle Beach Classic", parse_iso8601_z("2026-11-12T08:00Z"),
+               parse_iso8601_z("2026-11-15T08:00Z")});
+  read = shown;
+  read.event_id = "401811945";
+  read.kickoff_epoch = parse_iso8601_z("2026-11-12T05:00Z");
+  CHECK(!golf_read_is_older(card, read));
+  read.kickoff_epoch = parse_iso8601_z("2026-11-05T05:00Z");  // last week's
+  CHECK(golf_read_is_older(card, read));
   // Nothing to compare with: a boot, the placeholder, another sport
   CHECK(!golf_read_is_older(GameSnapshot{}, read));
   Team pga{League::PGA, 1106, "PGA", "PGA Tour", 0};
@@ -5826,6 +5906,10 @@ static void test_golf_off_season() {
   g = golf_doc("fixtures/golf_header_kft_final.json");  // final on 10/11
   CHECK(golf_off_season(g, now));
   CHECK(!golf_show_next(g, now));  // nothing known after it
+  g.golf.next_unknown = true;      // the calendar read failed: the final stays up
+  CHECK(!golf_off_season(g, now));
+  CHECK(!golf_show_next(g, now));
+  g.golf.next_unknown = false;
   g.golf.next = GolfNext{true, "1", "Next One", now + 20 * day, now + 23 * day};
   CHECK(golf_off_season(g, now));
   CHECK(golf_show_next(g, now));  // the board shows the next event, which reaches the clock itself

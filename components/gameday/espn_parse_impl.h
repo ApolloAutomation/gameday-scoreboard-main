@@ -607,8 +607,8 @@ template<typename TInput> int parse_golf(TInput &input, GameSnapshot &out) {
 }
 
 // A season calendar (golf_calendar_url). 1: the first event by start that
-// starts after now and isn't after_event, in out. 0: none ahead. -1: not a
-// scoreboard document.
+// started less than a day before now or starts after it, and isn't
+// after_event, in out. 0: none ahead. -1: not a scoreboard document.
 template<typename TInput>
 int parse_golf_calendar(TInput &input, int64_t now_epoch, const std::string &after_event, GolfNext &out) {
   JsonDocument filter(detail::json_allocator());
