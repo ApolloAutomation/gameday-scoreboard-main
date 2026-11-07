@@ -51,6 +51,8 @@ What the panel shows depends on whether you have a team:
 
 :::note[Coming in the next release]
 Live games doesn't follow golf: there's no Golf league button, and a golf tour as your team doesn't add golf to the automatic leagues. When nothing is live, a panel whose team is a golf tour shows that tour's tournament, like any team's card. See [Golf](/using/golf/).
+
+Racing is the same: there are no Formula 1 or NASCAR league buttons, and a series as your team doesn't add racing to the automatic leagues. When nothing is live, a panel whose team is a racing series shows that series' race weekend, with "No live NFL games, showing F1" at the front of the ticker. See [Racing](/using/racing/).
 :::
 - **With no team picked**, it rotates through the games still to come today under **Later today**, each with both logos, the start time and the TV channel, then the latest final scores for every league it follows, under headers like "Yesterday's NHL scores". When no game is left today, a "Next" card names the next matchup and its time, like "Next: BOS at NYR Thu 6:00 PM". A game drops off the Later today list once it starts.
 

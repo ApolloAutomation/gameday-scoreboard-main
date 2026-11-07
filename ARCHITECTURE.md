@@ -87,7 +87,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
-  `sport_golf.cpp`,
+  `sport_golf.cpp`, `sport_racing.cpp`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`,
   `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -182,6 +182,30 @@ board job, its reads and the drawing are shared code for any leaderboard
 sport: the `board_*` functions in `espn_parse.cpp` pick the sport's own. `sport_golf.cpp` builds for
 size (`#pragma GCC optimize("Os")`), since it runs once a minute at most.
 Golf is not in Favorite teams or Live games (`set_request.h`).
+
+**Racing.** A racing series (`League::F1`, `League::NASCAR`,
+`Sport::RACING`) is followed the same way, through the same board job:
+`is_leaderboard` sends it to `run_board_job_`, and the `board_*` functions
+pick racing's parse, text and timing (`sport_racing.cpp`). The series'
+scoreboard header (`header_url`, `sport=racing`) has one entry per session
+of a race weekend, all with the weekend's event id, and each session's order
+(up to about 95 KB for a finished F1 weekend, 3 to 27 KB for NASCAR, which
+lists only its race). `parse_racing` picks the weekend (the one on track,
+else the one whose last session with results ran latest, else the next) and
+within it the session on the board: the one on track, else the latest with
+results (`Racing::phase`: PRE, LIVE, BREAK between sessions, FINAL once the
+race itself is over, OFF for a canceled race). Practice and qualifying gaps
+come from the lap times, since ESPN's `behindTime` is wrong in a sprint
+shootout. The calendar is the coming Tuesday's scoreboard, as golf's
+(`parse_racing_calendar`); its entries' ids are in their `$ref`, and their
+times run three hours late, which the parse takes off. A final stays a day
+(`racing_show_next`), the clock shows when the next race is over 45 days
+away (`kRaceSeasonGap`, `racing_off_season`), and `racing_poll_ms` reads
+every 30 seconds during a race or sprint, a minute in practice and
+qualifying, and closer to the next session as it nears. The board is
+`gd_board_container` and `gd_board`, the same widgets as golf's: on one
+panel `BoardLines::value_narrow` false hides the value column and gives the
+names its room. Racing is not in Favorite teams or Live games either.
 
 ## The device page and its routes
 

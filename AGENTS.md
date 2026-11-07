@@ -3,7 +3,8 @@
 ESPHome firmware for a standalone sports scoreboard on an ESP32-S3
 driving HUB75 LED panels: the NFL, college football, MLB, the NBA, the
 WNBA, men's college basketball, the NHL, MLS and the Premier League, and
-golf's PGA Tour and LPGA Tour, each followed like a team. It
+golf's PGA Tour and LPGA Tour and racing's Formula 1 and NASCAR Cup Series,
+each followed like a team. It
 follows games from ESPN's public API by itself and serves its own
 settings page. Apollo Automation maintains this fork of it at
 github.com/ApolloAutomation/gameday-scoreboard-main. CONTRIBUTING.md has

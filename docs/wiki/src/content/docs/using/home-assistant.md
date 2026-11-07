@@ -65,6 +65,8 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 
 :::note[Coming in the next release]
 **Team** gains **Golf: PGA Tour** and **Golf: LPGA Tour** at the end of its list. While a tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22", and **Last Play** stays empty. See [Golf](/using/golf/).
+
+**Team** also gains **Racing: Formula 1** and **Racing: NASCAR Cup Series**, after the golf tours. While a series is the team, **Game Status** is the race weekend in one line, like "MSC Cruises Sao Paulo Grand Prix | Practice 2 final | Fastest: Antonelli", "MSC Cruises United States Grand Prix | Race | Leader: Antonelli", "MSC Cruises United States Grand Prix | Final | Antonelli wins" or "NASCAR Cup Series at Miami | Race Sun 3:00p". It changes with the leader or the session, not on every lap, and **Last Play** stays empty. See [Racing](/using/racing/).
 :::
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.

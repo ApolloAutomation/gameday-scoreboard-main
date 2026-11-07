@@ -1,8 +1,9 @@
 # Game Day Scoreboard firmware
 
 ESPHome firmware for a standalone sports scoreboard (NFL, college football,
-MLB, NBA, WNBA, men's college basketball, NHL, MLS, the Premier League, and
-golf's PGA Tour and LPGA Tour) on an ESP32-S3 HUB75 controller. Apollo Automation maintains this fork, at
+MLB, NBA, WNBA, men's college basketball, NHL, MLS, the Premier League,
+golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series) on an
+ESP32-S3 HUB75 controller. Apollo Automation maintains this fork, at
 github.com/ApolloAutomation/gameday-scoreboard-main; the product name is
 "Game Day Scoreboard". One top-level YAML per pinout: gameday.yaml
 (MoonHub75) and gameday-scoreboard75.yaml (the scoreboard75 controller

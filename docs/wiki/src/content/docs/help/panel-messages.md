@@ -76,6 +76,8 @@ These show on the board or in the ticker.
 
 :::note[Coming in the next release]
 With a golf tour as your team, **No upcoming event** means ESPN lists no tournament for the tour, now or ahead. Nothing to do: the panel checks again every hour. A tournament before it starts shows its name and days, and a canceled one its name and **Canceled** or **Postponed**. See [Golf](/using/golf/).
+
+With a racing series as your team, **No upcoming race** means ESPN lists no race for the series, now or ahead. Nothing to do: the panel checks again every hour. After a season's last race, until ESPN publishes the next season's schedule, the board shows the clock and the ticker says "No upcoming Formula 1 race" or "No upcoming NASCAR Cup Series race". A race weekend before it starts shows the race's name and the next session or its days, and a canceled race its name and **Canceled** or **Postponed**. See [Racing](/using/racing/).
 :::
 
 A panel with no team picked also brings the app's QR code back over the board for 13 seconds every 3 minutes, until you pick one.

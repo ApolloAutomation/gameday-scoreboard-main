@@ -9,6 +9,8 @@ Game Day Scoreboard is an LED panel that shows your team's live score, game cloc
 
 :::note[Coming in the next release]
 It also follows golf: pick the PGA Tour or the LPGA Tour and the panel shows that tour's tournament and leaderboard. See [Golf](/using/golf/).
+
+And racing: pick Formula 1 or the NASCAR Cup Series and the panel shows the race weekend, the order of each session and the race's winner. See [Racing](/using/racing/).
 :::
 
 ## What you need

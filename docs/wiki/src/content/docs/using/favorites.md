@@ -13,6 +13,8 @@ On the device page, open the **Favorites** card and tap **Add a favorite**. The 
 
 :::note[Coming in the next release]
 A golf tour can't be a favorite yet, so the chooser hides its **Golf** tab while you add one. Follow a tour in **My team** instead. See [Golf](/using/golf/).
+
+A racing series can't be a favorite yet either, so the **Racing** tab is hidden too. Follow a series in **My team**. See [Racing](/using/racing/).
 :::
 
 The order is the priority. Higher teams win when two games clash (unless you choose **Alternate**, below), and the first four are buttons 1 to 4 on a WizMote remote. The page marks those four with their button number.
