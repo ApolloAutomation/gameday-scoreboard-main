@@ -710,6 +710,8 @@ constexpr Team kTeams[] = {
     {League::NHL, 28, "WPG", "Winnipeg Jets", 0},
     {League::PGA, 1106, "PGA", "PGA Tour", 0},
     {League::LPGA, 1107, "LPGA", "LPGA Tour", 0},
+    {League::F1, 2030, "F1", "Formula 1", 0},
+    {League::NASCAR, 2021, "NASCAR", "NASCAR Cup Series", 0},
 };
 
 constexpr size_t kTeamCount = sizeof(kTeams) / sizeof(kTeams[0]);

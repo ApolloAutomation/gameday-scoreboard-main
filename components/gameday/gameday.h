@@ -105,18 +105,20 @@ struct UpdateFields {
   // line; empty when none is known, and the page shows the date instead.
   bool clock{false};
   std::string next_line;
-  // Golf (sport 5): the leaderboard cut to the board's columns
-  // (espn::golf_lines), which gd_golf (pages/gameday-live.yaml) draws when
-  // golf_board is set. golf_card: no leaderboard to show (before the event,
+  // A leaderboard sport (golf, sport 5; racing, 6): the board cut to its columns
+  // (espn::board_lines), which gd_board (pages/gameday-live.yaml) draws when
+  // board is set. board_card: no leaderboard to show (before the event,
   // canceled, the tour's name while it loads): the no-game message carries
   // next_line (the event name, a line break, the dates). Neither is set under
-  // the off-season clock.
-  bool golf_board{false};
-  bool golf_card{false};
-  std::string golf_title, golf_status;
-  uint32_t golf_status_color{0xFFFFFF};
-  std::vector<std::string> golf_pos, golf_name, golf_score, golf_thru;
-  std::vector<int> golf_score_color, golf_name_color;  // int[] script parameters are std::vector<int>
+  // the off-season clock. board_value_narrow: one panel shows the value
+  // column (golf's score); false gives its room to the names.
+  bool board{false};
+  bool board_card{false};
+  std::string board_title, board_status;
+  uint32_t board_status_color{0xFFFFFF};
+  bool board_value_narrow{true};
+  std::vector<std::string> board_pos, board_name, board_value, board_detail;
+  std::vector<int> board_value_color, board_name_color;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -243,7 +245,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // is on the board. The boot screen waits for it (boot.yaml, boot_hide).
   bool board_ready() const { return this->board_ready_; }
   // What the board is drawing: the fields of the on_update in progress, or
-  // of the last one. gd_golf reads its leaderboard from here.
+  // of the last one. gd_board reads its leaderboard from here.
   const UpdateFields &board_fields() const { return this->last_fields_; }
   // The Wi-Fi answered ESPN with a sign-in page (captive.h) and ESPN has not
   // answered since. The boot screen says so over the board (boot.yaml).
@@ -505,11 +507,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // ESPN answered 403 or 429 to a request in this job (set by open_)
     bool throttled{false};
     uint32_t retry_after_ms{0};
-    // Golf (sport_golf.cpp): the tour's scoreboard header into game (no_event
-    // when it lists none), then after a final, a canceled event or none
-    // listed, the calendar for the next event into game.golf.next.
-    bool need_golf{false};
-    bool golf_next_ok{false};
+    // A leaderboard sport (golf, racing): the league's scoreboard header into game
+    // (no_event when it lists none), then after a final, a canceled event or
+    // none listed, the calendar for the next event (espn::board_next).
+    bool need_board{false};
+    bool board_next_ok{false};
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -525,19 +527,24 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool fetch_schedule_(const ::espn::Team *team, Schedule &out, const char *comp_slug = nullptr);
   void run_cup_job_();
   void apply_cup_job_(uint32_t now);
-  // Golf: a tour followed like a team, by its own reads (no team endpoint,
-  // boot cache, Up next, cups, look-ahead or linger).
-  void run_golf_job_();
-  void apply_golf_job_(uint32_t now);
-  // 1 the tour's event, 0 the tour lists none, -1 the read failed.
-  int fetch_golf_(League league, GameSnapshot &out);
-  // The next event after after_event, from this season's calendar or the
+  // A leaderboard sport (golf, racing): a tour or a series followed like a
+  // team, by its own reads (no team endpoint, boot cache, Up next, cups,
+  // look-ahead or linger).
+  void run_board_job_();
+  void apply_board_job_(uint32_t now);
+  // 1 the league's event, 0 it lists none, -1 the read failed.
+  int fetch_board_(League league, GameSnapshot &out);
+  // The next event after after_event (a race weekend also starting no
+  // earlier than after_start, its start), from this season's calendar or the
   // next one's; false when a read failed.
-  bool fetch_golf_next_(League league, const std::string &after_event, int64_t now, ::espn::GolfNext &out);
-  // Older CDN reads turned away in a row (espn::golf_read_is_older), at most two.
-  uint8_t golf_stale_reads_{0};
-  // "Nov 12-15" in the panel's time zone (espn::golf_dates).
+  bool fetch_board_next_(League league, const std::string &after_event, int64_t after_start, int64_t now,
+                         ::espn::GolfNext &out);
+  // Older CDN reads turned away in a row (espn::board_read_is_older), at most two.
+  uint8_t board_stale_reads_{0};
+  // "Nov 12-15" in the panel's time zone (espn::golf_dates): golf's days
+  // (midnight Eastern, read at noon) and a race weekend's (real times).
   std::string golf_dates_(int64_t start, int64_t end) const;
+  std::string racing_dates_(int64_t start, int64_t end) const;
   bool fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out);
   bool fetch_game_(const ::espn::Team *team, const Schedule &schedule, GameSnapshot &out);
   // epoch picks the day (now when 0); finals and pending, when given, also

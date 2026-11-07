@@ -57,7 +57,7 @@ If your internet plan has a data cap, **ESPN data** in the Device card on the de
 Yes. **Favorite teams** holds up to 16 teams from any league, in priority order. Turn on **Only today's games** to cycle through only the favorites playing today. When two favorites play at once, the panel sticks with the higher one, or alternates between them if you choose **Alternate**. See [Favorite teams](/using/favorites/).
 
 :::note[Coming in the next release]
-A golf tour can't be a favorite yet. Follow it in **My team**. See [Golf](/using/golf/).
+A golf tour or a racing series can't be a favorite yet. Follow it in **My team**. See [Golf](/using/golf/) and [Racing](/using/racing/).
 :::
 
 ## Can I use a remote?

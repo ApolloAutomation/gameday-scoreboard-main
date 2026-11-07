@@ -48,8 +48,9 @@ REPO = Path(__file__).resolve().parents[2]
 WEB = Path(os.environ.get("GAMEDAY_WEB", REPO / "firmware" / "web"))
 
 # Same tables the firmware and scripts/build_web.py read.
-TEAM_RE = re.compile(r'\{League::([A-Z]+),\s*(\d+),\s*"([^"]*)",\s*"([^"]*)",\s*(\d+)\}')
-LEAGUE_RE = re.compile(r'\{League::[A-Z]+,\s*"([a-z]+)",')
+# League names and keys can hold digits: League::F1, "f1".
+TEAM_RE = re.compile(r'\{League::([A-Z0-9]+),\s*(\d+),\s*"([^"]*)",\s*"([^"]*)",\s*(\d+)\}')
+LEAGUE_RE = re.compile(r'\{League::[A-Z0-9]+,\s*"([a-z0-9]+)",')
 TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
 TEAMS = {}
 for lg, tid, abbr, name, _ in TEAM_RE.findall((REPO / "components/gameday/teams.h").read_text(encoding="utf-8")):
@@ -57,8 +58,9 @@ for lg, tid, abbr, name, _ in TEAM_RE.findall((REPO / "components/gameday/teams.
 # kLeagues order, which is the order the firmware lists live leagues in.
 LEAGUES_H = (REPO / "components/gameday/leagues.h").read_text(encoding="utf-8")
 LEAGUES = LEAGUE_RE.findall(LEAGUES_H)
-# The golf tours: a team, but never a favorite or a Live games league (set_request.h).
-GOLF = set(re.findall(r'\{League::[A-Z]+,\s*"([a-z]+)",[^}]*Sport::GOLF', LEAGUES_H))
+# The golf tours and racing series: a team, but never a favorite or a Live
+# games league (set_request.h).
+BOARD = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(?:GOLF|RACING)', LEAGUES_H))
 TZ_TEXT = "\n".join(ln for ln in (REPO / "components/gameday/timezones.h").read_text(encoding="utf-8").splitlines()
                     if not ln.lstrip().startswith("//"))
 TZ_ROWS = TZ_RE.findall(TZ_TEXT)
@@ -193,7 +195,7 @@ def timezone_index(v):
 def live_auto_leagues():
     """live_leagues() with a mask of 0: the saved team's league and the favorites'."""
     used = {TEAM_LEAGUE[0]} | {t["l"] for t in STATE["favs"] if t}
-    return [lg for lg in LEAGUES if lg in used and lg not in GOLF] or ["nfl"]
+    return [lg for lg in LEAGUES if lg in used and lg not in BOARD] or ["nfl"]
 
 
 def state_doc():
@@ -230,13 +232,13 @@ def apply_set(kv):
                 if len(refs) >= FAV_MAX:
                     break
                 ref = parse_team_ref(part)
-                if ref and ref[0] not in GOLF and ref not in refs:
+                if ref and ref[0] not in BOARD and ref not in refs:
                     refs.append(ref)
             # set_favorites_(): the list in order, then empty slots up to the four remote slots.
             STATE["favs"] = [team(*r) for r in refs] + [{}] * (4 - len(refs))
         elif k in ("fav1", "fav2", "fav3", "fav4"):
             ref = parse_team_ref(v)
-            if ref and ref[0] in GOLF:
+            if ref and ref[0] in BOARD:
                 continue
             if ref is None and v not in ("none", ""):
                 continue
@@ -244,7 +246,7 @@ def apply_set(kv):
         elif k == "today":
             STATE["today"] = v == "1"
         elif k == "live":
-            keys = [lg for lg in LEAGUES if lg in v.split(",") and lg not in GOLF]
+            keys = [lg for lg in LEAGUES if lg in v.split(",") and lg not in BOARD]
             STATE["live_auto"] = not keys
             STATE["live"] = keys
         elif k == "tz":

@@ -20,6 +20,8 @@ Each sport's page has the details: [Football](/using/football/), [Baseball](/usi
 
 :::note[Coming in the next release]
 A golf tour's ticker has the tournament's days and course before it, the round and the top 10 during it, and the winner and the next event after it. See [Golf](/using/golf/).
+
+A racing series' ticker has the next session and when it starts, then the track, before a race weekend; the session and the top 10 with their gaps during it, and what's next between sessions; and the winner and the next race after it. See [Racing](/using/racing/).
 :::
 
 ## The switches
@@ -35,7 +37,7 @@ The Ticker card on the device page has a switch for each part. All of them start
 | **Pre-game odds and TV** | The line, over/under and TV channel before the start, in every league, when ESPN has them. |
 
 :::note[Coming in the next release]
-For a golf tour, **Pre-game odds and TV** adds the purse before a tournament and keeps the TV channel in the ticker during it.
+For a golf tour, **Pre-game odds and TV** adds the purse before a tournament and keeps the TV channel in the ticker during it. For a racing series it adds the TV channel, before and during a race weekend.
 :::
 
 These three, Down and distance, Count and at-bat and Match stats, are the game situation for their sport. Hockey and basketball have no situation line, so they have no switch of their own. The card only shows the switches for sports your panel follows, from your team, your favorites and the leagues you picked for Live games, so turning off football's line leaves baseball's count alone.

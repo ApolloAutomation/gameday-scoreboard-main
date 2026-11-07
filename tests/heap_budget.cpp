@@ -191,6 +191,22 @@ int main() {
       return parse_golf_calendar(json, parse_iso8601_z("2026-11-09T12:00Z"), std::string("401850979"), n) == 1;
     });
   }
+  // A racing series' board: the header of a finished F1 weekend, the largest
+  // (five sessions of 22 drivers), and after the race the season calendar.
+  {
+    std::string json = slurp("fixtures/racing_header_f1_final.json");
+    measure("poll_racing_header", [&] {
+      GameSnapshot g;
+      return parse_racing(json, g) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/racing_calendar_nascar_2026.json");
+    measure("racing_calendar", [&] {
+      GolfNext n;
+      return parse_racing_calendar(json, parse_iso8601_z("2026-11-02T12:00Z"), std::string("202611010020"), 0, n) == 1;
+    });
+  }
   {
     std::string json = slurp("fixtures/team_nfl_dal.json");
     measure("team_nfl", [&] {

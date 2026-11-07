@@ -8,7 +8,7 @@
 
 ![Touchdown fireworks on the panel](docs/site/media/touchdown.gif)
 
-A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League, and from the next release golf's PGA Tour and LPGA Tour.
+A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League, and from the next release golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series.
 
 Watch the [full demo](https://apolloautomation.github.io/gameday-scoreboard-main/) on the installer page. The [docs](docs/wiki/src/content/docs/) cover setup, every setting, each sport's board, troubleshooting and running the firmware on your own board.
 
@@ -21,10 +21,11 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - Full-screen splashes in your team's color for touchdowns, field goals, extra points and two-point conversions, the opponent's scores acknowledged in theirs, and a victory splash on a win
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs and goals get the fireworks too
 - From the next release, golf: follow the PGA Tour or the LPGA Tour like a team, with this week's tournament and the top of its leaderboard, and the next event and its days between tournaments
+- From the next release, racing: follow Formula 1 or the NASCAR Cup Series like a team, with the race weekend's next session and its start time, the latest session's order with car numbers and gaps, the race winner's splash, and the next race between weekends
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
 - Live games: follows a random game in progress in the leagues you choose and moves on when it ends
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
-- Up to 16 favorite teams from any league (not the golf tours, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
+- Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
 - Adapts to one 64x64 panel (logos side by side, stacked scores) or one 128x64 panel or two 64x64 side by side (logos at the edges, big scores, records and pips in the middle); one firmware, the count is a setting
 
@@ -63,7 +64,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | Setting | What it does |
 | --- | --- |
 | Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every few minutes |
-| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team and every Division I men's college basketball team, a tab per league, plus an "On now" tab. The next release adds a Golf tab with the PGA Tour and the LPGA Tour, each followed like a team |
+| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team and every Division I men's college basketball team, a tab per league, plus an "On now" tab. The next release adds a Golf tab with the PGA Tour and the LPGA Tour and a Racing tab with Formula 1 and the NASCAR Cup Series, each followed like a team |
 | Timezone | Follows the browser's zone unless you pick one by hand; used for kickoff times |
 | Ticker: game situation, last play, odds and TV | Choose what scrolls along the bottom. Game situation is down and distance in football, the count and outs in baseball, and goals, cards and stats in soccer |
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
@@ -95,7 +96,7 @@ esphome run gameday.yaml
 
 ## How it works
 
-The `gameday` component asks ESPN's public site API for the team's next event, then polls that game's own scoreboard entry, in every league: every 15 minutes while the game is far off, every minute inside the last hour, every 10 seconds during the game, showing ESPN's clock as it arrives, and every minute for half an hour after the final (ten minutes for baseball). After a failed read it waits longer before trying again. The JSON is streamed through a filter on the device so a scoreboard of several hundred kilobytes never has to fit in memory at once. Score deltas between polls decide the splashes, the same rules the blueprint uses. Logos are ESPN's dark-background PNGs (the plain one when a team has no dark version), decoded and shrunk to 32x32 on the ESP32. From the next release, a golf tour is read differently: ESPN's scoreboard header for the tour (about 19 KB) gives the tournament and the top 25, every minute while a round is played and every 5 minutes between rounds, and after a final the tour's season calendar names the next event.
+The `gameday` component asks ESPN's public site API for the team's next event, then polls that game's own scoreboard entry, in every league: every 15 minutes while the game is far off, every minute inside the last hour, every 10 seconds during the game, showing ESPN's clock as it arrives, and every minute for half an hour after the final (ten minutes for baseball). After a failed read it waits longer before trying again. The JSON is streamed through a filter on the device so a scoreboard of several hundred kilobytes never has to fit in memory at once. Score deltas between polls decide the splashes, the same rules the blueprint uses. Logos are ESPN's dark-background PNGs (the plain one when a team has no dark version), decoded and shrunk to 32x32 on the ESP32. From the next release, a golf tour is read differently: ESPN's scoreboard header for the tour (about 19 KB) gives the tournament and the top 25, every minute while a round is played and every 5 minutes between rounds, and after a final the tour's season calendar names the next event. A racing series is read the same way: its scoreboard header lists the race weekend's sessions with each one's order (up to about 95 KB for an F1 weekend), every 30 seconds while a race runs, every minute in practice and qualifying, and closer to each session as it nears.
 
 The parser and game logic have host tests: `make -C tests` (needs g++). The device page has browser tests against a mock of the panel's web server: in `tests/web`, run `npm ci` and `npx playwright install chromium` once, then `npm test` (needs Node and Python 3). To refresh the team list at the start of a season, run `python3 scripts/build_teams.py` and commit the regenerated header.
 

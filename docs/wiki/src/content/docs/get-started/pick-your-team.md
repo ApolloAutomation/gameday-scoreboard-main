@@ -1,6 +1,6 @@
 ---
 title: "Pick your team"
-description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues, or from the next release a golf tour."
+description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues, or from the next release a golf tour or a racing series."
 sidebar:
   order: 3
 ---
@@ -45,6 +45,8 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 
 :::note[Coming in the next release]
 A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
+
+A **Racing** tab holds **Formula 1** and the **NASCAR Cup Series**. Pick one to follow that series' race weekends: each session's order, the race's winner and the next race. See [Racing](/using/racing/).
 :::
 
 Soccer clubs are followed into their cup competitions too: Premier League clubs into the Champions League, Europa League and Conference League, and MLS clubs into the CONCACAF Champions Cup.
@@ -52,7 +54,7 @@ Soccer clubs are followed into their cup competitions too: Premier League clubs 
 Each sport has its own board. See [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/) and [Soccer](/using/soccer/).
 
 :::note[Coming in the next release]
-Golf has its own board too, a tournament's leaderboard. See [Golf](/using/golf/).
+Golf has its own board too, a tournament's leaderboard, and so does racing, a session's order. See [Golf](/using/golf/) and [Racing](/using/racing/).
 :::
 
 ## The On now tab
@@ -83,5 +85,5 @@ That QR code opens the panel's device page by IP address. Scan it with your phon
 See [Modes](/using/modes/) and [Favorite teams](/using/favorites/).
 
 :::note[Coming in the next release]
-A golf tour can be your team in **My team**, but not a favorite or a **Live games** league yet. See [Golf](/using/golf/).
+A golf tour or a racing series can be your team in **My team**, but not a favorite or a **Live games** league yet. See [Golf](/using/golf/) and [Racing](/using/racing/).
 :::

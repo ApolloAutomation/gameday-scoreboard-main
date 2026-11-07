@@ -37,6 +37,8 @@ Tap **Change team** to open the team chooser. It has a search box and a **Close*
 
 :::note[Coming in the next release]
 A **Golf** tab follows **NHL**, with the **PGA Tour** and the **LPGA Tour**. While a tour is your team, the live board shows its tournament's leaderboard in place of the two teams: the round, then up to 10 rows with the place, the name, the score to par (red under par, blue over) and the holes played. Before a tournament it shows the days, and after a final the tour's next event. With nothing on the schedule it says **No upcoming event for this tour**. See [Golf](/using/golf/).
+
+A **Racing** tab follows **Golf**, with **Formula 1** and the **NASCAR Cup Series**. While a series is your team, the live board shows the order of the session on track or the latest one: the session, then up to 10 rows with the place, the name, the car number and the gap. Before and between sessions it shows the next session and when it starts, and after the race the next race weekend. With nothing on the schedule it says **No upcoming race for this series**. ESPN has no NASCAR logo, so that tile has none. See [Racing](/using/racing/).
 :::
 
 The first tab, **On now**, lists today's games in every league, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
