@@ -55,3 +55,7 @@ For the messages that take over the whole board, see [Panel messages](/help/pane
 ## Ticker speed
 
 **Ticker speed** in the Panel card sets how fast the ticker scrolls, from 1 (slowest) to 10 (fastest). A new panel starts at 5. The speed stays the same whatever the length of the line, so a long last play scrolls at the same pace as a short one.
+
+:::note[Coming in the next release]
+The whole range is slower and even, so every setting stays readable. 1 moves about one and a half letters a second, 5 (where a new panel starts) about three, and 10 about six, close to what 5 was before. Each step is the same amount faster than the one below it. Your panel keeps its setting through the update, so the ticker will look slower afterward: raise it if you'd like it quicker.
+:::
