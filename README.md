@@ -20,10 +20,11 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance and where the ball is (one switch) and the last play (another); the clock keeps its own row and never goes in the ticker
 - Full-screen splashes in your team's color for touchdowns, field goals, extra points and two-point conversions, the opponent's scores acknowledged in theirs, and a victory splash on a win
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs and goals get the fireworks too
+- From the next release, golf: follow the PGA Tour or the LPGA Tour like a team, with this week's tournament and the top of its leaderboard, and the next event and its days between tournaments
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
 - Live games: follows a random game in progress in the leagues you choose and moves on when it ends
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
-- Up to 16 favorite teams from any league, cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
+- Up to 16 favorite teams from any league (not the golf tours, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
 - Adapts to one 64x64 panel (logos side by side, stacked scores) or one 128x64 panel or two 64x64 side by side (logos at the edges, big scores, records and pips in the middle); one firmware, the count is a setting
 

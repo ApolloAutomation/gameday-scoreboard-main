@@ -18,6 +18,10 @@ The ticker is the line that scrolls along the bottom of the panel. It carries wh
 
 Each sport's page has the details: [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/) and [Soccer](/using/soccer/).
 
+:::note[Coming in the next release]
+A golf tour's ticker has the tournament's days and course before it, the round and the top 10 during it, and the winner and the next event after it. See [Golf](/using/golf/).
+:::
+
 ## The switches
 
 The Ticker card on the device page has a switch for each part. All of them start on.
@@ -29,6 +33,10 @@ The Ticker card on the device page has a switch for each part. All of them start
 | **Match stats** | Soccer: goals, cards, possession and shots. |
 | **Last play** | ESPN's latest play in every sport. In soccer, the latest goal or card. A very long play is cut short. |
 | **Pre-game odds and TV** | The line, over/under and TV channel before the start, in every league, when ESPN has them. |
+
+:::note[Coming in the next release]
+For a golf tour, **Pre-game odds and TV** adds the purse before a tournament and keeps the TV channel in the ticker during it.
+:::
 
 These three, Down and distance, Count and at-bat and Match stats, are the game situation for their sport. Hockey and basketball have no situation line, so they have no switch of their own. The card only shows the switches for sports your panel follows, from your team, your favorites and the leagues you picked for Live games, so turning off football's line leaves baseball's count alone.
 
