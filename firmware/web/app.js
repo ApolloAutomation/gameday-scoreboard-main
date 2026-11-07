@@ -158,7 +158,7 @@
           <div class="ctl" data-sport="baseball"><label>Count and at-bat<small>Baseball: the count, outs, pitcher and batter.</small></label><button class="sw" data-set="count" aria-label="Count and at-bat"></button></div>
           <div class="ctl" data-sport="soccer"><label>Match stats<small>Soccer: goals, cards, possession and shots.</small></label><button class="sw" data-set="match" aria-label="Match stats"></button></div>
           <div class="ctl"><label>Last play<small>ESPN's latest play in every sport. In soccer, the latest goal or card.</small></label><button class="sw" data-set="play" aria-label="Last play"></button></div>
-          <div class="ctl"><label>Pre-game odds and TV<small>The line, over/under and TV channel before the start, in every league, when ESPN has them.</small></label><button class="sw" data-set="odds" aria-label="Pre-game odds and TV"></button></div>
+          <div class="ctl"><label>Pre-game odds and TV<small>The line, over/under and TV channel before the start, in every league, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it.</small></label><button class="sw" data-set="odds" aria-label="Pre-game odds and TV"></button></div>
         </div>
       </div>
       <div class="card">
@@ -174,7 +174,7 @@
       </div>
       <div class="card">
         <h2>Favorites</h2>
-        <p class="hint">Up to 16 teams from any league. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
+        <p class="hint">Up to 16 teams from any league, not golf tours yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
         <div class="ctl"><label>Only today's games<small>The playlist skips favorites that aren't playing today.</small></label><button class="sw" data-set="today" aria-label="Only today's games"></button></div>
         <div id="favCtls"></div>
         <button class="btn" id="favAdd">Add a favorite</button>
@@ -1075,9 +1075,10 @@
     const tiles = $("#tiles");
     tiles.innerHTML = "";
     // A tab can hold more than one league (Golf: both tours). A golf tour is
-    // never a favorite yet.
+    // never a favorite yet, and search finds one by its tab's name too.
+    const words = (t) => (isGolf(t[0]) ? lgInfo(t[0]).tab + " " : "") + t[3] + " " + t[2];
     const list = TEAMS.filter((t) => !(pickFav && isGolf(t[0]))
-      && (q ? (t[3] + " " + t[2]).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
+      && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
       return;

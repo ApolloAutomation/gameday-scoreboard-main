@@ -516,11 +516,16 @@ test("golf stays out of favorites, Live games and On now", async ({ page, reques
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
   await page.locator("#q").fill("tour");
   await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  await page.locator("#q").fill("golf");
+  await expect(page.locator("#tiles .none")).toHaveText("No team matches");
   await page.getByRole("button", { name: "Close" }).click();
-  // Choosing the team: the Golf tab is back, and the tour is found
+  // Choosing the team: the Golf tab is back, and the tour is found by its
+  // name or by "golf"
   await page.locator("#pick").click();
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeVisible();
   await page.locator("#q").fill("tour");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
+  await page.locator("#q").fill("golf");
   await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
   // On now never reads a golf scoreboard
   await page.locator(".tabs button", { hasText: "On now" }).click();
