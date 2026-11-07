@@ -153,6 +153,48 @@ later-today cards:
 | --- | --- |
 | `day_nba_20261015.json` | `.../basketball/nba/scoreboard?dates=20261015`, two games to come: TOR @ NY (no TV listed) and OKC @ HOU (NBA TV) |
 
+Golf, recorded 2026-11-07 03:18Z from a tour's scoreboard header
+(`https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=<tour>`)
+and season calendar (`.../golf/<tour>/scoreboard?dates=`). The DP World Tour,
+Korn Ferry Tour, PGA Tour Champions and LIV headers have the same shape as the
+PGA Tour's and stand in for states the two tours the panel follows weren't in:
+
+| File | Source |
+| --- | --- |
+| `golf_header_pga_suspended.json` | `league=pga`: 401850979 World Wide Technology Championship, round 2 suspended (`STATUS_SUSPENDED`, state `post`, completed false), every listed player finished the round, ties at T4 and T6 |
+| `golf_header_lpga_live.json` | `league=lpga`: 401835175 TOTO Japan Classic, round 3 in progress, a T1 tie, thru 4 to 14, only 21 players listed |
+| `golf_header_eur_after_round.json` | `league=eur`: 401822708 Abu Dhabi Aldar Championship, round 2 play complete (`STATUS_PLAY_COMPLETE`, state `post`, completed true while the event goes on), round 3 tee times |
+| `golf_header_kft_final.json` | `league=ntw`: 401837451 Korn Ferry Tour Championship, final, the winner's `winner` flag false |
+| `golf_header_champions_pre.json` | `league=champions-tour`: 401832050 Charles Schwab Cup Championship, scheduled, no competitors yet |
+| `golf_header_liv_canceled.json` | `league=liv`: 401843582 LIV Golf Michigan, canceled |
+| `golf_header_none.json` | `https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga&dates=20261103`, the Tuesday before the World Wide Technology Championship, a day with no PGA Tour round: `leagues[0]` has no `events` |
+| `golf_calendar_pga_2026.json` | `.../golf/pga/scoreboard?dates=20261103`, a Tuesday with no round: no events, the 2026 season's calendar of 49 events |
+| `golf_calendar_pga_2027.json` | `.../golf/pga/scoreboard?dates=2027`, trimmed to its first 2 events; the 2027 calendar is whole |
+| `golf_calendar_lpga_2027.json` | `.../golf/lpga/scoreboard?dates=2027`, trimmed the same way |
+
+Racing, recorded 2026-11-07 05:20Z from a series' scoreboard header
+(`https://site.api.espn.com/apis/v2/scoreboard/header?sport=racing&league=<f1|nascar-premier>`,
+one entry per session of a race weekend, all with the weekend's event id) and
+season calendar (`.../racing/<series>/scoreboard?dates=`, the coming Tuesday's).
+"Trimmed" means each competitor's `headshot`, `logo`, `records` and `uid`, and
+each entry's `links`, `appLinks`, `guid`, `geoBroadcasts` and `track`, are
+dropped; nothing the panel reads changes:
+
+| File | Source |
+| --- | --- |
+| `racing_header_f1_practice.json` | `league=f1`: 600057448 Sao Paulo Grand Prix weekend on Saturday morning, FP1 and FP2 final (22 and 21 drivers, lap times, no `behindTime` on most rows), FP3, Qualifying and the Race scheduled with no competitors. Trimmed |
+| `racing_header_f1_final.json` | `league=f1&dates=20261025`: 600057446 United States Grand Prix, every session final, the race with `behindTime`, `behindLaps` and three `STATUS_RETIRED` rows. Whole, 93 KB (the heap budget's read) |
+| `racing_header_f1_sprint.json` | `league=f1&dates=20261011`: 600057445 Singapore, a sprint weekend, trimmed to its FP1, Sprint Shootout (`SS`) and Sprint Race (`SR`) entries |
+| `racing_header_f1_sprint_shootout.json` | The same, trimmed to FP1 and the Sprint Shootout, whose `behindTime` is each driver's own lap time and whose rows are all `STATUS_UNKNOWN` |
+| `racing_header_f1_live.json` | Not recorded: `racing_header_f1_final.json` with the Race entry set on lap 34 (`fullStatus.period` 34, `STATUS_IN_PROGRESS`, state `in`, shortDetail "Lap 34", no `flag`) and every `winner` false. Trimmed. No session was on track while these were recorded |
+| `racing_header_f1_canceled.json` | `league=f1&dates=20260412`: 600057430 Bahrain Grand Prix, all five sessions `STATUS_CANCELED` (state `post`), no competitors. Whole |
+| `racing_header_nascar_pre.json` | `league=nascar-premier`: 202611080042 NASCAR Cup Series at Miami, the season finale, scheduled (`laps` "267"), no competitors. NASCAR lists only the race, with no `competitionType`. Whole |
+| `racing_header_nascar_final.json` | `league=nascar-premier&dates=20261101`: 202611010020 at Martinsville, final, 37 drivers: no per-driver status, `behindTime` ".000", `behindLaps` negative. Trimmed |
+| `racing_header_nascar_duels.json` | `league=nascar-premier&dates=20260212`: Daytona's Duel #1 and Duel #2, two events on one day (`competitionType` 4, Exhibition), both final. Trimmed |
+| `racing_header_none.json` | `league=f1&dates=20261110`, a Tuesday with no session: `leagues[0]` has no `events` |
+| `racing_calendar_f1_2026.json` | `.../racing/f1/scoreboard?dates=20261110`: no events, the 2026 calendar of 25 races. Entries have no `id` (it is in `event.$ref`), and their times run 3 hours after the header's |
+| `racing_calendar_nascar_2026.json` | `.../racing/nascar-premier/scoreboard?dates=20261110`: the 2026 calendar of 40 races, exhibitions included |
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device

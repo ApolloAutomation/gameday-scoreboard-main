@@ -11,13 +11,9 @@ The panel needs Wi-Fi to read scores from ESPN. Once it's on your network, it ne
 
 The panel only joins 2.4 GHz networks. If your router has separate names for 2.4 GHz and 5 GHz, pick the 2.4 GHz one.
 
-Use your main network, not a guest network. A guest network can let the panel join but keep your phone from reaching it afterwards, so the app and the device page can't find it.
+Use your main network, not a guest network. A guest network can let the panel join but keep your phone from reaching it afterwards, so the device page won't open.
 
-Some bar, hotel and dorm Wi-Fi lets the panel join and then wants you to sign in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it covers the board with **Wi-Fi needs / sign-in / use home or / a hotspot** and the QR code for the app, and the device page says **Wi-Fi needs a sign-in**. Put the panel on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes away by itself once scores come through.
-
-:::note[Coming in the next release]
-On a network that wants a sign-in, the QR code opens the panel's device page by its IP address, where **Reset Wi-Fi** in the Device card puts the panel back into setup. Scan it from a phone on the same Wi-Fi. Some of these networks keep devices from reaching each other, and then the page won't open; use the button's [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) instead.
-:::
+Some bar, hotel and dorm Wi-Fi lets the panel join and then wants you to sign in on a web page before anything else gets through. The panel can't sign in to those pages. On a network like that it covers the board with **Wi-Fi needs / sign-in / use home or / a hotspot** and a QR code, and the device page says **Wi-Fi needs a sign-in**. Put the panel on a home network or a phone hotspot instead. [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. Scan the QR code from a phone on the same Wi-Fi: it opens the panel's device page by its IP address, where **Reset Wi-Fi** in the Device card does that. Some of these networks keep devices from reaching each other, and then the page won't open; use the button's Reset Wi-Fi instead. The message goes away by itself once scores come through.
 
 ## Saved networks
 
@@ -33,29 +29,21 @@ When the list is full, adding a sixth network drops the one at the bottom. The p
 
 Every network you set the panel up on is added to the top of the list. There are three ways:
 
-- **The panel's hotspot.** While it shows **SETUP**, the panel starts its own Wi-Fi network named **Game Day** and six letters and numbers, like **Game Day 2f6a70**. The screen shows the name. Join it from any phone or laptop and a setup page opens. Pick your Wi-Fi network, enter the password and save.
+- **The panel's hotspot.** While it shows **SETUP**, the panel starts its own Wi-Fi network named **Game Day** and six letters and numbers, like **Game Day 2f6a70**. Once the hotspot is up, the screen says **SETUP / Scan to / join Wi-Fi** with a QR code, the hotspot's Wi-Fi code: point your phone's camera at it and tap to join, instead of looking for the network in your phone's list. The screen also takes turns showing the hotspot's name, so you can join it from any phone or laptop. A setup page opens. Pick your Wi-Fi network, enter the password and save.
 - **The installer.** Right after you install the firmware from your browser, the installer offers to put the panel on your Wi-Fi. Enter your network name and password there. See [Set up your panel](/get-started/setup/#put-it-on-wi-fi-from-the-installer).
 - **The Game Day app**, a separate project that may not find panels running this firmware, finds the panel over Bluetooth where it works and hands it the network and password. While the panel joins, it shows **JOINING** and the network's name. See [The Game Day app](/get-started/the-app/).
 
 The six characters are the same as in the panel's address, so two panels in one house are easy to tell apart. See [Set up your panel](/get-started/setup/).
 
-:::note[Coming in the next release]
-The QR code on the setup screen is the hotspot's Wi-Fi code. Point your phone's camera at it and tap to join, instead of looking for the network in your phone's list. It shows once the hotspot is up, with the words **SETUP / Scan to / join Wi-Fi**.
-:::
-
 Taking the panel somewhere new? When it can't find any saved network, it says **Wi-Fi lost** and, within a few minutes, brings up its hotspot, as below, so you can give it the new network there. To put it into setup straight away, use [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
 
 ## When Wi-Fi drops
 
-A short drop, like a mesh system moving the panel to another access point, doesn't show. After 10 seconds without Wi-Fi the panel covers the board with **Wi-Fi lost** and the QR code for the Game Day app, so a stale score isn't left up.
+A short drop, like a mesh system moving the panel to another access point, doesn't show. After 10 seconds without Wi-Fi the panel covers the board with **Wi-Fi / lost / reconnecting**, with no QR code, so a stale score isn't left up. It keeps trying its saved networks the whole time.
 
-- Join the panel's **Game Day** hotspot as above. It comes up within a few minutes of the panel losing Wi-Fi. A changed router password is the common case: give the panel the new password there.
+- Within a few minutes the panel's **Game Day** hotspot comes up, and the screen says **Wi-Fi / lost / scan to fix** with the hotspot's QR code, taking turns with the hotspot's name. Scan the code with your phone's camera to join the hotspot, or join it by name, and give the panel the new network or password. A changed router password is the common case.
 - After 30 seconds, the panel turns Bluetooth back on so the Game Day app can reach it, where the app works with this firmware.
 - After a minute without its network, a panel that was on it earlier restarts itself once, to recover. It never restarts while the app is connected to it.
-
-:::note[Coming in the next release]
-The panel covers the board with **Wi-Fi / lost / reconnecting**, with no QR code, while it tries to get back on. Once its hotspot is up, it says **Wi-Fi / lost / scan to fix** with the hotspot's QR code and takes turns showing the hotspot's name. Scan the code with your phone's camera to join the hotspot and give the panel the new network or password. The panel keeps trying its saved networks the whole time.
-:::
 
 When the network comes back, the panel rejoins and the board comes back by itself.
 
@@ -65,10 +53,6 @@ To see how often it happens, look under **Diagnostics** in the Device card on th
 
 Every panel has a name on your network, `gameday-` and six characters, like `gameday-2f6a70`. Its device page is at that name plus `.local`, like `gameday-2f6a70.local`. The panel shows the address when it joins Wi-Fi, and again when you hold the boot button for about 1.5 seconds. The device page shows it in the Device card under **Address** and **Name**.
 
-Some phones can't open `.local` addresses. Use the panel's IP address instead, a number like `192.168.1.50`. The panel shows it with the address on a boot button hold, and the ticker gives it until you pick a team.
-
-:::note[Coming in the next release]
-The QR code the panel shows when it joins Wi-Fi opens its device page by IP address, like `http://192.168.1.50/`, so a phone that can't open `.local` addresses gets there with its camera.
-:::
+Some phones can't open `.local` addresses. Use the panel's IP address instead, a number like `192.168.1.50`. The QR code the panel shows when it joins Wi-Fi opens its device page by IP address, like `http://192.168.1.50`, so a phone that can't open `.local` addresses gets there with its camera. The panel also shows the IP address with the address on a boot button hold, and the ticker gives it until you pick a team.
 
 The panel treats your home network as trusted. Anyone on your Wi-Fi can open its device page and change its settings, and it isn't designed to be reached from the internet, so don't forward a port to it.

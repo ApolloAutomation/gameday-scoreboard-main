@@ -8,7 +8,7 @@
 
 ![Touchdown fireworks on the panel](docs/site/media/touchdown.gif)
 
-A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League.
+A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS, the Premier League, golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series.
 
 Watch the [full demo](https://apolloautomation.github.io/gameday-scoreboard-main/) on the installer page. The [docs](docs/wiki/src/content/docs/) cover setup, every setting, each sport's board, troubleshooting and running the firmware on your own board.
 
@@ -20,10 +20,12 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance and where the ball is (one switch) and the last play (another); the clock keeps its own row and never goes in the ticker
 - Full-screen splashes in your team's color for touchdowns, field goals, extra points and two-point conversions, the opponent's scores acknowledged in theirs, and a victory splash on a win
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs and goals get the fireworks too
+- Golf: follow the PGA Tour or the LPGA Tour like a team, with this week's tournament and the top of its leaderboard, and the next event and its days between tournaments
+- Racing: follow Formula 1 or the NASCAR Cup Series like a team, with the race weekend's next session and its start time, the latest session's order with car numbers and gaps, the race winner's splash, and the next race between weekends
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
 - Live games: follows a random game in progress in the leagues you choose and moves on when it ends
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
-- Up to 16 favorite teams from any league, cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
+- Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
 - Adapts to one 64x64 panel (logos side by side, stacked scores) or one 128x64 panel or two 64x64 side by side (logos at the edges, big scores, records and pips in the middle); one firmware, the count is a setting
 
@@ -44,14 +46,12 @@ The MoonHub75 pinout, which the M-1 Rev6 shares, under the names ESPHome uses (t
 ## Install
 
 1. Open the [installer page](https://apolloautomation.github.io/gameday-scoreboard-main/), plug the controller in over USB, and click Install. That page is for the scoreboard75 controller board, which starts on a 128x64 display. Have an Apollo M-1 (Rev6) or another controller on the MoonHub75 pinout? Use the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) instead: it asks whether yours drives one 64x64 panel or a 128x64 display before you click Install, so the first boot uses the right layout.
-2. Enter your WiFi details in the dialog that follows the install. If you skip it, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows the name on screen; join it and a setup page opens.
-3. Once it's on WiFi the panel shows the `gameday-xxxxxx.local` name of its own page. Open that name on your phone or computer and pick your team there, or add the panel to Home Assistant (below). Until you pick a team or a mode, from that page or Home Assistant, the ticker asks you to and gives the panel's IP address for phones that can't resolve `.local` names. Holding the controller's boot button for 1.5 seconds shows the name and the IP address again any time.
+2. Enter your WiFi details in the dialog that follows the install. If you skip it, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows its name and a QR code for it. Point any iPhone or Android camera at the code to join the hotspot, or join it by name from any phone or laptop, and a setup page opens.
+3. Once it's on WiFi the panel's QR code opens its own page by IP address, and the panel shows the page's `gameday-xxxxxx.local` name. Scan the code, or open that name on your phone or computer on the same WiFi, and pick your team there, or add the panel to Home Assistant (below). Until you pick a team or a mode, from that page or Home Assistant, the ticker asks you to and gives the panel's IP address for phones that can't resolve `.local` names. Holding the controller's boot button for 1.5 seconds shows the name and the IP address again any time.
 
 From the first Apollo Automation release on, the project's site at that address has the installers and the demo, the DIY, support and changelog pages, and the update feed the panels read. The [docs](docs/wiki/src/content/docs/) are in this repo.
 
-While it waits for WiFi, and right after it joins, the panel also shows a QR code for the Game Day app. That app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware; the hotspot and the device page do everything it does.
-
-From the next release the QR code needs no app: while the panel is off WiFi and its hotspot is up (during setup, and a few minutes into an outage), it is the Wi-Fi code for that hotspot, which any iPhone or Android camera joins, and once the panel is on WiFi it opens the device page by IP address. A phone's camera and browser are enough to set a panel up.
+A phone's camera and browser are enough to set a panel up. The QR code is the hotspot's Wi-Fi code whenever the panel is off WiFi and its hotspot is up, during setup and a few minutes into an outage, so a new router or password is fixed the same way. None of it needs the Game Day app, a separate project that Apollo Automation does not maintain, which may not find panels running this firmware; the hotspot and the device page do everything it does.
 
 Team changes take effect immediately and survive reboots. Wrong panel size? Click the matching picture in the Setup card. Nothing needs reflashing to change teams or layouts.
 
@@ -62,7 +62,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | Setting | What it does |
 | --- | --- |
 | Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every few minutes |
-| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team and every Division I men's college basketball team, a tab per league, plus an "On now" tab |
+| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team and every Division I men's college basketball team, a tab per league, plus an "On now" tab. The Golf tab has the PGA Tour and the LPGA Tour and the Racing tab Formula 1 and the NASCAR Cup Series, each followed like a team |
 | Timezone | Follows the browser's zone unless you pick one by hand; used for kickoff times |
 | Ticker: game situation, last play, odds and TV | Choose what scrolls along the bottom. Game situation is down and distance in football, the count and outs in baseball, and goals, cards and stats in soccer |
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
@@ -94,7 +94,7 @@ esphome run gameday.yaml
 
 ## How it works
 
-The `gameday` component asks ESPN's public site API for the team's next event, then polls that game's own scoreboard entry, in every league: every 15 minutes while the game is far off, every minute inside the last hour, every 10 seconds during the game, showing ESPN's clock as it arrives, and every minute for half an hour after the final (ten minutes for baseball). After a failed read it waits longer before trying again. The JSON is streamed through a filter on the device so a scoreboard of several hundred kilobytes never has to fit in memory at once. Score deltas between polls decide the splashes, the same rules the blueprint uses. Logos are ESPN's dark-background PNGs (the plain one when a team has no dark version), decoded and shrunk to 32x32 on the ESP32.
+The `gameday` component asks ESPN's public site API for the team's next event, then polls that game's own scoreboard entry, in every league: every 15 minutes while the game is far off, every minute inside the last hour, every 10 seconds during the game, showing ESPN's clock as it arrives, and every minute for half an hour after the final (ten minutes for baseball). After a failed read it waits longer before trying again. The JSON is streamed through a filter on the device so a scoreboard of several hundred kilobytes never has to fit in memory at once. Score deltas between polls decide the splashes, the same rules the blueprint uses. Logos are ESPN's dark-background PNGs (the plain one when a team has no dark version), decoded and shrunk to 32x32 on the ESP32. A golf tour is read differently: ESPN's scoreboard header for the tour (about 19 KB) gives the tournament and the top 25, every minute while a round is played and every 5 minutes between rounds, and after a final the tour's season calendar names the next event. A racing series is read the same way: its scoreboard header lists the race weekend's sessions with each one's order (up to about 95 KB for an F1 weekend), every 30 seconds while a race runs, every minute in practice and qualifying, and closer to each session as it nears.
 
 The parser and game logic have host tests: `make -C tests` (needs g++). The device page has browser tests against a mock of the panel's web server: in `tests/web`, run `npm ci` and `npx playwright install chromium` once, then `npm test` (needs Node and Python 3). To refresh the team list at the start of a season, run `python3 scripts/build_teams.py` and commit the regenerated header.
 
@@ -110,9 +110,9 @@ The parser and game logic have host tests: `make -C tests` (needs g++). The devi
 The panel is a score display, and it treats your home network as trusted.
 Anyone already on your Wi-Fi can open its page and change the team, and
 updates are not password protected. That is a deliberate trade: it keeps
-setup to one tap in the app and keeps the panel working when your phone
-is the only thing that knows it exists. It is not designed to be exposed
-to the internet, so do not forward a port to it.
+setup to a scan of the panel's QR code and keeps the panel working when
+your phone is the only thing that knows it exists. It is not designed to
+be exposed to the internet, so do not forward a port to it.
 
 ## Contributing
 

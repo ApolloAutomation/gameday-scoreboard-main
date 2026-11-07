@@ -34,10 +34,14 @@
   const REPO = "ApolloAutomation/gameday-scoreboard-main";
 
   // The leagues the firmware knows (components/gameday/leagues.h), in tab
-  // order. prefix: team list label; tab: picker tab; name: the long name;
-  // path: ESPN's; byId: logo files named by team id; scan: extra query for
-  // today's scoreboard. scripts/build_web.py checks prefix, path, logo and
-  // byId against leagues.h and stops the build when they differ.
+  // order. prefix: team list label; tab: picker tab (leagues with the same
+  // one share it); name: the long name; path: ESPN's; byId: logo files named
+  // by team id; file: one logo for the whole league ("" for none); scan:
+  // extra query for today's scoreboard; board: a leaderboard sport ("golf"
+  // for a golf tour, "racing" for a racing series), followed like a team but
+  // never a favorite, a Live games league or in On now. scripts/build_web.py
+  // checks prefix, path, logo and byId against leagues.h and stops the build
+  // when they differ.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
     ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&" },
@@ -48,11 +52,23 @@
     wnba: { prefix: "WNBA", tab: "WNBA", name: "WNBA", path: "basketball/wnba", logo: "wnba", byId: false, scan: "" },
     mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&" },
     nhl: { prefix: "NHL", tab: "NHL", name: "NHL", path: "hockey/nhl", logo: "nhl", byId: false, scan: "" },
+    pga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/pga", logo: "leagues", byId: false, file: "pgatour", scan: "", board: "golf" },
+    lpga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/lpga", logo: "leagues", byId: false, file: "lpga", scan: "", board: "golf" },
+    f1: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/f1", logo: "leagues", byId: false, file: "f1", scan: "", board: "racing" },
+    // ESPN has no NASCAR logo (its own icon is a dark flag the page can't show)
+    nascar: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/nascar-premier", logo: "leagues", byId: false, file: "", scan: "", board: "racing" },
   };
   const lgInfo = (lg) => LEAGUES[lg] || LEAGUES.nfl;
+  // A golf tour or a racing series: its board is a leaderboard
+  const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
+  const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
+  // The picker tab a league is on: the first league with the same tab text.
+  const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
+  // "" for a league with no logo: its image stays hidden.
   const logoUrl = (league, id, abbr) => {
     const l = lgInfo(league);
-    return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.byId ? id : String(abbr).toLowerCase()}.png`;
+    if (l.file === "") return "";
+    return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.file || (l.byId ? id : String(abbr).toLowerCase())}.png`;
   };
   const keyOf = (t) => t[0] + ":" + t[1];
   const teamByKey = (key) => TEAMS.find((t) => keyOf(t) === key);
@@ -93,6 +109,10 @@
         <div class="team" id="tB"><img alt=""><div class="abbr">---</div><div class="rec"></div><div class="pips"><i></i><i></i><i></i></div></div>
       </div>
       <div class="gname" id="gname" hidden></div>
+      <div class="golf" id="golf" hidden>
+        <div class="gt"><span id="golfSt"></span><span id="golfWhen"></span></div>
+        <ol id="golfRows"></ol>
+      </div>
       <div class="msg" id="msg" hidden></div>
       <div class="ticker" id="ticker">Waiting for the device</div>
       <div class="gone" id="gone" hidden></div>
@@ -146,7 +166,7 @@
           <div class="ctl" data-sport="baseball"><label>Count and at-bat<small>Baseball: the count, outs, pitcher and batter.</small></label><button class="sw" data-set="count" aria-label="Count and at-bat"></button></div>
           <div class="ctl" data-sport="soccer"><label>Match stats<small>Soccer: goals, cards, possession and shots.</small></label><button class="sw" data-set="match" aria-label="Match stats"></button></div>
           <div class="ctl"><label>Last play<small>ESPN's latest play in every sport. In soccer, the latest goal or card.</small></label><button class="sw" data-set="play" aria-label="Last play"></button></div>
-          <div class="ctl"><label>Pre-game odds and TV<small>The line, over/under and TV channel before the start, in every league, when ESPN has them.</small></label><button class="sw" data-set="odds" aria-label="Pre-game odds and TV"></button></div>
+          <div class="ctl"><label>Pre-game odds and TV<small>The line, over/under and TV channel before the start, in every league, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it. Racing: the TV channel.</small></label><button class="sw" data-set="odds" aria-label="Pre-game odds and TV"></button></div>
         </div>
       </div>
       <div class="card">
@@ -162,7 +182,7 @@
       </div>
       <div class="card">
         <h2>Favorites</h2>
-        <p class="hint">Up to 16 teams from any league. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
+        <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
         <div class="ctl"><label>Only today's games<small>The playlist skips favorites that aren't playing today.</small></label><button class="sw" data-set="today" aria-label="Only today's games"></button></div>
         <div id="favCtls"></div>
         <button class="btn" id="favAdd">Add a favorite</button>
@@ -195,7 +215,7 @@
         <div class="ctl" id="tzpick" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
         <div class="sub">Startup</div>
         <div class="ctl">
-          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 20 seconds. Turn it off to go straight to the scoreboard. Hold the boot button any time to show the address again.</small></label>
+          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 18 seconds, or until you pick a team on a new panel. Turn it off to go straight to the scoreboard once a team is picked. Hold the boot button any time to show the address again.</small></label>
           <button class="sw" data-set="bootaddr" aria-label="Show how to connect when the panel starts"></button>
         </div>
       </div>
@@ -490,9 +510,87 @@
     return g.sit || "";
   };
 
+  // An event's days, "Nov 12-15" or "Oct 29-Nov 1", in the panel's zone: a
+  // golf event's first and last day (midnight Eastern, read at noon Eastern,
+  // shift 43200) or a race weekend's (real times, shift 0).
+  const golfDates = (start, end, shift = 43200) => {
+    if (!start) return "";
+    const zone = (S && S.tz_iana) || undefined;
+    const part = (t) => {
+      try {
+        const p = new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short", day: "numeric" }).formatToParts(new Date((t + shift) * 1000));
+        return { m: p.find((x) => x.type === "month").value, d: p.find((x) => x.type === "day").value };
+      } catch (_) { return { m: "", d: "" }; }
+    };
+    const a = part(start), z = part(end || start);
+    if (a.m === z.m && a.d === z.d) return a.m + " " + a.d;
+    return a.m + " " + a.d + "-" + (a.m === z.m ? "" : z.m + " ") + z.d;
+  };
+  // Golf (sport 5): the tour's leaderboard in place of the two teams.
+  const renderGolf = (g) => {
+    const golf = g.golf || {};
+    const st = $("#gstate");
+    const ph = golf.ph || 0;  // 0 before, 1 round on, 2 between rounds, 3 final, 4 canceled
+    st.classList.toggle("live", ph === 1);
+    st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(golf.st || "").toUpperCase();
+    $("#golfSt").textContent = ph === 0 ? "" : golf.st || "";
+    const next = golf.next;
+    $("#golfWhen").textContent = ph === 0 ? golfDates(golf.start, golf.end)
+      : next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end) : "";
+    const ol = $("#golfRows");
+    ol.innerHTML = "";
+    for (const r of golf.rows || []) {
+      const li = el("li", r.w ? "w" : null);
+      li.appendChild(el("span", "p", r.p || ""));
+      li.appendChild(el("span", "n", r.n || ""));
+      const sc = String(r.s || "");
+      li.appendChild(el("span", "s " + (sc[0] === "-" ? "u" : sc[0] === "+" ? "o" : sc === "E" ? "e" : ""), sc));
+      li.appendChild(el("span", "t", r.t || ""));
+      ol.appendChild(li);
+    }
+  };
+  // "Sat 9:30 AM" in the panel's zone
+  const dayTime = (t) => {
+    if (!t) return "";
+    try {
+      return new Intl.DateTimeFormat("en-US", { timeZone: (S && S.tz_iana) || undefined, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(t * 1000));
+    } catch (_) { return ""; }
+  };
+  // Racing (sport 6): the session's order in golf's place, the car numbers
+  // and gaps in its score and thru columns.
+  const renderRace = (g) => {
+    const race = g.race || {};
+    const st = $("#gstate");
+    const ph = race.ph || 0;  // 0 before, 1 on track, 2 between sessions, 3 the race's final, 4 canceled
+    st.classList.toggle("live", ph === 1);
+    st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(race.st || "").toUpperCase();
+    $("#golfSt").textContent = ph === 0 ? "" : race.st || "";
+    const nx = race.nx ? race.nx + ", " + dayTime(race.at) : "";
+    const next = race.next;
+    $("#golfWhen").textContent = ph === 0 ? nx || golfDates(race.start, race.end, 0)
+      : ph === 1 || ph === 2 ? (nx ? "Next: " + nx : "")
+        : next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end, 0) : "";
+    const ol = $("#golfRows");
+    ol.innerHTML = "";
+    for (const r of race.rows || []) {
+      const li = el("li", r.w ? "w" : null);
+      li.appendChild(el("span", "p", r.p || ""));
+      li.appendChild(el("span", "n", r.n || ""));
+      li.appendChild(el("span", "s", r.v || ""));
+      li.appendChild(el("span", "t", r.d || ""));
+      ol.appendChild(li);
+    }
+  };
+
   const renderBoard = () => {
     const b = $("#board");
     const g = game;
+    // A leaderboard (golf, sport 5; racing, 6) in place of the two teams
+    const lboard = !!(g && g.s !== "NOT_FOUND" && (g.sport === 5 || g.sport === 6));
+    b.classList.toggle("golfing", lboard);
+    $("#golf").hidden = !lboard;
+    $("#golf").classList.toggle("race", lboard && g.sport === 6);
+    b.querySelector(".row").hidden = lboard;
     const st = $("#gstate");
     const msg = $("#msg");
     // misses is top level in the state document, not in game. Three in a row is
@@ -523,13 +621,22 @@
         : captive ? "This Wi-Fi needs a sign-in. Use a home network or a hotspot."
         : g.why ? g.why
         : favMode ? "None of your favorites has a game coming up"
-          : liveMode ? "No live games right now" : "No upcoming game for this team";
+          : liveMode ? "No live games right now"
+            : S && S.team && isRacing(S.team.l) ? "No upcoming race for this series"
+              : S && S.team && isBoard(S.team.l) ? "No upcoming event for this tour" : "No upcoming game for this team";
       $("#clock").innerHTML = "&nbsp;";
       $("#down").textContent = "";
       return;
     }
     b.classList.remove("empty");
     msg.hidden = true;
+    if (lboard) {
+      if (g.sport === 6) renderRace(g);
+      else renderGolf(g);
+      $("#clock").innerHTML = "&nbsp;";
+      $("#down").textContent = "";
+      return;
+    }
     st.classList.toggle("live", g.s === "IN");
     st.textContent = g.s === "IN" ? "LIVE" : g.s === "POST" ? endedAs(g).toUpperCase() : "UPCOMING";
     const football = !g.sport;
@@ -621,7 +728,7 @@
   };
   // One chip per league with teams, built once: a redraw only sets each one's
   // state, so it never takes the keyboard focus off the chip it is on.
-  const liveChips = Object.keys(LEAGUES).filter((lg) => TEAMS.some((t) => t[0] === lg)).map((lg) => {
+  const liveChips = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && TEAMS.some((t) => t[0] === lg)).map((lg) => {
     const b = el("button", "chip", LEAGUES[lg].tab);
     setOn(b, false, "aria-pressed");
     // From the list as it is now, not as it was when the chips were drawn:
@@ -702,7 +809,9 @@
       const img = el("img");
       img.loading = "lazy";
       img.alt = "";
-      if (t) img.src = logoUrl(t[0], t[1], t[2]);
+      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
       row.appendChild(img);
       const name = el("label", null, (i + 1) + ". " + (t ? t[3] : key));
       const slot = favSlots[i] ?? i;
@@ -908,7 +1017,10 @@
   const loadGames = async (force) => {
     if (!force && games && Date.now() - gamesAt < 60000) return games;
     const d = easternDate();
-    const urls = Object.keys(LEAGUES).map((lg) => [lg, `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
+    // Golf's and racing's scoreboards have no home and away (golf's is
+    // hundreds of kilobytes): not On now.
+    const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg))
+      .map((lg) => [lg, `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
     const out = [];
     await Promise.all(urls.map(async ([lg, u]) => {
       try {
@@ -1010,7 +1122,12 @@
     const cur = S ? refKey(S.team) : "";
     const tiles = $("#tiles");
     tiles.innerHTML = "";
-    const list = TEAMS.filter((t) => (q ? (t[3] + " " + t[2]).toLowerCase().includes(q) : t[0] === league));
+    // A tab can hold more than one league (Golf: both tours; Racing: both
+    // series). A tour or a series is never a favorite yet, and search finds
+    // one by its tab's name too.
+    const words = (t) => (isBoard(t[0]) ? lgInfo(t[0]).tab + " " : "") + t[3] + " " + t[2];
+    const list = TEAMS.filter((t) => !(pickFav && isBoard(t[0]))
+      && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
       return;
@@ -1019,7 +1136,9 @@
       const tile = el("button", "tile" + (keyOf(t) === cur ? " on" : ""));
       const img = el("img");
       img.loading = "lazy";
-      img.src = logoUrl(t[0], t[1], t[2]);
+      const src = logoUrl(t[0], t[1], t[2]);
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
       img.alt = "";
       tile.appendChild(img);
       tile.appendChild(el("div", "n", t[3]));
@@ -1042,7 +1161,10 @@
     pickerFrom = document.activeElement;
     $(".sheet").setAttribute("aria-label", fav ? "Add a favorite" : "Choose a team");
     const cur = S ? teamByKey(refKey(S.team)) : null;
-    league = cur ? cur[0] : "nfl";
+    league = cur && !(fav && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
+    // Golf and racing can't be a favorite yet: no Golf or Racing tab while
+    // adding one.
+    tabButtons.forEach((b) => { b.hidden = fav && isBoard(b.dataset.lg); });
     try {
       const list = await loadGames(false);
       if (list.some((g) => g.state === "in")) league = "now";
@@ -1053,9 +1175,12 @@
     $("#modal").classList.add("open");
     setTimeout(() => $("#q").focus(), 50);
   };
-  // One tab per league that has teams in this firmware's list.
+  // One tab per league that has teams in this firmware's list, and one for
+  // leagues that share a tab (Golf, Racing).
+  const tabsShown = new Set();
   for (const lg of Object.keys(LEAGUES)) {
-    if (!TEAMS.some((t) => t[0] === lg)) continue;
+    if (!TEAMS.some((t) => t[0] === lg) || tabsShown.has(LEAGUES[lg].tab)) continue;
+    tabsShown.add(LEAGUES[lg].tab);
     const b = el("button", null, LEAGUES[lg].tab);
     b.dataset.lg = lg;
     b.setAttribute("role", "tab");
@@ -1072,12 +1197,15 @@
   tabButtons.forEach((b, i) => {
     b.onclick = () => showTab(b);
     b.onkeydown = (ev) => {
-      const n = tabButtons.length;
-      const j = { ArrowRight: i + 1, ArrowLeft: i - 1 + n, Home: 0, End: n - 1 }[ev.key];
-      if (j === undefined) return;
+      // The tabs on show: Golf and Racing hide while adding a favorite.
+      const shown = tabButtons.filter((x) => !x.hidden);
+      const n = shown.length;
+      const at = shown.indexOf(b);
+      const j = { ArrowRight: at + 1, ArrowLeft: at - 1 + n, Home: 0, End: n - 1 }[ev.key];
+      if (j === undefined || at < 0) return;
       ev.preventDefault();
-      tabButtons[j % n].focus();
-      showTab(tabButtons[j % n]);
+      shown[j % n].focus();
+      showTab(shown[j % n]);
     };
   });
   $("#q").oninput = renderTiles;
@@ -1103,8 +1231,9 @@
     const t = S ? teamByKey(refKey(S.team)) : null;
     const img = $("#curLogo");
     if (!t) { img.style.visibility = "hidden"; $("#curName").textContent = "No team chosen"; return; }
-    img.style.visibility = "visible";
-    img.src = logoUrl(t[0], t[1], t[2]);
+    const src = logoUrl(t[0], t[1], t[2]);
+    img.style.visibility = src ? "visible" : "hidden";
+    if (src) img.src = src;
     $("#curName").textContent = t[3];
     $("#curLg").textContent = lgInfo(t[0]).name;
   };

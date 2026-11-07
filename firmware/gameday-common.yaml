@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.10.1"
+  version: "2026.10.2"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -683,6 +683,15 @@ gameday:
         # Built from panel_text() pieces with a line break that panel_text()
         # would turn into a space, so it goes to the board as it is.
         next_line: !lambda 'return x.next_line;'
+        # A leaderboard sport (golf, sport 5; racing, 6): its leaderboard, or
+        # its card (the event's name and dates or next session in next_line)
+        # when there is no leaderboard to show.
+        board: !lambda 'return x.board;'
+        board_card: !lambda 'return x.board_card;'
+    # The leaderboard's rows, read from the component (board_fields), so the
+    # columns aren't copied into script arguments. A script with no delay
+    # runs to its end here: the rows change in the same frame as the layout.
+    - script.execute: gd_board
     - lambda: |-
         id(gd_team_logo_url) = x.team_logo;
         id(gd_opp_logo_url) = x.opponent_logo;

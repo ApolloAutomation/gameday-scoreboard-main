@@ -23,13 +23,9 @@ The panel is made for indoor use. Keep it, its controller and its power supply o
 
 ## I don't have an iPhone. Can I still set it up?
 
-Yes. The Game Day app is for Android too, and you don't need the app at all. Set the panel up from any phone or laptop through its own hotspot. While the panel shows **SETUP**, join the Wi-Fi network it names, like `Game Day 2f6a70`, and a setup page opens. Pick your Wi-Fi network, enter the password and save.
+Yes. Any phone's camera does it, and you don't need an app. While the panel shows **SETUP**, point the camera at the QR code and tap to join the panel's own hotspot, then pick your Wi-Fi network on the setup page that opens, enter the password and save. If no page opens, open `192.168.4.1` in a browser. You can also join the hotspot from any phone or laptop by the name the panel shows, like `Game Day 2f6a70`.
 
-Once it's on your Wi-Fi, open the panel's address in a browser to pick your team and change everything the app would. See [Set up your panel](/get-started/setup/) and [The Game Day app](/get-started/the-app/).
-
-:::note[Coming in the next release]
-Any phone's camera does it. While the panel shows **SETUP**, point the camera at the QR code and tap to join the hotspot, then pick your network on the setup page. If no page opens, open `192.168.4.1` in a browser. Once the panel is on your Wi-Fi, its QR code opens the device page.
-:::
+Once the panel is on your Wi-Fi, its QR code opens the device page, where you pick your team and change every setting. You can also open the panel's address in a browser. See [Set up your panel](/get-started/setup/).
 
 ## Does it need Home Assistant?
 
@@ -46,6 +42,8 @@ No. The panel runs on its own and gets its scores from ESPN by itself. If you us
 
 In Live games with nothing on, the panel waits for the next start time instead of checking every few minutes. When a read fails, it waits longer before the next try.
 
+A golf tour or a racing series has its own schedule, like every minute during a round of golf and every 30 seconds during a race. See [Golf](/using/golf/#how-often-it-updates) and [Racing](/using/racing/#how-often-it-updates).
+
 ## What does it cost to run?
 
 Nothing beyond the panel and its electricity. There's no subscription and no account. The scores come from ESPN's public feed, and the panel reads them itself over your Wi-Fi.
@@ -55,6 +53,8 @@ If your internet plan has a data cap, **ESPN data** in the Device card on the de
 ## Can I follow more than one team?
 
 Yes. **Favorite teams** holds up to 16 teams from any league, in priority order. Turn on **Only today's games** to cycle through only the favorites playing today. When two favorites play at once, the panel sticks with the higher one, or alternates between them if you choose **Alternate**. See [Favorite teams](/using/favorites/).
+
+A golf tour or a racing series can't be a favorite yet. Follow it in **My team**. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 ## Can I use a remote?
 
