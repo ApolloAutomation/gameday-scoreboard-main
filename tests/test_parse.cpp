@@ -1,4 +1,5 @@
 // Host tests for the ESPN parser and game logic. Build with `make` in tests/.
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -19,6 +20,7 @@
 #include "offseason.h"
 #include "panel_text.h"
 #include "recap.h"
+#include "scroll_speed.h"
 #include "setup_qr.h"
 #include "poll_timing.h"
 #include "startup.h"
@@ -726,6 +728,34 @@ static void test_captive() {
   // every two while reads fail on one that looked open
   CHECK(!probe_due(true, false, true, kProbeFailingRecheckMs - 1));
   CHECK(probe_due(true, false, true, kProbeFailingRecheckMs));
+}
+
+// The ticker's speed (scroll_speed.h): Scroll Speed 1 to 10 as pixels per
+// second, and the scroll time that keeps a line of any width at that pace.
+static void test_ticker_speed() {
+  using esphome::gameday::ticker_px_per_s;
+  using esphome::gameday::ticker_scroll_ms;
+  CHECK(std::fabs(ticker_px_per_s(1) - 8.0f) < 0.01f);
+  CHECK(std::fabs(ticker_px_per_s(10) - 32.0f) < 0.01f);
+  // A new panel's 5: about 15 px/s, three letters of the 5 px font a second
+  CHECK(ticker_px_per_s(5) > 14.0f && ticker_px_per_s(5) < 16.0f);
+  // Every step faster than the last, by the same ratio
+  for (int s = 1; s < 10; s++) {
+    CHECK(ticker_px_per_s(s + 1) > ticker_px_per_s(s));
+    CHECK(std::fabs(ticker_px_per_s(s + 1) / ticker_px_per_s(s) - ticker_px_per_s(2) / ticker_px_per_s(1)) < 0.001f);
+  }
+  // Out of range and NaN clamp instead of running away
+  CHECK(ticker_px_per_s(0) == ticker_px_per_s(1));
+  CHECK(ticker_px_per_s(42) == ticker_px_per_s(10));
+  CHECK(ticker_px_per_s(NAN) == ticker_px_per_s(1));
+  // 120 px of line and a 15 px gap at 1 (8 px/s): 135 px in 16.875 s
+  CHECK_EQ(ticker_scroll_ms(120, 15, 1), (uint32_t) 16875);
+  // The same line at 10 (32 px/s): 4.2 s, never a blur
+  CHECK_EQ(ticker_scroll_ms(120, 15, 10), (uint32_t) 4219);
+  // Twice the width takes twice the time at the same setting
+  CHECK(ticker_scroll_ms(240, 0, 5) > 2 * ticker_scroll_ms(120, 0, 5) - 2);
+  CHECK(ticker_scroll_ms(240, 0, 5) < 2 * ticker_scroll_ms(120, 0, 5) + 2);
+  CHECK_EQ(ticker_scroll_ms(0, 0, 5), (uint32_t) 1);
 }
 
 // The boot screen's QR codes (setup_qr.h): a Wi-Fi join code for the
@@ -5946,6 +5976,7 @@ int main() {
   test_no_game_text();
   test_captive();
   test_captive_redirect_host();
+  test_ticker_speed();
   test_setup_qr();
   test_ha_status_text();
   test_short_game_name();

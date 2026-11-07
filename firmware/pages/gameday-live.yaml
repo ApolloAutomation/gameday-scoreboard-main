@@ -16,12 +16,8 @@ esphome:
       then:
         - lambda: |-
             id(shared_scroll_speed).add_on_state_callback([](float sp) {
-              const char *cur = lv_label_get_text(id(tt_game_status_lbl));
-              size_t len = cur ? strlen(cur) : 0;
-              uint32_t per = (uint32_t) (280 - sp * 26);
-              uint32_t anim_ms = (uint32_t) (len * per);
-              if (anim_ms < 3000) anim_ms = 3000;
-              lv_obj_set_style_anim_time(id(tt_game_status_lbl), anim_ms, LV_PART_MAIN);
+              id(tt_ticker_timing).execute();
+              // Restart the scroll so the new speed shows straight away.
               lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_CLIP);
               lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_SCROLL_CIRCULAR);
             });
@@ -36,6 +32,26 @@ lvgl_canvas_fx:
     start_paused: true
 
 script:
+  # The ticker's scroll time for its current line at the Scroll Speed setting
+  # (components/gameday/scroll_speed.h): LVGL animates a circular label over a
+  # fixed time, so the time follows the line's width in pixels, and every line
+  # moves at the same pace whatever its length. Run when the line or the
+  # setting changes.
+  - id: tt_ticker_timing
+    then:
+      - lambda: |-
+          lv_obj_t *l = id(tt_game_status_lbl);
+          const char *t = lv_label_get_text(l);
+          const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+          lv_point_t sz;
+          lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+          const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
+          const float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
+          const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
+          // Only when it changes: setting the style restarts the scroll.
+          if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
+            lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+
   - id: tt_hide_splash
     mode: restart
     then:
@@ -332,16 +348,10 @@ script:
       - lambda: |-
           // Update the ticker only when its text changed: rewriting the label
           // restarts the scroll animation, and pushes arrive every few seconds.
-          // Scale the animation time with the text length so the scroll speed
-          // stays constant (LVGL animates over a fixed TIME, not a fixed speed).
           const char *cur = lv_label_get_text(id(tt_game_status_lbl));
           if (cur == nullptr || status_text != cur) {
             lv_label_set_text(id(tt_game_status_lbl), status_text.c_str());
-            float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
-            uint32_t per = (uint32_t) (280 - sp * 26);
-            uint32_t anim_ms = (uint32_t) (status_text.length() * per);
-            if (anim_ms < 3000) anim_ms = 3000;
-            lv_obj_set_style_anim_time(id(tt_game_status_lbl), anim_ms, LV_PART_MAIN);
+            id(tt_ticker_timing).execute();
           }
       - lambda: |-
           // Timeout pips: lit bar = timeout remaining, dim bar = used

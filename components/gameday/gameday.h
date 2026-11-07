@@ -31,6 +31,7 @@
 #include "recap.h"
 #include "poll_timing.h"
 #include "set_request.h"
+#include "scroll_speed.h"
 #include "setup_qr.h"
 #include "startup.h"
 #include "update_mirror.h"
