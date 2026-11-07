@@ -20,7 +20,7 @@ The Game Day app is a separate project. Apollo Automation does not maintain it, 
 
 ## If the app doesn't list your panel
 
-Add it by address. Tap the add button and enter the panel's name, like `gameday-2f6a70.local`, or its IP address, like `192.168.1.50`. Both show on the panel when it starts. To see them again, hold the button on the controller for about 1.5 seconds.
+Add it by address. Tap the add button and enter the panel's name, like `gameday-2f6a70.local`, or its IP address, like `192.168.1.50`. The panel shows its name after it joins Wi-Fi, and its ticker shows the IP address until you pick a team. To see both any time, hold the button on the controller for about 1.5 seconds.
 
 The phone has to be on the same Wi-Fi network as the panel. A guest network can keep the two apart. More in [Troubleshooting](/help/troubleshooting/).
 

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows both again. See [Wi-Fi](/using/wifi/) for more on the address.
+Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for two things your browser reads from ESPN itself: the team logos and the **On now** list. The Game Day app shows the same settings, so a change in one shows up in the other.
 
@@ -39,9 +39,9 @@ In Favorite teams, the list has one row per favorite: the live score, the final,
 
 Tap **Change team** to open the team chooser. It has a search box and a **Close** button at the top, and under them a row of tabs, one per league: **NFL**, **NCAAF** (college football), **MLB**, **MLS**, **EPL** (Premier League), **NBA**, **WNBA**, **NCAAM** (men's college basketball) and **NHL**, then **Golf** (the **PGA Tour** and the **LPGA Tour**) and **Racing** (**Formula 1** and the **NASCAR Cup Series**). ESPN has no NASCAR logo, so that tile has none. On a narrow screen the tabs wrap onto more lines, so every league and the **Close** button stay on the screen, even on a small phone. Tap a logo to follow that team, tour or series. Search looks through every league at once.
 
-The first tab, **On now**, lists today's games in every league, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
+The first tab, **On now**, lists today's games in every league except golf and racing, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
 
-The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. See [Favorite teams](/using/favorites/).
+The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. The **Golf** and **Racing** tabs are hidden there, since a tour or a series can't be a favorite yet. See [Favorite teams](/using/favorites/).
 
 ## Settings
 
@@ -71,7 +71,7 @@ Settings are grouped in cards. In the order the page shows them:
 | **Discovery**, **Unpair remote** | Pairs and unpairs a WizMote remote. See [WizMote remote](/using/remote/). |
 | Matrix | Click the picture that matches your panel: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). The panel restarts with the new layout. See [Panel sizes and layouts](/using/panel-sizes/). |
 | Timezone | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
-| **Show how to connect when the panel starts** | After it joins Wi-Fi, the panel shows a QR code that opens this page, at the panel's IP address, then the page address, for about 20 seconds. Turn it off to go straight to the scoreboard. |
+| **Show how to connect when the panel starts** | After it joins Wi-Fi, the panel shows a QR code that opens this page, at the panel's IP address, then the page address: for about 18 seconds on a panel with a team, and on a new panel for 45 seconds or until you pick a team. Turn it off and a panel with a team goes straight to the scoreboard. A new panel still shows the QR code, without the address. |
 | **Install updates automatically** | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
 | **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
