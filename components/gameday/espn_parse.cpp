@@ -20,6 +20,12 @@ static std::string site_base(League league) {
   return std::string(site_root.load(std::memory_order_relaxed)) + (l != nullptr ? l->path : "football/nfl");
 }
 
+GameSnapshot::GameSnapshot(const GameSnapshot &) = default;
+GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
+GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
+GameSnapshot &GameSnapshot::operator=(GameSnapshot &&) noexcept = default;
+GameSnapshot::~GameSnapshot() = default;
+
 const char *league_path(League league) {
   const LeagueInfo *l = league_info(league);
   if (l == nullptr)
@@ -124,6 +130,47 @@ std::string scoreboard_url(League league, uint32_t group, int64_t kickoff_epoch,
   return url;
 }
 
+std::string header_url(League league) {
+  // The header lives beside the site API, not under it: keep the root's
+  // scheme and host (a bench root has no "/apis/").
+  std::string root = site_root.load(std::memory_order_relaxed);
+  size_t at = root.find("/apis/");
+  if (at == std::string::npos) {
+    size_t host = root.find("://");
+    at = root.find('/', host == std::string::npos ? 0 : host + 3);
+  }
+  if (at != std::string::npos)
+    root.erase(at);
+  // The sport is the league path's first part: "golf/pga" is sport=golf.
+  const LeagueInfo *l = league_info(league);
+  const char *path = l != nullptr ? l->path : "golf/pga";
+  const char *slash = strchr(path, '/');
+  root += "/apis/v2/scoreboard/header?sport=";
+  root.append(path, slash != nullptr ? (size_t) (slash - path) : strlen(path));
+  root += "&league=";
+  root += league_path(league);
+  return root;
+}
+
+std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season) {
+  // The Eastern date, as every ESPN dates= parameter reads it.
+  const int64_t eastern = now_epoch - 5 * 3600;
+  int64_t days = eastern / 86400 - (eastern % 86400 < 0 ? 1 : 0);
+  int y, m, d;
+  char buf[32];
+  if (next_season) {
+    civil_from_epoch(eastern, y, m, d);
+    snprintf(buf, sizeof(buf), "?dates=%04d", y + 1);
+  } else {
+    // 1970-01-01 was a Thursday: (days + 4) % 7 is the weekday, Sunday 0.
+    int wd = (int) (((days + 4) % 7 + 7) % 7);
+    days += (2 - wd + 7) % 7;  // on to Tuesday
+    civil_from_epoch(days * 86400, y, m, d);
+    snprintf(buf, sizeof(buf), "?dates=%04d%02d%02d", y, m, d);
+  }
+  return site_base(league) + "/scoreboard" + buf;
+}
+
 std::string scan_url(League league, int64_t now_epoch) {
   std::string url = site_base(league) + "/scoreboard";
   int y, m, d;
@@ -165,8 +212,8 @@ std::string team_logo_url(League league, uint32_t espn_id, const char *abbr) {
   for (auto &c : a)
     c = (char) tolower((unsigned char) c);
   const LeagueInfo *l = league_info(league);
-  if (l == nullptr)
-    return "";
+  if (l == nullptr || is_board_sport(l->sport))
+    return "";  // a golf tour's or a racing series' board has no logo
   std::string file = l->logo_by_id ? std::to_string(espn_id) : a;
   bool scoreboard = league == League::NFL || league == League::MLB || league == League::NBA || league == League::NHL;
   return dark_logo(std::string("https://a.espncdn.com/i/teamlogos/") + l->logo_dir +
@@ -177,6 +224,12 @@ GameSnapshot team_placeholder(const Team &t) {
   GameSnapshot g;
   g.valid = true;
   g.state = GameState::PRE;
+  if (is_leaderboard(t.league)) {
+    // The card with the tour's or the series' name and nothing under it
+    g.sport = league_sport(t.league);
+    g.game_name = t.name;
+    return g;
+  }
   g.team_abbr = t.abbr;
   g.team_id = t.espn_id;
   g.team_logo = team_logo_url(t.league, t.espn_id, t.abbr);
@@ -279,7 +332,55 @@ static const char *score_word(int delta, bool ours) {
   }
 }
 
+// ---- leaderboard sports ------------------------------------------------------
+
+GolfNext &board_next(GameSnapshot &g) { return g.sport == Sport::RACING ? g.race.next : g.golf.next; }
+
+bool &board_next_unknown(GameSnapshot &g) {
+  return g.sport == Sport::RACING ? g.race.next_unknown : g.golf.next_unknown;
+}
+
+GameSnapshot board_next_snapshot(Sport sport, const GolfNext &n) {
+  return sport == Sport::RACING ? racing_next_snapshot(n) : golf_next_snapshot(n);
+}
+
+bool board_show_next(const GameSnapshot &g, int64_t now) {
+  return g.sport == Sport::RACING ? racing_show_next(g, now) : golf_show_next(g, now);
+}
+
+bool board_read_is_older(const GameSnapshot &shown, const GameSnapshot &read) {
+  return read.sport == Sport::RACING ? racing_read_is_older(shown, read) : golf_read_is_older(shown, read);
+}
+
+Splash board_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide) {
+  return cur.sport == Sport::RACING ? racing_splash(prev, cur, wide) : golf_splash(prev, cur, wide);
+}
+
+uint32_t board_poll_ms(const GameSnapshot &g, int64_t now) {
+  return g.sport == Sport::RACING ? racing_poll_ms(g, now) : golf_poll_ms(g, now);
+}
+
+bool board_off_season(const GameSnapshot &g, int64_t now) {
+  return g.sport == Sport::RACING ? racing_off_season(g, now) : golf_off_season(g, now);
+}
+
+BoardLines board_lines(const GameSnapshot &g, bool wide) {
+  return g.sport == Sport::RACING ? racing_lines(g, wide) : golf_lines(g, wide);
+}
+
+std::string board_card_text(const GameSnapshot &g, bool wide, const std::string &when) {
+  return g.sport == Sport::RACING ? racing_card_text(g, wide, when) : golf_card_text(g, wide, when);
+}
+
+std::string board_event_name(Sport sport, const std::string &name, size_t max) {
+  return sport == Sport::RACING ? racing_event_name(name, max) : golf_event_name(name, max);
+}
+
 Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
+  if (cur.sport == Sport::GOLF)
+    return golf_splash(prev, cur, false);  // the one-panel splash fits both widths
+  if (cur.sport == Sport::RACING)
+    return racing_splash(prev, cur, false);
   if (cur.sport == Sport::BASEBALL)
     return baseball_splash(prev, cur, opponent_splashes, neutral);
   if (cur.sport == Sport::SOCCER)
@@ -378,6 +479,10 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
 }
 
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
+  if (s.sport == Sport::GOLF)
+    return golf_status_text(s, o, kickoff_local);
+  if (s.sport == Sport::RACING)
+    return racing_status_text(s, o, kickoff_local);
   if (s.sport == Sport::BASEBALL)
     return baseball_status_text(s, o, kickoff_local);
   if (s.sport == Sport::SOCCER)
@@ -423,6 +528,10 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
 }
 
 std::string ha_status_text(const GameSnapshot &s, const std::string &kickoff_local) {
+  if (s.sport == Sport::GOLF)
+    return golf_ha_status_text(s, kickoff_local);
+  if (s.sport == Sport::RACING)
+    return racing_ha_status_text(s, kickoff_local);
   std::string out;
   switch (s.state) {
     case GameState::NOT_FOUND:
@@ -533,7 +642,7 @@ static int64_t tm_day_number(const struct tm &t) {
   return y * 365 + floor_div(y, 4) - floor_div(y, 100) + floor_div(y, 400) + t.tm_yday;
 }
 
-std::string kickoff_label(const struct tm &kick_local, const struct tm &now_local, bool time_tbd) {
+std::string day_label(const struct tm &kick_local, const struct tm &now_local) {
   static const char *kDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
   static const char *kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -542,18 +651,21 @@ std::string kickoff_label(const struct tm &kick_local, const struct tm &now_loca
   if (kick_local.tm_mon < 0 || kick_local.tm_mon > 11 || kick_local.tm_wday < 0 || kick_local.tm_wday > 6)
     return "";
   int64_t diff = tm_day_number(kick_local) - tm_day_number(now_local);
-  std::string when;
   if (diff == 0)
-    when = "Today";
-  else if (diff == 1)
-    when = "Tomorrow";
-  else if (diff > 1 && diff < 7)
-    when = kDays[kick_local.tm_wday];
-  else {
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%s %d", kMonths[kick_local.tm_mon], kick_local.tm_mday);
-    when = buf;
-  }
+    return "Today";
+  if (diff == 1)
+    return "Tomorrow";
+  if (diff > 1 && diff < 7)
+    return kDays[kick_local.tm_wday];
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%s %d", kMonths[kick_local.tm_mon], kick_local.tm_mday);
+  return buf;
+}
+
+std::string kickoff_label(const struct tm &kick_local, const struct tm &now_local, bool time_tbd) {
+  std::string when = day_label(kick_local, now_local);
+  if (when.empty())
+    return "";
   return when + " " + (time_tbd ? std::string("TBD") : clock_12h(kick_local));
 }
 
@@ -625,6 +737,8 @@ static std::string period_name(int period) {
 }
 
 std::string clock_text(const GameSnapshot &s) {
+  if (is_board_sport(s.sport))
+    return "";  // the leaderboard has its own status cell
   if (s.sport == Sport::BASEBALL)
     return baseball_clock_text(s);
   if (s.sport == Sport::SOCCER)

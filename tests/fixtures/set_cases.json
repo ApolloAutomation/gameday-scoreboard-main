@@ -68,6 +68,8 @@
     {"name": "a team id with a minus sign is refused", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:-6"]], "expect": {"team": "mlb:15"}},
     {"name": "a team id in other digits is refused", "start": {"team": "mlb:15", "team_league": "mlb"}, "set": [["team", "nfl:\u0666"]], "expect": {"team": "mlb:15"}},
     {"name": "empty team is refused", "set": [["team", ""]], "expect": {"team": "nfl:6"}},
+    {"name": "a golf tour can be the team", "set": [["team", "pga:1106"]], "expect": {"team": "pga:1106"}},
+    {"name": "a racing series can be the team", "set": [["team", "f1:2030"]], "expect": {"team": "f1:2030"}},
 
     {"name": "fav slot 1", "set": [["fav1", "mlb:15"]], "expect": {"favs": ["mlb:15", "", "", ""]}},
     {"name": "fav slot 4", "set": [["fav4", "nhl:25"]], "expect": {"favs": ["", "", "", "nhl:25"]}},
@@ -76,6 +78,10 @@
     {"name": "a fav team id with a plus sign is read as the number", "start": {"favs": ["mlb:15", "", "", ""]}, "set": [["fav2", "nfl:+6"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
     {"name": "unknown fav team is refused", "start": {"favs": ["mlb:15", "nfl:6", "", ""]}, "set": [["fav2", "nfl:99999"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
     {"name": "garbage fav is refused", "start": {"favs": ["mlb:15", "nfl:6", "", ""]}, "set": [["fav2", "cowboys"]], "expect": {"favs": ["mlb:15", "nfl:6", "", ""]}},
+    {"name": "a golf tour isn't a favorite", "set": [["favs", "pga:1106,nfl:6"]], "expect": {"favs": ["nfl:6", "", "", ""]}},
+    {"name": "fav1 refuses a golf tour", "start": {"favs": ["nfl:6", "", "", ""]}, "set": [["fav1", "lpga:1107"]], "expect": {"favs": ["nfl:6", "", "", ""]}},
+    {"name": "a racing series isn't a favorite", "set": [["favs", "nascar:2021,nfl:6"]], "expect": {"favs": ["nfl:6", "", "", ""]}},
+    {"name": "fav2 refuses a racing series", "start": {"favs": ["nfl:6", "", "", ""]}, "set": [["fav2", "f1:2030"]], "expect": {"favs": ["nfl:6", "", "", ""]}},
     {"name": "fav slot 5 is not a key", "set": [["fav5", "mlb:15"]], "status": 400, "expect": {"favs": ["", "", "", ""]}},
     {"name": "fav slot 0 is not a key", "set": [["fav0", "mlb:15"]], "status": 400, "expect": {"favs": ["", "", "", ""]}},
 
@@ -106,6 +112,13 @@
      "expect": {"team": "", "live": ["mlb", "nhl"], "live_auto": true}},
     {"name": "a fresh panel's NFL counts with no team", "start": {"team": "", "team_league": "nfl", "favs": ["mlb:15", "", "", ""]}, "set": [["live", ""]],
      "expect": {"live": ["nfl", "mlb"], "live_auto": true}},
+    {"name": "live leaves golf out", "set": [["live", "pga,mlb"]], "expect": {"live": ["mlb"], "live_auto": false}},
+    {"name": "live of only golf is automatic", "start": {"live": ["mlb"], "live_auto": false}, "set": [["live", "pga"]], "expect": {"live": ["nfl"], "live_auto": true}},
+    {"name": "auto leaves a golf team's league out", "start": {"team": "pga:1106", "team_league": "pga"}, "set": [["live", ""]], "expect": {"live": ["nfl"], "live_auto": true}},
+    {"name": "auto leaves golf out beside a favorite", "start": {"team": "pga:1106", "team_league": "pga", "favs": ["mlb:15", "", "", ""]}, "set": [["live", ""]],
+     "expect": {"live": ["mlb"], "live_auto": true}},
+    {"name": "live leaves racing out", "set": [["live", "f1,nascar,nhl"]], "expect": {"live": ["nhl"], "live_auto": false}},
+    {"name": "auto leaves a racing team's league out", "start": {"team": "f1:2030", "team_league": "f1"}, "set": [["live", ""]], "expect": {"live": ["nfl"], "live_auto": true}},
 
     {"name": "two panels", "set": [["panels", "2"]], "expect": {"panels": 2}},
     {"name": "zero panels is refused", "start": {"panels": 2}, "set": [["panels", "0"]], "expect": {"panels": 2}},

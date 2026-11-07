@@ -21,7 +21,7 @@ The Game Day Scoreboard ships with one 128x64 panel, and its firmware starts on 
 
 The logos sit at the far edges with the abbreviations and big scores between them. Under the scores is the game clock, and under that the situation row: down and distance in football, red in the red zone; the count, a diamond of the runners and the outs in baseball; the latest goal in soccer; the playoff series in basketball. The records sit under the logos, with football's timeout pips or soccer's red card marks under them. The ticker runs along the bottom.
 
-During setup, the QR code for the Game Day app sits on the left half with the words beside it.
+On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
 ### Single: 64x64
 
@@ -29,7 +29,7 @@ The two logos sit side by side at the top, with the abbreviations and scores sta
 
 A single panel has no room for the records, the timeout pips, the red card marks or the situation row, so down and distance, the count and the soccer goals are in the ticker only, when their switches are on. See [The ticker](/using/ticker/).
 
-The off-season clock shows the date under the time, and the next game goes in the ticker. During setup, the QR code and the words take turns on the screen.
+The off-season clock shows the date under the time, and the next game goes in the ticker. On the start-up screen, the QR code and the words take turns.
 
 ## Changing the layout
 

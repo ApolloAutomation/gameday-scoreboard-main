@@ -16,12 +16,8 @@ esphome:
       then:
         - lambda: |-
             id(shared_scroll_speed).add_on_state_callback([](float sp) {
-              const char *cur = lv_label_get_text(id(tt_game_status_lbl));
-              size_t len = cur ? strlen(cur) : 0;
-              uint32_t per = (uint32_t) (280 - sp * 26);
-              uint32_t anim_ms = (uint32_t) (len * per);
-              if (anim_ms < 3000) anim_ms = 3000;
-              lv_obj_set_style_anim_time(id(tt_game_status_lbl), anim_ms, LV_PART_MAIN);
+              id(tt_ticker_timing).execute();
+              // Restart the scroll so the new speed shows straight away.
               lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_CLIP);
               lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_SCROLL_CIRCULAR);
             });
@@ -36,6 +32,26 @@ lvgl_canvas_fx:
     start_paused: true
 
 script:
+  # The ticker's scroll time for its current line at the Scroll Speed setting
+  # (components/gameday/scroll_speed.h): LVGL animates a circular label over a
+  # fixed time, so the time follows the line's width in pixels, and every line
+  # moves at the same pace whatever its length. Run when the line or the
+  # setting changes.
+  - id: tt_ticker_timing
+    then:
+      - lambda: |-
+          lv_obj_t *l = id(tt_game_status_lbl);
+          const char *t = lv_label_get_text(l);
+          const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+          lv_point_t sz;
+          lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+          const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
+          const float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
+          const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
+          // Only when it changes: setting the style restarts the scroll.
+          if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
+            lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+
   - id: tt_hide_splash
     mode: restart
     then:
@@ -54,6 +70,7 @@ script:
           const bool wide = W >= 128;
           lv_obj_set_size(id(tt_game_container), W, 64);
           lv_obj_set_size(id(tt_no_game_container), W, 64);
+          lv_obj_set_size(id(gd_board_container), W, 64);
           lv_obj_set_size(id(tt_splash), W, 64);
           lv_obj_set_width(id(tt_splash_lbl), W);
           lv_obj_set_width(id(tt_no_game_msg_lbl), W);
@@ -157,6 +174,64 @@ script:
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
             lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
           }
+          // The leaderboard (golf, racing): a status row and six rows of
+          // place, name, value (golf's score to par, racing's car number) and
+          // (wide) detail (holes played, a gap), in spleen_8 (5 px a
+          // character). Each column is its own label, cut to fit by the
+          // component. gd_board sets the one-panel name width and value
+          // column for the sport on the board.
+          {
+            lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
+                                 id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
+            lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
+                                  id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
+            lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
+                                   id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
+            lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
+                                    id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
+            if (wide) {
+              // The event's name left, the status right, at W - 2
+              lv_obj_set_pos(id(gd_board_title_lbl), 2, 0);
+              lv_obj_set_width(id(gd_board_title_lbl), W - 4);
+              lv_obj_clear_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_board_status_lbl), W - 2);
+              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
+            } else {
+              lv_obj_add_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_board_status_lbl), W);
+              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
+            }
+            for (int i = 0; i < 6; i++) {
+              // Each row's look is set here, once, rather than per label in
+              // the widget list: 24 labels' worth of setup code.
+              lv_obj_t *cells[4] = {gpos[i], gname[i], gvalue[i], gdetail[i]};
+              for (int c = 0; c < 4; c++) {
+                lv_obj_set_style_text_font(cells[c], id(spleen_8), 0);
+                lv_label_set_long_mode(cells[c], LV_LABEL_LONG_CLIP);
+                lv_obj_set_style_text_align(cells[c], c == 1 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
+                // Place and detail are gray; name and value get their colors
+                // from gd_board.
+                lv_obj_set_style_text_opa(cells[c], c == 2 ? LV_OPA_COVER : c == 1 ? 230 : 191, 0);
+                if (c == 0 || c == 3)
+                  lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
+              }
+              const int y = 8 + 8 * i;
+              lv_obj_set_pos(gpos[i], wide ? 2 : 0, y);
+              lv_obj_set_width(gpos[i], 10);
+              lv_obj_set_pos(gname[i], wide ? 16 : 12, y);
+              lv_obj_set_width(gname[i], wide ? 55 : 35);
+              lv_obj_set_pos(gvalue[i], wide ? 74 : 49, y);
+              lv_obj_set_width(gvalue[i], 15);
+              lv_obj_set_pos(gdetail[i], 94, y);
+              lv_obj_set_width(gdetail[i], 30);
+              if (wide)
+                lv_obj_clear_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
+              else
+                lv_obj_add_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
+            }
+          }
           // Baseball's bases, drawn as a small diamond (first base on the
           // right), and the outs. gd_update shows them during a half inning.
           lv_obj_t *bases[3] = {id(tt_base1), id(tt_base2), id(tt_base3)};
@@ -224,6 +299,8 @@ script:
       message: string
       clock_card: bool
       next_line: string
+      board: bool
+      board_card: bool
     then:
       - lambda: |-
           id(gd_sport) = sport;
@@ -274,16 +351,10 @@ script:
       - lambda: |-
           // Update the ticker only when its text changed: rewriting the label
           // restarts the scroll animation, and pushes arrive every few seconds.
-          // Scale the animation time with the text length so the scroll speed
-          // stays constant (LVGL animates over a fixed TIME, not a fixed speed).
           const char *cur = lv_label_get_text(id(tt_game_status_lbl));
           if (cur == nullptr || status_text != cur) {
             lv_label_set_text(id(tt_game_status_lbl), status_text.c_str());
-            float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
-            uint32_t per = (uint32_t) (280 - sp * 26);
-            uint32_t anim_ms = (uint32_t) (status_text.length() * per);
-            if (anim_ms < 3000) anim_ms = 3000;
-            lv_obj_set_style_anim_time(id(tt_game_status_lbl), anim_ms, LV_PART_MAIN);
+            id(tt_ticker_timing).execute();
           }
       - lambda: |-
           // Timeout pips: lit bar = timeout remaining, dim bar = used
@@ -337,24 +408,35 @@ script:
           underline(under_scores ? id(tt_away_score_lbl) : id(tt_away_team_lbl), id(tt_away_poss), live && possession == 1);
           underline(under_scores ? id(tt_home_score_lbl) : id(tt_home_team_lbl), id(tt_home_poss), live && possession == 2);
       - lambda: |-
-          // Toggle between the game layout and the "no game" layout
+          // Toggle between the game layout, a leaderboard and the "no game"
+          // layout
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          if (clock_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
+          if (clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
             // The component's words for this screen (the finals rotation's
-            // headers and next kickoff, "No live games"), else the default.
-            const char *msg = message.empty() ? "No upcoming game" : message.c_str();
+            // headers and next kickoff, "No live games", a golf event's name
+            // and dates), else the default.
+            const char *msg = board_card ? next_line.c_str() : message.empty() ? "No upcoming game" : message.c_str();
             const char *cur = lv_label_get_text(id(tt_no_game_msg_lbl));
             if (cur == nullptr || strcmp(cur, msg) != 0)
               lv_label_set_text(id(tt_no_game_msg_lbl), msg);
             lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
+          } else if (board) {
+            lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_clear_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           }
-          // The off-season clock takes the message's place, and borrows the
-          // ticker from the hidden game layout so it keeps running under it.
-          lv_obj_t *ticker_parent = clock_card ? id(tt_no_game_container) : id(tt_game_container);
+          if (board)
+            lv_obj_clear_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
+          // The off-season clock and a leaderboard's card take the message's
+          // place, and the leaderboard the game's: each borrows the ticker
+          // from the hidden game layout so it keeps running under it.
+          lv_obj_t *ticker_parent = (clock_card || board_card) ? id(tt_no_game_container)
+                                    : board ? id(gd_board_container) : id(tt_game_container);
           if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
             lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
           if (clock_card) {
@@ -505,6 +587,59 @@ script:
                 }
                 lv_obj_clear_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
             - script.execute: tt_hide_splash
+
+  # The leaderboard (gd_board_container), from the columns the component cut
+  # to fit (espn::board_lines), already plain ASCII. It reads them from the
+  # update being drawn rather than taking them as arguments. A label is only
+  # rewritten when its text changes; rows past the list are blanked. On one
+  # panel the sport decides the name's width and whether the value column
+  # shows (board_value_narrow), so a page reload runs this after
+  # tt_apply_layout too.
+  - id: gd_board
+    then:
+      - lambda: |-
+          const gameday::UpdateFields &f = id(gameday_ctl).board_fields();
+          if (!f.board)
+            return;
+          auto put = [](lv_obj_t *lbl, const std::string &text) {
+            const char *cur = lv_label_get_text(lbl);
+            if (cur == nullptr || text != cur)
+              lv_label_set_text(lbl, text.c_str());
+          };
+          const std::string blank;
+          auto at = [&blank](const std::vector<std::string> &v, int i) -> const std::string & {
+            return i < (int) v.size() ? v[i] : blank;
+          };
+          put(id(gd_board_title_lbl), f.board_title);
+          put(id(gd_board_status_lbl), f.board_status);
+          lv_obj_set_style_text_color(id(gd_board_status_lbl), lv_color_hex(f.board_status_color), 0);
+          lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
+                               id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
+          lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
+                                id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
+          lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
+                                 id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
+          lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
+                                  id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
+          const bool one = lv_disp_get_hor_res(lv_disp_get_default()) < 128;
+          for (int i = 0; i < 6; i++) {
+            if (one) {
+              // Golf's score column, or racing's names in its room
+              lv_obj_set_width(gname[i], f.board_value_narrow ? 35 : 52);
+              if (f.board_value_narrow)
+                lv_obj_clear_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
+              else
+                lv_obj_add_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            put(gpos[i], at(f.board_pos, i));
+            put(gname[i], at(f.board_name, i));
+            put(gvalue[i], at(f.board_value, i));
+            put(gdetail[i], at(f.board_detail, i));
+            if (i < (int) f.board_value_color.size())
+              lv_obj_set_style_text_color(gvalue[i], lv_color_hex((uint32_t) f.board_value_color[i]), 0);
+            if (i < (int) f.board_name_color.size())
+              lv_obj_set_style_text_color(gname[i], lv_color_hex((uint32_t) f.board_name_color[i]), 0);
+          }
 
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
@@ -871,6 +1006,115 @@ lvgl:
                   text: ""
                   styles: ["tt_st_status_text"]
 
+        # The leaderboard (golf, racing): the event and its status on the top
+        # row, six rows of place, name, value and (wide) detail, and the
+        # ticker, which gd_update moves in. Every label clips; the component
+        # cuts each column to fit (espn::board_lines). The rows' labels are
+        # styled and laid out by tt_apply_layout, filled by gd_board, shown by
+        # gd_update. Drawn before the splash so a winner's splash covers it.
+        - obj:
+            id: gd_board_container
+            scrollbar_mode: "OFF"
+            x: 0
+            y: 0
+            width: 64
+            height: 64
+            hidden: true
+            widgets:
+              - label:
+                  id: gd_board_title_lbl
+                  x: 2
+                  y: 0
+                  width: 60
+                  text_align: LEFT
+                  long_mode: CLIP
+                  text_font: spleen_8
+                  hidden: true
+                  text: ""
+                  styles: ["tt_st_team_text"]
+              - label:
+                  id: gd_board_status_lbl
+                  x: 0
+                  y: 0
+                  width: 64
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_8
+                  text: ""
+                  styles: ["tt_st_score_text"]
+              - label:
+                  id: gd_board_pos1
+                  text: ""
+              - label:
+                  id: gd_board_name1
+                  text: ""
+              - label:
+                  id: gd_board_value1
+                  text: ""
+              - label:
+                  id: gd_board_detail1
+                  text: ""
+              - label:
+                  id: gd_board_pos2
+                  text: ""
+              - label:
+                  id: gd_board_name2
+                  text: ""
+              - label:
+                  id: gd_board_value2
+                  text: ""
+              - label:
+                  id: gd_board_detail2
+                  text: ""
+              - label:
+                  id: gd_board_pos3
+                  text: ""
+              - label:
+                  id: gd_board_name3
+                  text: ""
+              - label:
+                  id: gd_board_value3
+                  text: ""
+              - label:
+                  id: gd_board_detail3
+                  text: ""
+              - label:
+                  id: gd_board_pos4
+                  text: ""
+              - label:
+                  id: gd_board_name4
+                  text: ""
+              - label:
+                  id: gd_board_value4
+                  text: ""
+              - label:
+                  id: gd_board_detail4
+                  text: ""
+              - label:
+                  id: gd_board_pos5
+                  text: ""
+              - label:
+                  id: gd_board_name5
+                  text: ""
+              - label:
+                  id: gd_board_value5
+                  text: ""
+              - label:
+                  id: gd_board_detail5
+                  text: ""
+              - label:
+                  id: gd_board_pos6
+                  text: ""
+              - label:
+                  id: gd_board_name6
+                  text: ""
+              - label:
+                  id: gd_board_value6
+                  text: ""
+              - label:
+                  id: gd_board_detail6
+                  text: ""
+
         # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
         - obj:
             id: tt_splash
@@ -943,3 +1187,5 @@ lvgl:
       on_load:
         then:
           - script.execute: tt_apply_layout
+          # The leaderboard's one-panel columns for the sport on the board
+          - script.execute: gd_board

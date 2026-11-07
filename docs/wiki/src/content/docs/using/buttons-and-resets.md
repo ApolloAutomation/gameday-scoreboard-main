@@ -27,9 +27,9 @@ The address hold is the quickest way to find the panel again. See [Wi-Fi](/using
 
 Reset Wi-Fi is for a new router, a new Wi-Fi password, or moving the panel to another network. Start it by letting go of the button between 10 and 20 seconds, or with **Reset Wi-Fi** in the Device card on the device page. The page asks you to confirm first.
 
-The panel keeps the Wi-Fi networks it has saved and restarts into setup for 15 minutes. It shows **SETUP** and the QR code for the Game Day app, and starts its own hotspot. Put it on the new network from the app or the hotspot; see [Set up your panel](/get-started/setup/). The new network goes to the top of the saved list.
+The panel keeps the Wi-Fi networks it has saved and restarts into setup for 15 minutes. It starts its own hotspot and shows **SETUP / Scan to / join Wi-Fi** with the hotspot's QR code. Scan it with your phone's camera to join the hotspot and pick the new network; see [Set up your panel](/get-started/setup/). The new network goes to the top of the saved list.
 
-The setup screen also takes a turn saying **Unplug it to / rejoin / saved Wi-Fi**. Unplug the panel and plug it back in, and it goes back to the networks it already knows. It does that by itself after the 15 minutes too, or up to 10 minutes later if you're still setting it up from the app or the hotspot.
+The setup screen also takes a turn saying **Unplug it to / rejoin / saved Wi-Fi**. Unplug the panel and plug it back in, and it goes back to the networks it already knows. It does that by itself after the 15 minutes too, or up to 10 minutes later if you're still on its hotspot or setting it up from the Game Day app.
 
 Your team, favorites and every other setting stay as they were. To clear the saved networks, use [Factory reset](#factory-reset). To drop one network, use **Forget** on the device page; see [Wi-Fi](/using/wifi/#saved-networks).
 

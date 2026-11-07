@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.10.1"
+  version: "2026.10.2"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -270,13 +270,15 @@ wifi:
         id(gd_networks).note_connected(wifi::global_wifi_component->get_sta());
         ESP_LOGI("wifi", "Connected. Internal heap free: %u bytes",
                  (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-  # Wi-Fi is gone. Turn Bluetooth back on so the Game Day app can find the
-  # panel and hand it new credentials (a changed router password is the
-  # common case, and there is no other way back in), and say so on the
-  # screen instead of leaving a stale score up. A drop shorter than
-  # boot_wifi_lost_later's wait never covers the scoreboard. boot_check's poll
-  # repaints the normal lines by itself once Wi-Fi returns, so a router
-  # reboot resolves with no reboot of our own.
+  # Wi-Fi is gone. Turn Bluetooth back on so a Bluetooth setup (the Game Day
+  # app, Home Assistant's Improv via BLE) can find the panel and hand it new
+  # credentials, a changed router password being the common case; the
+  # fallback hotspot, which the screen's QR code joins once it is up, is the
+  # way back in with nothing but a phone. Say so on the screen instead of
+  # leaving a stale score up. A drop shorter than boot_wifi_lost_later's wait
+  # never covers the scoreboard. boot_check's poll repaints the normal lines
+  # by itself once Wi-Fi returns, so a router reboot resolves with no reboot
+  # of our own.
   on_disconnect:
     - script.execute: gd_ble_grace
     - script.execute: boot_wifi_lost_later
@@ -364,9 +366,9 @@ script:
   # that comes back from the restart is a panel that has not connected this
   # boot.
   #
-  # Hold off while the Game Day app is connected over Bluetooth, and start the
-  # minute over once it leaves, so a restart never cuts off an owner who is
-  # picking a network or typing a password.
+  # Hold off while a Bluetooth setup (the Game Day app, Home Assistant) is
+  # connected, and start the minute over once it leaves, so a restart never
+  # cuts off an owner who is picking a network or typing a password.
   #
   # on_disconnect starts this and on_connect stops it, so the minute is
   # counted from the moment of the drop.
@@ -621,7 +623,7 @@ gameday:
               return false;
             if (x == "captive")
               return true;
-            return x == "captive_clear" && !id(boot_hide_later).is_running() && !id(boot_app_qr_on);
+            return x == "captive_clear" && !id(boot_hide_later).is_running() && !id(boot_team_qr_on);
         then:
           - script.execute: boot_hide
     # Picking a team or a mode is somebody standing in front of a dark panel
@@ -681,6 +683,15 @@ gameday:
         # Built from panel_text() pieces with a line break that panel_text()
         # would turn into a space, so it goes to the board as it is.
         next_line: !lambda 'return x.next_line;'
+        # A leaderboard sport (golf, sport 5; racing, 6): its leaderboard, or
+        # its card (the event's name and dates or next session in next_line)
+        # when there is no leaderboard to show.
+        board: !lambda 'return x.board;'
+        board_card: !lambda 'return x.board_card;'
+    # The leaderboard's rows, read from the component (board_fields), so the
+    # columns aren't copied into script arguments. A script with no delay
+    # runs to its end here: the rows change in the same frame as the layout.
+    - script.execute: gd_board
     - lambda: |-
         id(gd_team_logo_url) = x.team_logo;
         id(gd_opp_logo_url) = x.opponent_logo;

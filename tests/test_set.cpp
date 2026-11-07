@@ -245,12 +245,25 @@ void test_parse_set() {
          "fav4");
   SCHECK(parse_set("fav1", "none", op, kFavMax) && op.slot == 1 && op.team.id == 0, "fav1 none");
   SCHECK(!parse_set("fav1", "nfl:99999", op, kFavMax), "fav1 unknown team");
+  SCHECK(!parse_set("fav1", "pga:1106", op, kFavMax), "fav1 refuses a golf tour");
+  SCHECK(parse_set("team", "lpga:1107", op, kFavMax) && op.team.league == (uint8_t) League::LPGA && op.team.id == 1107,
+         "a golf tour is a team");
+  SCHECK(!parse_set("fav1", "f1:2030", op, kFavMax), "fav1 refuses a racing series");
+  SCHECK(parse_set("team", "nascar:2021", op, kFavMax) && op.team.league == (uint8_t) League::NASCAR &&
+             op.team.id == 2021,
+         "a racing series is a team");
   SCHECK(parse_set("team", "none", op, kFavMax) && op.kind == SetKind::TEAM && op.team.id == 0, "team none");
   SCHECK(parse_set("team", "nfl:6x", op, kFavMax) && op.team.id == 6, "team id reads like strtoul");
 
   SCHECK(parse_set("favs", "nfl:6,bogus,nfl:6,mlb:15", op, kFavMax), "favs");
   SCHECK(op.teams.size() == 2 && op.refused.size() == 1 && op.refused[0] == "bogus", "favs drops repeats, logs bad");
   SCHECK(parse_set("favs", "nfl:1,nfl:2,nfl:3", op, 2) && op.teams.size() == 2, "favs stops at fav_max");
+  SCHECK(parse_set("favs", "pga:1106,nfl:6", op, kFavMax) && op.teams.size() == 1 && op.teams[0].id == 6 &&
+             op.refused.size() == 1 && op.refused[0] == "pga:1106",
+         "favs refuses a golf tour and logs it");
+  SCHECK(parse_set("favs", "f1:2030,nfl:6", op, kFavMax) && op.teams.size() == 1 && op.teams[0].id == 6 &&
+             op.refused.size() == 1 && op.refused[0] == "f1:2030",
+         "favs refuses a racing series and logs it");
 
   SCHECK(parse_set("rotate", "-5", op, kFavMax) && op.value == kRotateMinMinutes, "rotate -5");
   SCHECK(parse_set("rotate", "999", op, kFavMax) && op.value == kRotateMaxMinutes, "rotate 999");
@@ -344,6 +357,19 @@ void test_live_leagues() {
   SCHECK(keys(live_leagues(mlb_nba, (uint8_t) League::NFL, {(uint8_t) League::NHL})) == "mlb,nba",
          "an explicit mask ignores team and favorites");
   SCHECK(keys(live_leagues(1u << 15, (uint8_t) League::MLB, none)) == "nfl", "a mask of unknown leagues is NFL");
+  SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, none)) == "nfl", "auto skips a golf team");
+  SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, {(uint8_t) League::LPGA, (uint8_t) League::NHL})) == "nhl",
+         "auto skips golf");
+  SCHECK(keys(live_leagues(1u << (uint8_t) League::PGA, (uint8_t) League::MLB, none)) == "nfl",
+         "a mask of golf alone is NFL");
+  SCHECK(live_mask_from_keys("pga,lpga") == 0, "golf keys");
+  SCHECK(keys(live_leagues(0, (uint8_t) League::F1, none)) == "nfl", "auto skips a racing team");
+  SCHECK(keys(live_leagues(0, (uint8_t) League::NASCAR, {(uint8_t) League::F1, (uint8_t) League::MLB})) == "mlb",
+         "auto skips racing");
+  SCHECK(keys(live_leagues(1u << (uint8_t) League::F1, (uint8_t) League::MLB, none)) == "nfl",
+         "a mask of racing alone is NFL");
+  SCHECK(live_mask_from_keys("f1,nascar") == 0, "racing keys");
+  SCHECK(live_mask_from_keys("f1,nhl") == (1u << (uint8_t) League::NHL), "racing keys beside a league");
 
   SCHECK(live_mask_from_keys("") == 0, "empty keys");
   SCHECK(live_mask_from_keys("xfl,MLB") == 0, "unknown and upper-case keys");

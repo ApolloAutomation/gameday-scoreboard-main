@@ -11,6 +11,8 @@ Favorite teams lets the panel follow up to 16 teams from any league, in the orde
 
 On the device page, open the **Favorites** card and tap **Add a favorite**. The team chooser opens; tap a team to add it to the end of the list. Each row has buttons to move the team up or down and to remove it. The Game Day app edits the same list.
 
+A golf tour or a racing series can't be a favorite yet, so the chooser hides its **Golf** and **Racing** tabs while you add one. Follow a tour or a series in **My team** instead. See [Golf](/using/golf/) and [Racing](/using/racing/).
+
 The order is the priority. Higher teams win when two games clash (unless you choose **Alternate**, below), and the first four are buttons 1 to 4 on a WizMote remote. The page marks those four with their button number.
 
 Then tap **Favorite teams** under the board to switch the panel to it. The list is kept when you switch to another mode and back.

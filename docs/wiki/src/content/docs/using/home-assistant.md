@@ -47,14 +47,14 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 
 | Entity | What it is |
 | --- | --- |
-| **Team** | The team the panel follows in My team. Every league except men's college basketball, whose list would be too long for one entity; pick those teams on the device page. |
+| **Team** | The team the panel follows in My team. Every league except men's college basketball, whose list would be too long for one entity; pick those teams on the device page. The golf tours, **Golf: PGA Tour** and **Golf: LPGA Tour**, come after the NHL teams, and the racing series, **Racing: Formula 1** and **Racing: NASCAR Cup Series**, at the end of the list. |
 | **Mode** | My team, Favorite teams or Live games, plus the older Live NFL, Live college and Live anything. |
 | **Power** | The panel's lights on or off. |
 | **Brightness** | 1 to 255. |
 | **Scroll Speed** | The ticker speed, 1 to 10. |
 | **Select Page** | The Scoreboard or the Clock page, with **Page Next** and **Page Previous** buttons. |
-| **Game Status** | The game in one line: the matchup, whether it's upcoming, live or final, and the score. |
-| **Last Play** | ESPN's latest play. |
+| **Game Status** | The game in one line: the matchup, whether it's upcoming, live or final, and the score. For a golf tour or a racing series, the tournament or the race weekend (below). |
+| **Last Play** | ESPN's latest play. Empty for a golf tour or a racing series. |
 | **Firmware** | The firmware update, so Home Assistant shows when a new release is out. |
 | **Install Updates Automatically** | The same switch as on the device page. See [Firmware updates](/using/updates/). |
 | **Check for Updates**, **Refresh Now**, **Reboot** | The device page's buttons. |
@@ -62,6 +62,10 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
+
+While a golf tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22". See [Golf](/using/golf/).
+
+While a racing series is the team, **Game Status** is the race weekend in one line, like "MSC Cruises Sao Paulo Grand Prix | Practice 2 final | Fastest: Antonelli", "MSC Cruises United States Grand Prix | Race | Leader: Antonelli", "MSC Cruises United States Grand Prix | Final | Antonelli wins" or "NASCAR Cup Series at Miami | Race Sun 3:00p". It changes with the leader or the session, not on every lap. See [Racing](/using/racing/).
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
 

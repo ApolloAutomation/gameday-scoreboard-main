@@ -29,7 +29,7 @@ The two pictures install two builds of the same firmware. The 64x64 choice insta
 
 ## If you skip the Wi-Fi dialog
 
-If you close the dialog, the panel shows a QR code for the separate Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70. Join the hotspot and a setup page opens. The panel only joins 2.4 GHz networks.
+If you close the dialog, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows a QR code that joins it. Scan the code with your phone's camera, or join the hotspot from any phone or laptop, and a setup page opens. The panel only joins 2.4 GHz networks.
 
 ## Set it up
 
@@ -39,7 +39,7 @@ From here a board you built works like any Game Day Scoreboard. Follow [Set up y
 
 A DIY board gets every release, built for its pinout, from the same release feed as a Game Day Scoreboard. It checks for a new release every 6 hours. When one is out, an Install button appears on the device page and the update goes over Wi-Fi. Turn on **Install updates automatically** and the panel installs a new release on its own between 3 and 5 AM, never while a game it follows is live. It's off unless you turn it on. See [Updates](/using/updates/).
 
-A **Follow beta** switch in the Device card gets test versions of the next release before everyone else. They can have bugs. A beta is named for a coming release, plus a build number, like `2026.10.2-beta.20`. With **Follow beta** on, the panel is offered each newer beta, to take with **Install**, or overnight with **Install updates automatically** on. Turn it on while the panel runs a release and it waits for a beta of the next release; until one is out, the Firmware box says **You're ahead of the latest beta**. Turn it off while the panel runs a beta and it waits for the next release. Once that release ships, the Firmware box offers it with **Install**, and the panel installs it overnight with **Install updates automatically** on.
+A **Follow beta** switch in the Device card gets test versions of the next release before everyone else. They can have bugs. A beta is named for a coming release, plus a build number, like `2026.10.3-beta.20`. With **Follow beta** on, the panel is offered each newer beta, to take with **Install**, or overnight with **Install updates automatically** on. Turn it on while the panel runs a release and it waits for a beta of the next release; until one is out, the Firmware box says **You're ahead of the latest beta**. Turn it off while the panel runs a beta and it waits for the next release. Once that release ships, the Firmware box offers it with **Install**, and the panel installs it overnight with **Install updates automatically** on.
 
 Each build has a variant name, and the variant names the folder the panel reads updates from:
 

@@ -11,6 +11,8 @@ Find what you're seeing, then try the fix. Each entry ends with why it happens, 
 
 The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own [device page](/using/device-page/), and its hotspot sets up Wi-Fi (see [Set up your panel](/get-started/setup/)).
 
+You don't need the app to get started. Point your phone's camera at the QR code on the panel: during setup it joins the panel's hotspot, and once the panel is on your Wi-Fi it opens the device page by IP address, which works on phones that won't open `.local` names.
+
 To try the app anyway, check that your phone is on the same Wi-Fi network as the panel. Then add the panel by address: tap the add button in the app and enter the panel's name, like `gameday-2f6a70.local`, or its IP address. If you don't have either, hold the button on the controller for about 1.5 seconds and the panel shows both for 20 seconds.
 
 A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluetooth, so keep Bluetooth on and the phone near the panel.
@@ -25,15 +27,15 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 While it joins a network from the Game Day app, the panel shows **JOINING** and the network's name, so a wrong pick shows up there.
 
-If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotspot**, with the QR code for the app, the network wants you to sign in on a web page, like many bar, hotel and dorm networks. The panel can't sign in to those pages. Set it up on a home network or a phone hotspot instead: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. Once it's on the new network, you can forget the sign-in network under **Wi-Fi networks** on the device page so the panel doesn't go back to it. The message goes away by itself once scores come through.
+If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code, the network wants you to sign in on a web page, like many bar, hotel and dorm networks. The panel can't sign in to those pages. Set it up on a home network or a phone hotspot instead: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The QR code opens the panel's device page by IP address: from a phone on the same Wi-Fi, scan it and tap **Reset Wi-Fi** in the Device card. If the page won't open, the network keeps devices apart: use the button's Reset Wi-Fi. Once it's on the new network, you can forget the sign-in network under **Wi-Fi networks** on the device page so the panel doesn't go back to it. The message goes away by itself once scores come through.
 
 **Why:** the panel's Wi-Fi only works on 2.4 GHz. A guest network can let the panel join but keep your phone from reaching it afterwards. A network with a sign-in page lets the panel join, then holds back everything else until someone signs in on that page.
 
 ## The panel says Wi-Fi lost
 
-If your router restarted or the internet dropped, wait. The panel rejoins by itself when the network comes back and the score returns.
+The panel says **Wi-Fi / lost / reconnecting** while it tries to get back on. If your router restarted or the internet dropped, wait. The panel rejoins by itself when the network comes back and the score returns.
 
-If you changed your router or your Wi-Fi password, join the panel's **Game Day** hotspot once it comes up, within a few minutes, and give it the new network or password. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
+If you changed your router or your Wi-Fi password, wait for the panel's **Game Day** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
 
 **Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, and restarts itself once, a minute into the outage.
 
@@ -92,7 +94,7 @@ Use **Reset Wi-Fi** in the Device card on the device page, or the button on the 
 
 Holding the button on a panel that's switched off turns it on, so you can see the countdown.
 
-**Why:** a Wi-Fi reset restarts the panel into setup for 15 minutes, so you can put it on a new network from the Game Day app or its hotspot. It keeps its saved networks, and the setup screen says **Unplug it to rejoin saved Wi-Fi**. Unplug it and plug it back in and it rejoins the Wi-Fi it already knows. It does that by itself after the 15 minutes too, or a little later if you're still setting it up. Your team, favorites and other settings stay as they were. See [Buttons and resets](/using/buttons-and-resets/).
+**Why:** a Wi-Fi reset restarts the panel into setup for 15 minutes, so you can put it on a new network from its hotspot. Scan the setup screen's QR code with your phone's camera to join the hotspot and give the panel the new network. It keeps its saved networks, and the setup screen says **Unplug it to rejoin saved Wi-Fi**. Unplug it and plug it back in and it rejoins the Wi-Fi it already knows. It does that by itself after the 15 minutes too, or a little later if you're still setting it up. Your team, favorites and other settings stay as they were. See [Buttons and resets](/using/buttons-and-resets/).
 
 ## Start over from scratch
 

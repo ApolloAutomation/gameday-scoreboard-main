@@ -17,17 +17,19 @@ The panel follows one team: its next game before kickoff, the game while it's on
 
 Far from kickoff the panel checks the game every 15 minutes, and every minute in the last hour before it starts. If a read from ESPN fails, it waits longer before each new try.
 
+A golf tour or a racing series is followed like a team, with its tournament or race weekend in place of a game, on its own update schedule. See [Golf](/using/golf/) and [Racing](/using/racing/).
+
 Your team is always on the left of the board.
 
 ### When your team has no game coming
 
 Between seasons the board shows a clock in your team's colors instead of an empty scoreboard. Under the time is the next game once it's on the schedule, like "Next: at PHI Mar 26 7:05 PM", or the date until then. On a single 64x64 panel the next game goes in the ticker, since there is no room for it under the time.
 
-Football teams get the clock only when ESPN lists no game at all, so a bye week never shows it. In the other leagues the clock comes up once the next game is more than 10 days away.
+Football teams get the clock only when ESPN lists no game at all, so a bye week never shows it. In the other leagues the clock comes up once the next game is more than 10 days away. A golf tour's clock is green and comes up once its next event is more than 10 days away, and a racing series' clock is red and waits until the next race is more than 45 days away. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 ### A panel with no team picked
 
-A new panel has no team. Until you pick one, it shows live NFL and college football games as Live games would, and when nothing is on, the latest final scores and the games still to come (see [When nothing is live](#when-nothing-is-live)). The ticker asks you to pick one until you choose a team, a mode or a favorite, and the QR code for the Game Day app comes back over the board for 13 seconds every 3 minutes until you pick a team. See [Pick your team](/get-started/pick-your-team/).
+A new panel has no team. Until you pick one, it shows live NFL and college football games as Live games would, and when nothing is on, the latest final scores and the games still to come (see [When nothing is live](#when-nothing-is-live)). The ticker asks you to pick one until you choose a team, a mode or a favorite, and the QR code that opens the panel's device page comes back over the board for 13 seconds every 3 minutes until you pick a team. See [Pick your team](/get-started/pick-your-team/).
 
 ## Live games
 
@@ -37,13 +39,15 @@ The panel follows a game in progress, picked at random from the leagues you choo
 
 The league buttons under the mode buttons pick the leagues. Until you pick any, Live games follows the leagues of your team and your favorites, and the page says so. Tap a league to choose by hand; **Back to automatic** goes back to following your team and favorites. At least one league stays on.
 
+Live games doesn't follow golf or racing. There are no Golf, Formula 1 or NASCAR league buttons, and a golf tour or a racing series as your team doesn't add golf or racing to the automatic leagues.
+
 A change takes effect right away. When you change the leagues, or change your favorites so that the automatic leagues change, the panel looks for games in the new leagues at once, without waiting for its next check, instead of leaving the old leagues' scores up.
 
 ### When nothing is live
 
 What the panel shows depends on whether you have a team:
 
-- **With a team picked**, it shows your team's card, the same as My team, with a line like "No live NFL games, showing DAL" at the front of the ticker. It keeps looking, and switches to a live game when one starts.
+- **With a team picked**, it shows your team's card, the same as My team, with a line like "No live NFL games, showing DAL" at the front of the ticker. It keeps looking, and switches to a live game when one starts. When your team is a golf tour, it shows that tour's tournament, and when it's a racing series, that series' race weekend, with a line like "No live NFL games, showing F1". See [Golf](/using/golf/) and [Racing](/using/racing/).
 - **With no team picked**, it rotates through the games still to come today under **Later today**, each with both logos, the start time and the TV channel, then the latest final scores for every league it follows, under headers like "Yesterday's NHL scores". When no game is left today, a "Next" card names the next matchup and its time, like "Next: BOS at NYR Thu 6:00 PM". A game drops off the Later today list once it starts.
 
 The panel waits for the next kickoff before it checks again, instead of checking every few minutes, and never waits more than 3 hours. When there has been no game in the last week and none is coming, the board shows a gray clock and the ticker says "No live games right now", or names the league when Live games follows just one, like "No live NHL games right now".
