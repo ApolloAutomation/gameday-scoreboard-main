@@ -1267,6 +1267,18 @@ static void test_team_placeholder() {
   f.away_abbr = "DAL";
   f.home_abbr = "PHI";
   CHECK(!is_team_placeholder(final_snapshot(f)));
+  // A golf tour's: the card with the tour's name, no logo
+  Team pga{League::PGA, 1106, "PGA", "PGA Tour", 0};
+  GameSnapshot gp = team_placeholder(pga);
+  CHECK(gp.valid);
+  CHECK(gp.sport == Sport::GOLF);
+  CHECK_EQ(gp.game_name, std::string("PGA Tour"));
+  CHECK(gp.team_logo.empty());
+  CHECK(gp.team_abbr.empty());
+  CHECK(is_team_placeholder(gp));
+  CHECK_EQ(golf_card_text(gp, false, ""), std::string("PGA Tour"));
+  CHECK(golf_lines(gp, true).name.empty());
+  CHECK_EQ(status_text(gp, TickerOptions{}, ""), std::string("PGA Tour"));
 }
 
 static void test_mlb_urls() {
@@ -5216,6 +5228,622 @@ static void test_wifi_history() {
   CHECK(d.weak());
 }
 
+// ---- golf ------------------------------------------------------------------------
+// A tour followed like a team, from its scoreboard header (fixtures recorded
+// 2026-11-07 03:18Z, see fixtures/README.md).
+
+// By value: the parse templates read from an lvalue.
+static int golf_str(std::string json, GameSnapshot &s) { return parse_golf(json, s); }
+static int golf_cal_str(std::string json, int64_t now, const std::string &after, GolfNext &n) {
+  return parse_golf_calendar(json, now, after, n);
+}
+
+static GameSnapshot golf_doc(const char *file) {
+  GameSnapshot s;
+  std::string json = slurp(file);
+  CHECK_EQ(golf_str(json, s), 1);
+  return s;
+}
+
+static bool contains(const std::string &s, const char *part) { return s.find(part) != std::string::npos; }
+
+static void golf_tee_labels(GameSnapshot &s) {
+  for (auto &r : s.golf.rows)
+    r.set_tee(r.tee_epoch > 0 ? golf_tee_label(utc_tm(r.tee_epoch)) : "");
+}
+
+static std::string golf_dates_of(int64_t start, int64_t end) {
+  return golf_dates(utc_tm(tbd_day_epoch(start)), utc_tm(tbd_day_epoch(end)));
+}
+
+static void test_golf_urls() {
+  CHECK(is_golf(League::PGA) && is_golf(League::LPGA) && !is_golf(League::NFL));
+  CHECK(league_sport(League::LPGA) == Sport::GOLF);
+  CHECK_EQ(std::string(league_key(League::PGA)), std::string("pga"));
+  CHECK(league_by_key("lpga") != nullptr && league_by_key("lpga")->league == League::LPGA);
+  CHECK_EQ(golf_header_url(League::PGA),
+           std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga"));
+  CHECK_EQ(golf_header_url(League::LPGA),
+           std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=lpga"));
+  // Sunday evening: the coming Tuesday. On a Tuesday, that day.
+  const std::string cal = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=";
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-08T23:00Z"), false), cal + "20261110");
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-10T15:00Z"), false), cal + "20261110");
+  // 10 PM Eastern on Sunday and on Tuesday are still those days
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-09T03:00Z"), false), cal + "20261110");
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-11T03:00Z"), false), cal + "20261110");
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-11T15:00Z"), false), cal + "20261117");
+  // Across the new year
+  CHECK_EQ(golf_calendar_url(League::LPGA, parse_iso8601_z("2026-12-31T15:00Z"), false),
+           std::string("https://site.api.espn.com/apis/site/v2/sports/golf/lpga/scoreboard?dates=20270105"));
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2026-12-14T15:00Z"), true), cal + "2027");
+  CHECK_EQ(golf_calendar_url(League::PGA, parse_iso8601_z("2027-01-01T03:00Z"), true), cal + "2027");  // Dec 31 Eastern
+  // Never this year's whole list (dates=2026 is 29 MB): a Tuesday in the
+  // coming week, or next year.
+  const int64_t day = 86400;
+  for (int64_t t = parse_iso8601_z("2026-01-01T00:00Z"); t < parse_iso8601_z("2027-02-01T00:00Z"); t += 7 * 3600) {
+    for (bool next : {false, true}) {
+      std::string url = golf_calendar_url(League::PGA, t, next);
+      std::string dates = url.substr(url.find("dates=") + 6);
+      struct tm east = utc_tm(t - 5 * 3600);
+      if (next) {
+        CHECK_EQ(dates, std::to_string(east.tm_year + 1901));
+        continue;
+      }
+      CHECK_EQ(dates.size(), (size_t) 8);
+      int64_t tue = parse_iso8601_z(dates.substr(0, 4) + "-" + dates.substr(4, 2) + "-" + dates.substr(6, 2) + "T12:00Z");
+      CHECK_EQ(utc_tm(tue).tm_wday, 2);
+      int64_t ahead = tue - (t - 5 * 3600);
+      CHECK(ahead > -day && ahead < 7 * day);
+    }
+  }
+  set_site_root("https://bench.invalid/sports/");
+  CHECK_EQ(golf_header_url(League::PGA),
+           std::string("https://bench.invalid/apis/v2/scoreboard/header?sport=golf&league=pga"));
+  CHECK(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-08T23:00Z"), false).rfind("https://bench.invalid/", 0) == 0);
+  set_site_root("https://site.api.espn.com/apis/site/v2/sports/");
+  CHECK_EQ(team_logo_url(League::PGA, 1106, "PGA"), std::string(""));
+  // The tours are rows in the team table: Home Assistant's options and /gameday/set
+  bool pga = false, lpga = false;
+  for (size_t i = 0; i < kTeamCount; i++) {
+    if (kTeams[i].league == League::PGA && kTeams[i].espn_id == 1106) {
+      pga = true;
+      CHECK_EQ(team_option(kTeams[i]), std::string("Golf: PGA Tour"));
+    }
+    if (kTeams[i].league == League::LPGA && kTeams[i].espn_id == 1107) {
+      lpga = true;
+      CHECK_EQ(team_option(kTeams[i]), std::string("Golf: LPGA Tour"));
+      CHECK(i == kTeamCount - 1);  // appended: every earlier option keeps its place
+    }
+  }
+  CHECK(pga && lpga);
+}
+
+// LPGA, TOTO Japan Classic, round 3 in progress
+static void test_golf_live() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_lpga_live.json");
+  CHECK(s.valid);
+  CHECK(s.sport == Sport::GOLF);
+  CHECK(s.golf.phase == GolfPhase::LIVE);
+  CHECK(s.state == GameState::IN);
+  CHECK(!s.completed);
+  CHECK_EQ(s.period, 3);
+  CHECK_EQ(s.event_id, std::string("401835175"));
+  CHECK_EQ(s.game_name, std::string("TOTO Japan Classic"));
+  CHECK_EQ(s.kickoff_epoch, parse_iso8601_z("2026-11-05T05:00:00Z"));
+  CHECK_EQ(s.golf.end_epoch, parse_iso8601_z("2026-11-08T05:00:00Z"));
+  CHECK_EQ(s.venue, std::string("Taiheiyo Club Minori Course - Omitama, Japan"));
+  CHECK_EQ(s.tv, std::string("Golf Chnl"));
+  CHECK_EQ(s.golf.purse, std::string("$2,100,000"));
+  CHECK_EQ(s.golf.defending, std::string("Nasa Hataoka"));
+  CHECK_EQ(s.golf.rows.size(), kGolfRows);
+  const GolfRow &r0 = s.golf.rows[0];
+  CHECK_EQ((int) r0.place, 1);
+  CHECK(r0.tie);
+  CHECK_EQ(r0.name, std::string("Iwai"));
+  CHECK_EQ(r0.score, std::string("-12"));
+  CHECK_EQ(r0.to_par, -12);
+  CHECK(r0.par_known);
+  CHECK_EQ(r0.state, 'i');
+  CHECK_EQ((int) r0.thru, 7);
+  CHECK(!r0.winner);
+  CHECK_EQ((int) s.golf.rows[2].place, 3);
+  CHECK(!s.golf.rows[2].tie);
+  CHECK_EQ(s.golf.rows[2].name, std::string("Hara"));
+  GolfLines l = golf_lines(s, false);
+  CHECK_EQ(l.status, std::string("Round 3"));
+  CHECK_EQ(l.status_color, (uint32_t) 0x40FF40);
+  CHECK(l.title.empty());
+  CHECK_EQ(l.pos.size(), kGolfBoardRows);
+  CHECK_EQ(l.pos[0], std::string("T1"));
+  CHECK_EQ(l.pos[2], std::string("3"));
+  CHECK_EQ(l.name[4], std::string("Takahas"));
+  CHECK_EQ(l.score[0], std::string("-12"));
+  CHECK_EQ(l.score_color[0], 0xFF3030);
+  CHECK_EQ(l.name_color[0], 0xFFFFFF);
+  CHECK_EQ(l.thru[0], std::string(""));
+  GolfLines w = golf_lines(s, true);
+  CHECK_EQ(w.title, std::string("TOTO Japan"));  // 17 beside "Round 3"
+  CHECK_EQ(w.name[4], std::string("Takahashi"));
+  CHECK_EQ(w.thru[0], std::string("7"));
+  CHECK_EQ(w.thru[1], std::string("4"));
+  TickerOptions o;
+  std::string t = status_text(s, o, "");
+  CHECK_EQ(t.rfind("TOTO Japan Classic | Round 3 | T1 Iwai -12 thru 7, T1 Hataoka -12 thru 4, 3 Hara -11 thru 5", 0),
+           (size_t) 0);
+  CHECK(contains(t, "| Golf Chnl"));
+  o.odds = false;
+  CHECK(!contains(status_text(s, o, ""), "Golf Chnl"));
+  CHECK_EQ(ha_status_text(s, ""), std::string("TOTO Japan Classic | Round 3 | Leader: Iwai -12"));
+  CHECK_EQ(clock_text(s), std::string(""));
+  // A playoff on the course
+  GameSnapshot p = s;
+  p.golf.playoff = true;
+  CHECK_EQ(golf_round_text(p), std::string("Playoff"));
+  CHECK_EQ(golf_round_long(p), std::string("Playoff"));
+  // Live with no round number
+  p.golf.playoff = false;
+  p.period = 0;
+  CHECK_EQ(golf_round_text(p), std::string("Live"));
+}
+
+// PGA Tour, World Wide Technology Championship, round 2 suspended
+static void test_golf_suspended() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_pga_suspended.json");
+  CHECK(s.golf.phase == GolfPhase::BREAK);
+  CHECK(s.state == GameState::IN);
+  CHECK_EQ(s.period, 2);
+  CHECK(s.golf.status == GolfStatus::SUSPENDED);
+  CHECK_EQ(golf_round_text(s), std::string("R2 suspended"));
+  CHECK_EQ(golf_round_color(s), (uint32_t) 0xFFA000);
+  CHECK_EQ(golf_round_long(s), std::string("Round 2 suspended"));
+  for (const auto &r : s.golf.rows) {
+    CHECK_EQ(r.state, 'f');
+    CHECK_EQ(golf_thru_text(r, s.golf.phase), std::string("F"));
+  }
+  const char *pos[] = {"1", "2", "3", "T4", "T4", "T6"};
+  GolfLines l = golf_lines(s, false), w = golf_lines(s, true);
+  for (size_t i = 0; i < kGolfBoardRows; i++)
+    CHECK_EQ(l.pos[i], std::string(pos[i]));
+  CHECK_EQ(l.name[5], std::string("Yellama"));
+  CHECK_EQ(w.name[5], std::string("Yellamaraju"));
+  CHECK_EQ(w.title, std::string("World Wide"));
+  CHECK_EQ(w.status, std::string("R2 suspended"));
+  CHECK_EQ(w.thru[3], std::string("F"));
+  CHECK_EQ(s.golf.rows[6].name, std::string("Neergaard-Peter"));  // kept to 15
+  std::string t = status_text(s, TickerOptions{}, "");
+  CHECK(contains(t, "World Wide Technology Championship | Round 2 suspended | 1 James -15, 2 Malnati -14,"));
+  CHECK(contains(t, "T4 Jaeger -11, T4 McCarthy -11"));
+  CHECK(!contains(t, " F,"));  // between rounds the rows have no thru
+  CHECK(!contains(t, "Leaders tee off"));  // nobody has a tee time to come
+  CHECK_EQ(ha_status_text(s, ""),
+           std::string("World Wide Technology Championship | Round 2 suspended | Leader: James -15"));
+  // Delayed reads the same way
+  GameSnapshot d = s;
+  d.golf.status = GolfStatus::DELAYED;
+  CHECK_EQ(golf_round_text(d), std::string("R2 delayed"));
+  CHECK_EQ(golf_round_long(d), std::string("Round 2 delayed"));
+  CHECK_EQ(golf_round_color(d), (uint32_t) 0xFFA000);
+  d.period = 12;  // no room for two digits: the word alone
+  CHECK_EQ(golf_round_text(d), std::string("Delayed"));
+  d.golf.status = GolfStatus::SUSPENDED;
+  CHECK_EQ(golf_round_text(d), std::string("Suspended"));
+  d.golf.status = GolfStatus::OTHER;  // a status name the panel doesn't know
+  d.short_detail = "Round 2 - Weather delay";
+  CHECK_EQ(golf_round_text(d), std::string("Round 2 - We"));
+}
+
+// DP World Tour, Abu Dhabi, round 2 play complete with round 3's tee times
+static void test_golf_after_round() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_eur_after_round.json");
+  CHECK(s.golf.phase == GolfPhase::BREAK);
+  CHECK(s.state == GameState::IN);
+  CHECK_EQ(golf_round_text(s), std::string("After R2"));
+  CHECK_EQ(golf_round_long(s), std::string("After round 2"));
+  CHECK_EQ(golf_round_color(s), (uint32_t) 0xFFFFFF);
+  CHECK_EQ(s.golf.rows[0].state, 'p');
+  CHECK_EQ((int) s.golf.rows[0].thru, 0);
+  CHECK_EQ(s.golf.rows[0].tee_epoch, parse_iso8601_z("2026-11-07T07:50Z"));
+  CHECK_EQ(golf_tee_label(utc_tm(s.golf.rows[0].tee_epoch)), std::string("7:50a"));
+  // Before the main loop fills the tee times in: a dash
+  CHECK_EQ(golf_thru_text(s.golf.rows[0], s.golf.phase), std::string("-"));
+  golf_tee_labels(s);
+  CHECK_EQ(golf_thru_text(s.golf.rows[0], s.golf.phase), std::string("7:50a"));
+  CHECK_EQ(golf_lines(s, true).thru[3], std::string("7:39a"));
+  CHECK_EQ(golf_lines(s, true).title, std::string("Abu Dhabi Aldar"));
+  std::string t = status_text(s, TickerOptions{}, "");
+  CHECK(contains(t, "Abu Dhabi Aldar Championship | After round 2 | T1 Hatton -12, T1 Rahm -12, T1 Laporta -12"));
+  CHECK(contains(t, "| Leaders tee off 7:50a"));
+  CHECK_EQ(ha_status_text(s, ""), std::string("Abu Dhabi Aldar Championship | After round 2 | Leader: Hatton -12"));
+  // Tee time labels
+  CHECK_EQ(golf_tee_label(mk(2026, 0, 0, 20, 27)), std::string("8:27p"));
+  CHECK_EQ(golf_tee_label(mk(2026, 0, 0, 11, 40)), std::string("11:40a"));
+  CHECK_EQ(golf_tee_label(mk(2026, 0, 0, 12, 5)), std::string("12:05p"));
+  CHECK_EQ(golf_tee_label(mk(2026, 0, 0, 0, 5)), std::string("12:05a"));
+  CHECK_EQ(golf_tee_label(mk(2026, 0, 0, -1, 5)), std::string(""));
+}
+
+// Korn Ferry Tour Championship, final, ESPN's winner flag false
+static void test_golf_final() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_kft_final.json");
+  CHECK(s.golf.phase == GolfPhase::FINAL);
+  CHECK(s.state == GameState::POST);
+  CHECK(s.completed);
+  CHECK(s.golf.rows[0].winner);
+  CHECK_EQ(s.golf.rows[0].name, std::string("Hitt"));
+  CHECK(!s.golf.rows[1].winner);
+  CHECK_EQ(golf_round_text(s), std::string("Final"));
+  CHECK_EQ(golf_round_color(s), (uint32_t) 0xFFD000);
+  GolfLines l = golf_lines(s, false), w = golf_lines(s, true);
+  CHECK_EQ(l.name_color[0], 0xFFD000);
+  CHECK_EQ(l.name_color[1], 0xFFFFFF);
+  CHECK_EQ(l.name[2], std::string("Dochert"));
+  CHECK_EQ(l.pos[3], std::string("T4"));
+  CHECK_EQ(w.title, std::string("Korn Ferry Tour"));
+  for (const auto &t : w.thru)
+    CHECK_EQ(t, std::string(""));  // a final has no thru column
+  std::string t = status_text(s, TickerOptions{}, "");
+  CHECK_EQ(t, std::string("Korn Ferry Tour Championship | Final | Hitt wins at -20 | 2 Brown -18, 3 Docherty -17, "
+                          "T4 Gabrelcik -16, T4 Westmoreland -16"));
+  CHECK_EQ(ha_status_text(s, ""), std::string("Korn Ferry Tour Championship | Final | Hitt wins at -20"));
+  GameSnapshot n = s;
+  n.golf.next.valid = true;
+  n.golf.next.event_id = "401850981";
+  n.golf.next.name = "The RSM Classic";
+  CHECK(contains(status_text(n, TickerOptions{}, "Nov 19-22"), "| Next: The RSM Classic, Nov 19-22"));
+  n.golf.playoff = true;
+  CHECK(contains(status_text(n, TickerOptions{}, ""), "Hitt wins in a playoff at -20"));
+  // The splash: once, on the read that goes final
+  GameSnapshot prev = s;
+  prev.golf.phase = GolfPhase::LIVE;
+  prev.state = GameState::IN;
+  Splash sp = golf_splash(prev, s);
+  CHECK_EQ(sp.text, std::string("HITT WINS!"));
+  CHECK_EQ(sp.color, (uint32_t) 0xFFD000);
+  CHECK_EQ(decide_splash(prev, s, true, false).text, std::string("HITT WINS!"));
+  prev.golf.phase = GolfPhase::BREAK;
+  CHECK_EQ(golf_splash(prev, s).text, std::string("HITT WINS!"));
+  CHECK(golf_splash(s, s).text.empty());              // final to final
+  CHECK(golf_splash(GameSnapshot{}, s).text.empty());  // a boot or a team change
+  prev.event_id = "1";
+  CHECK(golf_splash(prev, s).text.empty());  // another event
+  // Two players listed at place 1 in a final and no flag: no winner named
+  GameSnapshot two = s;
+  two.golf.rows[1].place = 1;
+  two.golf.rows[0].tie = two.golf.rows[1].tie = true;
+  two.golf.rows[0].winner = false;
+  prev = s;
+  prev.golf.phase = GolfPhase::LIVE;
+  CHECK(golf_splash(prev, two).text.empty());
+  CHECK_EQ(ha_status_text(two, ""), std::string("Korn Ferry Tour Championship | Final"));
+}
+
+// Charles Schwab Cup Championship (PGA Tour Champions), scheduled
+static void test_golf_pre() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_champions_pre.json");
+  CHECK(s.golf.phase == GolfPhase::PRE);
+  CHECK(s.state == GameState::PRE);
+  CHECK(s.golf.rows.empty());
+  CHECK_EQ(s.kickoff_epoch, parse_iso8601_z("2026-11-12T05:00:00Z"));
+  CHECK_EQ(s.golf.end_epoch, parse_iso8601_z("2026-11-15T05:00:00Z"));
+  const std::string dates = golf_dates_of(s.kickoff_epoch, s.golf.end_epoch);
+  CHECK_EQ(dates, std::string("Nov 12-15"));
+  CHECK_EQ(golf_card_text(s, false, dates), std::string("Charles Schwab Cup Championship\nNov 12-15"));
+  CHECK_EQ(golf_card_text(s, true, dates), std::string("Charles Schwab Cup Championship\nNov 12-15"));
+  GolfLines l = golf_lines(s, false);
+  CHECK(l.name.empty());
+  CHECK_EQ(l.status, std::string("Upcoming"));
+  CHECK_EQ(status_text(s, TickerOptions{}, dates),
+           std::string("Charles Schwab Cup Championship | Nov 12-15 | Phoenix Country Club - Phoenix, AZ | Purse "
+                       "$3,000,000 | Defending champion: Stewart Cink | Golf Chnl"));
+  TickerOptions o;
+  o.odds = false;
+  CHECK_EQ(status_text(s, o, dates), std::string("Charles Schwab Cup Championship | Nov 12-15 | Phoenix Country Club - "
+                                                 "Phoenix, AZ | Defending champion: Stewart Cink"));
+  CHECK_EQ(ha_status_text(s, dates), std::string("Charles Schwab Cup Championship | Nov 12-15"));
+  // Dates across a month, and one day
+  CHECK_EQ(golf_dates_of(parse_iso8601_z("2026-10-29T04:00:00Z"), parse_iso8601_z("2026-11-01T04:00:00Z")),
+           std::string("Oct 29-Nov 1"));
+  CHECK_EQ(golf_dates_of(parse_iso8601_z("2026-08-30T04:00:00Z"), parse_iso8601_z("2026-08-30T04:00:00Z")),
+           std::string("Aug 30"));
+  CHECK_EQ(golf_dates_of(parse_iso8601_z("2026-12-31T05:00:00Z"), parse_iso8601_z("2027-01-03T05:00:00Z")),
+           std::string("Dec 31-Jan 3"));
+  CHECK_EQ(golf_dates(mk(1900, -1, -1, 0, 0, -1, 0), mk(1900, -1, -1, 0, 0, -1, 0)), std::string(""));
+}
+
+// LIV Golf Michigan, canceled
+static void test_golf_canceled() {
+  GameSnapshot s = golf_doc("fixtures/golf_header_liv_canceled.json");
+  CHECK(s.golf.phase == GolfPhase::OFF);
+  CHECK(s.state == GameState::POST);
+  CHECK(!s.completed);
+  CHECK_EQ(golf_round_text(s), std::string("Canceled"));
+  CHECK_EQ(golf_round_color(s), (uint32_t) 0xFF3030);
+  CHECK(golf_lines(s, false).name.empty());
+  CHECK_EQ(golf_card_text(s, false, ""), std::string("LIV Golf Michigan - Stroke Play\nCanceled"));
+  CHECK_EQ(s.venue, std::string("The Cardinal at Saint John's - Plymouth, MI"));  // a curly apostrophe
+  CHECK_EQ(ha_status_text(s, ""), std::string("LIV Golf Michigan - Stroke Play | Canceled"));
+  CHECK_EQ(status_text(s, TickerOptions{}, ""), std::string("LIV Golf Michigan - Stroke Play | Canceled"));
+  GameSnapshot p = s;
+  p.golf.status = GolfStatus::POSTPONED;
+  CHECK_EQ(golf_round_text(p), std::string("Postponed"));
+}
+
+static void test_golf_documents() {
+  GameSnapshot s;
+  CHECK_EQ(golf_str(slurp("fixtures/golf_header_none.json"), s), 0);
+  CHECK(!s.valid);
+  CHECK_EQ(golf_str(std::string("{}"), s), -1);
+  CHECK_EQ(golf_str(std::string("garbage"), s), -1);
+  CHECK_EQ(golf_str(std::string("[1,2]"), s), -1);
+  CHECK_EQ(golf_str(std::string(R"({"sports":[{"leagues":[{"events":[]}]}]})"), s), 0);
+  CHECK_EQ(golf_str(std::string(R"({"sports":[{"leagues":[{"events":[{"name":"No id"}]}]}]})"), s), -1);
+  CHECK_EQ(golf_str(std::string(R"({"sports":[{"leagues":[{"events":[7]}]}]})"), s), -1);
+  // An opposite-field week: the primary event, wherever it is listed
+  const std::string two = R"({"sports":[{"leagues":[{"events":[
+      {"id":"1","name":"Opposite Open","primary":false},
+      {"id":"2","name":"Main Championship","primary":true}]}]}]})";
+  CHECK_EQ(golf_str(two, s), 1);
+  CHECK_EQ(s.event_id, std::string("2"));
+  CHECK_EQ(golf_str(std::string(R"({"sports":[{"leagues":[{"events":[{"id":"5"},{"id":"6"}]}]}]})"), s), 1);
+  CHECK_EQ(s.event_id, std::string("5"));
+  // Rows by ESPN's order however they arrive, at most kGolfRows of them, and
+  // the scores that aren't a number
+  std::string many = R"({"sports":[{"leagues":[{"events":[{"id":"9","fullStatus":{"type":{"name":"STATUS_IN_PROGRESS","state":"in"}},"competitors":[)";
+  for (int i = 12; i >= 1; i--) {
+    many += "{\"order\":" + std::to_string(i) + ",\"place\":" + std::to_string(i) + ",\"lastName\":\"P" +
+            std::to_string(i) + "\",\"score\":\"" + (i == 3 ? "WD" : i == 4 ? "E" : i == 5 ? "+3" : "-" + std::to_string(20 - i)) + "\"}";
+    if (i > 1)
+      many += ",";
+  }
+  many += "]}]}]}]}";
+  CHECK_EQ(golf_str(many, s), 1);
+  CHECK_EQ(s.golf.rows.size(), kGolfRows);
+  for (size_t i = 0; i < s.golf.rows.size(); i++)
+    CHECK_EQ(s.golf.rows[i].name, "P" + std::to_string(i + 1));
+  CHECK(!s.golf.rows[2].par_known);
+  CHECK_EQ(golf_score_text(s.golf.rows[2]), std::string("WD"));
+  CHECK_EQ(golf_score_color(s.golf.rows[2]), (uint32_t) 0xA0A0A0);
+  CHECK_EQ(s.golf.rows[3].to_par, 0);
+  CHECK_EQ(golf_score_text(s.golf.rows[3]), std::string("E"));
+  CHECK_EQ(golf_score_color(s.golf.rows[3]), (uint32_t) 0xFFFFFF);
+  CHECK_EQ(s.golf.rows[4].to_par, 3);
+  CHECK_EQ(golf_score_text(s.golf.rows[4]), std::string("+3"));
+  CHECK_EQ(golf_score_color(s.golf.rows[4]), (uint32_t) 0x40A0FF);
+  CHECK_EQ(golf_pos_text(s.golf.rows[9]), std::string("10"));
+  // Places past the board's two characters, and none at all
+  GolfRow r;
+  r.place = 12;
+  r.tie = true;
+  CHECK_EQ(golf_pos_text(r), std::string("12"));
+  CHECK_EQ(golf_place_text(r), std::string("T12"));
+  r.place = 0;
+  CHECK_EQ(golf_pos_text(r), std::string("-"));
+  r.place = 150;
+  CHECK_EQ(golf_pos_text(r), std::string("-"));
+  r.par_known = true;
+  r.to_par = -150;
+  CHECK_EQ(golf_score_text(r), std::string("-99"));
+  // A score as a JSON number, and one too long for the board
+  CHECK_EQ(golf_str(std::string(R"({"sports":[{"leagues":[{"events":[{"id":"9","competitors":[{"order":1,"score":-4},{"order":2,"score":"-123456"}]}]}]}]})"), s), 1);
+  CHECK_EQ(s.golf.rows[0].to_par, -4);
+  CHECK_EQ(s.golf.rows[0].score, std::string("-4"));
+  CHECK_EQ(s.golf.rows[1].score, std::string("-123"));
+  CHECK_EQ(golf_score_text(s.golf.rows[1]), std::string("-99"));
+}
+
+static void test_golf_calendar() {
+  GolfNext n;
+  const std::string pga = slurp("fixtures/golf_calendar_pga_2026.json");
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-11-09T12:00Z"), "401850979", n), 1);
+  CHECK(n.valid);
+  CHECK_EQ(n.event_id, std::string("401850980"));
+  CHECK_EQ(n.name, std::string("Austin Championship pres. by Compliance Solutions"));
+  CHECK_EQ(n.start_epoch, parse_iso8601_z("2026-11-12T08:00Z"));
+  CHECK_EQ(golf_dates_of(n.start_epoch, n.end_epoch), std::string("Nov 12-15"));
+  // During the World Wide Technology week, the event itself is passed over
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-11-04T12:00Z"), "401850979", n), 1);
+  CHECK_EQ(n.event_id, std::string("401850980"));
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-11-04T12:00Z"), "", n), 1);
+  CHECK_EQ(n.event_id, std::string("401850979"));
+  // The season is over: nothing ahead in this year's list
+  GolfNext none;
+  CHECK_EQ(golf_cal_str(pga, parse_iso8601_z("2026-12-14T12:00Z"), "", none), 0);
+  CHECK(!none.valid);
+  CHECK_EQ(golf_cal_str(slurp("fixtures/golf_calendar_pga_2027.json"), parse_iso8601_z("2026-12-14T12:00Z"), "", n),
+           1);
+  CHECK_EQ(n.name, std::string("The American Express"));
+  CHECK_EQ(golf_dates_of(n.start_epoch, n.end_epoch), std::string("Jan 21-24"));
+  CHECK_EQ(golf_cal_str(slurp("fixtures/golf_calendar_lpga_2027.json"), parse_iso8601_z("2026-11-24T12:00Z"), "",
+                               n),
+           1);
+  CHECK_EQ(n.name, std::string("Hilton Grand Vacations Tournament of Champions"));
+  CHECK_EQ(golf_dates_of(n.start_epoch, n.end_epoch), std::string("Feb 4-7"));
+  CHECK_EQ(golf_cal_str(std::string("{}"), 0, "", n), -1);
+  CHECK_EQ(golf_cal_str(std::string("nope"), 0, "", n), -1);
+  CHECK_EQ(golf_cal_str(std::string(R"({"leagues":[]})"), 0, "", n), 0);
+  // The calendar's next event as the board: a PRE card
+  GameSnapshot g = golf_next_snapshot(n);
+  CHECK(g.valid);
+  CHECK(g.state == GameState::PRE);
+  CHECK(g.sport == Sport::GOLF);
+  CHECK(g.golf.phase == GolfPhase::PRE);
+  CHECK_EQ(g.event_id, n.event_id);
+  CHECK_EQ(g.kickoff_epoch, n.start_epoch);
+  CHECK_EQ(g.golf.end_epoch, n.end_epoch);
+  CHECK(!is_team_placeholder(g));
+  CHECK_EQ(golf_card_text(g, false, "Feb 4-7"), std::string("Hilton Grand Vacations Tournament\nFeb 4-7"));
+}
+
+// No line over its column at either width (fixtures, the placeholder, a card)
+static void test_golf_budgets() {
+  const char *files[] = {"fixtures/golf_header_pga_suspended.json", "fixtures/golf_header_lpga_live.json",
+                         "fixtures/golf_header_eur_after_round.json", "fixtures/golf_header_kft_final.json",
+                         "fixtures/golf_header_champions_pre.json", "fixtures/golf_header_liv_canceled.json"};
+  std::vector<GameSnapshot> boards;
+  for (const char *f : files) {
+    GameSnapshot s = golf_doc(f);
+    for (auto &r : s.golf.rows)
+      r.set_tee(r.state == 'p' ? "12:05p" : "");  // the widest tee time
+    boards.push_back(s);
+  }
+  Team pga{League::PGA, 1106, "PGA", "PGA Tour", 0};
+  boards.push_back(team_placeholder(pga));
+  GolfNext n;
+  n.valid = true;
+  n.event_id = "1";
+  n.name = "Hilton Grand Vacations Tournament of Champions presented by Somebody Long";
+  boards.push_back(golf_next_snapshot(n));
+  for (const GameSnapshot &s : boards) {
+    for (bool wide : {false, true}) {
+      GolfLines l = golf_lines(s, wide);
+      CHECK(l.status.size() <= 12);
+      if (wide)
+        CHECK(l.title.size() + 1 + l.status.size() <= 25);
+      else
+        CHECK(l.title.empty());
+      CHECK(l.pos.size() <= kGolfBoardRows);
+      CHECK(l.name.size() == l.pos.size() && l.score.size() == l.pos.size() && l.thru.size() == l.pos.size());
+      CHECK(l.score_color.size() == l.pos.size() && l.name_color.size() == l.pos.size());
+      for (size_t i = 0; i < l.pos.size(); i++) {
+        CHECK(l.pos[i].size() <= 2);
+        CHECK(l.name[i].size() <= (wide ? 11u : 7u));
+        CHECK(l.score[i].size() <= 3);
+        CHECK(l.thru[i].size() <= (wide ? 6u : 0u));
+      }
+      std::string card = golf_card_text(s, wide, "Oct 29-Nov 1");
+      size_t nl = card.find('\n');
+      CHECK(card.substr(0, nl).size() <= (wide ? 42u : 36u));
+      if (nl != std::string::npos)
+        CHECK(card.size() - nl - 1 <= (wide ? 21u : 12u));
+    }
+  }
+}
+
+static void test_golf_event_name() {
+  struct {
+    const char *name;
+    size_t max;
+    const char *want;
+  } cases[] = {
+      {"World Wide Technology Championship", 17, "World Wide"},
+      {"World Wide Technology Championship", 36, "World Wide Technology Championship"},
+      {"Austin Championship pres. by Compliance Solutions", 17, "Austin"},
+      {"Austin Championship pres. by Compliance Solutions", 36, "Austin Championship"},
+      {"TOTO Japan Classic", 17, "TOTO Japan"},
+      {"TOTO Japan Classic", 36, "TOTO Japan Classic"},
+      {"Hilton Grand Vacations Tournament of Champions", 36, "Hilton Grand Vacations Tournament"},
+      {"The RSM Classic", 17, "The RSM Classic"},
+      {"Abu Dhabi Aldar Championship", 17, "Abu Dhabi Aldar"},
+      {"Korn Ferry Tour Championship", 17, "Korn Ferry Tour"},
+      {"PGA TOUR Q-School presented by Korn Ferry", 17, "PGA TOUR Q-School"},
+      {"Mitsubishi Electric Championship at Hualalai", 36, "Mitsubishi Electric Championship"},
+      {"Championship", 5, "Champ"},
+      {"Supercalifragilistic Open", 10, "Supercalif"},
+      {"", 10, ""},
+  };
+  for (const auto &c : cases)
+    CHECK_EQ(golf_event_name(c.name, c.max), std::string(c.want));
+  for (size_t max = 0; max < 40; max++)
+    CHECK(golf_event_name("Hilton Grand Vacations Tournament of Champions", max).size() <= max);
+}
+
+static void test_golf_poll_ms() {
+  const int64_t now = parse_iso8601_z("2026-11-07T03:18Z");
+  const int64_t hour = 3600, day = 24 * hour;
+  const uint32_t minute = 60 * 1000;
+  GameSnapshot g = golf_doc("fixtures/golf_header_lpga_live.json");
+  CHECK_EQ(golf_poll_ms(g, now), minute);
+  g.golf.phase = GolfPhase::BREAK;
+  CHECK_EQ(golf_poll_ms(g, now), 5 * minute);
+  g.golf.phase = GolfPhase::PRE;
+  g.kickoff_epoch = now + 6 * hour;
+  CHECK_EQ(golf_poll_ms(g, now), 5 * minute);
+  g.kickoff_epoch = now - 2 * hour;  // the first day, before ESPN says it started
+  CHECK_EQ(golf_poll_ms(g, now), 5 * minute);
+  g.kickoff_epoch = now + 13 * hour;
+  CHECK_EQ(golf_poll_ms(g, now), 30 * minute);
+  g.kickoff_epoch = now + 9 * day;
+  CHECK_EQ(golf_poll_ms(g, now), 30 * minute);
+  g.kickoff_epoch = now + 11 * day;
+  CHECK_EQ(golf_poll_ms(g, now), 360 * minute);
+  for (GolfPhase p : {GolfPhase::FINAL, GolfPhase::OFF}) {
+    g.golf.phase = p;
+    g.kickoff_epoch = now - 4 * day;
+    g.golf.end_epoch = now - 1 * day;
+    CHECK_EQ(golf_poll_ms(g, now), 30 * minute);
+    g.golf.end_epoch = now - 11 * day;
+    g.kickoff_epoch = now - 14 * day;
+    CHECK_EQ(golf_poll_ms(g, now), 360 * minute);
+    g.golf.end_epoch = 0;  // a one-day event with no end date: its start
+    g.kickoff_epoch = now - 2 * day;
+    CHECK_EQ(golf_poll_ms(g, now), 30 * minute);
+  }
+}
+
+static void test_golf_older() {
+  GameSnapshot shown = golf_doc("fixtures/golf_header_pga_suspended.json");  // round 2, break
+  GameSnapshot read = shown;
+  CHECK(!golf_read_is_older(shown, read));
+  read.period = 1;
+  CHECK(golf_read_is_older(shown, read));  // a round back
+  read.period = 3;
+  read.golf.phase = GolfPhase::LIVE;
+  CHECK(!golf_read_is_older(shown, read));  // the next round
+  read.period = 2;
+  CHECK(!golf_read_is_older(shown, read));  // resumed
+  read.golf.phase = GolfPhase::PRE;
+  CHECK(golf_read_is_older(shown, read));  // before the event, after a round of it
+  shown.golf.phase = GolfPhase::FINAL;
+  read.golf.phase = GolfPhase::BREAK;
+  CHECK(golf_read_is_older(shown, read));  // the final, taken back
+  // Another event: older when it started earlier
+  read = shown;
+  read.event_id = "401850978";
+  read.kickoff_epoch = shown.kickoff_epoch - 7 * 86400;
+  CHECK(golf_read_is_older(shown, read));
+  read.event_id = "401850980";
+  read.kickoff_epoch = shown.kickoff_epoch + 7 * 86400;
+  read.period = 0;
+  read.golf.phase = GolfPhase::PRE;
+  CHECK(!golf_read_is_older(shown, read));
+  // Nothing to compare with: a boot, the placeholder, another sport
+  CHECK(!golf_read_is_older(GameSnapshot{}, read));
+  Team pga{League::PGA, 1106, "PGA", "PGA Tour", 0};
+  CHECK(!golf_read_is_older(team_placeholder(pga), read));
+  GameSnapshot nfl = shown;
+  nfl.sport = Sport::FOOTBALL;
+  CHECK(!golf_read_is_older(nfl, read));
+}
+
+static void test_golf_off_season() {
+  const int64_t now = parse_iso8601_z("2026-12-20T15:00Z");
+  const int64_t day = 86400;
+  GameSnapshot g = golf_next_snapshot(GolfNext{true, "401916371", "The American Express", now + 32 * day, now + 35 * day});
+  CHECK(golf_off_season(g, now));  // the next season, a month out
+  g.kickoff_epoch = now + 9 * day;
+  CHECK(!golf_off_season(g, now));
+  g = golf_doc("fixtures/golf_header_kft_final.json");  // final on 10/11
+  CHECK(golf_off_season(g, now));
+  CHECK(!golf_show_next(g, now));  // nothing known after it
+  g.golf.next = GolfNext{true, "1", "Next One", now + 20 * day, now + 23 * day};
+  CHECK(golf_off_season(g, now));
+  CHECK(golf_show_next(g, now));  // the board shows the next event, which reaches the clock itself
+  CHECK(golf_off_season(golf_next_snapshot(g.golf.next), now));
+  g.golf.next.start_epoch = now + 5 * day;
+  CHECK(!golf_off_season(g, now));
+  CHECK(!golf_off_season(golf_next_snapshot(g.golf.next), now));
+  // A final two days ago keeps its leaderboard
+  const int64_t sunday = parse_iso8601_z("2026-10-11T04:00:00Z");
+  CHECK(!golf_off_season(g, sunday + 2 * day));
+  CHECK(!golf_show_next(g, sunday + 2 * day));
+  CHECK(golf_off_season(golf_doc("fixtures/golf_header_liv_canceled.json"), now));
+  CHECK(!golf_off_season(golf_doc("fixtures/golf_header_lpga_live.json"), now));
+  Team pga{League::PGA, 1106, "PGA", "PGA Tour", 0};
+  CHECK(!golf_off_season(team_placeholder(pga), now));
+  CHECK(!golf_off_season(GameSnapshot{}, now));
+}
+
 int main() {
   test_urls();
   test_iso();
@@ -5283,6 +5911,20 @@ int main() {
   test_nba_splash();
   test_mcbb_urls();
   test_mcbb();
+  test_golf_urls();
+  test_golf_live();
+  test_golf_suspended();
+  test_golf_after_round();
+  test_golf_final();
+  test_golf_pre();
+  test_golf_canceled();
+  test_golf_documents();
+  test_golf_calendar();
+  test_golf_budgets();
+  test_golf_event_name();
+  test_golf_poll_ms();
+  test_golf_older();
+  test_golf_off_season();
   checks++;
   failures += run_football_golden();
   test_logo_lru();

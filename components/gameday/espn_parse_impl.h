@@ -308,6 +308,13 @@ void basketball_from_event(JsonObjectConst ev, GameSnapshot &s);
 // Hockey's extra filter fields and their parse (sport_hockey.cpp)
 void fill_hockey_filter(JsonObject ev);
 void hockey_from_event(JsonObjectConst ev, GameSnapshot &s);
+// Golf (sport_golf.cpp). The header: sports[0].leagues[0].events[] and their
+// competitors (the top 25). The calendar: leagues[0].calendar[] only, so a
+// scoreboard's events and their hole-by-hole scores drop out as they stream.
+void fill_golf_filter(JsonDocument &f);
+void fill_golf_calendar_filter(JsonDocument &f);
+int golf_from_doc(JsonObjectConst root, GameSnapshot &out);
+int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, GolfNext &out);
 
 }  // namespace detail
 
@@ -583,6 +590,35 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     detail::hockey_from_event(doc.as<JsonObjectConst>(), s);
   out = std::move(s);
   return true;
+}
+
+// A golf tour's scoreboard header (golf_header_url). 1: the tour's event in
+// out (sport GOLF), the primary one when it lists two. 0: the tour lists
+// none. -1: not a header document.
+template<typename TInput> int parse_golf(TInput &input, GameSnapshot &out) {
+  JsonDocument filter(detail::json_allocator());
+  detail::fill_golf_filter(filter);
+  JsonDocument doc(detail::json_allocator());
+  DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
+                                              DeserializationOption::NestingLimit(40));
+  if (err)
+    return -1;
+  return detail::golf_from_doc(doc.as<JsonObjectConst>(), out);
+}
+
+// A season calendar (golf_calendar_url). 1: the first event by start that
+// starts after now and isn't after_event, in out. 0: none ahead. -1: not a
+// scoreboard document.
+template<typename TInput>
+int parse_golf_calendar(TInput &input, int64_t now_epoch, const std::string &after_event, GolfNext &out) {
+  JsonDocument filter(detail::json_allocator());
+  detail::fill_golf_calendar_filter(filter);
+  JsonDocument doc(detail::json_allocator());
+  DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
+                                              DeserializationOption::NestingLimit(40));
+  if (err)
+    return -1;
+  return detail::golf_next_from_doc(doc.as<JsonObjectConst>(), now_epoch, after_event, out);
 }
 
 // Parses a scoreboard document and extracts the event with `event_id`.

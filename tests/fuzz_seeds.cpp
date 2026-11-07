@@ -49,6 +49,8 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_scan_filter(f, true, true); },
       [](JsonDocument &f) { espn::detail::fill_team_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_upcoming_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_golf_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_golf_calendar_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;

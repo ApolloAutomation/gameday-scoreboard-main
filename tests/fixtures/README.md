@@ -153,6 +153,25 @@ later-today cards:
 | --- | --- |
 | `day_nba_20261015.json` | `.../basketball/nba/scoreboard?dates=20261015`, two games to come: TOR @ NY (no TV listed) and OKC @ HOU (NBA TV) |
 
+Golf, recorded 2026-11-07 03:18Z from a tour's scoreboard header
+(`https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=<tour>`)
+and season calendar (`.../golf/<tour>/scoreboard?dates=`). The DP World Tour,
+Korn Ferry Tour, PGA Tour Champions and LIV headers have the same shape as the
+PGA Tour's and stand in for states the two tours the panel follows weren't in:
+
+| File | Source |
+| --- | --- |
+| `golf_header_pga_suspended.json` | `league=pga`: 401850979 World Wide Technology Championship, round 2 suspended (`STATUS_SUSPENDED`, state `post`, completed false), every listed player finished the round, ties at T4 and T6 |
+| `golf_header_lpga_live.json` | `league=lpga`: 401835175 TOTO Japan Classic, round 3 in progress, a T1 tie, thru 4 to 14, only 21 players listed |
+| `golf_header_eur_after_round.json` | `league=eur`: 401822708 Abu Dhabi Aldar Championship, round 2 play complete (`STATUS_PLAY_COMPLETE`, state `post`, completed true while the event goes on), round 3 tee times |
+| `golf_header_kft_final.json` | `league=ntw`: 401837451 Korn Ferry Tour Championship, final, the winner's `winner` flag false |
+| `golf_header_champions_pre.json` | `league=champions-tour`: 401832050 Charles Schwab Cup Championship, scheduled, no competitors yet |
+| `golf_header_liv_canceled.json` | `league=liv`: 401843582 LIV Golf Michigan, canceled |
+| `golf_header_none.json` | `league=pga` on a day ESPN listed nothing: `leagues[0]` has no `events` |
+| `golf_calendar_pga_2026.json` | `.../golf/pga/scoreboard?dates=20261103`, a Tuesday with no round: no events, the 2026 season's calendar of 49 events |
+| `golf_calendar_pga_2027.json` | `.../golf/pga/scoreboard?dates=2027`, trimmed to its first 2 events; the 2027 calendar is whole |
+| `golf_calendar_lpga_2027.json` | `.../golf/lpga/scoreboard?dates=2027`, trimmed the same way |
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device

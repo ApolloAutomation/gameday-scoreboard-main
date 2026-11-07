@@ -20,6 +20,12 @@ static std::string site_base(League league) {
   return std::string(site_root.load(std::memory_order_relaxed)) + (l != nullptr ? l->path : "football/nfl");
 }
 
+GameSnapshot::GameSnapshot(const GameSnapshot &) = default;
+GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
+GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
+GameSnapshot &GameSnapshot::operator=(GameSnapshot &&) noexcept = default;
+GameSnapshot::~GameSnapshot() = default;
+
 const char *league_path(League league) {
   const LeagueInfo *l = league_info(league);
   if (l == nullptr)
@@ -124,6 +130,38 @@ std::string scoreboard_url(League league, uint32_t group, int64_t kickoff_epoch,
   return url;
 }
 
+std::string golf_header_url(League league) {
+  // The header lives beside the site API, not under it: keep the root's
+  // scheme and host (a bench root has no "/apis/").
+  std::string root = site_root.load(std::memory_order_relaxed);
+  size_t at = root.find("/apis/");
+  if (at == std::string::npos) {
+    size_t host = root.find("://");
+    at = root.find('/', host == std::string::npos ? 0 : host + 3);
+  }
+  return (at == std::string::npos ? root : root.substr(0, at)) + "/apis/v2/scoreboard/header?sport=golf&league=" +
+         league_path(league);
+}
+
+std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season) {
+  // The Eastern date, as every ESPN dates= parameter reads it.
+  const int64_t eastern = now_epoch - 5 * 3600;
+  int64_t days = eastern / 86400 - (eastern % 86400 < 0 ? 1 : 0);
+  int y, m, d;
+  char buf[32];
+  if (next_season) {
+    civil_from_epoch(eastern, y, m, d);
+    snprintf(buf, sizeof(buf), "?dates=%04d", y + 1);
+  } else {
+    // 1970-01-01 was a Thursday: (days + 4) % 7 is the weekday, Sunday 0.
+    int wd = (int) (((days + 4) % 7 + 7) % 7);
+    days += (2 - wd + 7) % 7;  // on to Tuesday
+    civil_from_epoch(days * 86400, y, m, d);
+    snprintf(buf, sizeof(buf), "?dates=%04d%02d%02d", y, m, d);
+  }
+  return site_base(league) + "/scoreboard" + buf;
+}
+
 std::string scan_url(League league, int64_t now_epoch) {
   std::string url = site_base(league) + "/scoreboard";
   int y, m, d;
@@ -165,8 +203,8 @@ std::string team_logo_url(League league, uint32_t espn_id, const char *abbr) {
   for (auto &c : a)
     c = (char) tolower((unsigned char) c);
   const LeagueInfo *l = league_info(league);
-  if (l == nullptr)
-    return "";
+  if (l == nullptr || l->sport == Sport::GOLF)
+    return "";  // a golf tour's board has no logo
   std::string file = l->logo_by_id ? std::to_string(espn_id) : a;
   bool scoreboard = league == League::NFL || league == League::MLB || league == League::NBA || league == League::NHL;
   return dark_logo(std::string("https://a.espncdn.com/i/teamlogos/") + l->logo_dir +
@@ -177,6 +215,12 @@ GameSnapshot team_placeholder(const Team &t) {
   GameSnapshot g;
   g.valid = true;
   g.state = GameState::PRE;
+  if (is_golf(t.league)) {
+    // The golf card with the tour's name and nothing under it
+    g.sport = Sport::GOLF;
+    g.game_name = t.name;
+    return g;
+  }
   g.team_abbr = t.abbr;
   g.team_id = t.espn_id;
   g.team_logo = team_logo_url(t.league, t.espn_id, t.abbr);
@@ -280,6 +324,8 @@ static const char *score_word(int delta, bool ours) {
 }
 
 Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
+  if (cur.sport == Sport::GOLF)
+    return golf_splash(prev, cur);
   if (cur.sport == Sport::BASEBALL)
     return baseball_splash(prev, cur, opponent_splashes, neutral);
   if (cur.sport == Sport::SOCCER)
@@ -378,6 +424,8 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
 }
 
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
+  if (s.sport == Sport::GOLF)
+    return golf_status_text(s, o, kickoff_local);
   if (s.sport == Sport::BASEBALL)
     return baseball_status_text(s, o, kickoff_local);
   if (s.sport == Sport::SOCCER)
@@ -423,6 +471,8 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
 }
 
 std::string ha_status_text(const GameSnapshot &s, const std::string &kickoff_local) {
+  if (s.sport == Sport::GOLF)
+    return golf_ha_status_text(s, kickoff_local);
   std::string out;
   switch (s.state) {
     case GameState::NOT_FOUND:
@@ -625,6 +675,8 @@ static std::string period_name(int period) {
 }
 
 std::string clock_text(const GameSnapshot &s) {
+  if (s.sport == Sport::GOLF)
+    return "";  // the leaderboard has its own status cell
   if (s.sport == Sport::BASEBALL)
     return baseball_clock_text(s);
   if (s.sport == Sport::SOCCER)

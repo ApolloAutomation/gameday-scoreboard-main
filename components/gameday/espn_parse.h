@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "teams.h"
@@ -91,8 +92,71 @@ struct Hockey {
   std::string series;    // "CAR leads series 2-0", playoffs
 };
 
+// Golf (sport_golf.cpp): the tour's current event, or its next one, from
+// its scoreboard header. GameSnapshot's shared fields carry the event:
+// event_id, game_name (event name, plain ASCII), kickoff_epoch (first day,
+// midnight Eastern), period (round), short_detail (ESPN's "Round 2 -
+// Suspended"), venue (course and city), tv, completed (STATUS_FINAL).
+// OFF is a canceled or postponed event.
+enum class GolfPhase : uint8_t { PRE, LIVE, BREAK, FINAL, OFF };
+// ESPN's status name, for the words: STATUS_SUSPENDED is SUSPENDED.
+enum class GolfStatus : uint8_t { OTHER, SCHEDULED, IN_PROGRESS, PLAY_COMPLETE, SUSPENDED, DELAYED, FINAL, CANCELED,
+                                  POSTPONED };
+static const size_t kGolfRows = 10;      // kept from the header (ticker, device page)
+static const size_t kGolfBoardRows = 6;  // drawn on the panel, both widths
+
+// Plain characters, no std::string, so the rows copy as a block: a snapshot
+// is copied and moved all over the component, and every board that isn't
+// golf carries an empty list of these.
+struct GolfRow {
+  uint8_t place{0};       // ESPN's place, shared by a tie; 0 when it gave none
+  bool tie{false};        // another listed player has the same place
+  bool par_known{false};  // score was a number or "E"
+  char state{'p'};        // 'p' not started this round, 'i' on the course, 'f' finished it
+  uint8_t thru{0};        // holes played this round
+  bool winner{false};     // won the event (final): place 1 held alone, or ESPN's flag
+  int16_t to_par{0};
+  int64_t tee_epoch{0};   // this round's (or the next round's) tee time, 0 for none
+  char name[16]{};        // last name, ascii_fold()ed, at most 15 chars: "McIlroy", "Hojgaard"
+  char score[5]{};        // to par as ESPN writes it, at most 4 chars: "-12", "E", "+3"
+  char tee[8]{};          // "8:27p" in the panel's time zone; filled on the main loop
+  void set_tee(const std::string &t) { put(this->tee, sizeof(this->tee), t); }
+  static void put(char *dst, size_t cap, const std::string &s) {
+    size_t n = s.size() < cap ? s.size() : cap - 1;
+    s.copy(dst, n);
+    dst[n] = '\0';
+  }
+};
+
+static_assert(std::is_trivially_copyable<GolfRow>::value, "golf rows copy as a block");
+
+struct GolfNext {  // the event after the one on the board, from the calendar
+  bool valid{false};
+  std::string event_id, name;  // name ascii_fold()ed
+  int64_t start_epoch{0}, end_epoch{0};
+};
+
+struct Golf {
+  GolfPhase phase{GolfPhase::PRE};
+  GolfStatus status{GolfStatus::OTHER};
+  bool playoff{false};        // hadPlayoff, or a listed player's status.playoff
+  int64_t end_epoch{0};       // the event's last day, midnight Eastern
+  char purse[16]{};           // "$6,000,000"
+  std::string defending;      // "Ben Griffin"
+  std::vector<GolfRow> rows;  // leaderboard order, at most kGolfRows
+  GolfNext next;              // after a final, canceled event or none listed
+};
+
 // One scoreboard event, resolved to "us" and "them".
 struct GameSnapshot {
+  // Copied and moved all over the component: one out-of-line copy of each
+  // (espn_parse.cpp), not one inlined into every file that moves one.
+  GameSnapshot() = default;
+  GameSnapshot(const GameSnapshot &);
+  GameSnapshot(GameSnapshot &&) noexcept;
+  GameSnapshot &operator=(const GameSnapshot &);
+  GameSnapshot &operator=(GameSnapshot &&) noexcept;
+  ~GameSnapshot();
   bool valid{false};
   GameState state{GameState::NOT_FOUND};
   std::string event_id;
@@ -122,6 +186,7 @@ struct GameSnapshot {
   Soccer soc;
   Basketball nba;  // every basketball league
   Hockey nhl;
+  Golf golf;
   std::string game_name;  // "Rose Bowl", "Super Bowl LX"; empty for most games
 };
 
@@ -350,6 +415,72 @@ Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool
 // The playoff series in at most 12 characters for the situation row
 // ("NY lead 2-1", "Series 2-2"), else "".
 std::string basketball_series(const GameSnapshot &s);
+
+// Golf (sport_golf.cpp). A tour is followed like a team: its board is the
+// tour's current tournament from the scoreboard header, and the calendar
+// names the next one. The JSON filters and parses are in espn_parse_impl.h.
+//
+// The tour's scoreboard header, ~19 KB during an event, ~3 KB between them:
+// https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga
+std::string golf_header_url(League league);
+// A season calendar: the scoreboard of the first Tuesday on or after now
+// (Eastern), 8-12 KB since Tuesday never has a round; or with next_season the
+// year after this one's whole list (dates=2027, 40-58 KB). Never this year:
+// dates=2026 is 29 MB.
+std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season);
+// The board's status cell, at most 12 characters: "Round 3", "R2 suspended",
+// "After R2", "Final", "Upcoming", "Canceled".
+std::string golf_round_text(const GameSnapshot &s);
+// The same for the ticker and Home Assistant: "Round 2 suspended", "After round 2".
+std::string golf_round_long(const GameSnapshot &s);
+uint32_t golf_round_color(const GameSnapshot &s);
+// Board columns: the place ("T4", "12", "-", at most 2 characters), the same
+// without the width limit ("T10"), the score to par ("E", "-12", "+3", at most
+// 3) and holes played ("F", "12", a tee time "8:27p", "-"; "" in a final; at
+// most 6).
+std::string golf_pos_text(const GolfRow &r);
+std::string golf_place_text(const GolfRow &r);
+std::string golf_score_text(const GolfRow &r);
+uint32_t golf_score_color(const GolfRow &r);
+std::string golf_thru_text(const GolfRow &r, GolfPhase phase);
+// "8:27p", "11:40a", "12:05p".
+std::string golf_tee_label(const struct tm &t);
+// "Nov 12-15", "Oct 29-Nov 1", "Aug 30".
+std::string golf_dates(const struct tm &start, const struct tm &end);
+// An event name in at most max characters: the sponsor tail goes first, then
+// a trailing "Championship" or "Classic", then words from the end ("World
+// Wide Technology Championship" is "World Wide" in 17).
+std::string golf_event_name(const std::string &name, size_t max);
+// The leaderboard cut to the board's columns (kGolfBoardRows rows, none
+// before the event or for a canceled one: the board shows golf_card_text).
+struct GolfLines {
+  std::string title, status;
+  uint32_t status_color{0xFFFFFF};
+  std::vector<std::string> pos, name, score, thru;
+  std::vector<int> score_color, name_color;
+};
+GolfLines golf_lines(const GameSnapshot &s, bool wide);
+// The no-leaderboard card on the no-game screen: the event name, a line
+// break, then dates (before the event), Canceled or Postponed, or the round.
+std::string golf_card_text(const GameSnapshot &s, bool wide, const std::string &dates);
+// The ticker and Home Assistant's Game Status. dates: the event's own before
+// it starts, the next event's after a final or a canceled one.
+std::string golf_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &dates);
+std::string golf_ha_status_text(const GameSnapshot &s, const std::string &dates);
+// "HITT WINS!" when the event went final between the two reads.
+Splash golf_splash(const GameSnapshot &prev, const GameSnapshot &cur);
+// The calendar's next event as a board: a PRE golf snapshot.
+GameSnapshot golf_next_snapshot(const GolfNext &n);
+// ESPN's CDN edges serve snapshots of different ages: a read that goes back to
+// an earlier event, an earlier round or an earlier phase of the one shown.
+bool golf_read_is_older(const GameSnapshot &shown, const GameSnapshot &read);
+// How long until the next header read.
+uint32_t golf_poll_ms(const GameSnapshot &g, int64_t now);
+// Between seasons: the board shows the off-season clock (offseason.h).
+bool golf_off_season(const GameSnapshot &g, int64_t now);
+// A final (or a canceled event) over kSeasonHorizon old that ESPN still has in
+// its header, with the next event known: the board shows that one instead.
+bool golf_show_next(const GameSnapshot &g, int64_t now);
 
 namespace detail {
 // Ticker helpers shared by the sport files.
