@@ -477,6 +477,10 @@ static bool race_like(RaceKind k) { return k == RaceKind::RACE || k == RaceKind:
 static bool held(const GameSnapshot &s) {
   return s.race.status == GolfStatus::SUSPENDED || s.race.status == GolfStatus::DELAYED;
 }
+// Stopped six hours past its start: a race put off overnight, not a red flag
+static bool held_long(const GameSnapshot &s, int64_t now) {
+  return held(s) && now - s.race.session_start > 6 * kRaceHour;
+}
 static const char *held_word(const GameSnapshot &s) {
   return s.race.status == GolfStatus::SUSPENDED ? "Suspended" : "Delayed";
 }
@@ -915,6 +919,10 @@ uint32_t racing_poll_ms(const GameSnapshot &g, int64_t now) {
   const Racing &r = g.race;
   switch (r.phase) {
     case RacePhase::LIVE:
+      // Stopped: every 2 minutes for the restart, every 15 once it has been
+      // held six hours past its start (a race put off overnight)
+      if (held(g))
+        return held_long(g, now) ? 15 * minute : 2 * minute;
       // A header is at most ~95 KB: every 30 seconds while cars race
       return race_like(r.kind) ? minute / 2 : minute;
     case RacePhase::PRE:
@@ -935,9 +943,13 @@ uint32_t racing_poll_ms(const GameSnapshot &g, int64_t now) {
     }
     default:
       // Waiting for ESPN to move its header on to the next race; between
-      // seasons, a few times a day.
-      return now - r.race_epoch <= kRaceSeasonGap ? 30 * minute : 360 * minute;
+      // seasons (the off-season clock up), a few times a day.
+      return racing_off_season(g, now) || now - r.race_epoch > kRaceSeasonGap ? 360 * minute : 30 * minute;
   }
+}
+
+bool racing_on_track(const GameSnapshot &g, int64_t now) {
+  return g.valid && g.sport == Sport::RACING && g.race.phase == RacePhase::LIVE && !held_long(g, now);
 }
 
 bool racing_off_season(const GameSnapshot &g, int64_t now) {

@@ -1531,11 +1531,13 @@ void GamedayComponent::update_state_changed_() {
 bool GamedayComponent::followed_game_live_() const {
   // A golf event is IN all week, overnight breaks included: only a round
   // being played counts, so the nights between rounds can still update. A
-  // race weekend is the same: only a session on track.
+  // race weekend is the same: only a session on track, and not a race
+  // stopped overnight.
   if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF)
     return this->game_.golf.phase == ::espn::GolfPhase::LIVE;
   if (this->game_.valid && this->game_.sport == ::espn::Sport::RACING)
-    return this->game_.race.phase == ::espn::RacePhase::LIVE;
+    return ::espn::racing_on_track(this->game_,
+                                   this->time_ != nullptr ? (int64_t) this->time_->timestamp_now() : 0);
   if (this->game_.valid && this->game_.state == GameState::IN)
     return true;
   if (this->favorites_mode_())

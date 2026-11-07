@@ -621,8 +621,13 @@ GameSnapshot racing_next_snapshot(const GolfNext &n);
 // shown, or the same event at an earlier session, phase or lap.
 bool racing_read_is_older(const GameSnapshot &shown, const GameSnapshot &read);
 // How long until the next header read: 30 s while a race or sprint runs, a
-// minute in practice or qualifying, closer to the next session as it nears.
+// minute in practice or qualifying, 2 minutes while a session is suspended or
+// delayed (15 six hours past its start), closer to the next session as it
+// nears, and 6 hours while the off-season clock is up.
 uint32_t racing_poll_ms(const GameSnapshot &g, int64_t now);
+// A session on track, for holding back an automatic update: LIVE, a red flag
+// or a short stop included, but not one stopped six hours past its start.
+bool racing_on_track(const GameSnapshot &g, int64_t now);
 // The off-season clock: the next race over kRaceSeasonGap away, or none
 // known a day after the last race. Not while a failed calendar read leaves
 // it unknown (next_unknown).

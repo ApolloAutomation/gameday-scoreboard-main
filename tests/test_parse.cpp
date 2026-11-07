@@ -6224,8 +6224,21 @@ static void test_racing_live() {
   CHECK_EQ(racing_state_text(r), std::string("Suspended"));
   CHECK_EQ(racing_state_color(r), (uint32_t) 0xFFA000);
   CHECK_EQ(racing_state_long(r), std::string("Race suspended"));
+  // Read every 2 minutes for the restart, not every 30 seconds; every 15
+  // once it has been stopped six hours past its start
+  CHECK_EQ(racing_poll_ms(r, parse_iso8601_z("2026-10-25T21:00Z")), 2u * 60 * 1000);
+  CHECK_EQ(racing_poll_ms(r, parse_iso8601_z("2026-10-26T02:01Z")), 15u * 60 * 1000);
+  // and it holds back an automatic update only until then
+  CHECK(racing_on_track(r, parse_iso8601_z("2026-10-25T21:00Z")));
+  CHECK(!racing_on_track(r, parse_iso8601_z("2026-10-26T02:01Z")));
+  CHECK(racing_on_track(s, parse_iso8601_z("2026-10-26T02:01Z")));  // on track, however long
+  GameSnapshot between = s;
+  between.race.phase = RacePhase::BREAK;
+  CHECK(!racing_on_track(between, 0));
+  CHECK(!racing_on_track(GameSnapshot{}, 0));
   r.race.status = GolfStatus::DELAYED;
   CHECK_EQ(racing_state_text(r), std::string("Delayed"));
+  CHECK_EQ(racing_poll_ms(r, parse_iso8601_z("2026-10-25T20:10Z")), 2u * 60 * 1000);
   // The winner's splash: once, on the read that goes final, the race only
   GameSnapshot fin = racing_doc("fixtures/racing_header_f1_final.json");
   Splash sp = racing_splash(s, fin, false);
@@ -6674,6 +6687,17 @@ static void test_racing_timing() {
     CHECK_EQ(racing_poll_ms(g, now), 30 * minute);
     g.race.race_epoch = now - 46 * day;
     CHECK_EQ(racing_poll_ms(g, now), 360 * minute);
+    // The off-season clock up (nothing ahead, a day after the race): every 6
+    // hours, not every 30 minutes for 45 days
+    g.race.race_epoch = now - 2 * day;
+    CHECK(racing_off_season(g, now));
+    CHECK_EQ(racing_poll_ms(g, now), 360 * minute);
+    g.race.next_unknown = true;  // the calendar read failed: the final stays up
+    CHECK_EQ(racing_poll_ms(g, now), 30 * minute);
+    g.race.next_unknown = false;
+    g.race.next = GolfNext{true, "1", "Next GP", now + 12 * day, now + 14 * day};  // the next race's card
+    CHECK_EQ(racing_poll_ms(g, now), 30 * minute);
+    g.race.next = GolfNext{};
   }
   // The off-season clock: the next race 45 days or more away
   GameSnapshot card = racing_next_snapshot(GolfNext{true, "1", "Next GP", now + 44 * day, now + 46 * day});

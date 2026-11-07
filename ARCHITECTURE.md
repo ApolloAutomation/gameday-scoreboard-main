@@ -202,7 +202,10 @@ times run three hours late, which the parse takes off. A final stays a day
 (`racing_show_next`), the clock shows when the next race is over 45 days
 away (`kRaceSeasonGap`, `racing_off_season`), and `racing_poll_ms` reads
 every 30 seconds during a race or sprint, a minute in practice and
-qualifying, and closer to the next session as it nears. The board is
+qualifying, 2 minutes while a session is suspended or delayed, closer to the
+next session as it nears, and every 6 hours while the off-season clock is up.
+A held session still holds back an automatic update (`racing_on_track`)
+until it has been stopped six hours past its start. The board is
 `gd_board_container` and `gd_board`, the same widgets as golf's: on one
 panel `BoardLines::value_narrow` false hides the value column and gives the
 names its room. Racing is not in Favorite teams or Live games either.

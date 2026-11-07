@@ -39,6 +39,8 @@ Under it are the first six places:
 - **Car number** and **gap**, on a 128x64 display only. In practice and qualifying the leader shows their lap time, like "1:10.7", and everyone else how far behind it they are, like "+0.253". In a race the gap is to the leader, like "+13.07", or the laps down, like "+1L". A driver out of the race shows "DNF", and a disqualified one "DSQ".
 
 The ticker has the session and the top 10 with their full gaps, like "1 Antonelli 1:10.763, 2 Norris +0.253" or "8 Wallace +1 lap", then the TV channel when **Pre-game odds and TV** is on.
+
+With **Install updates automatically** on, an overnight update waits while a session is on track, through a red flag or a short stop too, but not for a race still stopped 6 hours after its start. See [Install updates automatically](/using/updates/#install-updates-automatically).
 :::
 
 ## Between sessions
@@ -74,7 +76,7 @@ After a season's last race, until ESPN publishes the next season's schedule, the
 ## How often it updates
 
 :::note[Coming in the next release]
-Every 30 seconds while a race or sprint is on track, and every minute during practice and qualifying and from 10 minutes before a session until ESPN says it has started. Every 5 minutes in the 2 hours before a session, every 30 minutes the rest of the season, and every 6 hours between seasons. A session ESPN still hasn't started 6 hours after its time is checked every 15 minutes. **Refresh scores** on the device page reads it again right away.
+Every 30 seconds while a race or sprint is on track, and every minute during practice and qualifying and from 10 minutes before a session until ESPN says it has started. A suspended or delayed session is checked every 2 minutes, and every 15 once it's still stopped 6 hours after its start. Every 5 minutes in the 2 hours before a session, every 30 minutes the rest of the season, and every 6 hours while the off-season clock is up. A session ESPN still hasn't started 6 hours after its time is checked every 15 minutes. **Refresh scores** on the device page reads it again right away.
 
 Each read is ESPN's summary of the weekend: up to about 95 KB during an F1 weekend, when every session's order is in it, and 3 to 27 KB for NASCAR.
 :::

@@ -355,6 +355,7 @@ size_t racing(GameSnapshot g, const GolfNext &next, int64_t now) {
     n += splash.size();
   }
   n += racing_poll_ms(g, now) + (racing_off_season(g, now) ? 1 : 0) + (racing_show_next(g, now) ? 1 : 0) +
+       (racing_on_track(g, now) ? 1 : 0) +
        (racing_read_is_older(before, g) ? 1 : 0) + (racing_read_is_older(g, before) ? 1 : 0);
   n += racing_status_text(racing_next_snapshot(g.race.next), TickerOptions{}, when).size();
   return n;
