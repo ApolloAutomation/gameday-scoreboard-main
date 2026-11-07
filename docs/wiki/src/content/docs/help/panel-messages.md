@@ -53,8 +53,8 @@ These show on the board or in the ticker.
 | **Later today** | A card before the games still to come today, each with both logos, the start time and the TV channel. | Nothing. |
 | **Yesterday's NHL scores**, or another day and league | A card before that day's final scores. | Nothing. |
 | **Next: BOS at NYR Thu 6:00 PM** | No game is left today. This is the next one. | Nothing. |
-| A clock, with **Next:** and a date, or only the date | Your team is between seasons. The clock is in your team's colors, or gray with no team picked. Under it is the next game once it's on the schedule. | Nothing. See [Brightness and the clock](/using/brightness-and-clock/). |
-| A clock, with **No upcoming Formula 1 race** or **No upcoming NASCAR Cup Series race** in the ticker | Your team is a racing series, its season's last race is over, and ESPN hasn't published the next season's schedule yet. | Nothing. See [Racing](/using/racing/). |
+| A clock, with **Next:** and a date, or only the date | Your team is between seasons. The clock is in your team's colors, or gray with no team picked. A golf tour's clock is green and a racing series' is red. Under it is the next game, event or race once it's on the schedule. | Nothing. See [Brightness and the clock](/using/brightness-and-clock/). |
+| A clock, with **No upcoming PGA Tour event**, **No upcoming LPGA Tour event**, **No upcoming Formula 1 race** or **No upcoming NASCAR Cup Series race** in the ticker | Your team is a golf tour or a racing series, its season is over, and ESPN hasn't listed the next event or race yet. | Nothing. See [Golf](/using/golf/) and [Racing](/using/racing/). |
 | **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. A canceled or postponed golf tournament or race shows its name and **Canceled** or **Postponed**. | Nothing. |
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
 

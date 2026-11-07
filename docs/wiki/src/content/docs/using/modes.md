@@ -25,7 +25,7 @@ Your team is always on the left of the board.
 
 Between seasons the board shows a clock in your team's colors instead of an empty scoreboard. Under the time is the next game once it's on the schedule, like "Next: at PHI Mar 26 7:05 PM", or the date until then. On a single 64x64 panel the next game goes in the ticker, since there is no room for it under the time.
 
-Football teams get the clock only when ESPN lists no game at all, so a bye week never shows it. In the other leagues the clock comes up once the next game is more than 10 days away.
+Football teams get the clock only when ESPN lists no game at all, so a bye week never shows it. In the other leagues the clock comes up once the next game is more than 10 days away. A golf tour's clock is green and comes up once its next event is more than 10 days away, and a racing series' clock is red and waits until the next race is more than 45 days away. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 ### A panel with no team picked
 

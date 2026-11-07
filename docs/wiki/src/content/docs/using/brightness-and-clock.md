@@ -36,6 +36,7 @@ The panel always comes back on after a restart or a power cut.
 Separate from the Clock page, the scoreboard shows a clock of its own when there's no game to follow, so the panel isn't stuck on "No upcoming game" for months between seasons:
 
 - **In My team**, between seasons, the clock is in your team's colors. Under the time is your team's next game once it's on the schedule, like "Next: at PHI Mar 26 7:05 PM", or the date until then. Football teams get it only when ESPN lists no game at all, so a bye week never shows it; other leagues get it once the next game is more than 10 days away.
+- **In My team with a golf tour or a racing series**, the clock is green for golf and red for racing. Golf gets it once the tour's next event is more than 10 days away, and racing once the next race is more than 45 days away, or after the season's last race when ESPN has no next one listed. Under the time is "Next:" and the event or race once it's on the schedule, or the date until then. See [Golf](/using/golf/) and [Racing](/using/racing/).
 - **In Favorite teams**, when none of your favorites has a game scheduled, the clock is in your first favorite's colors.
 - **In Live games** with no team picked, when there has been no game in the last week and none is coming, the clock is gray.
 

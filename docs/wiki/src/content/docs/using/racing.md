@@ -53,7 +53,7 @@ A canceled or postponed race, or a whole canceled weekend, shows its name and "C
 
 Between race weekends the board shows the next race's name and days. When the next race is more than 45 days away, the board shows the off-season clock, in red. On a 128x64 display the next race and its days sit under the time, like "Next: Australian GP" over "Mar 5-7", and on a single panel the date does. The ticker says "Next:" with the race's full name and days.
 
-After a season's last race, until ESPN publishes the next season's schedule, the clock's ticker says "No upcoming Formula 1 race" or "No upcoming NASCAR Cup Series race". When version 2026.10.2 came out, ESPN had no 2027 schedule yet for either series, so a panel following NASCAR shows that clock from the day after its November 8 finale, and one following Formula 1 from the day after the Abu Dhabi race on December 6. If ESPN lists nothing for the series at all, the board says "No upcoming race". See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/).
+After a season's last race, until ESPN publishes the next season's schedule, the clock's ticker says "No upcoming Formula 1 race" or "No upcoming NASCAR Cup Series race". When version 2026.10.2 came out, ESPN had no 2027 schedule yet for either series, so a panel following NASCAR shows that clock from the day after the 2026 season's November 8 finale, and one following Formula 1 from the day after the Abu Dhabi race on December 6, 2026. If ESPN lists nothing for the series at all, the board says "No upcoming race". See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/).
 
 ## How often it updates
 
