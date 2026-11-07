@@ -13,6 +13,10 @@ Pick your team on the panel's device page. Home Assistant can change the same se
 2. Tap **Change team**.
 3. Pick a league tab and tap a logo, or type in **Search teams** to find a team in any league.
 
+:::note[Coming in the next release]
+For step 1 you can also scan the QR code the panel shows when it joins your Wi-Fi, with your phone's camera. It opens the device page by IP address, so there's no `.local` name to type. Your phone has to be on the same Wi-Fi.
+:::
+
 The page says **Now following the** and the team's name, and the panel switches. While the new team's scores load, the panel says **Looking up scores**, for up to 10 seconds, so you never see a half-empty board.
 
 Lost the address? Hold the button on the controller for about 1.5 seconds and the panel shows it again, with the IP address, for 20 seconds.
@@ -56,6 +60,10 @@ A new team shows on the panel within a few seconds, with nothing to restart. The
 ## Before you pick a team
 
 A panel nobody has picked a team for doesn't follow one. It shows live NFL and college football games, and when nothing is on, the latest final scores and when the next game starts. See [A panel with no team picked](/using/modes/#a-panel-with-no-team-picked). The app's QR code comes back over the board for 13 seconds every 3 minutes until you pick a team.
+
+:::note[Coming in the next release]
+That QR code opens the panel's device page by IP address. Scan it with your phone's camera, on the same Wi-Fi, to pick your team.
+:::
 
 ## More than one team
 

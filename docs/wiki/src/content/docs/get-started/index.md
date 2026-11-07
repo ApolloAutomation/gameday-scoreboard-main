@@ -21,6 +21,10 @@ Built your own on a MoonHub75 board or another ESP32-S3 board, or putting the fi
 2. **Put it on your Wi-Fi.** Use the Wi-Fi dialog the installer offers right after an install, or join the panel's own **Game Day** hotspot from any phone or laptop. Both are on [Set up your panel](/get-started/setup/).
 3. **Pick your team.** Choose it on the panel's own web page, the device page, or from [Home Assistant](/using/home-assistant/). See [Pick your team](/get-started/pick-your-team/).
 
+:::note[Coming in the next release]
+The QR code in step 1 joins the panel's hotspot: point your phone's camera at it. Once the panel is on your Wi-Fi, its QR code opens the device page for step 3. No app needed.
+:::
+
 That's all the setup there is. Before a game the panel shows the matchup and the start time. When the game starts it switches to the live board, celebrates scores, and stays on the final for a while before it looks up the next game.
 
 If something doesn't go to plan, [Help](/help/) covers the common problems and what the panel's messages mean.

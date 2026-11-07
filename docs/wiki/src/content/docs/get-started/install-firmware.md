@@ -30,6 +30,10 @@ You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 
 If you skip the Wi-Fi step, the panel shows **SETUP** with the QR code for the app and starts its **Game Day** hotspot. Carry on from [Set up your panel](/get-started/setup/).
 
+:::note[Coming in the next release]
+The setup screen's QR code joins the **Game Day** hotspot: scan it with your phone's camera and the setup page opens.
+:::
+
 If the installer says the browser can't talk to the controller over USB, switch to Chrome or Edge on a desktop computer.
 
 ## Built your own?
