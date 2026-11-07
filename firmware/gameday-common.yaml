@@ -683,6 +683,14 @@ gameday:
         # Built from panel_text() pieces with a line break that panel_text()
         # would turn into a space, so it goes to the board as it is.
         next_line: !lambda 'return x.next_line;'
+        # Golf (sport 5): its leaderboard, or its card (the event's name and
+        # dates in next_line) when there is no leaderboard to show.
+        golf_board: !lambda 'return x.golf_board;'
+        golf_card: !lambda 'return x.golf_card;'
+    # The leaderboard's rows, read from the component (board_fields), so the
+    # columns aren't copied into script arguments. A script with no delay
+    # runs to its end here: the rows change in the same frame as the layout.
+    - script.execute: gd_golf
     - lambda: |-
         id(gd_team_logo_url) = x.team_logo;
         id(gd_opp_logo_url) = x.opponent_logo;

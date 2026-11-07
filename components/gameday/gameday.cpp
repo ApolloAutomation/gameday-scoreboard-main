@@ -1033,6 +1033,9 @@ void GamedayComponent::loop() {
         deadline = WORKER_DEADLINE / 2 * (2 + LOOKAHEAD_DAYS);
       else if ((this->job_.need_schedule || this->job_.comp > 0) && team != nullptr)
         deadline = WORKER_DEADLINE / 2 * 3;
+      // Golf: the header, and at most two calendar reads after it.
+      if (this->job_.need_golf)
+        deadline = WORKER_DEADLINE / 2 * 3;
       if (this->busy_since_ms_ != 0 && (millis() - this->busy_since_ms_) >= deadline) {
         ESP_LOGW(TAG, "Fetch task did not finish in %us, giving up on it", (unsigned) (deadline / 1000));
         this->busy_ = false;
@@ -1526,6 +1529,10 @@ void GamedayComponent::update_state_changed_() {
 // A game the panel follows is in progress: the one on the board, which
 // covers My team and the live modes, or any favorite's in Favorite teams.
 bool GamedayComponent::followed_game_live_() const {
+  // A golf event is IN all week, overnight breaks included: only a round
+  // being played counts, so the nights between rounds can still update.
+  if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF)
+    return this->game_.golf.phase == ::espn::GolfPhase::LIVE;
   if (this->game_.valid && this->game_.state == GameState::IN)
     return true;
   if (this->favorites_mode_())
@@ -1679,6 +1686,7 @@ void GamedayComponent::reset_game_() {
   this->post_since_ms_ = 0;
   this->misses_ = 0;
   this->no_game_confirmed_ = false;
+  this->golf_stale_reads_ = 0;
 }
 
 void GamedayComponent::restart_board_() {
@@ -1908,7 +1916,8 @@ bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, 
 
 bool GamedayComponent::needs_lookahead_(League league) const {
   const ::espn::LeagueInfo *info = ::espn::league_info(league);
-  return info != nullptr && info->sport != ::espn::Sport::FOOTBALL && !info->season_list;
+  return info != nullptr && info->sport != ::espn::Sport::FOOTBALL && info->sport != ::espn::Sport::GOLF &&
+         !info->season_list;
 }
 
 int GamedayComponent::fetch_team_day_(const ::espn::Team *team, uint32_t group, int64_t day_epoch,
@@ -2030,8 +2039,55 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   return true;
 }
 
+int GamedayComponent::fetch_golf_(League league, GameSnapshot &out) {
+  std::string url = ::espn::golf_header_url(league);
+  ESP_LOGD(TAG, "Fetching golf: %s", url.c_str());
+  auto container = this->open_(url);
+  if (container == nullptr)
+    return -1;
+  ContainerReader reader(container, this->espn_bytes_);
+  GameSnapshot g;
+  int r = ::espn::parse_golf(reader, g);
+  container->end();
+  if (r < 0) {
+    ESP_LOGW(TAG, "Golf header not parsed (%u bytes)", (unsigned) reader.total());
+    return -1;
+  }
+  ESP_LOGI(TAG, "Golf: %s %s, %u rows (%u bytes)", r > 0 ? g.event_id.c_str() : "no event",
+           r > 0 ? g.short_detail.c_str() : "", (unsigned) g.golf.rows.size(), (unsigned) reader.total());
+  out = std::move(g);
+  return r;
+}
+
+bool GamedayComponent::fetch_golf_next_(League league, const std::string &after_event, int64_t now,
+                                        ::espn::GolfNext &out) {
+  out = ::espn::GolfNext{};
+  // This season's calendar first, then next season's once this one is over.
+  for (int pass = 0; pass < 2; pass++) {
+    std::string url = ::espn::golf_calendar_url(league, now, pass == 1);
+    ESP_LOGD(TAG, "Fetching golf calendar: %s", url.c_str());
+    auto container = this->open_(url);
+    if (container == nullptr)
+      return false;
+    ContainerReader reader(container, this->espn_bytes_);
+    int r = ::espn::parse_golf_calendar(reader, now, after_event, out);
+    container->end();
+    if (r < 0) {
+      ESP_LOGW(TAG, "Golf calendar not parsed (%u bytes)", (unsigned) reader.total());
+      return false;
+    }
+    ESP_LOGI(TAG, "Golf next: %s (%u bytes)", r > 0 ? out.event_id.c_str() : "none", (unsigned) reader.total());
+    if (r > 0)
+      return true;
+  }
+  return true;  // nothing listed ahead in either season
+}
+
 uint32_t GamedayComponent::interval_for_phase_() const {
   uint32_t ms;
+  if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF) {
+    ms = ::espn::golf_poll_ms(this->game_, (int64_t) this->time_->timestamp_now());
+  } else {
   switch (this->game_.state) {
     case GameState::IN:
       ms = IN_INTERVAL;
@@ -2049,6 +2105,7 @@ uint32_t GamedayComponent::interval_for_phase_() const {
     default:
       ms = SCHEDULE_INTERVAL;
       break;
+  }
   }
   // The fallback card is only borrowing the board: a 15 minute PRE cycle, or
   // the 6 hours an out of season team gets, must never outlast the rescan.
@@ -2139,6 +2196,13 @@ void GamedayComponent::start_job_() {
     // In the fallback with the rescan not due: fall through to the My team
     // path below, so the card is fetched and polled by that code and not by
     // a copy of it.
+  }
+  if (j.team != nullptr && ::espn::is_golf(j.team->league)) {
+    // A golf tour: one header read, plus the calendar after a final
+    // (run_golf_job_). None of the team machinery below applies.
+    j.need_golf = true;
+    this->start_worker_();
+    return;
   }
   if (!this->schedule_.valid && !this->team_cache_tried_) {
     this->team_cache_tried_ = true;
@@ -2268,6 +2332,10 @@ void GamedayComponent::run_job_() {
     container->end();
     return;
   }
+  if (j.need_golf) {
+    this->run_golf_job_();
+    return;
+  }
   if (j.need_recap) {
     // One day's scoreboard: its finals going back, its first kickoff and that
     // game's matchup going forward. The live list is always empty for a day
@@ -2368,6 +2436,10 @@ void GamedayComponent::apply_job_() {
   uint32_t now = millis();
   if (j.fav_index >= 0) {
     this->apply_fav_job_(now);
+    return;
+  }
+  if (j.need_golf) {
+    this->apply_golf_job_(now);
     return;
   }
   if (j.need_recap) {
@@ -2647,6 +2719,82 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
   this->schedule_next_(this->comp_next_ > 0 || this->upcoming_due_ ? 0 : this->interval_for_phase_());
 }
 
+// Worker, golf: the tour's header, and after a final, a canceled event or
+// none listed, what comes next from the calendar.
+void GamedayComponent::run_golf_job_() {
+  Job &j = this->job_;
+  League league = j.team->league;
+  int r = this->fetch_golf_(league, j.game);
+  j.game_ok = r >= 0;
+  j.no_event = r == 0;
+  if (!j.game_ok || (!j.no_event && j.game.state != GameState::POST))
+    return;
+  int64_t now = (int64_t) this->time_->timestamp_now();
+  j.golf_next_ok = this->fetch_golf_next_(league, j.game.event_id, now, j.game.golf.next);
+}
+
+// Main loop, golf: the read takes the board unless it is an older CDN copy.
+void GamedayComponent::apply_golf_job_(uint32_t now) {
+  (void) now;
+  Job &j = this->job_;
+  const int64_t tnow = (int64_t) this->time_->timestamp_now();
+  const bool calendar_failed = (j.no_event || j.game.state == GameState::POST) && !j.golf_next_ok;
+  if (!j.game_ok || (j.no_event && calendar_failed)) {
+    // A read failed: the same as every sport.
+    this->misses_ = ::espn::add_miss(this->misses_);
+    this->drop_team_placeholder_();
+    this->emit_({});
+    this->schedule_next_(this->back_off_());
+    return;
+  }
+  this->clear_backoff_();
+  this->force_schedule_ = false;  // Refresh Now is a plain re-read for golf
+  if (j.no_event) {
+    if (!j.game.golf.next.valid) {
+      // ESPN lists nothing, now or ahead
+      ESP_LOGI(TAG, "No upcoming event for this tour");
+      this->no_game_confirmed_ = true;
+      this->game_ = GameSnapshot{};
+      this->prev_ = GameSnapshot{};
+      this->misses_ = 0;
+      this->emit_({});
+      this->mark_board_ready_();
+      this->schedule_next_(60 * MINUTE);
+      return;
+    }
+    j.game = ::espn::golf_next_snapshot(j.game.golf.next);  // the next event's card, from the calendar
+  }
+  // A failed calendar read keeps the next event this final already had.
+  if (calendar_failed && this->game_.valid && this->game_.event_id == j.game.event_id)
+    j.game.golf.next = this->game_.golf.next;
+  // ESPN keeps a tour's last final in its header for weeks: once it is
+  // stale, the board moves on to the next event.
+  if (::espn::golf_show_next(j.game, tnow))
+    j.game = ::espn::golf_next_snapshot(j.game.golf.next);
+  if (::espn::golf_read_is_older(this->game_, j.game) && this->golf_stale_reads_ < 2) {
+    this->golf_stale_reads_++;
+    ESP_LOGI(TAG, "Golf: an older copy of the leaderboard, keeping the board");
+    this->mark_good_poll_();
+    this->rebuild_state_(&this->last_fields_);
+    this->schedule_next_(this->interval_for_phase_());
+    return;
+  }
+  this->golf_stale_reads_ = 0;
+  // Tee times in the panel's time zone
+  for (auto &r : j.game.golf.rows)
+    r.set_tee(r.tee_epoch > 0 ? ::espn::golf_tee_label(ESPTime::from_epoch_local((time_t) r.tee_epoch).to_c_tm())
+                              : std::string());
+  this->prev_ = std::move(this->game_);
+  this->game_ = std::move(j.game);  // leaves job_ without the rows
+  this->no_game_confirmed_ = false;
+  this->mark_good_poll_();
+  ::espn::Splash splash = ::espn::decide_splash(this->prev_, this->game_, false, false);
+  this->prev_.golf.rows = {};  // only its event and phase are read later
+  this->emit_(splash);
+  this->mark_board_ready_();
+  this->schedule_next_(this->interval_for_phase_());
+}
+
 std::string GamedayComponent::no_game_why_() const {
   if (this->game_.valid || this->demo_playing_())
     return "";
@@ -2721,14 +2869,52 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     return ::espn::kickoff_label(kick, now, s.time_tbd);
   };
   std::string kickoff = kickoff_of(g);
+  const bool golf = g.valid && g.sport == ::espn::Sport::GOLF;
+  if (golf) {
+    // The dates stand in for the kickoff: the event's own before it starts,
+    // the next event's after a final or a canceled one.
+    std::string dates = g.golf.phase == ::espn::GolfPhase::PRE ? this->golf_dates_(g.kickoff_epoch, g.golf.end_epoch)
+                        : g.golf.next.valid ? this->golf_dates_(g.golf.next.start_epoch, g.golf.next.end_epoch)
+                                            : std::string();
+    kickoff = dates;
+    const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
+    ::espn::GolfLines l = ::espn::golf_lines(g, wide);
+    f.golf_title = std::move(l.title);
+    f.golf_status = std::move(l.status);
+    f.golf_status_color = l.status_color;
+    f.golf_pos = std::move(l.pos);
+    f.golf_name = std::move(l.name);
+    f.golf_score = std::move(l.score);
+    f.golf_thru = std::move(l.thru);
+    f.golf_score_color = std::move(l.score_color);
+    f.golf_name_color = std::move(l.name_color);
+    // No leaderboard (before the event, canceled, the tour's name while it
+    // loads): the card. Its pieces are panel-safe already (ascii_fold), and
+    // panel_text() would turn its line break into a space.
+    f.golf_card = f.golf_name.empty();
+    if (f.golf_card)
+      f.next_line = ::espn::golf_card_text(g, wide, g.golf.phase == ::espn::GolfPhase::PRE ? dates : std::string());
+  }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
   const GameSnapshot &ha = this->ha_game_();
-  f.ha_status_text = ::espn::ha_status_text(ha, kickoff_of(ha));
+  f.ha_status_text = ::espn::ha_status_text(ha, golf && &ha == &g ? kickoff : kickoff_of(ha));
   f.ha_last_play = ha.last_play;
   // Before the Live mode prefixes, so a fallback team's Next line keeps "No
   // live X games, showing CHI |" in front of it.
   this->clock_fields_(f);
+  // The leaderboard, or the card, unless the off-season clock has the board.
+  if (f.clock)
+    f.golf_card = false;
+  f.golf_board = golf && !f.clock && !f.golf_card;
+  // A golf tour ESPN lists nothing for, now or ahead: an event, not a game.
+  const ::espn::Team *followed = this->current_team_();
+  if (!g.valid && this->no_game_confirmed_ && followed != nullptr && ::espn::is_golf(followed->league) &&
+      !this->favorites_mode_()) {
+    f.status_text = "No upcoming event";
+    f.ha_status_text = f.status_text;
+    f.message = f.status_text;
+  }
   if (this->live_mode_() && !this->demo_playing_()) {
     std::string league_word = this->live_word_();
     const ::espn::Team *saved = this->current_team_();
@@ -2871,6 +3057,33 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
         return;
     team = this->fav_[0].team;
     color = this->fav_[0].sched.team_color;
+  } else if (team != nullptr && ::espn::is_golf(team->league)) {
+    // A golf tour between seasons: the next event, when one is known, under
+    // the time on a wide board and in the ticker.
+    int64_t tnow = (int64_t) this->time_->timestamp_now();
+    if (!::espn::golf_off_season(g, tnow))
+      return;
+    color = "30B050";  // golf green, lifted by clock_color
+    std::string name;
+    int64_t start = 0, end = 0;
+    if (g.golf.phase == ::espn::GolfPhase::PRE) {
+      name = g.game_name;
+      start = g.kickoff_epoch;
+      end = g.golf.end_epoch;
+    } else if (g.golf.next.valid) {
+      name = g.golf.next.name;
+      start = g.golf.next.start_epoch;
+      end = g.golf.next.end_epoch;
+    }
+    if (!name.empty()) {
+      std::string dates = this->golf_dates_(start, end);
+      // 21 characters a line of spleen_12 on a wide board
+      f.next_line = "Next: " + ::espn::golf_event_name(name, 15) + "\n" + dates;
+      f.status_text = "Next: " + name + (dates.empty() ? "" : ", " + dates);
+    } else {
+      f.next_line.clear();
+      f.status_text = std::string("No upcoming ") + team->name + " event";
+    }
   } else {
     if (team == nullptr)
       return;
@@ -2896,6 +3109,16 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
   }
   f.clock = true;
   f.team_color = ::espn::clock_color(team != nullptr, ::espn::parse_color(color));
+}
+
+// "Nov 12-15" for an event's first and last day (midnight Eastern, read at
+// noon Eastern as a TBD game's day is), in the panel's time zone.
+std::string GamedayComponent::golf_dates_(int64_t start, int64_t end) const {
+  if (start <= 0)
+    return "";
+  struct tm a = ESPTime::from_epoch_local((time_t) ::espn::tbd_day_epoch(start)).to_c_tm();
+  struct tm b = ESPTime::from_epoch_local((time_t) ::espn::tbd_day_epoch(end > 0 ? end : start)).to_c_tm();
+  return ::espn::golf_dates(a, b);
 }
 
 // ---- finals rotation ------------------------------------------------------------
@@ -3350,6 +3573,33 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
       game["sit"] = f->situation;
       game["outs"] = f->outs;
       game["bases"] = f->bases;
+    }
+  }
+  if (g.valid && g.sport == ::espn::Sport::GOLF) {
+    // The leaderboard for the page: up to kGolfRows rows, places without the
+    // board's width limit ("T10").
+    JsonObject golf = game["golf"].to<JsonObject>();
+    golf["st"] = ::espn::golf_round_long(g);
+    golf["ph"] = (int) g.golf.phase;
+    golf["round"] = g.period;
+    golf["start"] = g.kickoff_epoch;
+    golf["end"] = g.golf.end_epoch;
+    golf["loc"] = g.venue;
+    JsonArray rows = golf["rows"].to<JsonArray>();
+    for (const auto &r : g.golf.rows) {
+      JsonObject o = rows.add<JsonObject>();
+      o["p"] = ::espn::golf_place_text(r);
+      o["n"] = (const char *) r.name;  // copied: a char array would be kept as a literal
+      o["s"] = ::espn::golf_score_text(r);
+      o["t"] = ::espn::golf_thru_text(r, g.golf.phase);
+      if (r.winner)
+        o["w"] = true;
+    }
+    if (g.golf.next.valid) {
+      JsonObject n = golf["next"].to<JsonObject>();
+      n["name"] = g.golf.next.name;
+      n["start"] = g.golf.next.start_epoch;
+      n["end"] = g.golf.next.end_epoch;
     }
   }
   JsonArray next = doc["next"].to<JsonArray>();
