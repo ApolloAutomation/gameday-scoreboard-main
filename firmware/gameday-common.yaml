@@ -683,9 +683,9 @@ gameday:
         # Built from panel_text() pieces with a line break that panel_text()
         # would turn into a space, so it goes to the board as it is.
         next_line: !lambda 'return x.next_line;'
-        # A leaderboard sport (golf, sport 5): its leaderboard, or its card
-        # (the event's name and dates in next_line) when there is no
-        # leaderboard to show.
+        # A leaderboard sport (golf, sport 5; racing, 6): its leaderboard, or
+        # its card (the event's name and dates or next session in next_line)
+        # when there is no leaderboard to show.
         board: !lambda 'return x.board;'
         board_card: !lambda 'return x.board_card;'
     # The leaderboard's rows, read from the component (board_fields), so the

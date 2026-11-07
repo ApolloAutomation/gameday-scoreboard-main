@@ -1530,9 +1530,12 @@ void GamedayComponent::update_state_changed_() {
 // covers My team and the live modes, or any favorite's in Favorite teams.
 bool GamedayComponent::followed_game_live_() const {
   // A golf event is IN all week, overnight breaks included: only a round
-  // being played counts, so the nights between rounds can still update.
+  // being played counts, so the nights between rounds can still update. A
+  // race weekend is the same: only a session on track.
   if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF)
     return this->game_.golf.phase == ::espn::GolfPhase::LIVE;
+  if (this->game_.valid && this->game_.sport == ::espn::Sport::RACING)
+    return this->game_.race.phase == ::espn::RacePhase::LIVE;
   if (this->game_.valid && this->game_.state == GameState::IN)
     return true;
   if (this->favorites_mode_())
@@ -2047,7 +2050,8 @@ int GamedayComponent::fetch_board_(League league, GameSnapshot &out) {
     return -1;
   ContainerReader reader(container, this->espn_bytes_);
   GameSnapshot g;
-  int r = ::espn::parse_golf(reader, g);
+  const bool racing = ::espn::is_racing(league);
+  int r = racing ? ::espn::parse_racing(reader, g) : ::espn::parse_golf(reader, g);
   container->end();
   if (r < 0) {
     ESP_LOGW(TAG, "Header not parsed (%u bytes)", (unsigned) reader.total());
@@ -2057,7 +2061,8 @@ int GamedayComponent::fetch_board_(League league, GameSnapshot &out) {
   if (r == 0)
     g.sport = ::espn::league_sport(league);
   ESP_LOGI(TAG, "Header: %s %s, %u rows (%u bytes)", r > 0 ? g.event_id.c_str() : "no event",
-           r > 0 ? g.short_detail.c_str() : "", (unsigned) g.golf.rows.size(), (unsigned) reader.total());
+           r > 0 ? g.short_detail.c_str() : "", (unsigned) (racing ? g.race.rows.size() : g.golf.rows.size()),
+           (unsigned) reader.total());
   out = std::move(g);
   return r;
 }
@@ -2073,7 +2078,8 @@ bool GamedayComponent::fetch_board_next_(League league, const std::string &after
     if (container == nullptr)
       return false;
     ContainerReader reader(container, this->espn_bytes_);
-    int r = ::espn::parse_golf_calendar(reader, now, after_event, out);
+    int r = ::espn::is_racing(league) ? ::espn::parse_racing_calendar(reader, now, after_event, out)
+                                      : ::espn::parse_golf_calendar(reader, now, after_event, out);
     container->end();
     if (r < 0) {
       ESP_LOGW(TAG, "Calendar not parsed (%u bytes)", (unsigned) reader.total());
@@ -2201,8 +2207,9 @@ void GamedayComponent::start_job_() {
     // a copy of it.
   }
   if (j.team != nullptr && ::espn::is_leaderboard(j.team->league)) {
-    // A golf tour: one header read, plus the calendar after a final
-    // (run_board_job_). None of the team machinery below applies.
+    // A golf tour or a racing series: one header read, plus the calendar
+    // after a final (run_board_job_). None of the team machinery below
+    // applies.
     j.need_board = true;
     this->start_worker_();
     return;
@@ -2756,7 +2763,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
   if (j.no_event) {
     if (!::espn::board_next(j.game).valid) {
       // ESPN lists nothing, now or ahead
-      ESP_LOGI(TAG, "No upcoming event");
+      ESP_LOGI(TAG, "No upcoming %s", sport == ::espn::Sport::RACING ? "race" : "event");
       this->clear_backoff_();
       this->no_game_confirmed_ = true;
       this->game_ = GameSnapshot{};
@@ -2793,7 +2800,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
     return;
   }
   this->board_stale_reads_ = 0;
-  // Tee times in the panel's time zone
+  // Golf's tee times in the panel's time zone
   for (auto &r : j.game.golf.rows)
     r.set_tee(r.tee_epoch > 0 ? ::espn::golf_tee_label(ESPTime::from_epoch_local((time_t) r.tee_epoch).to_c_tm())
                               : std::string());
@@ -2804,6 +2811,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
   const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
   ::espn::Splash splash = ::espn::board_splash(this->prev_, this->game_, wide);
   this->prev_.golf.rows = {};  // only its event and phase are read later
+  this->prev_.race.rows = {};
   this->emit_(splash);
   this->mark_board_ready_();
   this->schedule_next_(next_unknown ? this->back_off_() : this->interval_for_phase_());
@@ -2885,12 +2893,29 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   std::string kickoff = kickoff_of(g);
   const bool board = g.valid && ::espn::is_board_sport(g.sport);
   if (board) {
-    // The dates stand in for the kickoff: the event's own before it starts,
-    // the next event's after a final or a canceled one.
-    std::string dates = g.golf.phase == ::espn::GolfPhase::PRE ? this->golf_dates_(g.kickoff_epoch, g.golf.end_epoch)
-                        : g.golf.next.valid ? this->golf_dates_(g.golf.next.start_epoch, g.golf.next.end_epoch)
-                                            : std::string();
-    std::string card = g.golf.phase == ::espn::GolfPhase::PRE ? dates : std::string();
+    std::string dates, card;
+    if (g.sport == ::espn::Sport::RACING) {
+      // The next session's day and time stand in for the kickoff, or the
+      // dates: the weekend's own before it starts (from the calendar), the
+      // next one's after the race or a canceled one.
+      const ::espn::Racing &r = g.race;
+      const bool over = r.phase == ::espn::RacePhase::FINAL || r.phase == ::espn::RacePhase::OFF;
+      if (over)
+        dates = r.next.valid ? this->racing_dates_(r.next.start_epoch, r.next.end_epoch) : std::string();
+      else if (r.next_start > 0 && this->time_ != nullptr)
+        dates = ::espn::racing_when(ESPTime::from_epoch_local((time_t) r.next_start).to_c_tm(),
+                                    this->time_->now().to_c_tm());
+      else if (r.phase == ::espn::RacePhase::PRE)
+        dates = this->racing_dates_(g.kickoff_epoch, r.race_epoch);
+      card = dates;
+    } else {
+      // The dates stand in for the kickoff: the event's own before it
+      // starts, the next event's after a final or a canceled one.
+      dates = g.golf.phase == ::espn::GolfPhase::PRE ? this->golf_dates_(g.kickoff_epoch, g.golf.end_epoch)
+              : g.golf.next.valid ? this->golf_dates_(g.golf.next.start_epoch, g.golf.next.end_epoch)
+                                  : std::string();
+      card = g.golf.phase == ::espn::GolfPhase::PRE ? dates : std::string();
+    }
     kickoff = dates;
     const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
     ::espn::BoardLines l = ::espn::board_lines(g, wide);
@@ -2923,11 +2948,12 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   if (f.clock)
     f.board_card = false;
   f.board = board && !f.clock && !f.board_card;
-  // A golf tour ESPN lists nothing for, now or ahead: an event, not a game.
+  // A golf tour or a racing series ESPN lists nothing for, now or ahead: an
+  // event or a race, not a game.
   const ::espn::Team *followed = this->current_team_();
   if (!g.valid && this->no_game_confirmed_ && followed != nullptr && ::espn::is_leaderboard(followed->league) &&
       !this->favorites_mode_()) {
-    f.status_text = "No upcoming event";
+    f.status_text = ::espn::is_racing(followed->league) ? "No upcoming race" : "No upcoming event";
     f.ha_status_text = f.status_text;
     f.message = f.status_text;
   }
@@ -3074,31 +3100,33 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
     team = this->fav_[0].team;
     color = this->fav_[0].sched.team_color;
   } else if (team != nullptr && ::espn::is_leaderboard(team->league)) {
-    // A golf tour between seasons: the next event, when one is known, under
-    // the time on a wide board and in the ticker.
+    // A golf tour or a racing series between seasons: the next event, when
+    // one is known, under the time on a wide board and in the ticker.
     int64_t tnow = (int64_t) this->time_->timestamp_now();
     if (!::espn::board_off_season(g, tnow))
       return;
-    color = "30B050";  // golf green, lifted by clock_color
+    const bool racing = g.sport == ::espn::Sport::RACING;
+    color = racing ? "E03030" : "30B050";  // racing red, golf green, lifted by clock_color
+    const ::espn::GolfNext &next = racing ? g.race.next : g.golf.next;
     std::string name;
     int64_t start = 0, end = 0;
-    if (g.golf.phase == ::espn::GolfPhase::PRE) {
+    if (racing ? g.race.phase == ::espn::RacePhase::PRE : g.golf.phase == ::espn::GolfPhase::PRE) {
       name = g.game_name;
       start = g.kickoff_epoch;
-      end = g.golf.end_epoch;
-    } else if (g.golf.next.valid) {
-      name = g.golf.next.name;
-      start = g.golf.next.start_epoch;
-      end = g.golf.next.end_epoch;
+      end = racing ? g.race.race_epoch : g.golf.end_epoch;
+    } else if (next.valid) {
+      name = next.name;
+      start = next.start_epoch;
+      end = next.end_epoch;
     }
     if (!name.empty()) {
-      std::string dates = this->golf_dates_(start, end);
+      std::string dates = racing ? this->racing_dates_(start, end) : this->golf_dates_(start, end);
       // 21 characters a line of spleen_12 on a wide board
       f.next_line = "Next: " + ::espn::board_event_name(g.sport, name, 15) + "\n" + dates;
       f.status_text = "Next: " + name + (dates.empty() ? "" : ", " + dates);
     } else {
       f.next_line.clear();
-      f.status_text = std::string("No upcoming ") + team->name + " event";
+      f.status_text = std::string("No upcoming ") + team->name + (racing ? " race" : " event");
     }
   } else {
     if (team == nullptr)
@@ -3134,6 +3162,16 @@ std::string GamedayComponent::golf_dates_(int64_t start, int64_t end) const {
     return "";
   struct tm a = ESPTime::from_epoch_local((time_t) ::espn::tbd_day_epoch(start)).to_c_tm();
   struct tm b = ESPTime::from_epoch_local((time_t) ::espn::tbd_day_epoch(end > 0 ? end : start)).to_c_tm();
+  return ::espn::golf_dates(a, b);
+}
+
+// "Nov 20-22" for a race weekend in the panel's time zone. Racing's times are
+// real (the header's, or the calendar's set right), so no noon shift.
+std::string GamedayComponent::racing_dates_(int64_t start, int64_t end) const {
+  if (start <= 0)
+    return "";
+  struct tm a = ESPTime::from_epoch_local((time_t) start).to_c_tm();
+  struct tm b = ESPTime::from_epoch_local((time_t) (end > 0 ? end : start)).to_c_tm();
   return ::espn::golf_dates(a, b);
 }
 
@@ -3616,6 +3654,37 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
       n["name"] = g.golf.next.name;
       n["start"] = g.golf.next.start_epoch;
       n["end"] = g.golf.next.end_epoch;
+    }
+  }
+  if (g.valid && g.sport == ::espn::Sport::RACING) {
+    // The shown session's order for the page: up to kRaceRows rows, gaps in
+    // full ("+13.078", "+1 lap"), and the session to come.
+    const ::espn::Racing &r = g.race;
+    JsonObject race = game["race"].to<JsonObject>();
+    race["st"] = ::espn::racing_state_long(g);
+    race["ph"] = (int) r.phase;
+    race["start"] = g.kickoff_epoch;
+    race["end"] = r.race_epoch;
+    race["loc"] = g.venue;
+    if (r.next_start > 0) {
+      race["nx"] = ::espn::racing_session_long(r.next_kind, r.next_number);
+      race["at"] = r.next_start;
+    }
+    JsonArray rows = race["rows"].to<JsonArray>();
+    for (const auto &row : r.rows) {
+      JsonObject o = rows.add<JsonObject>();
+      o["p"] = ::espn::racing_pos_text(row);
+      o["n"] = (const char *) row.name;  // copied: a char array would be kept as a literal
+      o["v"] = (const char *) row.num;
+      o["d"] = ::espn::racing_detail_long(row);
+      if (row.winner)
+        o["w"] = true;
+    }
+    if (r.next.valid) {
+      JsonObject n = race["next"].to<JsonObject>();
+      n["name"] = r.next.name;
+      n["start"] = r.next.start_epoch;
+      n["end"] = r.next.end_epoch;
     }
   }
   JsonArray next = doc["next"].to<JsonArray>();

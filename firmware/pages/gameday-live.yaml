@@ -174,11 +174,12 @@ script:
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
             lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
           }
-          // The leaderboard (golf): a status row and six rows of place, name,
-          // value (golf's score to par) and (wide) detail (holes played), in
-          // spleen_8 (5 px a character). Each column is its own label, cut to
-          // fit by the component. gd_board sets the one-panel name width and
-          // value column for the sport on the board.
+          // The leaderboard (golf, racing): a status row and six rows of
+          // place, name, value (golf's score to par, racing's car number) and
+          // (wide) detail (holes played, a gap), in spleen_8 (5 px a
+          // character). Each column is its own label, cut to fit by the
+          // component. gd_board sets the one-panel name width and value
+          // column for the sport on the board.
           {
             lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
                                  id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
@@ -623,7 +624,7 @@ script:
           const bool one = lv_disp_get_hor_res(lv_disp_get_default()) < 128;
           for (int i = 0; i < 6; i++) {
             if (one) {
-              // Golf's score column, or (no value column) its room for the name
+              // Golf's score column, or racing's names in its room
               lv_obj_set_width(gname[i], f.board_value_narrow ? 35 : 52);
               if (f.board_value_narrow)
                 lv_obj_clear_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
@@ -1005,12 +1006,12 @@ lvgl:
                   text: ""
                   styles: ["tt_st_status_text"]
 
-        # The leaderboard (golf): the event and its status on the top row, six
-        # rows of place, name, value and (wide) detail, and the ticker, which
-        # gd_update moves in. Every label clips; the component cuts each
-        # column to fit (espn::board_lines). The rows' labels are styled and
-        # laid out by tt_apply_layout, filled by gd_board, shown by gd_update.
-        # Drawn before the splash so a winner's splash covers it.
+        # The leaderboard (golf, racing): the event and its status on the top
+        # row, six rows of place, name, value and (wide) detail, and the
+        # ticker, which gd_update moves in. Every label clips; the component
+        # cuts each column to fit (espn::board_lines). The rows' labels are
+        # styled and laid out by tt_apply_layout, filled by gd_board, shown by
+        # gd_update. Drawn before the splash so a winner's splash covers it.
         - obj:
             id: gd_board_container
             scrollbar_mode: "OFF"

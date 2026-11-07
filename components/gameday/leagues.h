@@ -11,9 +11,10 @@ namespace espn {
 
 // Saved in prefs and the boot cache: append, never renumber.
 enum class League : uint8_t { NFL = 0, NCAA = 1, NBA = 2, NHL = 3, MLB = 4, WNBA = 5, MLS = 6, EPL = 7, MCBB = 8,
-                              PGA = 9, LPGA = 10 };
+                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12 };
 
-enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5 };
+enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5,
+                             RACING = 6 };
 
 struct LeagueInfo {
   League league;
@@ -52,6 +53,11 @@ constexpr LeagueInfo kLeagues[] = {
     // per_event, season_list, logo_by_id and linger don't apply.
     {League::PGA, "pga", "golf/pga", "Golf", "leagues", Sport::GOLF, false, false, false, 0},
     {League::LPGA, "lpga", "golf/lpga", "Golf", "leagues", Sport::GOLF, false, false, false, 0},
+    // Racing: a series is followed like a team (sport_racing.cpp). Its one row in
+    // teams.h is the series, with ESPN's league id. Same reads as golf: the
+    // scoreboard header and the season calendar.
+    {League::F1, "f1", "racing/f1", "Racing", "leagues", Sport::RACING, false, false, false, 0},
+    {League::NASCAR, "nascar", "racing/nascar-premier", "Racing", "leagues", Sport::RACING, false, false, false, 0},
 };
 
 constexpr size_t kLeagueCount = sizeof(kLeagues) / sizeof(kLeagues[0]);
@@ -97,11 +103,14 @@ inline Sport league_sport(League league) {
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in
 // Live games (set_request.h).
 inline bool is_golf(League league) { return league_sport(league) == Sport::GOLF; }
-// A sport whose board is a leaderboard (golf): the league's one team row is
-// a tour, read from the scoreboard header (gameday.cpp's board job).
-inline bool is_board_sport(Sport s) { return s == Sport::GOLF; }
-// Followed like a team, never a favorite or in Live games.
+// A sport whose board is a leaderboard (golf, racing): the league's one team
+// row is a tour or a series, read from the scoreboard header (gameday.cpp's
+// board job).
+inline bool is_board_sport(Sport s) { return s == Sport::GOLF || s == Sport::RACING; }
+// Followed like a team, never a favorite or in Live games (set_request.h).
 inline bool is_leaderboard(League league) { return is_board_sport(league_sport(league)); }
+// A racing series (F1, the NASCAR Cup Series).
+inline bool is_racing(League league) { return league_sport(league) == Sport::RACING; }
 
 // Cups a club in a league can also be playing in. ESPN's team endpoint is
 // per competition (soccer/<slug>/teams/<id>, the same team ids everywhere)

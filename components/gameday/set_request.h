@@ -82,8 +82,8 @@ inline bool known_team(uint8_t league, uint32_t id) {
 }
 
 // "mlb,nhl" -> a bit per league. Unknown keys are skipped, and so are the golf
-// tours (Live games has no golf), so a list of only those, like "", is 0:
-// back to auto.
+// tours and racing series (Live games has neither), so a list of only those,
+// like "", is 0: back to auto.
 inline uint16_t live_mask_from_keys(const std::string &keys) {
   uint16_t mask = 0;
   size_t start = 0;
@@ -92,7 +92,7 @@ inline uint16_t live_mask_from_keys(const std::string &keys) {
     std::string key = keys.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
     start = comma == std::string::npos ? keys.size() : comma + 1;
     const LeagueInfo *info = league_by_key(key.c_str());
-    if (info != nullptr && info->sport != Sport::GOLF)
+    if (info != nullptr && !is_board_sport(info->sport))
       mask |= (uint16_t) (1u << (uint8_t) info->league);
   }
   return mask;
@@ -100,19 +100,20 @@ inline uint16_t live_mask_from_keys(const std::string &keys) {
 
 // The leagues Live mode scans, in kLeagues order. A mask of 0 is auto: the
 // saved team's league and each favorite's. team_league is the league byte
-// the panel keeps, which stays after the team is cleared. Golf is never
-// scanned: a tour followed as the team adds nothing. NFL when nothing is left.
+// the panel keeps, which stays after the team is cleared. Golf and racing are
+// never scanned: a tour or a series followed as the team adds nothing. NFL
+// when nothing is left.
 inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, const std::vector<uint8_t> &fav_leagues) {
   if (mask == 0) {
-    if (team_league < 16 && !is_golf((League) team_league))
+    if (team_league < 16 && !is_leaderboard((League) team_league))
       mask |= (uint16_t) (1u << team_league);
     for (uint8_t l : fav_leagues)
-      if (l < 16 && !is_golf((League) l))
+      if (l < 16 && !is_leaderboard((League) l))
         mask |= (uint16_t) (1u << l);
   }
   std::vector<League> out;
   for (const auto &l : kLeagues)
-    if (l.sport != Sport::GOLF && (mask & (1u << (uint8_t) l.league)))
+    if (!is_board_sport(l.sport) && (mask & (1u << (uint8_t) l.league)))
       out.push_back(l.league);
   if (out.empty())
     out.push_back(League::NFL);
@@ -243,8 +244,8 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   }
   if (k == "favs") {
     // "mlb:15,nfl:6,..." in priority order; "" clears the list. Unknown teams,
-    // golf tours (not a favorite yet) and repeats drop out; the rest keep
-    // their order up to fav_max.
+    // golf tours and racing series (not a favorite yet) and repeats drop out;
+    // the rest keep their order up to fav_max.
     op.kind = SetKind::FAVS;
     size_t start = 0;
     while (start < v.size() && op.teams.size() < fav_max) {
@@ -252,7 +253,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
       std::string ref = v.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
       start = comma == std::string::npos ? v.size() : comma + 1;
       TeamRef t;
-      if (!parse_team_ref(ref, t.league, t.id) || !known_team(t.league, t.id) || is_golf((League) t.league)) {
+      if (!parse_team_ref(ref, t.league, t.id) || !known_team(t.league, t.id) || is_leaderboard((League) t.league)) {
         op.refused.push_back(ref);
         continue;
       }
@@ -265,12 +266,12 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k.size() == 4 && k.compare(0, 3, "fav") == 0 && k[3] >= '1' && k[3] <= '4') {
-    // One of the remote's four slots; "none" or "" clears it. A golf tour
-    // can't be a favorite yet.
+    // One of the remote's four slots; "none" or "" clears it. A golf tour or
+    // a racing series can't be a favorite yet.
     op.kind = SetKind::FAV_SLOT;
     op.slot = (uint8_t) (k[3] - '0');
     if (parse_team_ref(v, op.team.league, op.team.id) && known_team(op.team.league, op.team.id) &&
-        !is_golf((League) op.team.league))
+        !is_leaderboard((League) op.team.league))
       return true;
     op.team = TeamRef{};
     return v == "none" || v.empty();

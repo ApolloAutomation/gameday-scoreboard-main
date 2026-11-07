@@ -1309,6 +1309,19 @@ static void test_team_placeholder() {
   CHECK_EQ(golf_card_text(gp, false, ""), std::string("PGA Tour"));
   CHECK(golf_lines(gp, true).name.empty());
   CHECK_EQ(status_text(gp, TickerOptions{}, ""), std::string("PGA Tour"));
+  // A racing series': the card with the series' name
+  Team f1{League::F1, 2030, "F1", "Formula 1", 0};
+  GameSnapshot fp = team_placeholder(f1);
+  CHECK(fp.valid);
+  CHECK(fp.sport == Sport::RACING);
+  CHECK_EQ(fp.game_name, std::string("Formula 1"));
+  CHECK(fp.team_logo.empty());
+  CHECK(is_team_placeholder(fp));
+  CHECK_EQ(racing_card_text(fp, false, ""), std::string("Formula 1"));
+  CHECK_EQ(board_card_text(fp, true, ""), std::string("Formula 1"));
+  CHECK(racing_lines(fp, true).name.empty());
+  CHECK_EQ(status_text(fp, TickerOptions{}, ""), std::string("Formula 1"));
+  CHECK_EQ(ha_status_text(fp, ""), std::string("Formula 1"));
 }
 
 static void test_mlb_urls() {
@@ -5343,7 +5356,8 @@ static void test_golf_urls() {
     if (kTeams[i].league == League::LPGA && kTeams[i].espn_id == 1107) {
       lpga = true;
       CHECK_EQ(team_option(kTeams[i]), std::string("Golf: LPGA Tour"));
-      CHECK(i == kTeamCount - 1);  // appended: every earlier option keeps its place
+      // appended: every earlier option keeps its place, and the racing series follow
+      CHECK(i + 1 < kTeamCount && is_racing(kTeams[i + 1].league));
     }
   }
   CHECK(pga && lpga);
@@ -5959,6 +5973,777 @@ static void test_golf_off_season() {
   CHECK(!golf_off_season(GameSnapshot{}, now));
 }
 
+// ---- racing ----------------------------------------------------------------------
+// A series followed like a golf tour, from its scoreboard header, one entry per
+// session (fixtures recorded 2026-11-07 05:20Z, see fixtures/README.md).
+
+static int racing_str(std::string json, GameSnapshot &s) { return parse_racing(json, s); }
+static int racing_cal_str(std::string json, int64_t now, const std::string &after, GolfNext &n) {
+  return parse_racing_calendar(json, now, after, n);
+}
+
+static GameSnapshot racing_doc(const char *file) {
+  GameSnapshot s;
+  std::string json = slurp(file);
+  CHECK_EQ(racing_str(json, s), 1);
+  return s;
+}
+
+// The panel's racing_when in UTC
+static std::string racing_when_utc(int64_t at, int64_t now) { return racing_when(utc_tm(at), utc_tm(now)); }
+
+static void test_racing_urls() {
+  CHECK(is_racing(League::F1) && is_racing(League::NASCAR) && !is_racing(League::PGA) && !is_racing(League::NFL));
+  CHECK(is_leaderboard(League::F1) && is_leaderboard(League::NASCAR) && is_leaderboard(League::LPGA));
+  CHECK(!is_leaderboard(League::NFL) && !is_leaderboard(League::MCBB));
+  CHECK(is_board_sport(Sport::RACING) && is_board_sport(Sport::GOLF) && !is_board_sport(Sport::SOCCER));
+  CHECK(league_sport(League::NASCAR) == Sport::RACING);
+  CHECK_EQ(std::string(league_key(League::F1)), std::string("f1"));
+  CHECK(league_by_key("f1") != nullptr && league_by_key("f1")->league == League::F1);
+  CHECK(league_by_key("nascar") != nullptr && league_by_key("nascar")->league == League::NASCAR);
+  CHECK_EQ(header_url(League::F1),
+           std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=racing&league=f1"));
+  CHECK_EQ(header_url(League::NASCAR),
+           std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=racing&league=nascar-premier"));
+  // The coming Tuesday's scoreboard (6 KB, the calendar and no events), or next year's
+  CHECK_EQ(golf_calendar_url(League::F1, parse_iso8601_z("2026-11-08T23:00Z"), false),
+           std::string("https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard?dates=20261110"));
+  CHECK_EQ(golf_calendar_url(League::NASCAR, parse_iso8601_z("2026-11-09T12:00Z"), true),
+           std::string("https://site.api.espn.com/apis/site/v2/sports/racing/nascar-premier/scoreboard?dates=2027"));
+  set_site_root("https://bench.invalid/sports/");
+  CHECK_EQ(header_url(League::F1),
+           std::string("https://bench.invalid/apis/v2/scoreboard/header?sport=racing&league=f1"));
+  set_site_root("https://site.api.espn.com/apis/site/v2/sports/");
+  CHECK_EQ(team_logo_url(League::F1, 2030, "F1"), std::string(""));
+  CHECK_EQ(team_logo_url(League::NASCAR, 2021, "NASCAR"), std::string(""));
+  // The series are rows in the team table, after golf's tours: Home
+  // Assistant's options and /gameday/set
+  size_t lpga = kTeamCount, f1 = kTeamCount, nascar = kTeamCount;
+  for (size_t i = 0; i < kTeamCount; i++) {
+    if (kTeams[i].league == League::LPGA)
+      lpga = i;
+    if (kTeams[i].league == League::F1 && kTeams[i].espn_id == 2030) {
+      f1 = i;
+      CHECK_EQ(team_option(kTeams[i]), std::string("Racing: Formula 1"));
+      CHECK_EQ(std::string(kTeams[i].abbr), std::string("F1"));
+    }
+    if (kTeams[i].league == League::NASCAR && kTeams[i].espn_id == 2021) {
+      nascar = i;
+      CHECK_EQ(team_option(kTeams[i]), std::string("Racing: NASCAR Cup Series"));
+    }
+  }
+  CHECK(lpga < kTeamCount && f1 == lpga + 1 && nascar == lpga + 2);
+  CHECK(nascar == kTeamCount - 1);  // appended: every earlier option keeps its place
+}
+
+// Sao Paulo, Saturday morning: FP1 and FP2 run, FP3 at 14:30Z
+static void test_racing_break() {
+  GameSnapshot s = racing_doc("fixtures/racing_header_f1_practice.json");
+  CHECK(s.valid);
+  CHECK(s.sport == Sport::RACING);
+  CHECK(s.race.phase == RacePhase::BREAK);
+  CHECK(s.state == GameState::IN);
+  CHECK(!s.completed);
+  CHECK(s.race.kind == RaceKind::PRACTICE);
+  CHECK_EQ((int) s.race.number, 2);
+  CHECK(s.race.next_kind == RaceKind::PRACTICE);
+  CHECK_EQ((int) s.race.next_number, 3);
+  CHECK_EQ(s.race.next_start, parse_iso8601_z("2026-11-07T14:30Z"));
+  CHECK_EQ(s.race.race_epoch, parse_iso8601_z("2026-11-08T17:00Z"));
+  CHECK_EQ(s.kickoff_epoch, parse_iso8601_z("2026-11-06T15:30Z"));
+  CHECK_EQ(s.race.session_start, parse_iso8601_z("2026-11-06T19:00Z"));
+  CHECK_EQ(s.event_id, std::string("600057448"));
+  CHECK_EQ(s.game_name, std::string("MSC Cruises Sao Paulo Grand Prix"));
+  CHECK_EQ(s.venue, std::string("Autodromo Jose Carlos Pace"));
+  CHECK_EQ(s.tv, std::string("Apple TV"));
+  CHECK_EQ(s.race.rows.size(), kRaceRows);
+  const char *names[] = {"Antonelli", "Norris", "Verstappen", "Russell", "Piastri", "Hamilton"};
+  const char *gaps[] = {"1:10.763", "+0.253", "+0.259", "+0.273", "+0.321", "+0.450"};
+  const char *nums[] = {"12", "1", "3", "63", "81", "44"};
+  const char *detail[] = {"1:10.7", "+0.253", "+0.259", "+0.273", "+0.321", "+0.450"};
+  for (size_t i = 0; i < 6; i++) {
+    const RaceRow &r = s.race.rows[i];
+    CHECK_EQ((int) r.place, (int) i + 1);
+    CHECK_EQ(r.name, std::string(names[i]));
+    CHECK_EQ(r.gap, std::string(gaps[i]));
+    CHECK_EQ(r.num, std::string(nums[i]));
+    CHECK(!r.winner);
+    CHECK_EQ((int) r.out, 0);
+    CHECK_EQ((int) r.laps_down, 0);
+  }
+  CHECK_EQ(racing_state_text(s), std::string("FP2 final"));
+  CHECK_EQ(racing_state_long(s), std::string("Practice 2 final"));
+  CHECK_EQ(racing_state_color(s), (uint32_t) 0xFFFFFF);
+  BoardLines l = racing_lines(s, false);
+  CHECK_EQ(l.status, std::string("FP2 final"));
+  CHECK(l.title.empty());
+  CHECK(!l.value_narrow);  // no car numbers on one panel: the names get the room
+  CHECK_EQ(l.pos.size(), kGolfBoardRows);
+  for (size_t i = 0; i < kGolfBoardRows; i++) {
+    CHECK_EQ(l.name[i], std::string(names[i]));
+    CHECK_EQ(l.pos[i], std::to_string(i + 1));
+    CHECK(l.value[i].empty() && l.detail[i].empty());
+    CHECK_EQ(l.name_color[i], 0xFFFFFF);
+  }
+  BoardLines w = racing_lines(s, true);
+  CHECK_EQ(w.title, std::string("Sao Paulo GP"));
+  for (size_t i = 0; i < kGolfBoardRows; i++) {
+    CHECK_EQ(w.value[i], std::string(nums[i]));
+    CHECK_EQ(w.detail[i], std::string(detail[i]));
+    CHECK_EQ(w.value_color[i], 0xA0A0A0);
+  }
+  const int64_t now = parse_iso8601_z("2026-11-07T05:22Z");
+  const std::string when = racing_when_utc(s.race.next_start, now);
+  CHECK_EQ(when, std::string("Today 2:30p"));
+  CHECK_EQ(status_text(s, TickerOptions{}, when),
+           std::string("MSC Cruises Sao Paulo Grand Prix | Practice 2 final | 1 Antonelli 1:10.763, 2 Norris +0.253, "
+                       "3 Verstappen +0.259, 4 Russell +0.273, 5 Piastri +0.321, 6 Hamilton +0.450, 7 Leclerc +0.720, "
+                       "8 Bortoleto +1.017, 9 Hadjar +1.076, 10 Bearman +1.228 | Next: Practice 3, Today 2:30p | "
+                       "Apple TV"));
+  TickerOptions o;
+  o.odds = false;
+  CHECK(!contains(status_text(s, o, when), "Apple TV"));
+  CHECK_EQ(ha_status_text(s, when), std::string("MSC Cruises Sao Paulo Grand Prix | Practice 2 final | Fastest: Antonelli"));
+  CHECK_EQ(clock_text(s), std::string(""));
+  // Closer to FP3, closer reads
+  CHECK_EQ(racing_poll_ms(s, now), 30u * 60 * 1000);
+  CHECK_EQ(racing_poll_ms(s, parse_iso8601_z("2026-11-07T13:00Z")), 5u * 60 * 1000);
+  CHECK_EQ(racing_poll_ms(s, parse_iso8601_z("2026-11-07T14:25Z")), 60u * 1000);
+  CHECK_EQ(board_poll_ms(s, now), 30u * 60 * 1000);
+}
+
+// The US Grand Prix, final: retirements, gaps, the winner
+static void test_racing_final() {
+  GameSnapshot s = racing_doc("fixtures/racing_header_f1_final.json");
+  CHECK(s.race.phase == RacePhase::FINAL);
+  CHECK(s.state == GameState::POST);
+  CHECK(s.completed);
+  CHECK(s.race.kind == RaceKind::RACE);
+  CHECK_EQ(s.event_id, std::string("600057446"));
+  CHECK_EQ(s.period, 56);
+  CHECK_EQ((int) s.race.laps, 56);
+  CHECK_EQ(s.race.next_start, (int64_t) 0);
+  CHECK_EQ(s.race.race_epoch, parse_iso8601_z("2026-10-25T20:00Z"));
+  CHECK(s.race.rows[0].winner);
+  CHECK_EQ(s.race.rows[0].name, std::string("Antonelli"));
+  CHECK(!s.race.rows[1].winner);
+  CHECK_EQ(s.race.rows[0].gap, std::string(""));  // the leader has no gap
+  CHECK_EQ(s.race.rows[1].gap, std::string("+13.078"));
+  BoardLines l = racing_lines(s, false), w = racing_lines(s, true);
+  CHECK_EQ(l.status, std::string("Final"));
+  CHECK_EQ(l.status_color, (uint32_t) 0xFFD000);
+  CHECK_EQ(l.name_color[0], 0xFFD000);
+  CHECK_EQ(l.name_color[1], 0xFFFFFF);
+  CHECK_EQ(w.title, std::string("US GP"));
+  const char *detail[] = {"", "+13.07", "+17.48", "+18.51", "+30.52", "+34.37"};
+  for (size_t i = 0; i < kGolfBoardRows; i++)
+    CHECK_EQ(w.detail[i], std::string(detail[i]));
+  CHECK_EQ(w.value[0], std::string("12"));
+  std::string t = status_text(s, TickerOptions{}, "");
+  CHECK_EQ(t.rfind("MSC Cruises United States Grand Prix | Final | Antonelli wins | 2 Leclerc +13.078, "
+                   "3 Verstappen +17.485",
+                   0),
+           (size_t) 0);
+  CHECK(t.size() > 18 && t.compare(t.size() - 18, 18, "10 Gasly +1:27.516") == 0);
+  CHECK(!contains(t, "Apple TV"));  // not after the race
+  CHECK_EQ(ha_status_text(s, ""), std::string("MSC Cruises United States Grand Prix | Final | Antonelli wins"));
+  GameSnapshot n = s;
+  n.race.next = GolfNext{true, "600057447", "Mexico City Grand Prix", parse_iso8601_z("2026-10-30T18:30Z"),
+                         parse_iso8601_z("2026-11-01T20:00Z")};
+  CHECK(contains(status_text(n, TickerOptions{}, "Oct 30-Nov 1"), "| Next: Mexico City Grand Prix, Oct 30-Nov 1"));
+}
+
+// The US Grand Prix on lap 34 (edited from the final, see fixtures/README.md)
+static void test_racing_live() {
+  GameSnapshot s = racing_doc("fixtures/racing_header_f1_live.json");
+  CHECK(s.race.phase == RacePhase::LIVE);
+  CHECK(s.state == GameState::IN);
+  CHECK(!s.completed);
+  CHECK(s.race.kind == RaceKind::RACE);
+  CHECK_EQ(s.period, 34);
+  CHECK_EQ((int) s.race.laps, 56);
+  CHECK_EQ(s.race.session_start, parse_iso8601_z("2026-10-25T20:00Z"));
+  CHECK(!s.race.rows[0].winner);
+  CHECK_EQ(racing_state_text(s), std::string("Lap 34/56"));
+  CHECK_EQ(racing_state_color(s), (uint32_t) 0x40FF40);
+  CHECK_EQ(racing_state_long(s), std::string("Race lap 34/56"));
+  CHECK_EQ(racing_poll_ms(s, parse_iso8601_z("2026-10-25T21:00Z")), 30u * 1000);
+  CHECK_EQ(ha_status_text(s, ""), std::string("MSC Cruises United States Grand Prix | Race | Leader: Antonelli"));
+  CHECK(contains(status_text(s, TickerOptions{}, ""),
+                 "MSC Cruises United States Grand Prix | Race lap 34/56 | 1 Antonelli, 2 Leclerc +13.078"));
+  CHECK(contains(status_text(s, TickerOptions{}, ""), "| Apple TV"));
+  // The total unknown, or no lap yet
+  GameSnapshot u = s;
+  u.race.laps = 0;
+  CHECK_EQ(racing_state_text(u), std::string("Lap 34"));
+  u.period = 0;
+  CHECK_EQ(racing_state_text(u), std::string("Race live"));
+  u.race.kind = RaceKind::SPRINT;
+  CHECK_EQ(racing_state_text(u), std::string("Sprint live"));
+  u.period = 5;
+  u.race.laps = 19;
+  CHECK_EQ(racing_state_text(u), std::string("Sprint 5/19"));
+  CHECK_EQ(racing_state_long(u), std::string("Sprint lap 5/19"));
+  u.period = 999;
+  u.race.laps = 999;
+  CHECK_EQ(racing_state_text(u), std::string("Sprint 999"));  // no room for the total
+  u.race.kind = RaceKind::QUALIFYING;
+  CHECK_EQ(racing_state_text(u), std::string("Qual live"));
+  CHECK_EQ(racing_state_long(u), std::string("Qualifying live"));
+  CHECK_EQ(racing_poll_ms(u, 0), 60u * 1000);
+  u.race.kind = RaceKind::SPRINT_QUALIFYING;
+  CHECK_EQ(racing_state_text(u), std::string("Sprint Q"));
+  u.race.kind = RaceKind::PRACTICE;
+  u.race.number = 3;
+  CHECK_EQ(racing_state_text(u), std::string("FP3 live"));
+  CHECK_EQ(racing_state_long(u), std::string("Practice 3 live"));
+  CHECK_EQ(ha_status_text(u, ""), std::string("MSC Cruises United States Grand Prix | Practice 3 | Leader: Antonelli"));
+  // A red flag, a yellow, a stoppage
+  std::string doc = slurp("fixtures/racing_header_f1_live.json");
+  const std::string lap = "\"fullStatus\":{\"period\":34,";
+  size_t at = doc.find(lap);
+  CHECK(at != std::string::npos);
+  std::string red = doc;
+  red.insert(at + lap.size(), "\"flag\":\"RED\",");
+  GameSnapshot r;
+  CHECK_EQ(racing_str(red, r), 1);
+  CHECK_EQ(r.race.flag, 'R');
+  CHECK_EQ(racing_state_text(r), std::string("Red flag"));
+  CHECK_EQ(racing_state_color(r), (uint32_t) 0xFF3030);
+  CHECK_EQ(racing_state_long(r), std::string("Race lap 34/56, red flag"));
+  std::string yellow = doc;
+  yellow.insert(at + lap.size(), "\"flag\":\"YELLOW\",");
+  CHECK_EQ(racing_str(yellow, r), 1);
+  CHECK_EQ(r.race.flag, 'Y');
+  CHECK_EQ(racing_state_text(r), std::string("Lap 34/56"));
+  CHECK_EQ(racing_state_color(r), (uint32_t) 0xFFA000);
+  std::string held = doc;
+  held.replace(held.find("STATUS_IN_PROGRESS"), 18, "STATUS_SUSPENDED");
+  CHECK_EQ(racing_str(held, r), 1);
+  CHECK(r.race.phase == RacePhase::LIVE);  // a stopped race is still on
+  CHECK_EQ(racing_state_text(r), std::string("Suspended"));
+  CHECK_EQ(racing_state_color(r), (uint32_t) 0xFFA000);
+  CHECK_EQ(racing_state_long(r), std::string("Race suspended"));
+  r.race.status = GolfStatus::DELAYED;
+  CHECK_EQ(racing_state_text(r), std::string("Delayed"));
+  // The winner's splash: once, on the read that goes final, the race only
+  GameSnapshot fin = racing_doc("fixtures/racing_header_f1_final.json");
+  Splash sp = racing_splash(s, fin, false);
+  CHECK_EQ(sp.text, std::string("ANTONELLI WINS!"));
+  CHECK_EQ(sp.color, (uint32_t) 0xFFD000);
+  CHECK_EQ(racing_splash(s, fin, true).text, std::string("ANTONELLI WINS!"));
+  CHECK_EQ(decide_splash(s, fin, true, false).text, std::string("ANTONELLI WINS!"));
+  CHECK_EQ(board_splash(s, fin, false).text, std::string("ANTONELLI WINS!"));
+  GameSnapshot brk = s;
+  brk.race.phase = RacePhase::BREAK;  // qualifying's order up when the race ends
+  CHECK_EQ(racing_splash(brk, fin, false).text, std::string("ANTONELLI WINS!"));
+  CHECK(racing_splash(fin, fin, false).text.empty());            // final to final
+  CHECK(racing_splash(GameSnapshot{}, fin, false).text.empty());  // a boot or a team change
+  GameSnapshot pre = s;
+  pre.race.phase = RacePhase::PRE;
+  CHECK(racing_splash(pre, fin, false).text.empty());
+  GameSnapshot other = s;
+  other.event_id = "1";
+  CHECK(racing_splash(other, fin, false).text.empty());
+  GameSnapshot sprint = fin;
+  sprint.race.kind = RaceKind::SPRINT;
+  CHECK(racing_splash(s, sprint, false).text.empty());
+  // Names: a suffix dropped, each word on a line of the splash
+  GameSnapshot longer = fin;
+  GolfRow::put(longer.race.rows[0].name, sizeof(longer.race.rows[0].name), "van Gisbergen");
+  CHECK_EQ(racing_splash(s, longer, false).text, std::string("VAN GISBERGEN WINS!"));
+  GolfRow::put(longer.race.rows[0].name, sizeof(longer.race.rows[0].name), "Stenhouse Jr.");
+  CHECK_EQ(racing_splash(s, longer, false).text, std::string("STENHOUSE WINS!"));
+  GolfRow::put(longer.race.rows[0].name, sizeof(longer.race.rows[0].name), "Allmendinger");
+  CHECK_EQ(racing_splash(s, longer, false).text, std::string("ALLMENDING WINS!"));
+  CHECK_EQ(racing_splash(s, longer, true).text, std::string("ALLMENDINGER WINS!"));
+}
+
+static void test_racing_sprint() {
+  // Singapore's Sprint final on Saturday: no gold, no splash, race wins only
+  GameSnapshot s = racing_doc("fixtures/racing_header_f1_sprint.json");
+  CHECK(s.race.phase == RacePhase::BREAK);
+  CHECK(s.race.kind == RaceKind::SPRINT);
+  CHECK(!s.completed);
+  CHECK_EQ(racing_state_text(s), std::string("Sprint final"));
+  CHECK_EQ(racing_state_long(s), std::string("Sprint final"));
+  for (const auto &r : s.race.rows)
+    CHECK(!r.winner);
+  for (int c : racing_lines(s, true).name_color)
+    CHECK_EQ(c, 0xFFFFFF);
+  CHECK(contains(ha_status_text(s, ""), "| Sprint final | Winner: "));
+  GameSnapshot before = s;
+  before.race.phase = RacePhase::LIVE;
+  CHECK(racing_splash(before, s, false).text.empty());
+  // The Sprint Shootout: ESPN's behindTime is each driver's own lap time, so
+  // the gaps come from the times
+  GameSnapshot q = racing_doc("fixtures/racing_header_f1_sprint_shootout.json");
+  CHECK(q.race.phase == RacePhase::BREAK);
+  CHECK(q.race.kind == RaceKind::SPRINT_QUALIFYING);
+  CHECK_EQ(racing_session_label(q.race.kind, q.race.number), std::string("Sprint Q"));
+  CHECK_EQ(racing_state_text(q), std::string("Sprint Q"));  // "Sprint Q final" is too long
+  CHECK_EQ(racing_state_long(q), std::string("Sprint qualifying final"));
+  CHECK_EQ(q.race.rows[0].name, std::string("Verstappen"));
+  CHECK_EQ(q.race.rows[0].gap, std::string("1:31.156"));
+  CHECK_EQ(q.race.rows[1].name, std::string("Russell"));
+  CHECK_EQ(q.race.rows[1].gap, std::string("+0.120"));
+  CHECK_EQ(q.race.rows[2].name, std::string("Leclerc"));
+  CHECK_EQ(q.race.rows[2].gap, std::string("+0.243"));
+  CHECK_EQ(racing_lines(q, true).detail[0], std::string("1:31.1"));
+  for (const auto &r : q.race.rows)
+    CHECK_EQ((int) r.out, 0);  // STATUS_UNKNOWN is a normal row
+}
+
+static void test_racing_nascar() {
+  // Martinsville, final: no per-driver status, ".000" gaps, laps down negative
+  GameSnapshot f = racing_doc("fixtures/racing_header_nascar_final.json");
+  CHECK(f.race.phase == RacePhase::FINAL);
+  CHECK(f.race.kind == RaceKind::RACE);
+  CHECK_EQ(f.event_id, std::string("202611010020"));
+  CHECK(f.race.rows[0].winner);
+  CHECK_EQ(f.race.rows[0].name, std::string("Byron"));
+  CHECK_EQ(f.race.rows[4].name, std::string("van Gisbergen"));
+  BoardLines l = racing_lines(f, false), w = racing_lines(f, true);
+  CHECK_EQ(l.name[4], std::string("Gisbergen"));
+  CHECK_EQ(w.name[4], std::string("Gisbergen"));
+  CHECK_EQ(w.value[0], std::string("24"));
+  CHECK_EQ(w.value[1], std::string("9"));
+  CHECK_EQ(w.detail[0], std::string(""));
+  CHECK_EQ(w.detail[1], std::string(""));  // on the lead lap: no gap from NASCAR
+  CHECK_EQ(w.title, std::string("Martinsville"));
+  CHECK_EQ((int) f.race.rows[7].laps_down, 1);
+  CHECK_EQ(racing_detail_text(f.race.rows[7]), std::string("+1L"));
+  CHECK_EQ(status_text(f, TickerOptions{}, ""),
+           std::string("NASCAR Cup Series at Martinsville | Final | Byron wins | 2 Elliott, 3 Gibbs, 4 Berry, "
+                       "5 van Gisbergen, 6 Hamlin, 7 Dillon, 8 Wallace +1 lap, 9 Larson +1 lap, 10 Bell +1 lap"));
+  // Miami, the season finale, before it starts: only the race is listed
+  GameSnapshot p = racing_doc("fixtures/racing_header_nascar_pre.json");
+  CHECK(p.race.phase == RacePhase::PRE);
+  CHECK(p.state == GameState::PRE);
+  CHECK(p.race.rows.empty());
+  CHECK(p.race.next_kind == RaceKind::RACE);
+  CHECK_EQ(p.race.next_start, parse_iso8601_z("2026-11-08T20:00Z"));
+  CHECK_EQ((int) p.race.laps, 267);
+  CHECK_EQ(p.race.session_start, (int64_t) 0);
+  CHECK(racing_lines(p, false).name.empty());
+  CHECK_EQ(racing_lines(p, true).status, std::string("Upcoming"));
+  CHECK_EQ(racing_card_text(p, false, "Sun 3:00p"), std::string("Miami\nRace Sun 3:00p"));
+  CHECK_EQ(racing_card_text(p, true, "Sun 3:00p"), std::string("Miami\nRace Sun 3:00p"));
+  CHECK_EQ(board_card_text(p, false, "Sun 3:00p"), std::string("Miami\nRace Sun 3:00p"));
+  CHECK_EQ(status_text(p, TickerOptions{}, "Sun 3:00p"),
+           std::string("NASCAR Cup Series at Miami | Race Sun 3:00p | Homestead-Miami Speedway | NBC/HBO Max"));
+  CHECK_EQ(ha_status_text(p, "Sun 3:00p"), std::string("NASCAR Cup Series at Miami | Race Sun 3:00p"));
+  CHECK_EQ(racing_poll_ms(p, parse_iso8601_z("2026-11-07T05:22Z")), 30u * 60 * 1000);
+  // Daytona's Duels, two races (two events) on one day: the second's final
+  GameSnapshot d = racing_doc("fixtures/racing_header_nascar_duels.json");
+  CHECK_EQ(d.event_id, std::string("202602120045"));
+  CHECK_EQ(d.game_name, std::string("Duel #2"));
+  CHECK(d.race.phase == RacePhase::FINAL);
+  CHECK_EQ(d.race.rows[0].name, std::string("Elliott"));
+  CHECK(d.race.rows[0].winner);
+  // The first Duel's final stays up until the second starts, so its splash fires
+  std::string duels = slurp("fixtures/racing_header_nascar_duels.json");
+  size_t second = duels.find("\"id\":\"202602120045\"");
+  CHECK(second != std::string::npos);
+  std::string early = duels;
+  size_t st = early.find("STATUS_FINAL", second);
+  early.replace(st, 12, "STATUS_SCHEDULED");
+  size_t state = early.find("\"state\":\"post\"", second);
+  early.replace(state, 14, "\"state\":\"pre\"");
+  CHECK_EQ(racing_str(early, d), 1);
+  CHECK_EQ(d.game_name, std::string("Duel #1"));
+  CHECK(d.race.phase == RacePhase::FINAL);
+  // Bahrain, canceled
+  GameSnapshot c = racing_doc("fixtures/racing_header_f1_canceled.json");
+  CHECK(c.race.phase == RacePhase::OFF);
+  CHECK(c.state == GameState::POST);
+  CHECK(!c.completed);
+  CHECK(racing_lines(c, false).name.empty());
+  CHECK_EQ(racing_state_text(c), std::string("Canceled"));
+  CHECK_EQ(racing_state_color(c), (uint32_t) 0xFF3030);
+  CHECK_EQ(racing_card_text(c, false, ""), std::string("Bahrain GP\nCanceled"));
+  CHECK_EQ(status_text(c, TickerOptions{}, ""), std::string("Gulf Air Bahrain Grand Prix | Canceled"));
+  CHECK_EQ(ha_status_text(c, ""), std::string("Gulf Air Bahrain Grand Prix | Canceled"));
+  GameSnapshot pp = c;
+  pp.race.status = GolfStatus::POSTPONED;
+  CHECK_EQ(racing_state_text(pp), std::string("Postponed"));
+  // Nothing listed, and documents that aren't a header
+  GameSnapshot none;
+  CHECK_EQ(racing_str(slurp("fixtures/racing_header_none.json"), none), 0);
+  CHECK(!none.valid);
+  CHECK_EQ(racing_str(std::string("{}"), none), -1);
+  CHECK_EQ(racing_str(std::string("garbage"), none), -1);
+  CHECK_EQ(racing_str(std::string(R"({"sports":[{"leagues":[{"events":[]}]}]})"), none), 0);
+  CHECK_EQ(racing_str(std::string(R"({"sports":[{"leagues":[{"events":[{"name":"No id"}]}]}]})"), none), -1);
+  CHECK_EQ(racing_str(std::string(R"({"sports":[{"leagues":[{"events":[7]}]}]})"), none), -1);
+  CHECK_EQ(status_text(GameSnapshot{}, TickerOptions{}, ""), std::string("No upcoming game"));
+  GameSnapshot nf;
+  nf.valid = true;
+  nf.sport = Sport::RACING;
+  CHECK_EQ(status_text(nf, TickerOptions{}, ""), std::string("No upcoming race"));
+  // A session whose time isn't one, the rows in ESPN's order however they come
+  std::string many = R"({"sports":[{"leagues":[{"events":[{"id":"9","competitionType":{"id":"2"},)"
+                     R"("fullStatus":{"type":{"name":"STATUS_FINAL","state":"post"}},"competitors":[)";
+  for (int i = 12; i >= 1; i--) {
+    many += "{\"order\":" + std::to_string(i) + ",\"place\":" + std::to_string(i) + ",\"lastName\":\"P" +
+            std::to_string(i) + "\",\"time\":\"" + (i == 3 ? "-1:27.798" : "1:2" + std::to_string(i % 10) + ".5") +
+            "\"" + (i == 3 ? ",\"status\":{\"type\":{\"name\":\"STATUS_DISQUALIFIED\"}}" : "") + "}";
+    if (i > 1)
+      many += ",";
+  }
+  many += "]}]}]}]}";
+  GameSnapshot m;
+  CHECK_EQ(racing_str(many, m), 1);
+  CHECK(m.race.phase == RacePhase::BREAK);  // qualifying, and no race listed
+  CHECK_EQ(m.race.rows.size(), kRaceRows);
+  for (size_t i = 0; i < m.race.rows.size(); i++)
+    CHECK_EQ(m.race.rows[i].name, "P" + std::to_string(i + 1));
+  CHECK_EQ(m.race.rows[0].gap, std::string("1:21.5"));
+  CHECK_EQ(m.race.rows[1].gap, std::string("+1.000"));
+  CHECK_EQ(m.race.rows[2].gap, std::string(""));  // a disqualified row's negative time
+  CHECK_EQ(racing_detail_text(m.race.rows[2]), std::string("DSQ"));
+  CHECK_EQ(m.race.rows[9].gap, std::string(""));  // 1:20.5, ahead of the leader
+}
+
+static void test_racing_calendar() {
+  GolfNext n;
+  const std::string f1 = slurp("fixtures/racing_calendar_f1_2026.json");
+  CHECK_EQ(racing_cal_str(f1, parse_iso8601_z("2026-11-09T12:00Z"), "600057448", n), 1);
+  CHECK(n.valid);
+  CHECK_EQ(n.event_id, std::string("600057449"));
+  CHECK_EQ(n.name, std::string("Heineken Las Vegas Grand Prix"));
+  // Three hours earlier than the calendar says, as the header has it
+  CHECK_EQ(n.start_epoch, parse_iso8601_z("2026-11-20T00:30Z"));
+  CHECK_EQ(n.end_epoch, parse_iso8601_z("2026-11-22T04:00Z"));
+  CHECK_EQ(golf_dates(utc_tm(n.start_epoch), utc_tm(n.end_epoch)), std::string("Nov 20-22"));
+  // During a weekend the header doesn't list yet, that weekend
+  CHECK_EQ(racing_cal_str(f1, parse_iso8601_z("2026-11-07T05:22Z"), "", n), 1);
+  CHECK_EQ(n.event_id, std::string("600057448"));
+  CHECK_EQ(n.name, std::string("MSC Cruises Sao Paulo Grand Prix"));
+  // The season's last race, until six hours after its start
+  CHECK_EQ(racing_cal_str(f1, parse_iso8601_z("2026-12-06T10:00Z"), "", n), 1);
+  CHECK_EQ(n.event_id, std::string("600057451"));
+  CHECK_EQ(n.name, std::string("Etihad Airways Abu Dhabi Grand Prix"));
+  GolfNext none;
+  CHECK_EQ(racing_cal_str(f1, parse_iso8601_z("2026-12-07T12:00Z"), "", none), 0);
+  CHECK(!none.valid);
+  const std::string nascar = slurp("fixtures/racing_calendar_nascar_2026.json");
+  CHECK_EQ(racing_cal_str(nascar, parse_iso8601_z("2026-11-02T12:00Z"), "202611010020", n), 1);
+  CHECK_EQ(n.event_id, std::string("202611080042"));
+  CHECK_EQ(n.name, std::string("NASCAR Cup Series at Miami"));
+  CHECK_EQ(n.start_epoch, parse_iso8601_z("2026-11-08T20:00Z"));
+  CHECK_EQ(racing_cal_str(nascar, parse_iso8601_z("2026-11-09T12:00Z"), "", none), 0);
+  // The id is in each entry's $ref; an entry without one is skipped
+  CHECK_EQ(racing_cal_str(std::string(R"({"leagues":[{"calendar":[{"label":"No ref","startDate":"2027-03-01T00:00Z",)"
+                                      R"("endDate":"2027-03-03T00:00Z","event":{"$ref":"http://x/y"}},{"label":"Ref",)"
+                                      R"("startDate":"2027-03-08T00:00Z","event":{"$ref":"http://x/events/123?a=b"}}]}]})"),
+                          parse_iso8601_z("2027-01-01T00:00Z"), "", n),
+           1);
+  CHECK_EQ(n.event_id, std::string("123"));
+  CHECK_EQ(n.name, std::string("Ref"));
+  CHECK_EQ(n.end_epoch, n.start_epoch);  // no end date: the start
+  CHECK_EQ(racing_cal_str(std::string("{}"), 0, "", n), -1);
+  CHECK_EQ(racing_cal_str(std::string("nope"), 0, "", n), -1);
+  CHECK_EQ(racing_cal_str(std::string(R"({"leagues":[]})"), 0, "", n), 0);
+  // The calendar's next race weekend as the board: a PRE card with its dates
+  CHECK_EQ(racing_cal_str(f1, parse_iso8601_z("2026-11-09T12:00Z"), "600057448", n), 1);
+  GameSnapshot g = racing_next_snapshot(n);
+  CHECK(g.valid);
+  CHECK(g.state == GameState::PRE);
+  CHECK(g.sport == Sport::RACING);
+  CHECK(g.race.phase == RacePhase::PRE);
+  CHECK_EQ(g.event_id, n.event_id);
+  CHECK_EQ(g.kickoff_epoch, n.start_epoch);
+  CHECK_EQ(g.race.race_epoch, n.end_epoch);
+  CHECK_EQ(g.race.next_start, (int64_t) 0);
+  CHECK(!is_team_placeholder(g));
+  CHECK(board_next_snapshot(Sport::RACING, n).sport == Sport::RACING);
+  CHECK(board_next_snapshot(Sport::GOLF, n).sport == Sport::GOLF);
+  CHECK_EQ(racing_card_text(g, false, "Nov 20-22"), std::string("Las Vegas GP\nNov 20-22"));
+  CHECK_EQ(status_text(g, TickerOptions{}, "Nov 20-22"), std::string("Heineken Las Vegas Grand Prix | Nov 20-22"));
+  CHECK_EQ(racing_poll_ms(g, parse_iso8601_z("2026-11-09T12:00Z")), 30u * 60 * 1000);
+}
+
+static void test_racing_names() {
+  struct {
+    const char *name;
+    size_t max;
+    const char *want;
+  } cases[] = {
+      {"MSC Cruises Sao Paulo Grand Prix", 15, "Sao Paulo GP"},
+      {"MSC Cruises United States Grand Prix", 15, "US GP"},
+      {"Mexico City Grand Prix", 15, "Mexico City GP"},
+      {"Mexico City Grand Prix", 12, "Mexico City"},
+      {"STC Saudi Arabian Grand Prix", 15, "Saudi Arabian"},
+      {"STC Saudi Arabian Grand Prix", 24, "Saudi Arabian GP"},
+      {"Qatar Airways Australian Grand Prix", 12, "Australian"},
+      {"MSC Cruises Barcelona-Catalunya Grand Prix", 15, "Barcelona"},
+      {"MSC Cruises Barcelona-Catalunya Grand Prix", 24, "Barcelona-Catalunya GP"},
+      {"Moet & Chandon Belgian Grand Prix", 15, "Belgian GP"},
+      {"Moet & Chandon Belgian Grand Prix", 40, "Belgian GP"},
+      {"Gulf Air Bahrain Grand Prix in Malaysia", 24, "Bahrain GP"},
+      {"Heineken Las Vegas Grand Prix", 24, "Las Vegas GP"},
+      {"Etihad Airways Abu Dhabi Grand Prix", 24, "Abu Dhabi GP"},
+      {"Crypto.com Miami Grand Prix", 24, "Miami GP"},
+      {"Monaco Grand Prix", 24, "Monaco GP"},
+      {"NASCAR Cup Series at Miami", 24, "Miami"},
+      {"NASCAR Cup Series All Star Race", 24, "All Star Race"},
+      {"NASCAR Cup Series at World Wide Technology Raceway", 15, "World Wide"},
+      {"NASCAR Cup Series at Circuit of the Americas", 21, "Circuit"},
+      {"NASCAR Cup Series at Circuit of the Americas", 24, "Circuit of the Americas"},
+      {"Clash at Bowman Gray", 21, "Clash at Bowman Gray"},
+      {"Duel #1", 12, "Duel #1"},
+      {"Daytona 500", 12, "Daytona 500"},
+      {"Formula 1", 24, "Formula 1"},
+      {"", 10, ""},
+  };
+  for (const auto &c : cases)
+    CHECK_EQ(racing_event_name(c.name, c.max), std::string(c.want));
+  for (size_t max = 0; max < 30; max++) {
+    CHECK(racing_event_name("MSC Cruises Barcelona-Catalunya Grand Prix", max).size() <= max);
+    CHECK(racing_event_name("NASCAR Cup Series at World Wide Technology Raceway", max).size() <= max);
+  }
+  CHECK_EQ(board_event_name(Sport::RACING, "Mexico City Grand Prix", 15), std::string("Mexico City GP"));
+  CHECK_EQ(board_event_name(Sport::GOLF, "TOTO Japan Classic", 17), std::string("TOTO Japan"));
+  // Names in a column
+  CHECK_EQ(racing_name_fit("van Gisbergen", 10), std::string("Gisbergen"));
+  CHECK_EQ(racing_name_fit("van Gisbergen", 13), std::string("van Gisbergen"));
+  CHECK_EQ(racing_name_fit("Stenhouse Jr.", 11), std::string("Stenhouse"));
+  CHECK_EQ(racing_name_fit("Allmendinger", 10), std::string("Allmending"));
+  CHECK_EQ(racing_name_fit("Allmendinger", 11), std::string("Allmendinge"));
+  CHECK_EQ(racing_name_fit("Hulkenberg", 10), std::string("Hulkenberg"));
+  CHECK_EQ(racing_name_fit("van der Garde", 6), std::string("Garde"));
+  // The detail column and the ticker's
+  RaceRow r;
+  CHECK_EQ(racing_detail_text(r), std::string(""));
+  CHECK_EQ(racing_pos_text(r), std::string("-"));
+  r.place = 7;
+  CHECK_EQ(racing_pos_text(r), std::string("7"));
+  r.place = 100;
+  CHECK_EQ(racing_pos_text(r), std::string("-"));
+  struct {
+    const char *gap;
+    const char *board;
+  } gaps[] = {{"+0.084", "+0.084"}, {"+13.078", "+13.07"}, {"+1:20.588", "+1:20"}, {"1:10.763", "1:10.7"}};
+  for (const auto &g : gaps) {
+    GolfRow::put(r.gap, sizeof(r.gap), g.gap);
+    CHECK_EQ(racing_detail_text(r), std::string(g.board));
+    CHECK_EQ(racing_detail_long(r), std::string(g.gap));
+  }
+  r.laps_down = 1;
+  CHECK_EQ(racing_detail_text(r), std::string("+1L"));
+  CHECK_EQ(racing_detail_long(r), std::string("+1 lap"));
+  r.laps_down = 13;
+  CHECK_EQ(racing_detail_text(r), std::string("+13L"));
+  CHECK_EQ(racing_detail_long(r), std::string("+13 laps"));
+  r.laps_down = 999;
+  CHECK_EQ(racing_detail_text(r), std::string("+999L"));
+  r.out = 'R';
+  CHECK_EQ(racing_detail_text(r), std::string("DNF"));
+  CHECK_EQ(racing_detail_long(r), std::string("DNF"));
+  r.out = 'D';
+  CHECK_EQ(racing_detail_text(r), std::string("DSQ"));
+  CHECK_EQ(racing_detail_long(r), std::string("DSQ"));
+  // Gaps from lap times, in whole milliseconds
+  CHECK_EQ(racing_gap("1:10.763", "1:10.510"), std::string("+0.253"));
+  CHECK_EQ(racing_gap("1:31.276", "1:31.156"), std::string("+0.120"));
+  CHECK_EQ(racing_gap("2:12.004", "1:10.000"), std::string("+1:02.004"));
+  CHECK_EQ(racing_gap("58.1", "57.95"), std::string("+0.150"));
+  CHECK_EQ(racing_gap("1:35:16.650", "1:35:16.650"), std::string("+0.000"));
+  CHECK_EQ(racing_gap("1:09.000", "1:10.000"), std::string(""));  // ahead of the leader
+  CHECK_EQ(racing_gap("-1:27.798", "1:10.000"), std::string(""));
+  CHECK_EQ(racing_gap("DNF", "1:10.000"), std::string(""));
+  CHECK_EQ(racing_gap("1:10.000", ""), std::string(""));
+  CHECK_EQ(racing_gap("1::10.0", "1:10.0"), std::string(""));
+  CHECK_EQ(racing_gap("1:10.", "1:10.0"), std::string(""));
+  // Session names
+  CHECK_EQ(racing_session_label(RaceKind::PRACTICE, 1), std::string("FP1"));
+  CHECK_EQ(racing_session_label(RaceKind::PRACTICE, 0), std::string("Practice"));
+  CHECK_EQ(racing_session_label(RaceKind::QUALIFYING, 0), std::string("Qual"));
+  CHECK_EQ(racing_session_label(RaceKind::SPRINT, 0), std::string("Sprint"));
+  CHECK_EQ(racing_session_label(RaceKind::RACE, 0), std::string("Race"));
+  CHECK_EQ(racing_session_long(RaceKind::PRACTICE, 3), std::string("Practice 3"));
+  CHECK_EQ(racing_session_long(RaceKind::SPRINT_QUALIFYING, 0), std::string("Sprint qualifying"));
+  CHECK_EQ(racing_session_long(RaceKind::RACE, 0), std::string("Race"));
+  // A session's day and time
+  const int64_t now = parse_iso8601_z("2026-11-07T05:22Z");  // a Saturday
+  CHECK_EQ(racing_when_utc(parse_iso8601_z("2026-11-07T09:30Z"), now), std::string("Today 9:30a"));
+  CHECK_EQ(racing_when_utc(parse_iso8601_z("2026-11-08T12:00Z"), now), std::string("Tomorrow 12:00p"));
+  CHECK_EQ(racing_when_utc(parse_iso8601_z("2026-11-13T09:30Z"), now), std::string("Fri 9:30a"));
+  CHECK_EQ(racing_when_utc(parse_iso8601_z("2026-11-14T09:30Z"), now), std::string("Nov 14 9:30a"));
+  CHECK_EQ(racing_when_utc(parse_iso8601_z("2026-11-20T19:30Z"), now), std::string("Nov 20 7:30p"));
+  CHECK_EQ(racing_when(mk(2026, 0, -1, 0, 0, -1, 0), utc_tm(now)), std::string(""));
+  CHECK_EQ(day_label(utc_tm(parse_iso8601_z("2026-11-08T12:00Z")), utc_tm(now)), std::string("Tomorrow"));
+}
+
+// No line over its column at either width (every fixture, the placeholder, a card)
+static void test_racing_budgets() {
+  const char *files[] = {"fixtures/racing_header_f1_practice.json", "fixtures/racing_header_f1_final.json",
+                         "fixtures/racing_header_f1_sprint.json",   "fixtures/racing_header_f1_sprint_shootout.json",
+                         "fixtures/racing_header_f1_live.json",     "fixtures/racing_header_f1_canceled.json",
+                         "fixtures/racing_header_nascar_pre.json",  "fixtures/racing_header_nascar_final.json",
+                         "fixtures/racing_header_nascar_duels.json"};
+  std::vector<GameSnapshot> boards;
+  for (const char *f : files)
+    boards.push_back(racing_doc(f));
+  Team f1{League::F1, 2030, "F1", "Formula 1", 0};
+  boards.push_back(team_placeholder(f1));
+  GolfNext n{true, "1", "NASCAR Cup Series at World Wide Technology Raceway Presented by Somebody", 0, 0};
+  boards.push_back(racing_next_snapshot(n));
+  GameSnapshot longest = boards[1];
+  for (auto &r : longest.race.rows) {
+    GolfRow::put(r.name, sizeof(r.name), "Abcdefghijklmnopqrstuvwxyz");
+    GolfRow::put(r.num, sizeof(r.num), "1234");
+    GolfRow::put(r.gap, sizeof(r.gap), "+1:23:45.678");
+  }
+  longest.game_name = "Supercalifragilisticexpialidocious Grand Prix";
+  boards.push_back(longest);
+  for (const GameSnapshot &s : boards) {
+    for (bool wide : {false, true}) {
+      BoardLines l = racing_lines(s, wide);
+      CHECK(l.status.size() <= 12);
+      if (wide)
+        CHECK(l.title.size() + 1 + l.status.size() <= 25);
+      else
+        CHECK(l.title.empty());
+      CHECK(!l.value_narrow);
+      CHECK(l.pos.size() <= kGolfBoardRows);
+      CHECK(l.name.size() == l.pos.size() && l.value.size() == l.pos.size() && l.detail.size() == l.pos.size());
+      CHECK(l.value_color.size() == l.pos.size() && l.name_color.size() == l.pos.size());
+      for (size_t i = 0; i < l.pos.size(); i++) {
+        CHECK(l.pos[i].size() <= 2);
+        CHECK(l.name[i].size() <= (wide ? 11u : 10u));
+        CHECK(l.value[i].size() <= (wide ? 3u : 0u));
+        CHECK(l.detail[i].size() <= (wide ? 6u : 0u));
+      }
+      for (const char *when : {"", "Tomorrow 12:30p", "Nov 20 7:30p", "Oct 30-Nov 1"}) {
+        std::string card = racing_card_text(s, wide, when);
+        size_t nl = card.find('\n');
+        CHECK(card.substr(0, nl).size() <= (wide ? 21u : 24u));
+        size_t word = 0;
+        for (char c : card) {
+          word = c == ' ' || c == '\n' || c == '-' ? 0 : word + 1;
+          CHECK(word <= (wide ? 21u : 12u));
+        }
+      }
+    }
+  }
+}
+
+static void test_racing_timing() {
+  const int64_t now = parse_iso8601_z("2026-11-07T05:22Z");
+  const int64_t hour = 3600, day = 24 * hour;
+  const uint32_t minute = 60 * 1000;
+  GameSnapshot g = racing_doc("fixtures/racing_header_f1_practice.json");
+  // Live: a race or sprint every 30 seconds, practice and qualifying every minute
+  g.race.phase = RacePhase::LIVE;
+  for (RaceKind k : {RaceKind::RACE, RaceKind::SPRINT}) {
+    g.race.kind = k;
+    CHECK_EQ(racing_poll_ms(g, now), minute / 2);
+  }
+  for (RaceKind k : {RaceKind::PRACTICE, RaceKind::QUALIFYING, RaceKind::SPRINT_QUALIFYING}) {
+    g.race.kind = k;
+    CHECK_EQ(racing_poll_ms(g, now), minute);
+  }
+  // Before and between sessions, by the next session's start
+  for (RacePhase p : {RacePhase::PRE, RacePhase::BREAK}) {
+    g.race.phase = p;
+    g.race.next_start = 0;
+    g.kickoff_epoch = 0;
+    CHECK_EQ(racing_poll_ms(g, now), 30 * minute);  // nothing known
+    g.kickoff_epoch = now + 3 * hour;  // with no next session, the weekend's start
+    CHECK_EQ(racing_poll_ms(g, now), 30 * minute);
+    struct {
+      int64_t until;
+      uint32_t ms;
+    } cases[] = {{10 * 60, minute},         {5 * 60, minute},          {-hour, minute},
+                 {-6 * hour + 60, minute},  {-6 * hour, 15 * minute},  {-2 * day, 15 * minute},
+                 {10 * 60 + 1, 5 * minute}, {2 * hour, 5 * minute},    {2 * hour + 1, 30 * minute},
+                 {44 * day, 30 * minute}};
+    for (const auto &c : cases) {
+      g.race.next_start = now + c.until;
+      CHECK_EQ(racing_poll_ms(g, now), c.ms);
+    }
+    g.race.next_start = now + 46 * day;
+    CHECK_EQ(racing_poll_ms(g, now), p == RacePhase::PRE ? 360 * minute : 30 * minute);
+  }
+  // After the race (or a canceled one): until the header moves on
+  for (RacePhase p : {RacePhase::FINAL, RacePhase::OFF}) {
+    g.race.phase = p;
+    g.race.race_epoch = now - day;
+    CHECK_EQ(racing_poll_ms(g, now), 30 * minute);
+    g.race.race_epoch = now - 46 * day;
+    CHECK_EQ(racing_poll_ms(g, now), 360 * minute);
+  }
+  // The off-season clock: the next race 45 days or more away
+  GameSnapshot card = racing_next_snapshot(GolfNext{true, "1", "Next GP", now + 44 * day, now + 46 * day});
+  CHECK(!racing_off_season(card, now));
+  card.kickoff_epoch = now + 46 * day;
+  CHECK(racing_off_season(card, now));
+  CHECK(board_off_season(card, now));
+  GameSnapshot fin = racing_doc("fixtures/racing_header_f1_final.json");
+  const int64_t race = fin.race.race_epoch;
+  CHECK(!racing_off_season(fin, race + 23 * hour));  // the final stays up a day
+  CHECK(!racing_show_next(fin, race + 25 * hour));   // nothing known after it
+  CHECK(racing_off_season(fin, race + 25 * hour));   // and nothing ahead: the clock
+  fin.race.next_unknown = true;                      // the calendar read failed: the final stays up
+  CHECK(!racing_off_season(fin, race + 25 * hour));
+  fin.race.next_unknown = false;
+  fin.race.next = GolfNext{true, "600057447", "Mexico City Grand Prix", race + 12 * day, race + 14 * day};
+  CHECK(!racing_off_season(fin, race + 25 * hour));
+  CHECK(!racing_show_next(fin, race + 23 * hour));
+  CHECK(racing_show_next(fin, race + 25 * hour));  // the next race's card
+  CHECK(board_show_next(fin, race + 25 * hour));
+  CHECK(!racing_off_season(racing_next_snapshot(fin.race.next), race + 25 * hour));
+  fin.race.next.start_epoch = race + 89 * day;
+  CHECK(racing_off_season(fin, race + 25 * hour));
+  CHECK(racing_off_season(racing_next_snapshot(fin.race.next), race + 25 * hour));
+  CHECK(!racing_off_season(racing_doc("fixtures/racing_header_f1_live.json"), race));
+  Team f1{League::F1, 2030, "F1", "Formula 1", 0};
+  CHECK(!racing_off_season(team_placeholder(f1), now));
+  CHECK(!racing_off_season(GameSnapshot{}, now));
+  // Older CDN copies of the same weekend: an earlier session, phase or lap
+  GameSnapshot live = racing_doc("fixtures/racing_header_f1_live.json");  // the race, lap 34
+  GameSnapshot qual = live;  // qualifying's order up, the race to come
+  qual.race.phase = RacePhase::BREAK;
+  qual.race.kind = RaceKind::QUALIFYING;
+  qual.race.session_start = parse_iso8601_z("2026-10-24T21:00Z");
+  GameSnapshot qual_live = qual;
+  qual_live.race.phase = RacePhase::LIVE;
+  CHECK(racing_read_is_older(qual, qual_live));  // a stale "Qual live" under "Qual final"
+  CHECK(!racing_read_is_older(qual_live, qual));
+  CHECK(!racing_read_is_older(qual, live));  // the race started
+  CHECK(racing_read_is_older(live, qual));
+  GameSnapshot lap33 = live;
+  lap33.period = 33;
+  CHECK(racing_read_is_older(live, lap33));
+  CHECK(!racing_read_is_older(lap33, live));
+  CHECK(!racing_read_is_older(live, live));
+  GameSnapshot done = racing_doc("fixtures/racing_header_f1_final.json");
+  CHECK(!racing_read_is_older(live, done));
+  CHECK(racing_read_is_older(done, live));  // the final, taken back
+  CHECK(board_read_is_older(done, live));
+  // Another weekend: older when it started two days or more before
+  GameSnapshot last = done;
+  last.event_id = "600057445";
+  last.kickoff_epoch = done.kickoff_epoch - 14 * day;
+  CHECK(racing_read_is_older(done, last));
+  CHECK(!racing_read_is_older(last, done));
+  // The calendar's card and the header's weekend, the same event
+  GameSnapshot cal = racing_next_snapshot(GolfNext{true, "600057448", "MSC Cruises Sao Paulo Grand Prix",
+                                                   parse_iso8601_z("2026-11-06T15:30Z"),
+                                                   parse_iso8601_z("2026-11-08T17:00Z")});
+  GameSnapshot sp = racing_doc("fixtures/racing_header_f1_practice.json");
+  CHECK(!racing_read_is_older(cal, sp));
+  CHECK(racing_read_is_older(sp, cal));
+  // Nothing to compare with
+  CHECK(!racing_read_is_older(GameSnapshot{}, live));
+  CHECK(!racing_read_is_older(team_placeholder(f1), live));
+  GameSnapshot golf = live;
+  golf.sport = Sport::GOLF;
+  CHECK(!racing_read_is_older(golf, lap33));
+}
+
 int main() {
   test_urls();
   test_iso();
@@ -6041,6 +6826,16 @@ int main() {
   test_golf_poll_ms();
   test_golf_older();
   test_golf_off_season();
+  test_racing_urls();
+  test_racing_break();
+  test_racing_final();
+  test_racing_live();
+  test_racing_sprint();
+  test_racing_nascar();
+  test_racing_calendar();
+  test_racing_names();
+  test_racing_budgets();
+  test_racing_timing();
   checks++;
   failures += run_football_golden();
   test_logo_lru();

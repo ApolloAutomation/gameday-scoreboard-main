@@ -107,6 +107,9 @@ button { font: inherit; color: inherit; }
 .golf .s.u { color: #ff5050; }
 .golf .s.o { color: #5aa8ff; }
 .golf li.w .n { color: var(--gold); font-weight: 700; }
+/* Racing: a car number and a gap in golf's score and thru columns */
+.golf.race li { grid-template-columns: 2.5em 1fr 2.5em 6em; }
+.golf.race .s { color: #a0a0a0; }
 .board.dim .golf { opacity: .35; filter: grayscale(1); }
 
 /* Team chooser */

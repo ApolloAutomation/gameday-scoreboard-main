@@ -328,6 +328,14 @@ void fill_golf_filter(JsonDocument &f);
 void fill_golf_calendar_filter(JsonDocument &f);
 int golf_from_doc(JsonObjectConst root, GameSnapshot &out);
 int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, GolfNext &out);
+// Racing (sport_racing.cpp). The header: sports[0].leagues[0].events[], one
+// per session, and their competitors' order, names, car numbers, gaps and
+// laps down. The calendar: leagues[0].calendar[] (each entry's event id is
+// in its $ref).
+void fill_racing_filter(JsonDocument &f);
+void fill_racing_calendar_filter(JsonDocument &f);
+int racing_from_doc(JsonObjectConst root, GameSnapshot &out);
+int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, GolfNext &out);
 
 }  // namespace detail
 
@@ -632,6 +640,36 @@ int parse_golf_calendar(TInput &input, int64_t now_epoch, const std::string &aft
   if (err)
     return -1;
   return detail::golf_next_from_doc(doc.as<JsonObjectConst>(), now_epoch, after_event, out);
+}
+
+// A racing series' scoreboard header (header_url). 1: its race weekend in
+// out (sport RACING): the one with a session on track, else the one whose
+// last session with results ran latest, else the next. 0: the series lists
+// none. -1: not a header document.
+template<typename TInput> int parse_racing(TInput &input, GameSnapshot &out) {
+  JsonDocument filter(detail::json_allocator());
+  detail::fill_racing_filter(filter);
+  JsonDocument doc(detail::json_allocator());
+  DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
+                                              DeserializationOption::NestingLimit(40));
+  if (err)
+    return -1;
+  return detail::racing_from_doc(doc.as<JsonObjectConst>(), out);
+}
+
+// A racing series' calendar (golf_calendar_url). 1: the first race weekend by
+// start that isn't over (its race started less than six hours ago) and isn't
+// after_event, in out. 0: none ahead. -1: not a scoreboard document.
+template<typename TInput>
+int parse_racing_calendar(TInput &input, int64_t now_epoch, const std::string &after_event, GolfNext &out) {
+  JsonDocument filter(detail::json_allocator());
+  detail::fill_racing_calendar_filter(filter);
+  JsonDocument doc(detail::json_allocator());
+  DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
+                                              DeserializationOption::NestingLimit(40));
+  if (err)
+    return -1;
+  return detail::racing_next_from_doc(doc.as<JsonObjectConst>(), now_epoch, after_event, out);
 }
 
 // Parses a scoreboard document and extracts the event with `event_id`.

@@ -502,22 +502,100 @@ test("a golf event before it starts shows its dates, and a final the next event"
   await expect(page.locator("#golfRows li.w .n")).toHaveText("Hitt");
 });
 
-test("golf stays out of favorites, Live games and On now", async ({ page, request }) => {
+const F1 = { l: "f1", id: 2030, abbr: "F1", name: "Formula 1" };
+
+test("a racing series is a team on the Racing tab, and its session's order shows on the board", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await page.locator("#pick").click();
+  await page.locator(".tabs button", { hasText: "Racing" }).click();
+  await expect(page.locator(".tabs button.on")).toHaveText("Racing");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Formula 1", "NASCAR Cup Series"]);
+  await expect(page.locator("#tiles .tile .a")).toHaveText(["Racing · F1", "Racing · NASCAR"]);
+  // ESPN has no NASCAR logo: its tile shows none rather than a broken image
+  await expect(page.locator("#tiles .tile", { hasText: "NASCAR" }).locator("img")).toBeHidden();
+  await expect(page.locator("#tiles .tile", { hasText: "Formula 1" }).locator("img")).toHaveAttribute("src", /leagues\/500-dark\/f1\.png$/);
+  await page.locator("#tiles .tile", { hasText: "Formula 1" }).first().click();
+  await expectSet(request, { team: "f1:2030" });
+
+  // Between sessions: the last one's order, car numbers and gaps, and the next session
+  await reset(request, {
+    team: F1, next: [], tz_iana: "America/Chicago",
+    status: "MSC Cruises Sao Paulo Grand Prix | Practice 2 final | 1 Antonelli 1:10.763",
+    game: {
+      s: "IN", l: "f1", sport: 6, gn: "MSC Cruises Sao Paulo Grand Prix", id: "600057448",
+      race: { st: "Practice 2 final", ph: 2, start: 1793979000, end: 1794157200, loc: "Autodromo Jose Carlos Pace",
+              nx: "Practice 3", at: 1794065400, rows: [
+                { p: "1", n: "Antonelli", v: "12", d: "1:10.763" }, { p: "2", n: "Norris", v: "1", d: "+0.253" },
+                { p: "3", n: "Verstappen", v: "3", d: "+0.259" }] },
+    },
+  });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("PRACTICE 2 FINAL");
+  await expect(page.locator("#gname")).toHaveText("MSC Cruises Sao Paulo Grand Prix");
+  await expect(page.locator("#golf")).toBeVisible();
+  await expect(page.locator("#golf")).toHaveClass(/race/);
+  await expect(page.locator("#golfSt")).toHaveText("Practice 2 final");
+  await expect(page.locator("#golfWhen")).toHaveText("Next: Practice 3, Sat 9:30 AM");
+  await expect(page.locator("#golfRows .p")).toHaveText(["1", "2", "3"]);
+  await expect(page.locator("#golfRows .n")).toHaveText(["Antonelli", "Norris", "Verstappen"]);
+  await expect(page.locator("#golfRows .s")).toHaveText(["12", "1", "3"]);
+  await expect(page.locator("#golfRows .t")).toHaveText(["1:10.763", "+0.253", "+0.259"]);
+  await expect(page.locator("#board .row")).toBeHidden();
+  await expect(page.locator("#curName")).toHaveText("Formula 1");
+  await expect(page.locator("#curLg")).toHaveText("Racing");
+
+  // The race final: the winner in gold, and the next race weekend
+  await reset(request, {
+    team: F1, next: [], tz_iana: "America/Chicago",
+    game: {
+      s: "POST", l: "f1", sport: 6, gn: "MSC Cruises Sao Paulo Grand Prix", id: "600057448", done: true,
+      race: { st: "Final", ph: 3, rows: [{ p: "1", n: "Antonelli", v: "12", d: "", w: true }, { p: "2", n: "Norris", v: "1", d: "+3.120" }],
+              next: { name: "Heineken Las Vegas Grand Prix", start: 1795134600, end: 1795320000 } },
+    },
+  });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(page.locator("#golfRows li.w .n")).toHaveText("Antonelli");
+  await expect(page.locator("#golfWhen")).toHaveText("Next: Heineken Las Vegas Grand Prix, Nov 19-21");
+
+  // The picker opens on the Racing tab for a series, NASCAR's included
+  await reset(request, { team: { l: "nascar", id: 2021, abbr: "NASCAR", name: "NASCAR Cup Series" }, next: [] });
+  await page.reload();
+  await expect(page.locator("#curLogo")).toBeHidden();
+  await page.locator("#pick").click();
+  await expect(page.locator(".tabs button.on")).toHaveText("Racing");
+  await expect(page.locator("#tiles .tile.on .n")).toHaveText("NASCAR Cup Series");
+  await page.getByRole("button", { name: "Close" }).click();
+
+  // Nothing listed for the series
+  await reset(request, { team: F1, next: [], game: { s: "NOT_FOUND", l: "f1" } });
+  await page.reload();
+  await expect(page.locator("#msg")).toHaveText("No upcoming race for this series");
+  await expect(page.locator("#golf")).toBeHidden();
+});
+
+test("golf and racing stay out of favorites, Live games and On now", async ({ page, request }) => {
   let golfReads = 0;
   await page.route("https://site.api.espn.com/apis/site/v2/sports/golf/**", (route) => {
     golfReads++;
     return route.fulfill({ json: { events: [] } });
   });
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/racing/**", (route) => {
+    golfReads++;
+    return route.fulfill({ json: { events: [] } });
+  });
   await reset(request);
   await page.goto("/");
-  // Adding a favorite: no Golf tab, and no tour in the search
+  // Adding a favorite: no Golf or Racing tab, and no tour or series in the search
   await page.locator("#favAdd").click();
   await expect(page.locator("#modal")).toHaveClass(/open/);
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
-  await page.locator("#q").fill("tour");
-  await expect(page.locator("#tiles .none")).toHaveText("No team matches");
-  await page.locator("#q").fill("golf");
-  await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
+  for (const q of ["tour", "golf", "racing", "formula", "nascar"]) {
+    await page.locator("#q").fill(q);
+    await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  }
   await page.getByRole("button", { name: "Close" }).click();
   // Choosing the team: the Golf tab is back, and the tour is found by its
   // name or by "golf"
@@ -527,7 +605,14 @@ test("golf stays out of favorites, Live games and On now", async ({ page, reques
   await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
   await page.locator("#q").fill("golf");
   await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
-  // On now never reads a golf scoreboard
+  await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeVisible();
+  await page.locator("#q").fill("racing");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Formula 1", "NASCAR Cup Series"]);
+  await page.locator("#q").fill("formula");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Formula 1"]);
+  await page.locator("#q").fill("nascar");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["NASCAR Cup Series"]);
+  // On now never reads a golf or racing scoreboard
   await page.locator(".tabs button", { hasText: "On now" }).click();
   await expect(page.locator("#tiles .none")).toHaveText("No games today");
   expect(golfReads).toBe(0);
@@ -590,7 +675,7 @@ test("a screen reader gets each control's name, role and state", async ({ page, 
   await expect(tabs.getByRole("tab", { name: "NCAAF" })).toBeFocused();
   await expect(page.getByRole("tabpanel").locator(".tile .a").first()).toContainText("NCAAF");
   await page.keyboard.press("End");
-  await expect(tabs.getByRole("tab", { selected: true })).toHaveText("Golf");
+  await expect(tabs.getByRole("tab", { selected: true })).toHaveText("Racing");
   await page.keyboard.press("ArrowRight");
   await expect(tabs.getByRole("tab", { selected: true })).toHaveText("On now");
   await expect(tabs.locator('[tabindex="0"]')).toHaveText("On now");
@@ -1285,8 +1370,8 @@ test("the picker has a tab per league and follows a team from another sport", as
   await reset(request);
   await page.goto("/");
   await page.locator("#pick").click();
-  // One Golf tab for both tours, after the leagues
-  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "Golf"]);
+  // One Golf tab for both tours and one Racing tab for both series, after the leagues
+  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "Golf", "Racing"]);
   await page.locator(".tabs button", { hasText: "NHL" }).click();
   await expect(page.locator(".tabs button.on")).toHaveText("NHL");
   await expect(page.locator("#tiles .tile")).toHaveCount(32);

@@ -133,7 +133,9 @@ struct GolfRow {
 
 static_assert(std::is_trivially_copyable<GolfRow>::value, "golf rows copy as a block");
 
-struct GolfNext {  // the event after the one on the board, from the calendar
+// The event after the one on the board, from the season calendar: a golf
+// tour's next tournament or a racing series' next race weekend.
+struct GolfNext {
   bool valid{false};
   std::string event_id, name;  // name ascii_fold()ed
   int64_t start_epoch{0}, end_epoch{0};
@@ -149,6 +151,51 @@ struct Golf {
   std::vector<GolfRow> rows;  // leaderboard order, at most kGolfRows
   GolfNext next;              // after a final, canceled event or none listed
   bool next_unknown{false};   // after a final or a canceled event, the calendar read failed
+};
+
+// Racing (sport_racing.cpp): a series' race weekend from its scoreboard
+// header, one header entry per session. GameSnapshot's shared fields carry
+// the event: event_id, game_name (ESPN's full name, plain ASCII),
+// kickoff_epoch (the first session's start), venue (circuit), tv, period (the
+// shown session's lap), short_detail (its ESPN status), completed (the race
+// is final). Phases: PRE nothing has run yet (the card), LIVE a session on
+// track, BREAK a finished session's order while the next one waits, FINAL the
+// race's result, OFF the race canceled or postponed.
+using RacePhase = GolfPhase;
+enum class RaceKind : uint8_t { RACE, PRACTICE, QUALIFYING, SPRINT_QUALIFYING, SPRINT };
+static const size_t kRaceRows = 10;  // kept: the ticker's top ten, the device page
+// The next race this far off or more is the off-season clock, not its card.
+// F1 leaves 12 to 33 days between races and about 90 between seasons.
+static const int64_t kRaceSeasonGap = 45 * 24 * 3600;
+
+struct RaceRow {          // plain characters, copied as a block like GolfRow
+  uint8_t place{0};       // 0 when ESPN gave none
+  bool winner{false};     // won the race (FINAL only): ESPN's flag or place 1
+  char out{0};            // 'R' retired (DNF), 'D' disqualified (DSQ), 0 otherwise
+  uint16_t laps_down{0};  // |behindLaps|, race sessions only, at most 999
+  char name[20]{};        // last name, ascii_fold()ed: "Verstappen", "van Gisbergen", "Stenhouse Jr."
+  char num[4]{};          // car number: "1", "24"
+  char gap[12]{};         // race: ESPN's behindTime when it starts with '+' ("+13.078",
+                          // "+1:20.588"); timed sessions: from the lap times ("+0.253"),
+                          // and the leader's own time ("1:10.763"); "" none
+};
+static_assert(std::is_trivially_copyable<RaceRow>::value, "race rows copy as a block");
+
+struct Racing {
+  RacePhase phase{RacePhase::PRE};
+  GolfStatus status{GolfStatus::OTHER};  // the shown session's ESPN status (the race's when OFF)
+  RaceKind kind{RaceKind::RACE};         // the session on the board (before any ran: the next one)
+  uint8_t number{0};                     // its practice number, 1-3
+  char flag{0};                          // 'R' red flag, 'Y' yellow or caution (fullStatus.flag)
+  uint16_t laps{0};                      // the shown session's scheduled laps, 0 unknown
+  int64_t session_start{0};              // the shown session's start, 0 before any ran
+  int64_t race_epoch{0};                 // the race's start (or the last session's when there is no race)
+  RaceKind next_kind{RaceKind::RACE};
+  uint8_t next_number{0};
+  int64_t next_start{0};                 // the weekend's next session, 0 for none
+  std::vector<RaceRow> rows;             // the shown session's order, at most kRaceRows
+  GolfNext next;                         // after the final or a canceled race: from the calendar
+  bool next_unknown{false};              // the calendar read failed after a final
 };
 
 // One scoreboard event, resolved to "us" and "them".
@@ -191,6 +238,7 @@ struct GameSnapshot {
   Basketball nba;  // every basketball league
   Hockey nhl;
   Golf golf;
+  Racing race;
   std::string game_name;  // "Rose Bowl", "Super Bowl LX"; empty for most games
 };
 
@@ -357,6 +405,9 @@ std::string short_game_name(const std::string &headline);
 // "Sat 3:30 PM", or "Sat TBD" with time_tbd, when ESPN has no kickoff time
 // yet (then kick_local is from tbd_day_epoch).
 std::string kickoff_label(const struct tm &kick_local, const struct tm &now_local, bool time_tbd = false);
+// kickoff_label's day: "Today", "Tomorrow", "Sat" within the week, else
+// "Nov 20"; "" for a time the panel couldn't convert.
+std::string day_label(const struct tm &kick_local, const struct tm &now_local);
 // ESPN lists a game with no kickoff time yet (timeValid false: college games
 // a week or two out, TBD playoff slots) at midnight Eastern of its day. That
 // instant is the evening before in Central and Pacific time, so anything that
@@ -420,19 +471,21 @@ Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool
 // ("NY lead 2-1", "Series 2-2"), else "".
 std::string basketball_series(const GameSnapshot &s);
 
-// Leaderboard sports: golf's tours (sport_golf.cpp). A tour is followed
-// like a team: its board is the tour's current event from the scoreboard
-// header, and the calendar names the next one. The JSON filters and parses
-// are in espn_parse_impl.h.
+// Leaderboard sports: golf's tours (sport_golf.cpp) and racing's series
+// (sport_racing.cpp). A tour is followed like a team: its board is the
+// tour's current event from the scoreboard header, and the calendar names
+// the next one. The JSON filters and parses are in espn_parse_impl.h.
 //
 // A league's scoreboard header, the sport and league from its path: golf's
 // is ~19 KB during an event and ~3 KB between them.
 // https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga
+// https://site.api.espn.com/apis/v2/scoreboard/header?sport=racing&league=f1
 std::string header_url(League league);
-// A golf tour's season calendar: the scoreboard of the first Tuesday on or
-// after now (Eastern), 8-12 KB since Tuesday never has a round; or with
-// next_season the year after this one's whole list (dates=2027, 40-58 KB).
-// Never this year: dates=2026 is 29 MB.
+// A golf tour's or a racing series' calendar: the scoreboard of the first
+// Tuesday on or after now (Eastern), 6-12 KB since Tuesday never has a round
+// or a race; or with next_season the year after this one's whole list
+// (dates=2027, 40-58 KB for golf). Never this year: golf's dates=2026 is
+// 29 MB, F1's 0.8 MB.
 std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season);
 // The board's status cell, at most 12 characters: "Round 3", "R2 suspended",
 // "After R2", "Final", "Upcoming", "Canceled".
@@ -466,9 +519,12 @@ struct BoardLines {
   std::string title, status;
   uint32_t status_color{0xFFFFFF};
   // One panel shows the value column (golf's score to par, 3 characters, the
-  // name 7). False: no value column on one panel, and the names get its room.
+  // name 7). False: no value column on one panel, and the names get its room
+  // (racing, 10 characters).
   bool value_narrow{true};
-  std::vector<std::string> pos, name, value, detail;  // golf: score to par, holes played
+  // value, detail: golf's score to par and holes played; racing's car number
+  // and gap (128 wide only)
+  std::vector<std::string> pos, name, value, detail;
   std::vector<int> value_color, name_color;
 };
 // Golf's leaderboard (none before the event or for a canceled one: the board
@@ -503,8 +559,80 @@ bool golf_off_season(const GameSnapshot &g, int64_t now);
 // its header, with the next event known: the board shows that one instead.
 bool golf_show_next(const GameSnapshot &g, int64_t now);
 
+// Racing (sport_racing.cpp). A series (F1, the NASCAR Cup Series) is
+// followed like a golf tour: its board is the current race weekend from the
+// series' scoreboard header (header_url, up to ~95 KB during an F1 weekend,
+// 3-27 KB for NASCAR), one entry per session, and its calendar
+// (golf_calendar_url: the coming Tuesday's scoreboard, 6-10 KB) names the
+// next race. The JSON filters and parses are in espn_parse_impl.h.
+//
+// A session's name for the board ("FP1", "Qual", "Sprint Q", "Sprint",
+// "Race") and for the ticker ("Practice 1", "Qualifying", "Sprint
+// qualifying", "Sprint", "Race").
+std::string racing_session_label(RaceKind kind, uint8_t number);
+std::string racing_session_long(RaceKind kind, uint8_t number);
+// The board's status cell, at most 12 characters: "Lap 34/56", "FP3 live",
+// "Red flag", "FP2 final", "Final", "Canceled", "Upcoming".
+std::string racing_state_text(const GameSnapshot &s);
+// The same for the ticker, Home Assistant and the device page: "Race lap
+// 34/56", "Practice 2 final", "Qualifying live".
+std::string racing_state_long(const GameSnapshot &s);
+uint32_t racing_state_color(const GameSnapshot &s);
+// Board columns: the place ("1" to "99", else "-"), a name in max characters
+// (a suffix, then a leading particle dropped: "van Gisbergen" is
+// "Gisbergen", "Stenhouse Jr." is "Stenhouse"), the 128-wide detail in 6
+// ("DNF", "DSQ", "+1L", "+13.07", "1:10.7") and the ticker's ("+1 lap",
+// "+13.078").
+std::string racing_pos_text(const RaceRow &r);
+std::string racing_name_fit(const std::string &name, size_t max);
+std::string racing_detail_text(const RaceRow &r);
+std::string racing_detail_long(const RaceRow &r);
+// A timed session's gap from two lap times ("1:10.763"), in whole
+// milliseconds: "+0.253", "+1:02.004"; "" when either isn't a time or the gap
+// is negative.
+std::string racing_gap(const std::string &time, const std::string &leader);
+// An event name in at most max characters: a NASCAR name without its "NASCAR
+// Cup Series at" ("Miami"), an F1 name as its place and "GP" without the
+// sponsor ("Sao Paulo GP", "US GP"), then without the "GP", then whole words.
+std::string racing_event_name(const std::string &name, size_t max);
+// "Today 9:30a", "Tomorrow 12:00p", "Sat 9:30a", "Nov 20 7:30p".
+std::string racing_when(const struct tm &start_local, const struct tm &now_local);
+// The shown session's order cut to the board's columns: kGolfBoardRows rows,
+// none before the weekend or for a canceled race (racing_card_text). One
+// panel has no value column (value_narrow false) and 10 characters of name.
+BoardLines racing_lines(const GameSnapshot &s, bool wide);
+// The no-order card: the event name, a line break, then the next session and
+// when ("FP1 Fri 10:30a"), the calendar's dates ("Nov 19-21"), Canceled or
+// Postponed, or the status. No word is longer than a line (12 characters on
+// one panel, 21 on two).
+std::string racing_card_text(const GameSnapshot &s, bool wide, const std::string &when);
+// The ticker and Home Assistant's Game Status (only a new leader or session
+// changes the latter, never a lap). when: the next session's day and time,
+// or the event's dates (before it), or the next event's (after the race).
+std::string racing_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &when);
+std::string racing_ha_status_text(const GameSnapshot &s, const std::string &when);
+// "ANTONELLI WINS!" when the race went final between two reads of it (never
+// a practice, qualifying or a sprint). Each word fits a line of the splash
+// (10 characters on one panel, 16 on two).
+Splash racing_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide);
+// The calendar's next race weekend as a PRE board, its dates only.
+GameSnapshot racing_next_snapshot(const GolfNext &n);
+// An older CDN copy: an event that started two days or more before the one
+// shown, or the same event at an earlier session, phase or lap.
+bool racing_read_is_older(const GameSnapshot &shown, const GameSnapshot &read);
+// How long until the next header read: 30 s while a race or sprint runs, a
+// minute in practice or qualifying, closer to the next session as it nears.
+uint32_t racing_poll_ms(const GameSnapshot &g, int64_t now);
+// The off-season clock: the next race over kRaceSeasonGap away, or none
+// known a day after the last race. Not while a failed calendar read leaves
+// it unknown (next_unknown).
+bool racing_off_season(const GameSnapshot &g, int64_t now);
+// A final (or a canceled race) over a day past its start, the next race
+// known: the board shows that one instead.
+bool racing_show_next(const GameSnapshot &g, int64_t now);
+
 // The leaderboard sports' one path through the component (gameday.cpp's
-// board job): each picks the sport's own function by the snapshot's sport.
+// board job): each picks golf's or racing's function by the snapshot's sport.
 // The calendar's next event and the flag that its read failed:
 GolfNext &board_next(GameSnapshot &g);
 bool &board_next_unknown(GameSnapshot &g);
@@ -516,7 +644,7 @@ Splash board_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide
 uint32_t board_poll_ms(const GameSnapshot &g, int64_t now);
 bool board_off_season(const GameSnapshot &g, int64_t now);
 BoardLines board_lines(const GameSnapshot &g, bool wide);
-// when: golf's dates (before the event).
+// when: golf's dates (before the event); racing's next session or dates.
 std::string board_card_text(const GameSnapshot &g, bool wide, const std::string &when);
 std::string board_event_name(Sport sport, const std::string &name, size_t max);
 
