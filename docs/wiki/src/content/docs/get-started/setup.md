@@ -16,7 +16,7 @@ A panel that isn't on Wi-Fi yet then shows **SETUP** and a QR code. On the 128x6
 The QR code opens `https://gamedayscoreboard.app/setup`, a page of the separate Game Day app project, which Apollo Automation does not maintain (see [The Game Day app](/get-started/the-app/)). You don't need it: the installer's Wi-Fi dialog or the panel's hotspot below sets the panel up.
 
 :::note[Coming in the next release]
-The QR code no longer has anything to do with the app. Once the panel's hotspot is up, the QR code is the hotspot's Wi-Fi code, and the words say **SETUP / Scan to / join Wi-Fi**. Point the camera of any iPhone or Android phone at it and tap to join, and the setup page opens by itself. Your phone's camera and browser are all you need. In the moment before the hotspot is up, the panel says **SETUP / Starting / hotspot**, with no QR code.
+The QR code no longer has anything to do with the app. Once the panel's hotspot is up, the QR code is the hotspot's Wi-Fi code, and the words say **SETUP / Scan to / join Wi-Fi**. Point the camera of any iPhone or Android phone at it and tap to join, then pick your Wi-Fi network on the setup page, as below. Your phone's camera and browser are all you need. In the moment before the hotspot is up, the panel says **SETUP / Starting / hotspot**, with no QR code.
 :::
 
 ## Put it on Wi-Fi from the installer
@@ -27,14 +27,14 @@ If you just installed the firmware from your browser, the installer offers to pu
 
 While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`. Once the hotspot is up, the panel takes a turn showing **Join WiFi / Game Day** and those six characters, so you know which network is yours. Two panels in one house each get their own name.
 
-1. On any phone or laptop, join that network. A setup page opens.
+1. On any phone or laptop, join that network. A setup page opens. If it doesn't, tap your phone's notification to sign in to the network, or open `192.168.4.1` in a browser. If your phone says the network has no internet, choose to stay connected.
 2. Pick your Wi-Fi network and enter the password.
 3. Save.
 
 The panel joins your Wi-Fi. Then [pick your team](/get-started/pick-your-team/) on its device page.
 
 :::note[Coming in the next release]
-You don't have to find the network in your phone's list. Point your phone's camera at the QR code on the panel and tap to join the hotspot; on a 64x64 panel, wait for the code's turn. The setup page then opens, as in step 1.
+You don't have to find the network in your phone's list. Point your phone's camera at the QR code on the panel and tap to join the hotspot; on a 64x64 panel, wait for the code's turn. The setup page then opens as in step 1, which also says what to do if it doesn't. The hotspot's name now takes its turn as **Join Wi-Fi / Game Day** and the six characters.
 :::
 
 ## Pick your team, or add it to Home Assistant

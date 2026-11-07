@@ -2759,9 +2759,27 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     f.ha_status_text = why;
     f.message = why;
   }
+  // The device page's address, for the hints below: the IP rather than the
+  // .local name, which many Android phones can't open; the boot screen's QR
+  // code holds the same address (setup_qr.h). Empty off Wi-Fi.
+  auto page_ip = []() -> std::string {
+    if (!network::is_connected())
+      return std::string();
+    for (auto &a : network::get_ip_addresses()) {
+      if (a.is_set() && a.is_ip4()) {
+        char buf[48];
+        a.str_to(buf);
+        return buf;
+      }
+    }
+    return std::string();
+  };
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->fav_.empty() && !this->demo_playing_()) {
-    f.status_text = "Favorites: add teams on the page | " + f.status_text;
-    f.ha_status_text = "Favorites: add teams on the page | " + f.ha_status_text;
+    const std::string ip = page_ip();
+    const std::string fav = ip.empty() ? std::string("Favorites: add teams on the device page | ")
+                                       : "Favorites: add teams at " + ip + " | ";
+    f.status_text = fav + f.status_text;
+    f.ha_status_text = fav + f.ha_status_text;
   }
   if (this->misses_ >= 3 && !this->demo_playing_()) {
     if (!this->ever_polled_good_()) {
@@ -2780,19 +2798,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     }
   }
   // Until a team, mode or favorite has been picked once, the ticker asks for
-  // one at the device page's address. The IP rather than the .local name,
-  // which many Android phones can't open; the boot screen's QR code holds
-  // the same address (setup_qr.h).
-  if (!this->flag_(FLAG_SETUP) && network::is_connected() && !this->demo_playing_()) {
-    std::string ip;
-    for (auto &a : network::get_ip_addresses()) {
-      if (a.is_set() && a.is_ip4()) {
-        char buf[48];
-        a.str_to(buf);
-        ip = buf;
-        break;
-      }
-    }
+  // one at the device page's address.
+  if (!this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
+    const std::string ip = page_ip();
     if (!ip.empty()) {
       std::string pick = "Pick a team at " + ip + " | ";
       f.status_text = pick + f.status_text;

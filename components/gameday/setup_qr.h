@@ -10,8 +10,10 @@ namespace esphome::gameday {
 
 // A Wi-Fi join code for an open network, the kind a phone shows to share its
 // Wi-Fi: WIFI:T:nopass;S:<name>;; with \ ; , : and " in the name escaped by
-// a backslash. The iPhone and Android cameras both offer to join it, and
-// ESPHome's captive portal then opens by itself to pick the home network.
+// a backslash. The iPhone and Android cameras both offer to join it. The
+// phone then offers ESPHome's captive portal to pick the home network: an
+// iPhone opens it, and many Android phones post a sign-in notification
+// instead. It is at http://192.168.4.1/ either way.
 // The hotspot's name always starts "Game Day " (gameday-common.yaml,
 // on_boot), so it can never be read as a hex name and needs no quotes.
 inline std::string wifi_join_qr(const std::string &ssid) {

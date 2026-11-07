@@ -29,7 +29,7 @@ The phone has to be on the same Wi-Fi network as the panel. A guest network can 
 The QR code the panel shows during setup, when it has lost Wi-Fi and right after it joins, opens `https://gamedayscoreboard.app/setup`, a page of the app's own project. On an iPhone, point the Camera at it. It opens the Game Day app if you have it installed, and that project's setup page in your browser if you don't.
 
 :::note[Coming in the next release]
-The panel's QR codes no longer open the app or its project's page, so you never need the app to use them. During setup and when the panel has lost Wi-Fi, the QR code joins the panel's own hotspot. Once the panel is on your Wi-Fi, it opens the panel's device page. The camera of any iPhone or Android phone reads both. The app can still set a panel up over Bluetooth, where it finds it.
+The panel's QR codes no longer open the app or its project's page, so you never need the app to use them. During setup, and once the panel's own hotspot comes up a few minutes into a Wi-Fi outage, the QR code joins that hotspot. Once the panel is on your Wi-Fi, it opens the panel's device page. The camera of any iPhone or Android phone reads both. The app can still set a panel up over Bluetooth, where it finds it.
 :::
 
 ## Without the app

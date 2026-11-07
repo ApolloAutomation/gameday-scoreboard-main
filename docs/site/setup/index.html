@@ -48,21 +48,21 @@
   <div class="card">
     <h2>2. Put it on Wi-Fi</h2>
     <p>Just installed the firmware from your browser? The installer offers to put the panel on your Wi-Fi as soon as the install finishes. Enter your network name and password there.</p>
-    <p>Otherwise use the panel's hotspot. While it shows SETUP, the panel also starts its own Wi-Fi network named <code>Game Day</code> plus six letters and numbers, like <code>Game Day 2f6a70</code>, and the screen shows the name. Join it from any phone or laptop and a setup page opens. Pick your Wi-Fi network, enter the password and save.</p>
-    <p class="note">Coming in the next release: the QR code on the panel joins the hotspot. Point the camera of any iPhone or Android phone at it and tap to join, and the setup page opens. No app needed.</p>
+    <p>Otherwise use the panel's hotspot. While it shows SETUP, the panel also starts its own Wi-Fi network named <code>Game Day</code> plus six letters and numbers, like <code>Game Day 2f6a70</code>. The QR code on the panel joins it: point the camera of any iPhone or Android phone at the code and tap to join. No app needed. The screen shows the network's name too, so you can also join it from the Wi-Fi list on any phone or laptop.</p>
+    <p>A setup page opens. Pick your Wi-Fi network, enter the password and save.</p>
+    <p class="note">No setup page? Tap your phone's notification to sign in to the network, or open <code>192.168.4.1</code> in a browser. If your phone says the network has no internet, choose to stay connected.</p>
   </div>
 
   <div class="card">
     <h2>3. Pick your team</h2>
-    <p>Once it's on your Wi-Fi, the panel shows its address, like <code>gameday-2f6a70.local</code>. Open that in a browser and pick your team. If your phone won't open a <code>.local</code> address, hold the button on the controller for 1.5 seconds and the panel shows the number version too.</p>
+    <p>Once it's on your Wi-Fi, the panel's QR code opens its page. Scan it with your phone's camera, with the phone on the same Wi-Fi, and pick your team.</p>
+    <p>The panel also shows its address, like <code>gameday-2f6a70.local</code>, to open in any browser. If your phone won't open a <code>.local</code> address, scan the code instead, or hold the button on the controller for 1.5 seconds and the panel shows the number version too.</p>
     <p>Home Assistant finds the panel as a new ESPHome device, and can pick the team too.</p>
-    <p class="note">Coming in the next release: once it's on your Wi-Fi, the panel's QR code opens its page at the number address. Scan it with your phone's camera, on the same Wi-Fi, and pick your team, with no <code>.local</code> name to type.</p>
   </div>
 
   <div class="card">
     <h2>The Game Day app</h2>
-    <p>The QR code on the panel is for the Game Day app, a separate project that Apollo Automation does not maintain. It may not find panels running this firmware, and you don't need it: the hotspot and the panel's own page do everything it does.</p>
-    <p class="note">Coming in the next release: the panel's QR codes have nothing to do with the app. They join the panel's hotspot during setup and open the panel's own page once it's on Wi-Fi.</p>
+    <p>The panel's QR codes have nothing to do with the Game Day app, a separate project that Apollo Automation does not maintain. It may not find panels running this firmware, and you don't need it: the hotspot and the panel's own page do everything it does.</p>
   </div>
 
   <div class="card">
@@ -72,8 +72,7 @@
 
   <div class="card">
     <h2>New router or Wi-Fi password?</h2>
-    <p>The panel says <strong>Wi-Fi lost</strong>. Join the panel's <code>Game Day</code> hotspot as above and give it the new network or password. The hotspot comes up within a few minutes of the panel losing Wi-Fi.</p>
-    <p class="note">Coming in the next release: the panel says <strong>Wi-Fi lost, reconnecting</strong> while it tries to get back on, then <strong>Wi-Fi lost, scan to fix</strong> with a QR code once its hotspot is up. Scan the code with your phone's camera to join the hotspot and give the panel the new network or password.</p>
+    <p>The panel says <strong>Wi-Fi lost, reconnecting</strong> while it tries to get back on. Within a few minutes it brings up its <code>Game Day</code> hotspot and says <strong>Wi-Fi lost, scan to fix</strong> with a QR code. Scan the code with your phone's camera to join the hotspot, and give the panel the new network or password on the setup page, as above.</p>
   </div>
 
   <div class="card" id="remote">

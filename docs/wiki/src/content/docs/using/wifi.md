@@ -31,9 +31,10 @@ When the list is full, adding a sixth network drops the one at the bottom. The p
 
 ## Adding a network
 
-Every network you set the panel up on is added to the top of the list. There are two ways:
+Every network you set the panel up on is added to the top of the list. There are three ways:
 
 - **The panel's hotspot.** While it shows **SETUP**, the panel starts its own Wi-Fi network named **Game Day** and six letters and numbers, like **Game Day 2f6a70**. The screen shows the name. Join it from any phone or laptop and a setup page opens. Pick your Wi-Fi network, enter the password and save.
+- **The installer.** Right after you install the firmware from your browser, the installer offers to put the panel on your Wi-Fi. Enter your network name and password there. See [Set up your panel](/get-started/setup/#put-it-on-wi-fi-from-the-installer).
 - **The Game Day app**, a separate project that may not find panels running this firmware, finds the panel over Bluetooth where it works and hands it the network and password. While the panel joins, it shows **JOINING** and the network's name. See [The Game Day app](/get-started/the-app/).
 
 The six characters are the same as in the panel's address, so two panels in one house are easy to tell apart. See [Set up your panel](/get-started/setup/).

@@ -12,10 +12,11 @@
 #
 #   - Off Wi-Fi (setup and Wi-Fi lost) the code is a Wi-Fi join code for the
 #     panel's own open hotspot, "Game Day 2f6a70", named in on_boot. The
-#     iPhone and Android cameras both offer to join it, and ESPHome's captive
-#     portal then opens by itself to pick the home network. It only shows
-#     once the hotspot is really up, so it never points at a network that is
-#     not there yet; until then the lines are text only.
+#     iPhone and Android cameras both offer to join it, and the phone then
+#     offers ESPHome's captive portal (192.168.4.1) to pick the home
+#     network. It only shows once the hotspot is really up, so it never
+#     points at a network that is not there yet; until then the lines are
+#     text only.
 #   - On Wi-Fi the code opens the panel's own device page by IP address,
 #     http://192.168.1.50/, not by its .local name, which many Android phones
 #     can't open.
@@ -32,13 +33,13 @@
 #   wifi lost   Wi-Fi / lost / reconnecting, full width, no QR, until the
 #               hotspot is up, then
 #               64:  Wi-Fi / lost / scan to fix (5 s), hotspot QR (8 s),
-#                    Join WiFi / Game Day / 2f6a70 (5 s)
+#                    Join Wi-Fi / Game Day / 2f6a70 (5 s)
 #               128: hotspot QR + Wi-Fi / lost / scan to fix (13 s), then
 #                    the hotspot lines (5 s)
 #   setup       SETUP / Starting / hotspot, full width, no QR, until the
 #               hotspot is up (on a new panel, almost at once), then
 #               64:  SETUP / Scan to / join Wi-Fi (5 s), hotspot QR (8 s),
-#                    Join WiFi / Game Day / 2f6a70 (5 s), the hotspot's own
+#                    Join Wi-Fi / Game Day / 2f6a70 (5 s), the hotspot's own
 #                    name
 #               128: hotspot QR + SETUP / Scan to / join Wi-Fi (13 s), then
 #                    the hotspot lines (5 s)
@@ -487,7 +488,7 @@ script:
               id(boot_set_lines).execute("Wi-Fi", "lost", "reconnecting", "", true);
             } else if (frame == 2) {
               const std::string &name = App.get_name();
-              id(boot_set_lines).execute("Join WiFi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
             } else
               id(boot_set_lines).execute("Wi-Fi", "lost", "scan to fix", "", true);
           } else if (!w->has_sta() || w->is_ap_active()) {
@@ -512,7 +513,7 @@ script:
             } else if (frame == 2) {
               // The hotspot is "Game Day <suffix>", named in on_boot.
               const std::string &name = App.get_name();
-              id(boot_set_lines).execute("Join WiFi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
             } else if (ap) {
               id(boot_set_lines).execute("SETUP", "Scan to", "join Wi-Fi", "", true);
             } else
@@ -736,10 +737,10 @@ script:
     then:
       # boot_refresh only arms the hide timer when boot_ip_shown_ms is 0, so
       # clearing it lets the overlay hide itself again normally once Wi-Fi
-      # comes back. What keeps the lines below on the screen is boot_refresh
-      # deriving the same lost state from the Wi-Fi component on its next
-      # 500ms tick; this script only exists to paint them now instead of up to
-      # half a second from now.
+      # comes back. What keeps the lines on the screen is boot_refresh
+      # deriving the lost state from the Wi-Fi component on every 500ms tick;
+      # this script only exists to paint them now instead of up to half a
+      # second from now.
       - lambda: |-
           id(boot_ip_shown_ms) = 0;
           id(boot_hold_since_ms) = 0;
@@ -757,14 +758,14 @@ script:
             - lvgl.obj.update:
                 id: boot_overlay
                 hidden: false
-            - lambda: |-
-                // Same lines and layout as boot_refresh's lost branch before
-                // the fallback hotspot is up, which it never is this soon
-                // after a drop: text only, full width. boot_refresh adds the
-                // hotspot's code once it is.
-                id(boot_qr_cycle).execute(0, false);
-                id(boot_view).execute(false, "");
-                id(boot_set_lines).execute("Wi-Fi", "lost", "reconnecting", "", true);
+            # boot_refresh's lost branch paints the lines, so they match
+            # whether or not the fallback hotspot is up yet. It usually is
+            # not, this soon after a drop, but on the boot after "Reset
+            # Wi-Fi" on_boot cut the hotspot's wait to a second for the rest
+            # of that boot (gameday-common.yaml), and there it already is.
+            - script.execute:
+                id: boot_refresh
+                via_button: false
 
   # A panel nobody has picked a team on (no_team_default in the gameday
   # component) shows the QR code for its device page for one turn every 3

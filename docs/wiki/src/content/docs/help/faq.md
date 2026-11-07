@@ -28,7 +28,7 @@ Yes. The Game Day app is for Android too, and you don't need the app at all. Set
 Once it's on your Wi-Fi, open the panel's address in a browser to pick your team and change everything the app would. See [Set up your panel](/get-started/setup/) and [The Game Day app](/get-started/the-app/).
 
 :::note[Coming in the next release]
-Any phone's camera does it. While the panel shows **SETUP**, point the camera at the QR code and tap to join the hotspot; the setup page opens. Once the panel is on your Wi-Fi, its QR code opens the device page.
+Any phone's camera does it. While the panel shows **SETUP**, point the camera at the QR code and tap to join the hotspot, then pick your network on the setup page. If no page opens, open `192.168.4.1` in a browser. Once the panel is on your Wi-Fi, its QR code opens the device page.
 :::
 
 ## Does it need Home Assistant?
