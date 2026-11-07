@@ -14,7 +14,7 @@ You follow a golf tour the way you follow a team. Pick the **PGA Tour** or the *
 ## Following a tour
 
 :::note[Coming in the next release]
-On the device page, tap **Change team** and open the **Golf** tab, which holds both tours. Tap **PGA Tour** or **LPGA Tour**. Search finds them too, by their names or by "golf". In Home Assistant, the **Team** entity has **Golf: PGA Tour** and **Golf: LPGA Tour** at the end of its list.
+On the device page, tap **Change team** and open the **Golf** tab, which holds both tours. Tap **PGA Tour** or **LPGA Tour**. Search finds them too, by their names or by "golf". In Home Assistant, the **Team** entity has **Golf: PGA Tour** and **Golf: LPGA Tour** near the end of its list, after the NHL teams.
 
 The tour is your team in **My team**. In **Live games**, when nothing is live, the panel shows your tour the way it would show your team, with "No live NFL games, showing PGA" at the front of the ticker. See [Show: My team, Favorite teams, Live games](/using/modes/#when-nothing-is-live).
 :::
