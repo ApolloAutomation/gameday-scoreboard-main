@@ -104,6 +104,9 @@ enum class GolfStatus : uint8_t { OTHER, SCHEDULED, IN_PROGRESS, PLAY_COMPLETE, 
                                   POSTPONED };
 static const size_t kGolfRows = 10;      // kept from the header (ticker, device page)
 static const size_t kGolfBoardRows = 6;  // drawn on the panel, both widths
+// A leaderboard's top row on a 128-wide board: the title and the status cell,
+// a space between, in spleen_8 (5 px a character).
+static const size_t kBoardTitleRow = 25;
 
 // Plain characters, no std::string, so the rows copy as a block: a snapshot
 // is copied and moved all over the component, and every board that isn't
@@ -417,17 +420,19 @@ Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool
 // ("NY lead 2-1", "Series 2-2"), else "".
 std::string basketball_series(const GameSnapshot &s);
 
-// Golf (sport_golf.cpp). A tour is followed like a team: its board is the
-// tour's current tournament from the scoreboard header, and the calendar
-// names the next one. The JSON filters and parses are in espn_parse_impl.h.
+// Leaderboard sports: golf's tours (sport_golf.cpp). A tour is followed
+// like a team: its board is the tour's current event from the scoreboard
+// header, and the calendar names the next one. The JSON filters and parses
+// are in espn_parse_impl.h.
 //
-// The tour's scoreboard header, ~19 KB during an event, ~3 KB between them:
+// A league's scoreboard header, the sport and league from its path: golf's
+// is ~19 KB during an event and ~3 KB between them.
 // https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga
-std::string golf_header_url(League league);
-// A season calendar: the scoreboard of the first Tuesday on or after now
-// (Eastern), 8-12 KB since Tuesday never has a round; or with next_season the
-// year after this one's whole list (dates=2027, 40-58 KB). Never this year:
-// dates=2026 is 29 MB.
+std::string header_url(League league);
+// A golf tour's season calendar: the scoreboard of the first Tuesday on or
+// after now (Eastern), 8-12 KB since Tuesday never has a round; or with
+// next_season the year after this one's whole list (dates=2027, 40-58 KB).
+// Never this year: dates=2026 is 29 MB.
 std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season);
 // The board's status cell, at most 12 characters: "Round 3", "R2 suspended",
 // "After R2", "Final", "Upcoming", "Canceled".
@@ -453,15 +458,22 @@ std::string golf_dates(const struct tm &start, const struct tm &end);
 // "Championship" or "Classic" ("PGA Championship" is "PGA Champ"), then words
 // from the end ("World Wide Technology Championship" is "World Wide" in 17).
 std::string golf_event_name(const std::string &name, size_t max);
-// The leaderboard cut to the board's columns (kGolfBoardRows rows, none
-// before the event or for a canceled one: the board shows golf_card_text).
-struct GolfLines {
+// A leaderboard cut to the board's columns (gd_board in
+// pages/gameday-live.yaml): the title (128 wide only) and the status cell,
+// then up to kGolfBoardRows rows of place, name, value and detail. No rows
+// when the board shows its card instead.
+struct BoardLines {
   std::string title, status;
   uint32_t status_color{0xFFFFFF};
-  std::vector<std::string> pos, name, score, thru;
-  std::vector<int> score_color, name_color;
+  // One panel shows the value column (golf's score to par, 3 characters, the
+  // name 7). False: no value column on one panel, and the names get its room.
+  bool value_narrow{true};
+  std::vector<std::string> pos, name, value, detail;  // golf: score to par, holes played
+  std::vector<int> value_color, name_color;
 };
-GolfLines golf_lines(const GameSnapshot &s, bool wide);
+// Golf's leaderboard (none before the event or for a canceled one: the board
+// shows golf_card_text).
+BoardLines golf_lines(const GameSnapshot &s, bool wide);
 // The no-leaderboard card on the no-game screen: the event name, a line
 // break, then dates (before the event), Canceled or Postponed, or the round.
 // No word is longer than a line (12 characters on one panel, 21 on two):
@@ -491,9 +503,40 @@ bool golf_off_season(const GameSnapshot &g, int64_t now);
 // its header, with the next event known: the board shows that one instead.
 bool golf_show_next(const GameSnapshot &g, int64_t now);
 
+// The leaderboard sports' one path through the component (gameday.cpp's
+// board job): each picks the sport's own function by the snapshot's sport.
+// The calendar's next event and the flag that its read failed:
+GolfNext &board_next(GameSnapshot &g);
+bool &board_next_unknown(GameSnapshot &g);
+// The next event as a PRE board of the sport.
+GameSnapshot board_next_snapshot(Sport sport, const GolfNext &n);
+bool board_show_next(const GameSnapshot &g, int64_t now);
+bool board_read_is_older(const GameSnapshot &shown, const GameSnapshot &read);
+Splash board_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide);
+uint32_t board_poll_ms(const GameSnapshot &g, int64_t now);
+bool board_off_season(const GameSnapshot &g, int64_t now);
+BoardLines board_lines(const GameSnapshot &g, bool wide);
+// when: golf's dates (before the event).
+std::string board_card_text(const GameSnapshot &g, bool wide, const std::string &when);
+std::string board_event_name(Sport sport, const std::string &name, size_t max);
+
 namespace detail {
 // Ticker helpers shared by the sport files.
 void add_part(std::string &out, const std::string &part);
+// Text helpers shared by the leaderboard sports (sport_golf.cpp): s cut to
+// max characters; lower case; the trailing spaces, commas, hyphens and
+// colons dropped; the last word.
+std::string cut(const std::string &s, size_t max);
+std::string lower(std::string s);
+void trim_right(std::string &s);
+std::string last_word(const std::string &s);
+// Whole words up to max, without a dangling "of", "in" or "at the", or a
+// bracket left open; one long word is cut.
+std::string whole_words(const std::string &s, size_t max);
+// Each word (split at spaces and after hyphens, where LVGL breaks a line) in
+// at most line characters, so a wrapping label never breaks one in the
+// middle: "International" is "Int'l", a longer word is cut.
+std::string fit_words(const std::string &s, size_t line);
 std::string records_line(const GameSnapshot &s);
 // The pre-game betting parts when the ticker shows odds: the line, the
 // over/under and the TV listing. Soccer builds its own line.

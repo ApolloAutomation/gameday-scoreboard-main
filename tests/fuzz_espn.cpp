@@ -285,15 +285,15 @@ size_t golf(GameSnapshot g, const GolfNext &next, int64_t now) {
     g.golf.next = next;
   std::string dates = golf_dates(panel_tm(tbd_day_epoch(g.kickoff_epoch)), panel_tm(tbd_day_epoch(g.golf.end_epoch)));
   for (bool wide : {false, true}) {
-    GolfLines l = golf_lines(g, wide);
+    BoardLines l = golf_lines(g, wide);
     if (l.status.size() > 12 || (wide ? l.title.size() + 1 + l.status.size() > 25 : !l.title.empty()))
       abort();
-    if (l.pos.size() > kGolfBoardRows || l.name.size() != l.pos.size() || l.score.size() != l.pos.size() ||
-        l.thru.size() != l.pos.size() || l.score_color.size() != l.pos.size() || l.name_color.size() != l.pos.size())
+    if (l.pos.size() > kGolfBoardRows || l.name.size() != l.pos.size() || l.value.size() != l.pos.size() ||
+        l.detail.size() != l.pos.size() || l.value_color.size() != l.pos.size() || l.name_color.size() != l.pos.size())
       abort();
     for (size_t i = 0; i < l.pos.size(); i++)
-      if (l.pos[i].size() > 2 || l.name[i].size() > (wide ? 11u : 7u) || l.score[i].size() > 3 ||
-          l.thru[i].size() > (wide ? 6u : 0u))
+      if (l.pos[i].size() > 2 || l.name[i].size() > (wide ? 11u : 7u) || l.value[i].size() > 3 ||
+          l.detail[i].size() > (wide ? 6u : 0u))
         abort();
     std::string card = golf_card_text(g, wide, dates);
     if (card.substr(0, card.find('\n')).size() > (wide ? 42u : 36u))

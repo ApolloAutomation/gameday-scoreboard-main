@@ -5291,9 +5291,9 @@ static void test_golf_urls() {
   CHECK(league_sport(League::LPGA) == Sport::GOLF);
   CHECK_EQ(std::string(league_key(League::PGA)), std::string("pga"));
   CHECK(league_by_key("lpga") != nullptr && league_by_key("lpga")->league == League::LPGA);
-  CHECK_EQ(golf_header_url(League::PGA),
+  CHECK_EQ(header_url(League::PGA),
            std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=pga"));
-  CHECK_EQ(golf_header_url(League::LPGA),
+  CHECK_EQ(header_url(League::LPGA),
            std::string("https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league=lpga"));
   // Sunday evening: the coming Tuesday. On a Tuesday, that day.
   const std::string cal = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=";
@@ -5328,7 +5328,7 @@ static void test_golf_urls() {
     }
   }
   set_site_root("https://bench.invalid/sports/");
-  CHECK_EQ(golf_header_url(League::PGA),
+  CHECK_EQ(header_url(League::PGA),
            std::string("https://bench.invalid/apis/v2/scoreboard/header?sport=golf&league=pga"));
   CHECK(golf_calendar_url(League::PGA, parse_iso8601_z("2026-11-08T23:00Z"), false).rfind("https://bench.invalid/", 0) == 0);
   set_site_root("https://site.api.espn.com/apis/site/v2/sports/");
@@ -5380,23 +5380,24 @@ static void test_golf_live() {
   CHECK_EQ((int) s.golf.rows[2].place, 3);
   CHECK(!s.golf.rows[2].tie);
   CHECK_EQ(s.golf.rows[2].name, std::string("Hara"));
-  GolfLines l = golf_lines(s, false);
+  BoardLines l = golf_lines(s, false);
   CHECK_EQ(l.status, std::string("Round 3"));
   CHECK_EQ(l.status_color, (uint32_t) 0x40FF40);
+  CHECK(l.value_narrow);  // golf's score column on one panel
   CHECK(l.title.empty());
   CHECK_EQ(l.pos.size(), kGolfBoardRows);
   CHECK_EQ(l.pos[0], std::string("T1"));
   CHECK_EQ(l.pos[2], std::string("3"));
   CHECK_EQ(l.name[4], std::string("Takahas"));
-  CHECK_EQ(l.score[0], std::string("-12"));
-  CHECK_EQ(l.score_color[0], 0xFF3030);
+  CHECK_EQ(l.value[0], std::string("-12"));
+  CHECK_EQ(l.value_color[0], 0xFF3030);
   CHECK_EQ(l.name_color[0], 0xFFFFFF);
-  CHECK_EQ(l.thru[0], std::string(""));
-  GolfLines w = golf_lines(s, true);
+  CHECK_EQ(l.detail[0], std::string(""));
+  BoardLines w = golf_lines(s, true);
   CHECK_EQ(w.title, std::string("TOTO Japan"));  // 17 beside "Round 3"
   CHECK_EQ(w.name[4], std::string("Takahashi"));
-  CHECK_EQ(w.thru[0], std::string("7"));
-  CHECK_EQ(w.thru[1], std::string("4"));
+  CHECK_EQ(w.detail[0], std::string("7"));
+  CHECK_EQ(w.detail[1], std::string("4"));
   TickerOptions o;
   std::string t = status_text(s, o, "");
   CHECK_EQ(t.rfind("TOTO Japan Classic | Round 3 | T1 Iwai -12 thru 7, T1 Hataoka -12 thru 4, 3 Hara -11 thru 5", 0),
@@ -5432,14 +5433,14 @@ static void test_golf_suspended() {
     CHECK_EQ(golf_thru_text(r, s.golf.phase), std::string("F"));
   }
   const char *pos[] = {"1", "2", "3", "T4", "T4", "T6"};
-  GolfLines l = golf_lines(s, false), w = golf_lines(s, true);
+  BoardLines l = golf_lines(s, false), w = golf_lines(s, true);
   for (size_t i = 0; i < kGolfBoardRows; i++)
     CHECK_EQ(l.pos[i], std::string(pos[i]));
   CHECK_EQ(l.name[5], std::string("Yellama"));
   CHECK_EQ(w.name[5], std::string("Yellamaraju"));
   CHECK_EQ(w.title, std::string("World Wide"));
   CHECK_EQ(w.status, std::string("R2 suspended"));
-  CHECK_EQ(w.thru[3], std::string("F"));
+  CHECK_EQ(w.detail[3], std::string("F"));
   // The whole name, cut only in the board's columns
   CHECK_EQ(s.golf.rows[6].name, std::string("Neergaard-Petersen"));
   CHECK_EQ(w.name.size(), (size_t) 6);
@@ -5495,7 +5496,7 @@ static void test_golf_after_round() {
   CHECK_EQ(golf_thru_text(s.golf.rows[0], s.golf.phase), std::string("-"));
   golf_tee_labels(s);
   CHECK_EQ(golf_thru_text(s.golf.rows[0], s.golf.phase), std::string("7:50a"));
-  CHECK_EQ(golf_lines(s, true).thru[3], std::string("7:39a"));
+  CHECK_EQ(golf_lines(s, true).detail[3], std::string("7:39a"));
   CHECK_EQ(golf_lines(s, true).title, std::string("Abu Dhabi Aldar"));
   std::string t = status_text(s, TickerOptions{}, "");
   CHECK(contains(t, "Abu Dhabi Aldar Championship | After round 2 | T1 Hatton -12, T1 Rahm -12, T1 Laporta -12"));
@@ -5520,13 +5521,13 @@ static void test_golf_final() {
   CHECK(!s.golf.rows[1].winner);
   CHECK_EQ(golf_round_text(s), std::string("Final"));
   CHECK_EQ(golf_round_color(s), (uint32_t) 0xFFD000);
-  GolfLines l = golf_lines(s, false), w = golf_lines(s, true);
+  BoardLines l = golf_lines(s, false), w = golf_lines(s, true);
   CHECK_EQ(l.name_color[0], 0xFFD000);
   CHECK_EQ(l.name_color[1], 0xFFFFFF);
   CHECK_EQ(l.name[2], std::string("Dochert"));
   CHECK_EQ(l.pos[3], std::string("T4"));
   CHECK_EQ(w.title, std::string("Korn Ferry Tour"));
-  for (const auto &t : w.thru)
+  for (const auto &t : w.detail)
     CHECK_EQ(t, std::string(""));  // a final has no thru column
   std::string t = status_text(s, TickerOptions{}, "");
   CHECK_EQ(t, std::string("Korn Ferry Tour Championship | Final | Hitt wins at -20 | 2 Brown -18, 3 Docherty -17, "
@@ -5588,7 +5589,7 @@ static void test_golf_pre() {
   CHECK_EQ(dates, std::string("Nov 12-15"));
   CHECK_EQ(golf_card_text(s, false, dates), std::string("Charles Schwab Cup Championship\nNov 12-15"));
   CHECK_EQ(golf_card_text(s, true, dates), std::string("Charles Schwab Cup Championship\nNov 12-15"));
-  GolfLines l = golf_lines(s, false);
+  BoardLines l = golf_lines(s, false);
   CHECK(l.name.empty());
   CHECK_EQ(l.status, std::string("Upcoming"));
   CHECK_EQ(status_text(s, TickerOptions{}, dates),
@@ -5774,20 +5775,20 @@ static void test_golf_budgets() {
   boards.push_back(golf_next_snapshot(n));
   for (const GameSnapshot &s : boards) {
     for (bool wide : {false, true}) {
-      GolfLines l = golf_lines(s, wide);
+      BoardLines l = golf_lines(s, wide);
       CHECK(l.status.size() <= 12);
       if (wide)
         CHECK(l.title.size() + 1 + l.status.size() <= 25);
       else
         CHECK(l.title.empty());
       CHECK(l.pos.size() <= kGolfBoardRows);
-      CHECK(l.name.size() == l.pos.size() && l.score.size() == l.pos.size() && l.thru.size() == l.pos.size());
-      CHECK(l.score_color.size() == l.pos.size() && l.name_color.size() == l.pos.size());
+      CHECK(l.name.size() == l.pos.size() && l.value.size() == l.pos.size() && l.detail.size() == l.pos.size());
+      CHECK(l.value_color.size() == l.pos.size() && l.name_color.size() == l.pos.size());
       for (size_t i = 0; i < l.pos.size(); i++) {
         CHECK(l.pos[i].size() <= 2);
         CHECK(l.name[i].size() <= (wide ? 11u : 7u));
-        CHECK(l.score[i].size() <= 3);
-        CHECK(l.thru[i].size() <= (wide ? 6u : 0u));
+        CHECK(l.value[i].size() <= 3);
+        CHECK(l.detail[i].size() <= (wide ? 6u : 0u));
       }
       std::string card = golf_card_text(s, wide, "Oct 29-Nov 1");
       size_t nl = card.find('\n');

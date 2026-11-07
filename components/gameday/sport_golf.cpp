@@ -23,7 +23,13 @@
 namespace espn {
 
 using detail::add_part;
+using detail::cut;
+using detail::fit_words;
+using detail::last_word;
+using detail::lower;
 using detail::str_or_empty;
+using detail::trim_right;
+using detail::whole_words;
 
 static const uint32_t kGolfWhite = 0xFFFFFF;
 static const uint32_t kGolfGray = 0xA0A0A0;
@@ -34,17 +40,14 @@ static const uint32_t kGolfRed = 0xFF3030;  // under par, the golf convention; a
 static const uint32_t kGolfBlue = 0x40A0FF;  // over par
 
 static const size_t kGolfStatusMax = 12;  // the board's status cell
-static const size_t kGolfTitleRow = 25;   // a 128-wide row of spleen_8 (5 px a character)
 static const int64_t kGolfDay = 24 * 3600;
-
-static std::string cut(const std::string &s, size_t max) { return s.size() > max ? s.substr(0, max) : s; }
 
 // ---- parse --------------------------------------------------------------------
 
 namespace detail {
 
 // Sets each key to true in o: one filter object's fields.
-static void keep(JsonObject o, std::initializer_list<const char *> keys) {
+void keep(JsonObject o, std::initializer_list<const char *> keys) {
   for (const char *k : keys)
     o[k] = true;
 }
@@ -69,23 +72,23 @@ void fill_golf_calendar_filter(JsonDocument &f) {
 }
 
 // One call per field read, not the lookup inlined at every one (about 4 KB
-// of flash on the panel).
-__attribute__((noinline)) static JsonVariantConst field(JsonVariantConst v, const char *key) { return v[key]; }
-__attribute__((noinline)) static std::string text(JsonVariantConst v, const char *key) {
+// of flash on the panel). Shared with the other leaderboard sports.
+__attribute__((noinline)) JsonVariantConst field(JsonVariantConst v, const char *key) { return v[key]; }
+__attribute__((noinline)) std::string text(JsonVariantConst v, const char *key) {
   return str_or_empty(field(v, key));
 }
-static int64_t when(JsonVariantConst v, const char *key) { return parse_iso8601_z(text(v, key)); }
-__attribute__((noinline)) static bool flag(JsonVariantConst v, const char *key) { return field(v, key) | false; }
+int64_t when(JsonVariantConst v, const char *key) { return parse_iso8601_z(text(v, key)); }
+__attribute__((noinline)) bool flag(JsonVariantConst v, const char *key) { return field(v, key) | false; }
 
 // An integer field clamped to [lo, hi]; def when it is missing or not a number.
-static int clamp_int(JsonVariantConst v, int lo, int hi, int def) {
+int clamp_int(JsonVariantConst v, int lo, int hi, int def) {
   if (!v.is<long long>())
     return def;
   long long n = v.as<long long>();
   return n < lo ? lo : n > hi ? hi : (int) n;
 }
 
-static GolfStatus status_of(const std::string &name) {
+GolfStatus status_of(const std::string &name) {
   static const char *const kNames[] = {"STATUS_SCHEDULED",     "STATUS_IN_PROGRESS", "STATUS_PLAY_COMPLETE",
                                        "STATUS_SUSPENDED",     "STATUS_DELAYED",     "STATUS_FINAL",
                                        "STATUS_CANCELED",      "STATUS_POSTPONED"};
@@ -263,25 +266,30 @@ int golf_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::strin
 
 // ---- board text ---------------------------------------------------------------
 
-static std::string lower(std::string s) {
+// Shared with the other leaderboard sports (espn_parse.h).
+namespace detail {
+
+std::string cut(const std::string &s, size_t max) { return s.size() > max ? s.substr(0, max) : s; }
+
+std::string lower(std::string s) {
   for (char &c : s)
     c = (char) tolower((unsigned char) c);
   return s;
 }
 
-static void trim_right(std::string &s) {
+void trim_right(std::string &s) {
   while (!s.empty() && (s.back() == ' ' || s.back() == ',' || s.back() == '-' || s.back() == ':'))
     s.pop_back();
 }
 
-static std::string last_word(const std::string &s) {
+std::string last_word(const std::string &s) {
   size_t sp = s.rfind(' ');
   return sp == std::string::npos ? s : s.substr(sp + 1);
 }
 
 // Whole words up to max, without a dangling "of", "in" or "at the", or a
 // bracket left open; one long word is cut.
-static std::string whole_words(const std::string &s, size_t max) {
+std::string whole_words(const std::string &s, size_t max) {
   if (s.size() <= max)
     return s;
   std::string t = s.substr(0, max + 1);
@@ -309,7 +317,7 @@ static std::string whole_words(const std::string &s, size_t max) {
 // Each word (split at spaces and after hyphens, where LVGL breaks a line) in
 // at most line characters, so a wrapping label never breaks one in the
 // middle: "International" is "Int'l", a longer word is cut.
-static std::string fit_words(const std::string &s, size_t line) {
+std::string fit_words(const std::string &s, size_t line) {
   std::string out, word;
   auto flush = [&]() {
     if (word.size() > line && lower(word) == "international")
@@ -332,6 +340,8 @@ static std::string fit_words(const std::string &s, size_t line) {
   flush();
   return out;
 }
+
+}  // namespace detail
 
 static bool suspended(const GameSnapshot &s) { return s.golf.status == GolfStatus::SUSPENDED; }
 static bool delayed(const GameSnapshot &s) { return s.golf.status == GolfStatus::DELAYED; }
@@ -538,12 +548,12 @@ static bool golf_has_board(const GameSnapshot &s) {
          (s.golf.phase == GolfPhase::LIVE || s.golf.phase == GolfPhase::BREAK || s.golf.phase == GolfPhase::FINAL);
 }
 
-GolfLines golf_lines(const GameSnapshot &s, bool wide) {
-  GolfLines l;
+BoardLines golf_lines(const GameSnapshot &s, bool wide) {
+  BoardLines l;
   l.status = golf_round_text(s);
   l.status_color = golf_round_color(s);
-  if (wide && l.status.size() + 1 < kGolfTitleRow)
-    l.title = golf_event_name(s.game_name, kGolfTitleRow - 1 - l.status.size());
+  if (wide && l.status.size() + 1 < kBoardTitleRow)
+    l.title = golf_event_name(s.game_name, kBoardTitleRow - 1 - l.status.size());
   if (!golf_has_board(s))
     return l;  // the card (golf_card_text)
   const size_t name_max = wide ? 11 : 7;
@@ -551,9 +561,9 @@ GolfLines golf_lines(const GameSnapshot &s, bool wide) {
     const GolfRow &r = s.golf.rows[i];
     l.pos.push_back(golf_pos_text(r));
     l.name.push_back(cut(r.name, name_max));
-    l.score.push_back(golf_score_text(r));
-    l.thru.push_back(wide ? golf_thru_text(r, s.golf.phase) : std::string());
-    l.score_color.push_back((int) golf_score_color(r));
+    l.value.push_back(golf_score_text(r));
+    l.detail.push_back(wide ? golf_thru_text(r, s.golf.phase) : std::string());
+    l.value_color.push_back((int) golf_score_color(r));
     l.name_color.push_back((int) (r.winner ? kGolfGold : kGolfWhite));
   }
   return l;

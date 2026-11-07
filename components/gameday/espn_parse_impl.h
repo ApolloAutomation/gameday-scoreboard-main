@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 
 #include <algorithm>
+#include <initializer_list>
 #include <utility>
 
 namespace espn {
@@ -308,6 +309,18 @@ void basketball_from_event(JsonObjectConst ev, GameSnapshot &s);
 // Hockey's extra filter fields and their parse (sport_hockey.cpp)
 void fill_hockey_filter(JsonObject ev);
 void hockey_from_event(JsonObjectConst ev, GameSnapshot &s);
+// The leaderboard sports' JSON helpers (sport_golf.cpp), one call per field
+// read rather than the lookup inlined at every one. keep sets each key to
+// true in a filter object; field, text, when and flag read one key (a string,
+// an ISO time, a bool); clamp_int an integer clamped to [lo, hi], def when it
+// is missing or not a number; status_of ESPN's status name.
+void keep(JsonObject o, std::initializer_list<const char *> keys);
+JsonVariantConst field(JsonVariantConst v, const char *key);
+std::string text(JsonVariantConst v, const char *key);
+int64_t when(JsonVariantConst v, const char *key);
+bool flag(JsonVariantConst v, const char *key);
+int clamp_int(JsonVariantConst v, int lo, int hi, int def);
+GolfStatus status_of(const std::string &name);
 // Golf (sport_golf.cpp). The header: sports[0].leagues[0].events[] and their
 // competitors (the top 25). The calendar: leagues[0].calendar[] only, so a
 // scoreboard's events and their hole-by-hole scores drop out as they stream.
@@ -592,7 +605,7 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
   return true;
 }
 
-// A golf tour's scoreboard header (golf_header_url). 1: the tour's event in
+// A golf tour's scoreboard header (header_url). 1: the tour's event in
 // out (sport GOLF), the primary one when it lists two. 0: the tour lists
 // none. -1: not a header document.
 template<typename TInput> int parse_golf(TInput &input, GameSnapshot &out) {

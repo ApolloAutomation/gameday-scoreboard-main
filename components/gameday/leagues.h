@@ -97,6 +97,11 @@ inline Sport league_sport(League league) {
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in
 // Live games (set_request.h).
 inline bool is_golf(League league) { return league_sport(league) == Sport::GOLF; }
+// A sport whose board is a leaderboard (golf): the league's one team row is
+// a tour, read from the scoreboard header (gameday.cpp's board job).
+inline bool is_board_sport(Sport s) { return s == Sport::GOLF; }
+// Followed like a team, never a favorite or in Live games.
+inline bool is_leaderboard(League league) { return is_board_sport(league_sport(league)); }
 
 // Cups a club in a league can also be playing in. ESPN's team endpoint is
 // per competition (soccer/<slug>/teams/<id>, the same team ids everywhere)

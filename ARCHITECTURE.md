@@ -157,8 +157,8 @@ restart can skip the team read.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
-above applies. `start_job_` sends it to `run_golf_job_`, which reads the
-tour's scoreboard header (`golf_header_url`, `apis/v2/scoreboard/header`,
+above applies. `start_job_` sends it to `run_board_job_`, which reads the
+tour's scoreboard header (`header_url`, `apis/v2/scoreboard/header`,
 about 19 KB during an event and 3 KB between them): the current or next
 event, its status and round, and the top 25 in order with place, score to
 par, holes played and tee time (`parse_golf`, `sport_golf.cpp`). After a
@@ -175,9 +175,11 @@ one shown: the calendar's card and the header put the same day three hours
 apart). Timing is
 `golf_poll_ms`: a minute while a round is played, 5 minutes between rounds
 and before the start, 30 minutes otherwise, 6 hours between seasons. The
-board is `gd_golf_container` in `pages/gameday-live.yaml`, filled by the
-`gd_golf` script from columns `golf_lines` has already cut to fit, read
-from the update being drawn (`board_fields`). `sport_golf.cpp` builds for
+board is `gd_board_container` in `pages/gameday-live.yaml`, filled by the
+`gd_board` script from columns `golf_lines` has already cut to fit
+(`BoardLines`), read from the update being drawn (`board_fields`). The
+board job, its reads and the drawing are shared code for any leaderboard
+sport: the `board_*` functions in `espn_parse.cpp` pick the sport's own. `sport_golf.cpp` builds for
 size (`#pragma GCC optimize("Os")`), since it runs once a minute at most.
 Golf is not in Favorite teams or Live games (`set_request.h`).
 

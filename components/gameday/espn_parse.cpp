@@ -130,7 +130,7 @@ std::string scoreboard_url(League league, uint32_t group, int64_t kickoff_epoch,
   return url;
 }
 
-std::string golf_header_url(League league) {
+std::string header_url(League league) {
   // The header lives beside the site API, not under it: keep the root's
   // scheme and host (a bench root has no "/apis/").
   std::string root = site_root.load(std::memory_order_relaxed);
@@ -139,8 +139,13 @@ std::string golf_header_url(League league) {
     size_t host = root.find("://");
     at = root.find('/', host == std::string::npos ? 0 : host + 3);
   }
-  return (at == std::string::npos ? root : root.substr(0, at)) + "/apis/v2/scoreboard/header?sport=golf&league=" +
-         league_path(league);
+  // The sport is the league path's first part: "golf/pga" is sport=golf.
+  const LeagueInfo *l = league_info(league);
+  const char *path = l != nullptr ? l->path : "golf/pga";
+  const char *slash = strchr(path, '/');
+  std::string sport = slash != nullptr ? std::string(path, slash - path) : std::string(path);
+  return (at == std::string::npos ? root : root.substr(0, at)) + "/apis/v2/scoreboard/header?sport=" + sport +
+         "&league=" + league_path(league);
 }
 
 std::string golf_calendar_url(League league, int64_t now_epoch, bool next_season) {
@@ -321,6 +326,42 @@ static const char *score_word(int delta, bool ours) {
     default:
       return ours ? "SCORE!" : "SCORE";
   }
+}
+
+// ---- leaderboard sports ------------------------------------------------------
+
+GolfNext &board_next(GameSnapshot &g) { return g.golf.next; }
+
+bool &board_next_unknown(GameSnapshot &g) { return g.golf.next_unknown; }
+
+GameSnapshot board_next_snapshot(Sport sport, const GolfNext &n) {
+  (void) sport;
+  return golf_next_snapshot(n);
+}
+
+bool board_show_next(const GameSnapshot &g, int64_t now) { return golf_show_next(g, now); }
+
+bool board_read_is_older(const GameSnapshot &shown, const GameSnapshot &read) {
+  return golf_read_is_older(shown, read);
+}
+
+Splash board_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wide) {
+  return golf_splash(prev, cur, wide);
+}
+
+uint32_t board_poll_ms(const GameSnapshot &g, int64_t now) { return golf_poll_ms(g, now); }
+
+bool board_off_season(const GameSnapshot &g, int64_t now) { return golf_off_season(g, now); }
+
+BoardLines board_lines(const GameSnapshot &g, bool wide) { return golf_lines(g, wide); }
+
+std::string board_card_text(const GameSnapshot &g, bool wide, const std::string &when) {
+  return golf_card_text(g, wide, when);
+}
+
+std::string board_event_name(Sport sport, const std::string &name, size_t max) {
+  (void) sport;
+  return golf_event_name(name, max);
 }
 
 Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {

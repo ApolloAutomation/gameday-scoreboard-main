@@ -70,7 +70,7 @@ script:
           const bool wide = W >= 128;
           lv_obj_set_size(id(tt_game_container), W, 64);
           lv_obj_set_size(id(tt_no_game_container), W, 64);
-          lv_obj_set_size(id(gd_golf_container), W, 64);
+          lv_obj_set_size(id(gd_board_container), W, 64);
           lv_obj_set_size(id(tt_splash), W, 64);
           lv_obj_set_width(id(tt_splash_lbl), W);
           lv_obj_set_width(id(tt_no_game_msg_lbl), W);
@@ -174,42 +174,44 @@ script:
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
             lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
           }
-          // Golf's leaderboard: a status row and six rows of place, name, score
-          // to par and (wide) holes played, in spleen_8 (5 px a character).
-          // Each column is its own label, cut to fit by the component.
+          // The leaderboard (golf): a status row and six rows of place, name,
+          // value (golf's score to par) and (wide) detail (holes played), in
+          // spleen_8 (5 px a character). Each column is its own label, cut to
+          // fit by the component. gd_board sets the one-panel name width and
+          // value column for the sport on the board.
           {
-            lv_obj_t *gpos[6] = {id(gd_golf_pos1), id(gd_golf_pos2), id(gd_golf_pos3),
-                                 id(gd_golf_pos4), id(gd_golf_pos5), id(gd_golf_pos6)};
-            lv_obj_t *gname[6] = {id(gd_golf_name1), id(gd_golf_name2), id(gd_golf_name3),
-                                  id(gd_golf_name4), id(gd_golf_name5), id(gd_golf_name6)};
-            lv_obj_t *gscore[6] = {id(gd_golf_score1), id(gd_golf_score2), id(gd_golf_score3),
-                                   id(gd_golf_score4), id(gd_golf_score5), id(gd_golf_score6)};
-            lv_obj_t *gthru[6] = {id(gd_golf_thru1), id(gd_golf_thru2), id(gd_golf_thru3),
-                                  id(gd_golf_thru4), id(gd_golf_thru5), id(gd_golf_thru6)};
+            lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
+                                 id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
+            lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
+                                  id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
+            lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
+                                   id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
+            lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
+                                    id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
             if (wide) {
               // The event's name left, the status right, at W - 2
-              lv_obj_set_pos(id(gd_golf_title_lbl), 2, 0);
-              lv_obj_set_width(id(gd_golf_title_lbl), W - 4);
-              lv_obj_clear_flag(id(gd_golf_title_lbl), LV_OBJ_FLAG_HIDDEN);
-              lv_obj_set_pos(id(gd_golf_status_lbl), 0, 0);
-              lv_obj_set_width(id(gd_golf_status_lbl), W - 2);
-              lv_obj_set_style_text_align(id(gd_golf_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
+              lv_obj_set_pos(id(gd_board_title_lbl), 2, 0);
+              lv_obj_set_width(id(gd_board_title_lbl), W - 4);
+              lv_obj_clear_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_board_status_lbl), W - 2);
+              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
             } else {
-              lv_obj_add_flag(id(gd_golf_title_lbl), LV_OBJ_FLAG_HIDDEN);
-              lv_obj_set_pos(id(gd_golf_status_lbl), 0, 0);
-              lv_obj_set_width(id(gd_golf_status_lbl), W);
-              lv_obj_set_style_text_align(id(gd_golf_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
+              lv_obj_add_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_board_status_lbl), W);
+              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
             }
             for (int i = 0; i < 6; i++) {
               // Each row's look is set here, once, rather than per label in
               // the widget list: 24 labels' worth of setup code.
-              lv_obj_t *cells[4] = {gpos[i], gname[i], gscore[i], gthru[i]};
+              lv_obj_t *cells[4] = {gpos[i], gname[i], gvalue[i], gdetail[i]};
               for (int c = 0; c < 4; c++) {
                 lv_obj_set_style_text_font(cells[c], id(spleen_8), 0);
                 lv_label_set_long_mode(cells[c], LV_LABEL_LONG_CLIP);
                 lv_obj_set_style_text_align(cells[c], c == 1 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
-                // Place and holes played are gray; name and score get their
-                // colors from gd_golf.
+                // Place and detail are gray; name and value get their colors
+                // from gd_board.
                 lv_obj_set_style_text_opa(cells[c], c == 2 ? LV_OPA_COVER : c == 1 ? 230 : 191, 0);
                 if (c == 0 || c == 3)
                   lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
@@ -219,14 +221,14 @@ script:
               lv_obj_set_width(gpos[i], 10);
               lv_obj_set_pos(gname[i], wide ? 16 : 12, y);
               lv_obj_set_width(gname[i], wide ? 55 : 35);
-              lv_obj_set_pos(gscore[i], wide ? 74 : 49, y);
-              lv_obj_set_width(gscore[i], 15);
-              lv_obj_set_pos(gthru[i], 94, y);
-              lv_obj_set_width(gthru[i], 30);
+              lv_obj_set_pos(gvalue[i], wide ? 74 : 49, y);
+              lv_obj_set_width(gvalue[i], 15);
+              lv_obj_set_pos(gdetail[i], 94, y);
+              lv_obj_set_width(gdetail[i], 30);
               if (wide)
-                lv_obj_clear_flag(gthru[i], LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
               else
-                lv_obj_add_flag(gthru[i], LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
             }
           }
           // Baseball's bases, drawn as a small diamond (first base on the
@@ -296,8 +298,8 @@ script:
       message: string
       clock_card: bool
       next_line: string
-      golf_board: bool
-      golf_card: bool
+      board: bool
+      board_card: bool
     then:
       - lambda: |-
           id(gd_sport) = sport;
@@ -405,35 +407,35 @@ script:
           underline(under_scores ? id(tt_away_score_lbl) : id(tt_away_team_lbl), id(tt_away_poss), live && possession == 1);
           underline(under_scores ? id(tt_home_score_lbl) : id(tt_home_team_lbl), id(tt_home_poss), live && possession == 2);
       - lambda: |-
-          // Toggle between the game layout, golf's leaderboard and the "no
-          // game" layout
+          // Toggle between the game layout, a leaderboard and the "no game"
+          // layout
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          if (clock_card || golf_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
+          if (clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
             // The component's words for this screen (the finals rotation's
             // headers and next kickoff, "No live games", a golf event's name
             // and dates), else the default.
-            const char *msg = golf_card ? next_line.c_str() : message.empty() ? "No upcoming game" : message.c_str();
+            const char *msg = board_card ? next_line.c_str() : message.empty() ? "No upcoming game" : message.c_str();
             const char *cur = lv_label_get_text(id(tt_no_game_msg_lbl));
             if (cur == nullptr || strcmp(cur, msg) != 0)
               lv_label_set_text(id(tt_no_game_msg_lbl), msg);
             lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
-          } else if (golf_board) {
+          } else if (board) {
             lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_clear_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           }
-          if (golf_board)
-            lv_obj_clear_flag(id(gd_golf_container), LV_OBJ_FLAG_HIDDEN);
+          if (board)
+            lv_obj_clear_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
           else
-            lv_obj_add_flag(id(gd_golf_container), LV_OBJ_FLAG_HIDDEN);
-          // The off-season clock and golf's card take the message's place,
-          // and golf's leaderboard the game's: each borrows the ticker from
-          // the hidden game layout so it keeps running under it.
-          lv_obj_t *ticker_parent = (clock_card || golf_card) ? id(tt_no_game_container)
-                                    : golf_board ? id(gd_golf_container) : id(tt_game_container);
+            lv_obj_add_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
+          // The off-season clock and a leaderboard's card take the message's
+          // place, and the leaderboard the game's: each borrows the ticker
+          // from the hidden game layout so it keeps running under it.
+          lv_obj_t *ticker_parent = (clock_card || board_card) ? id(tt_no_game_container)
+                                    : board ? id(gd_board_container) : id(tt_game_container);
           if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
             lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
           if (clock_card) {
@@ -585,15 +587,18 @@ script:
                 lv_obj_clear_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
             - script.execute: tt_hide_splash
 
-  # Golf's leaderboard (gd_golf_container), from the columns the component
-  # cut to fit (espn::golf_lines), already plain ASCII. It reads them from
-  # the update being drawn rather than taking them as arguments. A label is
-  # only rewritten when its text changes; rows past the list are blanked.
-  - id: gd_golf
+  # The leaderboard (gd_board_container), from the columns the component cut
+  # to fit (espn::board_lines), already plain ASCII. It reads them from the
+  # update being drawn rather than taking them as arguments. A label is only
+  # rewritten when its text changes; rows past the list are blanked. On one
+  # panel the sport decides the name's width and whether the value column
+  # shows (board_value_narrow), so a page reload runs this after
+  # tt_apply_layout too.
+  - id: gd_board
     then:
       - lambda: |-
           const gameday::UpdateFields &f = id(gameday_ctl).board_fields();
-          if (!f.golf_board)
+          if (!f.board)
             return;
           auto put = [](lv_obj_t *lbl, const std::string &text) {
             const char *cur = lv_label_get_text(lbl);
@@ -604,26 +609,35 @@ script:
           auto at = [&blank](const std::vector<std::string> &v, int i) -> const std::string & {
             return i < (int) v.size() ? v[i] : blank;
           };
-          put(id(gd_golf_title_lbl), f.golf_title);
-          put(id(gd_golf_status_lbl), f.golf_status);
-          lv_obj_set_style_text_color(id(gd_golf_status_lbl), lv_color_hex(f.golf_status_color), 0);
-          lv_obj_t *gpos[6] = {id(gd_golf_pos1), id(gd_golf_pos2), id(gd_golf_pos3),
-                               id(gd_golf_pos4), id(gd_golf_pos5), id(gd_golf_pos6)};
-          lv_obj_t *gname[6] = {id(gd_golf_name1), id(gd_golf_name2), id(gd_golf_name3),
-                                id(gd_golf_name4), id(gd_golf_name5), id(gd_golf_name6)};
-          lv_obj_t *gscore[6] = {id(gd_golf_score1), id(gd_golf_score2), id(gd_golf_score3),
-                                 id(gd_golf_score4), id(gd_golf_score5), id(gd_golf_score6)};
-          lv_obj_t *gthru[6] = {id(gd_golf_thru1), id(gd_golf_thru2), id(gd_golf_thru3),
-                                id(gd_golf_thru4), id(gd_golf_thru5), id(gd_golf_thru6)};
+          put(id(gd_board_title_lbl), f.board_title);
+          put(id(gd_board_status_lbl), f.board_status);
+          lv_obj_set_style_text_color(id(gd_board_status_lbl), lv_color_hex(f.board_status_color), 0);
+          lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
+                               id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
+          lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
+                                id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
+          lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
+                                 id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
+          lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
+                                  id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
+          const bool one = lv_disp_get_hor_res(lv_disp_get_default()) < 128;
           for (int i = 0; i < 6; i++) {
-            put(gpos[i], at(f.golf_pos, i));
-            put(gname[i], at(f.golf_name, i));
-            put(gscore[i], at(f.golf_score, i));
-            put(gthru[i], at(f.golf_thru, i));
-            if (i < (int) f.golf_score_color.size())
-              lv_obj_set_style_text_color(gscore[i], lv_color_hex((uint32_t) f.golf_score_color[i]), 0);
-            if (i < (int) f.golf_name_color.size())
-              lv_obj_set_style_text_color(gname[i], lv_color_hex((uint32_t) f.golf_name_color[i]), 0);
+            if (one) {
+              // Golf's score column, or (no value column) its room for the name
+              lv_obj_set_width(gname[i], f.board_value_narrow ? 35 : 52);
+              if (f.board_value_narrow)
+                lv_obj_clear_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
+              else
+                lv_obj_add_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
+            }
+            put(gpos[i], at(f.board_pos, i));
+            put(gname[i], at(f.board_name, i));
+            put(gvalue[i], at(f.board_value, i));
+            put(gdetail[i], at(f.board_detail, i));
+            if (i < (int) f.board_value_color.size())
+              lv_obj_set_style_text_color(gvalue[i], lv_color_hex((uint32_t) f.board_value_color[i]), 0);
+            if (i < (int) f.board_name_color.size())
+              lv_obj_set_style_text_color(gname[i], lv_color_hex((uint32_t) f.board_name_color[i]), 0);
           }
 
   # The off-season clock's time, and the date when that line has no next
@@ -991,14 +1005,14 @@ lvgl:
                   text: ""
                   styles: ["tt_st_status_text"]
 
-        # Golf's leaderboard: the event and its status on the top row, six
-        # rows of place, name, score to par and (wide) holes played, and the
-        # ticker, which gd_update moves in. Every label clips; the component
-        # cuts each column to fit (espn::golf_lines). The rows' labels are
-        # styled and laid out by tt_apply_layout, filled by gd_golf, shown by
-        # gd_update. Drawn before the splash so a winner's splash covers it.
+        # The leaderboard (golf): the event and its status on the top row, six
+        # rows of place, name, value and (wide) detail, and the ticker, which
+        # gd_update moves in. Every label clips; the component cuts each
+        # column to fit (espn::board_lines). The rows' labels are styled and
+        # laid out by tt_apply_layout, filled by gd_board, shown by gd_update.
+        # Drawn before the splash so a winner's splash covers it.
         - obj:
-            id: gd_golf_container
+            id: gd_board_container
             scrollbar_mode: "OFF"
             x: 0
             y: 0
@@ -1007,7 +1021,7 @@ lvgl:
             hidden: true
             widgets:
               - label:
-                  id: gd_golf_title_lbl
+                  id: gd_board_title_lbl
                   x: 2
                   y: 0
                   width: 60
@@ -1018,7 +1032,7 @@ lvgl:
                   text: ""
                   styles: ["tt_st_team_text"]
               - label:
-                  id: gd_golf_status_lbl
+                  id: gd_board_status_lbl
                   x: 0
                   y: 0
                   width: 64
@@ -1028,76 +1042,76 @@ lvgl:
                   text: ""
                   styles: ["tt_st_score_text"]
               - label:
-                  id: gd_golf_pos1
+                  id: gd_board_pos1
                   text: ""
               - label:
-                  id: gd_golf_name1
+                  id: gd_board_name1
                   text: ""
               - label:
-                  id: gd_golf_score1
+                  id: gd_board_value1
                   text: ""
               - label:
-                  id: gd_golf_thru1
+                  id: gd_board_detail1
                   text: ""
               - label:
-                  id: gd_golf_pos2
+                  id: gd_board_pos2
                   text: ""
               - label:
-                  id: gd_golf_name2
+                  id: gd_board_name2
                   text: ""
               - label:
-                  id: gd_golf_score2
+                  id: gd_board_value2
                   text: ""
               - label:
-                  id: gd_golf_thru2
+                  id: gd_board_detail2
                   text: ""
               - label:
-                  id: gd_golf_pos3
+                  id: gd_board_pos3
                   text: ""
               - label:
-                  id: gd_golf_name3
+                  id: gd_board_name3
                   text: ""
               - label:
-                  id: gd_golf_score3
+                  id: gd_board_value3
                   text: ""
               - label:
-                  id: gd_golf_thru3
+                  id: gd_board_detail3
                   text: ""
               - label:
-                  id: gd_golf_pos4
+                  id: gd_board_pos4
                   text: ""
               - label:
-                  id: gd_golf_name4
+                  id: gd_board_name4
                   text: ""
               - label:
-                  id: gd_golf_score4
+                  id: gd_board_value4
                   text: ""
               - label:
-                  id: gd_golf_thru4
+                  id: gd_board_detail4
                   text: ""
               - label:
-                  id: gd_golf_pos5
+                  id: gd_board_pos5
                   text: ""
               - label:
-                  id: gd_golf_name5
+                  id: gd_board_name5
                   text: ""
               - label:
-                  id: gd_golf_score5
+                  id: gd_board_value5
                   text: ""
               - label:
-                  id: gd_golf_thru5
+                  id: gd_board_detail5
                   text: ""
               - label:
-                  id: gd_golf_pos6
+                  id: gd_board_pos6
                   text: ""
               - label:
-                  id: gd_golf_name6
+                  id: gd_board_name6
                   text: ""
               - label:
-                  id: gd_golf_score6
+                  id: gd_board_value6
                   text: ""
               - label:
-                  id: gd_golf_thru6
+                  id: gd_board_detail6
                   text: ""
 
         # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
@@ -1172,3 +1186,5 @@ lvgl:
       on_load:
         then:
           - script.execute: tt_apply_layout
+          # The leaderboard's one-panel columns for the sport on the board
+          - script.execute: gd_board
