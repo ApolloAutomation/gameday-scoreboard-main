@@ -31,6 +31,7 @@
 #include "recap.h"
 #include "poll_timing.h"
 #include "set_request.h"
+#include "setup_qr.h"
 #include "startup.h"
 #include "update_mirror.h"
 #include "wifi_history.h"
@@ -204,10 +205,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // them to the demo (demo.cpp).
   void remote_number(uint8_t n);
   // No team picked and nothing else chosen: the panel follows live games and
-  // the finals rotation, and the boot screen gives the app's QR code a turn
-  // every few minutes (boot.yaml, boot_app_qr_turn) until a team is picked.
+  // the finals rotation, and the boot screen gives the QR code for its device
+  // page a turn every few minutes (boot.yaml, boot_team_qr_turn) until a team
+  // is picked.
   bool no_team_default() const;
-  bool app_qr_turns() const { return this->no_team_default() && !this->demo_playing_(); }
+  bool team_qr_turns() const { return this->no_team_default() && !this->demo_playing_(); }
 #ifdef GAMEDAY_DEMO
   // Loops a scripted game through the real splash and render path, for
   // showing the panel off without a live game, until stop_demo().

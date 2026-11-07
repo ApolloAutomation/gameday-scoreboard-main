@@ -72,6 +72,10 @@ Settings are grouped in cards. In the order the page shows them:
 | **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+The QR code the panel shows after it joins Wi-Fi opens this device page, at the panel's IP address, instead of the Game Day app. **Show how to connect when the panel starts** says so: **a QR code that opens this page, then the page address**.
+:::
+
 Only the ticker switches for sports your panel follows are shown. Hockey and basketball have no game situation line, so they have no switch of their own.
 
 ### Celebrations

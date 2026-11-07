@@ -23,6 +23,10 @@ The logos sit at the far edges with the abbreviations and big scores between the
 
 During setup, the QR code for the Game Day app sits on the left half with the words beside it.
 
+:::note[Coming in the next release]
+The QR code there joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
+:::
+
 ### Single: 64x64
 
 The two logos sit side by side at the top, with the abbreviations and scores stacked under them. During play the game clock takes the abbreviations' place, and the gold possession line in football goes under the score. Baseball's diamond sits between the two scores with the outs as three dots under it.

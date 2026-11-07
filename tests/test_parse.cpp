@@ -19,6 +19,7 @@
 #include "offseason.h"
 #include "panel_text.h"
 #include "recap.h"
+#include "setup_qr.h"
 #include "poll_timing.h"
 #include "startup.h"
 #include "timezones.h"
@@ -725,6 +726,26 @@ static void test_captive() {
   // every two while reads fail on one that looked open
   CHECK(!probe_due(true, false, true, kProbeFailingRecheckMs - 1));
   CHECK(probe_due(true, false, true, kProbeFailingRecheckMs));
+}
+
+// The boot screen's QR codes (setup_qr.h): a Wi-Fi join code for the
+// panel's open hotspot, read by the iPhone and Android cameras, and the
+// device page by IP. No app in either.
+static void test_setup_qr() {
+  using esphome::gameday::device_page_qr;
+  using esphome::gameday::wifi_join_qr;
+  CHECK_EQ(wifi_join_qr("Game Day 2f6a70"), std::string("WIFI:T:nopass;S:Game Day 2f6a70;;"));
+  // The Wi-Fi QR format's specials, each escaped with a backslash
+  CHECK_EQ(wifi_join_qr("a;b,c:d\\e\"f"), std::string("WIFI:T:nopass;S:a\\;b\\,c\\:d\\\\e\\\"f;;"));
+  CHECK_EQ(wifi_join_qr("Café's"), std::string("WIFI:T:nopass;S:Café's;;"));
+  CHECK_EQ(wifi_join_qr(""), std::string("WIFI:T:nopass;S:;;"));
+  // 33 characters: LVGL's version 3 at M, 2 px modules on a 64 px panel
+  CHECK_EQ(wifi_join_qr("Game Day 2f6a70").size(), (size_t) 33);
+
+  CHECK_EQ(device_page_qr("192.168.1.50"), std::string("http://192.168.1.50/"));
+  CHECK_EQ(device_page_qr(""), std::string(""));
+  // The longest IPv4 address is 23 characters, within version 2 at M (26)
+  CHECK_EQ(device_page_qr("192.168.100.200").size(), (size_t) 23);
 }
 
 // Where a portal's redirect points. A relative link stays on whoever
@@ -5211,6 +5232,7 @@ int main() {
   test_no_game_text();
   test_captive();
   test_captive_redirect_host();
+  test_setup_qr();
   test_ha_status_text();
   test_short_game_name();
   test_kickoff_label();

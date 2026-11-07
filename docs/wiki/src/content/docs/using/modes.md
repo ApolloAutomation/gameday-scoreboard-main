@@ -29,6 +29,10 @@ Football teams get the clock only when ESPN lists no game at all, so a bye week 
 
 A new panel has no team. Until you pick one, it shows live NFL and college football games as Live games would, and when nothing is on, the latest final scores and the games still to come (see [When nothing is live](#when-nothing-is-live)). The ticker asks you to pick one until you choose a team, a mode or a favorite, and the QR code for the Game Day app comes back over the board for 13 seconds every 3 minutes until you pick a team. See [Pick your team](/get-started/pick-your-team/).
 
+:::note[Coming in the next release]
+The QR code that comes back over the board opens the panel's device page, not the app.
+:::
+
 ## Live games
 
 The panel follows a game in progress, picked at random from the leagues you choose, and moves to another one when that game ends or after **Switch every** minutes (1 to 30). When it moves on, it picks a different game from the one it showed last, if another one is on. Splashes name the team that scored, like "DAL TOUCHDOWN", since there is no "your team" here. With **Opponent scores too** off, only the team on the left gets them.
