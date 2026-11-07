@@ -27,13 +27,15 @@ inline std::string wifi_join_qr(const std::string &ssid) {
   return out;
 }
 
-// The panel's own device page, by IP address: http://192.168.1.50/. Not the
-// .local name, which many Android phones can't open. Empty without an
-// address, and then the boot screen shows no code.
+// The panel's own device page, by IP address: http://192.168.1.50. Not the
+// .local name, which many Android phones can't open. No trailing slash: a
+// browser adds it, and at 20 bytes or less (a typical home address) LVGL
+// can encode the code at error correction Q instead of M (boot.yaml). Empty
+// without an address, and then the boot screen shows no code.
 inline std::string device_page_qr(const std::string &ip) {
   if (ip.empty())
     return std::string();
-  return "http://" + ip + "/";
+  return "http://" + ip;
 }
 
 }  // namespace esphome::gameday

@@ -1022,23 +1022,29 @@ lvgl:
             # code. No text here: it stays hidden until boot_view gives it
             # one.
             #
-            # LVGL (9.5) encodes it in byte mode at error correction M and
-            # picks the smallest version that fits, centered on a canvas it
-            # clears to the light color. The 33 character join code,
-            # WIFI:T:nopass;S:Game Day 2f6a70;;, is version 3, 29x29
-            # modules: at 64 px that is 2 px per module, 58 px, with a 3 px
-            # lit border as the quiet zone. The page's address,
-            # http://192.168.1.50/, is 23 characters at most, version 2,
-            # 25x25 modules: 2 px per module again, 50 px, with a 7 px
-            # border. Apple's barcode reader decodes a 3 px border offline
-            # with a dark frame right against it; bench both codes with an
-            # iPhone and an Android phone before release.
+            # One LED per module, white modules on black, the geometry the
+            # M-1's WLED setup card proved on the panel's glass (WLED-M1,
+            # apollo/bench/gen_setup_card.py, card_B9: 21x21 at 1 px,
+            # inverted). Codes drawn at 2 px per module filling the panel, dark
+            # on a lit background, did not scan: the lit border was the only
+            # quiet zone, and the black box around it read as more code.
+            # Phone cameras read inverted codes, and here the black canvas
+            # and box are one wide quiet zone.
             #
-            # A QR wants dark modules on a light background, so the light
-            # modules and the border are the lit ones. They are grey, not
-            # white: most of the panel is lit on this screen, and full white
-            # at a high Brightness setting blooms on camera and pulls far more
-            # current than any other screen.
+            # LVGL (9.5) encodes in byte mode at error correction M, raised to
+            # Q when the data still fits that version, and scales by the
+            # largest whole number that fits the canvas, centered. The
+            # 33 byte join code, WIFI:T:nopass;S:Game Day 2f6a70;;, is
+            # version 3: 29x29 modules, 1 px each on this 33 px canvas. The
+            # page's address, http://192.168.1.50 (setup_qr.h leaves off the
+            # slash), is version 2: 25x25, error correction Q up to 20 bytes
+            # and M up to the longest address, 22. A code that needed more
+            # than 33 px would fail to encode and stay hidden (boot_view), but
+            # neither one can: the hotspot's name and an IPv4 address have
+            # fixed upper lengths.
+            #
+            # Only the modules are lit, about half of a 29x29 code, so full
+            # white draws far less than the old lit grey field did.
             - obj:
                 id: boot_qr_box
                 scrollbar_mode: "OFF"
@@ -1056,9 +1062,9 @@ lvgl:
                   - qrcode:
                       id: boot_qr
                       align: CENTER
-                      size: 64
-                      light_color: 0xA0A0A0
-                      dark_color: 0x000000
+                      size: 33
+                      light_color: 0x000000
+                      dark_color: 0xFFFFFF
 
 esphome:
   on_boot:

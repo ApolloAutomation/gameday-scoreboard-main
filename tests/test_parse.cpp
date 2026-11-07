@@ -739,13 +739,15 @@ static void test_setup_qr() {
   CHECK_EQ(wifi_join_qr("a;b,c:d\\e\"f"), std::string("WIFI:T:nopass;S:a\\;b\\,c\\:d\\\\e\\\"f;;"));
   CHECK_EQ(wifi_join_qr("Café's"), std::string("WIFI:T:nopass;S:Café's;;"));
   CHECK_EQ(wifi_join_qr(""), std::string("WIFI:T:nopass;S:;;"));
-  // 33 characters: LVGL's version 3 at M, 2 px modules on a 64 px panel
+  // 33 characters: LVGL's version 3 at M, 29x29 at 1 px per module on its 33 px canvas
   CHECK_EQ(wifi_join_qr("Game Day 2f6a70").size(), (size_t) 33);
 
-  CHECK_EQ(device_page_qr("192.168.1.50"), std::string("http://192.168.1.50/"));
+  CHECK_EQ(device_page_qr("192.168.1.50"), std::string("http://192.168.1.50"));
   CHECK_EQ(device_page_qr(""), std::string(""));
-  // The longest IPv4 address is 23 characters, within version 2 at M (26)
-  CHECK_EQ(device_page_qr("192.168.100.200").size(), (size_t) 23);
+  // A long address, 192.168.100.200, makes 22 characters, within version 2 at M (26)
+  CHECK_EQ(device_page_qr("192.168.100.200").size(), (size_t) 22);
+  // A typical home address stays within version 2 at error correction Q (20 bytes).
+  CHECK(device_page_qr("192.168.29.10").size() <= 20);
 }
 
 // Where a portal's redirect points. A relative link stays on whoever
