@@ -70,6 +70,7 @@ script:
           const bool wide = W >= 128;
           lv_obj_set_size(id(tt_game_container), W, 64);
           lv_obj_set_size(id(tt_no_game_container), W, 64);
+          lv_obj_set_size(id(gd_golf_container), W, 64);
           lv_obj_set_size(id(tt_splash), W, 64);
           lv_obj_set_width(id(tt_splash_lbl), W);
           lv_obj_set_width(id(tt_no_game_msg_lbl), W);
@@ -173,6 +174,61 @@ script:
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
             lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
           }
+          // Golf's leaderboard: a status row and six rows of place, name, score
+          // to par and (wide) holes played, in spleen_8 (5 px a character).
+          // Each column is its own label, cut to fit by the component.
+          {
+            lv_obj_t *gpos[6] = {id(gd_golf_pos1), id(gd_golf_pos2), id(gd_golf_pos3),
+                                 id(gd_golf_pos4), id(gd_golf_pos5), id(gd_golf_pos6)};
+            lv_obj_t *gname[6] = {id(gd_golf_name1), id(gd_golf_name2), id(gd_golf_name3),
+                                  id(gd_golf_name4), id(gd_golf_name5), id(gd_golf_name6)};
+            lv_obj_t *gscore[6] = {id(gd_golf_score1), id(gd_golf_score2), id(gd_golf_score3),
+                                   id(gd_golf_score4), id(gd_golf_score5), id(gd_golf_score6)};
+            lv_obj_t *gthru[6] = {id(gd_golf_thru1), id(gd_golf_thru2), id(gd_golf_thru3),
+                                  id(gd_golf_thru4), id(gd_golf_thru5), id(gd_golf_thru6)};
+            if (wide) {
+              // The event's name left, the status right, at W - 2
+              lv_obj_set_pos(id(gd_golf_title_lbl), 2, 0);
+              lv_obj_set_width(id(gd_golf_title_lbl), W - 4);
+              lv_obj_clear_flag(id(gd_golf_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_golf_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_golf_status_lbl), W - 2);
+              lv_obj_set_style_text_align(id(gd_golf_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
+            } else {
+              lv_obj_add_flag(id(gd_golf_title_lbl), LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_pos(id(gd_golf_status_lbl), 0, 0);
+              lv_obj_set_width(id(gd_golf_status_lbl), W);
+              lv_obj_set_style_text_align(id(gd_golf_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
+            }
+            for (int i = 0; i < 6; i++) {
+              // Each row's look is set here, once, rather than per label in
+              // the widget list: 24 labels' worth of setup code.
+              lv_obj_t *cells[4] = {gpos[i], gname[i], gscore[i], gthru[i]};
+              for (int c = 0; c < 4; c++) {
+                lv_obj_set_style_text_font(cells[c], id(spleen_8), 0);
+                lv_label_set_long_mode(cells[c], LV_LABEL_LONG_CLIP);
+                lv_obj_set_style_text_align(cells[c], c == 1 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
+                // Place and holes played are gray; name and score get their
+                // colors from gd_golf.
+                lv_obj_set_style_text_opa(cells[c], c == 2 ? LV_OPA_COVER : c == 1 ? 230 : 191, 0);
+                if (c == 0 || c == 3)
+                  lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
+              }
+              const int y = 8 + 8 * i;
+              lv_obj_set_pos(gpos[i], wide ? 2 : 0, y);
+              lv_obj_set_width(gpos[i], 10);
+              lv_obj_set_pos(gname[i], wide ? 16 : 12, y);
+              lv_obj_set_width(gname[i], wide ? 55 : 35);
+              lv_obj_set_pos(gscore[i], wide ? 74 : 49, y);
+              lv_obj_set_width(gscore[i], 15);
+              lv_obj_set_pos(gthru[i], 94, y);
+              lv_obj_set_width(gthru[i], 30);
+              if (wide)
+                lv_obj_clear_flag(gthru[i], LV_OBJ_FLAG_HIDDEN);
+              else
+                lv_obj_add_flag(gthru[i], LV_OBJ_FLAG_HIDDEN);
+            }
+          }
           // Baseball's bases, drawn as a small diamond (first base on the
           // right), and the outs. gd_update shows them during a half inning.
           lv_obj_t *bases[3] = {id(tt_base1), id(tt_base2), id(tt_base3)};
@@ -240,6 +296,8 @@ script:
       message: string
       clock_card: bool
       next_line: string
+      golf_board: bool
+      golf_card: bool
     then:
       - lambda: |-
           id(gd_sport) = sport;
@@ -347,24 +405,35 @@ script:
           underline(under_scores ? id(tt_away_score_lbl) : id(tt_away_team_lbl), id(tt_away_poss), live && possession == 1);
           underline(under_scores ? id(tt_home_score_lbl) : id(tt_home_team_lbl), id(tt_home_poss), live && possession == 2);
       - lambda: |-
-          // Toggle between the game layout and the "no game" layout
+          // Toggle between the game layout, golf's leaderboard and the "no
+          // game" layout
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          if (clock_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
+          if (clock_card || golf_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
             // The component's words for this screen (the finals rotation's
-            // headers and next kickoff, "No live games"), else the default.
-            const char *msg = message.empty() ? "No upcoming game" : message.c_str();
+            // headers and next kickoff, "No live games", a golf event's name
+            // and dates), else the default.
+            const char *msg = golf_card ? next_line.c_str() : message.empty() ? "No upcoming game" : message.c_str();
             const char *cur = lv_label_get_text(id(tt_no_game_msg_lbl));
             if (cur == nullptr || strcmp(cur, msg) != 0)
               lv_label_set_text(id(tt_no_game_msg_lbl), msg);
             lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
+          } else if (golf_board) {
+            lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_clear_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
           }
-          // The off-season clock takes the message's place, and borrows the
-          // ticker from the hidden game layout so it keeps running under it.
-          lv_obj_t *ticker_parent = clock_card ? id(tt_no_game_container) : id(tt_game_container);
+          if (golf_board)
+            lv_obj_clear_flag(id(gd_golf_container), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(id(gd_golf_container), LV_OBJ_FLAG_HIDDEN);
+          // The off-season clock and golf's card take the message's place,
+          // and golf's leaderboard the game's: each borrows the ticker from
+          // the hidden game layout so it keeps running under it.
+          lv_obj_t *ticker_parent = (clock_card || golf_card) ? id(tt_no_game_container)
+                                    : golf_board ? id(gd_golf_container) : id(tt_game_container);
           if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
             lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
           if (clock_card) {
@@ -515,6 +584,47 @@ script:
                 }
                 lv_obj_clear_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
             - script.execute: tt_hide_splash
+
+  # Golf's leaderboard (gd_golf_container), from the columns the component
+  # cut to fit (espn::golf_lines), already plain ASCII. It reads them from
+  # the update being drawn rather than taking them as arguments. A label is
+  # only rewritten when its text changes; rows past the list are blanked.
+  - id: gd_golf
+    then:
+      - lambda: |-
+          const gameday::UpdateFields &f = id(gameday_ctl).board_fields();
+          if (!f.golf_board)
+            return;
+          auto put = [](lv_obj_t *lbl, const std::string &text) {
+            const char *cur = lv_label_get_text(lbl);
+            if (cur == nullptr || text != cur)
+              lv_label_set_text(lbl, text.c_str());
+          };
+          const std::string blank;
+          auto at = [&blank](const std::vector<std::string> &v, int i) -> const std::string & {
+            return i < (int) v.size() ? v[i] : blank;
+          };
+          put(id(gd_golf_title_lbl), f.golf_title);
+          put(id(gd_golf_status_lbl), f.golf_status);
+          lv_obj_set_style_text_color(id(gd_golf_status_lbl), lv_color_hex(f.golf_status_color), 0);
+          lv_obj_t *gpos[6] = {id(gd_golf_pos1), id(gd_golf_pos2), id(gd_golf_pos3),
+                               id(gd_golf_pos4), id(gd_golf_pos5), id(gd_golf_pos6)};
+          lv_obj_t *gname[6] = {id(gd_golf_name1), id(gd_golf_name2), id(gd_golf_name3),
+                                id(gd_golf_name4), id(gd_golf_name5), id(gd_golf_name6)};
+          lv_obj_t *gscore[6] = {id(gd_golf_score1), id(gd_golf_score2), id(gd_golf_score3),
+                                 id(gd_golf_score4), id(gd_golf_score5), id(gd_golf_score6)};
+          lv_obj_t *gthru[6] = {id(gd_golf_thru1), id(gd_golf_thru2), id(gd_golf_thru3),
+                                id(gd_golf_thru4), id(gd_golf_thru5), id(gd_golf_thru6)};
+          for (int i = 0; i < 6; i++) {
+            put(gpos[i], at(f.golf_pos, i));
+            put(gname[i], at(f.golf_name, i));
+            put(gscore[i], at(f.golf_score, i));
+            put(gthru[i], at(f.golf_thru, i));
+            if (i < (int) f.golf_score_color.size())
+              lv_obj_set_style_text_color(gscore[i], lv_color_hex((uint32_t) f.golf_score_color[i]), 0);
+            if (i < (int) f.golf_name_color.size())
+              lv_obj_set_style_text_color(gname[i], lv_color_hex((uint32_t) f.golf_name_color[i]), 0);
+          }
 
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
@@ -880,6 +990,115 @@ lvgl:
                   long_mode: SCROLL_CIRCULAR
                   text: ""
                   styles: ["tt_st_status_text"]
+
+        # Golf's leaderboard: the event and its status on the top row, six
+        # rows of place, name, score to par and (wide) holes played, and the
+        # ticker, which gd_update moves in. Every label clips; the component
+        # cuts each column to fit (espn::golf_lines). The rows' labels are
+        # styled and laid out by tt_apply_layout, filled by gd_golf, shown by
+        # gd_update. Drawn before the splash so a winner's splash covers it.
+        - obj:
+            id: gd_golf_container
+            scrollbar_mode: "OFF"
+            x: 0
+            y: 0
+            width: 64
+            height: 64
+            hidden: true
+            widgets:
+              - label:
+                  id: gd_golf_title_lbl
+                  x: 2
+                  y: 0
+                  width: 60
+                  text_align: LEFT
+                  long_mode: CLIP
+                  text_font: spleen_8
+                  hidden: true
+                  text: ""
+                  styles: ["tt_st_team_text"]
+              - label:
+                  id: gd_golf_status_lbl
+                  x: 0
+                  y: 0
+                  width: 64
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_8
+                  text: ""
+                  styles: ["tt_st_score_text"]
+              - label:
+                  id: gd_golf_pos1
+                  text: ""
+              - label:
+                  id: gd_golf_name1
+                  text: ""
+              - label:
+                  id: gd_golf_score1
+                  text: ""
+              - label:
+                  id: gd_golf_thru1
+                  text: ""
+              - label:
+                  id: gd_golf_pos2
+                  text: ""
+              - label:
+                  id: gd_golf_name2
+                  text: ""
+              - label:
+                  id: gd_golf_score2
+                  text: ""
+              - label:
+                  id: gd_golf_thru2
+                  text: ""
+              - label:
+                  id: gd_golf_pos3
+                  text: ""
+              - label:
+                  id: gd_golf_name3
+                  text: ""
+              - label:
+                  id: gd_golf_score3
+                  text: ""
+              - label:
+                  id: gd_golf_thru3
+                  text: ""
+              - label:
+                  id: gd_golf_pos4
+                  text: ""
+              - label:
+                  id: gd_golf_name4
+                  text: ""
+              - label:
+                  id: gd_golf_score4
+                  text: ""
+              - label:
+                  id: gd_golf_thru4
+                  text: ""
+              - label:
+                  id: gd_golf_pos5
+                  text: ""
+              - label:
+                  id: gd_golf_name5
+                  text: ""
+              - label:
+                  id: gd_golf_score5
+                  text: ""
+              - label:
+                  id: gd_golf_thru5
+                  text: ""
+              - label:
+                  id: gd_golf_pos6
+                  text: ""
+              - label:
+                  id: gd_golf_name6
+                  text: ""
+              - label:
+                  id: gd_golf_score6
+                  text: ""
+              - label:
+                  id: gd_golf_thru6
+                  text: ""
 
         # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
         - obj:

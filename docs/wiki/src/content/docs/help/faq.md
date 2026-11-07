@@ -56,6 +56,10 @@ If your internet plan has a data cap, **ESPN data** in the Device card on the de
 
 Yes. **Favorite teams** holds up to 16 teams from any league, in priority order. Turn on **Only today's games** to cycle through only the favorites playing today. When two favorites play at once, the panel sticks with the higher one, or alternates between them if you choose **Alternate**. See [Favorite teams](/using/favorites/).
 
+:::note[Coming in the next release]
+A golf tour can't be a favorite yet. Follow it in **My team**. See [Golf](/using/golf/).
+:::
+
 ## Can I use a remote?
 
 Yes, a WiZ WizMote, the small battery remote sold for WiZ smart bulbs. It talks to the panel directly, with no hub. To pair it, open the Remote card on the device page or in the app, turn on **Discovery**, then press any button on the remote.

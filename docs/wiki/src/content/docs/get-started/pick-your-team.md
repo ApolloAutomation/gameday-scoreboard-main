@@ -1,6 +1,6 @@
 ---
 title: "Pick your team"
-description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues."
+description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues, or from the next release a golf tour."
 sidebar:
   order: 3
 ---
@@ -43,9 +43,17 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 | MLS | Every team |
 | Premier League (EPL) | Every team |
 
+:::note[Coming in the next release]
+A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
+:::
+
 Soccer clubs are followed into their cup competitions too: Premier League clubs into the Champions League, Europa League and Conference League, and MLS clubs into the CONCACAF Champions Cup.
 
 Each sport has its own board. See [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/) and [Soccer](/using/soccer/).
+
+:::note[Coming in the next release]
+Golf has its own board too, a tournament's leaderboard. See [Golf](/using/golf/).
+:::
 
 ## The On now tab
 
@@ -73,3 +81,7 @@ That QR code opens the panel's device page by IP address. Scan it with your phon
 - **Live games** follows a game in progress in the leagues you choose and moves on when it ends.
 
 See [Modes](/using/modes/) and [Favorite teams](/using/favorites/).
+
+:::note[Coming in the next release]
+A golf tour can be your team in **My team**, but not a favorite or a **Live games** league yet. See [Golf](/using/golf/).
+:::

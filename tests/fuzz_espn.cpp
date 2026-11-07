@@ -263,6 +263,58 @@ size_t boot_cache(const Schedule &team, int64_t now) {
   return back.event_id.size();
 }
 
+// No word of a wrapping label longer than its line: LVGL would break it in
+// the middle.
+static void words_fit(const std::string &text, size_t line) {
+  size_t word = 0;
+  for (char c : text) {
+    word = c == ' ' || c == '\n' || c == '-' ? 0 : word + 1;
+    if (word > line)
+      abort();
+  }
+}
+
+// A golf tour's board from its header: the columns, the card, the ticker and
+// Home Assistant, the splash and the timing, with next as the calendar's next
+// event. Every column stays inside its width at both board widths.
+size_t golf(GameSnapshot g, const GolfNext &next, int64_t now) {
+  size_t n = 0;
+  for (auto &r : g.golf.rows)
+    r.set_tee(r.tee_epoch > 0 ? golf_tee_label(panel_tm(r.tee_epoch)) : "");
+  if (next.valid)
+    g.golf.next = next;
+  std::string dates = golf_dates(panel_tm(tbd_day_epoch(g.kickoff_epoch)), panel_tm(tbd_day_epoch(g.golf.end_epoch)));
+  for (bool wide : {false, true}) {
+    GolfLines l = golf_lines(g, wide);
+    if (l.status.size() > 12 || (wide ? l.title.size() + 1 + l.status.size() > 25 : !l.title.empty()))
+      abort();
+    if (l.pos.size() > kGolfBoardRows || l.name.size() != l.pos.size() || l.score.size() != l.pos.size() ||
+        l.thru.size() != l.pos.size() || l.score_color.size() != l.pos.size() || l.name_color.size() != l.pos.size())
+      abort();
+    for (size_t i = 0; i < l.pos.size(); i++)
+      if (l.pos[i].size() > 2 || l.name[i].size() > (wide ? 11u : 7u) || l.score[i].size() > 3 ||
+          l.thru[i].size() > (wide ? 6u : 0u))
+        abort();
+    std::string card = golf_card_text(g, wide, dates);
+    if (card.substr(0, card.find('\n')).size() > (wide ? 42u : 36u))
+      abort();
+    words_fit(card, wide ? 21 : 12);
+    n += card.size() + l.title.size();
+  }
+  n += render(GameSnapshot{}, g, now);
+  GameSnapshot before = g;
+  before.golf.phase = GolfPhase::LIVE;
+  for (bool wide : {false, true}) {
+    std::string splash = golf_splash(before, g, wide).text;
+    words_fit(splash, wide ? 16 : 10);
+    n += splash.size();
+  }
+  n += golf_poll_ms(g, now) + (golf_off_season(g, now) ? 1 : 0) + (golf_show_next(g, now) ? 1 : 0) +
+       (golf_read_is_older(before, g) ? 1 : 0) + (golf_read_is_older(g, before) ? 1 : 0);
+  n += golf_status_text(golf_next_snapshot(g.golf.next), TickerOptions{}, dates).size();
+  return n;
+}
+
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
 
 }  // namespace
@@ -306,6 +358,22 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     parse_live_games(r, live);
     for (const auto &g : live)
       sink = sink + g.away_abbr.size() + g.home_abbr.size();
+  }
+
+  {
+    // A golf tour: its header, then the calendar for what comes after it
+    GameSnapshot g;
+    GolfNext next;
+    ChunkReader r(data, size, chunk);
+    int found = parse_golf(r, g);
+    ChunkReader r2(data, size, chunk);
+    int ahead = parse_golf_calendar(r2, now, g.event_id, next);
+    if ((ahead == 1) != next.valid)
+      abort();
+    if (found == 1)
+      sink = sink + golf(g, next, now);
+    else if (ahead == 1)
+      sink = sink + golf(golf_next_snapshot(next), GolfNext{}, now);
   }
 
   Schedule team;

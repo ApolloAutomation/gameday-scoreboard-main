@@ -7,6 +7,10 @@ sidebar:
 
 Game Day Scoreboard is an LED panel that shows your team's live score, game clock and next game. It follows the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League. Once it's on your Wi-Fi it gets the scores from ESPN by itself, with no hub, account or other computer to run.
 
+:::note[Coming in the next release]
+It also follows golf: pick the PGA Tour or the LPGA Tour and the panel shows that tour's tournament and leaderboard. See [Golf](/using/golf/).
+:::
+
 ## What you need
 
 - A panel running Game Day Scoreboard: the scoreboard75 controller board with its 128x64 LED panel and 5 V power supply, or an [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6).

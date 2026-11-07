@@ -18,6 +18,9 @@ conference id.
 
 Men's college basketball's team list is Division I only, but it can trail a
 school that just finished moving up; see mcbb_teams().
+
+A golf tour (PGA, LPGA) is followed like a team: its one row is the tour
+itself, with ESPN's league id as the team id; see golf_tour().
 """
 
 import argparse
@@ -52,7 +55,12 @@ OUT = COMPONENT / "teams.h"
 LEAGUES_H = COMPONENT / "leagues.h"
 
 # Fewest teams a fresh list may have before the run is treated as a bad read.
-MIN_TEAMS = {"NFL": 32, "NCAA": 120, "MLB": 30, "NBA": 30, "NHL": 32, "WNBA": 13, "MLS": 29, "EPL": 20, "MCBB": 350}
+MIN_TEAMS = {"NFL": 32, "NCAA": 120, "MLB": 30, "NBA": 30, "NHL": 32, "WNBA": 13, "MLS": 29, "EPL": 20, "MCBB": 350,
+             "PGA": 1, "LPGA": 1}
+
+# A golf tour is followed like a team: one row, ESPN's league id as the id.
+# ESPN calls the LPGA "Ladies Pro Golf Association"; the panel says "LPGA Tour".
+GOLF_TOURS = {"PGA": "PGA Tour", "LPGA": "LPGA Tour"}
 
 
 # ESPN returns 403 to most unfamiliar agents but accepts ones that start with "curl/".
@@ -120,6 +128,13 @@ def mcbb_teams(path):
     return list(found.values())
 
 
+def golf_tour(lg, path):
+    slug = path.split("/")[1]
+    data = get(f"https://site.api.espn.com/apis/v2/scoreboard/header?sport=golf&league={slug}")
+    league = data["sports"][0]["leagues"][0]
+    return [(lg, int(league["id"]), league["abbreviation"], GOLF_TOURS[lg], 0)]
+
+
 def cstr(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -164,6 +179,8 @@ def main():
             fresh = ncaa_teams()
         elif lg == "MCBB":
             fresh = mcbb_teams(paths[lg])
+        elif paths[lg].startswith("golf/"):
+            fresh = golf_tour(lg, paths[lg])
         else:
             fresh = pro_teams(lg, paths[lg])
         print(f"{lg}: {len(fresh)} teams")

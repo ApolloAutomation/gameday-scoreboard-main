@@ -74,6 +74,10 @@ These show on the board or in the ticker.
 | **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. | Nothing. |
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
 
+:::note[Coming in the next release]
+With a golf tour as your team, **No upcoming event** means ESPN lists no tournament for the tour, now or ahead. Nothing to do: the panel checks again every hour. A tournament before it starts shows its name and days, and a canceled one its name and **Canceled** or **Postponed**. See [Golf](/using/golf/).
+:::
+
 A panel with no team picked also brings the app's QR code back over the board for 13 seconds every 3 minutes, until you pick one.
 
 :::note[Coming in the next release]
