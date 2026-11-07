@@ -215,7 +215,7 @@
         <div class="ctl" id="tzpick" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
         <div class="sub">Startup</div>
         <div class="ctl">
-          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 20 seconds. Turn it off to go straight to the scoreboard. Hold the boot button any time to show the address again.</small></label>
+          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 18 seconds, or until you pick a team on a new panel. Turn it off to go straight to the scoreboard once a team is picked. Hold the boot button any time to show the address again.</small></label>
           <button class="sw" data-set="bootaddr" aria-label="Show how to connect when the panel starts"></button>
         </div>
       </div>
