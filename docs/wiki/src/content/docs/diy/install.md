@@ -29,11 +29,7 @@ The two pictures install two builds of the same firmware. The 64x64 choice insta
 
 ## If you skip the Wi-Fi dialog
 
-If you close the dialog, the panel shows a QR code for the separate Game Day app and starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70. Join the hotspot and a setup page opens. The panel only joins 2.4 GHz networks.
-
-:::note[Coming in the next release]
-The QR code joins that hotspot instead: scan it with your phone's camera and the setup page opens.
-:::
+If you close the dialog, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows a QR code that joins it. Scan the code with your phone's camera, or join the hotspot from any phone or laptop, and a setup page opens. The panel only joins 2.4 GHz networks.
 
 ## Set it up
 

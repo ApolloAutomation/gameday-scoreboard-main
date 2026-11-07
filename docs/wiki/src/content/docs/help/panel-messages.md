@@ -9,47 +9,28 @@ The panel says what's going on in words on the screen, or in the ticker along th
 
 ## While it starts and sets up
 
-These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the QR code sits on the left half with the words beside it. On a single 64x64 panel the words and the QR code take turns.
+These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the QR code sits on the left half with the words beside it, and without a QR code up the words use the whole width. On a single 64x64 panel the words and the QR code take turns. Your phone's camera reads every QR code here, so none of them needs an app: off Wi-Fi the code joins the panel's own hotspot, and on Wi-Fi it opens the panel's device page.
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
 | **Starting** | The panel has power and is starting up. | Wait a few seconds. |
-| **SETUP / Game Day / app**, with a QR code | The panel has no Wi-Fi network yet, or you reset its Wi-Fi. | Join its hotspot (the panel shows the name in turn), or use the installer's Wi-Fi dialog. The QR code is for the separate Game Day app. See [Set up your panel](/get-started/setup/). |
-| **Join WiFi / Game Day / 2f6a70** | The panel's own hotspot is up, named `Game Day 2f6a70`. | Join that network from any phone or laptop to set it up. |
-| **Unplug it to / rejoin / saved Wi-Fi** | The panel is in setup after a Wi-Fi reset and still knows its saved networks. It takes turns with **SETUP**. | Set it up on a new network, or unplug it and plug it back in to go back to the networks it knows. It goes back by itself after 15 minutes, or up to 10 minutes later if you're still setting it up from the app or the hotspot. See [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). |
-| **Connecting to** and a network name | The panel is joining a network it already knows. | Wait. |
-| **JOINING** and a network name | The app sent the panel a network, and it's joining it. | Wait. If the name is wrong, pick again in the app. |
-| A QR code with **Scan for Game Day app** | The panel joined your Wi-Fi. | Wait for the address. The QR code is for the separate Game Day app. |
-| **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
-| **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
-
-:::note[Coming in the next release]
-The start-up screen no longer mentions the app, and its QR codes need nothing but your phone's camera.
-
-| The panel says | What it means | What to do |
-| --- | --- | --- |
+| **SETUP / Starting / hotspot** | The panel has no Wi-Fi network yet, or you reset its Wi-Fi, and its hotspot is starting. | Wait a moment. |
 | **SETUP / Scan to / join Wi-Fi**, with a QR code | The panel has no Wi-Fi network yet, or you reset its Wi-Fi, and its hotspot is up. The QR code is the hotspot's Wi-Fi code. | Point your phone's camera at the QR code and tap to join, then pick your network on the setup page. If no page opens, open `192.168.4.1` in a browser. Or join the hotspot by name (the panel shows it in turn), or use the installer's Wi-Fi dialog. See [Set up your panel](/get-started/setup/). |
 | **Join Wi-Fi / Game Day / 2f6a70** | The panel's own hotspot is up, named `Game Day 2f6a70`. It takes turns with the hotspot's QR code. | Scan the code, or join that network from any phone or laptop to set it up. |
-| **SETUP / Starting / hotspot** | The panel's hotspot is starting. | Wait a moment. |
-| A QR code with **Scan to / pick your / team** | The panel joined your Wi-Fi. The QR code opens its device page by IP address. | Scan it with your phone's camera, on the same Wi-Fi, and pick your team. Or wait for the address. |
-
-:::
+| **Unplug it to / rejoin / saved Wi-Fi** | The panel is in setup after a Wi-Fi reset and still knows its saved networks. It takes turns with **SETUP**. | Set it up on a new network, or unplug it and plug it back in to go back to the networks it knows. It goes back by itself after 15 minutes, or up to 10 minutes later if you're still on its hotspot or setting it up from the Game Day app. See [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). |
+| **Connecting to** and a network name (**Connecting** on a 64x64 panel) | The panel is joining a network it already knows. | Wait. |
+| **JOINING** and a network name | The app sent the panel a network over Bluetooth, and it's joining it. | Wait. If the name is wrong, pick again in the app. |
+| A QR code, with **Scan to / pick your / team** beside it on the 128x64 panel | The panel joined your Wi-Fi. The QR code opens its device page by IP address. | Scan it with your phone's camera, on the same Wi-Fi, and pick your team. Or wait for the address. |
+| **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
+| **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
 ## When the Wi-Fi is the problem
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
-| **Wi-Fi / lost / open app**, with a QR code | The panel has been off its Wi-Fi for more than about 10 seconds. | If the router or internet is down, wait: the panel rejoins by itself. If you changed the router or the password, give the panel the new one from its hotspot. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
-| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. | Set it up on a home network or a phone hotspot: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The message goes by itself once scores come through. |
-
-:::note[Coming in the next release]
-| The panel says | What it means | What to do |
-| --- | --- | --- |
 | **Wi-Fi / lost / reconnecting** | The panel has been off its Wi-Fi for more than about 10 seconds and is trying to get back on. | If the router or internet is down, wait: the panel rejoins by itself. If you changed your router or Wi-Fi password, wait a few minutes: the panel brings up its hotspot and shows a QR code to scan (next row). |
-| **Wi-Fi / lost / scan to fix**, with a QR code, taking turns with **Join Wi-Fi / Game Day / 2f6a70** | The panel is still off its Wi-Fi and its hotspot is up. The QR code is the hotspot's Wi-Fi code. | If you changed the router or the password, scan the code with your phone's camera, join, and give the panel the new one on the page that opens. If the router is only down, wait. |
-| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | As above. The QR code opens the panel's device page by IP address. | From a phone on the same Wi-Fi, scan it and tap **Reset Wi-Fi** in the Device card to put the panel back into setup. If the page won't open, use the button's [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). |
-
-:::
+| **Wi-Fi / lost / scan to fix**, with a QR code, taking turns with **Join Wi-Fi / Game Day / 2f6a70** | The panel is still off its Wi-Fi and its hotspot is up. It keeps trying its saved networks. The QR code is the hotspot's Wi-Fi code. | If you changed the router or the password, scan the code with your phone's camera, join, and give the panel the new one on the page that opens. If the router is only down, wait. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
+| **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. The QR code opens the panel's device page by IP address. | Set it up on a home network or a phone hotspot. From a phone on the same Wi-Fi, scan the code and tap **Reset Wi-Fi** in the Device card to put the panel back into setup. If the page won't open, use the button's [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). The message goes by itself once scores come through. |
 
 ## On the scoreboard
 
@@ -57,34 +38,29 @@ These show on the board or in the ticker.
 
 | The panel says | What it means | What to do |
 | --- | --- | --- |
-| **Pick a team in the Game Day app or at** and an IP address | Nobody has picked a team or a mode yet. | Open that address in a browser and pick one. See [Pick your team](/get-started/pick-your-team/). |
+| **Pick a team at** and an IP address | Nobody has picked a team or a mode yet. | Open that address, the device page, in a browser on the same Wi-Fi and pick one. See [Pick your team](/get-started/pick-your-team/). |
 | **Getting ready** | The panel is on Wi-Fi but hasn't set its clock yet. It can't read scores before it has. | Wait a few seconds. If it lasts, see [Troubleshooting](/help/troubleshooting/#the-panel-says-getting-ready-for-a-long-time). |
 | **Can't reach ESPN** | The panel is on Wi-Fi but gets no answer from ESPN, where the scores come from. | Check the internet connection. The panel keeps trying. |
 | **no update yet** at the end of the ticker | Three reads from ESPN in a row failed, and none has worked since the panel started. | Check the internet connection. |
 | **no update for 12 min** at the end of the ticker | Three reads in a row failed. The score on the board is from that many minutes ago. | Check the internet connection. The board catches up once a read works. |
 | **No upcoming game** | ESPN lists no next game for your team. | Nothing. Between seasons the panel shows a clock instead, below. |
+| **No upcoming event** | Your team is a golf tour, and ESPN lists no tournament for it, now or ahead. | Nothing. The panel checks again every hour. See [Golf](/using/golf/). |
+| **No upcoming race** | Your team is a racing series, and ESPN lists no race for it, now or ahead. | Nothing. The panel checks again every hour. See [Racing](/using/racing/). |
 | **Looking for a live game** | In Live games, the panel is checking what's on. With one league picked, it names it, like **Looking for a live NHL game**. | Wait. |
 | **No live games right now** | In Live games, nothing is being played in the leagues you picked. | Nothing. The panel shows today's later games and recent final scores, and picks up the next game when it starts. |
 | **No live NFL games, showing CHI** | In Live games with nothing on, the panel shows your own team until a game starts. | Nothing. |
-| **Favorites: add teams in the app or on the page** | The panel is in Favorite teams with no favorites. | Add favorites, or switch to My team. See [Favorite teams](/using/favorites/). |
+| **Favorites: add teams at** and an IP address, or **Favorites: add teams on the device page** | The panel is in Favorite teams with no favorites. | Add favorites on the device page, at that address, or switch to My team. See [Favorite teams](/using/favorites/). |
 | **Later today** | A card before the games still to come today, each with both logos, the start time and the TV channel. | Nothing. |
 | **Yesterday's NHL scores**, or another day and league | A card before that day's final scores. | Nothing. |
 | **Next: BOS at NYR Thu 6:00 PM** | No game is left today. This is the next one. | Nothing. |
 | A clock, with **Next:** and a date, or only the date | Your team is between seasons. The clock is in your team's colors, or gray with no team picked. Under it is the next game once it's on the schedule. | Nothing. See [Brightness and the clock](/using/brightness-and-clock/). |
-| **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. | Nothing. |
+| A clock, with **No upcoming Formula 1 race** or **No upcoming NASCAR Cup Series race** in the ticker | Your team is a racing series, its season's last race is over, and ESPN hasn't published the next season's schedule yet. | Nothing. See [Racing](/using/racing/). |
+| **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. A canceled or postponed golf tournament or race shows its name and **Canceled** or **Postponed**. | Nothing. |
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
 
-:::note[Coming in the next release]
-With a golf tour as your team, **No upcoming event** means ESPN lists no tournament for the tour, now or ahead. Nothing to do: the panel checks again every hour. A tournament before it starts shows its name and days, and a canceled one its name and **Canceled** or **Postponed**. See [Golf](/using/golf/).
+With a golf tour or a racing series as your team, a tournament or a race weekend before it starts shows its name and its days, or for a race weekend the next session, in place of a matchup. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
-With a racing series as your team, **No upcoming race** means ESPN lists no race for the series, now or ahead. Nothing to do: the panel checks again every hour. After a season's last race, until ESPN publishes the next season's schedule, the board shows the clock and the ticker says "No upcoming Formula 1 race" or "No upcoming NASCAR Cup Series race". A race weekend before it starts shows the race's name and the next session or its days, and a canceled race its name and **Canceled** or **Postponed**. See [Racing](/using/racing/).
-:::
-
-A panel with no team picked also brings the app's QR code back over the board for 13 seconds every 3 minutes, until you pick one.
-
-:::note[Coming in the next release]
-**Pick a team in the Game Day app or at** becomes **Pick a team at** and the IP address, and **Favorites: add teams in the app or on the page** becomes **Favorites: add teams at** and the IP address (**on the device page** while the panel has none). The QR code that comes back over the board every 3 minutes opens the panel's device page.
-:::
+A panel with no team picked also brings the QR code that opens its device page back over the board for 13 seconds every 3 minutes, until you pick one.
 
 ## When you hold the button
 
