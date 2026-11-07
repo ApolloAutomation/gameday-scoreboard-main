@@ -63,6 +63,10 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
+:::note[Coming in the next release]
+**Team** gains **Golf: PGA Tour** and **Golf: LPGA Tour** at the end of its list. While a tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "Korn Ferry Tour Championship | Final | Hitt wins at -20" or "Charles Schwab Cup Championship | Nov 12-15", and **Last Play** stays empty. See [Golf](/using/golf/).
+:::
+
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
 
 The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.

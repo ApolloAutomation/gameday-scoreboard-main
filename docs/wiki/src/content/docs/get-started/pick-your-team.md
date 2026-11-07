@@ -43,6 +43,10 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 | MLS | Every team |
 | Premier League (EPL) | Every team |
 
+:::note[Coming in the next release]
+A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
+:::
+
 Soccer clubs are followed into their cup competitions too: Premier League clubs into the Champions League, Europa League and Conference League, and MLS clubs into the CONCACAF Champions Cup.
 
 Each sport has its own board. See [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/) and [Soccer](/using/soccer/).

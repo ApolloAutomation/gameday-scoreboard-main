@@ -87,6 +87,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
+  `sport_golf.cpp`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`,
   `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -128,7 +129,9 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 3. **Parsing.** `espn_parse_impl.h` turns each document into a
    `GameSnapshot` oriented around the followed team, with per-sport extras
    from the `sport_*.cpp` files (the count, outs and runners, soccer minute
-   and cards, periods and series).
+   and cards, periods and series, golf's leaderboard). Its copy and move
+   are defined once, in `espn_parse.cpp`, rather than inlined into every
+   file that moves one.
 4. **Applying.** When the task sets `job_done_`, the loop calls
    `apply_job_`. A job from before a team or mode change (older
    `generation_`) is dropped; a task past its deadline is abandoned and the
@@ -151,6 +154,26 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 
 The boot cache (`startup.h`) keeps the next game in flash for a day so a
 restart can skip the team read.
+
+**Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
+team row in `teams.h` with ESPN's league id, but none of the team machinery
+above applies. `start_job_` sends it to `run_golf_job_`, which reads the
+tour's scoreboard header (`golf_header_url`, `apis/v2/scoreboard/header`,
+about 19 KB during an event and 3 KB between them): the current or next
+event, its status and round, and the top 25 in order with place, score to
+par, holes played and tee time (`parse_golf`, `sport_golf.cpp`). After a
+final, a canceled event or none listed, it also reads the season calendar
+from the scoreboard of the coming Tuesday (8 to 12 KB, never `dates=` the
+current year, which is 29 MB), or next season's (`golf_calendar_url`,
+`parse_golf_calendar`). `golf_read_is_older` turns away up to two CDN
+copies in a row that go back a round, a phase or an event. Timing is
+`golf_poll_ms`: a minute while a round is played, 5 minutes between rounds
+and before the start, 30 minutes otherwise, 6 hours between seasons. The
+board is `gd_golf_container` in `pages/gameday-live.yaml`, filled by the
+`gd_golf` script from columns `golf_lines` has already cut to fit, read
+from the update being drawn (`board_fields`). `sport_golf.cpp` builds for
+size (`#pragma GCC optimize("Os")`), since it runs once a minute at most.
+Golf is not in Favorite teams or Live games (`set_request.h`).
 
 ## The device page and its routes
 
