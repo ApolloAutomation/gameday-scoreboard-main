@@ -344,6 +344,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_night_start(int minute);
   void set_night_end(int minute);
   void set_night_bri(int level);
+  // Off or dim holds the panel darker than want, the Brightness, would light
+  // it: the remote's brightness buttons leave the setting alone then
+  // (pages/wizmote.yaml, idle.h idle_caps).
+  bool idle_dimmed(uint8_t want) const {
+    return ::espn::idle_caps(want, this->idle_, this->idle_prefs_.night_bri, this->idle_prefs_.dim, this->night_.on);
+  }
   // The chip temperature sensor's readings (firmware/pages/guard.yaml).
   void set_chip_temp(float c);
   // What the panel's corner says: 0 nothing, 1 too warm, 2 check power.
@@ -603,6 +609,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // display in My team or Favorite teams: it goes in between the mode's
     // reads and leaves their timing alone (start_side_job_).
     bool side{false};
+    // My team today: a team read whose look-ahead skips today's final reads
+    // that final into today_final too (idle.h, want_today_final). since is
+    // the local day's start, 0 when My team today isn't the idle display;
+    // have the start of the final kept already. Allocated only when read.
+    int64_t today_since{0};
+    int64_t today_have{0};
+    std::unique_ptr<GameSnapshot> today_final;
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -719,7 +732,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   IdlePrefs idle_prefs_{};
   ::espn::IdleState idle_;
   ::espn::IdleView idle_view_{::espn::IdleView::BOARD};
-  bool night_override_{false};  // the owner set the brightness during these night hours
+  ::espn::NightOverride night_;  // the owner set the brightness during these night hours
   uint32_t idle_tick_ms_{0};
   int idle_minute_{-1};  // the minute My team today's countdown was drawn in
   // Recomputes idle_ and idle_view_; true when the view changed. Fires the
@@ -727,8 +740,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool idle_update_();
   void idle_tick_();
   // A followed game is on, its final is up for the mode's wait, Favorite
-  // teams has taken over for a game, or Follow this game holds.
+  // teams has taken over for a game, or Follow this game holds (idle.h,
+  // idle_busy, from what the component knows).
   bool idle_busy_() const;
+  // post_since_ms_'s game was read before it was final this boot: a final
+  // only ever read as one (after a restart) gets its wait while it is new.
+  bool post_saw_play_{false};
+  void note_post_(uint32_t now);  // game_ is a final: start its wait the first time
   ::espn::IdleView idle_effective_(::espn::IdleView v) const;
   void idle_changed_(bool live_switch);  // a setting changed: redraw, and in Live games maybe scan again
   // f becomes the idle display's view (idle_view_), keeping Home
@@ -738,10 +756,18 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // today's final; nullptr for the clock.
   const GameSnapshot *today_game_() const;
   // Live games' finals rotation also stands in for a team's card when the
-  // idle display is the scores.
+  // idle display is the scores, except in the night hours: the clock then,
+  // in the team's colors with its next game, which needs the team's card.
   bool live_recap_() const {
-    return this->current_team_() == nullptr || this->idle_prefs_.idle == (uint8_t) ::espn::IdleShow::SCORES;
+    return this->current_team_() == nullptr ||
+           (this->idle_prefs_.idle == (uint8_t) ::espn::IdleShow::SCORES && !this->idle_.night);
   }
+  // My team today's local day start for a team read (Job::today_since), 0
+  // when it isn't the idle display.
+  int64_t today_since_() const;
+  // The page's ticker under its board while the idle display has the panel:
+  // the mode's own line, for the mode's own game the page shows.
+  std::string page_status_;
   // Two snapshots in PSRAM: [0] the scores rotation's card outside Live
   // games, [1] the last final of the team (or a favorite) today.
   std::vector<GameSnapshot, PsramAllocator<GameSnapshot>> idle_snaps_;
@@ -1050,6 +1076,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // ESPN gave none (espn::standing_text).
   std::string standing_text_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
+  // When the loop last gave up on a worker that may still be running, 0 for
+  // never: no worker starts for RETRY_INTERVAL after (start_side_job_ too).
+  uint32_t worker_gave_up_ms_{0};
   // Bumped by the main loop when it abandons a worker, read by the worker.
   std::atomic<uint32_t> worker_seq_{0};
   Job job_;

@@ -8054,6 +8054,8 @@ static void test_idle_night_window() {
 static void test_idle_state() {
   IdleInputs in;
   in.clock_valid = true;
+  in.board_ready = true;
+  in.connected = true;
   in.minute = 14 * 60;  // 2 PM
   in.night_on = true;
   in.night_start = 22 * 60;
@@ -8111,6 +8113,243 @@ static void test_idle_state() {
   CHECK(idle_state(in).view == IdleView::BOARD);
   CHECK(std::string(idle_view_key(IdleView::BOARD)).empty());
   CHECK_EQ(std::string(idle_view_key(IdleView::TODAY)), std::string("today"));
+
+  // Before the first board after a restart or a new team or mode: the boot
+  // screen and that board stay up, but the night hours and Off or dim go by
+  // the clock alone. An overnight update's restart at 3 AM stays dark or at
+  // the night brightness.
+  in.board_ready = false;
+  in.minute = 3 * 60;
+  off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::BOARD && off.dim && off.night);
+  IdleState next = view(IdleShow::NEXT);
+  CHECK(next.view == IdleView::BOARD && next.night && !next.dim);
+  CHECK(view(IdleShow::CLOCK).view == IdleView::BOARD);
+  in.minute = 14 * 60;
+  off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::BOARD && off.dim && !off.night);
+  // Off Wi-Fi the panel's screens about getting connected stay lit (at the
+  // night brightness in the night hours), and the view is as it would be.
+  in.board_ready = true;
+  in.connected = false;
+  off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::CLOCK && !off.dim);
+  in.minute = 23 * 60;
+  off = view(IdleShow::OFF);
+  CHECK(!off.dim && off.night);
+  in.connected = true;
+  CHECK(view(IdleShow::OFF).dim);
+  // A followed game still wins at night, before the first board too.
+  in.busy = true;
+  in.board_ready = false;
+  off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::BOARD && !off.dim && off.night);
+}
+
+// The owner's Brightness change in the night hours holds until they end, not
+// through a moment without the time or the first board after a change.
+static void test_idle_night_override() {
+  NightOverride o;
+  o.update(true, false);
+  o.brightness_changed(false);  // in the day: nothing to hold
+  CHECK(!o.on);
+  o.update(true, true);  // 10 PM
+  CHECK(!o.on);
+  o.brightness_changed(true);
+  CHECK(o.on);
+  o.update(true, true);
+  CHECK(o.on);
+  // The time unknown for a while (the night reads false then): still theirs
+  o.update(false, false);
+  CHECK(o.on);
+  o.update(true, true);
+  CHECK(o.on);
+  // 7 AM: the hours end, and the next night starts at the night brightness
+  o.update(true, false);
+  CHECK(!o.on);
+  o.update(true, true);
+  CHECK(!o.on);
+  // The hours ending while the time was unknown end the change too.
+  o.brightness_changed(true);
+  o.update(false, false);
+  o.update(true, false);
+  CHECK(!o.on);
+  // After a restart in the night hours the change is gone, as before.
+  NightOverride boot;
+  boot.update(true, true);
+  CHECK(!boot.on);
+}
+
+// Whether the mode's own game keeps the panel, from plain values: the live
+// against idle decision behind every idle display.
+static void test_idle_busy() {
+  const int64_t now = parse_iso8601_z("2026-11-08T23:00Z");
+  BusyInputs my;  // My team
+  my.valid = true;
+  my.now = now;
+  my.kickoff = now - 3600;
+  my.linger_ms = 30 * 60 * 1000;
+  // Before the game, and with no game at all: idle.
+  my.state = GameState::PRE;
+  CHECK(!idle_busy(my));
+  my.state = GameState::NOT_FOUND;
+  CHECK(!idle_busy(my));
+  BusyInputs none = my;
+  none.valid = false;
+  none.state = GameState::IN;
+  CHECK(!idle_busy(none));
+  // In progress: busy.
+  my.state = GameState::IN;
+  CHECK(idle_busy(my));
+  // The final: the half hour after the panel saw it end, once.
+  my.state = GameState::POST;
+  CHECK(!idle_busy(my));  // no wait started (not read as a final yet)
+  my.post_seen = true;
+  my.saw_play = true;
+  my.post_age_ms = 0;
+  CHECK(idle_busy(my));
+  my.post_age_ms = 29 * 60 * 1000;
+  CHECK(idle_busy(my));
+  my.post_age_ms = 30 * 60 * 1000;
+  CHECK(!idle_busy(my));
+  my.post_age_ms = 0;
+  my.lingered = true;  // the team endpoint still names a final that had its wait
+  CHECK(!idle_busy(my));
+  my.lingered = false;
+  // Baseball's ten minutes
+  my.linger_ms = 10 * 60 * 1000;
+  my.post_age_ms = 11 * 60 * 1000;
+  CHECK(!idle_busy(my));
+  my.linger_ms = 30 * 60 * 1000;
+  my.post_age_ms = 60 * 1000;
+
+  // Right after a restart: a final the panel only read as one. Last night's
+  // game, which ESPN still names at the 3 AM restart of an overnight update,
+  // gets no new wait, so Off or dim stays dark and the clock comes straight
+  // back. One that started under four hours ago may have just ended: its wait.
+  my.saw_play = false;
+  my.kickoff = parse_iso8601_z("2026-11-08T01:20Z");  // 7:20 PM Central the evening before
+  my.now = parse_iso8601_z("2026-11-08T09:00Z");      // 3 AM Central
+  CHECK(!idle_busy(my));
+  my.kickoff = my.now - 3 * 3600;
+  CHECK(idle_busy(my));
+  my.kickoff = my.now - kFinalFreshSeconds;
+  CHECK(!idle_busy(my));
+  my.kickoff = 0;  // no start time known: nothing says it is new
+  CHECK(!idle_busy(my));
+  // A final the panel saw end keeps its wait however long the game ran.
+  my.saw_play = true;
+  my.kickoff = my.now - 6 * 3600;
+  CHECK(idle_busy(my));
+  my.now = now;
+
+  // Live games: its own pick until its next look moves on after the final;
+  // the finals rotation follows no game; the team card is like My team.
+  BusyInputs live = my;
+  live.live_mode = true;
+  live.state = GameState::IN;
+  CHECK(idle_busy(live));
+  live.state = GameState::POST;
+  live.post_seen = false;
+  CHECK(idle_busy(live));
+  live.state = GameState::PRE;
+  CHECK(!idle_busy(live));
+  live.recap = true;
+  live.state = GameState::IN;
+  CHECK(!idle_busy(live));
+  live.recap = false;
+  live.live_fallback = true;
+  CHECK(idle_busy(live));
+  live.state = GameState::POST;
+  CHECK(!idle_busy(live));  // the card's final, with no wait started
+  live.post_seen = true;
+  live.saw_play = true;
+  CHECK(idle_busy(live));
+
+  // Favorite teams: a favorite that took over (Take over before kickoff, the
+  // game, After the final) or one in progress; the playlist alone is idle.
+  BusyInputs fav;
+  fav.favorites = true;
+  fav.now = now;
+  CHECK(!idle_busy(fav));
+  fav.fav_locked = true;
+  CHECK(idle_busy(fav));
+  fav.fav_locked = false;
+  fav.fav_live = true;
+  CHECK(idle_busy(fav));
+  fav.fav_live = false;
+  fav.valid = true;
+  fav.state = GameState::IN;  // the card on the board is the playlist's
+  CHECK(!idle_busy(fav));
+
+  // Follow this game, and the demo's scripted game, hold whatever else.
+  BusyInputs hold;
+  hold.hold = true;
+  CHECK(idle_busy(hold));
+  hold.live_mode = true;
+  hold.recap = true;
+  CHECK(idle_busy(hold));
+
+  // A golf tour or a racing series: busy while a round or session is on, not
+  // overnight between rounds or between a weekend's sessions, and for the
+  // half hour after its final, not the day or two ESPN keeps it.
+  BusyInputs golf;
+  golf.valid = true;
+  golf.leaderboard = true;
+  golf.now = now;
+  golf.kickoff = now - 3 * 86400;  // the event's first day
+  golf.linger_ms = kBoardFinalWaitMs;
+  golf.state = GameState::IN;
+  golf.on_course = true;
+  CHECK(idle_busy(golf));
+  golf.on_course = false;  // after round 2, or a suspended round
+  CHECK(!idle_busy(golf));
+  golf.state = GameState::POST;
+  golf.post_seen = true;
+  golf.saw_play = true;
+  golf.post_age_ms = 10 * 60 * 1000;
+  CHECK(idle_busy(golf));
+  golf.post_age_ms = kBoardFinalWaitMs;
+  CHECK(!idle_busy(golf));
+  // A restart the day after: the final shows no wait.
+  golf.saw_play = false;
+  golf.post_age_ms = 0;
+  CHECK(!idle_busy(golf));
+  golf.state = GameState::PRE;
+  CHECK(!idle_busy(golf));
+}
+
+// My team today's final after a restart, and the records with the ranks.
+static void test_idle_today_final() {
+  const int64_t day = parse_iso8601_z("2026-11-08T06:00Z");  // midnight Central
+  // The team read names a final that started today, later than the one kept
+  // (none, yesterday's, or a doubleheader's first): read it.
+  const int64_t seven_pm = day + 19 * 3600;
+  CHECK(want_today_final(day, true, seven_pm, 0));
+  CHECK(want_today_final(day, true, day, 0));
+  CHECK(want_today_final(day, true, seven_pm, day - 5 * 3600));
+  CHECK(want_today_final(day, true, seven_pm, day + 13 * 3600));
+  // Already kept, yesterday's, not a final, or My team today off.
+  CHECK(!want_today_final(day, true, seven_pm, seven_pm));
+  CHECK(!want_today_final(day, true, day - 60, 0));
+  CHECK(!want_today_final(day, false, seven_pm, 0));
+  CHECK(!want_today_final(0, true, seven_pm, 0));
+
+  // The ranks come with a game, and My team today's records line (the
+  // ticker's own, records_line) puts each side's in front of it.
+  GameSnapshot fin = hoops_event("fixtures/event_mcbb_final.json", kMichigan);
+  CHECK_EQ((int) fin.team_rank, 1);
+  CHECK_EQ((int) fin.opp_rank, 2);
+  CHECK_EQ(espn::detail::records_line(fin, ""), std::string("#1 MICH 37-3 | #2 CONN 34-6"));
+  GameSnapshot iowa;
+  CHECK(parse_event_str(slurp("fixtures/event_ncaa_tbd.json"), Sport::FOOTBALL, 2294, iowa));
+  CHECK_EQ((int) iowa.team_rank, 17);
+  CHECK_EQ((int) iowa.opp_rank, 0);
+  GameSnapshot jxst;
+  CHECK(parse_event_str(slurp("fixtures/event_ncaa_live.json"), Sport::FOOTBALL, 55, jxst));
+  CHECK_EQ((int) jxst.team_rank, 0);
+  CHECK_EQ((int) jxst.opp_rank, 0);
+  CHECK(espn::detail::records_line(jxst, "").find('#') == std::string::npos);
 }
 
 static void test_idle_brightness() {
@@ -8136,6 +8375,19 @@ static void test_idle_brightness() {
   dim.night = true;
   CHECK_EQ((int) idle_brightness(128, dim, 20, 30, false), 20);
   CHECK_EQ((int) idle_brightness(128, dim, 40, 30, false), 30);
+  // The remote's brightness buttons wait while Off or dim holds the panel
+  // below what it would have: dark, or a dim level under the brightness.
+  CHECK(idle_caps(128, dark, 20, 0, false));
+  IdleState day_dim;
+  day_dim.dim = true;
+  CHECK(idle_caps(128, day_dim, 20, 30, false));
+  CHECK(!idle_caps(20, day_dim, 20, 30, false));  // 20 shows as 20: a step shows
+  CHECK(!idle_caps(30, day_dim, 20, 30, false));
+  CHECK(!idle_caps(128, IdleState{}, 20, 0, false));  // not idle
+  CHECK(!idle_caps(128, night, 20, 0, false));        // the night hours alone
+  CHECK(!idle_caps(128, dim, 20, 30, false));  // night 20 is under the dim level 30
+  CHECK(idle_caps(128, dim, 40, 30, false));
+  CHECK(idle_caps(128, dim, 20, 30, true));  // the owner's 128 tonight, held at 30
   // Then the heat and power guard on top, as guard_brightness() does it.
   CHECK_EQ((int) guarded_brightness(idle_brightness(200, night, 100, 0, false), 0, true), (int) kPowerCap);
 }
@@ -8181,11 +8433,44 @@ static void test_idle_hhmm() {
     CHECK_EQ(parse_hhmm(clock_hhmm(m)), m);
 }
 
-// Today in a zone utc_offset_s from UTC, the way the panel works it out from
-// its local time.
-static LocalDay idle_day(int64_t now, int utc_offset_s) {
-  struct tm t = utc_tm(now + utc_offset_s);
-  return local_day(now, t.tm_hour, t.tm_min, t.tm_sec);
+// The zone for these tests' local_day(): TZ for the host's mktime, a
+// POSIX rule like the ones in timezones_parsed.h. Put back afterwards.
+struct ScopedTz {
+  std::string old;
+  bool had{false};
+  explicit ScopedTz(const char *tz) {
+    const char *o = getenv("TZ");
+    this->had = o != nullptr;
+    if (this->had)
+      this->old = o;
+    setenv("TZ", tz, 1);
+    tzset();
+  }
+  ~ScopedTz() {
+    if (this->had)
+      setenv("TZ", this->old.c_str(), 1);
+    else
+      unsetenv("TZ");
+    tzset();
+  }
+};
+
+// Today in the zone tz, the way the panel works it out: its local time now,
+// and each midnight from its date. mktime with tm_isdst -1 stands in for the
+// time component's conversion, which matches it (ESPTime::recalc_timestamp_local).
+static LocalDay idle_day(int64_t now, const char *tz) {
+  ScopedTz z(tz);
+  time_t t = (time_t) now;
+  struct tm local {};
+  localtime_r(&t, &local);
+  return local_day(now, local, [](int y, int m, int d) -> int64_t {
+    struct tm at {};
+    at.tm_year = y - 1900;
+    at.tm_mon = m - 1;
+    at.tm_mday = d;
+    at.tm_isdst = -1;
+    return (int64_t) mktime(&at);
+  });
 }
 
 static TodayGame idle_game(GameState state, const char *kick, bool tbd = false) {
@@ -8200,7 +8485,8 @@ static TodayGame idle_game(GameState state, const char *kick, bool tbd = false) 
 // My team today: the game today counts down, its final stays until local
 // midnight, and a day without one is the clock, all in the panel's zone.
 static void test_idle_today() {
-  const int central = -6 * 3600, utc = 0, berlin = 3600;
+  // November: standard time in both
+  const char *central = "CST6CDT,M3.2.0,M11.1.0", *utc = "UTC0", *berlin = "CET-1CEST,M3.5.0,M10.5.0/3";
   const int64_t noon_central = parse_iso8601_z("2026-11-08T18:00Z");  // Sunday noon, US Central
   // A 7 PM Central kickoff is Monday 01:00 UTC.
   std::vector<TodayGame> sunday_night = {idle_game(GameState::PRE, "2026-11-09T01:00Z")};
@@ -8253,6 +8539,70 @@ static void test_idle_today() {
   CHECK_EQ(today_pick(tbd, d), 0);
   tbd[0].tbd = false;
   CHECK_EQ(today_pick(tbd, d), -1);  // with a real time, 11 PM Saturday Central
+}
+
+// The days the clocks change are 23 and 25 hours long: a Saturday 11 PM final
+// is yesterday's on the spring Sunday, and midnight to 1 AM is today on the
+// fall one. US Central's 2026 changes are March 8 and November 1.
+static void test_idle_dst_day() {
+  const char *chicago = "CST6CDT,M3.2.0,M11.1.0";
+  LocalDay spring = idle_day(parse_iso8601_z("2026-03-08T17:00Z"), chicago);  // noon CDT
+  CHECK_EQ(spring.start, parse_iso8601_z("2026-03-08T06:00Z"));               // midnight CST
+  CHECK_EQ(spring.end, parse_iso8601_z("2026-03-09T05:00Z"));                 // midnight CDT
+  std::vector<TodayGame> sat = {idle_game(GameState::POST, "2026-03-08T05:15Z")};  // Sat 11:15 PM CST
+  CHECK_EQ(today_pick(sat, spring), -1);
+  sat[0].kickoff = parse_iso8601_z("2026-03-08T06:30Z");  // Sun 12:30 AM CST
+  CHECK_EQ(today_pick(sat, spring), 0);
+  // Either side of 2 AM, the same day
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-03-08T07:59Z"), chicago).start, spring.start);
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-03-08T08:00Z"), chicago).start, spring.start);
+  // 11:59 PM CDT is still Sunday, 12:00 AM Monday is not
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-03-09T04:59Z"), chicago).start, spring.start);
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-03-09T05:00Z"), chicago).start, spring.end);
+  LocalDay sat_day = idle_day(parse_iso8601_z("2026-03-07T18:00Z"), chicago);
+  CHECK_EQ(sat_day.end - sat_day.start, (int64_t) 86400);
+  CHECK_EQ(sat_day.end, spring.start);
+
+  LocalDay fall = idle_day(parse_iso8601_z("2026-11-01T18:00Z"), chicago);  // noon CST
+  CHECK_EQ(fall.start, parse_iso8601_z("2026-11-01T05:00Z"));               // midnight CDT
+  CHECK_EQ(fall.end, parse_iso8601_z("2026-11-02T06:00Z"));                 // midnight CST
+  std::vector<TodayGame> early = {idle_game(GameState::POST, "2026-11-01T05:30Z")};  // 12:30 AM CDT
+  CHECK_EQ(today_pick(early, fall), 0);
+  early[0].kickoff = parse_iso8601_z("2026-11-01T04:30Z");  // Sat 11:30 PM CDT
+  CHECK_EQ(today_pick(early, fall), -1);
+  // 1:30 AM comes twice; both are Sunday
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-11-01T06:30Z"), chicago).start, fall.start);
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-11-01T07:30Z"), chicago).start, fall.start);
+  LocalDay mon = idle_day(parse_iso8601_z("2026-11-02T18:00Z"), chicago);
+  CHECK_EQ(mon.start, fall.end);
+  CHECK_EQ(mon.end - mon.start, (int64_t) 86400);
+
+  // The next midnight across a month's and a year's end, and a leap day.
+  LocalDay nye = idle_day(parse_iso8601_z("2026-12-31T18:00Z"), chicago);
+  CHECK_EQ(nye.start, parse_iso8601_z("2026-12-31T06:00Z"));
+  CHECK_EQ(nye.end, parse_iso8601_z("2027-01-01T06:00Z"));
+  LocalDay feb = idle_day(parse_iso8601_z("2028-02-28T18:00Z"), chicago);
+  CHECK_EQ(feb.end, parse_iso8601_z("2028-02-29T06:00Z"));
+  CHECK_EQ(idle_day(parse_iso8601_z("2027-02-28T18:00Z"), chicago).end, parse_iso8601_z("2027-03-01T06:00Z"));
+  CHECK_EQ(idle_day(parse_iso8601_z("2026-04-30T18:00Z"), chicago).end, parse_iso8601_z("2026-05-01T05:00Z"));
+  // Midnight conversions that make no sense: 24 hours from the time of day.
+  struct tm odd {};
+  odd.tm_year = 126;
+  odd.tm_mon = 10;
+  odd.tm_mday = 8;
+  odd.tm_hour = 14;
+  const int64_t two_pm = parse_iso8601_z("2026-11-08T14:00Z");
+  LocalDay fallback = local_day(two_pm, odd, [](int, int, int) -> int64_t { return -1; });
+  CHECK_EQ(fallback.start, parse_iso8601_z("2026-11-08T00:00Z"));
+  CHECK_EQ(fallback.end, parse_iso8601_z("2026-11-09T00:00Z"));
+  // A zone whose clocks jump at midnight itself (Chile, Saturday 24:00): the
+  // day still holds the time, whatever the C library makes of the missing
+  // midnight.
+  const char *santiago = "<-04>4<-03>,M9.1.6/24,M4.1.6/24";
+  const int64_t sun = parse_iso8601_z("2026-09-06T16:00Z");
+  LocalDay jump = idle_day(sun, santiago);
+  CHECK(jump.start <= sun && sun < jump.end);
+  CHECK(jump.end - jump.start >= 22 * 3600 && jump.end - jump.start <= 26 * 3600);
 }
 
 // The leagues the idle display's scores read in My team and Favorite teams.
@@ -8424,6 +8774,10 @@ int main() {
   test_idle_countdown();
   test_idle_hhmm();
   test_idle_today();
+  test_idle_dst_day();
+  test_idle_night_override();
+  test_idle_busy();
+  test_idle_today_final();
   test_idle_scan_leagues();
   failures += run_set_tests(checks);
   failures += run_alert_tests(checks);

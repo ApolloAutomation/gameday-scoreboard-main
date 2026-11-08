@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -51,8 +52,15 @@ struct IdleInputs {
   int night_end{kNightEndDefault};
   // A followed game is in progress, its final is still up for the mode's wait
   // after it (My team's half hour, Favorite teams' After the final), Favorite
-  // teams has taken over for a game, or Follow this game holds.
+  // teams has taken over for a game, or Follow this game holds (idle_busy).
   bool busy{false};
+  // The first board since boot or a change of team or mode is up. Until then
+  // the boot screen and that board stay up, at the night brightness or dark
+  // as the night hours and Off or dim say.
+  bool board_ready{false};
+  // On Wi-Fi. Off it, the panel's own screens about getting connected (the
+  // hotspot's QR code among them) are never dark or dimmed by the idle display.
+  bool connected{false};
 };
 
 // Inside the night hours, start included and end not. An end before the start
@@ -65,21 +73,18 @@ inline bool in_night(int minute, int start, int end) {
   return minute >= start || minute < end;
 }
 
-// What the panel shows now. At night the scores rotation and the mode's own
-// board give way to the clock; My team today and Off or dim stay as chosen.
-inline IdleState idle_state(const IdleInputs &in) {
+// The owner's choice with nothing followed on, in or out of the night hours.
+// At night the scores rotation and the mode's own board give way to the
+// clock; My team today and Off or dim stay as chosen.
+inline IdleState idle_choice(uint8_t show, bool night) {
   IdleState s;
-  if (!in.clock_valid)
-    return s;
-  s.night = in.night_on && in_night(in.minute, in.night_start, in.night_end);
-  if (in.busy)
-    return s;
-  switch ((IdleShow) in.show) {
+  s.night = night;
+  switch ((IdleShow) show) {
     case IdleShow::CLOCK:
       s.view = IdleView::CLOCK;
       break;
     case IdleShow::SCORES:
-      s.view = s.night ? IdleView::CLOCK : IdleView::SCORES;
+      s.view = night ? IdleView::CLOCK : IdleView::SCORES;
       break;
     case IdleShow::TODAY:
       s.view = IdleView::TODAY;
@@ -89,9 +94,27 @@ inline IdleState idle_state(const IdleInputs &in) {
       s.dim = true;
       break;
     default:
-      s.view = s.night ? IdleView::CLOCK : IdleView::BOARD;
+      s.view = night ? IdleView::CLOCK : IdleView::BOARD;
       break;
   }
+  return s;
+}
+
+// What the panel shows now. The night hours and Off or dim need only the time
+// of day, so they hold through a restart in the night (the clock survives
+// one) and a change of team or mode; the view waits for the first board.
+inline IdleState idle_state(const IdleInputs &in) {
+  IdleState s;
+  if (!in.clock_valid)
+    return s;
+  s.night = in.night_on && in_night(in.minute, in.night_start, in.night_end);
+  if (in.busy)
+    return s;
+  s = idle_choice(in.show, s.night);
+  if (!in.connected)
+    s.dim = false;
+  if (!in.board_ready)
+    s.view = IdleView::BOARD;
   return s;
 }
 
@@ -104,6 +127,97 @@ inline uint8_t idle_brightness(uint8_t want, const IdleState &s, uint8_t night_b
   if (s.dim && dim < b)
     b = dim;
   return b;
+}
+
+// Off or dim holds the panel below what it would have now: the remote's
+// brightness buttons then leave the saved Brightness alone, since a step
+// wouldn't show (pages/wizmote.yaml).
+inline bool idle_caps(uint8_t want, const IdleState &s, uint8_t night_bri, uint8_t dim, bool override) {
+  if (!s.dim)
+    return false;
+  IdleState lit = s;
+  lit.dim = false;
+  return idle_brightness(want, s, night_bri, dim, override) < idle_brightness(want, lit, night_bri, dim, override);
+}
+
+// The owner's Brightness change in the night hours holds until they end, and
+// the next night starts at the night brightness again. Only a known time can
+// end them: a moment without one doesn't, and neither does the first board
+// after a change of team or mode.
+struct NightOverride {
+  bool on{false};
+  bool was_night{false};  // in the night hours, when the time was last known
+  void brightness_changed(bool night) {
+    if (night)
+      this->on = true;
+  }
+  void update(bool clock_valid, bool night) {
+    if (!clock_valid)
+      return;
+    if (this->was_night && !night)
+      this->on = false;
+    this->was_night = night;
+  }
+};
+
+// A restart forgets when a final came in. A final the panel only ever read as
+// one gets the mode's wait while it can still be news: up to this long after
+// its start, about a game and its wait (a cached game this old is over too,
+// startup.h). Later, the idle display is back at once, as after an overnight
+// update's restart between 3 and 5 AM.
+constexpr int64_t kFinalFreshSeconds = 4 * 3600;
+// A tournament's or a race's final stays up as long as a team's before the
+// idle display takes over (leagues.h gives leaderboards no wait of their own).
+constexpr uint32_t kBoardFinalWaitMs = 30u * 60u * 1000u;
+
+// What the mode follows now, for idle_busy(): plain values from the component.
+struct BusyInputs {
+  bool hold{false};           // the demo's scripted game, or Follow this game
+  bool live_mode{false};      // Live games (or a football-only live mode)
+  bool recap{false};          // Live games' finals rotation: no game followed
+  bool live_fallback{false};  // Live games shows the team's card
+  bool favorites{false};      // Favorite teams with favorites set
+  bool fav_locked{false};     // a favorite took the panel (Take over, its game, After the final)
+  bool fav_live{false};       // a favorite's game is in progress
+  // The game on the board: My team's, Live games' pick or its team card.
+  bool valid{false};
+  GameState state{GameState::NOT_FOUND};
+  bool leaderboard{false};  // a golf tour or a racing series
+  bool on_course{false};    // a leaderboard's round or session is on (not between them)
+  int64_t kickoff{0};
+  int64_t now{0};
+  // Its final: post_seen once the panel has it as one (post_age_ms since),
+  // saw_play when the panel had the game before it was final this boot, and
+  // lingered when this final already had its wait (My team moved on once).
+  bool post_seen{false};
+  uint32_t post_age_ms{0};
+  uint32_t linger_ms{0};
+  bool saw_play{false};
+  bool lingered{false};
+};
+
+// Busy keeps the mode's own board up, whatever the idle display is: a
+// followed game in progress, its final for the mode's wait after it, a
+// favorite that took over, or Follow this game. A leaderboard is busy while a
+// round or session is on, not overnight between rounds, and for the wait
+// after its final.
+inline bool idle_busy(const BusyInputs &b) {
+  if (b.hold)
+    return true;
+  if (b.live_mode && b.recap)
+    return false;
+  if (b.live_mode && !b.live_fallback)
+    // A game Live games picked, until its next look moves on after the final.
+    return b.valid && (b.state == GameState::IN || b.state == GameState::POST);
+  if (b.favorites)
+    return b.fav_locked || b.fav_live;
+  if (!b.valid)
+    return false;
+  if (b.state == GameState::IN)
+    return !b.leaderboard || b.on_course;
+  if (b.state != GameState::POST || !b.post_seen || b.lingered || b.post_age_ms >= b.linger_ms)
+    return false;
+  return b.saw_play || (b.kickoff > 0 && b.now > 0 && b.now - b.kickoff < kFinalFreshSeconds);
 }
 
 // "in 2h 15m", "in 2h", "in 45m": the time to a kickoff, rounded up to the
@@ -153,15 +267,39 @@ inline int parse_hhmm(const std::string &v) {
   return h * 60 + m;
 }
 
-// Today in the panel's time zone: from the last local midnight to the next,
-// given the local time of day now.
+// Today in the panel's time zone: from the last local midnight to the next.
+// local is the time now in that zone. Each midnight comes from its date,
+// turned into epoch seconds by midnight(year, month, day): the time
+// component's own zone rules on the panel, which leave libc's TZ unset, and
+// mktime under TZ in the host tests. So a day the clocks change on is 23 or
+// 25 hours long, where counting back the time of day would be an hour off.
 struct LocalDay {
   int64_t start{0}, end{0};
 };
-inline LocalDay local_day(int64_t now, int hour, int minute, int second) {
+inline int month_days(int month, int year) {
+  static const uint8_t kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (month == 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))
+    return 29;
+  return month >= 1 && month <= 12 ? kDays[month - 1] : 31;
+}
+template<typename Midnight> LocalDay local_day(int64_t now, const struct tm &local, Midnight midnight) {
   LocalDay d;
-  d.start = now - ((int64_t) hour * 3600 + minute * 60 + second);
-  d.end = d.start + 24 * 3600;
+  int y = local.tm_year + 1900, m = local.tm_mon + 1, day = local.tm_mday;
+  d.start = midnight(y, m, day);
+  if (++day > month_days(m, y)) {
+    day = 1;
+    if (++m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  d.end = midnight(y, m, day);
+  if (d.start > now || d.end <= now) {
+    // Zone rules that make no sense of a midnight: 24 hours from the time of
+    // day, as before.
+    d.start = now - ((int64_t) local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec);
+    d.end = d.start + 86400;
+  }
   return d;
 }
 
@@ -203,6 +341,15 @@ inline int today_pick(const std::vector<TodayGame> &games, const LocalDay &day) 
       pick = (int) i;
   }
   return pick;
+}
+
+// My team today after a restart, in a league whose team read skips past a
+// final to the next game (MLB, the NBA, the WNBA, men's college basketball,
+// the NHL): that final is read too when it started today (since: the local
+// day's start, 0 when My team today isn't the idle display) and isn't the one
+// kept already (have: its start, 0 for none; a later one replaces it).
+inline bool want_today_final(int64_t since, bool next_final, int64_t kickoff, int64_t have) {
+  return since > 0 && next_final && kickoff >= since && kickoff > have;
 }
 
 // The page's name for what the panel shows: "" for the mode's own board.
