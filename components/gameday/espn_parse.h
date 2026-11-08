@@ -431,6 +431,16 @@ std::string clock_text(const GameSnapshot &s);
 // otherwise, or in the third period or later, doesn't count.
 bool is_halftime(const GameSnapshot &s);
 
+// ESPN's status name says the period is under way and the clock has time on
+// it, so a shortDetail without a clock ("End of 3rd") is left over from the
+// break before.
+bool clock_running(const GameSnapshot &s);
+
+// A football break the drive doesn't carry across: halftime, or the end of the
+// 2nd or 4th quarter. ESPN keeps the last play's down, possession and red zone
+// there, which no longer apply.
+bool football_break(const GameSnapshot &s);
+
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the
 // follow-up scoreboard endpoint from Schedule::league, so it must be stamped

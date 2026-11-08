@@ -19,6 +19,10 @@ NHL teams have no Up next list on the device page: their season schedules are to
 - **Overtime** reads "OT". In the playoffs, where overtime goes on until someone scores, later periods read "2OT", "3OT" and so on.
 - **A shootout**, in the regular season, reads "SO".
 - **Intermissions** show ESPN's words, like "End of 1st", and the ticker shows the series, or the records outside the playoffs.
+
+:::note[Coming in the next release]
+The clock comes back as soon as the next period starts, instead of ESPN's "End of 1st" staying up for a while.
+:::
 - **The ticker** with the last play. Turn it off with **Last play** in the Ticker card. See [The ticker](/using/ticker/).
 
 The board doesn't show power plays. ESPN's NHL data has no power play field, and working one out from the penalties would be wrong when penalties offset.

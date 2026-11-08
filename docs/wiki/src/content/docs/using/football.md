@@ -58,6 +58,10 @@ When your team wins, a victory splash with fireworks says your abbreviation and 
 
 At halftime the clock row says "Halftime" and the ticker shows both teams' records.
 
+:::note[Coming in the next release]
+The panel goes by ESPN's game status, so the clock comes back as soon as the second half starts, instead of "Halftime" staying up for a while. The same goes for the breaks between quarters. At halftime and at the end of the 4th quarter, the down and distance, the possession line and the red zone color go away until play starts again, since they belong to the drive that just ended.
+:::
+
 At the final the ticker says "Final" with the records. The final stays up for half an hour, then the panel moves on to your team's next game. In Live games the panel moves to another game instead, and in Favorite teams **After the final** sets how long it stays; see [Favorite teams](/using/favorites/).
 
 A postponed, canceled or suspended game shows ESPN's word for it instead of "Final", and gets no victory splash.

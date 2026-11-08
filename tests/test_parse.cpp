@@ -975,6 +975,73 @@ static void test_clock_text() {
   h.display_clock = "15:00";
   CHECK(status_text(h, all, "").rfind("Halftime", 0) != 0);
   CHECK(ha_status_text(h, "").rfind("Halftime", 0) != 0);
+
+  // Any break's words give way once ESPN says the clock runs again.
+  GameSnapshot q = live(14, 7);
+  q.period = 4;
+  q.display_clock = "15:00";
+  q.short_detail = "End of 3rd";
+  q.status_name = "STATUS_IN_PROGRESS";
+  CHECK(clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("15:00 4th"));
+  q.display_clock = "0:00";  // a period that just ended keeps ESPN's words
+  CHECK(!clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("End of 3rd"));
+  q.status_name = "STATUS_END_PERIOD";
+  q.display_clock = "15:00";
+  CHECK(!clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("End of 3rd"));
+
+  // The drive carries across the 1st and 3rd quarter breaks, not the others.
+  GameSnapshot b = live(14, 7);
+  b.down_distance = "3rd & 4 at DAL 30";
+  b.status_name = "STATUS_END_PERIOD";
+  b.short_detail = "End of 1st";
+  b.period = 1;
+  CHECK(!football_break(b));
+  CHECK(status_text(b, all, "").find("3rd & 4") != std::string::npos);
+  b.period = 3;
+  CHECK(!football_break(b));
+  b.period = 2;
+  b.short_detail = "End of 2nd";
+  CHECK(football_break(b));
+  CHECK(status_text(b, all, "").find("3rd & 4") == std::string::npos);
+  b.period = 4;
+  b.short_detail = "End of 4th";
+  CHECK(football_break(b));
+  b.status_name = "STATUS_HALFTIME";
+  b.period = 2;
+  CHECK(football_break(b));
+  b.status_name = "STATUS_IN_PROGRESS";
+  CHECK(!football_break(b));
+  b.sport = Sport::BASKETBALL;
+  b.status_name = "STATUS_HALFTIME";
+  CHECK(!football_break(b));  // football only
+
+  // Hockey: an intermission's words give way once the next period's clock runs.
+  GameSnapshot k = live(2, 1);
+  k.sport = Sport::HOCKEY;
+  k.period = 2;
+  k.display_clock = "20:00";
+  k.short_detail = "End of 1st";
+  k.status_name = "STATUS_IN_PROGRESS";
+  CHECK_EQ(clock_text(k), std::string("20:00 2nd"));
+  k.status_name = "STATUS_END_PERIOD";
+  k.period = 1;
+  k.display_clock = "0:00";
+  CHECK_EQ(clock_text(k), std::string("End of 1st"));
+}
+
+// The recorded STATUS_HALFTIME game keeps the punt's "1st & 10" in situation.
+static void test_halftime_fixture() {
+  std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
+  GameSnapshot s;
+  CHECK(parse_scoreboard_str(json, "401862694", 2429, s));
+  CHECK_EQ(s.status_name, std::string("STATUS_HALFTIME"));
+  CHECK(is_halftime(s));
+  CHECK(football_break(s));
+  CHECK_EQ(s.short_down_distance, std::string("1st & 10"));  // ESPN's, hidden at the break
+  CHECK_EQ(clock_text(s), std::string("Halftime"));
 }
 
 static void test_color() {
@@ -6870,6 +6937,7 @@ int main() {
   test_live_games();
   test_upcoming();
   test_clock_text();
+  test_halftime_fixture();
   test_color();
   test_favorites();
   test_favorites_shrunk();

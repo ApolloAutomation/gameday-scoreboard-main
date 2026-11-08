@@ -2837,7 +2837,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.opponent_score = g.opp_score;
   f.team_logo = g.team_logo;
   f.opponent_logo = g.opp_logo;
-  f.possession = g.possession;
+  // At halftime ESPN keeps the last drive's down, possession and red zone.
+  const bool brk = ::espn::football_break(g);
+  f.possession = brk ? 0 : g.possession;
   f.team_timeouts = g.team_timeouts;
   f.opponent_timeouts = g.opp_timeouts;
   f.team_record = g.team_record;
@@ -2845,8 +2847,10 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.last_play = g.last_play;
   if (g.valid && g.state == GameState::IN) {
     f.clock_text = ::espn::clock_text(g);
-    f.down_distance = g.short_down_distance;
-    f.is_red_zone = g.is_red_zone;
+    if (!brk) {
+      f.down_distance = g.short_down_distance;
+      f.is_red_zone = g.is_red_zone;
+    }
   }
   f.sport = (uint8_t) g.sport;
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASEBALL) {
@@ -3592,10 +3596,11 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   game["os"] = g.opp_score;
   game["tr"] = g.team_record;
   game["or"] = g.opp_record;
-  game["p"] = g.possession;
+  const bool brk = ::espn::football_break(g);
+  game["p"] = brk ? 0 : g.possession;
   game["tt"] = g.team_timeouts;
   game["ot"] = g.opp_timeouts;
-  game["rz"] = g.is_red_zone;
+  game["rz"] = !brk && g.is_red_zone;
   game["tv"] = g.tv;
   game["venue"] = g.venue;
   game["gn"] = g.game_name;
@@ -3607,7 +3612,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   if (g.time_tbd)
     game["tbd"] = true;
   game["lp"] = g.last_play;
-  game["dd"] = g.down_distance;
+  game["dd"] = brk ? std::string() : g.down_distance;
   if (f != nullptr) {
     game["c"] = f->clock_text;
     game["d"] = f->down_distance;

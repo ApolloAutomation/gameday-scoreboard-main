@@ -516,7 +516,7 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
     add_part(out, records_line(s));
     return out;
   }
-  if (o.down_distance)
+  if (o.down_distance && !football_break(s))
     add_part(out, s.down_distance);
   // A "Halftime" left in shortDetail after the second half starts gives way
   // to the clock the panel shows.
@@ -753,6 +753,19 @@ static bool stale_halftime(const GameSnapshot &s) {
   return s.short_detail.find("Halftime") != std::string::npos && !is_halftime(s);
 }
 
+bool clock_running(const GameSnapshot &s) {
+  return s.status_name == "STATUS_IN_PROGRESS" && s.period > 0 &&
+         s.display_clock.find(':') != std::string::npos && s.display_clock != "0:00";
+}
+
+bool football_break(const GameSnapshot &s) {
+  if (s.sport != Sport::FOOTBALL || s.state != GameState::IN)
+    return false;
+  if (is_halftime(s))
+    return true;
+  return s.status_name == "STATUS_END_PERIOD" && (s.period == 2 || s.period >= 4);
+}
+
 std::string clock_text(const GameSnapshot &s) {
   if (is_board_sport(s.sport))
     return "";  // the leaderboard has its own status cell
@@ -766,7 +779,7 @@ std::string clock_text(const GameSnapshot &s) {
     return hockey_clock_text(s);
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
   bool special = s.short_detail.find(':') == std::string::npos;  // Halftime, End of 3rd, Delayed, Final
-  if (stale_halftime(s))
+  if (special && (stale_halftime(s) || clock_running(s)))
     return has_clock ? s.display_clock + " " + period_name(s.period) : period_name(s.period);
   if (!has_clock || special) {
     std::string t = s.short_detail;
