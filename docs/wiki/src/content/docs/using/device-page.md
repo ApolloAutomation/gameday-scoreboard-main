@@ -135,6 +135,16 @@ They all start on. The sport pages say what each one shows: [football](/using/fo
 
 **Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game, as before.
 
+Three more controls under it are for big plays in other games:
+
+| Control | What it does | Starts at |
+| --- | --- | --- |
+| **Switch to big plays in other games** | The panel also checks the other live games it would show, about every 45 seconds, and switches to one for its big play. In Live games that's every game in its leagues (only your team's and favorites' with **Favorite teams only** on); in My team and Favorite teams, your favorites' games. The switches above pick which big plays count. It uses more data. | On |
+| **Stay on a big play** | How long the board stays on the other game before going back: 30 seconds, 1 minute, 90 seconds, 2, 3 or 5 minutes. | 1 minute |
+| **Switch from my team** | Lets a favorite's big play take the board from your team's live game. Off, your team's game is never left. | Off |
+
+See [Big plays in other games](/using/modes/#big-plays-in-other-games) for which games are watched and how much data it takes.
+
 A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel, so the longer ones take two or three lines, like "PHI" over "FUMBLE RECOVERY".
 :::
 

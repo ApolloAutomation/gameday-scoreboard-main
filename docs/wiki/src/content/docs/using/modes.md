@@ -86,6 +86,34 @@ A game counts as on once it starts. The panel keeps the final up for its usual t
 The idle display needs the time of day. What it shows waits for the panel's first board after a restart, or after you pick a new team or mode, but **Off or dim** and the night hours start as soon as the panel knows the time, and a restart keeps it. While the panel isn't on Wi-Fi, **Off or dim** leaves it lit. **Scores** reads today's games from ESPN about once every half hour while games you don't follow are on, and at the next start time otherwise, the same as Live games does. See [Night hours](/using/brightness-and-clock/#night-hours) for the overnight schedule.
 :::
 
+## Big plays in other games
+
+:::note[Coming in the next release]
+While the panel shows its game, it can keep an eye on other live games too. When one of them has a big play, like a touchdown, a home run, a goal or a late lead change, the panel switches to that game, shows the splash, stays there for a minute, then goes back to what it was showing. It's on unless you turn off **Switch to big plays in other games** in the Celebrations card, where **Stay on a big play** sets how long it stays, 30 seconds to 5 minutes. See [Celebrations](/using/device-page/#celebrations).
+
+Which games it watches depends on the mode:
+
+- **Live games**: every other game on in the leagues Live games follows. With **Favorite teams only** on, only games with your team or a favorite.
+- **Favorite teams**: your other favorites' games.
+- **My team**: your favorites' games, if you have any.
+
+It watches up to 8 games at once, your favorites' first, then the closest games, late ones ahead of early ones.
+
+- Your team's live game is never left for another game's big play, unless a favorite plays in that game and **Switch from my team** is on. It starts off.
+- The panel doesn't switch while the board's own splash is up, and a game it has just started watching never switches it for a score from before.
+- A basketball final doesn't switch the board, since that game is over.
+- Home Assistant's Game Status and Last Play stay on the game the mode follows.
+- Golf and racing aren't watched, and neither are a soccer favorite's cup games, like the Champions League.
+
+The panel checks each watched game about every 45 seconds, in the gaps between its own reads of the game on the board, so the score on the board never waits for it. That uses more data:
+
+- In Live games it reads each league's whole day of games at once: about 250 KB each time on an NFL Sunday, up to about 20 MB an hour, and about as much on a full day of baseball. A league with nothing else on is checked again at its next start instead.
+- College games, which come in much larger days, and your favorites' games in My team and Favorite teams are read one at a time, 10 to 20 KB each, about 1 to 1.5 MB an hour per game. The panel looks for a favorite's game at its start time, and every few hours otherwise.
+- In Live games, a college game that starts after the panel last looked for live games is watched from its next look, after **Switch every** or when the game on the board ends.
+
+A check every 45 seconds sees less than the board's every 10, so a big play in another game is told mostly by the score. The sport pages say what that means for each: [football](/using/football/), [baseball](/using/baseball/), [basketball](/using/basketball/), [hockey](/using/hockey/) and [soccer](/using/soccer/).
+:::
+
 ## Remote buttons and modes
 
 Buttons 1 to 4 on a WizMote remote pick your first four favorites. In Favorite teams, a button jumps to that favorite. In My team or Live games, a button switches the panel to My team following that favorite. See [WizMote remote](/using/remote/).

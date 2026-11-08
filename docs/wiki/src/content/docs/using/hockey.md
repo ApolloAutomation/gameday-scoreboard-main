@@ -41,6 +41,10 @@ Goal splashes have their own switch in the Celebrations card. See [Celebrations]
 Every goal splashes the same way. ESPN's words for a goal don't say whether it came on a power play or into an empty net, and the number after the scorer's name counts goals this season, not this game, so there is no power play goal, empty net goal or hat trick splash.
 :::
 
+:::note[Coming in the next release]
+A goal in another hockey game can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those games about every 45 seconds. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+:::
+
 ## The playoff series
 
 In the playoffs the series, like "CAR leads series 2-0", is in the ticker before the game, and takes the records' place during intermissions and at the final. It isn't on the board itself.
