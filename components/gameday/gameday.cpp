@@ -2856,7 +2856,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     f.clock_text = ::espn::clock_text(g);
     if (!brk) {
       f.down_distance = g.short_down_distance;
-      f.is_red_zone = g.is_red_zone;
+      f.is_red_zone = ::espn::in_red_zone(g);
     }
   }
   f.sport = (uint8_t) g.sport;
@@ -3607,7 +3607,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   game["p"] = brk ? 0 : g.possession;
   game["tt"] = g.team_timeouts;
   game["ot"] = g.opp_timeouts;
-  game["rz"] = !brk && g.is_red_zone;
+  game["rz"] = ::espn::in_red_zone(g);
   game["tv"] = g.tv;
   game["venue"] = g.venue;
   game["gn"] = g.game_name;

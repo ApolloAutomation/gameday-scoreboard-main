@@ -518,6 +518,8 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
     add_part(out, records_line(s));
     return out;
   }
+  if (o.down_distance && in_red_zone(s))
+    add_part(out, "RED ZONE");
   if (o.down_distance && !football_break(s))
     add_part(out, s.down_distance);
   // Break words ESPN has left in shortDetail once play is under way give way
@@ -931,6 +933,11 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   };
   fill(prev.team_timeouts, 1, next.team_timeouts);
   fill(prev.opp_timeouts, 2, next.opp_timeouts);
+}
+
+bool in_red_zone(const GameSnapshot &s) {
+  return s.sport == Sport::FOOTBALL && s.state == GameState::IN && s.is_red_zone && s.possession != 0 &&
+         !s.short_down_distance.empty() && !football_break(s);
 }
 
 bool football_break(const GameSnapshot &s) {

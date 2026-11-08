@@ -478,6 +478,11 @@ std::string play_clock(const std::string &last_play);
 //   carried only within its period.
 void carry_football(const GameSnapshot &prev, GameSnapshot &next);
 
+// The team with the ball is inside the 20. ESPN's isRedZone is also set on
+// extra-point tries and after a score, so it counts only with a down and a
+// team in possession, and not at a break.
+bool in_red_zone(const GameSnapshot &s);
+
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the
 // follow-up scoreboard endpoint from Schedule::league, so it must be stamped

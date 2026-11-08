@@ -26,7 +26,7 @@ The Ticker card on the device page has a switch for each part. All of them start
 
 | Switch | What it adds |
 | --- | --- |
-| **Down and distance** | Football: the down, yards to go and where the ball is, like "3rd & 4 at FIU 31". |
+| **Down and distance** | Football: the down, yards to go and where the ball is, like "3rd & 4 at FIU 31". In the next release it starts with "RED ZONE" when the team with the ball is inside the 20. |
 | **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
 | **Match stats** | Soccer: goals, cards, possession and shots. |
 | **Last play** | ESPN's latest play in every sport. In soccer, the latest goal or card. A very long play is cut short. |
