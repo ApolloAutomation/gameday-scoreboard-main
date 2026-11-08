@@ -324,4 +324,6 @@ button { font: inherit; color: inherit; }
 /* Automatic leagues are the device's suggestion, not a pick */
 .chips.auto .chip.on { border-style: dashed; }
 .livebar .name { white-space: normal; }
+/* Follow this game: the bar under the board, outlined while the panel holds the game */
+.followbar.on { border-color: var(--accent); }
 .linkbtn { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--accent); font-size: 12px; cursor: pointer; }

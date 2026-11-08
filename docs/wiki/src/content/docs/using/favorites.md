@@ -41,6 +41,12 @@ The minutes for **Alternate** are the same setting as **Switch every** in Live g
 
 Panels set up before Favorite teams could alternate keep **Stick with the higher team** until you change it.
 
+:::note[Coming in the next release]
+To stay with the favorite on the board, turn on **Follow this game** under the board on the device page. The bar then says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner.
+
+Pressing a remote button, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
+:::
+
 ## Using the remote
 
 Buttons 1 to 4 on a paired WizMote jump to your first four favorites. In Favorite teams, the panel shows that favorite's card at once. If its game is locked on, the panel stays on it; otherwise the card stays up for its 10 seconds and the playlist carries on from there. A button for an empty slot does nothing. See [WizMote remote](/using/remote/).

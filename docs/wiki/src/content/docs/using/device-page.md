@@ -17,6 +17,10 @@ While a golf tour is your team, the board shows its tournament's leaderboard in 
 
 While a racing series is your team, the board shows the order of the session on track or the latest one: the session, then up to 10 rows with the place, the name, the car number and the gap. Before and between sessions it shows the next session and when it starts, and after the race the next race weekend. See [Racing](/using/racing/).
 
+:::note[Coming in the next release]
+In Live games and Favorite teams, a **Follow this game** switch sits under the board while the panel shows a game. Turn it on to keep that game on the panel instead of moving on, and the switch reads **Following this game**. The panel goes back to switching games, or to your favorites, by itself once the final has been up a while, or when you turn the switch off. A restart turns it off, since the panel doesn't save it. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
+:::
+
 When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**, or, with nothing on the schedule, **No upcoming event for this tour** for a golf tour and **No upcoming race for this series** for a racing series. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 
 Three warnings can appear on the board:
