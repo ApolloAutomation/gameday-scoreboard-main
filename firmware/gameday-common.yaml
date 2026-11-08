@@ -506,12 +506,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  # The sport on the board (0 football), so the page layout can leave the
-  # timeout pips hidden for other sports until the next board update.
-  - id: gd_sport
-    type: int
-    restore_value: no
-    initial_value: '0'
   # The off-season clock's second line shows the date (true) rather than the
   # next game, so the minute refresh keeps it current (gameday-live.yaml).
   - id: gd_clock_date

@@ -2566,8 +2566,9 @@ void GamedayComponent::apply_job_() {
     this->schedule_fetched_ms_ = now == 0 ? 1 : now;  // 0 reads as "never fetched"
     this->live_away_id_ = g.away_id;
     this->live_started_ms_ = now == 0 ? 1 : now;
-    if (this->game_.event_id != g.event_id) {
-      // The same game picked again keeps its last poll (carry_football reads it)
+    if (this->game_.event_id != g.event_id || this->game_.team_id != g.away_id) {
+      // The same game picked again, seen from the same side, keeps its last
+      // poll (carry_football reads it)
       this->game_ = GameSnapshot{};
       this->prev_ = GameSnapshot{};
     }
@@ -3728,7 +3729,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
       o["ts"] = e.game.team_score;
       o["os"] = e.game.opp_score;
       o["tv"] = e.game.tv;
-      o["detail"] = e.game.short_detail;
+      // A game under way says what the board says (a lagging "Halftime" gives way)
+      o["detail"] = e.game.state == GameState::IN ? ::espn::clock_text(e.game) : e.game.short_detail;
       o["done"] = e.game.completed;
     }
   }

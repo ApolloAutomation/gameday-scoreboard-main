@@ -299,7 +299,6 @@ script:
       board_card: bool
     then:
       - lambda: |-
-          id(gd_sport) = sport;
           // A side with no team yet (just after a team change) shows no logo.
           // A side with no logo to fetch (the demo build's made-up teams)
           // shows its abbreviation badge in the logo's place, drawn by the

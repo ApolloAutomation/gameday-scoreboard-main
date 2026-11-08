@@ -231,9 +231,11 @@ struct GameSnapshot {
   // Football: the game seconds left in regulation at the last play, from ESPN
   // (3600 at kickoff, 1800 at halftime; -1 when not sent, as on extra points).
   int play_secs_left{-1};
-  // Football breaks (carry_football): held from a break until the next play,
-  // the last play seen in it, and that play's clock in seconds (-1 none).
+  // Football breaks (carry_football): held from a break until a play from
+  // after it, the period it began in (2 for halftime), the last play seen in
+  // it, and that play's clock in seconds (-1 none).
   bool held{false};
+  int break_period{0};
   std::string break_play;
   int break_secs{-1};
   bool resumed{false};  // football: the second half's plays came in while ESPN's status still says halftime
@@ -459,18 +461,21 @@ std::string play_clock(const std::string &last_play);
 // breaks: the status can stay at STATUS_HALFTIME while the second half's
 // plays come in, and a first-half play can arrive after the break began.
 // Football only, given the previous snapshot of the same board or favorite:
-// - held: a break began and no play has come in since (ESPN's later texts
-//   during the break, and late first-half plays, move break_play along).
+// - held: a break began and no play from after it has come in (ESPN's
+//   end-of-quarter words, an empty play and late first-half plays don't end
+//   it; time put back in the break's own period does). A first look at a 3rd
+//   or 4th quarter whose last play is still the first half's counts as held.
 // - resumed: during STATUS_HALFTIME, a play from the second half: ESPN puts
-//   it under 1800 seconds left, or it is the 3rd quarter's 15:00 kickoff.
-//   For a play without that figure, its clock must be later than any seen in
-//   the break (the clock counts down, so a late first-half play's is earlier),
-//   or 10:00 or later when none was.
+//   it under 1800 seconds left, or it is the 3rd quarter's kickoff. For a
+//   play without that figure, its clock must be later than any seen in the
+//   break (the clock counts down, so a late first-half play's is earlier), or
+//   10:00 or later when none was.
 // - Timeouts ESPN left out (-1): the last count from the same game and half
-//   (each overtime its own); 3 before kickoff, and 3 when the 3rd quarter
-//   begins, also over the first half's counts ESPN keeps sending until the
-//   half's first play; otherwise unknown, which hides the pips. A count the
-//   panel filled in is marked in to_guess and carried only within its period.
+//   (each overtime its own), 3 before kickoff, otherwise unknown, which hides
+//   the pips. While the second half is held after halftime, ESPN still sends
+//   the first half's counts, so it shows 3; an overtime held before its first
+//   play hides them. A count the panel filled in is marked in to_guess and
+//   carried only within its period.
 void carry_football(const GameSnapshot &prev, GameSnapshot &next);
 
 // The team endpoint does not say which league answered, so a freshly parsed
