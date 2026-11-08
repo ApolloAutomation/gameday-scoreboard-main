@@ -164,7 +164,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 The boot cache (`startup.h`) keeps the next game in flash for a day so a
 restart can skip the team read.
 
-**Bets.** The owner types bets in on the device page (`bet=`, `betdel=`);
+**Bets.** The owner types bets in on the device page (`bet=`, `betdel=`;
+the page sends slot 0, which `bet_put` turns into the first empty slot);
 the panel never reads a sportsbook. `bets.h` holds up to eight `Bet`
 records in their own blob (`ManualBets`, a `BetSource`; a bet tracker's
 API could be another source). `bets_tick_`, run from `emit_`, after a

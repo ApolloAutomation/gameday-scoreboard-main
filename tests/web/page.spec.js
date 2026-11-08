@@ -2325,7 +2325,8 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expect(page.locator("#betTeam")).toHaveText("Dallas Cowboys");
   await page.locator("#betLine").fill("-3.5");
   await page.locator("#betAdd").click();
-  await expectSet(request, { bet: "1,nfl,6,spread,-3.5" });
+  // Slot 0: the panel puts it in its first empty slot.
+  await expectSet(request, { bet: "0,nfl,6,spread,-3.5" });
   await expect(page.locator("#toast")).toHaveText("Added DAL -3.5");
   await expect(page.locator("#betList .betrow label")).toHaveCount(1);
   await expect(page.locator("#betList .betrow label")).toContainText("DAL -3.5");
@@ -2338,7 +2339,8 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expect(page.locator("#betLineHint")).toHaveText("Total points in the game, like 47.5");
   await page.locator("#betLine").fill("47.5");
   await page.locator("#betLine").press("Enter");
-  await expectSet(request, { bet: "2,nfl,6,over,47.5" });
+  await expectSet(request, { bet: "0,nfl,6,over,47.5" });
+  expect((await deviceState(request)).bets.map((b) => b.slot)).toEqual([1, 2]);
   await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5", "OVER 47.5"]);
 });
 
@@ -2353,14 +2355,17 @@ test("the Bets card says what's wrong with a bet before posting it", async ({ pa
   await page.locator("#q").fill("Buffalo");
   await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
   await page.locator("#betAdd").click();
-  await expect(msg).toHaveText("Type the spread, like -3.5 or +7.");
+  await expect(msg).toHaveText("Type the spread, like 3.5.");
   await expect(page.locator("#betLine")).toBeFocused();
   await page.locator("#betLine").fill("3.25");
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("Lines go in whole or half points, like 3 or 3.5.");
   await page.locator("#betLine").fill("three");
   await page.locator("#betAdd").click();
-  await expect(msg).toHaveText("That isn't a number. Type it like -3.5 or +7.");
+  await expect(msg).toHaveText("That isn't a number. Type it like 3.5.");
+  await page.locator("#betLine").fill("3,25");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Lines go in whole or half points, like 3 or 3.5.");
   await page.locator("#betLine").fill("-120");
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("The panel takes spreads up to 99.5.");
@@ -2377,20 +2382,119 @@ test("the Bets card says what's wrong with a bet before posting it", async ({ pa
   await page.locator("#betType").selectOption("spread");
   await page.locator("#betLine").fill("PK");
   await page.locator("#betAdd").click();
-  await expectSet(request, { bet: "1,nfl,2,spread,0" });
+  await expectSet(request, { bet: "0,nfl,2,spread,0" });
   await expect(msg).toBeHidden();
   await page.locator("#betType").selectOption("ml");
   await expect(page.locator("#betLineRow")).toBeHidden();
   await page.locator("#betAdd").click();
-  await expectSet(request, { bet: "2,nfl,2,ml," });
+  await expectSet(request, { bet: "0,nfl,2,ml," });
   await page.locator("#betType").selectOption("spread");
   await page.locator("#betLine").fill("+7.0");
   await page.locator("#betAdd").click();
-  await expectSet(request, { bet: "3,nfl,2,spread,+7" });
+  await expectSet(request, { bet: "0,nfl,2,spread,+7" });
   await expect(page.locator("#betList .betrow")).toHaveCount(3);
+  // A spread with no sign is neither side until the owner says which.
   await page.locator("#betLine").fill("7");
   await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Tap \u2212 if the team is the favorite or + if it's the underdog.");
+  await page.getByRole("button", { name: "Plus, the underdog" }).click();
+  await expect(msg).toBeHidden();
+  await page.locator("#betAdd").click();
   await expect(msg).toHaveText("You have that bet already.");
+  // A comma for the decimal point, as a phone set to a comma locale types it.
+  await page.locator("#betLine").fill("3,5");
+  await page.getByRole("button", { name: "Minus, the favorite" }).click();
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,nfl,2,spread,-3.5" });
+  await expect(page.locator("#toast")).toHaveText("Added BUF -3.5");
+  await page.locator("#betType").selectOption("under");
+  await page.locator("#betLine").fill("44,5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,nfl,2,under,44.5" });
+  expect((await sets(request)).filter((q) => q.bet).length).toBe(5);
+});
+
+test("the spread's sign comes from the minus and plus buttons, so no keyboard needs a minus", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("Buffalo");
+  await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
+  // The decimal pad an iPhone opens for the line has no minus.
+  await expect(page.locator("#betLine")).toHaveAttribute("inputmode", "decimal");
+  const minus = page.getByRole("button", { name: "Minus, the favorite" });
+  const plus = page.getByRole("button", { name: "Plus, the underdog" });
+  await expect(minus).toHaveAttribute("aria-pressed", "false");
+  await expect(plus).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#betLine").fill("3.5");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText("Tap \u2212 if the team is the favorite or + if it's the underdog.");
+  expect((await sets(request)).filter((q) => q.bet)).toEqual([]);
+  await minus.click();
+  await expect(minus).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#betLine")).toBeFocused();
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,nfl,2,spread,-3.5" });
+  await expect(page.locator("#toast")).toHaveText("Added BUF -3.5");
+  // The next bet starts with neither side picked.
+  await expect(minus).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#betLine")).toHaveValue("");
+  // A sign typed in lights its button, and the other button changes it.
+  await page.locator("#betLine").pressSequentially("-6");
+  await expect(minus).toHaveAttribute("aria-pressed", "true");
+  await plus.click();
+  await expect(page.locator("#betLine")).toHaveValue("+6");
+  await expect(plus).toHaveAttribute("aria-pressed", "true");
+  await expect(minus).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,nfl,2,spread,+6" });
+  // A total has no side.
+  await page.locator("#betType").selectOption("over");
+  await expect(page.locator("#betSign")).toBeHidden();
+});
+
+test("a double tap on Add bet adds the bet once", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("Buffalo");
+  await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").dblclick();
+  await expectSet(request, { bet: "0,nfl,2,ml," });
+  await expect(page.locator("#betList .betrow")).toHaveCount(1);
+  await sleep(1000);
+  expect((await sets(request)).filter((q) => q.bet)).toEqual([{ bet: "0,nfl,2,ml," }]);
+  expect((await deviceState(request)).bets.length).toBe(1);
+});
+
+test("two device pages adding a bet at the same time each keep theirs", async ({ page, request, baseURL }) => {
+  await reset(request);
+  const other = await page.context().newPage();
+  await other.route((url) => url.origin !== new URL(baseURL).origin, (route) => route.fulfill({ status: 404, body: "" }));
+  await other.route("https://site.api.espn.com/**", (route) => route.fulfill({ json: { events: [] } }));
+  for (const p of [page, other]) {
+    await p.goto("/");
+    await openBets(p);
+  }
+  // The other page keeps the state from before either bet, as a phone tab
+  // just woken up would: it sees slot 1 free.
+  const before = await deviceState(request);
+  await other.route("**/gameday/state*", (route) => route.fulfill({ json: before }));
+  const add = async (p, name) => {
+    await p.locator("#betTeam").click();
+    await p.locator("#q").fill(name);
+    await p.locator("#tiles .tile", { hasText: name }).click();
+    await p.locator("#betType").selectOption("ml");
+    await p.locator("#betAdd").click();
+  };
+  // Neither page has seen the other's bet when it adds its own.
+  await add(page, "Buffalo Bills");
+  await add(other, "Miami Dolphins");
+  await expect.poll(async () => (await deviceState(request)).bets.map((b) => b.slot + " " + b.text)).toEqual(["1 BUF ML", "2 MIA ML"]);
+  await other.close();
 });
 
 test("a full Bets card says to remove one first", async ({ page, request }) => {

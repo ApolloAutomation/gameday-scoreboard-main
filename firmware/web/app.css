@@ -351,4 +351,9 @@ button { font: inherit; color: inherit; }
 .betrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 .betdel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 9px; padding: 0; flex: none; }
 .betmsg { color: var(--gold); font-size: 13px; margin: 6px 0; }
+/* The spread's minus and plus, next to the points */
+.betlinebox { display: flex; align-items: center; gap: 6px; flex: none; }
+.betsign { display: flex; gap: 4px; }
+.betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
+.betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
 #betAdd { margin-top: 8px; }

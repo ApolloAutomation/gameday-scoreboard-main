@@ -5,7 +5,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
 //   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...,
-//                                 bet=1,nfl,2,spread,-3.5 and betdel=1 for the Bets card)
+//                                 bet=0,nfl,2,spread,-3.5 and betdel=1 for the Bets card)
 //   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
@@ -310,7 +310,9 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
         <div class="ctl"><label for="betType">Bet</label><select id="betType">
           <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
         </select></div>
-        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><input id="betLine" inputmode="decimal" autocomplete="off"></div>
+        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
+          <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
+          <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
         <p class="betmsg" id="betMsg" role="alert" hidden></p>
         <button class="btn primary" id="betAdd">Add bet</button>
       </details>
@@ -1302,22 +1304,28 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   // ---- bets ----------------------------------------------------------------------
   // Typed in by hand: the panel never connects to a sportsbook. The firmware
   // ties each bet to a game it reads, grades it at the final and drops it at
-  // midnight (components/gameday/bets.h). A new bet goes in the first free
-  // slot (bet=<slot>,<league>,<team id>,<type>,<line>), betdel=<slot> removes one.
+  // midnight (components/gameday/bets.h). A new bet posts slot 0, which the
+  // firmware puts in its first empty slot, so two pages adding at once never
+  // pick the same one (bet=0,<league>,<team id>,<type>,<line>); betdel=<slot>
+  // removes one.
   let betTeam = "";      // the add form's team, "nfl:2"
+  let betSign = "";      // the spread's sign from the minus and plus buttons, "" until one is tapped
   let betDrawn = null;   // the list as last drawn
-  const betHeld = {};    // slot -> when the page posted a bet into it, until the panel lists it
+  let betPending = [];   // bets posted that the panel doesn't list yet: { l, id, type, half, at }
+  const sameBet = (a, b) => a.l === b.l && a.id === b.id && a.type === b.type && a.half === b.half;
   const BET_WORDS = { covering: "COVERING", not_covering: "NOT COVERING", level: "PUSH", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
   const betTone = (st) => (st === "covering" || st === "won" ? "good" : st === "not_covering" || st === "lost" ? "bad" : BET_WORDS[st] ? "even" : "");
   const betPoints = (half, sign) => (sign && half > 0 ? "+" : half < 0 ? "-" : "") + Math.floor(Math.abs(half) / 2) + (Math.abs(half) % 2 ? ".5" : "");
   // The line as typed, in half points, or what's wrong with it.
+  // A comma works as the decimal point ("3,5"), as a phone set to a comma
+  // locale types it.
   const betHalf = (raw, spread) => {
-    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "");
+    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
     if (spread && /^(pk|pick|pickem|pick'em)$/i.test(v)) return 0;
-    if (!v) return spread ? "Type the spread, like -3.5 or +7." : "Type the total, like 47.5.";
+    if (!v) return spread ? "Type the spread, like 3.5." : "Type the total, like 47.5.";
     if (!spread && /^[+-]/.test(v)) return "A total has no + or -. Type it like 47.5.";
     const m = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(v);
-    if (!m) return "That isn't a number. Type it like " + (spread ? "-3.5 or +7." : "47.5.");
+    if (!m) return "That isn't a number. Type it like " + (spread ? "3.5." : "47.5.");
     const frac = (m[3] || "").replace(/0+$/, "");
     if (frac && frac !== "5") return "Lines go in whole or half points, like 3 or 3.5.";
     const half = (Number(m[2]) * 2 + (frac ? 1 : 0)) * (m[1] === "-" ? -1 : 1);
@@ -1350,7 +1358,6 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
     line.hidden = !on.length;
     if (card.hidden) return;
-    for (const b of list) delete betHeld[b.slot];
     $("#betSum").textContent = list.length ? list.length + " of " + (S.betmax || 8) : "";
     const sig = JSON.stringify(list);
     if (sig === betDrawn) return;
@@ -1381,13 +1388,22 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     if (!list.length) host.appendChild(el("p", "hint", "No bets yet."));
     if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
   };
+  // The sign typed at the start of the line, "" for none.
+  const typedSign = (v) => {
+    const m = /^\s*([+\-\u2212])/.exec(v);
+    return m ? (m[1] === "+" ? "+" : "-") : "";
+  };
+  const signButtons = Array.from(document.querySelectorAll("#betSign button"));
   const renderBetForm = () => {
     const t = teamByKey(betTeam);
     $("#betTeam").textContent = t ? t[3] : "Pick a team";
     const type = $("#betType").value;
     $("#betLineRow").hidden = type === "ml";
-    $("#betLineHint").textContent = type === "spread" ? "The team's spread, like -3.5 or +7" : "Total points in the game, like 47.5";
-    $("#betLine").placeholder = type === "spread" ? "-3.5" : "47.5";
+    $("#betSign").hidden = type !== "spread";
+    signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
+    $("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
+      : "Total points in the game, like 47.5";
+    $("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
   };
   const betSay = (t) => {
     $("#betMsg").textContent = t;
@@ -1396,31 +1412,56 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   $("#betTeam").onclick = () => openPicker(false, true);
   $("#betType").onchange = () => { betSay(""); renderBetForm(); };
   $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
+  // A sign typed in the line lights its button; a button tapped with a sign
+  // already typed changes that sign.
+  $("#betLine").oninput = () => {
+    const s = typedSign($("#betLine").value);
+    if (s && s !== betSign) { betSign = s; renderBetForm(); }
+  };
+  signButtons.forEach((b) => {
+    b.onclick = () => {
+      betSign = b.dataset.sign;
+      const f = $("#betLine");
+      if (typedSign(f.value)) f.value = betSign + f.value.replace(/^\s*[+\-\u2212]\s*/, "");
+      betSay("");
+      renderBetForm();
+      f.focus();
+    };
+  });
   $("#betAdd").onclick = () => {
     if (!S) return;
     const t = teamByKey(betTeam);
     if (!t) return betSay("Pick the team first.");
     const type = $("#betType").value;
-    const half = type === "ml" ? 0 : betHalf($("#betLine").value, type === "spread");
+    let raw = $("#betLine").value;
+    if (type === "spread" && !typedSign(raw) && betSign && /^\s*\d/.test(raw)) raw = betSign + raw.trim();
+    const half = type === "ml" ? 0 : betHalf(raw, type === "spread");
     if (typeof half === "string") {
       betSay(half);
       $("#betLine").focus();
       return;
     }
+    // An unsigned spread is never taken as one side: the owner says which.
+    if (type === "spread" && half !== 0 && !typedSign(raw)) return betSay("Tap \u2212 if the team is the favorite or + if it's the underdog.");
     const list = S.bets || [];
-    if (list.some((b) => b.l === t[0] && b.id === t[1] && b.type === type && b.half === half)) return betSay("You have that bet already.");
+    // A bet posted a moment ago counts too, until the panel lists it: a
+    // double tap doesn't add it twice.
+    betPending = betPending.filter((p) => Date.now() - p.at < 5000 && !list.some((b) => sameBet(b, p)));
+    const want = { l: t[0], id: t[1], type, half };
+    if (list.concat(betPending).some((b) => sameBet(b, want))) return betSay("You have that bet already.");
     const max = S.betmax || 8;
-    let slot = 1;
-    while (slot <= max && (list.some((b) => b.slot === slot) || Date.now() - (betHeld[slot] || 0) < 5000)) slot++;
-    if (slot > max) return betSay("All " + max + " bets are in use. Remove one first.");
+    if (list.length + betPending.length >= max) return betSay("All " + max + " bets are in use. Remove one first.");
     betSay("");
-    betHeld[slot] = Date.now();
+    const mine = { ...want, at: Date.now() };
+    betPending.push(mine);
     const value = type === "ml" ? "" : betPoints(half, type === "spread");
-    setGD({ bet: [slot, t[0], t[1], type, value].join(",") }).then((ok) => {
-      if (!ok) delete betHeld[slot];
+    setGD({ bet: [0, t[0], t[1], type, value].join(",") }).then((ok) => {
+      if (!ok) betPending = betPending.filter((p) => p !== mine);
       else toast("Added " + (type === "ml" ? t[2] + " ML" : type === "spread" ? t[2] + " " + (half ? value : "PK") : type.toUpperCase() + " " + value));
     });
     $("#betLine").value = "";
+    betSign = "";
+    renderBetForm();
   };
   renderBetForm();
 

@@ -15,21 +15,23 @@ Keep an eye on bets you've placed. You type each one into the **Bets** card on t
 
 | Bet | Example | How the panel checks it |
 | --- | --- | --- |
-| **Point spread** | Bills -3.5, Bills +7, or PK for a pick'em | The team's score plus the spread, against the other team's score. |
+| **Point spread** | Bills -3.5, Bills +7, or 0 for a pick'em | The team's score plus the spread, against the other team's score. |
 | **Total, over** or **Total, under** | Over 47.5 | Both teams' points added up, against the line. Pick either team in the game, so the panel knows which game it is. |
 | **Moneyline** | Bills | Whether the team is ahead. A moneyline has no line to type. |
 
-Lines are whole or half points, like 3 or 3.5. Spreads go up to 99.5 either way, and totals up to 999.5. The panel keeps up to eight bets. Golf tours and racing series can't take a bet.
+Lines are whole or half points, like 3 or 3.5, and a comma works in place of the point, like 3,5. Spreads go up to 99.5 either way, and totals up to 999.5. The panel keeps up to eight bets. Golf tours and racing series can't take a bet.
 
 ## Adding a bet
 
 1. Open the device page and tap **Bets** near the bottom of the page to open the card.
 2. Tap **Pick a team**. The team chooser opens, and its **On now** tab lists today's games, so you can tap the side you bet on.
 3. Choose the kind of bet: **Point spread**, **Total, over**, **Total, under** or **Moneyline**.
-4. Type the line: the team's spread, like -3.5 or +7, or the game's total, like 47.5.
+4. Type the line. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. Type 0 for a pick'em. For a total, type the game's total, like 47.5.
 5. Tap **Add bet**.
 
-If something is missing or doesn't fit, the card says so before anything is saved, like **Pick the team first.**, **Lines go in whole or half points, like 3 or 3.5.**, **A total has no + or -. Type it like 47.5.**, **You have that bet already.** or **All 8 bets are in use. Remove one first.**
+The **−** and **+** buttons are there because a phone's number pad often has no minus key. On a computer you can type the minus or plus with the points instead, and the matching button lights up.
+
+If something is missing or doesn't fit, the card says so before anything is saved, like **Pick the team first.**, **Tap − if the team is the favorite or + if it's the underdog.**, **Lines go in whole or half points, like 3 or 3.5.**, **A total has no + or -. Type it like 47.5.**, **You have that bet already.** or **All 8 bets are in use. Remove one first.**
 
 To take a bet off, tap the remove button (✕) next to it.
 
