@@ -215,6 +215,7 @@ struct GameSnapshot {
   bool time_tbd{false};  // no kickoff time yet (see Schedule::time_tbd)
   bool completed{false};
   std::string short_detail;
+  std::string status_name;  // ESPN's status.type.name, like STATUS_HALFTIME
   std::string display_clock;
   int period{0};
   std::string team_abbr, opp_abbr;
@@ -225,7 +226,19 @@ struct GameSnapshot {
   std::string team_logo, opp_logo;
   bool team_winner{false};
   int possession{0};
-  int team_timeouts{0}, opp_timeouts{0};
+  int team_timeouts{-1}, opp_timeouts{-1};  // -1: no count (see carry_football)
+  uint8_t to_guess{0};     // bit 0 ours, bit 1 theirs: a count the panel filled in, not ESPN's
+  // Football: the game seconds left in regulation at the last play, from ESPN
+  // (3600 at kickoff, 1800 at halftime; -1 when not sent, as on extra points).
+  int play_secs_left{-1};
+  // Football breaks (carry_football): held from a break until a play from
+  // after it, the period it began in (2 for halftime), the last play seen in
+  // it, and that play's clock in seconds (-1 none).
+  bool held{false};
+  int break_period{0};
+  std::string break_play;
+  int break_secs{-1};
+  bool resumed{false};  // football: the second half's plays came in while ESPN's status still says halftime
   std::string last_play, down_distance;
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
@@ -424,6 +437,46 @@ const char *state_name(GameState s);
 // lags those fields by a poll or two, so it is only used for the states that
 // have no clock (Halftime, End of 3rd, Delayed).
 std::string clock_text(const GameSnapshot &s);
+
+// At halftime: ESPN's status says so, or (in documents without a status
+// name) shortDetail does before the third period. A football game whose plays
+// have moved on (resumed) isn't, whatever the status says.
+bool is_halftime(const GameSnapshot &s);
+
+// ESPN's status name says the period is under way and the clock has time on
+// it, so a shortDetail without a clock ("End of 3rd") is left from the break.
+bool clock_running(const GameSnapshot &s);
+
+// A football break the drive doesn't carry across: halftime, or the end of the
+// 2nd or 4th quarter (which ESPN also sends as in progress, "End of 2nd" at
+// 0:00), until the next play comes in. ESPN keeps the last drive's down,
+// possession and red zone there, which no longer apply.
+bool football_break(const GameSnapshot &s);
+
+// The game clock a football play started at, from ESPN's play text
+// ("(14:52) J.Smith kicks ..." is "14:52"); "" when it has none or it is 0:00.
+std::string play_clock(const std::string &last_play);
+
+// ESPN's status and its plays come from separate feeds and drift apart around
+// breaks: the status can stay at STATUS_HALFTIME while the second half's
+// plays come in, and a first-half play can arrive after the break began.
+// Football only, given the previous snapshot of the same board or favorite:
+// - held: a break began and no play from after it has come in (ESPN's
+//   end-of-quarter words, an empty play and late first-half plays don't end
+//   it; time put back in the break's own period does). A first look at a 3rd
+//   or 4th quarter whose last play is still the first half's counts as held.
+// - resumed: during STATUS_HALFTIME, a play from the second half: ESPN puts
+//   it under 1800 seconds left, or it is the 3rd quarter's kickoff. For a
+//   play without that figure, its clock must be later than any seen in the
+//   break (the clock counts down, so a late first-half play's is earlier), or
+//   10:00 or later when none was.
+// - Timeouts ESPN left out (-1): the last count from the same game and half
+//   (each overtime its own), 3 before kickoff, otherwise unknown, which hides
+//   the pips. While the second half is held after halftime, ESPN still sends
+//   the first half's counts, so it shows 3; an overtime held before its first
+//   play hides them. A count the panel filled in is marked in to_guess and
+//   carried only within its period.
+void carry_football(const GameSnapshot &prev, GameSnapshot &next);
 
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the

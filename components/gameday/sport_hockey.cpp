@@ -28,7 +28,7 @@ static bool shootout(const GameSnapshot &s) { return s.period >= 5 && !s.nhl.pla
 
 // Between periods ESPN's shortDetail reads "End of 1st" (status END_PERIOD)
 static bool intermission(const GameSnapshot &s) {
-  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0;
+  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0 && !clock_running(s);
 }
 
 static std::string period_name(const GameSnapshot &s) {
@@ -53,7 +53,9 @@ std::string hockey_clock_text(const GameSnapshot &s) {
   if (s.state == GameState::IN && shootout(s))
     return "SO";
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
-  bool special = s.short_detail.find(':') == std::string::npos;
+  // ESPN's shortDetail lags the status name and clock by a poll or two, so an
+  // "End of 1st" left from the intermission gives way once the clock runs.
+  bool special = s.short_detail.find(':') == std::string::npos && !clock_running(s);
   if (!has_clock || special) {
     std::string t = s.short_detail;
     size_t dash = t.find(" - ");

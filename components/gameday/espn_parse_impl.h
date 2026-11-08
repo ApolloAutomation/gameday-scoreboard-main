@@ -44,9 +44,11 @@ inline void fill_event_filter(JsonObject ev) {
   ev["status"]["type"]["state"] = true;
   ev["status"]["type"]["completed"] = true;
   ev["status"]["type"]["shortDetail"] = true;
+  ev["status"]["type"]["name"] = true;
   JsonObject comp = ev["competitions"].add<JsonObject>();
   comp["timeValid"] = true;
   comp["situation"]["lastPlay"]["text"] = true;
+  comp["situation"]["lastPlay"]["probability"]["secondsLeft"] = true;
   comp["situation"]["downDistanceText"] = true;
   comp["situation"]["shortDownDistanceText"] = true;
   comp["situation"]["isRedZone"] = true;
@@ -194,6 +196,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
     s.state = GameState::PRE;
   s.completed = status["type"]["completed"] | false;
   s.short_detail = str_or_empty(status["type"]["shortDetail"]);
+  s.status_name = str_or_empty(status["type"]["name"]);
   s.display_clock = str_or_empty(status["displayClock"]);
   s.period = status["period"] | 0;
 
@@ -203,12 +206,13 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   s.time_tbd = time_tbd(comp);
   JsonObjectConst sit = comp["situation"];
   s.last_play = str_or_empty(sit["lastPlay"]["text"]);
+  s.play_secs_left = sit["lastPlay"]["probability"]["secondsLeft"] | -1;
   s.down_distance = str_or_empty(sit["downDistanceText"]);
   s.short_down_distance = str_or_empty(sit["shortDownDistanceText"]);
   s.is_red_zone = sit["isRedZone"] | false;
   std::string possession = str_or_empty(sit["possession"]);
-  int home_to = sit["homeTimeouts"] | 0;
-  int away_to = sit["awayTimeouts"] | 0;
+  int home_to = sit["homeTimeouts"] | -1;  // -1: not sent (carry_football)
+  int away_to = sit["awayTimeouts"] | -1;
 
   bool found_us = false;
   for (JsonObjectConst c : comp["competitors"].as<JsonArrayConst>()) {

@@ -935,6 +935,602 @@ static void test_clock_text() {
   s.display_clock = "";
   s.short_detail = "12:34 - 4th";
   CHECK_EQ(clock_text(s), std::string("12:34 4th"));
+
+  // Halftime goes by ESPN's status name. shortDetail lags it, so a
+  // "Halftime" still there once the second half has started is ignored.
+  GameSnapshot h = live(14, 7);
+  h.period = 2;
+  h.display_clock = "0:00";
+  h.short_detail = "Halftime";
+  h.status_name = "STATUS_HALFTIME";
+  CHECK(is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("Halftime"));
+  h.period = 3;  // the status name moved on first
+  h.display_clock = "15:00";
+  h.status_name = "STATUS_IN_PROGRESS";
+  CHECK(!is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("15:00 3rd"));
+  h.display_clock = "14:21";
+  h.status_name = "";  // no status name: the period decides
+  CHECK(!is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("14:21 3rd"));
+  h.period = 3;
+  h.status_name = "STATUS_IN_PROGRESS";
+  h.display_clock = "";  // no clock yet: the quarter alone
+  CHECK_EQ(clock_text(h), std::string("3rd"));
+  h.period = 2;
+  h.status_name = "";
+  h.display_clock = "0:00";
+  CHECK(is_halftime(h));  // older documents without a status name
+  h.short_detail = "End of 2nd";
+  h.status_name = "STATUS_HALFTIME";
+  CHECK(is_halftime(h));  // the status name says so before shortDetail does
+  TickerOptions all;
+  h.team_record = "2-0";
+  h.opp_record = "1-1";
+  CHECK_EQ(status_text(h, all, ""), std::string("Halftime | DAL 2-0 | PHI 1-1"));
+  h.short_detail = "Halftime";
+  h.status_name = "STATUS_IN_PROGRESS";
+  h.period = 3;
+  h.display_clock = "15:00";
+  CHECK(status_text(h, all, "").rfind("Halftime", 0) != 0);
+  CHECK(ha_status_text(h, "").rfind("Halftime", 0) != 0);
+
+  // Any break's words give way once ESPN says the clock runs again.
+  GameSnapshot q = live(14, 7);
+  q.period = 4;
+  q.display_clock = "15:00";
+  q.short_detail = "End of 3rd";
+  q.status_name = "STATUS_IN_PROGRESS";
+  CHECK(clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("15:00 4th"));
+  q.display_clock = "0:00";  // a period that just ended keeps ESPN's words
+  CHECK(!clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("End of 3rd"));
+  q.status_name = "STATUS_END_PERIOD";
+  q.display_clock = "15:00";
+  CHECK(!clock_running(q));
+  CHECK_EQ(clock_text(q), std::string("End of 3rd"));
+
+  // The drive carries across the 1st and 3rd quarter breaks, not the others.
+  GameSnapshot b = live(14, 7);
+  b.down_distance = "3rd & 4 at DAL 30";
+  b.status_name = "STATUS_END_PERIOD";
+  b.short_detail = "End of 1st";
+  b.period = 1;
+  CHECK(!football_break(b));
+  CHECK(status_text(b, all, "").find("3rd & 4") != std::string::npos);
+  b.period = 3;
+  CHECK(!football_break(b));
+  b.period = 2;
+  b.short_detail = "End of 2nd";
+  CHECK(football_break(b));
+  CHECK(status_text(b, all, "").find("3rd & 4") == std::string::npos);
+  b.period = 4;
+  b.short_detail = "End of 4th";
+  CHECK(football_break(b));
+  b.status_name = "STATUS_HALFTIME";
+  b.period = 2;
+  CHECK(football_break(b));
+  b.status_name = "STATUS_IN_PROGRESS";
+  CHECK(!football_break(b));
+  b.sport = Sport::BASKETBALL;
+  b.status_name = "STATUS_HALFTIME";
+  CHECK(!football_break(b));  // football only
+
+  // Hockey: an intermission's words give way once the next period's clock runs.
+  GameSnapshot k = live(2, 1);
+  k.sport = Sport::HOCKEY;
+  k.period = 2;
+  k.display_clock = "20:00";
+  k.short_detail = "End of 1st";
+  k.status_name = "STATUS_IN_PROGRESS";
+  CHECK_EQ(clock_text(k), std::string("20:00 2nd"));
+  k.status_name = "STATUS_END_PERIOD";
+  k.period = 1;
+  k.display_clock = "0:00";
+  CHECK_EQ(clock_text(k), std::string("End of 1st"));
+}
+
+static void test_carry_football() {
+  GameSnapshot none;
+  GameSnapshot pre = live(0, 0, GameState::PRE);
+  pre.team_timeouts = pre.opp_timeouts = -1;
+  carry_football(none, pre);
+  CHECK_EQ(pre.team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pre.opp_timeouts, 3);
+  GameSnapshot q1 = live(0, 0);
+  q1.period = 1;
+  q1.team_timeouts = -1;  // between plays, no situation
+  q1.opp_timeouts = 2;    // what ESPN sent stays
+  carry_football(pre, q1);
+  CHECK_EQ(q1.team_timeouts, 3);
+  CHECK_EQ(q1.opp_timeouts, 2);
+  GameSnapshot q2 = live(7, 0);
+  q2.period = 2;
+  q2.team_timeouts = 1;
+  q2.opp_timeouts = 0;
+  GameSnapshot q2b = q2;
+  q2b.team_timeouts = q2b.opp_timeouts = -1;
+  carry_football(q2, q2b);
+  CHECK_EQ(q2b.team_timeouts, 1);  // the last count, the same half
+  CHECK_EQ(q2b.opp_timeouts, 0);   // a real 0 carries too
+  GameSnapshot ht = q2b;  // halftime
+  ht.status_name = "STATUS_HALFTIME";
+  ht.short_detail = "Halftime";
+  carry_football(q2b, ht);
+  GameSnapshot q3 = ht;
+  q3.status_name = "STATUS_IN_PROGRESS";
+  q3.short_detail = "14:20 - 3rd";
+  q3.period = 3;
+  q3.last_play = "(14:20) First play of the half.";
+  q3.team_timeouts = q3.opp_timeouts = -1;
+  carry_football(ht, q3);
+  CHECK_EQ(q3.team_timeouts, -1);  // a play in, no count from ESPN: unknown, not a guess
+  q3.team_timeouts = q3.opp_timeouts = 3;  // ESPN's
+  GameSnapshot q4 = q3;
+  q4.period = 4;
+  q4.team_timeouts = 2;
+  GameSnapshot q4b = q4;
+  q4b.team_timeouts = -1;
+  carry_football(q4, q4b);
+  CHECK_EQ(q4b.team_timeouts, 2);
+  GameSnapshot ot = q4b;
+  ot.period = 5;
+  ot.team_timeouts = ot.opp_timeouts = -1;
+  carry_football(q4b, ot);
+  CHECK_EQ(ot.team_timeouts, -1);  // overtime's allotment differs by league: unknown
+  GameSnapshot fin = q4b;
+  fin.state = GameState::POST;
+  fin.team_timeouts = fin.opp_timeouts = -1;
+  carry_football(q4b, fin);
+  CHECK_EQ(fin.team_timeouts, 2);  // the final keeps the 4th quarter's count
+  GameSnapshot mid = live(10, 3);  // joined mid-game after a restart
+  mid.period = 2;
+  mid.team_timeouts = -1;
+  carry_football(none, mid);
+  CHECK_EQ(mid.team_timeouts, -1);  // no guess
+  GameSnapshot other = q2;
+  other.event_id = "2";  // another game's count never carries
+  GameSnapshot nxt = q2b;
+  nxt.team_timeouts = -1;
+  carry_football(other, nxt);
+  CHECK_EQ(nxt.team_timeouts, -1);
+  GameSnapshot nba = live(50, 48, GameState::PRE);
+  nba.sport = Sport::BASKETBALL;
+  nba.team_timeouts = -1;
+  carry_football(none, nba);
+  CHECK_EQ(nba.team_timeouts, -1);  // football only: a football pregame would get 3
+
+  // A guess carries only within its period.
+  GameSnapshot late = pre;  // a pregame read, then the next read is mid-2nd
+  GameSnapshot mid2 = live(7, 7);
+  mid2.period = 2;
+  mid2.team_timeouts = mid2.opp_timeouts = -1;
+  carry_football(late, mid2);
+  CHECK_EQ(mid2.team_timeouts, -1);
+  GameSnapshot g1 = q1;  // the 1st quarter's guessed 3
+  CHECK(g1.to_guess & 1);
+  GameSnapshot mid4 = live(14, 7);
+  mid4.period = 4;
+  mid4.team_timeouts = -1;
+  carry_football(g1, mid4);
+  CHECK_EQ(mid4.team_timeouts, -1);
+  CHECK(!(q2b.to_guess & 1));  // carried from ESPN's count: not a guess
+
+  // Cards the panel builds without ESPN's situation
+  Pending pd;
+  pd.league = (uint8_t) League::NFL;
+  CHECK_EQ(pending_snapshot(pd).team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pending_snapshot(pd).to_guess, 3);       // the panel's, not ESPN's
+  Final fn;
+  fn.league = (uint8_t) League::NFL;
+  CHECK_EQ(final_snapshot(fn).team_timeouts, -1);  // unknown: hidden, not all used
+}
+
+// ESPN's status can stay at halftime while the second half's plays come in.
+static void test_halftime_resumes() {
+  GameSnapshot h = live(14, 7);
+  h.period = 2;
+  h.display_clock = "0:00";
+  h.short_detail = "Halftime";
+  h.status_name = "STATUS_HALFTIME";
+  h.last_play = "End of 2nd quarter.";
+  h.down_distance = "1st & 10 at DAL 25";
+  h.short_down_distance = "1st & 10";
+  h.possession = 1;
+  h.team_timeouts = 1;
+  h.opp_timeouts = 0;
+  GameSnapshot none;
+  carry_football(none, h);
+  CHECK(is_halftime(h));
+  CHECK(football_break(h));
+  CHECK_EQ(h.break_play, std::string("End of 2nd quarter."));
+  CHECK_EQ(h.team_timeouts, 1);  // ESPN's halftime counts are the first half's: shown as sent
+
+  GameSnapshot still = h;  // the next halftime poll, nothing new
+  still.break_play.clear();
+  carry_football(h, still);
+  CHECK(!still.resumed);
+  CHECK(is_halftime(still));
+  GameSnapshot words = still;  // a new last play with no clock isn't a play
+  words.last_play = "Halftime";
+  carry_football(still, words);
+  CHECK(!words.resumed);
+
+  GameSnapshot kick = still;  // the second half's kickoff; the status hasn't caught up
+  kick.last_play = "(15:00) J.Smith kicks 65 yards from DAL 35 to PHI End Zone. Touchback.";
+  kick.down_distance = "1st & 10 at PHI 25";
+  kick.short_down_distance = "1st & 10";
+  kick.possession = 2;
+  kick.team_timeouts = 1;  // still the first half's
+  kick.opp_timeouts = 0;
+  carry_football(still, kick);
+  CHECK(kick.resumed);
+  CHECK(!is_halftime(kick));
+  CHECK(!football_break(kick));
+  CHECK_EQ(clock_text(kick), std::string("15:00 3rd"));
+  TickerOptions all;
+  const std::string t = status_text(kick, all, "");
+  CHECK(t.find("1st & 10 at PHI 25") != std::string::npos);  // the downs stay
+  CHECK(t.find("15:00 3rd") != std::string::npos);
+  CHECK(t.find("Halftime") == std::string::npos);
+  CHECK(ha_status_text(kick, "").rfind("Live", 0) == 0);
+  CHECK_EQ(kick.team_timeouts, 1);  // a new play: ESPN's counts from here on
+
+  GameSnapshot next = kick;  // still stuck at halftime a poll later: stays resumed
+  next.last_play = "(14:21) A.Back rush for 4 yards.";
+  next.resumed = false;
+  carry_football(kick, next);
+  CHECK(next.resumed);
+  CHECK_EQ(clock_text(next), std::string("14:21 3rd"));
+  GameSnapshot caught = next;  // ESPN's status catches up
+  caught.status_name = "STATUS_IN_PROGRESS";
+  caught.short_detail = "13:58 - 3rd";
+  caught.display_clock = "13:58";
+  caught.period = 3;
+  caught.resumed = false;
+  carry_football(next, caught);
+  CHECK(!caught.resumed);
+  CHECK_EQ(clock_text(caught), std::string("13:58 3rd"));
+
+  // The second half before its first play: ESPN still sends the first half's counts.
+  GameSnapshot q3 = h;
+  q3.status_name = "STATUS_IN_PROGRESS";
+  q3.short_detail = "15:00 - 3rd";
+  q3.display_clock = "15:00";
+  q3.period = 3;
+  q3.team_timeouts = 1;
+  q3.opp_timeouts = 0;
+  q3.break_play.clear();
+  carry_football(h, q3);
+  CHECK_EQ(q3.team_timeouts, 3);
+  CHECK_EQ(q3.opp_timeouts, 3);
+  CHECK(q3.to_guess == 3);
+  GameSnapshot q3b = q3;  // the first play: ESPN's counts again
+  q3b.last_play = "(15:00) Kickoff return for 22 yards.";
+  q3b.team_timeouts = 3;
+  q3b.opp_timeouts = 2;
+  carry_football(q3, q3b);
+  CHECK_EQ(q3b.opp_timeouts, 2);
+  CHECK(q3b.to_guess == 0);
+
+  CHECK_EQ(play_clock("(00:14) Shotgun pass"), std::string("0:14"));
+  CHECK_EQ(play_clock("(9:05) Run"), std::string("9:05"));
+  CHECK_EQ(play_clock("(00:00) End"), std::string(""));
+  CHECK_EQ(play_clock("End of 2nd quarter."), std::string(""));
+  CHECK_EQ(play_clock("(1a:00) x"), std::string(""));
+
+  // "Halftime" left in shortDetail while the status says the 2nd is still on.
+  GameSnapshot lag = live(7, 7);
+  lag.period = 2;
+  lag.short_detail = "Halftime";
+  lag.status_name = "STATUS_IN_PROGRESS";
+  lag.display_clock = "0:42";
+  CHECK(!is_halftime(lag));
+  CHECK_EQ(clock_text(lag), std::string("0:42 2nd"));
+  // The status says halftime before shortDetail does.
+  GameSnapshot early = lag;
+  early.status_name = "STATUS_HALFTIME";
+  early.short_detail = "End of 2nd";
+  early.display_clock = "0:00";
+  CHECK_EQ(clock_text(early), std::string("Halftime"));
+  // Soccer's Home Assistant line keeps "Live" at half time, as before.
+  GameSnapshot soc = live(1, 0);
+  soc.sport = Sport::SOCCER;
+  soc.status_name = "STATUS_HALFTIME";
+  soc.short_detail = "HT";
+  CHECK(ha_status_text(soc, "").rfind("Live", 0) == 0);
+}
+
+static void test_break_timelines() {
+  GameSnapshot none;
+  auto at = [](int period, const char *name, const char *detail, const char *clock, const char *play) {
+    GameSnapshot g = live(14, 7);
+    g.period = period;
+    g.status_name = name;
+    g.short_detail = detail;
+    g.display_clock = clock;
+    g.last_play = play;
+    g.short_down_distance = "2nd & 6";
+    g.down_distance = "2nd & 6 at PHI 40";
+    g.possession = 1;
+    return g;
+  };
+  // The 4th quarter's end keeps ESPN's counts, and the final keeps them.
+  GameSnapshot q4 = at(4, "STATUS_IN_PROGRESS", "0:31 - 4th", "0:31", "(00:31) Run for 2 yards.");
+  q4.team_timeouts = 0;
+  q4.opp_timeouts = 1;
+  carry_football(none, q4);
+  GameSnapshot e4 = at(4, "STATUS_END_PERIOD", "End of 4th", "0:00", "End of 4th quarter.");
+  e4.team_timeouts = 0;
+  e4.opp_timeouts = 1;
+  carry_football(q4, e4);
+  CHECK(football_break(e4));
+  CHECK_EQ(e4.team_timeouts, 0);
+  CHECK_EQ(e4.opp_timeouts, 1);
+  GameSnapshot fin = e4;
+  fin.state = GameState::POST;
+  fin.team_timeouts = fin.opp_timeouts = -1;
+  carry_football(e4, fin);
+  CHECK_EQ(fin.team_timeouts, 0);
+  CHECK_EQ(fin.opp_timeouts, 1);
+
+  // A first-half play that reaches ESPN's plays after halftime began isn't the 3rd quarter.
+  GameSnapshot h1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:14) Pass incomplete.");
+  carry_football(none, h1);
+  CHECK(h1.held);
+  CHECK_EQ(h1.break_secs, 14);
+  GameSnapshot h2 = h1;
+  h2.last_play = "(00:09) Field goal is GOOD.";
+  h2.team_score = 17;
+  carry_football(h1, h2);
+  CHECK(!h2.resumed);
+  CHECK(is_halftime(h2));
+  CHECK_EQ(clock_text(h2), std::string("Halftime"));
+  CHECK_EQ(h2.break_secs, 9);
+  GameSnapshot h3 = h2;  // ESPN changes its words during the break
+  h3.last_play = "End of Half";
+  carry_football(h2, h3);
+  CHECK(!h3.resumed);
+  CHECK(h3.held);
+  // ESPN's status moves to the 3rd before the half's first play: drive and counts held.
+  GameSnapshot s3 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "End of Half");
+  s3.team_timeouts = 1;
+  s3.opp_timeouts = 0;
+  carry_football(h3, s3);
+  CHECK(s3.held);
+  CHECK(football_break(s3));  // the first half's drive stays hidden
+  TickerOptions all;
+  CHECK(status_text(s3, all, "").find("2nd & 6") == std::string::npos);
+  CHECK_EQ(s3.team_timeouts, 3);
+  CHECK_EQ(s3.opp_timeouts, 3);
+  GameSnapshot s3b = s3;  // the kickoff
+  s3b.last_play = "(15:00) Kickoff for a touchback.";
+  s3b.team_timeouts = 3;
+  s3b.opp_timeouts = 3;
+  carry_football(s3, s3b);
+  CHECK(!s3b.held);
+  CHECK(!football_break(s3b));
+
+  // ESPN's seconds left tells the halves apart, plays without a clock included.
+  GameSnapshot c1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
+  c1.play_secs_left = 1800;
+  carry_football(none, c1);
+  CHECK(!c1.resumed);  // the half's end
+  GameSnapshot c2 = c1;  // a late first-half play without a clock
+  c2.last_play = "Shotgun #2 QB pass complete to #5 for 9 yds";
+  c2.play_secs_left = 1806;
+  carry_football(c1, c2);
+  CHECK(!c2.resumed);
+  CHECK_EQ(clock_text(c2), std::string("Halftime"));
+  GameSnapshot c3 = c2;  // the 3rd quarter's kickoff
+  c3.last_play = "(15:00) J.Smith kickoff for 65 yds for a touchback.";
+  c3.play_secs_left = 1800;
+  carry_football(c2, c3);
+  CHECK(c3.resumed);
+  CHECK_EQ(clock_text(c3), std::string("15:00 3rd"));
+  GameSnapshot c4 = c2;  // a second-half play without a clock
+  c4.last_play = "#21 T.Lester rush middle for 2 yds";
+  c4.play_secs_left = 1756;
+  carry_football(c2, c4);
+  CHECK(c4.resumed);
+  CHECK_EQ(clock_text(c4), std::string("3rd"));
+  // The panel's first look at a game whose status is stuck at halftime
+  GameSnapshot cold = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
+  cold.play_secs_left = 1720;
+  carry_football(none, cold);
+  CHECK(cold.resumed);
+  CHECK(!football_break(cold));
+  GameSnapshot cold2 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
+  carry_football(none, cold2);  // no seconds left sent: a 10:00 or later clock still tells
+  CHECK(cold2.resumed);
+  GameSnapshot cold3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:21) Run for 4 yards.");
+  carry_football(none, cold3);
+  CHECK(!cold3.resumed);  // a late first-half play
+
+  // ESPN's plays frozen at the half's end into the 4th: the counts stay the guessed 3.
+  GameSnapshot f3 = s3;
+  GameSnapshot f4 = at(4, "STATUS_IN_PROGRESS", "14:00 - 4th", "14:00", "End of Half");
+  f4.team_timeouts = 1;
+  f4.opp_timeouts = 0;
+  carry_football(f3, f4);
+  CHECK(f4.held);
+  CHECK_EQ(f4.team_timeouts, 3);
+  CHECK_EQ(f4.opp_timeouts, 3);
+
+  // A gap from mid-2nd to mid-3rd (no halftime seen) doesn't guess 3.
+  GameSnapshot m2 = at(2, "STATUS_IN_PROGRESS", "5:00 - 2nd", "5:00", "(05:00) Run.");
+  m2.team_timeouts = 1;
+  carry_football(none, m2);
+  GameSnapshot m3 = at(3, "STATUS_IN_PROGRESS", "9:00 - 3rd", "9:00", "(09:00) Pass.");
+  m3.team_timeouts = -1;
+  carry_football(m2, m3);
+  CHECK_EQ(m3.team_timeouts, -1);
+}
+
+// The fourth review's cases
+static void test_break_edges() {
+  GameSnapshot none;
+  auto at = [](int period, const char *name, const char *detail, const char *clock, const char *play) {
+    GameSnapshot g = live(14, 7);
+    g.period = period;
+    g.status_name = name;
+    g.short_detail = detail;
+    g.display_clock = clock;
+    g.last_play = play;
+    g.short_down_distance = "2nd & 6";
+    g.down_distance = "2nd & 6 at PHI 40";
+    g.possession = 1;
+    return g;
+  };
+  // Time put back after "End of 4th": play goes on with ESPN's counts.
+  GameSnapshot e4 = at(4, "STATUS_IN_PROGRESS", "End of 4th", "0:00", "(00:05) Pass incomplete.");
+  e4.team_timeouts = 0;
+  e4.opp_timeouts = 1;
+  carry_football(none, e4);
+  CHECK(e4.held);
+  CHECK_EQ(e4.break_period, 4);
+  GameSnapshot back = at(4, "STATUS_IN_PROGRESS", "0:01 - 4th", "0:01", "(00:05) Pass incomplete.");
+  back.team_timeouts = 0;
+  back.opp_timeouts = 1;
+  carry_football(e4, back);
+  CHECK(!back.held);
+  CHECK(!football_break(back));
+  CHECK_EQ(back.team_timeouts, 0);
+  CHECK_EQ(back.opp_timeouts, 1);
+
+  // After the status reaches the 3rd, ESPN's words or an empty play don't end the hold.
+  GameSnapshot h = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
+  h.play_secs_left = 1800;
+  carry_football(none, h);
+  GameSnapshot s3 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "End of 2nd quarter.");
+  s3.play_secs_left = 1800;
+  s3.team_timeouts = 1;
+  s3.opp_timeouts = 0;
+  carry_football(h, s3);
+  CHECK(s3.held);
+  GameSnapshot blank = s3;  // the situation drops out for a poll
+  blank.last_play = "";
+  blank.play_secs_left = -1;
+  blank.team_timeouts = blank.opp_timeouts = -1;
+  carry_football(s3, blank);
+  CHECK(blank.held);
+  CHECK_EQ(blank.team_timeouts, 3);
+  GameSnapshot again = s3;  // the old words come back with the first half's counts
+  carry_football(blank, again);
+  CHECK(again.held);
+  CHECK_EQ(again.team_timeouts, 3);
+  CHECK_EQ(again.opp_timeouts, 3);
+  TickerOptions all;
+  CHECK(status_text(again, all, "").find("2nd & 6") == std::string::npos);
+  GameSnapshot first = again;  // the half's first play
+  first.last_play = "Kickoff for 65 yards, touchback.";
+  first.play_secs_left = 1800;
+  first.team_timeouts = first.opp_timeouts = 3;
+  carry_football(again, first);
+  CHECK(!first.held);
+
+  // A first look at a 3rd quarter whose plays are still the first half's (recorded)
+  std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
+  GameSnapshot ark;
+  CHECK(parse_scoreboard_str(json, "401856635", 8, ark));
+  CHECK_EQ(ark.play_secs_left, 1800);
+  carry_football(none, ark);
+  CHECK(ark.held);
+  CHECK(football_break(ark));  // the first half's "2nd & 10" stays hidden
+  CHECK_EQ(ark.team_timeouts, 3);  // over the first half's 1 and 0
+  CHECK_EQ(ark.opp_timeouts, 3);
+
+  // A stuck halftime into the 4th quarter reads "4th" from ESPN's seconds left.
+  GameSnapshot h4 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(08:12) Run for 3 yards.");
+  h4.play_secs_left = 492;
+  carry_football(none, h4);
+  CHECK(h4.resumed);
+  CHECK_EQ(clock_text(h4), std::string("8:12 4th"));
+
+  // A kickoff without a clock at 1800 seconds left resumes a stuck halftime.
+  GameSnapshot k1 = h;
+  GameSnapshot k2 = h;
+  k2.last_play = "J.Smith kickoff for 65 yds for a touchback.";
+  k2.play_secs_left = 1800;
+  carry_football(k1, k2);
+  CHECK(k2.resumed);
+
+  // A first-half kickoff returned as the half ran out also has 1800 left.
+  GameSnapshot r1 = h;
+  GameSnapshot r2 = h;
+  r2.last_play = "(00:05) #44 G.Spetic kickoff 65 yards to the PHI00, #3 A.Smith return 28 yards to the PHI28";
+  r2.play_secs_left = 1800;
+  carry_football(r1, r2);
+  CHECK(!r2.resumed);
+  CHECK(is_halftime(r2));
+  GameSnapshot r3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:05) J.Bates kicks 65 yards, returned to the 30");
+  r3.play_secs_left = 1800;
+  carry_football(none, r3);  // a first look too
+  CHECK(!r3.resumed);
+  // A first look at the 3rd quarter's kickoff touchback isn't a held break.
+  GameSnapshot t1 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00",
+                       "(15:00) J.Bates kicks 65 yards from DET 35 to end zone, Touchback.");
+  t1.play_secs_left = 1800;
+  t1.team_timeouts = t1.opp_timeouts = 3;
+  carry_football(none, t1);
+  CHECK(!t1.held);
+  CHECK(!football_break(t1));
+  GameSnapshot t2 = t1;  // nor on the poll after
+  carry_football(t1, t2);
+  CHECK(!t2.held);
+  GameSnapshot c1 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "#44 G.Spetic kickoff 65 yards to the PHI00, Touchback");
+  c1.play_secs_left = 1800;
+  carry_football(none, c1);
+  CHECK(!c1.held);
+  // A resumed halftime whose plays go back to the first half's says Halftime again.
+  GameSnapshot u1 = h4;
+  GameSnapshot u2 = h;
+  carry_football(u1, u2);
+  CHECK(!u2.resumed);
+
+  // An overtime before its first play hides the 4th quarter's counts.
+  GameSnapshot ot = at(5, "STATUS_IN_PROGRESS", "10:00 - OT", "10:00", "(00:05) Pass incomplete.");
+  ot.team_timeouts = 0;
+  ot.opp_timeouts = 1;
+  GameSnapshot e4b = e4;
+  carry_football(e4, e4b);
+  carry_football(e4b, ot);
+  CHECK(ot.held);
+  CHECK_EQ(ot.team_timeouts, -1);
+  GameSnapshot ot1 = ot;  // its first play
+  ot1.last_play = "(10:00) Kickoff, touchback.";
+  ot1.team_timeouts = 2;
+  ot1.opp_timeouts = 2;
+  carry_football(ot, ot1);
+  CHECK(!ot1.held);
+  CHECK_EQ(ot1.team_timeouts, 2);
+}
+
+// ESPN also ends a half as in progress: "End of 2nd" at 0:00.
+static void test_end_of_half_in_progress() {
+  std::string json = slurp("fixtures/day_ncaa_20261017.json");
+  GameSnapshot s;
+  CHECK(parse_scoreboard_str(json, "401856720", 99, s));
+  CHECK_EQ(s.status_name, std::string("STATUS_IN_PROGRESS"));
+  CHECK_EQ(s.short_detail, std::string("End of 2nd"));
+  CHECK_EQ(s.play_secs_left, 1800);
+  CHECK(football_break(s));
+  TickerOptions all;
+  CHECK(status_text(s, all, "").find("2nd & 15") == std::string::npos);
+}
+
+// The recorded STATUS_HALFTIME game keeps the punt's "1st & 10" in situation.
+static void test_halftime_fixture() {
+  std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
+  GameSnapshot s;
+  CHECK(parse_scoreboard_str(json, "401862694", 2429, s));
+  CHECK_EQ(s.status_name, std::string("STATUS_HALFTIME"));
+  CHECK(is_halftime(s));
+  CHECK(football_break(s));
+  CHECK_EQ(s.short_down_distance, std::string("1st & 10"));  // ESPN's, hidden at the break
+  CHECK_EQ(clock_text(s), std::string("Halftime"));
 }
 
 static void test_color() {
@@ -2044,7 +2640,7 @@ static void test_nba_live() {
   CHECK_EQ(g.nba.series, std::string(""));
   CHECK_EQ((int) g.nba.team_wins, -1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, 0);
+  CHECK_EQ(g.team_timeouts, -1);  // not sent
   CHECK_EQ(g.team_logo, std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/nba/500-dark/scoreboard/ind.png&w=64&h=64"));
   CHECK_EQ(clock_text(g), std::string("8:27 3rd"));
   CHECK_EQ(basketball_series(g), std::string(""));
@@ -2347,7 +2943,7 @@ static void test_nhl_live() {
   CHECK_EQ(g.opp_score, 0);
   CHECK_EQ(g.period, 1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, 0);
+  CHECK_EQ(g.team_timeouts, -1);  // not sent
   CHECK_EQ(g.down_distance, std::string(""));
   CHECK_EQ(g.team_record, std::string("2-0-1"));
   CHECK_EQ(g.opp_record, std::string("2-0-0"));
@@ -6830,6 +7426,12 @@ int main() {
   test_live_games();
   test_upcoming();
   test_clock_text();
+  test_halftime_fixture();
+  test_carry_football();
+  test_halftime_resumes();
+  test_end_of_half_in_progress();
+  test_break_timelines();
+  test_break_edges();
   test_color();
   test_favorites();
   test_favorites_shrunk();

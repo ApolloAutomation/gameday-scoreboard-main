@@ -1423,6 +1423,16 @@ test("the picker is a dialog that keeps the keyboard inside and hands focus back
   await expect(page.locator("#favAdd")).toBeFocused();
 });
 
+test("a timeout count ESPN didn't send hides that team's pips instead of showing them used", async ({ page, request }) => {
+  await reset(request);
+  const g = (await (await request.get("/gameday/state")).json()).game;
+  await reset(request, { game: { ...g, ...LIVE, tt: -1, ot: 0 } });
+  await page.goto("/");
+  await expect(page.locator("#tA .pips")).toBeHidden();
+  await expect(page.locator("#tB .pips")).toBeVisible();
+  await expect(page.locator("#tB .pips i.on")).toHaveCount(0);  // a real 0 still shows all used
+});
+
 test("other sports show their situation line and no timeout pips", async ({ page, request }) => {
   const mlb = {
     s: "IN", l: "mlb", sport: 1, ta: "NYY", ti: 10, ts: 3, oa: "TOR", oi: 14, os: 2, p: 0, tt: 0, ot: 0,

@@ -921,6 +921,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     return;
   }
   GameSnapshot old = e.game;
+  ::espn::carry_football(old, j.game);
   e.game = j.game;
   // A refresh that came back with the same final backs off instead of
   // retrying every minute: six hours when the look-ahead found no game in the
@@ -2565,8 +2566,12 @@ void GamedayComponent::apply_job_() {
     this->schedule_fetched_ms_ = now == 0 ? 1 : now;  // 0 reads as "never fetched"
     this->live_away_id_ = g.away_id;
     this->live_started_ms_ = now == 0 ? 1 : now;
-    this->game_ = GameSnapshot{};
-    this->prev_ = GameSnapshot{};
+    if (this->game_.event_id != g.event_id || this->game_.team_id != g.away_id) {
+      // The same game picked again, seen from the same side, keeps its last
+      // poll (carry_football reads it)
+      this->game_ = GameSnapshot{};
+      this->prev_ = GameSnapshot{};
+    }
     this->schedule_next_(0);  // poll the chosen game right away
     return;
   }
@@ -2636,6 +2641,7 @@ void GamedayComponent::apply_job_() {
     return;
   }
   this->cache_unconfirmed_ = false;
+  ::espn::carry_football(this->game_, j.game);
   this->prev_ = this->game_;
   this->game_ = j.game;
   this->mark_good_poll_();
@@ -2713,6 +2719,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->emit_({});
   } else if (j.polled) {
     this->prev_ = moved ? GameSnapshot{} : this->game_;
+    ::espn::carry_football(this->prev_, j.game);
     this->game_ = j.game;
     this->mark_good_poll_();
     if (this->game_.state == GameState::POST) {
@@ -2837,7 +2844,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.opponent_score = g.opp_score;
   f.team_logo = g.team_logo;
   f.opponent_logo = g.opp_logo;
-  f.possession = g.possession;
+  // At halftime ESPN keeps the last drive's down, possession and red zone.
+  const bool brk = ::espn::football_break(g);
+  f.possession = brk ? 0 : g.possession;
   f.team_timeouts = g.team_timeouts;
   f.opponent_timeouts = g.opp_timeouts;
   f.team_record = g.team_record;
@@ -2845,8 +2854,10 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.last_play = g.last_play;
   if (g.valid && g.state == GameState::IN) {
     f.clock_text = ::espn::clock_text(g);
-    f.down_distance = g.short_down_distance;
-    f.is_red_zone = g.is_red_zone;
+    if (!brk) {
+      f.down_distance = g.short_down_distance;
+      f.is_red_zone = g.is_red_zone;
+    }
   }
   f.sport = (uint8_t) g.sport;
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASEBALL) {
@@ -3592,10 +3603,11 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   game["os"] = g.opp_score;
   game["tr"] = g.team_record;
   game["or"] = g.opp_record;
-  game["p"] = g.possession;
+  const bool brk = ::espn::football_break(g);
+  game["p"] = brk ? 0 : g.possession;
   game["tt"] = g.team_timeouts;
   game["ot"] = g.opp_timeouts;
-  game["rz"] = g.is_red_zone;
+  game["rz"] = !brk && g.is_red_zone;
   game["tv"] = g.tv;
   game["venue"] = g.venue;
   game["gn"] = g.game_name;
@@ -3607,7 +3619,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   if (g.time_tbd)
     game["tbd"] = true;
   game["lp"] = g.last_play;
-  game["dd"] = g.down_distance;
+  game["dd"] = brk ? std::string() : g.down_distance;
   if (f != nullptr) {
     game["c"] = f->clock_text;
     game["d"] = f->down_distance;
@@ -3717,7 +3729,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
       o["ts"] = e.game.team_score;
       o["os"] = e.game.opp_score;
       o["tv"] = e.game.tv;
-      o["detail"] = e.game.short_detail;
+      // A game under way says what the board says (a lagging "Halftime" gives way)
+      o["detail"] = e.game.state == GameState::IN ? ::espn::clock_text(e.game) : e.game.short_detail;
       o["done"] = e.game.completed;
     }
   }

@@ -21,6 +21,10 @@ NHL teams have no Up next list on the device page: their season schedules are to
 - **Intermissions** show ESPN's words, like "End of 1st", and the ticker shows the series, or the records outside the playoffs.
 - **The ticker** with the last play. Turn it off with **Last play** in the Ticker card. See [The ticker](/using/ticker/).
 
+:::note[Coming in the next release]
+The clock comes back as soon as the next period starts, instead of ESPN's "End of 1st" staying up for a while.
+:::
+
 The board doesn't show power plays. ESPN's NHL data has no power play field, and working one out from the penalties would be wrong when penalties offset.
 
 On a single 64x64 panel the clock takes the abbreviations' place during play, and there is no room for the records.

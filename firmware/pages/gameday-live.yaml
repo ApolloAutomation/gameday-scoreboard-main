@@ -126,14 +126,10 @@ script:
             // Timeout pips centered under each logo
             const int acx = 18, hcx = W - 18;
             for (int i = 0; i < 3; i++) {
-              // Timeout pips are football's (gd_update keeps them in step).
-              if (id(gd_sport) == 0) {
-                lv_obj_clear_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
-              } else {
-                lv_obj_add_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
-              }
+              // Timeout pips are football's; gd_update shows them for a side
+              // with a known count, so a layout change never shows them used.
+              lv_obj_add_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_add_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
               lv_obj_set_pos(abars[i], acx - 9 + i * 7, 48);
               lv_obj_set_pos(hbars[i], hcx - 9 + i * 7, 48);
             }
@@ -303,7 +299,6 @@ script:
       board_card: bool
     then:
       - lambda: |-
-          id(gd_sport) = sport;
           // A side with no team yet (just after a team change) shows no logo.
           // A side with no logo to fetch (the demo build's made-up teams)
           // shows its abbreviation badge in the logo's place, drawn by the
@@ -522,7 +517,8 @@ script:
             lv_obj_t *pips[6] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3),
                                  id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
             for (int i = 0; i < 6; i++) {
-              if (sport == 0)
+              // A side with no known count (-1) hides its pips rather than showing them used.
+              if (sport == 0 && (i < 3 ? team_timeouts : opponent_timeouts) >= 0)
                 lv_obj_clear_flag(pips[i], LV_OBJ_FLAG_HIDDEN);
               else
                 lv_obj_add_flag(pips[i], LV_OBJ_FLAG_HIDDEN);
