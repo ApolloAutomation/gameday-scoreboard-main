@@ -1002,12 +1002,29 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await page.reload();
   await expect(page.locator("#favName")).toHaveText("Cycling through your favorites");
   await expect(bar).toBeVisible();
-  await expect(page.locator("#followLg")).toHaveText("Keep this game on the panel until it ends, instead of moving to another favorite.");
+  await expect(page.locator("#followLg")).toHaveText("Keep this game on the panel until its final has been up for After the final, instead of moving to another favorite.");
   await sw.click();
   await expectSet(request, { follow: "1" });
   await expect(sw).toBeChecked();
   await expect(page.locator("#favName")).toHaveText("Following Dallas Cowboys");
-  await expect(page.locator("#followLg")).toHaveText(/Turn this off to go back to your favorites\.$/);
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until its final has been up for After the final. Turn this off to go back to your favorites.");
+
+  // A favorite's last final is over already: nothing to follow
+  await reset(request, {
+    mode: 4,
+    shown: 1,
+    game: { ...g, s: "POST", ts: 24, os: 17 },
+    next: [{ slot: 1, t: t("DAL", "Dallas Cowboys", 6), id: "401772001", s: "POST", kick: 1792531500, oi: 21, oa: "PHI", ts: 24, os: 17, tv: "FOX", detail: "Final" }],
+  });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(page.locator("#favName")).toHaveText("Cycling through your favorites");
+  await expect(bar).toBeHidden();
+  // Nor a final in Live games, the minute before it moves on
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" } });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeHidden();
 
   // Favorite teams with no favorites runs as My team
   await reset(request, { mode: 4, favs: [{}, {}, {}, {}] });
@@ -1022,20 +1039,40 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await expect(bar).toBeHidden();
 });
 
-test("Follow this game shows what the panel has, and a follow the panel ignored goes back off", async ({ page, request }) => {
+test("Follow this game shows what the panel has, turns off on an open page when the panel lets go, and a follow the panel ignored goes back off", async ({ page, request }) => {
   const sw = page.getByRole("switch", { name: "Follow this game" });
+  const bar = page.locator("#followbar");
+  const name = page.locator("#followName");
   await reset(request);
   const g = (await deviceState(request)).game;
   // Following, as the state document says
   await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: true });
+  await page.clock.install();
   await page.goto("/");
   await expect(sw).toBeChecked();
-  await expect(page.locator("#followName")).toHaveText("Following this game");
+  await expect(name).toHaveText("Following this game");
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
 
-  // The panel let go by itself (the final was up long enough, or the mode changed elsewhere)
+  // The page's regular read: the game ended, and the switch stays on over the final the panel still holds
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: true });
+  await page.clock.fastForward(16000);
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeVisible();
+  await expect(sw).toBeChecked();
+  // The panel let go by itself after the final: the switch goes, since a final has nothing left to follow
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: false });
+  await page.clock.fastForward(16000);
+  await expect(bar).toBeHidden();
+
+  // The panel let go on a game still on (a change made in the app): the switch turns off on the open page
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: true });
+  await page.clock.fastForward(16000);
+  await expect(sw).toBeChecked();
   await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: false });
-  await page.reload();
+  await page.clock.fastForward(16000);
   await expect(sw).not.toBeChecked();
+  await expect(name).toHaveText("Follow this game");
+  await expect(page.locator("#liveName")).toHaveText("Following a random game in progress");
 
   // A follow=1 the panel answered but didn't take: the switch shows the tap, then the panel's off
   await page.route("**/gameday/set*", (route) => route.fulfill({ json: { ok: true } }));

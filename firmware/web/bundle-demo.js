@@ -761,24 +761,26 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
   };
   // Follow this game: Live games and Favorite teams keep the game on the
-  // board instead of moving on, until its final has been up a while. The
-  // switch posts follow=1 or 0 like the others (.sw[data-set]). Not in My
-  // team, which follows one team already, nor over Live games' team card or
-  // recent finals, or a golf or racing board.
+  // board instead of moving on, until it ends (Favorite teams: until its
+  // final has been up for After the final). The switch posts follow=1 or 0
+  // like the others (.sw[data-set]). Not in My team, which follows one team
+  // already, nor over Live games' team card or recent finals, a golf or
+  // racing board, or a game that has ended and isn't followed already.
   const renderFollow = (mode) => {
     const favMode = mode === "4" && (S.favs || []).some(refKey);
     const liveGame = isLive(mode) && !S.fallback && !S.recap;
     const g = game;
-    const up = !!(g && g.s !== "NOT_FOUND" && g.id && g.sport !== 5 && g.sport !== 6);
+    const on = !!S.follow;
+    const up = !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
     // Firmware from before the switch leaves follow out.
     $("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
-    const on = !!S.follow;
     $("#followbar").classList.toggle("on", on);
     $("#followName").textContent = on ? "Following this game" : "Follow this game";
+    const until = favMode ? "until its final has been up for After the final" : "until it ends";
     $("#followLg").textContent = on
-      ? "The panel stays on this game until its final has been up a while. Turn this off to go back to "
+      ? "The panel stays on this game " + until + ". Turn this off to go back to "
         + (favMode ? "your favorites." : "switching games.")
-      : "Keep this game on the panel until it ends, instead of "
+      : "Keep this game on the panel " + until + ", instead of "
         + (favMode ? "moving to another favorite." : "switching to another game.");
   };
   const renderMode = () => {

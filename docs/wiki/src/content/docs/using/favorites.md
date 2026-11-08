@@ -42,9 +42,9 @@ The minutes for **Alternate** are the same setting as **Switch every** in Live g
 Panels set up before Favorite teams could alternate keep **Stick with the higher team** until you change it.
 
 :::note[Coming in the next release]
-To stay with the favorite on the board, turn on **Follow this game** under the board on the device page. The bar then says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner.
+To stay with the favorite on the board, turn on **Follow this game** under the board on the device page. The switch then reads **Following this game**, and the bar under the mode buttons says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner. A card whose game has already ended has no switch, since there's nothing left to follow.
 
-Pressing a remote button, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
+If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it. Pressing a numbered button on the remote for one of your favorites, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
 :::
 
 ## Using the remote
