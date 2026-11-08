@@ -157,9 +157,11 @@ button { font: inherit; color: inherit; }
 .spark .gap { fill: none; stroke: var(--red); stroke-width: 1.5; }
 .sparklbl { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; margin-top: 3px; }
 .ctl input[type=range] { width: 46%; accent-color: var(--accent); }
-.ctl select {
+.ctl select, .ctl input[type=time] {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 55%;
 }
+.ctl input[type=time] { color-scheme: dark; font: inherit; font-size: 14px; }
+#idleNow:empty { display: none; }
 /* toggle */
 .sw {
   position: relative; width: 42px; min-width: 42px; height: 24px; min-height: 24px; border-radius: 12px;
