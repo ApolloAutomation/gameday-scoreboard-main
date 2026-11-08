@@ -160,7 +160,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
 //                                    follow=0/1 (Live games and Favorite teams: keep the game on
-//                                    the board until a while after its final; memory only, follow.h)
+//                                    the board until it ends, plus After the final in Favorite
+//                                    teams; memory only, follow.h)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -771,7 +772,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot &ha_game_() const;  // the game Home Assistant's sensors follow
   // Follow this game: the pin on the board's game, in memory only. The mode
   // asks following_() where it would move on; true while the pin holds, and
-  // it lets go once the final has been up for the mode's own time.
+  // it lets go once the game ends and its final has been up for the mode's
+  // own time, or the game can't be read or never finishes.
   ::espn::FollowPin follow_;
   bool following_();
   void start_fav_job_(uint32_t now);

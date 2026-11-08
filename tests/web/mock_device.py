@@ -209,9 +209,10 @@ def state_doc():
 def can_follow():
     """set_follow() (follow.h): the mode put the game on the board itself. Live games
     (and the old live modes 1-3) with a game it picked, not the team's card or the
-    finals, or Favorite teams with favorites. My team has nothing to pin."""
+    finals, or Favorite teams with favorites. My team has nothing to pin, and a game
+    that has ended has nothing left to keep up (a pin it already has stays)."""
     g = STATE.get("game") or {}
-    up = g.get("s", "NOT_FOUND") != "NOT_FOUND" and bool(g.get("id")) and g.get("sport") not in (5, 6)
+    up = g.get("s", "NOT_FOUND") not in ("NOT_FOUND", "POST") and bool(g.get("id")) and g.get("sport") not in (5, 6)
     if STATE["mode"] == 4:
         return up and any(STATE["favs"])
     return up and STATE["mode"] in (1, 2, 3, 5) and not STATE.get("fallback") and not STATE.get("recap")
@@ -314,7 +315,10 @@ def selftest():
         team_league = start.pop("team_league", "nfl")
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
-        # board: false stands for a board with nothing of the mode's own to follow.
+        # board: false stands for a board with nothing of the mode's own to follow,
+        # final: true for its game having ended.
+        if start.pop("final", False):
+            start["game"] = {**INITIAL["game"], "s": "POST"}
         if not start.pop("board", True):
             start["game"] = {"s": "NOT_FOUND"}
         reset_state(start)

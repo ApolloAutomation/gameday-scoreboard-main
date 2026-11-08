@@ -969,8 +969,9 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
 // ---- Follow this game ---------------------------------------------------------
 
 // follow=1 pins the game on the board: a game Live games picked, or the
-// favorite Favorite teams shows. My team, an empty board, and Live games'
-// fallback card and finals rotation have nothing to follow.
+// favorite Favorite teams shows. My team, an empty board, a game that has
+// ended, and Live games' fallback card and finals rotation have nothing to
+// follow.
 void GamedayComponent::set_follow(bool on) {
   if (!on) {
     if (!this->follow_.on)
@@ -985,22 +986,23 @@ void GamedayComponent::set_follow(bool on) {
   if (!::espn::follow_start(this->follow_, ::espn::follow_mode_ok(this->prefs2_.mode, !this->fav_.empty()),
                             picked && !this->demo_playing_(), this->game_,
                             (int64_t) this->time_->timestamp_now())) {
-    ESP_LOGW(TAG, "Follow this game: no game to follow in this mode");
+    ESP_LOGW(TAG, "Follow this game: no game to follow in this mode, or it has ended");
     return;
   }
-  ESP_LOGI(TAG, "Follow this game: %s vs %s (event %s) until it ends", this->game_.team_abbr.c_str(),
-           this->game_.opp_abbr.c_str(), this->game_.event_id.c_str());
+  ESP_LOGI(TAG, "Follow this game: %s vs %s (event %s)", this->game_.team_abbr.c_str(), this->game_.opp_abbr.c_str(),
+           this->game_.event_id.c_str());
   this->rebuild_state_(&this->last_fields_);
 }
 
-// The final stays up for the mode's own time: the league's in Live games,
-// as My team keeps one, and After the final in Favorite teams.
+// The final stays up for the mode's own time (follow_after_final_s), and a
+// game the panel can no longer read, or that never finishes, lets go too.
 bool GamedayComponent::following_() {
   if (!this->follow_.on)
     return false;
   bool fav = this->favorites_mode_();
-  int64_t after_final = fav ? (int64_t) this->prefs4_.release_seconds : (int64_t) (this->linger_ms_() / 1000);
-  if (::espn::follow_holds(this->follow_, this->game_, (int64_t) this->time_->timestamp_now(), after_final))
+  int64_t after_final = ::espn::follow_after_final_s(fav, this->prefs4_.release_seconds);
+  if (::espn::follow_holds(this->follow_, this->game_, (int64_t) this->time_->timestamp_now(), after_final,
+                           this->stale_seconds_()))
     return true;
   ESP_LOGI(TAG, "Follow this game: over, back to %s", fav ? "the favorites" : "switching games");
   this->rebuild_state_(&this->last_fields_);

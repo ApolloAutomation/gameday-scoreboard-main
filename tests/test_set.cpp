@@ -50,13 +50,14 @@ std::string keys(const std::vector<League> &leagues) {
 // gameday-common.yaml) is the one refusal outside set_request.h.
 // follow is the Follow this game pin, kept in memory only; board says the
 // mode has a game of its own on the panel to follow (not Live games'
-// fallback card or finals rotation, nor an empty board).
+// fallback card or finals rotation, nor an empty board), and final that the
+// game has ended.
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
   int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
-  bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, follow{false};
+  bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
 };
@@ -126,6 +127,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("autoupd", s.autoupd);
   flag("beta", s.beta);
   flag("board", s.board);
+  flag("final", s.final);
   flag("follow", s.follow);
 }
 
@@ -139,6 +141,8 @@ bool any_favorite(const Settings &s) {
 // A change to what the panel follows lets the Follow this game pin go: a new
 // team or mode (reset_game_), any favorites post (favorites_changed_) and new
 // leagues (set_live_mask_). The same team, mode or leagues again change nothing.
+// Those lines in gameday.cpp are mirrored here, not run: the host tests don't
+// build gameday.cpp. follow=1 itself goes through follow.h's follow_start.
 void apply(Settings &s, const SetOp &op) {
   switch (op.kind) {
     case SetKind::TEAM:
@@ -183,13 +187,25 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::BOOTADDR: s.bootaddr = op.on; break;
     case SetKind::AUTOUPD: s.autoupd = op.on; break;
     case SetKind::BETA: s.beta = op.on; break;
-    case SetKind::FOLLOW:
+    case SetKind::FOLLOW: {
       // set_follow: a follow=1 with nothing to follow leaves the pin as it was.
-      if (!op.on)
+      if (!op.on) {
         s.follow = false;
-      else if (s.board && follow_mode_ok((uint8_t) s.mode, any_favorite(s)))
-        s.follow = true;
+        break;
+      }
+      GameSnapshot g;
+      g.valid = true;
+      g.event_id = "401772001";
+      g.state = s.final ? GameState::POST : GameState::IN;
+      FollowPin p;
+      if (s.follow) {
+        p.on = true;
+        p.event_id = g.event_id;
+      }
+      follow_start(p, follow_mode_ok((uint8_t) s.mode, any_favorite(s)), s.board, g, 0);
+      s.follow = p.on;
       break;
+    }
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;

@@ -1710,6 +1710,7 @@ static GameSnapshot board_game(const char *event, GameState st, Sport sport = Sp
 
 static void test_follow() {
   const int64_t T = 1000000;
+  const int64_t H = 3600;
   // The modes that pick games themselves: Live games, the old live modes,
   // and Favorite teams with a favorite set.
   CHECK(follow_mode_ok((uint8_t) Mode::LIVE, false));
@@ -1721,6 +1722,15 @@ static void test_follow() {
   CHECK(!follow_mode_ok((uint8_t) Mode::MY_TEAM, true));
   CHECK(!follow_mode_ok(kModeCount, true));
 
+  // A final stays up for the mode's own time: Live games moves on at its
+  // first look after a final, as it does without the pin, and Favorite teams
+  // keeps it for After the final.
+  const int64_t LIVE = follow_after_final_s(false, 30);
+  CHECK_EQ(LIVE, (int64_t) 0);
+  CHECK_EQ(follow_after_final_s(false, 3600), (int64_t) 0);
+  CHECK_EQ(follow_after_final_s(true, 30), (int64_t) 30);
+  CHECK_EQ(follow_after_final_s(true, 3600), (int64_t) 3600);
+
   // Nothing to follow: the pin stays off
   FollowPin p;
   CHECK(!follow_start(p, false, true, board_game("1", GameState::IN), T));  // My team
@@ -1729,61 +1739,111 @@ static void test_follow() {
   CHECK(!follow_start(p, true, true, board_game("", GameState::PRE), T));   // a team's card before its first read
   CHECK(!follow_start(p, true, true, board_game("1", GameState::IN, Sport::GOLF), T));
   CHECK(!follow_start(p, true, true, board_game("1", GameState::IN, Sport::RACING), T));
+  CHECK(!follow_start(p, true, true, board_game("1", GameState::POST), T));  // over already: a favorite's last final
   CHECK(!p.on);
 
   // A live game holds for as long as it is on, whatever the switch timer says
   CHECK(follow_start(p, true, true, board_game("1", GameState::IN), T));
   CHECK(p.on);
+  CHECK_EQ(p.since, T);
   CHECK_EQ(p.final_epoch, (int64_t) 0);
-  CHECK(follow_holds(p, board_game("1", GameState::IN), T + 4 * 3600, 1800));
-  // Its final stays up for the mode's time after a final, from when the panel saw it
-  CHECK(follow_holds(p, board_game("1", GameState::POST), T + 5 * 3600, 1800));
-  CHECK_EQ(p.final_epoch, T + 5 * 3600);
-  CHECK(follow_holds(p, board_game("1", GameState::POST), T + 5 * 3600 + 1799, 1800));
-  CHECK(!follow_holds(p, board_game("1", GameState::POST), T + 5 * 3600 + 1800, 1800));
+  CHECK(follow_holds(p, board_game("1", GameState::IN), T + 4 * H, LIVE, 5));
+  // Live games: the first look at its final lets go
+  CHECK(!follow_holds(p, board_game("1", GameState::POST), T + 4 * H + 60, LIVE, 5));
   CHECK(!p.on);  // let go by itself
   CHECK(p.event_id.empty());
-  CHECK(!follow_holds(p, board_game("1", GameState::POST), T + 5 * 3600 + 1801, 1800));
+  CHECK(!follow_holds(p, board_game("1", GameState::POST), T + 4 * H + 120, LIVE, 5));
+
+  // Favorite teams: the final stays up for After the final, from when the panel saw it
+  CHECK(follow_start(p, true, true, board_game("2", GameState::IN), T));
+  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 3 * H, 300, 5));
+  CHECK_EQ(p.final_epoch, T + 3 * H);
+  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 3 * H + 299, 300, 5));
+  CHECK(!follow_holds(p, board_game("2", GameState::POST), T + 3 * H + 300, 300, 5));
+  CHECK(!p.on);
 
   // ESPN takes a final back: the wait starts over at the next one
   CHECK(follow_start(p, true, true, board_game("2", GameState::IN), T));
-  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 100, 30));
-  CHECK(follow_holds(p, board_game("2", GameState::IN), T + 200, 30));
+  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 100, 30, 5));
+  CHECK(follow_holds(p, board_game("2", GameState::IN), T + 200, 30, 5));
   CHECK_EQ(p.final_epoch, (int64_t) 0);
-  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 300, 30));
-  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 329, 30));
-  CHECK(!follow_holds(p, board_game("2", GameState::POST), T + 330, 30));
+  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 300, 30, 5));
+  CHECK(follow_holds(p, board_game("2", GameState::POST), T + 329, 30, 5));
+  CHECK(!follow_holds(p, board_game("2", GameState::POST), T + 330, 30, 5));
 
-  // A game far off holds too; another game on the board lets go at once
-  CHECK(follow_start(p, true, true, board_game("3", GameState::PRE), T));
-  CHECK(follow_holds(p, board_game("3", GameState::PRE), T + 86400, 30));
-  CHECK(!follow_holds(p, board_game("4", GameState::PRE), T + 86400, 30));
+  // A game days off holds until it is over; another game on the board lets go at once
+  GameSnapshot later = board_game("3", GameState::PRE);
+  later.kickoff_epoch = T + 3 * 86400;
+  CHECK(follow_start(p, true, true, later, T));
+  CHECK(follow_holds(p, later, T + 3 * 86400 + 8 * H - 1, 30, 5));
+  CHECK(!follow_holds(p, board_game("4", GameState::PRE), T + 86400, 30, 5));
   CHECK(!p.on);
   CHECK(follow_start(p, true, true, board_game("3", GameState::IN), T));
-  CHECK(!follow_holds(p, GameSnapshot{}, T + 10, 30));  // the board emptied
+  CHECK(!follow_holds(p, GameSnapshot{}, T + 10, 30, 5));  // the board emptied
   CHECK(!p.on);
 
-  // A final followed after it ended counts from the tap
-  CHECK(follow_start(p, true, true, board_game("5", GameState::POST), T));
-  CHECK_EQ(p.final_epoch, T);
-  CHECK(follow_holds(p, board_game("5", GameState::POST), T + 29, 30));
-  CHECK(!follow_holds(p, board_game("5", GameState::POST), T + 30, 30));
+  // A game that never finishes. ESPN stops answering for it: half an hour
+  // with no good read lets go, counted from the pin at the earliest, where
+  // Live games' Switch every moved past it before.
+  GameSnapshot on = board_game("4", GameState::IN);
+  on.kickoff_epoch = T - H;
+  CHECK(follow_start(p, true, true, on, T));
+  CHECK(follow_holds(p, on, T + 600, LIVE, 25 * 60 + 600));  // the reads went bad before the pin
+  CHECK(follow_holds(p, on, T + kFollowUnreadSeconds - 1, LIVE, 55 * 60 - 1));
+  CHECK(!follow_holds(p, on, T + kFollowUnreadSeconds, LIVE, 55 * 60));
+  CHECK(!p.on);
+  CHECK(follow_start(p, true, true, on, T));
+  CHECK(follow_holds(p, on, T + 2 * H, LIVE, kFollowUnreadSeconds - 1));  // a good read now and then keeps it
+  CHECK(!follow_holds(p, on, T + 2 * H, LIVE, kFollowUnreadSeconds));
+  // ESPN keeps it in progress: 8 hours past its start lets go
+  on.kickoff_epoch = T + H;  // pinned an hour before it started
+  CHECK(follow_start(p, true, true, on, T));
+  CHECK(follow_holds(p, on, T + 9 * H - 1, LIVE, 5));
+  CHECK(!follow_holds(p, on, T + 9 * H, LIVE, 5));
+  CHECK(!p.on);
+  // A game with no start, or pinned past its start, counts from the pin
+  on.kickoff_epoch = 0;
+  CHECK(follow_start(p, true, true, on, T));
+  CHECK(follow_holds(p, on, T + 8 * H - 1, LIVE, 5));
+  CHECK(!follow_holds(p, on, T + 8 * H, LIVE, 5));
+  on.kickoff_epoch = T - 10 * H;
+  CHECK(follow_start(p, true, true, on, T));
+  CHECK(follow_holds(p, on, T + 8 * H - 1, LIVE, 5));
+  CHECK(!follow_holds(p, on, T + 8 * H, LIVE, 5));
+  // A game with no start time yet counts from the end of its day
+  GameSnapshot tbd = board_game("5", GameState::PRE);
+  tbd.kickoff_epoch = T + 86400;
+  tbd.time_tbd = true;
+  CHECK(follow_start(p, true, true, tbd, T));
+  CHECK(follow_holds(p, tbd, T + 2 * 86400 + 8 * H - 1, 30, 5));
+  CHECK(!follow_holds(p, tbd, T + 2 * 86400 + 8 * H, 30, 5));
+  // A final that comes just inside the 8 hours still gets its own time
+  CHECK(follow_start(p, true, true, board_game("5", GameState::IN), T));
+  CHECK(follow_holds(p, board_game("5", GameState::IN), T + 8 * H - 60, 300, 5));
+  CHECK(follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 60, 300, 5));
+  CHECK(follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 359, 300, 5));
+  CHECK(!follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 360, 300, 5));
 
-  // follow=1 again on the same game keeps its count, on another game starts over
-  CHECK(follow_start(p, true, true, board_game("6", GameState::POST), T));
+  // follow=1 again on the same game keeps its count, even on its final; on
+  // another game it starts over
+  CHECK(follow_start(p, true, true, board_game("6", GameState::IN), T));
+  CHECK(follow_holds(p, board_game("6", GameState::POST), T + 10, 30, 5));
   CHECK(follow_start(p, true, true, board_game("6", GameState::POST), T + 20));
-  CHECK_EQ(p.final_epoch, T);
+  CHECK_EQ(p.final_epoch, T + 10);
+  CHECK_EQ(p.since, T);
   CHECK(follow_start(p, true, true, board_game("7", GameState::IN), T + 20));
   CHECK_EQ(p.event_id, std::string("7"));
   CHECK_EQ(p.final_epoch, (int64_t) 0);
+  CHECK_EQ(p.since, T + 20);
   // A refused follow=1 leaves the pin as it was
   CHECK(!follow_start(p, false, true, board_game("8", GameState::IN), T + 20));
+  CHECK(!follow_start(p, true, true, board_game("8", GameState::POST), T + 20));
   CHECK(p.on);
   CHECK_EQ(p.event_id, std::string("7"));
   // No pin, nothing held
   FollowPin off;
-  CHECK(!follow_holds(off, GameSnapshot{}, T, 30));
-  CHECK(!follow_holds(off, board_game("7", GameState::IN), T, 30));
+  CHECK(!follow_holds(off, GameSnapshot{}, T, 30, 5));
+  CHECK(!follow_holds(off, board_game("7", GameState::IN), T, 30, 5));
 }
 
 static void test_schedule_league() {
