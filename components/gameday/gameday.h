@@ -30,6 +30,7 @@
 #include "guard.h"
 #include "health.h"
 #include "hotspot.h"
+#include "idle.h"
 #include "offseason.h"
 #include "recap.h"
 #include "poll_timing.h"
@@ -174,6 +175,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    alerts=<mask> (the big plays that splash, bit (Alert - 1), alerts.h)
 //                                    alertfav=0/1 (big plays only in games with the team or a favorite)
 //                                    standing=0 record|1 seed|2 place (next to pro teams)
+//                                    idle=0-4 (idle.h) idledim=0-255 night=0/1
+//                                    nightstart=HH:MM nightend=HH:MM nightbri=1-255
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -326,8 +329,21 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_auto_update(bool on);
   // Heat and power protection (guard.h). guard_brightness() is what the
   // display gets for the owner's Brightness; it runs from on_boot before
-  // setup(), so it loads the power log itself the first time.
-  uint8_t guard_brightness(uint8_t want);
+  // setup(), so it loads the power log itself the first time. With idle, the
+  // idle display's dim level and the night brightness (idle.h) come first;
+  // QC passes false and lights at the owner's setting. 0 is dark: the HUB75
+  // driver stops, and the screen needs gd_repaint when it comes back.
+  uint8_t guard_brightness(uint8_t want, bool idle = true);
+  // The owner changed the Brightness (the number's on_value): inside the
+  // night hours their setting wins over the night brightness until morning.
+  void note_brightness();
+  // The idle display and the night hours (idle.h), from the device page.
+  void set_idle(int show);
+  void set_idle_dim(int level);
+  void set_night(bool on);
+  void set_night_start(int minute);
+  void set_night_end(int minute);
+  void set_night_bri(int level);
   // The chip temperature sensor's readings (firmware/pages/guard.yaml).
   void set_chip_temp(float c);
   // What the panel's corner says: 0 nothing, 1 too warm, 2 check power.
@@ -501,6 +517,23 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ::espn::Splash board_splash_(bool neutral) const;
   // One panel or two: how wide a splash's words can run.
   bool wide_() const { return this->panels_ != nullptr && this->panels_->cols() >= 2; }
+  // The idle display and the night hours (idle.h), in their own blob
+  // (gameday_idle_v1). Its size is fixed: a blob that changes size fails to
+  // load and resets every setting in it, so later settings take the spare
+  // bytes or a new blob. A panel without it (or with one that doesn't make
+  // sense) gets IdleShow::NEXT, what every mode showed before, and night
+  // hours that are off.
+  struct IdlePrefs {
+    uint8_t idle;          // espn::IdleShow
+    uint8_t dim;           // Off or dim's level, 0 = dark
+    uint8_t night_on;      // 1 = the night hours apply
+    uint8_t night_bri;     // the brightness in the night hours, 1-255
+    uint16_t night_start;  // minutes after local midnight
+    uint16_t night_end;
+    uint8_t spare[4];
+  } __attribute__((packed));
+  static_assert(sizeof(IdlePrefs) == 12, "IdlePrefs is saved as it is: a new size resets every setting in it");
+  void save_idle_prefs_() { this->idle_pref_.save(&this->idle_prefs_); }
 
   bool flag_(uint8_t f) const { return (this->prefs_.flags & f) != 0; }
   void set_flag_(uint8_t f, bool on);
@@ -566,6 +599,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // none listed, the calendar for the next event (espn::board_next).
     bool need_board{false};
     bool board_next_ok{false};
+    // The scores rotation's own read (a scan or a day), when it is the idle
+    // display in My team or Favorite teams: it goes in between the mode's
+    // reads and leaves their timing alone (start_side_job_).
+    bool side{false};
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -617,10 +654,17 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool live_mode_() const { return is_live_mode_(this->effective_mode_()); }
   // The leagues the scan reads (set_request.h). The finals rotation covers
   // the same ones, as recap_bit()s, so it never walks a league the scan skips.
+  // My team and Favorite teams scan only for the idle display's scores.
   std::vector<League> scan_leagues_() const {
     uint8_t m = this->effective_mode_();
+    if (this->side_on_)
+      return ::espn::scan_leagues(m, this->side_leagues_(), true);
     return ::espn::scan_leagues(m, m == (uint8_t) Mode::LIVE ? this->live_leagues_() : std::vector<League>{});
   }
+  // The idle display's scores outside Live games: Live games' own leagues
+  // when picked by hand, else the team's and the favorites'. Empty for a golf
+  // tour or a racing series with no favorites: then the clock.
+  std::vector<League> side_leagues_() const;
   uint16_t recap_leagues_() const {
     uint16_t mask = 0;
     for (League l : this->scan_leagues_())
@@ -647,6 +691,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void take_game_on_now_(const ::espn::Team *team, Schedule &s, const std::string &done_event,
                          const char *comp_slug = nullptr);
   void emit_(const ::espn::Splash &splash);
+  // The board's fields for one game: the scoreboard, its ticker and a
+  // leaderboard's columns, before any mode's or the idle display's words.
+  void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f);
+  // "Sun 3:25 PM" for a game not started yet, in the panel's time zone.
+  std::string kickoff_of_(const GameSnapshot &g) const;
+  // The mode's own words over its board (board: g is a leaderboard).
+  void mode_fields_(UpdateFields &f, bool board);
   bool hold_for_logos_(const UpdateFields &f);
   bool logo_hold_done_();
   void draw_(const UpdateFields &f);
@@ -656,8 +707,59 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t logo_hold_ms_{0};
   bool logo_held_{false};
   // Turns f into the off-season clock card when the board has nothing to
-  // show for months (offseason.h); leaves it alone otherwise.
-  void clock_fields_(UpdateFields &f);
+  // show for months (offseason.h); leaves it alone otherwise. force: the idle
+  // display's clock, whatever the season, with the next game under it.
+  void clock_fields_(UpdateFields &f, bool force = false);
+
+  // The idle display and the night hours (idle.h). idle_ is the state of the
+  // last idle_update_(), idle_view_ what that comes to in this mode: Live
+  // games' scores are its own rotation (BOARD), and a view with nothing to
+  // show (no team for My team today, no league for the scores) is the clock.
+  ESPPreferenceObject idle_pref_;
+  IdlePrefs idle_prefs_{};
+  ::espn::IdleState idle_;
+  ::espn::IdleView idle_view_{::espn::IdleView::BOARD};
+  bool night_override_{false};  // the owner set the brightness during these night hours
+  uint32_t idle_tick_ms_{0};
+  int idle_minute_{-1};  // the minute My team today's countdown was drawn in
+  // Recomputes idle_ and idle_view_; true when the view changed. Fires the
+  // "dim" action (gameday-common.yaml) when the brightness should change.
+  bool idle_update_();
+  void idle_tick_();
+  // A followed game is on, its final is up for the mode's wait, Favorite
+  // teams has taken over for a game, or Follow this game holds.
+  bool idle_busy_() const;
+  ::espn::IdleView idle_effective_(::espn::IdleView v) const;
+  void idle_changed_(bool live_switch);  // a setting changed: redraw, and in Live games maybe scan again
+  // f becomes the idle display's view (idle_view_), keeping Home
+  // Assistant's lines.
+  void idle_fields_(UpdateFields &f);
+  // My team today's game: the team's (or a favorite's) game today, else
+  // today's final; nullptr for the clock.
+  const GameSnapshot *today_game_() const;
+  // Live games' finals rotation also stands in for a team's card when the
+  // idle display is the scores.
+  bool live_recap_() const {
+    return this->current_team_() == nullptr || this->idle_prefs_.idle == (uint8_t) ::espn::IdleShow::SCORES;
+  }
+  // Two snapshots in PSRAM: [0] the scores rotation's card outside Live
+  // games, [1] the last final of the team (or a favorite) today.
+  std::vector<GameSnapshot, PsramAllocator<GameSnapshot>> idle_snaps_;
+  GameSnapshot &side_card_() { return this->idle_snaps_[0]; }
+  GameSnapshot &today_final_() { return this->idle_snaps_[1]; }
+  const GameSnapshot &today_final_() const { return this->idle_snaps_[1]; }
+  void note_final_(const GameSnapshot &g);  // a followed game is final: My team today keeps it until midnight
+  // The scores rotation as the idle display in My team or Favorite teams.
+  // Its reads go in between the mode's own (start_side_job_ from loop()),
+  // today's scan every side_rescan_ms_ and the days the rotation needs.
+  bool side_on_{false};
+  uint32_t side_check_ms_{0};
+  uint32_t side_scan_ms_{0};  // when the last scan started, 0 = due now
+  uint32_t side_rescan_ms_{0};
+  uint32_t side_wait_since_{0};
+  uint32_t side_wait_ms_{0};  // after a failed read, 0 = none
+  bool start_side_job_();
+  void apply_side_job_();
   void reset_game_();
   // Clears the board and scans again now, for a change in what the mode
   // follows. The caller starts the boot screen hold first.
@@ -862,6 +964,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   std::string recap_fwd_match_[::espn::kLeagueCount];
   bool recap_job_(Job &j, int64_t tnow);  // fills j with the next walk step, if any
   void apply_recap_job_();
+  bool recap_day_(Job &j);  // folds a day's read in; false when the read failed
   void recap_absorb_(const Job &j, int64_t tnow);  // a scan's finals, games to come and next kickoff
   // The next kickoff after today's games, and its matchup when known.
   int64_t recap_next_kickoff_(std::string *matchup = nullptr) const;
@@ -871,6 +974,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void recap_rebuild_();
   void recap_tick_();
   void recap_show_();
+  // Puts the current card in place, the board's game in Live games or the
+  // side card (idle display), with its words, without drawing it.
+  void recap_prepare_();
 
   Schedule schedule_;
   uint32_t schedule_fetched_ms_{0};

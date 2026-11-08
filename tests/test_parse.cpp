@@ -19,6 +19,7 @@
 #include "guard.h"
 #include "health.h"
 #include "hotspot.h"
+#include "idle.h"
 #include "logo_lru.h"
 #include "offseason.h"
 #include "panel_text.h"
@@ -8016,6 +8017,261 @@ static void test_racing_timing() {
   CHECK(!racing_read_is_older(golf, lap33));
 }
 
+// ---- The idle display (idle.h) ----------------------------------------------
+
+// The night hours: start included, end not, across midnight when the end is
+// earlier, and none at all when they are the same.
+static void test_idle_night_window() {
+  const int ten_pm = 22 * 60, seven_am = 7 * 60;
+  CHECK(in_night(ten_pm, ten_pm, seven_am));
+  CHECK(in_night(23 * 60 + 59, ten_pm, seven_am));
+  CHECK(in_night(0, ten_pm, seven_am));  // midnight
+  CHECK(in_night(seven_am - 1, ten_pm, seven_am));
+  CHECK(!in_night(seven_am, ten_pm, seven_am));
+  CHECK(!in_night(12 * 60, ten_pm, seven_am));
+  CHECK(!in_night(ten_pm - 1, ten_pm, seven_am));
+  // Inside one day: 1 AM to 6 AM
+  CHECK(in_night(60, 60, 360));
+  CHECK(in_night(359, 60, 360));
+  CHECK(!in_night(360, 60, 360));
+  CHECK(!in_night(59, 60, 360));
+  CHECK(!in_night(23 * 60, 60, 360));
+  // The same start and end is no night hours, not all day.
+  for (int m = 0; m < kDayMinutes; m += 37)
+    CHECK(!in_night(m, 600, 600));
+  // 10 PM to 7 AM is nine hours, minute by minute across midnight.
+  int night = 0;
+  for (int m = 0; m < kDayMinutes; m++)
+    night += in_night(m, ten_pm, seven_am) ? 1 : 0;
+  CHECK_EQ(night, 9 * 60);
+  // From the last minute of the day to the first.
+  CHECK(in_night(23 * 60 + 59, 23 * 60 + 59, 0));
+  CHECK(!in_night(0, 23 * 60 + 59, 0));
+}
+
+// What shows: the mode's board while a followed game is on, the owner's
+// choice when nothing is, and at night the quiet version of it.
+static void test_idle_state() {
+  IdleInputs in;
+  in.clock_valid = true;
+  in.minute = 14 * 60;  // 2 PM
+  in.night_on = true;
+  in.night_start = 22 * 60;
+  in.night_end = 7 * 60;
+  auto view = [&](IdleShow show) {
+    in.show = (uint8_t) show;
+    return idle_state(in);
+  };
+  // A panel that never chose: the mode's own board, day and night alike
+  // until the night hours (then the clock).
+  CHECK(view(IdleShow::NEXT).view == IdleView::BOARD);
+  CHECK(!view(IdleShow::NEXT).night);
+  CHECK(view(IdleShow::CLOCK).view == IdleView::CLOCK);
+  CHECK(view(IdleShow::SCORES).view == IdleView::SCORES);
+  CHECK(view(IdleShow::TODAY).view == IdleView::TODAY);
+  IdleState off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::CLOCK && off.dim && !off.night);
+  // A followed game on (or its final's wait, or Follow this game): the board,
+  // whatever the choice.
+  in.busy = true;
+  for (int s = 0; s < kIdleCount; s++) {
+    IdleState st = view((IdleShow) s);
+    CHECK(st.view == IdleView::BOARD && !st.dim && !st.night);
+  }
+  // At night: the scores and the mode's board give way to the clock; My team
+  // today and Off or dim stay. A followed game still shows, in the night
+  // hours (night brightness).
+  in.minute = 23 * 60;
+  CHECK(view(IdleShow::SCORES).view == IdleView::BOARD);  // busy
+  CHECK(view(IdleShow::SCORES).night);
+  in.busy = false;
+  CHECK(view(IdleShow::NEXT).view == IdleView::CLOCK);
+  CHECK(view(IdleShow::SCORES).view == IdleView::CLOCK);
+  CHECK(view(IdleShow::CLOCK).view == IdleView::CLOCK);
+  CHECK(view(IdleShow::TODAY).view == IdleView::TODAY);
+  off = view(IdleShow::OFF);
+  CHECK(off.view == IdleView::CLOCK && off.dim && off.night);
+  // The night hours off: night never comes.
+  in.night_on = false;
+  CHECK(!view(IdleShow::SCORES).night);
+  CHECK(view(IdleShow::SCORES).view == IdleView::SCORES);
+  CHECK(view(IdleShow::NEXT).view == IdleView::BOARD);
+  // No clock yet: nothing can be decided, so the mode's board at the owner's
+  // brightness, night hours or not.
+  in.night_on = true;
+  in.clock_valid = false;
+  for (int s = 0; s < kIdleCount; s++) {
+    IdleState st = view((IdleShow) s);
+    CHECK(st.view == IdleView::BOARD && !st.dim && !st.night);
+  }
+  // A byte from a newer firmware: the mode's own board.
+  in.clock_valid = true;
+  in.minute = 12 * 60;
+  in.show = 9;
+  CHECK(idle_state(in).view == IdleView::BOARD);
+  CHECK(std::string(idle_view_key(IdleView::BOARD)).empty());
+  CHECK_EQ(std::string(idle_view_key(IdleView::TODAY)), std::string("today"));
+}
+
+static void test_idle_brightness() {
+  IdleState day;
+  CHECK_EQ((int) idle_brightness(128, day, 20, 0, false), 128);
+  IdleState night;
+  night.night = true;
+  CHECK_EQ((int) idle_brightness(128, night, 20, 0, false), 20);
+  // The owner changed the brightness tonight: theirs.
+  CHECK_EQ((int) idle_brightness(128, night, 20, 0, true), 128);
+  CHECK_EQ((int) idle_brightness(20, night, 60, 0, true), 20);  // WizMote NIGHT in the night hours
+  // Off: dark, day or night.
+  IdleState dark;
+  dark.dim = true;
+  CHECK_EQ((int) idle_brightness(128, dark, 20, 0, false), 0);
+  dark.night = true;
+  CHECK_EQ((int) idle_brightness(128, dark, 20, 0, false), 0);
+  // Dim: the dim level, never brighter than the panel would be anyway.
+  IdleState dim;
+  dim.dim = true;
+  CHECK_EQ((int) idle_brightness(128, dim, 20, 30, false), 30);
+  CHECK_EQ((int) idle_brightness(10, dim, 20, 30, false), 10);
+  dim.night = true;
+  CHECK_EQ((int) idle_brightness(128, dim, 20, 30, false), 20);
+  CHECK_EQ((int) idle_brightness(128, dim, 40, 30, false), 30);
+  // Then the heat and power guard on top, as guard_brightness() does it.
+  CHECK_EQ((int) guarded_brightness(idle_brightness(200, night, 100, 0, false), 0, true), (int) kPowerCap);
+}
+
+static void test_idle_countdown() {
+  CHECK_EQ(countdown_text(2 * 3600 + 15 * 60), std::string("in 2h 15m"));
+  CHECK_EQ(countdown_text(2 * 3600), std::string("in 2h"));
+  CHECK_EQ(countdown_text(45 * 60), std::string("in 45m"));
+  // Rounded up: a game 30 seconds away is a minute away, never "in 0m".
+  CHECK_EQ(countdown_text(30), std::string("in 1m"));
+  CHECK_EQ(countdown_text(61), std::string("in 2m"));
+  CHECK_EQ(countdown_text(2 * 3600 - 1), std::string("in 2h"));
+  CHECK_EQ(countdown_text(2 * 3600 + 1), std::string("in 2h 1m"));
+  CHECK_EQ(countdown_text(23 * 3600 + 59 * 60), std::string("in 23h 59m"));
+  // Due, or late (ESPN keeps a game waiting a while)
+  CHECK_EQ(countdown_text(0), std::string("Starting"));
+  CHECK_EQ(countdown_text(-600), std::string("Starting"));
+  // Fits a single panel's 12 characters in spleen_8.
+  CHECK(countdown_text(23 * 3600 + 59 * 60).size() <= 12);
+}
+
+static void test_idle_hhmm() {
+  CHECK_EQ(parse_hhmm("22:00"), 22 * 60);
+  CHECK_EQ(parse_hhmm("07:05"), 7 * 60 + 5);
+  CHECK_EQ(parse_hhmm("7:05"), 7 * 60 + 5);
+  CHECK_EQ(parse_hhmm("00:00"), 0);
+  CHECK_EQ(parse_hhmm("23:59"), 23 * 60 + 59);
+  CHECK_EQ(parse_hhmm("24:00"), -1);
+  CHECK_EQ(parse_hhmm("12:60"), -1);
+  CHECK_EQ(parse_hhmm("1200"), -1);
+  CHECK_EQ(parse_hhmm(""), -1);
+  CHECK_EQ(parse_hhmm(":30"), -1);
+  CHECK_EQ(parse_hhmm("1:5"), -1);
+  CHECK_EQ(parse_hhmm("001:00"), -1);
+  CHECK_EQ(parse_hhmm("ab:cd"), -1);
+  CHECK_EQ(parse_hhmm("-1:00"), -1);
+  CHECK_EQ(parse_hhmm("10:00 PM"), -1);
+  CHECK_EQ(clock_hhmm(7 * 60 + 5), std::string("07:05"));
+  CHECK_EQ(clock_hhmm(22 * 60), std::string("22:00"));
+  CHECK_EQ(clock_hhmm(kDayMinutes), std::string("00:00"));
+  CHECK_EQ(clock_hhmm(-5), std::string("00:00"));
+  for (int m = 0; m < kDayMinutes; m += 7)
+    CHECK_EQ(parse_hhmm(clock_hhmm(m)), m);
+}
+
+// Today in a zone utc_offset_s from UTC, the way the panel works it out from
+// its local time.
+static LocalDay idle_day(int64_t now, int utc_offset_s) {
+  struct tm t = utc_tm(now + utc_offset_s);
+  return local_day(now, t.tm_hour, t.tm_min, t.tm_sec);
+}
+
+static TodayGame idle_game(GameState state, const char *kick, bool tbd = false) {
+  TodayGame g;
+  g.valid = true;
+  g.state = state;
+  g.kickoff = parse_iso8601_z(kick);
+  g.tbd = tbd;
+  return g;
+}
+
+// My team today: the game today counts down, its final stays until local
+// midnight, and a day without one is the clock, all in the panel's zone.
+static void test_idle_today() {
+  const int central = -6 * 3600, utc = 0, berlin = 3600;
+  const int64_t noon_central = parse_iso8601_z("2026-11-08T18:00Z");  // Sunday noon, US Central
+  // A 7 PM Central kickoff is Monday 01:00 UTC.
+  std::vector<TodayGame> sunday_night = {idle_game(GameState::PRE, "2026-11-09T01:00Z")};
+  CHECK_EQ(today_pick(sunday_night, idle_day(noon_central, central)), 0);
+  CHECK_EQ(today_pick(sunday_night, idle_day(noon_central, utc)), -1);     // tomorrow in UTC
+  CHECK_EQ(today_pick(sunday_night, idle_day(noon_central, berlin)), -1);  // tomorrow in Berlin too
+  // The day runs midnight to midnight local.
+  LocalDay d = idle_day(noon_central, central);
+  CHECK_EQ(d.start, parse_iso8601_z("2026-11-08T06:00Z"));
+  CHECK_EQ(d.end, parse_iso8601_z("2026-11-09T06:00Z"));
+
+  // The final, until local midnight: at 11:59 PM yes, at 12:01 AM the clock.
+  std::vector<TodayGame> final_only = {idle_game(GameState::POST, "2026-11-09T01:00Z")};
+  CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T05:59Z"), central)), 0);
+  CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T06:01Z"), central)), -1);
+  // A late game that ends past midnight is the day it started: the clock
+  // the next day.
+  CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T07:30Z"), central)), -1);
+
+  // A doubleheader: the second game counts down once the first is over, then
+  // its own final is the one that stays.
+  std::vector<TodayGame> two = {idle_game(GameState::POST, "2026-11-08T19:00Z"),
+                                idle_game(GameState::PRE, "2026-11-09T00:10Z")};
+  CHECK_EQ(today_pick(two, d), 1);
+  two[1].state = GameState::POST;
+  CHECK_EQ(today_pick(two, d), 1);
+  two[0].kickoff = parse_iso8601_z("2026-11-09T02:00Z");  // the later one wins
+  CHECK_EQ(today_pick(two, d), 0);
+
+  // Favorites: the first game today that hasn't ended, whoever plays it.
+  std::vector<TodayGame> favs = {idle_game(GameState::PRE, "2026-11-09T03:00Z"),
+                                 idle_game(GameState::PRE, "2026-11-10T01:00Z"),  // tomorrow
+                                 idle_game(GameState::PRE, "2026-11-08T21:00Z"),
+                                 idle_game(GameState::POST, "2026-11-08T17:00Z")};
+  CHECK_EQ(today_pick(favs, d), 2);
+  favs[2].state = GameState::POST;
+  CHECK_EQ(today_pick(favs, d), 0);
+  favs[0].state = GameState::POST;
+  CHECK_EQ(today_pick(favs, d), 0);  // the latest final today
+
+  // No game today, a game with nothing to show, and one ESPN dropped.
+  std::vector<TodayGame> none = {idle_game(GameState::PRE, "2026-11-12T01:00Z"), TodayGame{},
+                                 idle_game(GameState::NOT_FOUND, "2026-11-08T20:00Z")};
+  CHECK_EQ(today_pick(none, d), -1);
+  CHECK_EQ(today_pick({}, d), -1);
+
+  // A game with no time yet sits at midnight Eastern of its day: Sunday's is
+  // today in Central, though its placeholder is Saturday evening there.
+  std::vector<TodayGame> tbd = {idle_game(GameState::PRE, "2026-11-08T05:00Z", true)};
+  CHECK_EQ(today_pick(tbd, d), 0);
+  tbd[0].tbd = false;
+  CHECK_EQ(today_pick(tbd, d), -1);  // with a real time, 11 PM Saturday Central
+}
+
+// The leagues the idle display's scores read in My team and Favorite teams.
+static void test_idle_scan_leagues() {
+  std::vector<League> live = {League::MLB, League::NHL};
+  CHECK(scan_leagues((uint8_t) Mode::MY_TEAM, live).empty());
+  CHECK(scan_leagues((uint8_t) Mode::FAVORITES, live).empty());
+  CHECK(scan_leagues((uint8_t) Mode::MY_TEAM, live, true) == live);
+  CHECK(scan_leagues((uint8_t) Mode::FAVORITES, live, true) == live);
+  CHECK(scan_leagues((uint8_t) Mode::LIVE, live, true) == live);
+  CHECK(scan_leagues((uint8_t) Mode::LIVE_NFL, live, true) == std::vector<League>{League::NFL});
+  // A golf tour with no favorites has no league to read: no NFL stand-in.
+  CHECK(live_leagues(0, (uint8_t) League::PGA, {}, false).empty());
+  CHECK(live_leagues(0, (uint8_t) League::PGA, {}) == std::vector<League>{League::NFL});
+  CHECK(live_leagues(0, 0xFF, {(uint8_t) League::NBA}, false) == std::vector<League>{League::NBA});
+  CHECK(live_leagues(0, (uint8_t) League::NHL, {(uint8_t) League::MLB}, false) ==
+        (std::vector<League>{League::MLB, League::NHL}));
+}
+
 int main() {
   test_urls();
   test_iso();
@@ -8162,6 +8418,13 @@ int main() {
   test_panel_text();
   test_wifi_history();
   test_wifi_causes();
+  test_idle_night_window();
+  test_idle_state();
+  test_idle_brightness();
+  test_idle_countdown();
+  test_idle_hhmm();
+  test_idle_today();
+  test_idle_scan_leagues();
   failures += run_set_tests(checks);
   failures += run_alert_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);

@@ -11,14 +11,18 @@
     "follow is the Follow this game pin, kept in memory only. board (start only) says the mode",
     "has a game of its own on the panel to follow: not Live games' fallback card or finals, nor",
     "an empty board, and final (start only) that its game has ended. A new team or mode, any",
-    "favorites post or new leagues let the pin go."
+    "favorites post or new leagues let the pin go.",
+    "idle is the idle display (0 next game, 1 clock, 2 scores, 3 my team today, 4 off or dim),",
+    "idledim its dim level (0 dark), night the night hours with nightstart and nightend (HH:MM,",
+    "24-hour) and nightbri their brightness."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
     "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false,
-    "alerts": 524287, "alertfav": false, "standing": 0
+    "alerts": 524287, "alertfav": false, "standing": 0,
+    "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -180,6 +184,30 @@
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},
-    {"name": "one refused key doesn't stop the rest", "set": [["mode", "9"], ["rotate", "5"], ["tz", "Mars"]], "expect": {"mode": 0, "rotate": 5, "tz": 1}}
+    {"name": "one refused key doesn't stop the rest", "set": [["mode", "9"], ["rotate", "5"], ["tz", "Mars"]], "expect": {"mode": 0, "rotate": 5, "tz": 1}},
+
+    {"name": "idle display: the scores", "set": [["idle", "2"]], "expect": {"idle": 2}},
+    {"name": "idle display: off or dim", "set": [["idle", "4"]], "expect": {"idle": 4}},
+    {"name": "idle past the choices is refused", "start": {"idle": 1}, "set": [["idle", "5"]], "expect": {"idle": 1}},
+    {"name": "a negative idle is refused", "start": {"idle": 3}, "set": [["idle", "-1"]], "expect": {"idle": 3}},
+    {"name": "idle reads like atoi", "set": [["idle", "3x"]], "expect": {"idle": 3}},
+    {"name": "idle as text is the next game", "start": {"idle": 2}, "set": [["idle", "clock"]], "expect": {"idle": 0}},
+    {"name": "dim level in range", "set": [["idledim", "40"]], "expect": {"idledim": 40}},
+    {"name": "dim level 0 is dark", "start": {"idledim": 40}, "set": [["idledim", "0"]], "expect": {"idledim": 0}},
+    {"name": "dim level above 255 clamps down", "set": [["idledim", "999"]], "expect": {"idledim": 255}},
+    {"name": "a negative dim level clamps up", "start": {"idledim": 40}, "set": [["idledim", "-5"]], "expect": {"idledim": 0}},
+    {"name": "night hours on", "set": [["night", "1"]], "expect": {"night": true}},
+    {"name": "night hours are on for 1 only", "start": {"night": true}, "set": [["night", "on"]], "expect": {"night": false}},
+    {"name": "night start and end", "set": [["nightstart", "23:30"], ["nightend", "06:15"]], "expect": {"nightstart": "23:30", "nightend": "06:15"}},
+    {"name": "a night time with one hour digit", "set": [["nightend", "6:00"]], "expect": {"nightend": "06:00"}},
+    {"name": "a night time in minutes is refused", "set": [["nightstart", "1350"]], "expect": {"nightstart": "22:00"}},
+    {"name": "a night time past the day is refused", "set": [["nightend", "24:00"]], "expect": {"nightend": "07:00"}},
+    {"name": "a 12-hour night time is refused", "set": [["nightstart", "11:30 PM"]], "expect": {"nightstart": "22:00"}},
+    {"name": "an empty night time is refused", "set": [["nightend", ""]], "expect": {"nightend": "07:00"}},
+    {"name": "night brightness in range", "set": [["nightbri", "35"]], "expect": {"nightbri": 35}},
+    {"name": "night brightness never goes dark", "set": [["nightbri", "0"]], "expect": {"nightbri": 1}},
+    {"name": "night brightness above 255 clamps down", "set": [["nightbri", "400"]], "expect": {"nightbri": 255}},
+    {"name": "the idle display and night hours in one request", "set": [["nightbri", "12"], ["night", "1"], ["idledim", "8"], ["idle", "4"]], "expect": {"idle": 4, "idledim": 8, "night": true, "nightbri": 12}},
+    {"name": "the idle display keeps the follow pin", "start": {"mode": 5, "follow": true}, "set": [["idle", "1"], ["night", "1"]], "expect": {"follow": true, "idle": 1, "night": true}}
   ]
 }

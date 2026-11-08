@@ -61,6 +61,10 @@ struct Settings {
   TeamRef favs[16];
   uint16_t live_mask{0};
   int alerts{(1 << kAlertBits) - 1};
+  // The idle display and the night hours (IdlePrefs' defaults)
+  int idle{0}, idledim{0}, nightstart{kNightStartDefault}, nightend{kNightEndDefault},
+      nightbri{kNightBrightnessDefault};
+  bool night{false};
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 2;
@@ -133,6 +137,14 @@ void load(Settings &s, JsonObjectConst o) {
   flag("final", s.final);
   flag("follow", s.follow);
   flag("alertfav", s.alertfav);
+  num("idle", s.idle);
+  num("idledim", s.idledim);
+  num("nightbri", s.nightbri);
+  flag("night", s.night);
+  if (o["nightstart"].is<const char *>())
+    s.nightstart = parse_hhmm(o["nightstart"].as<const char *>());
+  if (o["nightend"].is<const char *>())
+    s.nightend = parse_hhmm(o["nightend"].as<const char *>());
 }
 
 bool any_favorite(const Settings &s) {
@@ -220,6 +232,12 @@ void apply(Settings &s, const SetOp &op) {
         s.panels = cols;
       break;
     }
+    case SetKind::IDLE: s.idle = op.value; break;
+    case SetKind::IDLE_DIM: s.idledim = op.value; break;
+    case SetKind::NIGHT: s.night = op.on; break;
+    case SetKind::NIGHT_START: s.nightstart = op.value; break;
+    case SetKind::NIGHT_END: s.nightend = op.value; break;
+    case SetKind::NIGHT_BRI: s.nightbri = op.value; break;
   }
 }
 
@@ -263,6 +281,12 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["alerts"] = s.alerts;
   doc["alertfav"] = s.alertfav;
   doc["standing"] = s.standing;
+  doc["idle"] = s.idle;
+  doc["idledim"] = s.idledim;
+  doc["night"] = s.night;
+  doc["nightstart"] = clock_hhmm(s.nightstart);
+  doc["nightend"] = clock_hhmm(s.nightend);
+  doc["nightbri"] = s.nightbri;
 }
 
 void test_fixture_cases() {
@@ -366,10 +390,28 @@ void test_parse_set() {
   SCHECK(!parse_set("standing", "3", op, kFavMax), "standing 3");
   SCHECK(!parse_set("standing", "-1", op, kFavMax), "standing -1");
 
+  SCHECK(parse_set("idle", "4", op, kFavMax) && op.kind == SetKind::IDLE && op.value == 4, "idle 4");
+  SCHECK(parse_set("idle", "0", op, kFavMax) && op.value == 0, "idle 0");
+  SCHECK(!parse_set("idle", "5", op, kFavMax), "idle 5 is past the choices");
+  SCHECK(!parse_set("idle", "-1", op, kFavMax), "idle -1");
+  SCHECK(parse_set("idledim", "0", op, kFavMax) && op.kind == SetKind::IDLE_DIM && op.value == 0, "idledim 0 is dark");
+  SCHECK(parse_set("idledim", "300", op, kFavMax) && op.value == kIdleDimMax, "idledim clamps down");
+  SCHECK(parse_set("idledim", "-4", op, kFavMax) && op.value == 0, "idledim clamps up");
+  SCHECK(parse_set("night", "1", op, kFavMax) && op.kind == SetKind::NIGHT && op.on, "night 1");
+  SCHECK(parse_set("nightstart", "22:30", op, kFavMax) && op.kind == SetKind::NIGHT_START && op.value == 22 * 60 + 30,
+         "nightstart");
+  SCHECK(parse_set("nightend", "6:45", op, kFavMax) && op.kind == SetKind::NIGHT_END && op.value == 6 * 60 + 45,
+         "nightend");
+  SCHECK(!parse_set("nightstart", "1350", op, kFavMax), "nightstart in minutes is refused");
+  SCHECK(!parse_set("nightend", "25:00", op, kFavMax), "nightend 25:00");
+  SCHECK(parse_set("nightbri", "0", op, kFavMax) && op.kind == SetKind::NIGHT_BRI && op.value == kNightBriMin,
+         "nightbri never goes dark");
+  SCHECK(parse_set("nightbri", "999", op, kFavMax) && op.value == kNightBriMax, "nightbri clamps down");
+
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {
     bool known = parse_set(key, "1", op, kFavMax) || parse_set(key, "nfl:6", op, kFavMax) ||
-                 parse_set(key, "", op, kFavMax);
+                 parse_set(key, "", op, kFavMax) || parse_set(key, "07:00", op, kFavMax);
     SCHECK(known, "kSetKeys has %s but parse_set refuses every value", key);
   }
 }

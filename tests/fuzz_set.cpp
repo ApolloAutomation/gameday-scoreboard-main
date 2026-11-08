@@ -88,6 +88,19 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         require((op.mask >> kLeagueCount) == 0, "the mask names a league past kLeagues", k, v);
         mask = (uint16_t) op.mask;
         break;
+      case SetKind::IDLE:
+        require(op.value >= 0 && op.value < kIdleCount, "the idle display is past IdleShow", k, v);
+        break;
+      case SetKind::IDLE_DIM:
+        require(op.value >= kIdleDimMin && op.value <= kIdleDimMax, "the dim level is out of range", k, v);
+        break;
+      case SetKind::NIGHT_BRI:
+        require(op.value >= kNightBriMin && op.value <= kNightBriMax, "the night brightness is out of range", k, v);
+        break;
+      case SetKind::NIGHT_START:
+      case SetKind::NIGHT_END:
+        require(op.value >= 0 && op.value < kDayMinutes, "the night time is past the day", k, v);
+        break;
       default:
         break;
     }
@@ -96,6 +109,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   for (uint8_t mode = 0; mode < kModeCount; mode++) {
     live_scan_changed(mode, live, live_leagues(0, team_league, fav_leagues));
     for (League l : scan_leagues(mode, live))
+      if (league_info(l) == nullptr)
+        abort();
+    // The idle display's scores, which read no league for a lone golf tour
+    for (League l : scan_leagues(mode, live_leagues(mask, team_league, fav_leagues, false), true))
       if (league_info(l) == nullptr)
         abort();
   }

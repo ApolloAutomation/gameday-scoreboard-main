@@ -129,6 +129,15 @@ static const uint32_t WORKER_DEADLINE = 120 * 1000;
 // Days of league scoreboards read to find a team's next game when ESPN's team
 // endpoint still names a finished one (leagues without a season list).
 static const int LOOKAHEAD_DAYS = 3;
+// The idle display (idle.h) looks at the night hours, midnight and the games
+// it follows this often.
+static const uint32_t IDLE_TICK = 1000;
+// The scores as the idle display in My team or Favorite teams: with games
+// under way that the panel doesn't follow, today's scan is read again this
+// often for their finals; with none, at the next kickoff (no_live_rescan_ms).
+// A failed read waits SIDE_RETRY, or longer when ESPN asks.
+static const uint32_t SIDE_LIVE_RESCAN = 30 * MINUTE;
+static const uint32_t SIDE_RETRY = 5 * MINUTE;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
@@ -241,6 +250,7 @@ void GamedayComponent::setup() {
 #ifdef USE_PSRAM
   ::espn::set_json_allocator(&json_psram);
 #endif
+  this->idle_snaps_.resize(2);  // before anything can draw (side_card_, today_final_)
   // A restart keeps the wall clock, so a crash a moment ago has its time now.
   this->start_reason_ = ::espn::boot_log_start(boot_log, (int) esp_reset_reason(), (uint32_t) App.get_build_time(),
                                                (int64_t) ::time(nullptr));
@@ -340,6 +350,17 @@ void GamedayComponent::setup() {
   this->pref6_ = global_preferences->make_preference<Prefs6>(fnv1_hash("gameday_prefs6_v1"));
   if (!this->pref6_.load(&this->prefs6_) || this->prefs6_.auto_update > 1)
     this->prefs6_ = Prefs6{};
+  // Not saved until the owner changes something: a panel without the blob
+  // gets the same defaults at every boot.
+  this->idle_pref_ = global_preferences->make_preference<IdlePrefs>(fnv1_hash("gameday_idle_v1"));
+  if (!this->idle_pref_.load(&this->idle_prefs_) || this->idle_prefs_.idle >= ::espn::kIdleCount ||
+      this->idle_prefs_.night_on > 1 || this->idle_prefs_.night_bri < ::espn::kNightBriMin ||
+      this->idle_prefs_.night_start >= ::espn::kDayMinutes || this->idle_prefs_.night_end >= ::espn::kDayMinutes) {
+    this->idle_prefs_ = IdlePrefs{};
+    this->idle_prefs_.night_bri = ::espn::kNightBrightnessDefault;
+    this->idle_prefs_.night_start = ::espn::kNightStartDefault;
+    this->idle_prefs_.night_end = ::espn::kNightEndDefault;
+  }
 #ifdef GAMEDAY_BETA_CHANNEL
   // Before the update entity's first check, which waits for the main loop.
   this->beta_pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("gameday_beta_v1"));
@@ -482,6 +503,10 @@ void GamedayComponent::favorites_changed_(bool first_pick, const std::vector<Lea
   bool was_fav_mode = this->favorites_mode_();
   this->rebuild_favorites_(true);
   this->follow_ = ::espn::FollowPin{};  // a new list: back to the mode's own pick
+  if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->idle_snaps_.size() >= 2)
+    this->today_final_() = GameSnapshot{};  // it may be a team no longer on the list
+  // The idle display's scores read the favorites' leagues: read them again.
+  this->side_scan_ms_ = 0;
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && (was_fav_mode || this->favorites_mode_())) {
     // The list changed under the mode: drop the board and let the next
     // cycle refresh what is missing and re-pick.
@@ -640,6 +665,7 @@ void GamedayComponent::set_live_mask_(uint16_t mask) {
   this->prefs7_.live_mask = mask;
   this->pref7_.save(&this->prefs7_);
   this->follow_ = ::espn::FollowPin{};  // other leagues: back to switching games
+  this->side_scan_ms_ = 0;  // the idle display's scores read these leagues too
   if (!this->live_leagues_changed_(before))
     this->rebuild_state_(&this->last_fields_);
 }
@@ -956,6 +982,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     e.final_epoch = 0;
   if (e.game.state == GameState::POST && old.valid && old.event_id == e.game.event_id && old.state != GameState::POST)
     e.final_epoch = tnow;
+  this->note_final_(e.game);
   this->mark_good_poll_();
   bool switched = this->fav_choose_(tnow);
   if (!switched && shown) {
@@ -1092,8 +1119,14 @@ void GamedayComponent::loop() {
   if (this->demo_loop_() && !this->busy_)
     return;
 #endif
+  // The idle display follows the night hours, midnight and the games on its
+  // own clock too.
+  if (millis() - this->idle_tick_ms_ >= IDLE_TICK) {
+    this->idle_tick_ms_ = millis();
+    this->idle_tick_();
+  }
   // The finals rotation turns its cards on its own clock, fetch or no fetch.
-  if (this->recap_on_ && !this->demo_playing_())
+  if ((this->recap_on_ || this->side_on_) && !this->demo_playing_())
     this->recap_tick_();
   if (this->busy_) {
     if (!this->job_done_) {
@@ -1134,8 +1167,12 @@ void GamedayComponent::loop() {
     this->apply_job_();
     return;
   }
-  if ((int32_t) (millis() - this->next_fetch_ms_) < 0)
+  if ((int32_t) (millis() - this->next_fetch_ms_) < 0) {
+    // In the gaps between the mode's own reads, the idle display's scores
+    // read theirs, so the mode's timing stays as it was.
+    this->start_side_job_();
     return;
+  }
   if (!network::is_connected() || !this->clock_set_()) {
     this->wait_for_clock_();
     const uint32_t now = millis();
@@ -1473,9 +1510,337 @@ void GamedayComponent::save_power_log_() {
   global_preferences->sync();
 }
 
-uint8_t GamedayComponent::guard_brightness(uint8_t want) {
+uint8_t GamedayComponent::guard_brightness(uint8_t want, bool idle) {
   this->load_power_log_();
+  if (idle) {
+    // Before setup() idle_prefs_ and idle_ are all zero: the owner's setting.
+    want = ::espn::idle_brightness(want, this->idle_, this->idle_prefs_.night_bri, this->idle_prefs_.dim,
+                                   this->night_override_);
+    if (want == 0)
+      return 0;
+  }
   return ::espn::guarded_brightness(want, this->heat_.step, this->power_log_.capped != 0);
+}
+
+void GamedayComponent::note_brightness() {
+  if (!this->idle_.night || this->night_override_)
+    return;
+  ESP_LOGI(TAG, "Brightness changed in the night hours: keeping it until they end");
+  this->night_override_ = true;
+}
+
+// ---- The idle display (idle.h) ----------------------------------------------
+
+void GamedayComponent::set_idle(int show) {
+  if (show < 0 || show >= ::espn::kIdleCount || show == this->idle_prefs_.idle)
+    return;
+  const bool was_scores = this->live_recap_();
+  this->idle_prefs_.idle = (uint8_t) show;
+  this->save_idle_prefs_();
+  ESP_LOGI(TAG, "Idle display: %d", show);
+  this->idle_changed_(was_scores != this->live_recap_());
+}
+
+void GamedayComponent::set_idle_dim(int level) {
+  level = ::espn::clamp_idle_dim(level);
+  if (level == this->idle_prefs_.dim)
+    return;
+  this->idle_prefs_.dim = (uint8_t) level;
+  this->save_idle_prefs_();
+  if (this->idle_.dim)
+    this->defer("idle_dim", [this]() { this->fire_action_("dim"); });
+  this->rebuild_state_(&this->last_fields_);
+}
+
+void GamedayComponent::set_night(bool on) {
+  if ((on ? 1 : 0) == this->idle_prefs_.night_on)
+    return;
+  this->idle_prefs_.night_on = on ? 1 : 0;
+  this->save_idle_prefs_();
+  ESP_LOGI(TAG, "Night hours: %s", on ? "on" : "off");
+  this->idle_changed_(false);
+}
+
+void GamedayComponent::set_night_start(int minute) {
+  if (minute < 0 || minute >= ::espn::kDayMinutes || minute == this->idle_prefs_.night_start)
+    return;
+  this->idle_prefs_.night_start = (uint16_t) minute;
+  this->save_idle_prefs_();
+  this->idle_changed_(false);
+}
+
+void GamedayComponent::set_night_end(int minute) {
+  if (minute < 0 || minute >= ::espn::kDayMinutes || minute == this->idle_prefs_.night_end)
+    return;
+  this->idle_prefs_.night_end = (uint16_t) minute;
+  this->save_idle_prefs_();
+  this->idle_changed_(false);
+}
+
+void GamedayComponent::set_night_bri(int level) {
+  level = ::espn::clamp_night_bri(level);
+  if (level == this->idle_prefs_.night_bri)
+    return;
+  this->idle_prefs_.night_bri = (uint8_t) level;
+  this->save_idle_prefs_();
+  if (this->idle_.night)
+    this->defer("idle_dim", [this]() { this->fire_action_("dim"); });
+  this->rebuild_state_(&this->last_fields_);
+}
+
+// A setting changed. Live games with a team shows either the team's card or
+// the finals rotation with nothing live (live_recap_): when that flips while
+// nothing is live, it scans again now to put the other one up.
+void GamedayComponent::idle_changed_(bool live_switch) {
+  if (live_switch && this->live_mode_() && (this->live_fallback_ || this->recap_on_)) {
+    this->live_fallback_ = false;
+    this->recap_on_ = false;
+    this->recap_cards_.clear();
+    this->recap_step_ms_ = 0;
+    this->live_none_ = false;
+    this->live_started_ms_ = 0;
+    this->schedule_ = Schedule{};
+    this->game_ = GameSnapshot{};
+    this->prev_ = GameSnapshot{};
+    this->post_since_ms_ = 0;
+    this->generation_++;  // a read in flight was for the other one
+    this->end_backoff_wait_();
+    this->schedule_next_(0);
+  }
+  this->emit_({});
+}
+
+// Busy keeps the mode's own board up: whatever the idle display is, the
+// panel goes back to a followed game by itself.
+bool GamedayComponent::idle_busy_() const {
+  if (this->demo_playing_() || this->follow_.on)
+    return true;
+  const GameSnapshot &g = this->game_;
+  if (this->live_mode_() && this->recap_on_)
+    return false;  // the finals rotation follows no game
+  if (this->live_mode_() && !this->live_fallback_)
+    // A game Live games picked, until its next look moves on after the final.
+    return g.valid && (g.state == GameState::IN || g.state == GameState::POST);
+  if (this->favorites_mode_()) {
+    // Take over before kickoff, the game, and After the final.
+    if (this->fav_locked_)
+      return true;
+    for (const auto &e : this->fav_)
+      if (e.game.valid && e.game.state == GameState::IN)
+        return true;
+    return false;
+  }
+  // My team, and Live games' team card.
+  if (!g.valid)
+    return false;
+  // A tournament or a race weekend under way, and its final as long as the
+  // board keeps it.
+  if (::espn::is_board_sport(g.sport))
+    return g.state == GameState::IN || g.state == GameState::POST;
+  if (g.state == GameState::IN)
+    return true;
+  // The final's half hour (ten minutes for baseball), once: a final the team
+  // endpoint keeps naming after it has had its wait doesn't get another.
+  return g.state == GameState::POST && this->post_since_ms_ != 0 && g.event_id != this->lingered_event_ &&
+         millis() - this->post_since_ms_ < this->linger_ms_();
+}
+
+::espn::IdleView GamedayComponent::idle_effective_(::espn::IdleView v) const {
+  using ::espn::IdleView;
+  const ::espn::Team *team = this->current_team_();
+  switch (v) {
+    case IdleView::SCORES:
+      // Live games' own rotation stands in for the team's card (live_recap_).
+      if (this->live_mode_())
+        return IdleView::BOARD;
+      return this->side_leagues_().empty() ? IdleView::CLOCK : IdleView::SCORES;
+    case IdleView::TODAY:
+      if (this->favorites_mode_())
+        return IdleView::TODAY;
+      if (team == nullptr || ::espn::is_leaderboard(team->league))
+        return IdleView::CLOCK;
+      return IdleView::TODAY;
+    default:
+      return v;
+  }
+}
+
+std::vector<League> GamedayComponent::side_leagues_() const {
+  std::vector<uint8_t> fav_leagues;
+  for (uint8_t i = 0; i < FAV_MAX; i++)
+    if (this->fav_id_(i) != 0)
+      fav_leagues.push_back(this->fav_league_(i));
+  const uint8_t team = this->current_team_() != nullptr ? this->prefs_.league : 0xFF;
+  return ::espn::live_leagues(this->prefs7_.live_mask, team, fav_leagues, false);
+}
+
+bool GamedayComponent::idle_update_() {
+  ::espn::IdleInputs in;
+  in.show = this->idle_prefs_.idle;
+  in.night_on = this->idle_prefs_.night_on != 0;
+  in.night_start = this->idle_prefs_.night_start;
+  in.night_end = this->idle_prefs_.night_end;
+  // Only once the board is up: the boot screen, and the first board after a
+  // new team or mode, show at the owner's brightness.
+  if (this->time_ != nullptr && this->board_ready_) {
+    ESPTime t = this->time_->now();
+    in.clock_valid = t.is_valid();
+    in.minute = t.hour * 60 + t.minute;
+  }
+  in.busy = this->idle_busy_();
+  const ::espn::IdleState s = ::espn::idle_state(in);
+  const ::espn::IdleView v = this->idle_effective_(s.view);
+  const bool light = s.dim != this->idle_.dim || s.night != this->idle_.night;
+  if (s.night != this->idle_.night)
+    this->night_override_ = false;  // each night starts at the night brightness
+  const bool changed = v != this->idle_view_;
+  this->idle_ = s;
+  this->idle_view_ = v;
+  const bool side = v == ::espn::IdleView::SCORES;
+  if (side != this->side_on_) {
+    this->side_on_ = side;
+    // The rotation starts over from its first card, and today's scan is due:
+    // finals came in while it was away.
+    this->recap_step_ = 0;
+    this->recap_step_ms_ = 0;
+    this->side_scan_ms_ = 0;
+    if (side)
+      this->recap_cards_ = ::espn::recap_cards(this->recap_days_, this->recap_leagues_(),
+                                               this->recap_next_kickoff_() != 0,
+                                               (int64_t) this->time_->timestamp_now());
+    else
+      this->recap_cards_.clear();
+  }
+  if (changed)
+    ESP_LOGI(TAG, "Idle display: showing %s%s", v == ::espn::IdleView::BOARD ? "the board" : ::espn::idle_view_key(v),
+             s.night ? " (night hours)" : "");
+  if (light) {
+    ESP_LOGI(TAG, "Brightness: %s", s.dim ? "idle dim" : s.night ? "night hours" : "the owner's");
+    // On the next loop: emit_ can be deep in the stack (fav_choose_).
+    this->defer("idle_dim", [this]() { this->fire_action_("dim"); });
+  }
+  return changed;
+}
+
+// Every IDLE_TICK: the night hours, midnight and a game that took over or let
+// go without a read, and My team today's countdown once a minute.
+void GamedayComponent::idle_tick_() {
+  const ::espn::IdleState before = this->idle_;
+  bool redraw = this->idle_update_();
+  if (!redraw && before != this->idle_)
+    this->rebuild_state_(&this->last_fields_);  // the page's night_now and dark
+  if (this->idle_view_ == ::espn::IdleView::TODAY && this->time_ != nullptr) {
+    ESPTime t = this->time_->now();
+    const int minute = t.is_valid() ? t.hour * 60 + t.minute : -1;
+    if (minute != this->idle_minute_) {
+      this->idle_minute_ = minute;
+      redraw = true;
+    }
+  }
+  if (redraw)
+    this->emit_({});
+}
+
+// The latest final of the team, or of a favorite: My team today keeps it on
+// the board until local midnight, after the mode has moved on.
+void GamedayComponent::note_final_(const GameSnapshot &g) {
+  if (!g.valid || g.state != GameState::POST || ::espn::is_board_sport(g.sport) || this->idle_snaps_.size() < 2)
+    return;
+  GameSnapshot &f = this->today_final_();
+  if (f.valid && f.event_id != g.event_id && f.kickoff_epoch > g.kickoff_epoch)
+    return;  // an older final the team endpoint still names
+  f = g;
+}
+
+const GameSnapshot *GamedayComponent::today_game_() const {
+  if (this->time_ == nullptr || this->idle_snaps_.size() < 2)
+    return nullptr;
+  ESPTime t = this->time_->now();
+  if (!t.is_valid())
+    return nullptr;
+  const ::espn::LocalDay day = ::espn::local_day((int64_t) t.timestamp, t.hour, t.minute, t.second);
+  std::vector<const GameSnapshot *> games;
+  if (this->favorites_mode_()) {
+    for (const auto &e : this->fav_)
+      games.push_back(&e.game);
+  } else if (!this->live_mode_() || this->live_fallback_) {
+    games.push_back(&this->game_);  // the team's card
+  }
+  games.push_back(&this->today_final_());
+  std::vector<::espn::TodayGame> list;
+  for (const GameSnapshot *g : games) {
+    ::espn::TodayGame tg;
+    tg.valid = g->valid && !::espn::is_board_sport(g->sport) && !::espn::is_team_placeholder(*g);
+    tg.state = g->state;
+    tg.kickoff = g->kickoff_epoch;
+    tg.tbd = g->time_tbd;
+    list.push_back(tg);
+  }
+  const int i = ::espn::today_pick(list, day);
+  return i >= 0 ? games[i] : nullptr;
+}
+
+// The scores rotation outside Live games: today's scan when it is due, else
+// the next day the rotation needs, one read at a time, only while the mode's
+// own next read isn't due (loop()).
+bool GamedayComponent::start_side_job_() {
+  if (!this->side_on_ || this->busy_ || this->demo_playing_())
+    return false;
+  const uint32_t now = millis();
+  if (now - this->side_check_ms_ < IDLE_TICK)
+    return false;
+  this->side_check_ms_ = now;
+  if (!network::is_connected() || !this->clock_set_())
+    return false;
+  if (this->side_wait_ms_ != 0 && now - this->side_wait_since_ < this->side_wait_ms_)
+    return false;
+  Job &j = this->job_;
+  j = Job{};
+  j.generation = this->generation_;
+  j.mode = this->effective_mode_();
+  j.side = true;
+  j.scan_leagues = this->scan_leagues_();
+  if (j.scan_leagues.empty())
+    return false;
+  if (this->side_scan_ms_ == 0 || now - this->side_scan_ms_ >= this->side_rescan_ms_) {
+    j.need_scan = true;
+    j.want_finals = true;
+    // Stamped now, so a scan that fails waits its turn like one that works.
+    this->side_scan_ms_ = now == 0 ? 1 : now;
+  } else if (!this->recap_job_(j, (int64_t) this->time_->timestamp_now())) {
+    return false;
+  }
+  this->start_worker_();
+  return this->busy_;
+}
+
+void GamedayComponent::apply_side_job_() {
+  Job &j = this->job_;
+  const int64_t tnow = (int64_t) this->time_->timestamp_now();
+  bool ok;
+  if (j.need_scan) {
+    ok = j.scan_ok || !j.live.empty();
+    if (ok) {
+      this->recap_absorb_(j, tnow);
+      // Games on that the panel doesn't follow end on their own time.
+      this->side_rescan_ms_ = !j.live.empty() ? SIDE_LIVE_RESCAN
+                                              : ::espn::no_live_rescan_ms(tnow, j.next_kickoff, NO_LIVE_RESCAN,
+                                                                          NO_GAMES_RESCAN);
+    }
+  } else {
+    ok = this->recap_day_(j);
+  }
+  if (ok) {
+    this->side_wait_ms_ = 0;
+    return;
+  }
+  // The rotation keeps what it has; the mode's own reads keep their timing.
+  this->side_wait_since_ = millis();
+  this->side_wait_ms_ = std::max(SIDE_RETRY, j.retry_after_ms);
+  if (j.need_scan)
+    this->side_scan_ms_ = 0;  // the scan, once the wait is over
+  ESP_LOGW(TAG, "Scores for the idle display not read; trying again in %u min",
+           (unsigned) (this->side_wait_ms_ / MINUTE));
 }
 
 void GamedayComponent::set_chip_temp(float c) {
@@ -1822,6 +2187,13 @@ void GamedayComponent::reset_game_() {
   this->recap_step_ = 0;
   this->recap_step_ms_ = 0;
   this->recap_scan_next_ = 0;
+  // The idle display's scores start over for what the board follows now
+  // (idle_update_ turns them back on), and My team today forgets the final.
+  this->side_on_ = false;
+  this->side_scan_ms_ = 0;
+  this->side_wait_ms_ = 0;
+  if (this->idle_snaps_.size() >= 2)
+    this->today_final_() = GameSnapshot{};
   this->schedule_ = Schedule{};
   this->schedule_fetched_ms_ = 0;
   this->comps_.clear();
@@ -2315,7 +2687,9 @@ void GamedayComponent::start_job_() {
       this->force_schedule_ = false;  // Refresh Now: scan now
       this->live_started_ms_ = 0;
     }
-    if (this->recap_job_(j, (int64_t) this->time_->timestamp_now())) {
+    // Not while the idle display covers it (the clock, My team today, dark):
+    // only today's scans then, for the game that ends it.
+    if (this->idle_view_ == ::espn::IdleView::BOARD && this->recap_job_(j, (int64_t) this->time_->timestamp_now())) {
       this->start_worker_();
       return;
     }
@@ -2347,9 +2721,9 @@ void GamedayComponent::start_job_() {
         bool ended = !held && this->game_.valid && this->game_.state != GameState::IN;
         j.need_scan = !this->schedule_.valid || rotate || ended || this->live_none_;
       }
-      // With no team, nothing live means the finals rotation: the scan keeps
-      // today's finals for it.
-      j.want_finals = j.team == nullptr;
+      // With no team, or the scores as the idle display, nothing live means
+      // the finals rotation: the scan keeps today's finals for it.
+      j.want_finals = this->live_recap_();
       j.schedule = this->schedule_;
       this->start_worker_();
       return;
@@ -2597,6 +2971,10 @@ void GamedayComponent::apply_job_() {
     ESP_LOGD(TAG, "Discarding a fetch for the previous team");
     return;
   }
+  if (j.side) {
+    this->apply_side_job_();  // leaves the mode's own next read where it was
+    return;
+  }
   uint32_t now = millis();
   if (j.fav_index >= 0) {
     this->apply_fav_job_(now);
@@ -2643,9 +3021,10 @@ void GamedayComponent::apply_job_() {
       if (this->live_rescan_ms_ > NO_LIVE_RESCAN)
         ESP_LOGI(TAG, "Next scan in %u min", (unsigned) (this->live_rescan_ms_ / MINUTE));
       const ::espn::Team *saved = this->current_team_();
-      if (saved != nullptr) {
+      if (saved != nullptr && !this->live_recap_()) {
         // Nothing live, but the owner has a team: show that team's card and
-        // keep scanning. The mode they picked is untouched.
+        // keep scanning. The mode they picked is untouched. With the scores
+        // as the idle display, the finals rotation below instead.
         bool already = this->live_fallback_;
         this->live_none_ = true;
         this->live_fallback_ = true;
@@ -2809,6 +3188,8 @@ void GamedayComponent::apply_job_() {
   if (this->game_.state == GameState::POST) {
     if (this->post_since_ms_ == 0)
       this->post_since_ms_ = now == 0 ? 1 : now;
+    if (!this->live_mode_() || this->live_fallback_)
+      this->note_final_(this->game_);  // the team's own: My team today keeps it
   } else {
     this->post_since_ms_ = 0;
   }
@@ -2880,6 +3261,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     if (this->game_.state == GameState::POST) {
       if (this->post_since_ms_ == 0)
         this->post_since_ms_ = now == 0 ? 1 : now;
+      this->note_final_(this->game_);
     } else {
       this->post_since_ms_ = 0;
     }
@@ -3006,11 +3388,213 @@ std::string GamedayComponent::standing_text_() const {
   return ::espn::standing_text(kind, s->seed, s->place);
 }
 
+std::string GamedayComponent::kickoff_of_(const GameSnapshot &s) const {
+  if (!s.valid || s.state != GameState::PRE || s.kickoff_epoch <= 0 || this->time_ == nullptr)
+    return "";
+  int64_t at = s.time_tbd ? ::espn::tbd_day_epoch(s.kickoff_epoch) : s.kickoff_epoch;
+  struct tm kick = ESPTime::from_epoch_local((time_t) at).to_c_tm();
+  struct tm now = this->time_->now().to_c_tm();
+  return ::espn::kickoff_label(kick, now, s.time_tbd);
+}
+
 void GamedayComponent::emit_(const ::espn::Splash &splash) {
+  // A game that started or ended takes the panel back, or lets it go, now
+  // (and the demo build's scripted game counts as one).
+  this->idle_update_();
   const GameSnapshot &g = this->game_;
-  // The followed pro team's seed or place, for the ticker and the board
-  const std::string standing = this->standing_text_();
   UpdateFields f;
+  this->game_fields_(g, splash, f);
+  const bool board = g.valid && ::espn::is_board_sport(g.sport);
+  const GameSnapshot &ha = this->ha_game_();
+  f.ha_status_text = ::espn::ha_status_text(ha, board && &ha == &g ? f.kickoff : this->kickoff_of_(ha));
+  f.ha_last_play = ha.last_play;
+  if (this->idle_view_ != ::espn::IdleView::BOARD && !this->demo_playing_())
+    this->idle_fields_(f);
+  else
+    this->mode_fields_(f, board);
+  // The device page's address, for the hints below: the IP rather than the
+  // .local name, which many Android phones can't open; the boot screen's QR
+  // code holds the same address (setup_qr.h). Empty off Wi-Fi.
+  auto page_ip = []() -> std::string {
+    if (!network::is_connected())
+      return std::string();
+    for (auto &a : network::get_ip_addresses()) {
+      if (a.is_set() && a.is_ip4()) {
+        char buf[48];
+        a.str_to(buf);
+        return buf;
+      }
+    }
+    return std::string();
+  };
+  if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->fav_.empty() && !this->demo_playing_() &&
+      this->idle_view_ == ::espn::IdleView::BOARD) {
+    const std::string ip = page_ip();
+    const std::string fav = ip.empty() ? std::string("Favorites: add teams on the device page | ")
+                                       : "Favorites: add teams at " + ip + " | ";
+    f.status_text = fav + f.status_text;
+    f.ha_status_text = fav + f.ha_status_text;
+  }
+  if (this->misses_ >= 3 && !this->demo_playing_()) {
+    // An empty ticker (the idle clock) gets the words alone.
+    const char *sep = f.status_text.empty() ? "" : " | ";
+    if (!this->ever_polled_good_()) {
+      // Nothing has ever come back, so there is no age to quote. Saying "no
+      // update for 1 min" here was wrong however long the panel had been
+      // trying, on a screen someone is reading because something is broken.
+      f.status_text += std::string(sep) + "no update yet";
+      f.ha_status_text += " | no update yet";
+    } else {
+      uint32_t mins = this->stale_seconds_() / 60;
+      if (mins < 1)
+        mins = 1;
+      f.status_text += std::string(sep) + "no update for " + std::to_string(mins) + " min";
+      // Without the minutes, which would log a change every minute.
+      f.ha_status_text += " | not updating";
+    }
+  }
+  // Until a team, mode or favorite has been picked once, the ticker asks for
+  // one at the device page's address.
+  if (!this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
+    const std::string ip = page_ip();
+    if (!ip.empty()) {
+      std::string pick = "Pick a team at " + ip + " | ";
+      f.status_text = pick + f.status_text;
+      f.ha_status_text = pick + f.ha_status_text;
+    }
+  }
+  // For a while after the panel joins Wi-Fi, its address leads the ticker
+  // (setup_qr.h), unless the line above already gives the IP. Only on the
+  // panel and the page's copy of it: Home Assistant has the IP entity, and
+  // its Game Status would log the line coming and going.
+  this->join_addr_shown_ = false;
+  if (join_ticker_on(this->join_addr_ms_, millis()) && this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
+    const std::string line = join_ticker_text(page_ip(), this->hostname());
+    if (!line.empty()) {
+      // An empty ticker (the idle clock) gets the address alone.
+      f.status_text = f.status_text.empty() ? line.substr(0, line.size() - 3) : line + f.status_text;
+      // Under a message too ("Can't reach ESPN"), which hides the ticker
+      // otherwise (ticker_host).
+      f.join_line = true;
+      this->join_addr_shown_ = true;
+    }
+  }
+
+  if (!f.splash_text.empty())
+    ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
+  this->last_fields_ = f;
+  this->rebuild_state_(&f);
+  if (this->hold_for_logos_(f))
+    return;
+  this->draw_(f);
+}
+
+// What each mode says over its own board: the off-season clock, a golf tour
+// or racing series with nothing listed, Live games' words, and why an empty
+// board is empty.
+void GamedayComponent::mode_fields_(UpdateFields &f, bool board) {
+  const GameSnapshot &g = this->game_;
+  // Before the Live mode prefixes, so a fallback team's Next line keeps "No
+  // live X games, showing CHI |" in front of it.
+  this->clock_fields_(f);
+  // The leaderboard, or the card, unless the off-season clock has the board.
+  if (f.clock)
+    f.board_card = false;
+  f.board = board && !f.clock && !f.board_card;
+  // A golf tour or a racing series ESPN lists nothing for, now or ahead: an
+  // event or a race, not a game.
+  const ::espn::Team *followed = this->current_team_();
+  if (!g.valid && this->no_game_confirmed_ && followed != nullptr && ::espn::is_leaderboard(followed->league) &&
+      !this->favorites_mode_()) {
+    f.status_text = ::espn::is_racing(followed->league) ? "No upcoming race" : "No upcoming event";
+    f.ha_status_text = f.status_text;
+    f.message = f.status_text;
+  }
+  if (this->live_mode_() && !this->demo_playing_()) {
+    std::string league_word = this->live_word_();
+    const ::espn::Team *saved = this->current_team_();
+    if (this->recap_on_) {
+      // The finals rotation follows no game, so Home Assistant gets one steady
+      // line instead of a change on every card.
+      f.status_text = this->recap_ticker_;
+      f.ha_status_text = "No live " + league_word + "games right now";
+      f.ha_last_play.clear();
+      f.message = this->recap_message_;
+    } else if (this->live_fallback_ && saved != nullptr) {
+      std::string showing = "No live " + league_word + "games, showing " + saved->abbr + " | ";
+      f.status_text = showing + f.status_text;
+      f.ha_status_text = showing + f.ha_status_text;
+    } else if (!g.valid || g.state == GameState::NOT_FOUND) {
+      f.status_text = this->live_none_ ? "No live " + league_word + "games right now"
+                                       : "Looking for a live " + league_word + "game";
+      f.ha_status_text = f.status_text;
+      f.message = this->live_none_ ? "No live " + league_word + "games" : "Looking for a live " + league_word + "game";
+    }
+  }
+  // An empty board says why (espn_parse.h, no_game_text): the clock is not
+  // set yet, or ESPN cannot be reached. "No upcoming game" is only right
+  // once ESPN itself has said so; before that it would be a guess.
+  std::string why = this->no_game_why_();
+  if (!why.empty()) {
+    f.status_text = why;
+    f.ha_status_text = why;
+    f.message = why;
+  }
+}
+
+// The idle display's view in place of the mode's board. Home Assistant keeps
+// following the mode's game, so its lines stay. The scores rotation's card
+// and My team today's game are drawn like any game; with nothing to show,
+// either is the clock.
+void GamedayComponent::idle_fields_(UpdateFields &f) {
+  UpdateFields out;
+  ::espn::IdleView v = this->idle_view_;
+  if (v == ::espn::IdleView::SCORES) {
+    if (this->recap_step_ms_ == 0)
+      this->recap_prepare_();  // the rotation's first card
+    if (!this->recap_cards_.empty()) {
+      this->game_fields_(this->side_card_(), {}, out);
+      out.status_text = this->recap_ticker_;
+      out.message = this->recap_message_;
+    } else {
+      v = ::espn::IdleView::CLOCK;  // nothing read yet, or nothing to show
+    }
+  }
+  if (v == ::espn::IdleView::TODAY) {
+    const GameSnapshot *t = this->today_game_();
+    if (t != nullptr) {
+      this->game_fields_(*t, {}, out);
+      if (t->state == GameState::PRE) {
+        // The countdown in the clock's place, the kickoff and the records in
+        // the ticker (a single panel has no room for the records).
+        if (!t->time_tbd)
+          out.clock_text =
+              ::espn::countdown_text(t->kickoff_epoch - (int64_t) this->time_->timestamp_now());
+        std::string rec = ::espn::detail::records_line(*t, std::string());
+        if (!rec.empty())
+          out.status_text = out.status_text.empty() ? rec : out.status_text + " | " + rec;
+      }
+    } else {
+      v = ::espn::IdleView::CLOCK;  // no game today
+    }
+  }
+  if (v == ::espn::IdleView::CLOCK) {
+    out.game_state = "NOT_FOUND";
+    this->clock_fields_(out, true);
+  }
+  out.board = false;
+  out.board_card = false;
+  out.ha_status_text = std::move(f.ha_status_text);
+  out.ha_last_play = std::move(f.ha_last_play);
+  f = std::move(out);
+}
+
+// One game's fields for the board: the scoreboard, its ticker and kickoff,
+// and a leaderboard's columns.
+void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f) {
+  // The followed pro team's seed or place, for the ticker and the board: the
+  // mode's own game only, not an idle display card.
+  const std::string standing = &g == &this->game_ ? this->standing_text_() : std::string();
   f.game_state = g.valid ? ::espn::state_name(g.state) : "NOT_FOUND";
   f.team_abbr = g.team_abbr;
   f.team_score = g.team_score;
@@ -3081,15 +3665,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   opts.odds = this->ticker_odds();
   opts.team_standing = standing;
 
-  auto kickoff_of = [this](const GameSnapshot &s) -> std::string {
-    if (!s.valid || s.state != GameState::PRE || s.kickoff_epoch <= 0 || this->time_ == nullptr)
-      return "";
-    int64_t at = s.time_tbd ? ::espn::tbd_day_epoch(s.kickoff_epoch) : s.kickoff_epoch;
-    struct tm kick = ESPTime::from_epoch_local((time_t) at).to_c_tm();
-    struct tm now = this->time_->now().to_c_tm();
-    return ::espn::kickoff_label(kick, now, s.time_tbd);
-  };
-  std::string kickoff = kickoff_of(g);
+  std::string kickoff = this->kickoff_of_(g);
   const bool board = g.valid && ::espn::is_board_sport(g.sport);
   if (board) {
     std::string dates, card;
@@ -3137,126 +3713,6 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
-  const GameSnapshot &ha = this->ha_game_();
-  f.ha_status_text = ::espn::ha_status_text(ha, board && &ha == &g ? kickoff : kickoff_of(ha));
-  f.ha_last_play = ha.last_play;
-  // Before the Live mode prefixes, so a fallback team's Next line keeps "No
-  // live X games, showing CHI |" in front of it.
-  this->clock_fields_(f);
-  // The leaderboard, or the card, unless the off-season clock has the board.
-  if (f.clock)
-    f.board_card = false;
-  f.board = board && !f.clock && !f.board_card;
-  // A golf tour or a racing series ESPN lists nothing for, now or ahead: an
-  // event or a race, not a game.
-  const ::espn::Team *followed = this->current_team_();
-  if (!g.valid && this->no_game_confirmed_ && followed != nullptr && ::espn::is_leaderboard(followed->league) &&
-      !this->favorites_mode_()) {
-    f.status_text = ::espn::is_racing(followed->league) ? "No upcoming race" : "No upcoming event";
-    f.ha_status_text = f.status_text;
-    f.message = f.status_text;
-  }
-  if (this->live_mode_() && !this->demo_playing_()) {
-    std::string league_word = this->live_word_();
-    const ::espn::Team *saved = this->current_team_();
-    if (this->recap_on_) {
-      // The finals rotation follows no game, so Home Assistant gets one steady
-      // line instead of a change on every card.
-      f.status_text = this->recap_ticker_;
-      f.ha_status_text = "No live " + league_word + "games right now";
-      f.ha_last_play.clear();
-      f.message = this->recap_message_;
-    } else if (this->live_fallback_ && saved != nullptr) {
-      std::string showing = "No live " + league_word + "games, showing " + saved->abbr + " | ";
-      f.status_text = showing + f.status_text;
-      f.ha_status_text = showing + f.ha_status_text;
-    } else if (!g.valid || g.state == GameState::NOT_FOUND) {
-      f.status_text = this->live_none_ ? "No live " + league_word + "games right now"
-                                       : "Looking for a live " + league_word + "game";
-      f.ha_status_text = f.status_text;
-      f.message = this->live_none_ ? "No live " + league_word + "games" : "Looking for a live " + league_word + "game";
-    }
-  }
-  // An empty board says why (espn_parse.h, no_game_text): the clock is not
-  // set yet, or ESPN cannot be reached. "No upcoming game" is only right
-  // once ESPN itself has said so; before that it would be a guess.
-  std::string why = this->no_game_why_();
-  if (!why.empty()) {
-    f.status_text = why;
-    f.ha_status_text = why;
-    f.message = why;
-  }
-  // The device page's address, for the hints below: the IP rather than the
-  // .local name, which many Android phones can't open; the boot screen's QR
-  // code holds the same address (setup_qr.h). Empty off Wi-Fi.
-  auto page_ip = []() -> std::string {
-    if (!network::is_connected())
-      return std::string();
-    for (auto &a : network::get_ip_addresses()) {
-      if (a.is_set() && a.is_ip4()) {
-        char buf[48];
-        a.str_to(buf);
-        return buf;
-      }
-    }
-    return std::string();
-  };
-  if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->fav_.empty() && !this->demo_playing_()) {
-    const std::string ip = page_ip();
-    const std::string fav = ip.empty() ? std::string("Favorites: add teams on the device page | ")
-                                       : "Favorites: add teams at " + ip + " | ";
-    f.status_text = fav + f.status_text;
-    f.ha_status_text = fav + f.ha_status_text;
-  }
-  if (this->misses_ >= 3 && !this->demo_playing_()) {
-    if (!this->ever_polled_good_()) {
-      // Nothing has ever come back, so there is no age to quote. Saying "no
-      // update for 1 min" here was wrong however long the panel had been
-      // trying, on a screen someone is reading because something is broken.
-      f.status_text += " | no update yet";
-      f.ha_status_text += " | no update yet";
-    } else {
-      uint32_t mins = this->stale_seconds_() / 60;
-      if (mins < 1)
-        mins = 1;
-      f.status_text += " | no update for " + std::to_string(mins) + " min";
-      // Without the minutes, which would log a change every minute.
-      f.ha_status_text += " | not updating";
-    }
-  }
-  // Until a team, mode or favorite has been picked once, the ticker asks for
-  // one at the device page's address.
-  if (!this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
-    const std::string ip = page_ip();
-    if (!ip.empty()) {
-      std::string pick = "Pick a team at " + ip + " | ";
-      f.status_text = pick + f.status_text;
-      f.ha_status_text = pick + f.ha_status_text;
-    }
-  }
-  // For a while after the panel joins Wi-Fi, its address leads the ticker
-  // (setup_qr.h), unless the line above already gives the IP. Only on the
-  // panel and the page's copy of it: Home Assistant has the IP entity, and
-  // its Game Status would log the line coming and going.
-  this->join_addr_shown_ = false;
-  if (join_ticker_on(this->join_addr_ms_, millis()) && this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
-    const std::string line = join_ticker_text(page_ip(), this->hostname());
-    if (!line.empty()) {
-      f.status_text = line + f.status_text;
-      // Under a message too ("Can't reach ESPN"), which hides the ticker
-      // otherwise (ticker_host).
-      f.join_line = true;
-      this->join_addr_shown_ = true;
-    }
-  }
-
-  if (!f.splash_text.empty())
-    ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
-  this->last_fields_ = f;
-  this->rebuild_state_(&f);
-  if (this->hold_for_logos_(f))
-    return;
-  this->draw_(f);
 }
 
 // A board with different logos from the one up now waits for them, so it goes
@@ -3295,29 +3751,49 @@ void GamedayComponent::draw_(const UpdateFields &f) {
 // The off-season clock (offseason.h): the saved team between seasons (in My
 // team, or as a Live mode's card when nothing is live), a Live mode whose
 // rotation has no cards, or Favorites with no card at all. Team colors, or
-// neutral gray with no team.
-void GamedayComponent::clock_fields_(UpdateFields &f) {
+// neutral gray with no team. force: the idle display's clock (idle.h), in any
+// season, with the next game the mode knows under the time: the team's, the
+// favorites' first, or with no team the finals rotation's next kickoff.
+void GamedayComponent::clock_fields_(UpdateFields &f, bool force) {
   if (this->demo_playing_() || !this->clock_set_())
     return;
   const GameSnapshot &g = this->game_;
   const ::espn::Team *team = this->current_team_();
   std::string color;  // hex, from the team endpoint or the game
+  const GameSnapshot *next = nullptr;  // the game whose kickoff goes under the time
+  const int64_t tnow = (int64_t) this->time_->timestamp_now();
   if (this->live_mode_() && !this->live_fallback_) {
     // Nothing in the last week and no kickoff in the next (recap_show_).
-    if (!this->recap_on_ || !this->recap_cards_.empty())
+    if (!force && (!this->recap_on_ || !this->recap_cards_.empty()))
       return;
+    std::string match;
+    const int64_t kick = force && team == nullptr ? this->recap_next_kickoff_(&match) : 0;
+    if (kick > 0) {
+      struct tm k = ESPTime::from_epoch_local((time_t) kick).to_c_tm();
+      std::string when = ::espn::kickoff_label(k, this->time_->now().to_c_tm());
+      f.next_line = (match.empty() ? std::string("Next game") : "Next: " + match) + "\n" + when;
+      f.status_text = ::espn::recap_next_text(match, when);
+    }
   } else if (this->favorites_mode_()) {
     // Every favorite has been read, and none has a game.
-    for (const auto &e : this->fav_)
-      if (!e.sched.valid || !e.sched.event_id.empty())
-        return;
-    team = this->fav_[0].team;
-    color = this->fav_[0].sched.team_color;
+    if (!force)
+      for (const auto &e : this->fav_)
+        if (!e.sched.valid || !e.sched.event_id.empty())
+          return;
+    const FavEntry *pick = &this->fav_[0];
+    if (force)
+      for (const auto &e : this->fav_)
+        if (e.game.valid && e.game.state == GameState::PRE && e.game.kickoff_epoch > tnow &&
+            (next == nullptr || e.game.kickoff_epoch < next->kickoff_epoch)) {
+          next = &e.game;
+          pick = &e;
+        }
+    team = pick->team;
+    color = next != nullptr && !next->team_color.empty() ? next->team_color : pick->sched.team_color;
   } else if (team != nullptr && ::espn::is_leaderboard(team->league)) {
     // A golf tour or a racing series between seasons: the next event, when
     // one is known, under the time on a wide board and in the ticker.
-    int64_t tnow = (int64_t) this->time_->timestamp_now();
-    if (!::espn::board_off_season(g, tnow))
+    if (!force && !::espn::board_off_season(g, tnow))
       return;
     const bool racing = g.sport == ::espn::Sport::RACING;
     color = racing ? "E03030" : "30B050";  // racing red, golf green, lifted by clock_color
@@ -3347,23 +3823,24 @@ void GamedayComponent::clock_fields_(UpdateFields &f) {
       return;
     // The team endpoint named no game, as opposed to a card still loading.
     bool none = !g.valid && this->schedule_.valid && this->schedule_.event_id.empty();
-    if (!none && !g.valid)
+    if (!force && !none && !g.valid)
       return;
-    int64_t tnow = (int64_t) this->time_->timestamp_now();
-    if (!::espn::off_season(none ? GameState::NOT_FOUND : g.state, g.kickoff_epoch, tnow,
-                            ::espn::season_horizon(::espn::league_sport(team->league))))
+    if (!force && !::espn::off_season(none ? GameState::NOT_FOUND : g.state, g.kickoff_epoch, tnow,
+                                      ::espn::season_horizon(::espn::league_sport(team->league))))
       return;
     color = g.valid ? g.team_color : this->schedule_.team_color;
-    if (g.valid && g.state == GameState::PRE && g.kickoff_epoch > 0) {
-      int64_t at = g.time_tbd ? ::espn::tbd_day_epoch(g.kickoff_epoch) : g.kickoff_epoch;
-      struct tm kick = ESPTime::from_epoch_local((time_t) at).to_c_tm();
-      struct tm now = this->time_->now().to_c_tm();
-      std::string ours = panel_text(g.team_abbr), opp = panel_text(g.opp_abbr);
-      f.next_line = ::espn::next_line(ours, opp, g.team_home, kick, now, "\n", g.time_tbd);
-      // The ticker carries it on both layouts, since a single panel has no
-      // room for it under the time.
-      f.status_text = ::espn::next_line(ours, opp, g.team_home, kick, now, " ", g.time_tbd);
-    }
+    next = &g;
+  }
+  if (next != nullptr && next->valid && next->state == GameState::PRE && next->kickoff_epoch > 0) {
+    const GameSnapshot &n = *next;
+    int64_t at = n.time_tbd ? ::espn::tbd_day_epoch(n.kickoff_epoch) : n.kickoff_epoch;
+    struct tm kick = ESPTime::from_epoch_local((time_t) at).to_c_tm();
+    struct tm now = this->time_->now().to_c_tm();
+    std::string ours = panel_text(n.team_abbr), opp = panel_text(n.opp_abbr);
+    f.next_line = ::espn::next_line(ours, opp, n.team_home, kick, now, "\n", n.time_tbd);
+    // The ticker carries it on both layouts, since a single panel has no
+    // room for it under the time.
+    f.status_text = ::espn::next_line(ours, opp, n.team_home, kick, now, " ", n.time_tbd);
   }
   f.clock = true;
   f.team_color = ::espn::clock_color(team != nullptr, ::espn::parse_color(color));
@@ -3447,20 +3924,27 @@ bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
 }
 
 void GamedayComponent::apply_recap_job_() {
-  Job &j = this->job_;
-  const uint8_t done = ::espn::kRecapMaxDays + 1;
-  if (j.recap_league >= ::espn::kLeagueCount)
+  if (this->job_.recap_league >= ::espn::kLeagueCount)
     return;
-  uint8_t i = j.recap_league;
-  int64_t tnow = (int64_t) this->time_->timestamp_now();
-  int32_t today = ::espn::espn_day(tnow, i);
-  if (!j.recap_ok) {
+  if (!this->recap_day_(this->job_)) {
     // The same day again after the backoff. The rotation keeps going with
     // what it has.
     this->schedule_next_(this->back_off_());
     return;
   }
   this->clear_backoff_();
+  this->schedule_next_(0);
+}
+
+bool GamedayComponent::recap_day_(Job &j) {
+  const uint8_t done = ::espn::kRecapMaxDays + 1;
+  if (j.recap_league >= ::espn::kLeagueCount)
+    return true;
+  uint8_t i = j.recap_league;
+  int64_t tnow = (int64_t) this->time_->timestamp_now();
+  int32_t today = ::espn::espn_day(tnow, i);
+  if (!j.recap_ok)
+    return false;
   if (j.recap_forward) {
     if (j.next_kickoff > tnow) {
       this->recap_fwd_next_[i] = j.next_kickoff;
@@ -3497,7 +3981,7 @@ void GamedayComponent::apply_recap_job_() {
   }
   ::espn::recap_trim(this->recap_days_, tnow);
   this->recap_rebuild_();
-  this->schedule_next_(0);
+  return true;
 }
 
 // A scan's finals and games to come go in as today's (recap.h).
@@ -3550,7 +4034,7 @@ std::string GamedayComponent::live_word_() const {
 void GamedayComponent::recap_rebuild_() {
   this->recap_cards_ = ::espn::recap_cards(this->recap_days_, this->recap_leagues_(), this->recap_next_kickoff_() != 0,
                                            (int64_t) this->time_->timestamp_now());
-  if (!this->recap_on_)
+  if (!this->recap_on_ && !this->side_on_)
     return;
   if (this->recap_step_ >= this->recap_cards_.size())
     this->recap_step_ = 0;
@@ -3572,43 +4056,54 @@ void GamedayComponent::recap_tick_() {
 // no-game screen, a final or a game later today on the scoreboard. The
 // ticker on a final names the day it was played, on a game later today its
 // kickoff and channel.
-void GamedayComponent::recap_show_() {
-  this->recap_step_ms_ = millis() == 0 ? 1 : millis();
-  this->prev_ = GameSnapshot{};
-  this->post_since_ms_ = 0;
+// The card goes on the board's game in Live games, or on the side card when
+// the rotation is the idle display in My team or Favorite teams, whose own
+// game stays as it is. There nothing live is a claim the panel can't make
+// (it follows no other games), so the tickers leave it out.
+void GamedayComponent::recap_prepare_() {
+  // With no cards yet the timer stays at 0, so the first ones show as soon
+  // as they are read (recap_rebuild_).
+  if (!this->recap_cards_.empty())
+    this->recap_step_ms_ = millis() == 0 ? 1 : millis();
+  const bool side = this->side_on_;
+  GameSnapshot &card = side ? this->side_card_() : this->game_;
+  if (!side) {
+    this->prev_ = GameSnapshot{};
+    this->post_since_ms_ = 0;
+  }
   int64_t tnow = (int64_t) this->time_->timestamp_now();
   std::string word = this->live_word_();
-  std::string none = "No live " + word + "games right now";
-  if (this->recap_cards_.empty()) {
+  std::string none = side ? std::string() : "No live " + word + "games right now";
+  auto with_none = [&none](const std::string &label) { return none.empty() ? label : none + " | " + label; };
+  if (this->recap_cards_.empty() || this->recap_step_ >= this->recap_cards_.size()) {
     // Nothing in the last week and no kickoff in the next: the off season.
-    this->game_ = GameSnapshot{};
+    card = GameSnapshot{};
     this->recap_message_ = "No live " + word + "games";
     this->recap_ticker_ = none;
-    this->emit_({});
     return;
   }
   const ::espn::RecapCard &c = this->recap_cards_[this->recap_step_];
   switch (c.kind) {
     case ::espn::RecapKind::HEADER:
-      this->game_ = GameSnapshot{};
+      card = GameSnapshot{};
       this->recap_message_ = ::espn::recap_header(this->recap_days_[c.day], tnow);
       this->recap_ticker_ = none;
       break;
     case ::espn::RecapKind::FINAL: {
-      this->game_ = ::espn::final_snapshot(this->recap_days_[c.day].finals[c.final]);
+      card = ::espn::final_snapshot(this->recap_days_[c.day].finals[c.final]);
       this->recap_message_.clear();
-      std::string detail = this->game_.short_detail.empty() ? std::string("Final") : this->game_.short_detail;
+      std::string detail = card.short_detail.empty() ? std::string("Final") : card.short_detail;
       this->recap_ticker_ = ::espn::recap_header(this->recap_days_[c.day], tnow) + " | " + detail;
       break;
     }
     case ::espn::RecapKind::LATER_HEADER:
-      this->game_ = GameSnapshot{};
+      card = GameSnapshot{};
       this->recap_message_ = "Later today";
       this->recap_ticker_ = none;
       break;
     case ::espn::RecapKind::LATER: {
       const ::espn::Pending &p = this->recap_days_[c.day].later[c.final];
-      this->game_ = ::espn::pending_snapshot(p);
+      card = ::espn::pending_snapshot(p);
       this->recap_message_.clear();
       struct tm k = ESPTime::from_epoch_local((time_t) p.kickoff_epoch).to_c_tm();
       struct tm n = this->time_->now().to_c_tm();
@@ -3616,24 +4111,32 @@ void GamedayComponent::recap_show_() {
       break;
     }
     case ::espn::RecapKind::NEXT: {
-      this->game_ = GameSnapshot{};
+      card = GameSnapshot{};
       std::string match;
       int64_t kick = this->recap_next_kickoff_(&match);
       if (kick == 0) {
         // It kicked off since the cards were made; the scan due now finds it.
-        this->recap_message_ = "No live " + word + "games";
+        this->recap_message_ = side ? "Later today" : "No live " + word + "games";
         this->recap_ticker_ = none;
+        if (side)
+          this->side_scan_ms_ = 0;
         break;
       }
       struct tm k = ESPTime::from_epoch_local((time_t) kick).to_c_tm();
       struct tm n = this->time_->now().to_c_tm();
       std::string label = ::espn::recap_next_text(match, ::espn::kickoff_label(k, n));
       this->recap_message_ = label;
-      this->recap_ticker_ = none + " | " + label;
+      this->recap_ticker_ = with_none(label);
       break;
     }
   }
+}
+
+void GamedayComponent::recap_show_() {
+  this->recap_prepare_();
   this->emit_({});
+  if (this->recap_cards_.empty())
+    return;
   // The logos for the card after this one start downloading now.
   const ::espn::RecapCard &nx = this->recap_cards_[(this->recap_step_ + 1) % this->recap_cards_.size()];
   if (nx.kind == ::espn::RecapKind::FINAL) {
@@ -3779,6 +4282,18 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["fallback"] = this->live_fallback_;
   doc["recap"] = this->recap_on_;
   doc["follow"] = this->follow_.on;  // Follow this game holds the board's game
+  // The idle display and the night hours (idle.h), and what they do now:
+  // idle_view is what the panel shows in place of the mode's board ("" for
+  // none), dark that it is off until a followed game starts.
+  doc["idle"] = this->idle_prefs_.idle;
+  doc["idledim"] = this->idle_prefs_.dim;
+  doc["night"] = this->idle_prefs_.night_on != 0;
+  doc["nightstart"] = ::espn::clock_hhmm(this->idle_prefs_.night_start);
+  doc["nightend"] = ::espn::clock_hhmm(this->idle_prefs_.night_end);
+  doc["nightbri"] = this->idle_prefs_.night_bri;
+  doc["idle_view"] = ::espn::idle_view_key(this->idle_view_);
+  doc["night_now"] = this->idle_.night;
+  doc["dark"] = this->idle_.dim && this->idle_prefs_.dim == 0;
 
   JsonObject game = doc["game"].to<JsonObject>();
   game["s"] = g.valid ? ::espn::state_name(g.state) : "NOT_FOUND";
@@ -3830,14 +4345,17 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     game["tbd"] = true;
   game["lp"] = g.last_play;
   game["dd"] = brk ? std::string() : g.down_distance;
+  // Under the idle display's view (a game isn't live then), the game here is
+  // still the mode's own, so its fields come from it, not from the view.
+  const bool idle = this->idle_view_ != ::espn::IdleView::BOARD;
   if (f != nullptr) {
-    game["c"] = f->clock_text;
-    game["d"] = f->down_distance;
-    game["k"] = f->kickoff;
+    game["c"] = idle ? std::string() : f->clock_text;
+    game["d"] = idle ? std::string() : f->down_distance;
+    game["k"] = idle ? this->kickoff_of_(g) : f->kickoff;
     char color[8];
-    snprintf(color, sizeof(color), "%06X", (unsigned) f->team_color);
+    snprintf(color, sizeof(color), "%06X", (unsigned) (idle ? ::espn::parse_color(g.team_color) : f->team_color));
     game["tc"] = color;
-    snprintf(color, sizeof(color), "%06X", (unsigned) f->opponent_color);
+    snprintf(color, sizeof(color), "%06X", (unsigned) (idle ? ::espn::parse_color(g.opp_color) : f->opponent_color));
     game["oc"] = color;
     doc["status"] = f->status_text;
     doc["clock"] = f->clock;
@@ -3848,7 +4366,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   game["id"] = g.event_id;
   if (g.sport != ::espn::Sport::FOOTBALL) {
     game["sport"] = (int) g.sport;
-    if (f != nullptr) {
+    if (f != nullptr && !idle) {
       game["sit"] = f->situation;
       game["outs"] = f->outs;
       game["bases"] = f->bases;
@@ -4352,6 +4870,24 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::STANDING:
         this->set_standing((uint8_t) op.value);
+        break;
+      case ::espn::SetKind::IDLE:
+        this->set_idle(op.value);
+        break;
+      case ::espn::SetKind::IDLE_DIM:
+        this->set_idle_dim(op.value);
+        break;
+      case ::espn::SetKind::NIGHT:
+        this->set_night(op.on);
+        break;
+      case ::espn::SetKind::NIGHT_START:
+        this->set_night_start(op.value);
+        break;
+      case ::espn::SetKind::NIGHT_END:
+        this->set_night_end(op.value);
+        break;
+      case ::espn::SetKind::NIGHT_BRI:
+        this->set_night_bri(op.value);
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)
