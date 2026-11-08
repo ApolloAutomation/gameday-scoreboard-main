@@ -30,6 +30,9 @@
 #ifdef USE_GAMEDAY_CRASH_REPORT
 #include "esphome/components/crash_report/crash_report.h"
 #endif
+#ifdef USE_CAPTIVE_PORTAL
+#include "esphome/components/captive_portal/captive_portal.h"
+#endif
 #ifdef USE_WIFI
 #include "esphome/components/wifi/wifi_component.h"
 #include <esp_event.h>
@@ -1064,6 +1067,19 @@ void GamedayComponent::loop() {
 #endif
   this->captive_tick_();
   this->wifi_tick_();
+#ifdef USE_CAPTIVE_PORTAL
+  // The hotspot's DNS server answers one lookup per pass of the main loop,
+  // and a phone that has just joined sends a burst of them, its check for
+  // internet among them. Lookups that queue past the socket's few slots are
+  // dropped and only asked again seconds later, which can be long enough for
+  // the phone to decide the hotspot has no internet rather than a setup
+  // page. Answer a few more per pass while the hotspot is up; each call
+  // returns at once when nothing is waiting.
+  auto *portal = captive_portal::global_captive_portal;
+  if (portal != nullptr && portal->is_active())
+    for (int i = 0; i < 7; i++)
+      portal->loop();
+#endif
 #ifdef GAMEDAY_DEMO
   // While the scripted game plays, nothing new is fetched. A fetch already
   // running still finishes below, and is discarded as belonging to before.
@@ -3956,6 +3972,44 @@ std::string GamedayComponent::wifi_json_() {
 bool GamedayComponent::canHandle(AsyncWebServerRequest *request) const {
   char buf[AsyncWebServerRequest::URL_BUF_SIZE];
   return request->url_to(buf).starts_with("/gameday/");
+}
+
+void GamedayComponent::set_web_server_base(web_server_base::WebServerBase *base) {
+  this->base_ = base;
+  // The web server takes handlers in the order they are added, and this runs
+  // before any component's setup: ahead of the device page (web_server, at
+  // setup) and the captive portal (when the hotspot first starts).
+  if (base != nullptr)
+    base->add_handler(&this->hotspot_handler_);
+}
+
+// ---- The setup hotspot (hotspot.h) -------------------------------------------
+
+bool GamedayComponent::HotspotHandler::canHandle(AsyncWebServerRequest *request) const {
+#ifdef USE_CAPTIVE_PORTAL
+  auto *portal = captive_portal::global_captive_portal;
+  if (portal == nullptr || !portal->is_active())
+    return false;
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  return hotspot_route(true, network::is_connected(), request->method() == HTTP_GET, request->url_to(buf).str()) !=
+         HotspotRoute::USUAL;
+#else
+  return false;
+#endif
+}
+
+// Only for what canHandle took: a GET on the hotspot while off Wi-Fi.
+void GamedayComponent::HotspotHandler::handleRequest(AsyncWebServerRequest *request) {
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  if (panel_route(request->url_to(buf).str())) {
+    this->parent_->handleRequest(request);
+    return;
+  }
+#ifdef USE_CAPTIVE_PORTAL
+  // The setup page, from the portal's own handler: for every OS's check for
+  // internet too, which is what makes the phone offer it.
+  captive_portal::global_captive_portal->handleRequest(request);
+#endif
 }
 
 void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {

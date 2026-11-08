@@ -19,6 +19,21 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 **Why:** where the app works with this firmware, it finds a new panel over Bluetooth and a panel that's already set up over your Wi-Fi. A guest network, or a phone on mobile data, can keep the phone and the panel apart. Some phones won't open `.local` names, and the IP address works there.
 
+## The setup page doesn't open
+
+You joined the panel's **Game Day** hotspot and no page opened.
+
+- Look for a notification to sign in to the network and tap it. Many Android phones post one instead of opening the page.
+- If your phone says the network has no internet, choose to stay connected, or to use the network as it is.
+- Open `192.168.4.1` in your browser.
+- Still nothing? Turn off mobile data while you set the panel up, then open `192.168.4.1` again.
+
+:::note[Coming in the next release]
+`192.168.4.1` opens the setup page on every panel. Until now, on a panel that had been on Wi-Fi before, one that lost its Wi-Fi or one you gave a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi), it could open the device page instead, which has no place to enter a network.
+:::
+
+**Why:** a phone that joins a network checks for internet by opening a web address it knows. On the panel's hotspot every address is the setup page, and getting that instead of what it expected is what makes the phone offer the page. Some phones don't open it by themselves, and a phone that decides the hotspot has no internet can send your browser over mobile data, where the panel isn't.
+
 ## The panel won't join my Wi-Fi
 
 - Pick the 2.4 GHz network. If your router has separate names for 2.4 GHz and 5 GHz, the panel can only use the 2.4 GHz one.

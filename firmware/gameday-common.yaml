@@ -444,6 +444,11 @@ script:
           ESP_LOGW("wifi", "Setup not finished in 15 minutes, restarting onto the saved networks");
           App.safe_reboot();
 
+# The Wi-Fi setup page on the panel's hotspot. The gameday component puts a
+# handler ahead of the device page's so that, while the hotspot is up and
+# the panel is off Wi-Fi, every page and every phone's check for internet
+# gets this setup page, whether or not the panel ever had a network
+# (components/gameday/hotspot.h).
 captive_portal:
 
 improv_serial:

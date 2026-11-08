@@ -29,6 +29,7 @@
 #include "follow.h"
 #include "guard.h"
 #include "health.h"
+#include "hotspot.h"
 #include "offseason.h"
 #include "recap.h"
 #include "poll_timing.h"
@@ -185,7 +186,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Team logos for the board (gameday-common.yaml, gd_show_logos)
   LogoCache &logos() { return this->logos_; }
   void set_time(time::RealTimeClock *time) { this->time_ = time; }
-  void set_web_server_base(web_server_base::WebServerBase *base) { this->base_ = base; }
+  // Also adds the hotspot's handler, ahead of every other (hotspot.h): this
+  // runs from the generated code, before any component's setup.
+  void set_web_server_base(web_server_base::WebServerBase *base);
   void set_panel_layout(panel_layout::PanelLayout *p) { this->panels_ = p; }
   void add_on_action_callback(std::function<void(std::string)> &&cb) {
     this->action_callbacks_.push_back(std::move(cb));
@@ -959,6 +962,20 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // ESPN answered 200 over HTTPS (open_), from any task: the network is open,
   // whatever the probe said.
   std::atomic<uint32_t> espn_ok_reads_{0};
+
+  // The panel's setup hotspot (hotspot.h). Ahead of every other web handler,
+  // so a phone on the hotspot gets the Wi-Fi setup page whichever order the
+  // hotspot and the device page started in. HTTP task.
+  class HotspotHandler : public AsyncWebHandler {
+   public:
+    explicit HotspotHandler(GamedayComponent *parent) : parent_(parent) {}
+    bool canHandle(AsyncWebServerRequest *request) const override;
+    void handleRequest(AsyncWebServerRequest *request) override;
+
+   protected:
+    GamedayComponent *parent_;
+  };
+  HotspotHandler hotspot_handler_{this};
 };
 
 class UpdateTrigger : public Trigger<const UpdateFields &> {
