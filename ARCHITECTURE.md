@@ -89,7 +89,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `demo.cpp` is the scripted demo. `teams.h`, `team_colors.h` and
@@ -163,6 +163,17 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 
 The boot cache (`startup.h`) keeps the next game in flash for a day so a
 restart can skip the team read.
+
+**Bets.** The owner types bets in on the device page (`bet=`, `betdel=`);
+the panel never reads a sportsbook. `bets.h` holds up to eight `Bet`
+records in their own blob (`ManualBets`, a `BetSource`; a bet tracker's
+API could be another source). `bets_tick_`, run from `emit_`, after a
+favorite's poll and every 10 s, hands each game the panel holds (the
+board's, and in Favorite teams each favorite's card) to `bets_observe` as a
+`BetGame`: a bet ties to its team's next or current game, keeps the final's
+result and goes at local midnight (`bets_expire`). Live standing is worked
+out from the snapshot each time and never saved. `emit_` adds the bets on
+the board's game to the ticker, and the state document lists every bet.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -373,7 +384,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
-  the panel's lines) and `test_networks.cpp` (saved networks).
+  the panel's lines), `test_bets.cpp` (manual bets) and `test_networks.cpp`
+  (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.

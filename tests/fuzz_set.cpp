@@ -101,6 +101,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       case SetKind::NIGHT_END:
         require(op.value >= 0 && op.value < kDayMinutes, "the night time is past the day", k, v);
         break;
+      case SetKind::BET:
+        require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        require(bet_valid(op.bet), "the bet isn't one the panel can keep", k, v);
+        bet_label(op.bet);
+        break;
+      case SetKind::BET_DEL:
+        require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        break;
       default:
         break;
     }

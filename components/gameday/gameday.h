@@ -23,6 +23,7 @@
 #include "alerts.h"
 #include "auto_update.h"
 #include "badge.h"
+#include "bets.h"
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"
@@ -177,6 +178,9 @@ class GamedaySelect : public select::Select, public Component {
 //                                    standing=0 record|1 seed|2 place (next to pro teams)
 //                                    idle=0-4 (idle.h) idledim=0-255 night=0/1
 //                                    nightstart=HH:MM nightend=HH:MM nightbri=1-255
+//                                    bet=<slot>,<league>,<team id>,<type>,<line> betdel=<slot>
+//                                    (a manual bet in slot 1-8: spread, over, under or ml, the
+//                                    line in whole or half points; bets.h)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -953,6 +957,25 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // own time, or the game can't be read or never finishes.
   ::espn::FollowPin follow_;
   bool following_();
+  // Manual bets (bets.h), entered on the device page and kept in their own
+  // blob. bets_tick_ ties each to a game the panel holds (the board's, and
+  // in Favorite teams each favorite's card), keeps its result at the final,
+  // drops the done ones and saves; true when one was dropped.
+  ESPPreferenceObject bets_pref_;
+  ::espn::ManualBets bets_;
+  void set_bet_(uint8_t slot, ::espn::Bet b);
+  void remove_bet_(uint8_t slot);
+  bool bets_tick_();
+  // The game on the board's league, as the state document has it.
+  uint8_t board_league_() const;
+  // g as a game for the bets, false when it is none (no game, no event id,
+  // a leaderboard, the demo's).
+  bool bet_game_(const GameSnapshot &g, uint8_t league, ::espn::BetGame &out) const;
+  // The game the panel holds for b, nullptr when it has none.
+  const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
+  // The bets on the board's game, added to its ticker line.
+  void bets_ticker_(std::string &out) const;
+  int64_t next_midnight_(int64_t now) const;
   void start_fav_job_(uint32_t now);
   void apply_fav_job_(uint32_t now);
   uint32_t live_away_id_{0};      // the followed live game's away team

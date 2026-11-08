@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "bets.h"
 #include "idle.h"
 #include "leagues.h"
 #include "startup.h"
@@ -21,13 +22,15 @@ namespace espn {
 
 // In the order the firmware applies them, whatever order the request uses.
 // follow comes first: it pins the game the page showed, and a change later in
-// the same request that moves the board lets the pin go again.
+// the same request that moves the board lets the pin go again. betdel comes
+// before bet, so a request with both empties a slot and then fills it.
 constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "fav1",     "fav2",
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
                                     "match",   "beta",   "alerts",  "alertfav", "standing", "idle",
-                                    "idledim", "night",  "nightstart", "nightend", "nightbri"};
+                                    "idledim", "night",  "nightstart", "nightend", "nightbri", "betdel",
+                                    "bet"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -210,6 +213,8 @@ enum class SetKind : uint8_t {
   NIGHT_START,  // value, minutes after local midnight
   NIGHT_END,    // value, minutes after local midnight
   NIGHT_BRI,    // value, 1 to 255
+  BET,          // slot (1-kBetSlots), bet: a manual bet into that slot (bets.h)
+  BET_DEL,      // slot: empties it
 };
 
 struct TeamRef {
@@ -227,7 +232,65 @@ struct SetOp {
   TeamRef team;
   std::vector<TeamRef> teams;
   std::vector<std::string> refused;  // favs entries left out, for the log
+  Bet bet;                           // BET: what was bet, with no game yet
 };
+
+// A bet slot as the page sends it: one digit, 1 to kBetSlots.
+inline bool parse_bet_slot(const std::string &v, uint8_t &slot) {
+  if (v.size() != 1 || v[0] < '1' || v[0] > '0' + kBetSlots)
+    return false;
+  slot = (uint8_t) (v[0] - '0');
+  return true;
+}
+
+// bet=<slot>,<league>,<team id>,<type>,<line>: "1,nfl,2,spread,-3.5",
+// "2,nfl,2,over,47.5", "3,nba,2,ml," (a moneyline has no line). The type is
+// spread, over, under or ml; the team one in the panel's list, not a golf
+// tour or a racing series; the line whole or half points (parse_bet_line).
+// Anything else, extra spaces and fields included, is refused.
+inline bool parse_bet(const std::string &v, uint8_t &slot, Bet &b) {
+  std::string f[5];
+  size_t n = 0, start = 0;
+  while (n < 5) {
+    size_t comma = v.find(',', start);
+    f[n++] = v.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+    if (comma == std::string::npos)
+      break;
+    start = comma + 1;
+    if (n == 5)
+      return false;  // a sixth field
+  }
+  if (n != 5 || !parse_bet_slot(f[0], slot))
+    return false;
+  b = Bet{};
+  const LeagueInfo *info = league_by_key(f[1].c_str());
+  if (info == nullptr || is_board_sport(info->sport) || f[2].empty() || f[2].size() > 10)
+    return false;
+  uint64_t id = 0;
+  for (char c : f[2]) {
+    if (c < '0' || c > '9')
+      return false;
+    id = id * 10 + (uint64_t) (c - '0');
+  }
+  if (id == 0 || id > UINT32_MAX || !known_team((uint8_t) info->league, (uint32_t) id))
+    return false;
+  b.league = (uint8_t) info->league;
+  b.team_id = (uint32_t) id;
+  const std::string &type = f[3];
+  if (type == "ml") {
+    b.type = (uint8_t) BetType::MONEYLINE;
+    return f[4].empty();
+  }
+  if (type == "spread") {
+    b.type = (uint8_t) BetType::SPREAD;
+    return parse_bet_line(f[4], true, b.line);
+  }
+  if (type != "over" && type != "under")
+    return false;
+  b.type = (uint8_t) BetType::TOTAL;
+  b.side = (uint8_t) (type == "over" ? BetSide::OVER : BetSide::UNDER);
+  return parse_bet_line(f[4], false, b.line);
+}
 
 // Decodes one key=value from the request. False when the key is unknown or
 // the value is refused: the firmware logs it and changes nothing. Switches
@@ -383,6 +446,14 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.kind = SetKind::NIGHT_BRI;
     op.value = clamp_night_bri(read_int(v));
     return true;
+  }
+  if (k == "bet") {
+    op.kind = SetKind::BET;
+    return parse_bet(v, op.slot, op.bet);
+  }
+  if (k == "betdel") {
+    op.kind = SetKind::BET_DEL;
+    return parse_bet_slot(v, op.slot);
   }
   return false;
 }

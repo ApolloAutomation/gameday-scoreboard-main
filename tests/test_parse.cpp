@@ -3532,6 +3532,7 @@ static void test_lookahead() {
 int run_football_golden();  // golden_football.cpp
 int run_set_tests(int &checks);  // test_set.cpp
 int run_alert_tests(int &checks);  // test_alerts.cpp
+int run_bet_tests(int &checks);  // test_bets.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -8781,6 +8782,7 @@ int main() {
   test_idle_scan_leagues();
   failures += run_set_tests(checks);
   failures += run_alert_tests(checks);
+  failures += run_bet_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
