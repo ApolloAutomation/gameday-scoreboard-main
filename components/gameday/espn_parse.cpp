@@ -1,4 +1,5 @@
 #include "espn_parse.h"
+#include "alerts.h"
 
 #include <atomic>
 #include <cstdio>
@@ -317,23 +318,6 @@ uint32_t parse_color(const std::string &hex) {
   return (uint32_t) v;
 }
 
-static const char *score_word(int delta, bool ours) {
-  switch (delta) {
-    case 6:
-    case 7:
-    case 8:
-      return ours ? "TOUCHDOWN!" : "TOUCHDOWN";
-    case 3:
-      return ours ? "FIELD GOAL!" : "FIELD GOAL";
-    case 1:
-      return ours ? "EXTRA POINT!" : "EXTRA POINT";
-    case 2:
-      return ours ? "2-POINT!" : "2-POINT";
-    default:
-      return ours ? "SCORE!" : "SCORE";
-  }
-}
-
 // ---- leaderboard sports ------------------------------------------------------
 
 GolfNext &board_next(GameSnapshot &g) { return g.sport == Sport::RACING ? g.race.next : g.golf.next; }
@@ -378,35 +362,28 @@ std::string board_event_name(Sport sport, const std::string &name, size_t max) {
   return sport == Sport::RACING ? racing_event_name(name, max) : golf_event_name(name, max);
 }
 
-Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
+Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral,
+                     uint32_t alerts, bool wide) {
   if (cur.sport == Sport::GOLF)
     return golf_splash(prev, cur, false);  // the one-panel splash fits both widths
   if (cur.sport == Sport::RACING)
     return racing_splash(prev, cur, false);
-  if (cur.sport == Sport::BASEBALL)
-    return baseball_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::SOCCER)
-    return soccer_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::BASKETBALL)
-    return basketball_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::HOCKEY)
-    return hockey_splash(prev, cur, opponent_splashes, neutral);
-  Splash none;
-  if (!detail::same_game(prev, cur))
-    return none;
-  if (detail::went_final(prev, cur))
-    return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
-  if (prev.state != GameState::IN || cur.state != GameState::IN)
-    return none;
-  int delta = detail::score_gain(prev.team_score, cur.team_score);
-  if (delta > 0 && neutral)
-    return Splash{cur.team_abbr + " " + score_word(delta, false), parse_color(cur.team_color)};
-  if (delta > 0)
-    return Splash{score_word(delta, true), parse_color(cur.team_color)};
-  int odelta = detail::score_gain(prev.opp_score, cur.opp_score);
-  if (odelta > 0 && opponent_splashes)
-    return Splash{cur.opp_abbr + " " + score_word(odelta, false), parse_color(cur.opp_color)};
-  return none;
+  Splash win;
+  if (detail::same_game(prev, cur) && detail::went_final(prev, cur)) {
+    // A shootout decides a level soccer game.
+    int us = cur.team_score, them = cur.opp_score;
+    if (cur.sport == Sport::SOCCER && us == them && cur.soc.team_shootout >= 0 && cur.soc.opp_shootout >= 0) {
+      us = cur.soc.team_shootout;
+      them = cur.soc.opp_shootout;
+    }
+    win = detail::win_splash(cur, neutral, us, them);
+  }
+  // The play that ended the game beats the win; anything else waits for none.
+  const BigPlay p = detect_big_play(prev, cur, alerts, opponent_splashes);
+  if (p.type != Alert::NONE &&
+      (win.text.empty() || p.type == Alert::WALK_OFF || p.type == Alert::BUZZER_BEATER))
+    return big_play_splash(p, cur, neutral, wide);
+  return win;
 }
 
 namespace detail {

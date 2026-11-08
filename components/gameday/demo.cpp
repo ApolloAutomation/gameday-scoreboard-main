@@ -205,7 +205,8 @@ void GamedayComponent::demo_show_step_(bool splash) {
   }
   this->prev_ = this->game_;
   this->game_ = g;
-  ::espn::Splash s = splash ? ::espn::decide_splash(this->prev_, g, true, false) : ::espn::Splash{};
+  ::espn::Splash s = splash ? ::espn::decide_splash(this->prev_, g, true, false, this->alerts_on(), this->wide_())
+                            : ::espn::Splash{};
   this->emit_(s);
 }
 

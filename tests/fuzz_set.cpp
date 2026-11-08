@@ -81,9 +81,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
           fav_leagues.push_back(t.league);
         }
         break;
+      case SetKind::ALERTS:
+        require((op.mask >> kAlertBits) == 0, "the mask names an alert past kAlertBits", k, v);
+        break;
       case SetKind::LIVE:
         require((op.mask >> kLeagueCount) == 0, "the mask names a league past kLeagues", k, v);
-        mask = op.mask;
+        mask = (uint16_t) op.mask;
         break;
       default:
         break;

@@ -58,7 +58,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/10844 them=/0
-  splash n0 o0 d2 us=2-POINT!/10844 them=/0
+  splash n0 o0 d2 us=SAFETY!/10844 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/10844 them=/0
   splash n0 o0 d4 us=SCORE!/10844 them=/0
   splash n0 o0 d5 us=SCORE!/10844 them=/0
@@ -72,7 +72,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/10844 them=NE EXTRA POINT/10844
-  splash n0 o1 d2 us=2-POINT!/10844 them=NE 2-POINT/10844
+  splash n0 o1 d2 us=SAFETY!/10844 them=NE SAFETY/10844
   splash n0 o1 d3 us=FIELD GOAL!/10844 them=NE FIELD GOAL/10844
   splash n0 o1 d4 us=SCORE!/10844 them=NE SCORE/10844
   splash n0 o1 d5 us=SCORE!/10844 them=NE SCORE/10844
@@ -86,7 +86,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=SEA EXTRA POINT/10844 them=/0
-  splash n1 o0 d2 us=SEA 2-POINT/10844 them=/0
+  splash n1 o0 d2 us=SEA SAFETY/10844 them=/0
   splash n1 o0 d3 us=SEA FIELD GOAL/10844 them=/0
   splash n1 o0 d4 us=SEA SCORE/10844 them=/0
   splash n1 o0 d5 us=SEA SCORE/10844 them=/0
@@ -100,7 +100,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=SEA EXTRA POINT/10844 them=NE EXTRA POINT/10844
-  splash n1 o1 d2 us=SEA 2-POINT/10844 them=NE 2-POINT/10844
+  splash n1 o1 d2 us=SEA SAFETY/10844 them=NE SAFETY/10844
   splash n1 o1 d3 us=SEA FIELD GOAL/10844 them=NE FIELD GOAL/10844
   splash n1 o1 d4 us=SEA SCORE/10844 them=NE SCORE/10844
   splash n1 o1 d5 us=SEA SCORE/10844 them=NE SCORE/10844
@@ -127,7 +127,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/10844 them=/0
-  splash n0 o0 d2 us=2-POINT!/10844 them=/0
+  splash n0 o0 d2 us=SAFETY!/10844 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/10844 them=/0
   splash n0 o0 d4 us=SCORE!/10844 them=/0
   splash n0 o0 d5 us=SCORE!/10844 them=/0
@@ -141,7 +141,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/10844 them=SEA EXTRA POINT/10844
-  splash n0 o1 d2 us=2-POINT!/10844 them=SEA 2-POINT/10844
+  splash n0 o1 d2 us=SAFETY!/10844 them=SEA SAFETY/10844
   splash n0 o1 d3 us=FIELD GOAL!/10844 them=SEA FIELD GOAL/10844
   splash n0 o1 d4 us=SCORE!/10844 them=SEA SCORE/10844
   splash n0 o1 d5 us=SCORE!/10844 them=SEA SCORE/10844
@@ -155,7 +155,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=NE EXTRA POINT/10844 them=/0
-  splash n1 o0 d2 us=NE 2-POINT/10844 them=/0
+  splash n1 o0 d2 us=NE SAFETY/10844 them=/0
   splash n1 o0 d3 us=NE FIELD GOAL/10844 them=/0
   splash n1 o0 d4 us=NE SCORE/10844 them=/0
   splash n1 o0 d5 us=NE SCORE/10844 them=/0
@@ -169,7 +169,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=NE EXTRA POINT/10844 them=SEA EXTRA POINT/10844
-  splash n1 o1 d2 us=NE 2-POINT/10844 them=SEA 2-POINT/10844
+  splash n1 o1 d2 us=NE SAFETY/10844 them=SEA SAFETY/10844
   splash n1 o1 d3 us=NE FIELD GOAL/10844 them=SEA FIELD GOAL/10844
   splash n1 o1 d4 us=NE SCORE/10844 them=SEA SCORE/10844
   splash n1 o1 d5 us=NE SCORE/10844 them=SEA SCORE/10844
@@ -196,7 +196,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/13716 them=/0
-  splash n0 o0 d2 us=2-POINT!/13716 them=/0
+  splash n0 o0 d2 us=SAFETY!/13716 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/13716 them=/0
   splash n0 o0 d4 us=SCORE!/13716 them=/0
   splash n0 o0 d5 us=SCORE!/13716 them=/0
@@ -210,7 +210,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/13716 them=SF EXTRA POINT/11141120
-  splash n0 o1 d2 us=2-POINT!/13716 them=SF 2-POINT/11141120
+  splash n0 o1 d2 us=SAFETY!/13716 them=SF SAFETY/11141120
   splash n0 o1 d3 us=FIELD GOAL!/13716 them=SF FIELD GOAL/11141120
   splash n0 o1 d4 us=SCORE!/13716 them=SF SCORE/11141120
   splash n0 o1 d5 us=SCORE!/13716 them=SF SCORE/11141120
@@ -224,7 +224,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=LAR EXTRA POINT/13716 them=/0
-  splash n1 o0 d2 us=LAR 2-POINT/13716 them=/0
+  splash n1 o0 d2 us=LAR SAFETY/13716 them=/0
   splash n1 o0 d3 us=LAR FIELD GOAL/13716 them=/0
   splash n1 o0 d4 us=LAR SCORE/13716 them=/0
   splash n1 o0 d5 us=LAR SCORE/13716 them=/0
@@ -238,7 +238,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=LAR EXTRA POINT/13716 them=SF EXTRA POINT/11141120
-  splash n1 o1 d2 us=LAR 2-POINT/13716 them=SF 2-POINT/11141120
+  splash n1 o1 d2 us=LAR SAFETY/13716 them=SF SAFETY/11141120
   splash n1 o1 d3 us=LAR FIELD GOAL/13716 them=SF FIELD GOAL/11141120
   splash n1 o1 d4 us=LAR SCORE/13716 them=SF SCORE/11141120
   splash n1 o1 d5 us=LAR SCORE/13716 them=SF SCORE/11141120
@@ -265,7 +265,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/11141120 them=/0
-  splash n0 o0 d2 us=2-POINT!/11141120 them=/0
+  splash n0 o0 d2 us=SAFETY!/11141120 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/11141120 them=/0
   splash n0 o0 d4 us=SCORE!/11141120 them=/0
   splash n0 o0 d5 us=SCORE!/11141120 them=/0
@@ -279,7 +279,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/11141120 them=LAR EXTRA POINT/13716
-  splash n0 o1 d2 us=2-POINT!/11141120 them=LAR 2-POINT/13716
+  splash n0 o1 d2 us=SAFETY!/11141120 them=LAR SAFETY/13716
   splash n0 o1 d3 us=FIELD GOAL!/11141120 them=LAR FIELD GOAL/13716
   splash n0 o1 d4 us=SCORE!/11141120 them=LAR SCORE/13716
   splash n0 o1 d5 us=SCORE!/11141120 them=LAR SCORE/13716
@@ -293,7 +293,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=SF EXTRA POINT/11141120 them=/0
-  splash n1 o0 d2 us=SF 2-POINT/11141120 them=/0
+  splash n1 o0 d2 us=SF SAFETY/11141120 them=/0
   splash n1 o0 d3 us=SF FIELD GOAL/11141120 them=/0
   splash n1 o0 d4 us=SF SCORE/11141120 them=/0
   splash n1 o0 d5 us=SF SCORE/11141120 them=/0
@@ -307,7 +307,7 @@ scoreboard fixtures/scoreboard_nfl.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=SF EXTRA POINT/11141120 them=LAR EXTRA POINT/13716
-  splash n1 o1 d2 us=SF 2-POINT/11141120 them=LAR 2-POINT/13716
+  splash n1 o1 d2 us=SF SAFETY/11141120 them=LAR SAFETY/13716
   splash n1 o1 d3 us=SF FIELD GOAL/11141120 them=LAR FIELD GOAL/13716
   splash n1 o1 d4 us=SF SCORE/11141120 them=LAR SCORE/13716
   splash n1 o1 d5 us=SF SCORE/11141120 them=LAR SCORE/13716
@@ -703,7 +703,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/37707 them=/0
-  splash n0 o0 d2 us=2-POINT!/37707 them=/0
+  splash n0 o0 d2 us=SAFETY!/37707 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/37707 them=/0
   splash n0 o0 d4 us=SCORE!/37707 them=/0
   splash n0 o0 d5 us=SCORE!/37707 them=/0
@@ -717,7 +717,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/37707 them=BOIS EXTRA POINT/13216
-  splash n0 o1 d2 us=2-POINT!/37707 them=BOIS 2-POINT/13216
+  splash n0 o1 d2 us=SAFETY!/37707 them=BOIS SAFETY/13216
   splash n0 o1 d3 us=FIELD GOAL!/37707 them=BOIS FIELD GOAL/13216
   splash n0 o1 d4 us=SCORE!/37707 them=BOIS SCORE/13216
   splash n0 o1 d5 us=SCORE!/37707 them=BOIS SCORE/13216
@@ -731,7 +731,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=ORE EXTRA POINT/37707 them=/0
-  splash n1 o0 d2 us=ORE 2-POINT/37707 them=/0
+  splash n1 o0 d2 us=ORE SAFETY/37707 them=/0
   splash n1 o0 d3 us=ORE FIELD GOAL/37707 them=/0
   splash n1 o0 d4 us=ORE SCORE/37707 them=/0
   splash n1 o0 d5 us=ORE SCORE/37707 them=/0
@@ -745,7 +745,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=ORE EXTRA POINT/37707 them=BOIS EXTRA POINT/13216
-  splash n1 o1 d2 us=ORE 2-POINT/37707 them=BOIS 2-POINT/13216
+  splash n1 o1 d2 us=ORE SAFETY/37707 them=BOIS SAFETY/13216
   splash n1 o1 d3 us=ORE FIELD GOAL/37707 them=BOIS FIELD GOAL/13216
   splash n1 o1 d4 us=ORE SCORE/37707 them=BOIS SCORE/13216
   splash n1 o1 d5 us=ORE SCORE/37707 them=BOIS SCORE/13216
@@ -775,7 +775,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/13216 them=/0
-  splash n0 o0 d2 us=2-POINT!/13216 them=/0
+  splash n0 o0 d2 us=SAFETY!/13216 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/13216 them=/0
   splash n0 o0 d4 us=SCORE!/13216 them=/0
   splash n0 o0 d5 us=SCORE!/13216 them=/0
@@ -789,7 +789,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/13216 them=ORE EXTRA POINT/37707
-  splash n0 o1 d2 us=2-POINT!/13216 them=ORE 2-POINT/37707
+  splash n0 o1 d2 us=SAFETY!/13216 them=ORE SAFETY/37707
   splash n0 o1 d3 us=FIELD GOAL!/13216 them=ORE FIELD GOAL/37707
   splash n0 o1 d4 us=SCORE!/13216 them=ORE SCORE/37707
   splash n0 o1 d5 us=SCORE!/13216 them=ORE SCORE/37707
@@ -803,7 +803,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=BOIS EXTRA POINT/13216 them=/0
-  splash n1 o0 d2 us=BOIS 2-POINT/13216 them=/0
+  splash n1 o0 d2 us=BOIS SAFETY/13216 them=/0
   splash n1 o0 d3 us=BOIS FIELD GOAL/13216 them=/0
   splash n1 o0 d4 us=BOIS SCORE/13216 them=/0
   splash n1 o0 d5 us=BOIS SCORE/13216 them=/0
@@ -817,7 +817,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=BOIS EXTRA POINT/13216 them=ORE EXTRA POINT/37707
-  splash n1 o1 d2 us=BOIS 2-POINT/13216 them=ORE 2-POINT/37707
+  splash n1 o1 d2 us=BOIS SAFETY/13216 them=ORE SAFETY/37707
   splash n1 o1 d3 us=BOIS FIELD GOAL/13216 them=ORE FIELD GOAL/37707
   splash n1 o1 d4 us=BOIS SCORE/13216 them=ORE SCORE/37707
   splash n1 o1 d5 us=BOIS SCORE/13216 them=ORE SCORE/37707
@@ -843,7 +843,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/11492407 them=/0
-  splash n0 o0 d2 us=2-POINT!/11492407 them=/0
+  splash n0 o0 d2 us=SAFETY!/11492407 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/11492407 them=/0
   splash n0 o0 d4 us=SCORE!/11492407 them=/0
   splash n0 o0 d5 us=SCORE!/11492407 them=/0
@@ -857,7 +857,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/11492407 them=TXST EXTRA POINT/5247508
-  splash n0 o1 d2 us=2-POINT!/11492407 them=TXST 2-POINT/5247508
+  splash n0 o1 d2 us=SAFETY!/11492407 them=TXST SAFETY/5247508
   splash n0 o1 d3 us=FIELD GOAL!/11492407 them=TXST FIELD GOAL/5247508
   splash n0 o1 d4 us=SCORE!/11492407 them=TXST SCORE/5247508
   splash n0 o1 d5 us=SCORE!/11492407 them=TXST SCORE/5247508
@@ -871,7 +871,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=TEX EXTRA POINT/11492407 them=/0
-  splash n1 o0 d2 us=TEX 2-POINT/11492407 them=/0
+  splash n1 o0 d2 us=TEX SAFETY/11492407 them=/0
   splash n1 o0 d3 us=TEX FIELD GOAL/11492407 them=/0
   splash n1 o0 d4 us=TEX SCORE/11492407 them=/0
   splash n1 o0 d5 us=TEX SCORE/11492407 them=/0
@@ -885,7 +885,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=TEX EXTRA POINT/11492407 them=TXST EXTRA POINT/5247508
-  splash n1 o1 d2 us=TEX 2-POINT/11492407 them=TXST 2-POINT/5247508
+  splash n1 o1 d2 us=TEX SAFETY/11492407 them=TXST SAFETY/5247508
   splash n1 o1 d3 us=TEX FIELD GOAL/11492407 them=TXST FIELD GOAL/5247508
   splash n1 o1 d4 us=TEX SCORE/11492407 them=TXST SCORE/5247508
   splash n1 o1 d5 us=TEX SCORE/11492407 them=TXST SCORE/5247508
@@ -911,7 +911,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o0 d-1 us=/0 them=/0
   splash n0 o0 d0 us=/0 them=/0
   splash n0 o0 d1 us=EXTRA POINT!/5247508 them=/0
-  splash n0 o0 d2 us=2-POINT!/5247508 them=/0
+  splash n0 o0 d2 us=SAFETY!/5247508 them=/0
   splash n0 o0 d3 us=FIELD GOAL!/5247508 them=/0
   splash n0 o0 d4 us=SCORE!/5247508 them=/0
   splash n0 o0 d5 us=SCORE!/5247508 them=/0
@@ -925,7 +925,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n0 o1 d-1 us=/0 them=/0
   splash n0 o1 d0 us=/0 them=/0
   splash n0 o1 d1 us=EXTRA POINT!/5247508 them=TEX EXTRA POINT/11492407
-  splash n0 o1 d2 us=2-POINT!/5247508 them=TEX 2-POINT/11492407
+  splash n0 o1 d2 us=SAFETY!/5247508 them=TEX SAFETY/11492407
   splash n0 o1 d3 us=FIELD GOAL!/5247508 them=TEX FIELD GOAL/11492407
   splash n0 o1 d4 us=SCORE!/5247508 them=TEX SCORE/11492407
   splash n0 o1 d5 us=SCORE!/5247508 them=TEX SCORE/11492407
@@ -939,7 +939,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o0 d-1 us=/0 them=/0
   splash n1 o0 d0 us=/0 them=/0
   splash n1 o0 d1 us=TXST EXTRA POINT/5247508 them=/0
-  splash n1 o0 d2 us=TXST 2-POINT/5247508 them=/0
+  splash n1 o0 d2 us=TXST SAFETY/5247508 them=/0
   splash n1 o0 d3 us=TXST FIELD GOAL/5247508 them=/0
   splash n1 o0 d4 us=TXST SCORE/5247508 them=/0
   splash n1 o0 d5 us=TXST SCORE/5247508 them=/0
@@ -953,7 +953,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   splash n1 o1 d-1 us=/0 them=/0
   splash n1 o1 d0 us=/0 them=/0
   splash n1 o1 d1 us=TXST EXTRA POINT/5247508 them=TEX EXTRA POINT/11492407
-  splash n1 o1 d2 us=TXST 2-POINT/5247508 them=TEX 2-POINT/11492407
+  splash n1 o1 d2 us=TXST SAFETY/5247508 them=TEX SAFETY/11492407
   splash n1 o1 d3 us=TXST FIELD GOAL/5247508 them=TEX FIELD GOAL/11492407
   splash n1 o1 d4 us=TXST SCORE/5247508 them=TEX SCORE/11492407
   splash n1 o1 d5 us=TXST SCORE/5247508 them=TEX SCORE/11492407

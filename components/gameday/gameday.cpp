@@ -331,6 +331,9 @@ void GamedayComponent::setup() {
       this->prefs8_.ticker = TICK8_COUNT | TICK8_MATCH;
     this->pref8_.save(&this->prefs8_);
   }
+  this->pref9_ = global_preferences->make_preference<Prefs9>(fnv1_hash("gameday_prefs9_v1"));
+  if (!this->pref9_.load(&this->prefs9_))
+    this->prefs9_ = Prefs9{};  // every alert on, every game
   this->pref6_ = global_preferences->make_preference<Prefs6>(fnv1_hash("gameday_prefs6_v1"));
   if (!this->pref6_.load(&this->prefs6_) || this->prefs6_.auto_update > 1)
     this->prefs6_ = Prefs6{};
@@ -956,8 +959,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     // Same game on the board: render the new poll with its splash.
     this->prev_ = this->game_;
     this->game_ = e.game;
-    ::espn::Splash splash = ::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(), false);
-    this->emit_(splash);
+    this->emit_(this->board_splash_(false));
   } else if (!switched) {
     this->rebuild_state_(&this->last_fields_);  // the page's list of favorites' games
   }
@@ -1353,6 +1355,42 @@ void GamedayComponent::set_ticker8_(uint8_t f, bool on) {
     this->emit_({});
   else
     this->rebuild_state_(&this->last_fields_);
+}
+
+void GamedayComponent::set_alerts(uint32_t on) {
+  const uint32_t off = ::espn::kAlertsAll & ~on;
+  if (off == this->prefs9_.alerts_off)
+    return;
+  this->prefs9_.alerts_off = off;
+  this->save_prefs9_();
+}
+
+void GamedayComponent::set_alerts_favorites_only(bool on) {
+  const uint8_t flags = on ? (this->prefs9_.flags | ALERT9_FAV) : (this->prefs9_.flags & ~ALERT9_FAV);
+  if (flags == this->prefs9_.flags)
+    return;
+  this->prefs9_.flags = flags;
+  this->save_prefs9_();
+}
+
+// Only the page shows these, so the board isn't redrawn.
+void GamedayComponent::save_prefs9_() {
+  this->pref9_.save(&this->prefs9_);
+  this->rebuild_state_(&this->last_fields_);
+}
+
+::espn::Splash GamedayComponent::board_splash_(bool neutral) const {
+  uint32_t alerts = this->alerts_on();
+  if (neutral && this->alerts_favorites_only()) {
+    // Live games: a game without the team or a favorite on either side gets none.
+    std::pair<uint8_t, uint32_t> teams[FAV_MAX + 1];
+    teams[0] = {this->prefs_.league, this->prefs_.team_id};
+    for (uint8_t i = 0; i < FAV_MAX; i++)
+      teams[i + 1] = {this->fav_league_(i), this->fav_id_(i)};
+    if (!::espn::game_has_team(this->schedule_.league, this->game_.team_id, this->game_.opp_id, teams, FAV_MAX + 1))
+      alerts = 0;
+  }
+  return ::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(), neutral, alerts, this->wide_());
 }
 
 void GamedayComponent::save_prefs_() { this->pref_.save(&this->prefs_); }
@@ -2713,9 +2751,7 @@ void GamedayComponent::apply_job_() {
     this->upcoming_after_poll_ = false;
     this->upcoming_due_ = true;
   }
-  ::espn::Splash splash =
-      ::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(),
-                            this->live_mode_() && !this->live_fallback_);
+  ::espn::Splash splash = this->board_splash_(this->live_mode_() && !this->live_fallback_);
   if (this->game_.state == GameState::POST) {
     if (this->post_since_ms_ == 0)
       this->post_since_ms_ = now == 0 ? 1 : now;
@@ -2792,7 +2828,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     } else {
       this->post_since_ms_ = 0;
     }
-    this->emit_(::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(), false));
+    this->emit_(this->board_splash_(false));
     this->mark_board_ready_();
   }
   if (::espn::cup_read_backs_off(j.cup_ok, j.polled, j.game_ok, j.throttled)) {
@@ -2882,8 +2918,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
   this->game_ = std::move(j.game);  // leaves job_ without the rows
   this->no_game_confirmed_ = false;
   this->mark_good_poll_();
-  const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
-  ::espn::Splash splash = ::espn::board_splash(this->prev_, this->game_, wide);
+  ::espn::Splash splash = ::espn::board_splash(this->prev_, this->game_, this->wide_());
   this->prev_.golf.rows = {};  // only its event and phase are read later
   this->prev_.race.rows = {};
   this->emit_(splash);
@@ -2995,7 +3030,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       card = g.golf.phase == ::espn::GolfPhase::PRE ? dates : std::string();
     }
     kickoff = dates;
-    const bool wide = this->panels_ != nullptr && this->panels_->cols() >= 2;
+    const bool wide = this->wide_();
     ::espn::BoardLines l = ::espn::board_lines(g, wide);
     f.board_title = std::move(l.title);
     f.board_status = std::move(l.status);
@@ -3606,6 +3641,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["play"] = this->ticker_last_play();
   doc["odds"] = this->ticker_odds();
   doc["opp"] = this->opponent_splashes();
+  doc["alerts"] = this->alerts_on();
+  doc["alertfav"] = this->alerts_favorites_only();
   doc["bootaddr"] = this->show_boot_address();
 #if defined(USE_UPDATE) && !defined(GAMEDAY_BAR)
   // Left out where nothing can be installed (the demo build) or there is no
@@ -4104,7 +4141,7 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         this->set_today_only(op.on);
         break;
       case ::espn::SetKind::LIVE:
-        this->set_live_mask_(op.mask);
+        this->set_live_mask_((uint16_t) op.mask);
         break;
       case ::espn::SetKind::FAVS: {
         for (const auto &bad : op.refused)
@@ -4142,6 +4179,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::OPP:
         this->set_opponent_splashes(op.on);
+        break;
+      case ::espn::SetKind::ALERTS:
+        this->set_alerts(op.mask);
+        break;
+      case ::espn::SetKind::ALERTFAV:
+        this->set_alerts_favorites_only(op.on);
         break;
       case ::espn::SetKind::BOOTADDR:
         this->set_show_boot_address(op.on);
