@@ -32,7 +32,7 @@ You joined the panel's **Game Day** hotspot and no page opened.
 `192.168.4.1` opens the setup page on every panel. Until now, on a panel that had been on Wi-Fi before, one that lost its Wi-Fi or one you gave a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi), it could open the device page instead, which has no place to enter a network.
 :::
 
-**Why:** a phone that joins a network checks for internet by opening a web address it knows. On the panel's hotspot every address is the setup page, and getting that instead of what it expected is what makes the phone offer the page. Some phones don't open it by themselves, and a phone that decides the hotspot has no internet can send your browser over mobile data, where the panel isn't.
+**Why:** a phone that joins a network checks for internet by opening a plain `http://` web address it knows. On the panel's hotspot every `http://` address is the setup page, and getting that instead of what it expected is what makes the phone offer the page. Some phones don't open it by themselves, and a phone that decides the hotspot has no internet can send your browser over mobile data, where the panel isn't. Secure `https://` sites, which is most of them, show an error on the hotspot instead of the setup page, so open `192.168.4.1` rather than a site you know.
 
 ## The panel won't join my Wi-Fi
 

@@ -28,7 +28,7 @@ While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game 
 3. Save.
 
 :::note[Coming in the next release]
-While your phone is on the panel's hotspot, `192.168.4.1` and any other web page you open there show the setup page, and so does the check for internet a phone makes as it joins, which is what makes the page open by itself. That holds on a new panel, after a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and on a panel that lost its Wi-Fi. Until now, on a panel that had been on Wi-Fi before, `192.168.4.1` could open the device page instead, which has no place to enter a network. If the page still doesn't open, see [The setup page doesn't open](/help/troubleshooting/#the-setup-page-doesnt-open).
+While your phone is on the panel's hotspot, `192.168.4.1` shows the setup page, and so does the check for internet a phone makes as it joins, which is what makes the page open by itself. That holds on a new panel, after a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and on a panel that lost its Wi-Fi. Until now, on a panel that had been on Wi-Fi before, `192.168.4.1` could open the device page instead, which has no place to enter a network. Open `192.168.4.1` rather than a site you know: most sites start with `https://`, and those show an error on the hotspot instead of the setup page. If the page still doesn't open, see [The setup page doesn't open](/help/troubleshooting/#the-setup-page-doesnt-open).
 :::
 
 The panel joins your Wi-Fi. Then [pick your team](/get-started/pick-your-team/) on its device page.
