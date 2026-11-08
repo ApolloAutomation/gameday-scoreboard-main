@@ -200,6 +200,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
 - **ESPN data**: how much the panel has downloaded from ESPN since it started, for anyone on a capped internet plan.
 
+:::note[Coming in the next release]
+Minor league baseball adds a **MiLB** tab to the team chooser, after **MLB**, with the teams under a heading for each level, and On now lists minor league games too. A minor league team has an Up next list of its next three games. Diagnostics show **Last MLB read** once the panel has read minor league scores, and the data row becomes **Data used**, counting what the panel downloads from MLB as well as ESPN. When the panel can't reach MLB for a minor league team, the board says **Can't reach MLB**. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
+
 ### Follow beta
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.

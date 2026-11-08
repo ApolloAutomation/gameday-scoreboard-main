@@ -61,6 +61,10 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
+
+:::note[Coming in the next release]
+Minor league teams aren't in the **Team** list either, since 120 more would make it too long for one entity; pick them on the device page. **ESPN Data** keeps its name but counts what the panel downloads from MLB for a minor league team too.
+:::
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
 While a golf tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22". See [Golf](/using/golf/).

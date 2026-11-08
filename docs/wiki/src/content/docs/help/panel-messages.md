@@ -66,6 +66,10 @@ With a golf tour or a racing series as your team, a tournament or a race weekend
 
 A panel with no team picked also brings the QR code that opens its device page back over the board for 13 seconds every 3 minutes, until you pick one.
 
+:::note[Coming in the next release]
+**Can't reach MLB** is the same as **Can't reach ESPN** for a minor league team, whose scores come from MLB's stats service. Check the internet connection; the panel keeps trying. A minor league doubleheader's game 2 shows as **Today TBD** until it starts. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
+
 ## When you hold the button
 
 The button on the controller shows the panel's address and resets it. Nothing resets until you let go, and the screen says what letting go will do. See [Buttons and resets](/using/buttons-and-resets/).

@@ -60,6 +60,10 @@ Check that other devices on the same network can get online. The panel keeps try
 
 **Why:** the panel is on your Wi-Fi but can't get an answer from ESPN, where the scores come from. That's usually the internet connection, and sometimes ESPN itself.
 
+:::note[Coming in the next release]
+For a minor league team the panel says **Can't reach MLB** instead, since those scores come from MLB's stats service. The same steps apply. If only MLB is out, your other teams and leagues keep updating from ESPN.
+:::
+
 ## The panel says Getting ready for a long time
 
 Check that other devices on the same network can get online. If they can, try another network, like your home Wi-Fi or a phone hotspot.

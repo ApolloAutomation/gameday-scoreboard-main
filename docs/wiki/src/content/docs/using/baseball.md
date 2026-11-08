@@ -7,6 +7,10 @@ sidebar:
 
 MLB games get their own board. This page describes a 128x64 display and notes where a single 64x64 panel differs. See [Panel sizes and layouts](/using/panel-sizes/).
 
+:::note[Coming in the next release]
+Minor league teams, at Triple-A, Double-A, High-A and Single-A, get this same board, with their scores from MLB instead of ESPN. See [Baseball: minor leagues](/using/minor-league-baseball/) for what's different.
+:::
+
 ## Before the game
 
 The next-game card shows both logos, your team on the left, with the records under them. The ticker carries:

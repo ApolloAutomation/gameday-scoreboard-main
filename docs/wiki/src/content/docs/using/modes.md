@@ -17,6 +17,10 @@ The panel follows one team: its next game before kickoff, the game while it's on
 
 Far from kickoff the panel checks the game every 15 minutes, and every minute in the last hour before it starts. If a read from ESPN fails, it waits longer before each new try.
 
+:::note[Coming in the next release]
+A minor league team's scores come from MLB's stats service instead of ESPN, on the same schedule. If MLB fails or refuses the panel, the panel waits longer before asking MLB again, while everything it reads from ESPN goes on as usual, and the other way around. Game 2 of a doubleheader has no start time, so on its day the panel checks it every minute. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
+
 A golf tour or a racing series is followed like a team, with its tournament or race weekend in place of a game, on its own update schedule. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 Your team is always on the left of the board.
@@ -50,6 +54,10 @@ Turn on **Favorite teams only** in the Celebrations card and only games with you
 The league buttons under the mode buttons pick the leagues. Until you pick any, Live games follows the leagues of your team and your favorites, and the page says so. Tap a league to choose by hand; **Back to automatic** goes back to following your team and favorites. At least one league stays on.
 
 Live games doesn't follow golf or racing. There are no Golf, Formula 1 or NASCAR league buttons, and a golf tour or a racing series as your team doesn't add golf or racing to the automatic leagues.
+
+:::note[Coming in the next release]
+A **MiLB** button follows minor league games at all four levels, Triple-A to Single-A, together; you can't pick one level. A minor league team as your team or a favorite adds MiLB to the automatic leagues. If MLB's stats service fails or refuses the panel, the other leagues are still checked and MiLB waits its turn.
+:::
 
 A change takes effect right away. When you change the leagues, or change your favorites so that the automatic leagues change, the panel looks for games in the new leagues at once, without waiting for its next check, instead of leaving the old leagues' scores up.
 

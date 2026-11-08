@@ -50,6 +50,10 @@ Nothing beyond the panel and its electricity. There's no subscription and no acc
 
 If your internet plan has a data cap, **ESPN data** in the Device card on the device page shows how much the panel has downloaded since it started.
 
+:::note[Coming in the next release]
+Minor league teams' scores come from MLB's public stats service instead, also free. The row is called **Data used** and counts both.
+:::
+
 ## Can I follow more than one team?
 
 Yes. **Favorite teams** holds up to 16 teams from any league, in priority order. Turn on **Only today's games** to cycle through only the favorites playing today. When two favorites play at once, the panel sticks with the higher one, or alternates between them if you choose **Alternate**. See [Favorite teams](/using/favorites/).

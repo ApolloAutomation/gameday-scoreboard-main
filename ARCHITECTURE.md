@@ -1,8 +1,9 @@
 # Architecture
 
 How Game Day Scoreboard is put together: the builds, the components, the
-path a score takes from ESPN to the panel and the device page, the update
-channels, and the sites, scripts, CI and tests around them. File and line
+path a score takes from ESPN (or for minor league baseball, the MLB Stats
+API) to the panel and the device page, the update channels, and the sites,
+scripts, CI and tests around them. File and line
 references are to `dev` when this was written; follow the names, since line
 numbers drift.
 
@@ -96,6 +97,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
+  `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -346,6 +348,40 @@ golf's: on one panel `BoardLines::value_narrow` false hides the value column
 and gives the names its room. Racing is not in Favorite teams or Live games
 either.
 
+**Minor league baseball.** `League::MILB` is the one league not read from
+ESPN: its `LeagueInfo::source` is `Source::MLB_STATS`, and its 120 teams
+(Triple-A to Single-A, `Team::group` the level's MLB Stats sport id, 11 to
+14) come from the MLB Stats API's team list (`build_teams.py --league milb`).
+The four fetch functions hand a minor league team or league to the MLB Stats
+reads in `source_mlbstats.cpp`, all on its schedule endpoint with a
+`fields=` list that cuts each document on the server and an ArduinoJson
+filter as well: the team read (`mlb_team_url`, yesterday to ten days ahead
+at all four levels, about 4 KB, which also gives the Up next list, so no
+look-ahead or game-on-now read), the far read when that lists nothing
+(`mlb_far_url`, 11 to 240 days ahead at the team's level, ids and dates only,
+about 10 KB: next season's opener), the game poll (`mlb_game_url`, one game
+with its line score and probable pitchers, about 1.4 KB; the line score
+endpoint has no status or team ids) and the day scan for Live games and the
+finals rotation (`mlb_day_url`, up to about 25 KB for 60 games, of which the
+first `kRecapCap` finals are kept). Each turns into the same `Schedule`,
+`Upcoming`, `GameSnapshot` (sport `BASEBALL`, so the baseball board, ticker
+and splashes draw it), `LiveGame`, `Final` and `Pending` as ESPN's.
+`codedGameState` decides the state: postponed, canceled and suspended games
+are post and not completed, as ESPN has them, and a game the API lists on
+several dates (postponed, then played) is read at the entry nearest the
+kickoff the board picked. A game with no start time (game 2 of a
+doubleheader) sits at midnight Eastern like ESPN's TBD games, and
+`pre_poll_near` reads a baseball one every minute on its day. Logos are
+MLB's 64 px PNG spots (`mlb_logo_url`). There are no team colors, last play
+or home run flag in the feed. `open_` tells the hosts apart (`is_mlb_url`):
+an MLB read's status, refusals and `Retry-After` go to the job's `mlb_*`
+fields, and a job that read only MLB backs off on `mlb_wait_`
+(`HostWait`, poll_timing.h), never ESPN's run, and the other way round.
+Favorite Teams skips a favorite whose host is waiting (`host_waiting_`), a
+scan leaves MiLB out while MLB's wait runs, and a failed MiLB scan read
+beside ESPN's that answered backs off MLB alone. Its bytes count in the same
+"ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`.
+
 ## The device page and its routes
 
 `firmware/web/app.js` and `app.css` are the page; `scripts/build_web.py`
@@ -368,7 +404,8 @@ The page reads the state document, re-reads it when ESPHome's event stream
 sends a Game Status event, holds each tapped setting until the panel
 confirms it, and uses entity endpoints only for what Home Assistant also
 has (Brightness, Power, the update entity). In the browser it reads today's
-games and logos from ESPN and release notes from GitHub.
+games and logos from ESPN (minor league ones from the MLB Stats API and MLB's
+image server) and release notes from GitHub.
 `tests/fixtures/set_cases.json` is the shared table of settings cases that
 the host tests, the page's mock and the fuzzer all use.
 
