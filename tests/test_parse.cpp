@@ -1055,10 +1055,17 @@ static void test_carry_football() {
   carry_football(q2, q2b);
   CHECK_EQ(q2b.team_timeouts, 1);  // the last count, the same half
   CHECK_EQ(q2b.opp_timeouts, 0);   // a real 0 carries too
-  GameSnapshot q3 = q2b;
+  GameSnapshot ht = q2b;  // halftime
+  ht.status_name = "STATUS_HALFTIME";
+  ht.short_detail = "Halftime";
+  carry_football(q2b, ht);
+  GameSnapshot q3 = ht;
+  q3.status_name = "STATUS_IN_PROGRESS";
+  q3.short_detail = "14:20 - 3rd";
   q3.period = 3;
+  q3.last_play = "(14:20) First play of the half.";
   q3.team_timeouts = q3.opp_timeouts = -1;
-  carry_football(q2b, q3);
+  carry_football(ht, q3);
   CHECK_EQ(q3.team_timeouts, 3);  // the second half starts with 3
   CHECK_EQ(q3.opp_timeouts, 3);
   GameSnapshot q4 = q3;
@@ -1233,6 +1240,101 @@ static void test_halftime_resumes() {
   soc.status_name = "STATUS_HALFTIME";
   soc.short_detail = "HT";
   CHECK(ha_status_text(soc, "").rfind("Live", 0) == 0);
+}
+
+static void test_break_timelines() {
+  GameSnapshot none;
+  auto at = [](int period, const char *name, const char *detail, const char *clock, const char *play) {
+    GameSnapshot g = live(14, 7);
+    g.period = period;
+    g.status_name = name;
+    g.short_detail = detail;
+    g.display_clock = clock;
+    g.last_play = play;
+    g.short_down_distance = "2nd & 6";
+    g.down_distance = "2nd & 6 at PHI 40";
+    g.possession = 1;
+    return g;
+  };
+  // The 4th quarter's end keeps ESPN's counts, and the final keeps them.
+  GameSnapshot q4 = at(4, "STATUS_IN_PROGRESS", "0:31 - 4th", "0:31", "(00:31) Run for 2 yards.");
+  q4.team_timeouts = 0;
+  q4.opp_timeouts = 1;
+  carry_football(none, q4);
+  GameSnapshot e4 = at(4, "STATUS_END_PERIOD", "End of 4th", "0:00", "End of 4th quarter.");
+  e4.team_timeouts = 0;
+  e4.opp_timeouts = 1;
+  carry_football(q4, e4);
+  CHECK(football_break(e4));
+  CHECK_EQ(e4.team_timeouts, 0);
+  CHECK_EQ(e4.opp_timeouts, 1);
+  GameSnapshot fin = e4;
+  fin.state = GameState::POST;
+  fin.team_timeouts = fin.opp_timeouts = -1;
+  carry_football(e4, fin);
+  CHECK_EQ(fin.team_timeouts, 0);
+  CHECK_EQ(fin.opp_timeouts, 1);
+
+  // A first-half play that reaches ESPN's plays after halftime began isn't the 3rd quarter.
+  GameSnapshot h1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:14) Pass incomplete.");
+  carry_football(none, h1);
+  CHECK(h1.held);
+  CHECK_EQ(h1.break_secs, 14);
+  GameSnapshot h2 = h1;
+  h2.last_play = "(00:09) Field goal is GOOD.";
+  h2.team_score = 17;
+  carry_football(h1, h2);
+  CHECK(!h2.resumed);
+  CHECK(is_halftime(h2));
+  CHECK_EQ(clock_text(h2), std::string("Halftime"));
+  CHECK_EQ(h2.break_secs, 9);
+  GameSnapshot h3 = h2;  // ESPN changes its words during the break
+  h3.last_play = "End of Half";
+  carry_football(h2, h3);
+  CHECK(!h3.resumed);
+  CHECK(h3.held);
+  // ESPN's status moves to the 3rd before the half's first play: drive and counts held.
+  GameSnapshot s3 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "End of Half");
+  s3.team_timeouts = 1;
+  s3.opp_timeouts = 0;
+  carry_football(h3, s3);
+  CHECK(s3.held);
+  CHECK(football_break(s3));  // the first half's drive stays hidden
+  TickerOptions all;
+  CHECK(status_text(s3, all, "").find("2nd & 6") == std::string::npos);
+  CHECK_EQ(s3.team_timeouts, 3);
+  CHECK_EQ(s3.opp_timeouts, 3);
+  GameSnapshot s3b = s3;  // the kickoff
+  s3b.last_play = "(15:00) Kickoff for a touchback.";
+  s3b.team_timeouts = 3;
+  s3b.opp_timeouts = 3;
+  carry_football(s3, s3b);
+  CHECK(!s3b.held);
+  CHECK(!football_break(s3b));
+
+  // A play without a clock (some college feeds) that moved the drive resumes the half.
+  GameSnapshot c1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
+  carry_football(none, c1);
+  GameSnapshot c2 = c1;
+  c2.last_play = "J.Smith kickoff for 65 yds for a touchback.";
+  c2.short_down_distance = "1st & 10";
+  c2.possession = 2;
+  carry_football(c1, c2);
+  CHECK(c2.resumed);
+  CHECK_EQ(clock_text(c2), std::string("3rd"));
+  GameSnapshot c3 = c1;  // a clockless text with the drive unchanged doesn't
+  c3.last_play = "Halftime show";
+  carry_football(c1, c3);
+  CHECK(!c3.resumed);
+
+  // A gap from mid-2nd to mid-3rd (no halftime seen) doesn't guess 3.
+  GameSnapshot m2 = at(2, "STATUS_IN_PROGRESS", "5:00 - 2nd", "5:00", "(05:00) Run.");
+  m2.team_timeouts = 1;
+  carry_football(none, m2);
+  GameSnapshot m3 = at(3, "STATUS_IN_PROGRESS", "9:00 - 3rd", "9:00", "(09:00) Pass.");
+  m3.team_timeouts = -1;
+  carry_football(m2, m3);
+  CHECK_EQ(m3.team_timeouts, -1);
 }
 
 // ESPN also ends a half as in progress: "End of 2nd" at 0:00.
@@ -7154,6 +7256,9 @@ int main() {
   test_clock_text();
   test_halftime_fixture();
   test_carry_football();
+  test_halftime_resumes();
+  test_end_of_half_in_progress();
+  test_break_timelines();
   test_color();
   test_favorites();
   test_favorites_shrunk();

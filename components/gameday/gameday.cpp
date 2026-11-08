@@ -2566,8 +2566,11 @@ void GamedayComponent::apply_job_() {
     this->schedule_fetched_ms_ = now == 0 ? 1 : now;  // 0 reads as "never fetched"
     this->live_away_id_ = g.away_id;
     this->live_started_ms_ = now == 0 ? 1 : now;
-    this->game_ = GameSnapshot{};
-    this->prev_ = GameSnapshot{};
+    if (this->game_.event_id != g.event_id) {
+      // The same game picked again keeps its last poll (carry_football reads it)
+      this->game_ = GameSnapshot{};
+      this->prev_ = GameSnapshot{};
+    }
     this->schedule_next_(0);  // poll the chosen game right away
     return;
   }
