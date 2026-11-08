@@ -839,8 +839,11 @@ static bool after_break(const GameSnapshot &s, int break_period, const std::stri
   if (break_period != 2)
     return true;
   const int secs = play_secs(s.last_play);
+  // 1800 left is also a first-half kickoff whose return ran out the clock, so
+  // only a 15:00 or clockless kickoff counts there
   if (s.play_secs_left >= 0)
-    return s.play_secs_left < 1800 || (s.play_secs_left == 1800 && (secs == 900 || kickoff(s.last_play)));
+    return s.play_secs_left < 1800 ||
+           (s.play_secs_left == 1800 && (secs == 900 || (secs < 0 && kickoff(s.last_play))));
   if (secs >= 0)
     return secs > (break_secs >= 0 ? break_secs : 599);
   return kickoff(s.last_play);
@@ -849,8 +852,12 @@ static bool after_break(const GameSnapshot &s, int break_period, const std::stri
 // The last play is still the first half's: ESPN's seconds left say so, or it
 // has no figure and is ESPN's end-of-half words.
 static bool first_half_play(const GameSnapshot &s) {
-  if (s.play_secs_left >= 0)
-    return s.play_secs_left >= 1800;
+  if (s.play_secs_left >= 0) {
+    // At 1800 left the 3rd quarter's own kickoff (15:00 or clockless) isn't
+    const int secs = play_secs(s.last_play);
+    return s.play_secs_left > 1800 ||
+           (s.play_secs_left == 1800 && secs != 900 && !(secs < 0 && kickoff(s.last_play)));
+  }
   return s.last_play.find("End of 2nd") != std::string::npos || s.last_play.find("End of Half") != std::string::npos ||
          s.last_play.find("Halftime") != std::string::npos;
 }
@@ -861,8 +868,8 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   const bool game = prev.valid && prev.event_id == next.event_id;
   const bool was_held = game && prev.held;
   if (next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
-    if (game && prev.resumed)
-      next.resumed = true;  // until ESPN's status catches up
+    if (game && prev.resumed && !first_half_play(next))
+      next.resumed = true;  // until ESPN's status catches up, or its plays go back to the first half's
     else
       next.resumed = after_break(next, 2, was_held ? prev.break_play : std::string(), was_held ? prev.break_secs : -1);
   }

@@ -1457,6 +1457,39 @@ static void test_break_edges() {
   carry_football(k1, k2);
   CHECK(k2.resumed);
 
+  // A first-half kickoff returned as the half ran out also has 1800 left.
+  GameSnapshot r1 = h;
+  GameSnapshot r2 = h;
+  r2.last_play = "(00:05) #44 G.Spetic kickoff 65 yards to the PHI00, #3 A.Smith return 28 yards to the PHI28";
+  r2.play_secs_left = 1800;
+  carry_football(r1, r2);
+  CHECK(!r2.resumed);
+  CHECK(is_halftime(r2));
+  GameSnapshot r3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:05) J.Bates kicks 65 yards, returned to the 30");
+  r3.play_secs_left = 1800;
+  carry_football(none, r3);  // a first look too
+  CHECK(!r3.resumed);
+  // A first look at the 3rd quarter's kickoff touchback isn't a held break.
+  GameSnapshot t1 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00",
+                       "(15:00) J.Bates kicks 65 yards from DET 35 to end zone, Touchback.");
+  t1.play_secs_left = 1800;
+  t1.team_timeouts = t1.opp_timeouts = 3;
+  carry_football(none, t1);
+  CHECK(!t1.held);
+  CHECK(!football_break(t1));
+  GameSnapshot t2 = t1;  // nor on the poll after
+  carry_football(t1, t2);
+  CHECK(!t2.held);
+  GameSnapshot c1 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "#44 G.Spetic kickoff 65 yards to the PHI00, Touchback");
+  c1.play_secs_left = 1800;
+  carry_football(none, c1);
+  CHECK(!c1.held);
+  // A resumed halftime whose plays go back to the first half's says Halftime again.
+  GameSnapshot u1 = h4;
+  GameSnapshot u2 = h;
+  carry_football(u1, u2);
+  CHECK(!u2.resumed);
+
   // An overtime before its first play hides the 4th quarter's counts.
   GameSnapshot ot = at(5, "STATUS_IN_PROGRESS", "10:00 - OT", "10:00", "(00:05) Pass incomplete.");
   ot.team_timeouts = 0;
