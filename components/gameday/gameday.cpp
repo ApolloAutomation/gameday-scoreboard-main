@@ -1056,15 +1056,19 @@ bool GamedayComponent::following_() {
 
 // ---- Manual bets -----------------------------------------------------------------
 
-// bet=: the slot takes the bet as typed (the page picks a free slot), with no
-// game yet. A game on the board or a favorite's card takes it at once.
+// bet=: the bet as typed, with no game yet, into the first empty slot (slot
+// 0, what the device page sends, so two pages never pick the same one) or
+// into the slot named. A game on the board or a favorite's card takes it at once.
 void GamedayComponent::set_bet_(uint8_t slot, ::espn::Bet b) {
-  if (slot < 1 || slot > ::espn::kBetSlots)
-    return;
   b.placed = this->clock_set_() ? (uint32_t) this->time_->timestamp_now() : 0;
-  this->bets_.at(slot - 1) = b;
+  uint8_t at = ::espn::bet_put(this->bets_.blob.bets, slot, b);
+  if (at == 0) {
+    ESP_LOGW(TAG, "Bet %s %s ignored: all %d bet slots are in use", ::espn::league_key((League) b.league),
+             ::espn::bet_label(b).c_str(), ::espn::kBetSlots);
+    return;
+  }
   this->bets_.changed();
-  ESP_LOGI(TAG, "Bet %u: %s %s", (unsigned) slot, ::espn::league_key((League) b.league),
+  ESP_LOGI(TAG, "Bet %u: %s %s", (unsigned) at, ::espn::league_key((League) b.league),
            ::espn::bet_label(b).c_str());
   this->bets_tick_();
   if (this->game_.valid)

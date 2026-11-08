@@ -17,7 +17,8 @@
     "24-hour) and nightbri their brightness.",
     "bets lists the manual bets by slot as entered: slot, league, team id, type (spread, over,",
     "under or ml) and the line in half points (-7 is -3.5). The state document adds each bet's",
-    "game and status, which the comparison leaves out."
+    "game and status, which the comparison leaves out. bet= into slot 0 takes the first empty",
+    "slot, what the device page sends, and with every slot in use changes nothing."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -202,7 +203,10 @@
     {"name": "betdel all is refused", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["betdel", "all"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}},
     {"name": "betdel then bet in one request fills the slot again", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["bet", "1,nfl,2,spread,-6.5"], ["betdel", "1"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -13}]}},
     {"name": "a slot past 8 is refused", "set": [["bet", "9,nfl,2,spread,-3.5"]], "expect": {"bets": []}},
-    {"name": "slot 0 is refused", "set": [["bet", "0,nfl,2,spread,-3.5"]], "expect": {"bets": []}},
+    {"name": "slot 0 takes the first slot when none is used", "set": [["bet", "0,nfl,2,spread,-3.5"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}},
+    {"name": "slot 0 takes the first empty slot and keeps the others", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}, {"slot": 2, "l": "nfl", "id": 15, "type": "ml", "half": 0}, {"slot": 4, "l": "nfl", "id": 2, "type": "over", "half": 95}]}, "set": [["bet", "0,nba,2,under,221"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}, {"slot": 2, "l": "nfl", "id": 15, "type": "ml", "half": 0}, {"slot": 3, "l": "nba", "id": 2, "type": "under", "half": 442}, {"slot": 4, "l": "nfl", "id": 2, "type": "over", "half": 95}]}},
+    {"name": "slot 0 with every slot in use changes nothing", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -2}, {"slot": 2, "l": "nfl", "id": 2, "type": "spread", "half": -4}, {"slot": 3, "l": "nfl", "id": 2, "type": "spread", "half": -6}, {"slot": 4, "l": "nfl", "id": 2, "type": "spread", "half": -8}, {"slot": 5, "l": "nfl", "id": 2, "type": "spread", "half": -10}, {"slot": 6, "l": "nfl", "id": 2, "type": "spread", "half": -12}, {"slot": 7, "l": "nfl", "id": 2, "type": "spread", "half": -14}, {"slot": 8, "l": "nfl", "id": 2, "type": "spread", "half": -16}]}, "set": [["bet", "0,nfl,15,ml,"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -2}, {"slot": 2, "l": "nfl", "id": 2, "type": "spread", "half": -4}, {"slot": 3, "l": "nfl", "id": 2, "type": "spread", "half": -6}, {"slot": 4, "l": "nfl", "id": 2, "type": "spread", "half": -8}, {"slot": 5, "l": "nfl", "id": 2, "type": "spread", "half": -10}, {"slot": 6, "l": "nfl", "id": 2, "type": "spread", "half": -12}, {"slot": 7, "l": "nfl", "id": 2, "type": "spread", "half": -14}, {"slot": 8, "l": "nfl", "id": 2, "type": "spread", "half": -16}]}},
+    {"name": "a refused bet into slot 0 takes no slot", "set": [["bet", "0,nfl,2,spread,-3.25"]], "expect": {"bets": []}},
     {"name": "a quarter point line is refused", "set": [["bet", "1,nfl,2,spread,-3.25"]], "expect": {"bets": []}},
     {"name": "a line that is not a number is refused", "set": [["bet", "1,nfl,2,spread,abc"]], "expect": {"bets": []}},
     {"name": "a spread past 99.5 is refused", "set": [["bet", "1,nfl,2,spread,-100"]], "expect": {"bets": []}},

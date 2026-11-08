@@ -235,16 +235,19 @@ struct SetOp {
   Bet bet;                           // BET: what was bet, with no game yet
 };
 
-// A bet slot as the page sends it: one digit, 1 to kBetSlots.
-inline bool parse_bet_slot(const std::string &v, uint8_t &slot) {
-  if (v.size() != 1 || v[0] < '1' || v[0] > '0' + kBetSlots)
+// A bet slot as the page sends it: one digit, 1 to kBetSlots, or with
+// free_ok 0 for the first empty slot (bet_put).
+inline bool parse_bet_slot(const std::string &v, uint8_t &slot, bool free_ok = false) {
+  if (v.size() != 1 || v[0] < (free_ok ? '0' : '1') || v[0] > '0' + kBetSlots)
     return false;
   slot = (uint8_t) (v[0] - '0');
   return true;
 }
 
 // bet=<slot>,<league>,<team id>,<type>,<line>: "1,nfl,2,spread,-3.5",
-// "2,nfl,2,over,47.5", "3,nba,2,ml," (a moneyline has no line). The type is
+// "2,nfl,2,over,47.5", "3,nba,2,ml," (a moneyline has no line). Slot 0 is
+// the first empty slot, which the device page sends; 1 to kBetSlots replaces
+// the bet in that slot. The type is
 // spread, over, under or ml; the team one in the panel's list, not a golf
 // tour or a racing series; the line whole or half points (parse_bet_line).
 // Anything else, extra spaces and fields included, is refused.
@@ -260,7 +263,7 @@ inline bool parse_bet(const std::string &v, uint8_t &slot, Bet &b) {
     if (n == 5)
       return false;  // a sixth field
   }
-  if (n != 5 || !parse_bet_slot(f[0], slot))
+  if (n != 5 || !parse_bet_slot(f[0], slot, true))
     return false;
   b = Bet{};
   const LeagueInfo *info = league_by_key(f[1].c_str());

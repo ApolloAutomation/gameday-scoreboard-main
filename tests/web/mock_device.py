@@ -255,9 +255,9 @@ def bet_line(v, spread):
 
 
 def parse_bet(v):
-    """parse_bet() (set_request.h): (slot, league, team id, type, half) or None."""
+    """parse_bet() (set_request.h): (slot, league, team id, type, half) or None. Slot 0 is the first empty one."""
     f = v.split(",")
-    if len(f) != 5 or len(f[0]) != 1 or not "1" <= f[0] <= str(LIMITS["kBetSlots"]):
+    if len(f) != 5 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kBetSlots"]):
         return None
     lg, tid, kind, line = f[1], f[2], f[3], f[4]
     if lg not in LEAGUES or lg in BOARD or not re.fullmatch(r"\d{1,10}", tid, re.ASCII) or (lg, int(tid)) not in TEAMS:
@@ -304,7 +304,14 @@ def bet_on_board(b):
 
 
 def put_bet(slot, doc):
-    """The slot's entry, or none: the list stays in slot order."""
+    """The slot's entry, or none: the list stays in slot order. bet_put() (bets.h): with a doc, slot 0 is the
+    first empty slot, and with every slot in use nothing changes."""
+    if slot == 0 and doc:
+        used = {b["slot"] for b in STATE.get("bets", [])}
+        slot = next((s for s in range(1, LIMITS["kBetSlots"] + 1) if s not in used), 0)
+        if not slot:
+            return
+        doc["slot"] = slot
     keep = [b for b in STATE.get("bets", []) if b["slot"] != slot]
     STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
 

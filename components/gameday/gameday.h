@@ -179,8 +179,9 @@ class GamedaySelect : public select::Select, public Component {
 //                                    idle=0-4 (idle.h) idledim=0-255 night=0/1
 //                                    nightstart=HH:MM nightend=HH:MM nightbri=1-255
 //                                    bet=<slot>,<league>,<team id>,<type>,<line> betdel=<slot>
-//                                    (a manual bet in slot 1-8: spread, over, under or ml, the
-//                                    line in whole or half points; bets.h)
+//                                    (a manual bet in slot 1-8, or 0 for the first empty slot:
+//                                    spread, over, under or ml, the line in whole or half
+//                                    points; bets.h)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,

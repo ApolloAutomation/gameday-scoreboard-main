@@ -158,7 +158,7 @@ void load(Settings &s, JsonObjectConst o) {
         value += bet_points(j["half"] | 0, type == "spread");
       uint8_t slot = 0;
       Bet b{};
-      if (parse_bet(value, slot, b))
+      if (parse_bet(value, slot, b) && slot >= 1)
         s.bets[slot - 1] = b;
       else
         printf("FAIL set_cases.json: a start bet doesn't parse: %s\n", value.c_str());
@@ -244,7 +244,7 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
     case SetKind::ALERTFAV: s.alertfav = op.on; break;
     case SetKind::STANDING: s.standing = op.value; break;
-    case SetKind::BET: s.bets[op.slot - 1] = op.bet; break;
+    case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // set_bet_
     case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.

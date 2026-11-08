@@ -303,6 +303,28 @@ void test_earliest_game() {
   BCHECK(m.dirty && m.at(0).event == 401800001, "the earliest game read in the pass");
 }
 
+void test_put() {
+  Bet blob[kBetSlots]{};
+  Bet a = make(BetType::SPREAD, BetSide::TEAM, -7);
+  Bet c = make(BetType::MONEYLINE, BetSide::TEAM, 0, MIA);
+  BCHECK(bet_put(blob, 0, a) == 1 && blob[0].line == -7, "slot 0: the first empty slot");
+  BCHECK(bet_put(blob, 3, c) == 3 && blob[2].team_id == MIA, "slot 3: that slot");
+  BCHECK(bet_put(blob, 0, c) == 2 && blob[1].team_id == MIA, "slot 0 again: the next empty one");
+  BCHECK(bet_put(blob, 0, a) == 4, "and past the ones in use");
+  BCHECK(bet_put(blob, 1, c) == 1 && blob[0].team_id == MIA, "a slot named replaces its bet");
+  for (int i = 4; i < kBetSlots; i++)
+    bet_put(blob, 0, a);
+  Bet before[kBetSlots];
+  for (int i = 0; i < kBetSlots; i++)
+    before[i] = blob[i];
+  BCHECK(bet_put(blob, 0, c) == 0, "every slot in use: nowhere");
+  bool same = true;
+  for (int i = 0; i < kBetSlots; i++)
+    same = same && blob[i].team_id == before[i].team_id && blob[i].type == before[i].type;
+  BCHECK(same, "and nothing changes");
+  BCHECK(bet_put(blob, kBetSlots + 1, a) == 0, "a slot past the blob");
+}
+
 void test_expire() {
   Bet b = make(BetType::SPREAD, BetSide::TEAM, -7);
   BCHECK(!bet_expired(b, T0 + 365 * 86400), "a bet with no game waits");
@@ -378,12 +400,13 @@ void test_parse_bet() {
   BCHECK(parse_set("bet", "2,nba,2,under,221", op, 16) && op.bet.side == (uint8_t) BetSide::UNDER &&
              op.bet.line == 442 && op.bet.league == (uint8_t) League::NBA,
          "an under");
+  BCHECK(parse_set("bet", "0,nfl,2,spread,+7", op, 16) && op.slot == 0 && op.bet.line == 14,
+         "slot 0, the first empty slot");
   BCHECK(parse_set("bet", "3,epl,359,ml,", op, 16) && op.bet.type == (uint8_t) BetType::MONEYLINE &&
              op.bet.line == 0 && bet_valid(op.bet),
          "a moneyline");
   const char *refused[] = {
       "",
-      "0,nfl,2,spread,-3.5",
       "9,nfl,2,spread,-3.5",
       "10,nfl,2,spread,-3.5",
       "1x,nfl,2,spread,-3.5",
@@ -453,6 +476,7 @@ int run_bet_tests(int &total_checks) {
   test_status();
   test_observe();
   test_earliest_game();
+  test_put();
   test_expire();
   test_text();
   test_event_id();

@@ -368,6 +368,21 @@ class BetSource {
   virtual void changed() = 0;
 };
 
+// Puts b in its slot (1 to kBetSlots, replacing the bet there) or, for slot
+// 0, in the first empty slot, so two device pages adding a bet at the same
+// time each get their own. The slot it went in, 0 when every slot is in use.
+inline uint8_t bet_put(Bet (&bets)[kBetSlots], uint8_t slot, const Bet &b) {
+  if (slot > kBetSlots)
+    return 0;
+  for (uint8_t i = 0; slot == 0 && i < kBetSlots; i++)
+    if (bet_empty(bets[i]))
+      slot = i + 1;
+  if (slot == 0)
+    return 0;
+  bets[slot - 1] = b;
+  return slot;
+}
+
 // The bets entered on the device page, one per slot (1 to kBetSlots), saved
 // in the panel's flash as one blob.
 struct BetBlob {
