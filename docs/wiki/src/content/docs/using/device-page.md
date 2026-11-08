@@ -101,7 +101,7 @@ They all start on. The sport pages say what each one shows: [football](/using/fo
 
 **Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
 
-**Favorite teams only** keeps the splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and shows as before.
+**Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game, as before.
 
 A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel, so the longer ones take two or three lines, like "PHI" over "FUMBLE RECOVERY".
 :::

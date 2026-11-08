@@ -31,9 +31,9 @@ Basketball only celebrates the win. A game has around a hundred scoring plays, s
 :::note[Coming in the next release]
 Baskets still don't splash, but four moments do, each with its own switch in the Celebrations card:
 
-- **LEAD CHANGE**: a team goes ahead in the last 2 minutes of the 4th quarter (of the 2nd half in college) or in overtime. Going ahead from a tie counts.
-- **BUZZER BEATER**, with fireworks: a basket in the last second of a period that ties the game or takes the lead. The panel reads the game about every 10 seconds, so it counts a basket when the clock stopped on it with a second or less left, or ran out from 3 seconds or less. A game winner at the buzzer gets this instead of the victory splash.
-- **OVERTIME**: when overtime starts, and each overtime after that.
+- **LEAD CHANGE**: the team that was behind goes ahead in the last 2 minutes of the 4th quarter (of the 2nd half in college) or in overtime. Breaking a tie doesn't count, since the team ahead before the tie may just be ahead again.
+- **BUZZER BEATER**, with fireworks: a basket in the last second of a period that ties the game or takes the lead. The panel reads the game about every 10 seconds, so it counts a basket when the clock stopped on it with a second or less left, or when the clock ran out and the update before showed a second or less. A basket from further out that beats the horn may get no splash. When ESPN marks the game final in the same update, a game winner at the buzzer gets this instead of the victory splash. When ESPN marks it final an update later, the buzzer beater shows first and the victory splash follows.
+- **OVERTIME**: when overtime starts, and each overtime after that, even when the first update in overtime already has a basket in it.
 - **FINAL**: when the game ends and your team didn't win. A win still gets the victory splash, and in Live games every final does.
 
 The other side's lead changes and buzzer beaters put its abbreviation first, like "MIN LEAD CHANGE", and need **Opponent scores too**. See [Celebrations](/using/device-page/#celebrations).

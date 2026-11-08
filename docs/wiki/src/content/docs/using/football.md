@@ -61,12 +61,14 @@ The other side's scores show the same way in their color with their abbreviation
 The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN.
 
 :::note[Coming in the next release]
-Two points say which they were. Right after a touchdown they are the conversion, "2-PT". Any other two points, or a play ESPN calls a safety, say "SAFETY".
+Two points say which they were. A play ESPN calls a safety says "SAFETY", and so do two points in the middle of a drive, when the panel last saw a team with the ball and a down to play. Two points after a touchdown say "2-PT" for the conversion, and so do two points the panel can't tell apart, since a conversion is far more common than a safety.
 
 Two big plays that aren't scores get a splash too, when ESPN's last play is one:
 
 - **INTERCEPTION**: the team that picked off the pass. On a single 64x64 panel the word breaks over two lines, "INTER-" and "CEPTION".
-- **FUMBLE RECOVERY**: the team that took the ball. Only a fumble the other team recovers counts. A fumble the offense falls on gets nothing.
+- **FUMBLE RECOVERY**: the team that took the ball. Only a fumble the other team recovers counts. A fumble the offense falls on never says FUMBLE RECOVERY, even when the offense runs it in for a touchdown, and neither does a muffed punt or kickoff.
+
+Each play counts once. When ESPN fixes the words of a play it already sent, like the yards on a return, it doesn't splash again.
 
 Both flash the screen in the color of the team that took the ball away. The other side's put its abbreviation first, like "PHI INTERCEPTION", and need **Opponent scores too**. An interception or a fumble returned for a touchdown shows as TOUCHDOWN.
 

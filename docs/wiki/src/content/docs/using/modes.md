@@ -40,7 +40,7 @@ To stay with one game, turn on **Follow this game** under the board on the devic
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it and goes back to switching games. Changing the mode, your team, your favorites or the leagues stops following too. So does a restart, since the panel doesn't save it. The switch shows only while Live games has a game it picked on the board that hasn't ended, not while it shows your team's card or recent finals with nothing live. My team follows one team already, so it has no such switch.
 
-Turn on **Favorite teams only** in the Celebrations card and only games with your team or one of your favorites get splashes. See [Celebrations](/using/device-page/#celebrations).
+Turn on **Favorite teams only** in the Celebrations card and only games with your team or one of your favorites get big-play splashes, like touchdowns, goals and lead changes. The victory splash still shows for every game. See [Celebrations](/using/device-page/#celebrations).
 :::
 
 ### Choosing the leagues
