@@ -86,6 +86,26 @@ Only the ticker switches for sports your panel follows are shown. Hockey, basket
 
 The panel fills the screen with a splash when someone scores, in the scoring team's color. Your team's always show. **Opponent scores too** turns the other side's on or off in football, baseball, hockey and soccer. Basketball only celebrates the win, so the switch makes no difference there.
 
+:::note[Coming in the next release]
+The Celebrations card has a switch for each kind of splash, grouped by sport. Like the Ticker card, it shows only the sports your panel follows, and all of them before you pick anything:
+
+| Sport | Switches |
+| --- | --- |
+| Football | Touchdown, Field goal, Extra point, 2-point conversion, Safety, Interception, Fumble recovery |
+| Baseball | Runs, Home run, Grand slam, Walk-off |
+| Hockey | Goal |
+| Soccer | Goal, Penalty goal, Red card |
+| Basketball | Lead change, Buzzer beater, Overtime, Final |
+
+They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/).
+
+**Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
+
+**Favorite teams only** keeps the splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and shows as before.
+
+A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel, so the longer ones take two or three lines, like "PHI" over "FUMBLE RECOVERY".
+:::
+
 ### Timezone
 
 The Time line in the Setup card names the panel's timezone. While it follows your browser, opening the page from a browser in another zone moves the panel to that zone. Tap **choose manually** to pick one from the list instead; the page then leaves it alone until you tap **follow this browser**. The list covers the US zones (Eastern, Central, Mountain, Arizona, Pacific, Alaska and Hawaii), Canada Atlantic and Newfoundland, Mexico City, UK and Ireland, Central Europe, Australia Eastern and UTC. A new panel starts on US Central.

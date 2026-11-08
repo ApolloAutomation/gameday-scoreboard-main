@@ -28,6 +28,17 @@ On a single 64x64 panel the clock takes the abbreviations' place during play. Th
 
 Basketball only celebrates the win. A game has around a hundred scoring plays, so splashing each basket would keep the screen covered. When your team wins, a victory splash with fireworks says your abbreviation and "WINS". **Opponent scores too** makes no difference for basketball.
 
+:::note[Coming in the next release]
+Baskets still don't splash, but four moments do, each with its own switch in the Celebrations card:
+
+- **LEAD CHANGE**: a team goes ahead in the last 2 minutes of the 4th quarter (of the 2nd half in college) or in overtime. Going ahead from a tie counts.
+- **BUZZER BEATER**, with fireworks: a basket in the last second of a period that ties the game or takes the lead. The panel reads the game about every 10 seconds, so it counts a basket when the clock stopped on it with a second or less left, or ran out from 3 seconds or less. A game winner at the buzzer gets this instead of the victory splash.
+- **OVERTIME**: when overtime starts, and each overtime after that.
+- **FINAL**: when the game ends and your team didn't win. A win still gets the victory splash, and in Live games every final does.
+
+The other side's lead changes and buzzer beaters put its abbreviation first, like "MIN LEAD CHANGE", and need **Opponent scores too**. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 ## The final
 
 The ticker says "Final", or "Final/OT" after overtime, with the series or the records. The final stays up for half an hour in My team, then the panel looks up your team's next game.

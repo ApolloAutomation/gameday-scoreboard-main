@@ -35,6 +35,12 @@ A goal fills the screen for 4 seconds with fireworks on black, in the scoring te
 
 When your team wins, a victory splash with fireworks says your abbreviation and "WINS".
 
+:::note[Coming in the next release]
+Goal splashes have their own switch in the Celebrations card. See [Celebrations](/using/device-page/#celebrations).
+
+Every goal splashes the same way. ESPN's words for a goal don't say whether it came on a power play or into an empty net, and the number after the scorer's name counts goals this season, not this game, so there is no power play goal, empty net goal or hat trick splash.
+:::
+
 ## The playoff series
 
 In the playoffs the series, like "CAR leads series 2-0", is in the ticker before the game, and takes the records' place during intermissions and at the final. It isn't on the board itself.
