@@ -3196,6 +3196,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     const std::string line = join_ticker_text(page_ip(), this->hostname());
     if (!line.empty()) {
       f.status_text = line + f.status_text;
+      // Under a message too ("Can't reach ESPN"), which hides the ticker
+      // otherwise (ticker_host).
+      f.join_line = true;
       this->join_addr_shown_ = true;
     }
   }

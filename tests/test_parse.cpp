@@ -825,6 +825,29 @@ static void test_join_ticker() {
   CHECK(!join_ticker_on(0xFFFFF000u, 0x00008000u));
 }
 
+// Where the scoreboard page runs the ticker. A message ("Can't reach ESPN",
+// "Getting ready", "Looking for a live game", a finals header) hides it, but
+// not while the address line after a join leads it, or the address would
+// time out unseen on exactly the screens where an owner needs it.
+static void test_ticker_host() {
+  using esphome::gameday::ticker_host;
+  using esphome::gameday::TickerHost;
+  // ticker_host(no_game_screen, card, board, join_line)
+  // A game: under the score, address line or not.
+  CHECK(ticker_host(false, false, false, false) == TickerHost::GAME);
+  CHECK(ticker_host(false, false, false, true) == TickerHost::GAME);
+  // A leaderboard: under its rows.
+  CHECK(ticker_host(false, false, true, false) == TickerHost::BOARD);
+  CHECK(ticker_host(false, false, true, true) == TickerHost::BOARD);
+  // The off-season clock or a leaderboard's card: under it.
+  CHECK(ticker_host(true, true, false, false) == TickerHost::NO_GAME);
+  CHECK(ticker_host(true, true, false, true) == TickerHost::NO_GAME);
+  // A message: stays hidden with the game layout as before...
+  CHECK(ticker_host(true, false, false, false) == TickerHost::GAME);
+  // ...and runs under the message while the address line leads it.
+  CHECK(ticker_host(true, false, false, true) == TickerHost::NO_GAME);
+}
+
 // Who answers on the panel's setup hotspot (hotspot.h). While the portal is
 // up and the panel is off Wi-Fi, every OS's check for internet and every
 // page gets the setup page, the panel's own /gameday/ routes still answer,
@@ -7691,6 +7714,7 @@ int main() {
   test_ticker_speed();
   test_setup_qr();
   test_join_ticker();
+  test_ticker_host();
   test_hotspot_route();
   test_ha_status_text();
   test_short_game_name();

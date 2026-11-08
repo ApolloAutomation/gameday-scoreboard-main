@@ -271,7 +271,10 @@ panel and the page.
 After a new join with "Show how to connect" on, the IP address and `.local`
 name lead the ticker for 30 s once the boot screen goes (`setup_qr.h`,
 `show_join_address`), and a live game on a panel that has a team cuts the
-join's QR screen short (`board_live`, `boot.yaml`).
+join's QR screen short (`board_live`, `boot.yaml`). The scoreboard page
+hides the ticker under a full-board message, and lends it to the message
+while the line is on (`join_line`, `ticker_host`), so the address still
+shows under "Can't reach ESPN" or "Getting ready".
 
 ## Brightness, heat and power
 

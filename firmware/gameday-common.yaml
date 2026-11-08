@@ -688,6 +688,9 @@ gameday:
         # when there is no leaderboard to show.
         board: !lambda 'return x.board;'
         board_card: !lambda 'return x.board_card;'
+        # The address line after a join leads the ticker: a message shows
+        # the ticker under it too (setup_qr.h, ticker_host).
+        join_line: !lambda 'return x.join_line;'
     # The leaderboard's rows, read from the component (board_fields), so the
     # columns aren't copied into script arguments. A script with no delay
     # runs to its end here: the rows change in the same frame as the layout.

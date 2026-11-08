@@ -117,6 +117,9 @@ struct UpdateFields {
   // column (golf's score); false gives its room to the names.
   bool board{false};
   bool board_card{false};
+  // The address line after a join leads status_text (setup_qr.h): the
+  // no-game screen shows the ticker under its message too (ticker_host).
+  bool join_line{false};
   std::string board_title, board_status;
   uint32_t board_status_color{0xFFFFFF};
   bool board_value_narrow{true};
