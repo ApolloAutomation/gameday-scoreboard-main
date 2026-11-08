@@ -339,20 +339,27 @@ script:
           // in front where it fits the label in its font (espn::rank_label;
           // the Spleen fonts are fixed width): before the abbreviation on one
           // panel, before and after the game (the clock has that row during
-          // play), and before the record under the logo on two.
-          const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
-          auto put = [](lv_obj_t *lbl, int rank, const std::string &text) {
-            const lv_font_t *f = lv_obj_get_style_text_font(lbl, LV_PART_MAIN);
-            const int32_t cw = lv_font_get_glyph_width(f, '0', 0);
-            const int32_t w = lv_obj_get_style_width(lbl, LV_PART_MAIN);
-            const size_t fit = cw > 0 && w > 0 ? (size_t) (w / cw) : 0;
+          // play), and before the record under the logo on two, kept a pixel
+          // clear of the clock between the records while it shows
+          // (espn::record_row_chars).
+          const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const bool wide = W >= 128;
+          auto char_px = [](lv_obj_t *lbl) {
+            return (int) lv_font_get_glyph_width(lv_obj_get_style_text_font(lbl, LV_PART_MAIN), '0', 0);
+          };
+          const int clock_px =
+              game_state == "IN" ? (int) clock_text.size() * char_px(id(tt_clock_lbl)) : 0;
+          auto put = [&](lv_obj_t *lbl, int rank, const std::string &text, bool row) {
+            const int cw = char_px(lbl);
+            const int w = (int) lv_obj_get_style_width(lbl, LV_PART_MAIN);
+            const size_t fit = cw <= 0 || w <= 0 ? 0 : row ? ::espn::record_row_chars(clock_px, W, w, cw) : (size_t) (w / cw);
             lv_label_set_text(lbl, ::espn::rank_label((uint8_t) rank, text, fit).c_str());
           };
           const bool abbr_rank = !wide && game_state != "IN";
-          put(id(tt_away_team_lbl), abbr_rank ? team_rank : 0, team_abbr);
-          put(id(tt_home_team_lbl), abbr_rank ? opponent_rank : 0, opponent_abbr);
-          put(id(tt_away_rec_lbl), wide ? team_rank : 0, team_record);
-          put(id(tt_home_rec_lbl), wide ? opponent_rank : 0, opponent_record);
+          put(id(tt_away_team_lbl), abbr_rank ? team_rank : 0, team_abbr, false);
+          put(id(tt_home_team_lbl), abbr_rank ? opponent_rank : 0, opponent_abbr, false);
+          put(id(tt_away_rec_lbl), wide ? team_rank : 0, team_record, true);
+          put(id(tt_home_rec_lbl), wide ? opponent_rank : 0, opponent_record, true);
       - lambda: |-
           // Update the ticker only when its text changed: rewriting the label
           // restarts the scroll animation, and pushes arrive every few seconds.

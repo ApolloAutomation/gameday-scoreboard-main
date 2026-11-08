@@ -191,7 +191,7 @@
       <div class="card">
         <h2>Panel</h2>
         <div id="panelCtls"></div>
-        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small>What your team shows where its record goes: the record, its playoff seed, or its place in its division, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
       </div>
       <div class="card">
         <h2>Favorites</h2>
@@ -502,6 +502,15 @@
   // marking it done; its detail says which.
   const endedAs = (g) => (g.done === false && g.detail ? g.detail : "Final");
 
+  // The rank stays on the abbreviation's line only where the two fit the
+  // team's column, as on the panel: a phone's narrow board leaves it out.
+  const fitRank = (node) => {
+    const rk = node.querySelector(".abbr .rk");
+    if (!rk) return;
+    rk.hidden = false;
+    rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
+  };
+  window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
   const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
     const img = node.querySelector("img");
     // No id: a side with no team yet, or the demo build's made-up teams.
@@ -512,6 +521,7 @@
     a.textContent = abbr || "---";
     // A college team's rank before its abbreviation, like a broadcast
     if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
+    fitRank(node);
     a.classList.toggle("poss", !!poss);
     a.style.color = "#" + (color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
@@ -1466,7 +1476,7 @@
       img.src = logoUrl(lg, u.oi, u.oa);
       row.appendChild(img);
       const txt = el("div", "ut");
-      txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + (u.on || u.oa)));
+      txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + ranked(u.ork, u.on || u.oa)));
       txt.appendChild(el("div", "w", kickLabel(u.kick, u.tbd) + (u.tv ? " · " + u.tv : "")));
       row.appendChild(txt);
       host.appendChild(row);

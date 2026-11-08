@@ -2053,7 +2053,9 @@ bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, 
     return false;
   ContainerReader reader(container, this->espn_bytes_);
   Schedule s;
-  bool ok = ::espn::parse_team(reader, s);
+  // The seed only counts for the league's own read of a pro team
+  // (league_standing hands a cup's read the league's).
+  bool ok = ::espn::parse_team(reader, s, comp_slug == nullptr && !::espn::is_college(team->league));
   container->end();
   if (!ok) {
     ESP_LOGW(TAG, "Schedule parse failed after %u bytes", (unsigned) reader.total());
@@ -2123,7 +2125,7 @@ bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::e
     return false;
   ContainerReader reader(container, this->espn_bytes_);
   // Four: the game on the board plus the three after it.
-  bool ok = ::espn::parse_upcoming(reader, team->espn_id, 4, out);
+  bool ok = ::espn::parse_upcoming(reader, team->espn_id, 4, out, ::espn::is_college(team->league));
   container->end();
   ESP_LOGI(TAG, "Upcoming: %u game(s) (%u bytes)", (unsigned) out.size(), (unsigned) reader.total());
   return ok;
@@ -2562,8 +2564,10 @@ void GamedayComponent::run_job_() {
       this->take_game_on_now_(j.team, j.schedule, j.done_event);
     }
     if (!j.comps.empty()) {
-      // Soccer: the cup reads from the last sweep still count.
+      // Soccer: the cup reads from the last sweep still count, with the
+      // league's standing.
       j.comps[0] = j.schedule;
+      ::espn::league_standing(j.comps);
       int pick = ::espn::pick_schedule(j.comps, (int64_t) this->time_->timestamp_now(), j.done_event);
       if (pick > 0)
         j.schedule = j.comps[pick];
@@ -2826,6 +2830,7 @@ void GamedayComponent::run_cup_job_() {
     ::espn::adopt_comp(s, slug);
     this->take_game_on_now_(j.team, s, j.done_event, slug);
     j.comps[j.comp] = s;
+    ::espn::league_standing(j.comps);  // the cup's table isn't the league's
   }
   int pick = ::espn::pick_schedule(j.comps, (int64_t) this->time_->timestamp_now(), j.done_event);
   Schedule next = pick >= 0 ? j.comps[pick] : j.comps[0];
@@ -3018,7 +3023,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.possession = brk ? 0 : g.possession;
   f.team_timeouts = g.team_timeouts;
   f.opponent_timeouts = g.opp_timeouts;
-  f.team_record = standing.empty() ? g.team_record : ::espn::board_standing(standing);
+  f.team_record = g.team_record;
   f.opponent_record = g.opp_record;
   f.team_rank = g.team_rank;
   f.opponent_rank = g.opp_rank;
@@ -3046,9 +3051,16 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       f.team_marks = g.soc.team_reds;
       f.opp_marks = g.soc.opp_reds;
     }
-    if (standing.empty())
-      f.team_record = ::espn::soccer_board_record(g.team_record);
+    f.team_record = ::espn::soccer_board_record(g.team_record);
     f.opponent_record = ::espn::soccer_board_record(g.opp_record);
+  }
+  if (!standing.empty()) {
+    // In the record's place, in the room beside the clock while it shows;
+    // the record when none of it fits.
+    const int clock_px = (int) f.clock_text.size() * ::espn::kClockCharPx;
+    std::string board = ::espn::board_standing(standing, ::espn::record_row_chars(clock_px));
+    if (!board.empty())
+      f.team_record = std::move(board);
   }
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASKETBALL)
     f.situation = ::espn::basketball_series(g);
@@ -3945,6 +3957,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["oi"] = u.opp_id;
     o["oa"] = u.opp_abbr;
     o["on"] = u.opp_name;
+    if (u.opp_rank != 0)
+      o["ork"] = u.opp_rank;
     o["home"] = u.home;
     o["neutral"] = u.neutral;
     o["tv"] = u.tv;

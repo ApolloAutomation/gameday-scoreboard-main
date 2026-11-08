@@ -85,6 +85,10 @@
       "heap": 1792,
       "json": 7023
     },
+    "schedule_ncaa": {
+      "heap": 1936,
+      "json": 11116
+    },
     "schedule_nfl": {
       "heap": 1936,
       "json": 6657
@@ -92,6 +96,10 @@
     "team_day_ncaa": {
       "heap": 1042,
       "json": 6101
+    },
+    "team_mlb": {
+      "heap": 1042,
+      "json": 16187
     },
     "team_nfl": {
       "heap": 1042,

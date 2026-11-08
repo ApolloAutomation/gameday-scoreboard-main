@@ -22,7 +22,7 @@ The Game Day Scoreboard ships with one 128x64 panel, and its firmware starts on 
 The logos sit at the far edges with the abbreviations and big scores between them. Under the scores is the game clock, and under that the situation row: down and distance in football, red in the red zone; the count, a diamond of the runners and the outs in baseball; the latest goal in soccer; the playoff series in basketball. The records sit under the logos, with football's timeout pips or soccer's red card marks under them. The ticker runs along the bottom.
 
 :::note[Coming in the next release]
-A ranked college team's rank goes in front of its record under the logo, like "#5 9-1", when the two fit. A pro team can show its seed or place there instead of its record. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+A ranked college team's rank goes in front of its record under the logo, like "#5 9-1", when the two fit, and keeps clear of the game clock between them. A pro team can show its seed or place there instead of its record. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 :::
 
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.

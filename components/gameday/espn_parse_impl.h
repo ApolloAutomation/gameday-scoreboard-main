@@ -94,7 +94,9 @@ inline void fill_baseball_filter(JsonObject ev) {
   comp["series"]["summary"] = true;
 }
 
-inline void fill_upcoming_filter(JsonDocument &f) {
+// ranks: a college schedule's curatedRank (a pro league's says 99 for every
+// team, a pool's worth of JSON on a season's schedule for nothing).
+inline void fill_upcoming_filter(JsonDocument &f, bool ranks = false) {
   JsonObject ev = f["events"].add<JsonObject>();
   ev["id"] = true;
   ev["date"] = true;
@@ -107,6 +109,8 @@ inline void fill_upcoming_filter(JsonDocument &f) {
   c["team"]["id"] = true;
   c["team"]["abbreviation"] = true;
   c["team"]["shortDisplayName"] = true;
+  if (ranks)
+    c["curatedRank"]["current"] = true;
   comp["broadcasts"].add<JsonObject>()["media"]["shortName"] = true;
 }
 
@@ -140,15 +144,19 @@ inline void fill_scan_filter(JsonDocument &f, bool finals = false, bool pending 
   c["winner"] = true;
 }
 
-inline void fill_team_filter(JsonDocument &f) {
+// seed: keep the record's stats for the Standing setting's seed (a filter
+// keeps every item's, about 9 KB more for an MLB team's 108); a college team
+// or a cup's read has no use for it.
+inline void fill_team_filter(JsonDocument &f, bool seed = true) {
   f["team"]["id"] = true;
   f["team"]["color"] = true;
   JsonObject item = f["team"]["record"]["items"].add<JsonObject>();
   item["summary"] = true;
-  // The Standing setting: the seed is one of the record's stats.
-  JsonObject stat = item["stats"].add<JsonObject>();
-  stat["name"] = true;
-  stat["value"] = true;
+  if (seed) {
+    JsonObject stat = item["stats"].add<JsonObject>();
+    stat["name"] = true;
+    stat["value"] = true;
+  }
   f["team"]["standingSummary"] = true;
   f["team"]["groups"]["id"] = true;
   JsonObject ne = f["team"]["nextEvent"].add<JsonObject>();
@@ -372,9 +380,9 @@ inline void set_json_allocator(ArduinoJson::Allocator *allocator) { detail::json
 
 // Parses the team endpoint. `input` is anything ArduinoJson can read from:
 // a std::string, or a reader object with read() and readBytes().
-template<typename TInput> bool parse_team(TInput &input, Schedule &out) {
+template<typename TInput> bool parse_team(TInput &input, Schedule &out, bool seed = true) {
   JsonDocument filter(detail::json_allocator());
-  detail::fill_team_filter(filter);
+  detail::fill_team_filter(filter, seed);
   JsonDocument doc(detail::json_allocator());
   DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
                                               DeserializationOption::NestingLimit(40));
@@ -421,9 +429,9 @@ template<typename TInput> bool parse_team(TInput &input, Schedule &out) {
 
 // Games that have not started yet, in the order ESPN lists them (by date).
 template<typename TInput>
-bool parse_upcoming(TInput &input, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out) {
+bool parse_upcoming(TInput &input, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out, bool ranks = false) {
   JsonDocument filter(detail::json_allocator());
-  detail::fill_upcoming_filter(filter);
+  detail::fill_upcoming_filter(filter, ranks);
   JsonDocument doc(detail::json_allocator());
   DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
                                               DeserializationOption::NestingLimit(40));
@@ -450,6 +458,7 @@ bool parse_upcoming(TInput &input, uint32_t our_team_id, size_t max, std::vector
         u.opp_id = id;
         u.opp_abbr = detail::str_or_empty(c["team"]["abbreviation"]);
         u.opp_name = detail::str_or_empty(c["team"]["shortDisplayName"]);
+        u.opp_rank = detail::rank_of(c);
       }
     }
     JsonVariantConst tv = comp["broadcasts"][0]["media"]["shortName"];

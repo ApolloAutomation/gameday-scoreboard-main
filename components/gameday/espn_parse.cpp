@@ -294,8 +294,9 @@ GameSnapshot pending_snapshot(const Pending &p) {
 
 bool parse_team_str(const std::string &json, Schedule &out) { return parse_team(json, out); }
 
-bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out) {
-  return parse_upcoming(json, our_team_id, max, out);
+bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out,
+                        bool ranks) {
+  return parse_upcoming(json, our_team_id, max, out, ranks);
 }
 
 bool parse_scoreboard_str(const std::string &json, const std::string &event_id, uint32_t our_team_id,
@@ -495,11 +496,14 @@ std::string place_short(const std::string &summary) {
   if (in == std::string::npos || in == 0 || in > 5 || !isdigit((unsigned char) summary[0]))
     return "";
   std::string group = summary.substr(in + 4);
-  for (const char *word : {" Division", " Conference"}) {
-    size_t at = group.find(word);
-    if (at != std::string::npos)
-      group.erase(at, strlen(word));
-  }
+  size_t at = group.find(" Division");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Division"));
+  // The initials keep "Conference": "National Football Conference" is "NFC".
+  const std::string named = group;
+  at = group.find(" Conference");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Conference"));
   const size_t sp = group.find(' ');
   if (sp == std::string::npos) {
     static const char *const kShort[][2] = {
@@ -519,9 +523,9 @@ std::string place_short(const std::string &summary) {
     std::string t = caps ? group.substr(0, sp + 2) : std::string();
     if (caps)
       t.erase(sp, 1);
-    for (size_t i = 0; !caps && i < group.size(); i++)
-      if (group[i] != ' ' && (i == 0 || group[i - 1] == ' '))
-        t += (char) toupper((unsigned char) group[i]);
+    for (size_t i = 0; !caps && i < named.size(); i++)
+      if (named[i] != ' ' && (i == 0 || named[i - 1] == ' '))
+        t += (char) toupper((unsigned char) named[i]);
     group = t;
   }
   std::string place = summary.substr(0, in);
@@ -534,7 +538,31 @@ std::string standing_text(Standing kind, uint8_t seed, const std::string &place)
   return kind == Standing::PLACE ? place : std::string();
 }
 
-std::string board_standing(const std::string &standing) { return detail::whole_words(standing, kRecordRowChars); }
+size_t record_row_chars(int clock_px, int board_px, int row_px, int char_px) {
+  if (row_px <= 0 || char_px <= 0)
+    return 0;
+  size_t n = (size_t) (row_px / char_px);
+  // LVGL centers a line at the label's x plus half the room left over
+  // (rounded down); the clock's label is centered on the board.
+  const int clock_left = board_px / 2 - (clock_px + 1) / 2;
+  while (clock_px > 0 && n > 0 && (row_px - (int) n * char_px) / 2 + (int) n * char_px >= clock_left)
+    n--;
+  return n;
+}
+
+std::string board_standing(const std::string &standing, size_t room) {
+  if (standing.size() <= room)
+    return standing;
+  const size_t sp = standing.find(' ');
+  if (sp == std::string::npos)
+    return "";
+  std::string t = standing;
+  t.erase(sp, 1);
+  if (t.size() <= room)
+    return t;
+  // A seed's "Seed" alone says nothing
+  return isdigit((unsigned char) standing[0]) && sp <= room ? standing.substr(0, sp) : std::string();
+}
 
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
   if (s.sport == Sport::GOLF)

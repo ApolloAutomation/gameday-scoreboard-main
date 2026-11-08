@@ -214,6 +214,15 @@ int main() {
       return parse_team(json, s);
     });
   }
+  // The largest team read: an MLB team's record carries over a hundred stats,
+  // kept for the Standing setting's seed.
+  {
+    std::string json = slurp("fixtures/team_mlb_mil_live.json");
+    measure("team_mlb", [&] {
+      Schedule s;
+      return parse_team(json, s);
+    });
+  }
   {
     std::string json = slurp("fixtures/day_ncaa_20261017.json");
     measure("team_day_ncaa", [&] {
@@ -226,6 +235,14 @@ int main() {
     measure("schedule_nfl", [&] {
       std::vector<Upcoming> up;
       return parse_upcoming(json, 6, 4, up);
+    });
+  }
+  // A college team's keeps each opponent's rank.
+  {
+    std::string json = slurp("fixtures/schedule_ncaa_iowa_tbd.json");
+    measure("schedule_ncaa", [&] {
+      std::vector<Upcoming> up;
+      return parse_upcoming(json, 2294, 4, up, true);
     });
   }
 

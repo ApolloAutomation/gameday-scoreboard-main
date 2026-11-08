@@ -479,4 +479,11 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
   return best >= 0 ? best : over;
 }
 
+void league_standing(std::vector<Schedule> &comps) {
+  for (size_t i = 1; i < comps.size(); i++) {
+    comps[i].seed = comps[0].seed;
+    comps[i].place = comps[0].place;
+  }
+}
+
 }  // namespace espn

@@ -23,7 +23,7 @@ A game whose kickoff time isn't set yet, like a college game a couple of weeks o
 :::note[Coming in the next release]
 A ranked college team shows its rank in front of its name. Before kickoff the ticker starts with the matchup, like "#5 OSU vs #12 MICH", after the game's name when it has one. On a 128x64 board the rank sits in front of the record under the logo, like "#5 9-1", and on a single 64x64 panel in front of the abbreviation, like "#5 OSU". Each goes in only where it fits, see [Ranks and standings](/using/ticker/#ranks-and-standings).
 
-An NFL team can show its playoff seed or its place in its division where its record goes, with **Standing next to pro teams** on the device page.
+An NFL team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
 :::
 
 ## During the game

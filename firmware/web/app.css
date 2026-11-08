@@ -61,7 +61,7 @@ button { font: inherit; color: inherit; }
 .team img { width: 84px; height: 84px; object-fit: contain; image-rendering: auto; filter: drop-shadow(0 0 12px rgba(255,255,255,.06)); }
 .team .abbr { font-weight: 800; font-size: 20px; letter-spacing: .06em; }
 /* possession: a gold underline under the name; team colors never change */
-.team .abbr { position: relative; }
+.team .abbr { position: relative; white-space: nowrap; }
 .team .abbr.poss::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: -4px; height: 3px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 10px rgba(255,208,0,.7); }
 .team .rec { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* a college team's rank, small and before the name like a broadcast */

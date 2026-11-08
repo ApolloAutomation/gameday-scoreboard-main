@@ -481,6 +481,43 @@ test("a college team's rank shows before its abbreviation on the board and in th
   });
   await page.reload();
   await expect(page.locator("#upnextList .un.fav .n")).toHaveText(["#5 OSU vs #12 MICH", "DAL vs PHI"]);
+
+  // My team's Up next: a ranked opponent's rank before its name
+  await reset(request, {
+    team: { l: "ncaa", id: 103, abbr: "BC", name: "Boston College Eagles" },
+    favs: [{}, {}, {}, {}],
+    game: { ...g, l: "ncaa", id: "401858214", ta: "BC", ti: 103, oa: "RUTG", oi: 164 },
+    next: [
+      { id: "401858214", kick: 1792531500, oi: 164, oa: "RUTG", on: "Rutgers", home: true, neutral: false, tv: "ESPN2" },
+      { id: "401858242", kick: 1793136300, oi: 259, oa: "VT", on: "Virginia Tech", home: true, neutral: false, tv: "" },
+      { id: "401858246", kick: 1793741100, oi: 2567, oa: "SMU", on: "SMU", ork: 17, home: false, neutral: false, tv: "ACCN" },
+    ],
+  });
+  await page.reload();
+  await expect(page.locator("#upnextList .un .n")).toHaveText(["vs Virginia Tech", "@ #17 SMU"]);
+});
+
+test("a rank that doesn't fit the board's team column on a narrow phone is left out", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  await reset(request, {
+    team: { l: "ncaa", id: 26, abbr: "UCLA", name: "UCLA Bruins" },
+    favs: [{}, {}, {}, {}],
+    game: { ...g, l: "ncaa", ta: "UCLA", ti: 26, tr: "9-1", trk: 12, oa: "MICH", oi: 130, or: "8-2", ork: 25 },
+  });
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+  await expect(page.locator("#tA .abbr")).toHaveText("UCLA", { useInnerText: true });
+  await expect(page.locator("#tA .abbr .rk")).toBeHidden();
+  await expect(page.locator("#tB .abbr .rk")).toBeHidden();
+  // One line: no rank wrapping above the name
+  const one = await page.locator("#tA .abbr").evaluate((a) => a.getClientRects().length === 1 && a.offsetHeight < 40);
+  expect(one).toBe(true);
+  // Turned to a wider screen, it comes back.
+  await page.setViewportSize({ width: 768, height: 800 });
+  await expect(page.locator("#tA .abbr")).toHaveText("#12 UCLA");
+  await expect(page.locator("#tA .abbr .rk")).toBeVisible();
+  await expect(page.locator("#tB .abbr")).toHaveText("#25 MICH");
 });
 
 test("standing next to pro teams: the record by default, posts seed and place, hidden where it doesn't apply", async ({ page, request }) => {
@@ -488,6 +525,9 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await page.goto("/");
   const sel = page.getByLabel("Standing next to pro teams");
   await expect(page.locator("#standingRow")).toBeVisible();
+  // Named like the other settings, the help as its description
+  await expect(page.getByRole("combobox", { name: "Standing next to pro teams", exact: true })).toBeVisible();
+  await expect(sel).toHaveAccessibleDescription(/its playoff seed, or its place/);
   await expect(sel).toHaveValue("0");
   await sel.selectOption("1");
   await expectSet(request, { standing: "1" });
