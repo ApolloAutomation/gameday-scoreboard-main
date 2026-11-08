@@ -1032,6 +1032,70 @@ static void test_clock_text() {
   CHECK_EQ(clock_text(k), std::string("End of 1st"));
 }
 
+static void test_carry_timeouts() {
+  GameSnapshot none;
+  GameSnapshot pre = live(0, 0, GameState::PRE);
+  pre.team_timeouts = pre.opp_timeouts = -1;
+  carry_timeouts(none, pre);
+  CHECK_EQ(pre.team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pre.opp_timeouts, 3);
+  GameSnapshot q1 = live(0, 0);
+  q1.period = 1;
+  q1.team_timeouts = -1;  // between plays, no situation
+  q1.opp_timeouts = 2;    // what ESPN sent stays
+  carry_timeouts(pre, q1);
+  CHECK_EQ(q1.team_timeouts, 3);
+  CHECK_EQ(q1.opp_timeouts, 2);
+  GameSnapshot q2 = live(7, 0);
+  q2.period = 2;
+  q2.team_timeouts = 1;
+  q2.opp_timeouts = 0;
+  GameSnapshot q2b = q2;
+  q2b.team_timeouts = q2b.opp_timeouts = -1;
+  carry_timeouts(q2, q2b);
+  CHECK_EQ(q2b.team_timeouts, 1);  // the last count, the same half
+  CHECK_EQ(q2b.opp_timeouts, 0);   // a real 0 carries too
+  GameSnapshot q3 = q2b;
+  q3.period = 3;
+  q3.team_timeouts = q3.opp_timeouts = -1;
+  carry_timeouts(q2b, q3);
+  CHECK_EQ(q3.team_timeouts, 3);  // the second half starts with 3
+  CHECK_EQ(q3.opp_timeouts, 3);
+  GameSnapshot q4 = q3;
+  q4.period = 4;
+  q4.team_timeouts = 2;
+  GameSnapshot q4b = q4;
+  q4b.team_timeouts = -1;
+  carry_timeouts(q4, q4b);
+  CHECK_EQ(q4b.team_timeouts, 2);
+  GameSnapshot ot = q4b;
+  ot.period = 5;
+  ot.team_timeouts = ot.opp_timeouts = -1;
+  carry_timeouts(q4b, ot);
+  CHECK_EQ(ot.team_timeouts, -1);  // overtime's allotment differs by league: unknown
+  GameSnapshot fin = q4b;
+  fin.state = GameState::POST;
+  fin.team_timeouts = fin.opp_timeouts = -1;
+  carry_timeouts(q4b, fin);
+  CHECK_EQ(fin.team_timeouts, 2);  // the final keeps the 4th quarter's count
+  GameSnapshot mid = live(10, 3);  // joined mid-game after a restart
+  mid.period = 2;
+  mid.team_timeouts = -1;
+  carry_timeouts(none, mid);
+  CHECK_EQ(mid.team_timeouts, -1);  // no guess
+  GameSnapshot other = q2;
+  other.event_id = "2";  // another game's count never carries
+  GameSnapshot nxt = q2b;
+  nxt.team_timeouts = -1;
+  carry_timeouts(other, nxt);
+  CHECK_EQ(nxt.team_timeouts, -1);
+  GameSnapshot nba = live(50, 48);
+  nba.sport = Sport::BASKETBALL;
+  nba.team_timeouts = -1;
+  carry_timeouts(none, nba);
+  CHECK_EQ(nba.team_timeouts, -1);  // football only
+}
+
 // The recorded STATUS_HALFTIME game keeps the punt's "1st & 10" in situation.
 static void test_halftime_fixture() {
   std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
@@ -2151,7 +2215,7 @@ static void test_nba_live() {
   CHECK_EQ(g.nba.series, std::string(""));
   CHECK_EQ((int) g.nba.team_wins, -1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, 0);
+  CHECK_EQ(g.team_timeouts, -1);  // not sent
   CHECK_EQ(g.team_logo, std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/nba/500-dark/scoreboard/ind.png&w=64&h=64"));
   CHECK_EQ(clock_text(g), std::string("8:27 3rd"));
   CHECK_EQ(basketball_series(g), std::string(""));
@@ -2454,7 +2518,7 @@ static void test_nhl_live() {
   CHECK_EQ(g.opp_score, 0);
   CHECK_EQ(g.period, 1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, 0);
+  CHECK_EQ(g.team_timeouts, -1);  // not sent
   CHECK_EQ(g.down_distance, std::string(""));
   CHECK_EQ(g.team_record, std::string("2-0-1"));
   CHECK_EQ(g.opp_record, std::string("2-0-0"));
@@ -6938,6 +7002,7 @@ int main() {
   test_upcoming();
   test_clock_text();
   test_halftime_fixture();
+  test_carry_timeouts();
   test_color();
   test_favorites();
   test_favorites_shrunk();

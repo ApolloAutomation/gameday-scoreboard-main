@@ -226,7 +226,7 @@ struct GameSnapshot {
   std::string team_logo, opp_logo;
   bool team_winner{false};
   int possession{0};
-  int team_timeouts{0}, opp_timeouts{0};
+  int team_timeouts{0}, opp_timeouts{0};  // -1: ESPN sent no count (see carry_timeouts)
   std::string last_play, down_distance;
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
@@ -440,6 +440,13 @@ bool clock_running(const GameSnapshot &s);
 // 2nd or 4th quarter. ESPN keeps the last play's down, possession and red zone
 // there, which no longer apply.
 bool football_break(const GameSnapshot &s);
+
+// ESPN leaves situation out between some plays, before kickoff and after the
+// final, which the parse reads as no count (-1) rather than 0. Fill that in
+// for football: the last count from the same game and half (each overtime is
+// its own), 3 before kickoff or when the second half begins, and otherwise
+// leave it unknown, so the board hides the pips instead of showing them used.
+void carry_timeouts(const GameSnapshot &prev, GameSnapshot &next);
 
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the

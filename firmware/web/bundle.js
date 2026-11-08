@@ -501,8 +501,9 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     a.classList.toggle("poss", !!poss);
     a.style.color = "#" + (color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
-    // Timeout pips are football's (other sports send no timeouts).
-    node.querySelector(".pips").style.display = timeouts === null ? "none" : "";
+    // Timeout pips are football's (other sports send no timeouts). -1 is a
+    // count ESPN didn't send, which hides them rather than showing them used.
+    node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
     node.querySelectorAll(".pips i").forEach((p, i) => p.classList.toggle("on", i < (timeouts || 0)));
   };
   // The situation line under the clock: down and distance for football, the

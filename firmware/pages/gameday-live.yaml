@@ -522,7 +522,8 @@ script:
             lv_obj_t *pips[6] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3),
                                  id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
             for (int i = 0; i < 6; i++) {
-              if (sport == 0)
+              // A side with no known count (-1) hides its pips rather than showing them used.
+              if (sport == 0 && (i < 3 ? team_timeouts : opponent_timeouts) >= 0)
                 lv_obj_clear_flag(pips[i], LV_OBJ_FLAG_HIDDEN);
               else
                 lv_obj_add_flag(pips[i], LV_OBJ_FLAG_HIDDEN);

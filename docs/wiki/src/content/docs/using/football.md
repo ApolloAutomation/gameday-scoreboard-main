@@ -32,6 +32,10 @@ At kickoff the board switches to the live scoreboard:
 - **Timeout pips** under each logo: three bars per team, lit gold for each timeout left and dim for each one used.
 - **The ticker** with the down, distance and where the ball is, like "3rd & 4 at FIU 31", and the last play. Turn either off in the Ticker card on the device page. See [The ticker](/using/ticker/).
 
+:::note[Coming in the next release]
+When ESPN leaves a team's count out, which it does between some plays, the timeout pips keep the last count from the same half instead of dropping to zero. They start at three before kickoff and when the second half begins, and stay hidden when the panel can't know the count, like in overtime or right after a restart mid-game.
+:::
+
 On a single 64x64 panel, the logos sit side by side with the scores under them. During play the clock takes the abbreviations' place and the gold possession line goes under the score. There is no room for records, timeout pips or the down and distance row, so down and distance is only in the ticker.
 
 ## Scoring splashes

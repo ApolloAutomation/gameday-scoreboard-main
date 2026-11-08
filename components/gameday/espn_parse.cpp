@@ -758,6 +758,31 @@ bool clock_running(const GameSnapshot &s) {
          s.display_clock.find(':') != std::string::npos && s.display_clock != "0:00";
 }
 
+// 1 for the first half, 2 for the second, then one per overtime period.
+static int timeout_half(int period) { return period <= 2 ? 1 : (period <= 4 ? 2 : period - 2); }
+
+void carry_timeouts(const GameSnapshot &prev, GameSnapshot &next) {
+  if (next.sport != Sport::FOOTBALL)
+    return;
+  const bool game = prev.valid && prev.event_id == next.event_id;
+  const bool same = game && timeout_half(prev.period) == timeout_half(next.period);
+  // Before kickoff, or the poll that sees the second half begin. A board that
+  // joins mid-half (after a restart) doesn't guess.
+  const bool fresh_half = next.state == GameState::PRE ||
+                          (next.state == GameState::IN && next.period <= 4 && game &&
+                           timeout_half(prev.period) < timeout_half(next.period));
+  auto fill = [&](int had, int &now) {
+    if (now >= 0)
+      return;
+    if (same && had >= 0)
+      now = had;
+    else if (fresh_half)
+      now = 3;
+  };
+  fill(prev.team_timeouts, next.team_timeouts);
+  fill(prev.opp_timeouts, next.opp_timeouts);
+}
+
 bool football_break(const GameSnapshot &s) {
   if (s.sport != Sport::FOOTBALL || s.state != GameState::IN)
     return false;
