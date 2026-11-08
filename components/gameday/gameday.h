@@ -40,6 +40,7 @@
 #include "setup_qr.h"
 #include "startup.h"
 #include "update_mirror.h"
+#include "watch.h"
 #include "wifi_history.h"
 #ifdef GAMEDAY_DEMO
 #include "demo.h"
@@ -182,6 +183,9 @@ class GamedaySelect : public select::Select, public Component {
 //                                    (a manual bet in slot 1-8, or 0 for the first empty slot:
 //                                    spread, over, under or ml, the line in whole or half
 //                                    points; bets.h)
+//                                    watch=0/1 (switch to big plays in other games, watch.h)
+//                                    watchstay=30-300 (s on the big play's game) watchmine=0/1 (switch
+//                                    from the panel's own team's live game for a favorite's big play)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -322,6 +326,15 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool alerts_favorites_only() const { return (this->prefs9_.flags & ALERT9_FAV) != 0; }
   void set_alerts(uint32_t on);
   void set_alerts_favorites_only(bool on);
+  // The big-play watcher (watch.h): "Switch to big plays in other games" (on
+  // unless turned off, so the bit is the off one), "Stay on a big play" and
+  // "Switch from my team".
+  bool watch_on() const { return (this->prefs9_.flags & ALERT9_NOWATCH) == 0; }
+  uint32_t watch_stay_ms() const { return ::espn::watch_stay_ms(this->prefs9_.stay); }
+  bool watch_from_mine() const { return (this->prefs9_.flags & ALERT9_MINE) != 0; }
+  void set_watch(bool on);
+  void set_watch_stay(int seconds);
+  void set_watch_from_mine(bool on);
   // "Install updates automatically", off unless the owner turns it on.
 #ifdef GAMEDAY_BAR
   // The bar build (firmware/pages/bar.yaml) always installs from the beta
@@ -516,12 +529,18 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Big-play alerts. The types turned off rather than on, so a type added
   // later starts on. Its own blob, fixed in size like the others: a blob that
   // changes size fails to load and resets every setting in it.
+  // The big-play watcher's settings came later, in its spare bytes, each
+  // starting at 0 for the default.
   struct Prefs9 {
     uint32_t alerts_off;  // bit (Alert - 1) per type turned off
-    uint8_t flags;        // ALERT9_FAV
-    uint8_t spare[3];
+    uint8_t flags;        // ALERT9_*
+    uint8_t stay;         // "Stay on a big play" in tens of seconds, 0 the default minute (watch.h)
+    uint8_t spare[2];
   } __attribute__((packed));
-  static constexpr uint8_t ALERT9_FAV = 1;  // only games with the team or a favorite
+  static_assert(sizeof(Prefs9) == 8, "Prefs9 keeps its size, or every alert setting resets");
+  static constexpr uint8_t ALERT9_FAV = 1;      // only games with the team or a favorite
+  static constexpr uint8_t ALERT9_NOWATCH = 2;  // don't switch to big plays in other games
+  static constexpr uint8_t ALERT9_MINE = 4;     // a favorite's big play can take the board from the team's live game
   void save_prefs9_();
   // The splash for the game on the board, from the read before (prev_) to
   // this one (game_). neutral: the live modes, where nobody is "our" team.
@@ -625,7 +644,15 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
     uint32_t clock_got_ms{0};  // millis() when the reply's headers arrived
+    // The big-play watcher (watch.h): one read of other games in a gap
+    // between the board's polls (watch_key: watch_key_() when it started),
+    // or a poll of the game a big play took the board to (visit).
+    bool need_watch{false};
+    ::espn::WatchJob watch;
+    uint32_t watch_key{0};
+    bool visit{false};
   };
+  Job &new_job_();
   void start_job_();
   void start_worker_();
   static void worker_(void *arg);
@@ -633,6 +660,58 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apply_job_();
   void start_clock_job_();
   void apply_clock_job_();
+  // The big-play watcher (watch.h). It runs while the setting is on and the
+  // board follows something it can leave for a while: a live game in Live
+  // games, or anything in My team and Favorite teams with favorites set.
+  bool watching_() const;
+  bool start_watch_job_();  // true when a read started
+  void run_watch_job_();
+  void apply_watch_job_(uint32_t now);
+  // Live games: the college games its scan found, read one by one.
+  void watch_feed_(const std::vector<::espn::LiveGame> &live);
+  uint32_t watch_key_() const;  // what the watched games depend on
+  void watch_reset_();
+  void watch_sync_();
+  ::espn::WatchCtx watch_ctx_() const;
+  // The league of the mode's own game (board_league_ is the game on the
+  // board's: the big play's during a visit).
+  uint8_t mode_league_() const;
+  bool own_team_live_() const;  // the mode's game is the panel's team, live
+  // The one hook for a pin to one game ("Follow one game"): false while the
+  // board is pinned, so no big play elsewhere takes it.
+  bool switch_allowed_() const { return true; }
+  void start_visit_(const ::espn::WatchAlert &a, uint8_t league);
+  void apply_visit_job_();
+  void end_visit_();  // back to what the mode was showing
+  // No visit any more, with no way back: what the board follows changed.
+  void drop_visit_() {
+    this->visit_.active = false;
+    this->visit_.saved.reset();
+  }
+  std::vector<::espn::WatchGame> watch_;
+  std::vector<::espn::WatchSource> watch_src_;
+  uint32_t watch_cycle_{0};
+  uint32_t watch_cycle_ms_{0};
+  uint32_t watch_key_last_{0};
+  uint32_t watch_hold_until_{0};  // millis(): a read failed, so none before this; 0 none
+  bool watch_idle_{false};        // this cycle's reads are done
+  // The last read's time per league (its day scoreboard), the last element
+  // one game's on its own; 0 untimed.
+  uint16_t watch_ms_[::espn::kLeagueCount + 1]{};
+  uint32_t splash_ms_{0};  // millis() of the last splash sent to the panel, 0 none
+  // The board on a big play's game: since when, that game, the splash its
+  // first poll puts up, and the mode's own board for the way back.
+  struct Visit {
+    bool active{false};
+    bool first{false};
+    uint8_t fails{0};
+    uint32_t since_ms{0};
+    uint32_t away_id{0};
+    Schedule sched;
+    Splash splash;
+    std::unique_ptr<GameSnapshot> saved;
+  };
+  Visit visit_;
   bool fetch_schedule_(const ::espn::Team *team, Schedule &out, const char *comp_slug = nullptr);
   void run_cup_job_();
   void apply_cup_job_(uint32_t now);

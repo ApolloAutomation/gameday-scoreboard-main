@@ -99,6 +99,8 @@ INITIAL = {
     "autoupd": False, "beta": False, "standing": 0,
     # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
+    # The big-play watcher (components/gameday/watch.h): stay in seconds.
+    "watch": True, "watchstay": 60, "watchmine": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
     # The idle display and the night hours (components/gameday/idle.h), and
     # what they do now: idle_view "" (the mode's board), "clock", "scores" or
@@ -381,7 +383,8 @@ def apply_set(kv):
                 STATE["tz"], STATE["tz_name"] = i, TZS[i]
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
-        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav"):
+        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "watch",
+                   "watchmine"):
             STATE[k] = v == "1"
         elif k == "alerts":
             # A bit past the known types, a negative number or no number at
@@ -395,6 +398,9 @@ def apply_set(kv):
             bet = parse_bet(v)
             if bet:
                 put_bet(bet[0], bet_on_board(bet_doc(*bet)))
+        elif k == "watchstay":
+            # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
+            STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)

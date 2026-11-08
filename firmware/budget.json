@@ -104,6 +104,22 @@
     "team_nfl": {
       "heap": 1042,
       "json": 6277
+    },
+    "watch_mlb_day": {
+      "heap": 1800,
+      "json": 14122
+    },
+    "watch_ncaa_conference": {
+      "heap": 2500,
+      "json": 24172
+    },
+    "watch_nfl_day": {
+      "heap": 3600,
+      "json": 39624
+    },
+    "watch_soccer_day": {
+      "heap": 2800,
+      "json": 29621
     }
   }
 }

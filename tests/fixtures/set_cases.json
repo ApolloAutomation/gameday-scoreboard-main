@@ -25,7 +25,7 @@
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
     "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false,
-    "alerts": 524287, "alertfav": false, "standing": 0,
+    "alerts": 524287, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "bets": []
   },
@@ -225,6 +225,16 @@
     {"name": "a refused bet keeps the slot as it was", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["bet", "1,nfl,2,spread,x"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}},
     {"name": "a bet changes no other setting", "start": {"mode": 5, "follow": true}, "set": [["bet", "1,nfl,2,spread,-3.5"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}], "follow": true, "mode": 5}},
     {"name": "a new team keeps the bets", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["team", "mlb:15"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}], "team": "mlb:15"}},
+
+    {"name": "switching to big plays in other games off", "set": [["watch", "0"]], "expect": {"watch": false}},
+    {"name": "switching to big plays in other games back on", "start": {"watch": false}, "set": [["watch", "1"]], "expect": {"watch": true}},
+    {"name": "switch from my team on", "set": [["watchmine", "1"]], "expect": {"watchmine": true}},
+    {"name": "stay on a big play for two minutes", "set": [["watchstay", "120"]], "expect": {"watchstay": 120}},
+    {"name": "a stay under 30 s clamps up", "start": {"watchstay": 120}, "set": [["watchstay", "10"]], "expect": {"watchstay": 30}},
+    {"name": "a stay over 5 min clamps down", "set": [["watchstay", "600"]], "expect": {"watchstay": 300}},
+    {"name": "a stay is kept in tens of seconds", "set": [["watchstay", "95"]], "expect": {"watchstay": 90}},
+    {"name": "a stay with no number is the shortest", "set": [["watchstay", "abc"]], "expect": {"watchstay": 30}},
+    {"name": "a stay past int's range clamps down, not around", "set": [["watchstay", "99999999999"]], "expect": {"watchstay": 300}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

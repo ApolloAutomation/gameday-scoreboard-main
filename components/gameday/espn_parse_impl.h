@@ -373,6 +373,17 @@ int racing_from_doc(JsonObjectConst root, GameSnapshot &out);
 int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, int64_t after_start,
                          GolfNext &out);
 
+// What parse_event reads for sport: the shared event fields and the sport's
+// own (football's last play type, id and teams; the baseball, soccer,
+// basketball and hockey extras), on a single-event document's root or on a
+// day scoreboard's event. game_from_event reads one event with them,
+// oriented around our_team_id. Both in espn_parse.cpp.
+void fill_game_filter(JsonObject ev, Sport sport);
+bool game_from_event(JsonObjectConst ev, Sport sport, uint32_t our_team_id, GameSnapshot &out);
+// A day scoreboard's event as far as saying whether it is wanted
+// (espn_parse.cpp).
+DayGame day_game(JsonObjectConst ev);
+
 }  // namespace detail
 
 // Must be set before any parse runs, since the fetch task reads it unlocked.
@@ -631,25 +642,7 @@ template<typename TInput>
 bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot &out,
                  const std::string &event_id = "") {
   JsonDocument filter(detail::json_allocator());
-  detail::fill_event_filter(filter.to<JsonObject>());
-  if (sport == Sport::FOOTBALL) {
-    // An interception or a lost fumble (alerts.h): what the play was, which
-    // play, and who has the ball after it, which ESPN sends even when it
-    // leaves possession out around a score.
-    JsonObject lp = filter["competitions"][0]["situation"]["lastPlay"];
-    lp["type"]["text"] = true;
-    lp["id"] = true;
-    lp["end"]["team"]["id"] = true;
-    lp["team"]["id"] = true;
-  }
-  if (sport == Sport::BASEBALL)
-    detail::fill_baseball_filter(filter.as<JsonObject>());
-  if (sport == Sport::SOCCER)
-    detail::fill_soccer_filter(filter.as<JsonObject>());
-  if (sport == Sport::BASKETBALL)
-    detail::fill_basketball_filter(filter.as<JsonObject>());
-  if (sport == Sport::HOCKEY)
-    detail::fill_hockey_filter(filter.as<JsonObject>());
+  detail::fill_game_filter(filter.to<JsonObject>(), sport);
   JsonDocument doc(detail::json_allocator());
   DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
                                               DeserializationOption::NestingLimit(40));
@@ -657,20 +650,7 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     return false;
   if (!event_id.empty() && detail::str_or_empty(doc["id"]) != event_id)
     return false;
-  GameSnapshot s;
-  if (!detail::snapshot_from_event(doc.as<JsonObjectConst>(), our_team_id, s))
-    return false;
-  s.sport = sport;
-  if (sport == Sport::BASEBALL)
-    detail::baseball_from_event(doc.as<JsonObjectConst>(), s);
-  if (sport == Sport::SOCCER)
-    detail::soccer_from_event(doc.as<JsonObjectConst>(), s);
-  if (sport == Sport::BASKETBALL)
-    detail::basketball_from_event(doc.as<JsonObjectConst>(), s);
-  if (sport == Sport::HOCKEY)
-    detail::hockey_from_event(doc.as<JsonObjectConst>(), s);
-  out = std::move(s);
-  return true;
+  return detail::game_from_event(doc.as<JsonObjectConst>(), sport, our_team_id, out);
 }
 
 // A golf tour's scoreboard header (header_url). 1: the tour's event in

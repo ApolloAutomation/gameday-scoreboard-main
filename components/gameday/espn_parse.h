@@ -208,9 +208,9 @@ struct Racing {
 
 // One scoreboard event, resolved to "us" and "them".
 struct GameSnapshot {
-  // Copied and moved all over the component: one out-of-line copy of each
+  // Made, copied and moved all over the component: one out-of-line copy of each
   // (espn_parse.cpp), not one inlined into every file that moves one.
-  GameSnapshot() = default;
+  GameSnapshot();
   GameSnapshot(const GameSnapshot &);
   GameSnapshot(GameSnapshot &&) noexcept;
   GameSnapshot &operator=(const GameSnapshot &);
@@ -298,6 +298,16 @@ struct LiveGame {
   uint32_t away_id{0};      // shown on the left, like a broadcast
   uint32_t home_id{0};      // for its logo, fetched as soon as the game is picked
   std::string away_abbr, home_abbr;
+};
+
+// One game of a day's scoreboard before it is read in full: enough for the
+// big-play watcher to say whether it is wanted (watch.h).
+struct DayGame {
+  std::string event_id;
+  GameState state{GameState::NOT_FOUND};
+  int64_t kickoff_epoch{0};
+  bool time_tbd{false};
+  uint32_t away_id{0}, home_id{0};
 };
 
 // A finished game from a day's scoreboard, for the finals rotation (recap.h).

@@ -87,7 +87,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
-  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`,
+  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -176,6 +176,30 @@ first gives way to an earlier one until it starts), keeps the final's
 result and goes at local midnight (`bets_expire`). Live standing is worked
 out from the snapshot each time and never saved. `emit_` adds the bets on
 the board's game to the ticker, and the state document lists every bet.
+
+**Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
+in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
+the board's gaps: `loop()` calls `start_watch_job_` while the next board poll
+is not due, and it starts a read (a `Job` with `need_watch`) only when that
+poll is further off than the read's last time plus a second
+(`watch_read_fits`), so the board's 10 s poll never waits. Every 45 s
+(`kWatchCycleMs`) each source is read once: in Live games a pro league's day
+scoreboard (`scan_url`), and one game at a time (`event_url`) for a college
+league, whose games come from the board's own scan (`watch_feed_`), and for
+the favorites in My team and Favorite teams, found by their league's or
+college conference's day scoreboard at their next start. Up to 8 games are
+kept (`WatchGame`, about 70 bytes each, in internal RAM; the documents are
+PSRAM's), favorites and close games first (`watch_rank`). The fetch task
+runs `detect_big_play` on each game against its last read (`watch_detect`,
+which rebuilds the read before from the `WatchGame` and tells a home run from
+the score and the bases when the last play has moved on), never on a game's
+first read or one more than two cycles old. A big play the board may take
+(`watch_may_switch`: not during its own splash, not from the panel's team's
+live game unless a favorite plays and "Switch from my team" is on, and
+`switch_allowed_()` for a later pin to one game) starts a visit: `start_job_`
+polls that game, its first poll carries the splash, and after "Stay on a big
+play" `end_visit_` puts the mode's own board back and reads it at once. Home
+Assistant keeps the mode's game (`ha_game_`).
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -386,7 +410,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
-  the panel's lines), `test_bets.cpp` (manual bets) and `test_networks.cpp`
+  the panel's lines), `test_bets.cpp` (manual bets), `test_watch.cpp` (the
+  big-play watcher: which games, big plays from day scoreboards, when a read
+  may run, when the board switches and goes back) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

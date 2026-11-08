@@ -19,6 +19,7 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "watch.h"
 
 using namespace espn;
 
@@ -149,6 +150,28 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
+// The big-play watcher's read of a day scoreboard (watch.h, run_watch_job_)
+// in Live games, with every game on it marked on, so each is read in full
+// and kept as a WatchGame. A game on its own is read as the poll_*_event
+// cases are.
+static void watch_day(const char *name, const std::string &file, League league) {
+  std::string json;
+  {
+    JsonDocument doc;
+    deserializeJson(doc, slurp("fixtures/" + file), DeserializationOption::NestingLimit(40));
+    for (JsonObject ev : doc["events"].as<JsonArray>())
+      ev["status"]["type"]["state"] = "in";
+    serializeJson(doc, json);
+  }
+  measure(name, [&] {
+    WatchJob job;
+    job.league = (uint8_t) league;
+    job.ctx.live = true;
+    job.ctx.mask = kAlertsAll;
+    return watch_read_day(json, job) && !job.fresh.empty();
+  });
+}
+
 int main() {
   JsonCounter json_alloc;
   set_json_allocator(&json_alloc);
@@ -174,6 +197,14 @@ int main() {
   event("poll_nba_event", "event_nba_live.json", Sport::BASKETBALL);
   event("poll_nhl_event", "event_nhl_live.json", Sport::HOCKEY);
   event("poll_soccer_event", "event_soccer_second_half.json", Sport::SOCCER);
+
+  // The watcher: an NFL Sunday's 16 games, a baseball and a soccer day, and
+  // a college conference's Saturday (the scoreboard that finds a college
+  // favorite's game).
+  watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
+  watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
+  watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);
+  watch_day("watch_ncaa_conference", "day_ncaa_20261017.json", League::NCAA);
 
   // A golf tour's board: the scoreboard header, and after a final the
   // season calendar for the next event.
