@@ -27,6 +27,22 @@ A few things turn a dark panel back on by themselves, since they mean someone wa
 
 The panel always comes back on after a restart or a power cut.
 
+:::note[Coming in the next release]
+With the **Idle display** set to **Off or dim**, the panel also goes dark, or down to its **Dim to** level, while none of the games it follows is on, and lights up again by itself when one starts. That isn't the same as **Panel on**: the switch stays on, Home Assistant still sees the panel as on, and your Brightness setting doesn't change. Pressing **ON** on the remote doesn't light a panel that's dark this way; pick another idle display, or turn **Off or dim** back off, to see it. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+:::
+
+## Night hours
+
+:::note[Coming in the next release]
+Turn on **Night hours** in the Panel card on the device page, and set **From** and **To** and a **Night brightness**. A panel starts with 10 PM to 7 AM and a night brightness of 20, the level the remote's **NIGHT** button uses. The hours can run past midnight. During them:
+
+- The panel runs at the night brightness.
+- It shows the idle display, with the clock in place of **Next game** and **Scores**. **Clock**, **My team today** and **Off or dim** stay as they are. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+- A game you follow still shows when it's on, at the night brightness, and the panel goes back to the idle display after its final.
+
+If you change the brightness during the night hours, on the device page, in Home Assistant or with the remote's brightness buttons or **NIGHT**, your change holds until the hours end, and the next night starts at the night brightness again. The night hours never change your Brightness setting itself, and **Off or dim** stays darker than the night brightness when its level is lower. The panel needs the time of day for them, so after a restart they start once its clock is set and its first board is up.
+:::
+
 ## Showing: the scoreboard or the clock
 
 **Showing** picks the page the panel shows: the **Scoreboard**, or a **Clock** page. The scoreboard is the page that follows your games; the clock page is a plain clock for when you want one. Home Assistant has the same choice as **Select Page**.
@@ -41,6 +57,10 @@ Separate from the Clock page, the scoreboard shows a clock of its own when there
 - **In Live games** with no team picked, when there has been no game in the last week and none is coming, the clock is gray.
 
 On a single 64x64 panel the date goes under the time, and the next game goes in the ticker. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).
+
+:::note[Coming in the next release]
+The same clock can stand in whenever nothing you follow is on, in season too: set the **Idle display** to **Clock**. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+:::
 
 ## Heat and power protection
 
