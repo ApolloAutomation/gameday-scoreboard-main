@@ -511,19 +511,23 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
     case GameState::IN:
       break;
   }
-  if (s.short_detail.find("Halftime") != std::string::npos) {
+  if (is_halftime(s)) {
     out = "Halftime";
     add_part(out, records_line(s));
     return out;
   }
   if (o.down_distance)
     add_part(out, s.down_distance);
+  // A "Halftime" left in shortDetail after the second half starts gives way
+  // to the clock the panel shows.
+  const std::string clock =
+      s.short_detail.find("Halftime") != std::string::npos ? clock_text(s) : s.short_detail;
   if (o.clock)
-    add_part(out, s.short_detail);
+    add_part(out, clock);
   if (o.last_play)
     add_last_play(out, s.last_play);
   if (out.empty())
-    out = s.short_detail.empty() ? "In Progress" : s.short_detail;
+    out = clock.empty() ? "In Progress" : clock;
   return out;
 }
 
@@ -545,7 +549,7 @@ std::string ha_status_text(const GameSnapshot &s, const std::string &kickoff_loc
       out = s.completed || s.short_detail.empty() ? std::string("Final") : s.short_detail;
       break;
     case GameState::IN:
-      out = s.short_detail.find("Halftime") != std::string::npos ? "Halftime" : "Live";
+      out = is_halftime(s) ? "Halftime" : "Live";
       break;
   }
   add_part(out, s.team_abbr + " " + std::to_string(s.team_score) + ", " + s.opp_abbr + " " +
@@ -736,6 +740,19 @@ static std::string period_name(int period) {
   }
 }
 
+bool is_halftime(const GameSnapshot &s) {
+  if (s.status_name == "STATUS_HALFTIME")
+    return true;
+  if (s.short_detail.find("Halftime") == std::string::npos)
+    return false;
+  return s.status_name.empty() && s.period < 3;
+}
+
+// shortDetail says "Halftime" but the second half is under way.
+static bool stale_halftime(const GameSnapshot &s) {
+  return s.short_detail.find("Halftime") != std::string::npos && !is_halftime(s);
+}
+
 std::string clock_text(const GameSnapshot &s) {
   if (is_board_sport(s.sport))
     return "";  // the leaderboard has its own status cell
@@ -749,6 +766,8 @@ std::string clock_text(const GameSnapshot &s) {
     return hockey_clock_text(s);
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
   bool special = s.short_detail.find(':') == std::string::npos;  // Halftime, End of 3rd, Delayed, Final
+  if (stale_halftime(s))
+    return has_clock ? s.display_clock + " " + period_name(s.period) : period_name(s.period);
   if (!has_clock || special) {
     std::string t = s.short_detail;
     size_t dash = t.find(" - ");

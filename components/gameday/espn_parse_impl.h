@@ -44,6 +44,7 @@ inline void fill_event_filter(JsonObject ev) {
   ev["status"]["type"]["state"] = true;
   ev["status"]["type"]["completed"] = true;
   ev["status"]["type"]["shortDetail"] = true;
+  ev["status"]["type"]["name"] = true;
   JsonObject comp = ev["competitions"].add<JsonObject>();
   comp["timeValid"] = true;
   comp["situation"]["lastPlay"]["text"] = true;
@@ -194,6 +195,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
     s.state = GameState::PRE;
   s.completed = status["type"]["completed"] | false;
   s.short_detail = str_or_empty(status["type"]["shortDetail"]);
+  s.status_name = str_or_empty(status["type"]["name"]);
   s.display_clock = str_or_empty(status["displayClock"]);
   s.period = status["period"] | 0;
 

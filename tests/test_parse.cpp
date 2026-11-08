@@ -935,6 +935,46 @@ static void test_clock_text() {
   s.display_clock = "";
   s.short_detail = "12:34 - 4th";
   CHECK_EQ(clock_text(s), std::string("12:34 4th"));
+
+  // Halftime goes by ESPN's status name. shortDetail lags it, so a
+  // "Halftime" still there once the second half has started is ignored.
+  GameSnapshot h = live(14, 7);
+  h.period = 2;
+  h.display_clock = "0:00";
+  h.short_detail = "Halftime";
+  h.status_name = "STATUS_HALFTIME";
+  CHECK(is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("Halftime"));
+  h.period = 3;  // the status name moved on first
+  h.display_clock = "15:00";
+  h.status_name = "STATUS_IN_PROGRESS";
+  CHECK(!is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("15:00 3rd"));
+  h.display_clock = "14:21";
+  h.status_name = "";  // no status name: the period decides
+  CHECK(!is_halftime(h));
+  CHECK_EQ(clock_text(h), std::string("14:21 3rd"));
+  h.period = 3;
+  h.status_name = "STATUS_IN_PROGRESS";
+  h.display_clock = "";  // no clock yet: the quarter alone
+  CHECK_EQ(clock_text(h), std::string("3rd"));
+  h.period = 2;
+  h.status_name = "";
+  h.display_clock = "0:00";
+  CHECK(is_halftime(h));  // older documents without a status name
+  h.short_detail = "End of 2nd";
+  h.status_name = "STATUS_HALFTIME";
+  CHECK(is_halftime(h));  // the status name says so before shortDetail does
+  TickerOptions all;
+  h.team_record = "2-0";
+  h.opp_record = "1-1";
+  CHECK_EQ(status_text(h, all, ""), std::string("Halftime | DAL 2-0 | PHI 1-1"));
+  h.short_detail = "Halftime";
+  h.status_name = "STATUS_IN_PROGRESS";
+  h.period = 3;
+  h.display_clock = "15:00";
+  CHECK(status_text(h, all, "").rfind("Halftime", 0) != 0);
+  CHECK(ha_status_text(h, "").rfind("Halftime", 0) != 0);
 }
 
 static void test_color() {

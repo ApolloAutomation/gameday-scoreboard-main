@@ -215,6 +215,7 @@ struct GameSnapshot {
   bool time_tbd{false};  // no kickoff time yet (see Schedule::time_tbd)
   bool completed{false};
   std::string short_detail;
+  std::string status_name;  // ESPN's status.type.name, like STATUS_HALFTIME
   std::string display_clock;
   int period{0};
   std::string team_abbr, opp_abbr;
@@ -424,6 +425,11 @@ const char *state_name(GameState s);
 // lags those fields by a poll or two, so it is only used for the states that
 // have no clock (Halftime, End of 3rd, Delayed).
 std::string clock_text(const GameSnapshot &s);
+
+// At halftime. shortDetail lags the status name, displayClock and period by a
+// poll or two, so a "Halftime" it still carries once the status name says
+// otherwise, or in the third period or later, doesn't count.
+bool is_halftime(const GameSnapshot &s);
 
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the
