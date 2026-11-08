@@ -56,7 +56,8 @@ struct Bet {
   uint8_t type;       // BetType
   uint8_t side;       // BetSide
   uint8_t result;     // BetResult
-  uint8_t spare[2];
+  uint8_t moved;      // 1 once ESPN moved its game to another start: it stays on that game
+  uint8_t spare;
 };
 static_assert(sizeof(Bet) == 36, "Bet is the saved blob's layout: keep its size");
 
@@ -67,7 +68,7 @@ inline bool bet_empty(const Bet &b) { return b.team_id == 0; }
 // is emptied.
 inline bool bet_valid(const Bet &b) {
   if (b.team_id == 0 || b.league >= kLeagueCount || is_leaderboard((League) b.league) ||
-      b.result > (uint8_t) BetResult::PUSH)
+      b.result > (uint8_t) BetResult::PUSH || b.moved > 1)
     return false;
   bool known = false;
   for (size_t t = 0; t < kTeamCount && !known; t++)
@@ -180,29 +181,43 @@ inline int bet_margin(const Bet &b, int us, int them) {
   return 0;
 }
 
-// The panel read g. A bet with no game yet takes g when it's the team's game
-// and not over, or over but started after the bet went in (the panel missed
-// it live); a final that started before the bet was entered was most likely
-// over by then, so the bet waits for the next game. The bet on g keeps its
-// details and, at the final, its result, until midnight (the local midnight
-// after now). True when the bet changed and its source should keep it.
+// g could be the bet's game: anything but a game that ended (a final, or
+// called off) before the bet went in, which was most likely over by then.
+// With no clock when the bet went in, an ended game can't be told apart.
+inline bool bet_game_open(const Bet &b, const BetGame &g) {
+  return !((g.phase == BetPhase::FINAL || g.phase == BetPhase::OFF) && (b.placed == 0 || g.kickoff < b.placed));
+}
+
+// The panel read g. A bet is for its team's next or current game, so a bet
+// with no game yet takes g when bet_game_open, and a bet tied to a later game
+// of the team moves to g when g starts earlier, while that later game hasn't
+// started and the bet has no result: the panel read the later game first (the
+// team was the other side of the game on the board, or another favorite's
+// card came first). A bet whose game ESPN moved to another start stays on it.
+// The bet on g keeps its details and, at the final, its result, until
+// midnight (the local midnight after now). True when the bet changed and its
+// source should keep it.
 inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
   if (!bet_in_game(b, g))
     return false;
   bool changed = false;
-  if (b.event == 0) {
-    if ((g.phase == BetPhase::FINAL || g.phase == BetPhase::OFF) && (b.placed == 0 || g.kickoff < b.placed))
+  bool tied = false;
+  if (b.event != g.event) {
+    bool earlier = b.event != 0 && b.result == (uint8_t) BetResult::NONE && !b.moved && b.kickoff != 0 &&
+                   now < (int64_t) b.kickoff && g.kickoff > 0 && g.kickoff < (int64_t) b.kickoff;
+    if ((b.event != 0 && !earlier) || !bet_game_open(b, g))
       return false;
     b.event = g.event;
-    changed = true;
-  } else if (b.event != g.event) {
-    return false;
+    b.moved = 0;
+    changed = tied = true;
   }
   uint32_t opp = b.team_id == g.team_id ? g.opp_id : g.team_id;
   uint32_t kick = g.kickoff > 0 && g.kickoff <= (int64_t) UINT32_MAX ? (uint32_t) g.kickoff : 0;
   if (b.opp_id != opp || b.kickoff != kick) {
+    if (!tied && b.kickoff != 0 && b.kickoff != kick)
+      b.moved = 1;  // a postponed game ESPN moved keeps the bet
     b.opp_id = opp;
-    b.kickoff = kick;  // a postponed game ESPN moved keeps the bet
+    b.kickoff = kick;
     changed = true;
   }
   if (g.phase != BetPhase::FINAL)

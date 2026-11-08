@@ -216,6 +216,93 @@ void test_observe() {
   BCHECK(edge.result == (uint8_t) BetResult::WON && edge.expires == (uint32_t) (KICK + 3601), "a midnight not ahead");
 }
 
+// A bet is for its team's next or current game, whichever of the team's
+// games the panel reads first.
+BetGame nba(BetPhase phase, uint32_t event, uint32_t home, uint32_t away, int64_t kickoff, int hs = 0, int as = 0) {
+  BetGame g;
+  g.league = (uint8_t) League::NBA;
+  g.event = event;
+  g.team_id = home;
+  g.opp_id = away;
+  g.team_score = hs;
+  g.opp_score = as;
+  g.kickoff = kickoff;
+  g.phase = phase;
+  return g;
+}
+
+void test_earliest_game() {
+  constexpr uint32_t BOS = 2, MIA_H = 14, NYK = 18;
+  const int64_t mon = T0 + 8 * 3600, wed = mon + 2 * 86400;  // BOS at NYK Monday night, MIA vs BOS Wednesday
+  // My team is MIA: its next game, MIA vs BOS on Wednesday, is on the board
+  // when the owner enters BOS -4.5 on Monday morning for BOS at NYK that night.
+  Bet b = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
+  BCHECK(bet_observe(b, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT) && b.event == 401800002,
+         "the first BOS game the panel reads takes the bet");
+  BCHECK(bet_observe(b, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0 + 60, MIDNIGHT) && b.event == 401800001 &&
+             b.opp_id == NYK && b.kickoff == (uint32_t) mon,
+         "BOS's earlier game takes it from the later one");
+  BCHECK(!bet_observe(b, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0 + 120, MIDNIGHT) && b.event == 401800001,
+         "the later game doesn't take it back");
+  BetGame live = nba(BetPhase::LIVE, 401800001, NYK, BOS, mon, 90, 100);
+  BCHECK(!bet_observe(b, live, mon + 3600, MIDNIGHT) && bet_status(b, &live, mon + 3600) == BetStatus::COVERING,
+         "up 10 at NYK covers -4.5, and the ticker of that game shows it");
+  BCHECK(bet_observe(b, nba(BetPhase::FINAL, 401800001, NYK, BOS, mon, 104, 108), mon + 3 * 3600, MIDNIGHT) &&
+             b.result == (uint8_t) BetResult::LOST,
+         "graded at Monday's final, a 4 point win");
+  BCHECK(!bet_observe(b, nba(BetPhase::FINAL, 401800002, MIA_H, BOS, wed, 110, 100), wed + 3 * 3600, MIDNIGHT) &&
+             b.result == (uint8_t) BetResult::LOST && b.event == 401800001,
+         "Wednesday's final leaves it alone");
+
+  // Read in the other order: the earlier game keeps it.
+  Bet o = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
+  bet_observe(o, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0, MIDNIGHT);
+  BCHECK(!bet_observe(o, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT) && o.event == 401800001,
+         "a later game read second doesn't take it");
+
+  // The earlier game already on, or a final the panel missed live that
+  // started after the bet went in: still the team's game.
+  Bet on = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
+  bet_observe(on, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
+  BCHECK(bet_observe(on, nba(BetPhase::LIVE, 401800001, NYK, BOS, mon, 50, 40), mon + 3600, MIDNIGHT) &&
+             on.event == 401800001,
+         "the game in progress takes it");
+  Bet missed = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
+  bet_observe(missed, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
+  BCHECK(bet_observe(missed, nba(BetPhase::FINAL, 401800001, NYK, BOS, mon, 99, 101), mon + 4 * 3600, MIDNIGHT) &&
+             missed.event == 401800001 && missed.result == (uint8_t) BetResult::WON,
+         "a final after the bet takes it and grades it");
+  Bet before = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
+  before.placed = (uint32_t) (mon + 4 * 3600);
+  bet_observe(before, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), mon + 4 * 3600, MIDNIGHT);
+  BCHECK(!bet_observe(before, nba(BetPhase::FINAL, 401800001, NYK, BOS, mon, 99, 101), mon + 5 * 3600, MIDNIGHT) &&
+             before.event == 401800002,
+         "a final from before the bet doesn't");
+
+  // Once its game has started, or has a result, the bet stays on it.
+  Bet started = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
+  bet_observe(started, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
+  BCHECK(!bet_observe(started, nba(BetPhase::FINAL, 401800001, NYK, BOS, mon, 99, 101), wed + 60, MIDNIGHT) &&
+             started.event == 401800002,
+         "its game has started");
+  // A game ESPN moved later stays the bet's game, even past another of the team's.
+  Bet moved = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
+  bet_observe(moved, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0, MIDNIGHT);
+  BCHECK(bet_observe(moved, nba(BetPhase::PRE, 401800001, NYK, BOS, wed + 86400), T0 + 60, MIDNIGHT) && moved.moved,
+         "ESPN moves the game past Wednesday");
+  BCHECK(!bet_observe(moved, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0 + 120, MIDNIGHT) &&
+             moved.event == 401800001 && moved.kickoff == (uint32_t) (wed + 86400),
+         "Wednesday's game doesn't take it");
+
+  // In one pass over the board and the favorites' cards, the order the panel
+  // reads them doesn't matter.
+  ManualBets m;
+  m.at(0) = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
+  bets_observe(m, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
+  bets_observe(m, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0, MIDNIGHT);
+  BCHECK(m.dirty && m.at(0).event == 401800001, "the earliest game read in the pass");
+}
+
 void test_expire() {
   Bet b = make(BetType::SPREAD, BetSide::TEAM, -7);
   BCHECK(!bet_expired(b, T0 + 365 * 86400), "a bet with no game waits");
@@ -272,6 +359,11 @@ void test_valid() {
   Bet r = make(BetType::MONEYLINE, BetSide::TEAM, 0);
   r.result = 9;
   BCHECK(!bet_valid(r), "a result this firmware doesn't know");
+  Bet mv = make(BetType::MONEYLINE, BetSide::TEAM, 0);
+  mv.moved = 1;
+  BCHECK(bet_valid(mv), "a bet whose game moved");
+  mv.moved = 2;
+  BCHECK(!bet_valid(mv), "a moved flag this firmware doesn't know");
 }
 
 void test_parse_bet() {
@@ -360,6 +452,7 @@ int run_bet_tests(int &total_checks) {
   test_margin();
   test_status();
   test_observe();
+  test_earliest_game();
   test_expire();
   test_text();
   test_event_id();

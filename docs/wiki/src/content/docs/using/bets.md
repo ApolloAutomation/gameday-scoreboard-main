@@ -35,7 +35,9 @@ To take a bet off, tap the remove button (✕) next to it.
 
 ## Which game a bet is for
 
-A bet is for its team's game that's on now, or its next game. The panel ties the bet to that game the first time it shows it, and keeps it on that game even if ESPN moves the game to another day. A bet you type in after the team's game has ended waits for the team's next game.
+A bet is for its team's game that's on now, or its next game, so type a bet in after the team's last game has ended. The panel ties the bet to the first of the team's games it reads. If that's a later game, say Wednesday's game against your own team that's on the board, the bet moves to the team's earlier game as soon as the panel reads that one, as long as Wednesday's game hasn't started. Once its game has started, the bet stays on it, and it also stays on its game if ESPN moves that game to another day. A bet you type in after the team's game has ended waits for the team's next game.
+
+If the panel never reads the game you bet on, it can't move the bet there, and the bet stays on the later game it found. The Bets card shows which game each bet is on, so remove a bet that's on the wrong game.
 
 The panel follows bets only on games it's already reading from ESPN:
 

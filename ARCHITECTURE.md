@@ -170,7 +170,8 @@ records in their own blob (`ManualBets`, a `BetSource`; a bet tracker's
 API could be another source). `bets_tick_`, run from `emit_`, after a
 favorite's poll and every 10 s, hands each game the panel holds (the
 board's, and in Favorite teams each favorite's card) to `bets_observe` as a
-`BetGame`: a bet ties to its team's next or current game, keeps the final's
+`BetGame`: a bet ties to its team's next or current game (a later game read
+first gives way to an earlier one until it starts), keeps the final's
 result and goes at local midnight (`bets_expire`). Live standing is worked
 out from the snapshot each time and never saved. `emit_` adds the bets on
 the board's game to the ticker, and the state document lists every bet.
