@@ -182,7 +182,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
-          <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, splashes only for games with your team or a favorite.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
+          <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div id="alertCtls"></div>
         </div>
       </div>
@@ -829,8 +829,8 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   const ALERTS = [
     ["football", "Football", [
       ["Touchdown"], ["Field goal"], ["Extra point"],
-      ["2-point conversion", "Two points right after a touchdown."],
-      ["Safety", "Any other two points."],
+      ["2-point conversion", "Two points after a touchdown, and any two points that aren't clearly a safety."],
+      ["Safety", "Two points ESPN calls a safety, or that come in the middle of a drive."],
       ["Interception"],
       ["Fumble recovery", "Only a fumble the other team recovers."]]],
     ["baseball", "Baseball", [
@@ -840,7 +840,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     ["hockey", "Hockey", [["Goal", "Every goal the same way: ESPN doesn't say which came on a power play or into an empty net."]]],
     ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
     ["basketball", "Basketball", [
-      ["Lead change", "A team goes ahead in the last 2 minutes or in overtime."],
+      ["Lead change", "The team that was behind goes ahead, in the last 2 minutes or in overtime."],
       ["Buzzer beater", "A basket in the last second of a period that ties the game or takes the lead."],
       ["Overtime", "When overtime starts."],
       ["Final", "When the game ends, unless your team won: then the victory splash."]]],

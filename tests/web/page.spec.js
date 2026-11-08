@@ -688,6 +688,10 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(sw("Hockey: Goal")).toBeVisible();
   await expect(sw("Soccer: Goal")).toBeVisible();
   await expect(page.locator("#alertCtls .ctl")).toHaveCount(19);
+  // Each sport's heading sits as far from the switch above it as the other cards' headings do.
+  const heads = page.locator("#alertCtls .alertSport .sub");
+  await expect(heads).toHaveCount(5);
+  for (const h of await heads.all()) await expect(h).toHaveCSS("margin-top", "14px");
 
   // Firmware from before alerts: no switches, no Favorite teams only.
   await reset(request, { alerts: null, alertfav: null });
