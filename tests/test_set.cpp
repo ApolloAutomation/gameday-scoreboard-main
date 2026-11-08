@@ -351,6 +351,11 @@ void test_parse_set() {
   SCHECK(!parse_set("alerts", std::to_string(1 << kAlertBits), op, kFavMax), "alerts past the known types");
   SCHECK(!parse_set("alerts", "-1", op, kFavMax), "alerts -1");
   SCHECK(!parse_set("alerts", "99999999999", op, kFavMax), "alerts past int");
+  // No number at all is refused, not read as 0, which would turn every switch off.
+  SCHECK(!parse_set("alerts", "", op, kFavMax), "alerts empty");
+  SCHECK(!parse_set("alerts", "abc", op, kFavMax), "alerts text");
+  SCHECK(!parse_set("alerts", " ", op, kFavMax), "alerts space");
+  SCHECK(parse_set("alerts", " 12x", op, kFavMax) && op.mask == 12, "alerts after a space");
   SCHECK(parse_set("alertfav", "1", op, kFavMax) && op.kind == SetKind::ALERTFAV && op.on, "alertfav 1");
 
   // Every key handle_set_ forwards decodes to something.

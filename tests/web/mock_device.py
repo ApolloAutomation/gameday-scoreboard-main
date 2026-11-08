@@ -293,8 +293,9 @@ def apply_set(kv):
         elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav"):
             STATE[k] = v == "1"
         elif k == "alerts":
-            # A bit past the known types, or a negative number, is refused.
-            if 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
+            # A bit past the known types, a negative number or no number at
+            # all (which atoi would read as every switch off) is refused.
+            if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
                 STATE["alerts"] = atoi(v)
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:

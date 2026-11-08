@@ -252,11 +252,13 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   }
   if (k == "alerts") {
     // A bit past the known types is refused, not dropped: the page sends
-    // only what it knows.
+    // only what it knows. So is a value with no number in it, which atoi
+    // would read as 0 and so turn every switch off.
     op.kind = SetKind::ALERTS;
-    const int n = read_int(v);
+    char *end = nullptr;
+    const long n = strtol(v.c_str(), &end, 10);
     op.mask = (uint32_t) n;
-    return n >= 0 && n < (1 << kAlertBits);
+    return end != v.c_str() && n >= 0 && n < (1L << kAlertBits);
   }
   if (k == "favs") {
     // "mlb:15,nfl:6,..." in priority order; "" clears the list. Unknown teams,
