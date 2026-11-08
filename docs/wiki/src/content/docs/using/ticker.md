@@ -18,6 +18,10 @@ The ticker is the line that scrolls along the bottom of the panel. It carries wh
 
 A golf tour's ticker has the tournament's days and course before it, the round and the top 10 during it, and the winner and the next event after it. A racing series' ticker has the next session and when it starts, then the track, before a race weekend; the session and the top 10 with their gaps during it, and what's next between sessions; and the winner and the next race after it.
 
+:::note[Coming in the next release]
+Bets you typed into the device page's **Bets** card go at the end of the ticker of their game while it's on the board: the bet before the start, like **BET BUF -3.5**, then **BUF -3.5 COVERING**, **NOT COVERING** or **PUSH** during the game, and **WON**, **LOST** or **PUSH** after the final until midnight. The panel never connects to a sportsbook. See [Bets](/using/bets/).
+:::
+
 ## Ranks and standings
 
 :::note[Coming in the next release]
