@@ -33,7 +33,7 @@ At kickoff the board switches to the live scoreboard:
 - **The ticker** with the down, distance and where the ball is, like "3rd & 4 at FIU 31", and the last play. Turn either off in the Ticker card on the device page. See [The ticker](/using/ticker/).
 
 :::note[Coming in the next release]
-When ESPN leaves a team's count out, which it does between some plays, the timeout pips keep the last count from the same half instead of dropping to zero. They start at three before kickoff and when the second half begins, and stay hidden when the panel can't know the count, like in overtime or right after a restart mid-game.
+When ESPN leaves a team's count out, which it does between some plays, the timeout pips keep the last count from the same half instead of dropping to zero. They start at three before kickoff and when the second half begins, including while ESPN still sends the first half's counts before the half's first play. They stay hidden when the panel can't know the count, like in overtime, right after a restart mid-game, and on the final scores in Live games.
 :::
 
 On a single 64x64 panel, the logos sit side by side with the scores under them. During play the clock takes the abbreviations' place and the gold possession line goes under the score. There is no room for records, timeout pips or the down and distance row, so down and distance is only in the ticker.
@@ -63,7 +63,7 @@ When your team wins, a victory splash with fireworks says your abbreviation and 
 At halftime the clock row says "Halftime" and the ticker shows both teams' records.
 
 :::note[Coming in the next release]
-The panel goes by ESPN's game status, so the clock comes back as soon as the second half starts, instead of "Halftime" staying up for a while. The same goes for the breaks between quarters. At halftime and at the end of the 4th quarter, the down and distance, the possession line and the red zone color go away until play starts again, since they belong to the drive that just ended.
+The panel goes by ESPN's game status and its plays. ESPN's status sometimes stays at halftime after the second half starts; once the half's first play comes in, the clock row shows that play's clock with "3rd" and the down and distance stay up, instead of "Halftime" staying on the screen. The clock also comes back as soon as ESPN says a quarter has started. At halftime and at the end of the 2nd and 4th quarters, the down and distance, the possession line and the red zone color go away until play starts again, since they belong to the drive that just ended.
 :::
 
 At the final the ticker says "Final" with the records. The final stays up for half an hour, then the panel moves on to your team's next game. In Live games the panel moves to another game instead, and in Favorite teams **After the final** sets how long it stays; see [Favorite teams](/using/favorites/).

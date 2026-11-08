@@ -209,7 +209,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   s.short_down_distance = str_or_empty(sit["shortDownDistanceText"]);
   s.is_red_zone = sit["isRedZone"] | false;
   std::string possession = str_or_empty(sit["possession"]);
-  int home_to = sit["homeTimeouts"] | -1;  // -1: not sent (carry_timeouts)
+  int home_to = sit["homeTimeouts"] | -1;  // -1: not sent (carry_football)
   int away_to = sit["awayTimeouts"] | -1;
 
   bool found_us = false;

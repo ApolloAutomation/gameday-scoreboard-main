@@ -226,7 +226,10 @@ struct GameSnapshot {
   std::string team_logo, opp_logo;
   bool team_winner{false};
   int possession{0};
-  int team_timeouts{0}, opp_timeouts{0};  // -1: ESPN sent no count (see carry_timeouts)
+  int team_timeouts{-1}, opp_timeouts{-1};  // -1: no count (see carry_football)
+  uint8_t to_guess{0};     // bit 0 ours, bit 1 theirs: a count the panel filled in, not ESPN's
+  std::string break_play;  // football: the last play when a break began, kept until a new one
+  bool resumed{false};     // football: a play came in while ESPN's status still says halftime
   std::string last_play, down_distance;
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
@@ -426,27 +429,40 @@ const char *state_name(GameState s);
 // have no clock (Halftime, End of 3rd, Delayed).
 std::string clock_text(const GameSnapshot &s);
 
-// At halftime. shortDetail lags the status name, displayClock and period by a
-// poll or two, so a "Halftime" it still carries once the status name says
-// otherwise, or in the third period or later, doesn't count.
+// At halftime: ESPN's status says so, or (in documents without a status
+// name) shortDetail does before the third period. A football game whose plays
+// have moved on (resumed) isn't, whatever the status says.
 bool is_halftime(const GameSnapshot &s);
 
 // ESPN's status name says the period is under way and the clock has time on
-// it, so a shortDetail without a clock ("End of 3rd") is left over from the
-// break before.
+// it, so a shortDetail without a clock ("End of 3rd") is left from the break.
 bool clock_running(const GameSnapshot &s);
 
 // A football break the drive doesn't carry across: halftime, or the end of the
-// 2nd or 4th quarter. ESPN keeps the last play's down, possession and red zone
-// there, which no longer apply.
+// 2nd or 4th quarter, which ESPN also sends as in progress with "End of 2nd"
+// at 0:00. ESPN keeps the last play's down, possession and red zone there,
+// which no longer apply.
 bool football_break(const GameSnapshot &s);
 
-// ESPN leaves situation out between some plays, before kickoff and after the
-// final, which the parse reads as no count (-1) rather than 0. Fill that in
-// for football: the last count from the same game and half (each overtime is
-// its own), 3 before kickoff or when the second half begins, and otherwise
-// leave it unknown, so the board hides the pips instead of showing them used.
-void carry_timeouts(const GameSnapshot &prev, GameSnapshot &next);
+// The game clock a football play started at, from ESPN's play text
+// ("(14:52) J.Smith kicks ..." is "14:52"); "" when it has none or it is 0:00.
+std::string play_clock(const std::string &last_play);
+
+// ESPN's status and its plays come from separate feeds, and around halftime
+// the status can lag: still STATUS_HALFTIME while the second half's plays
+// come in. Football only, given the previous snapshot of the board or the
+// favorite:
+// - resumed: a new play with a game clock has come in since halftime began,
+//   so the half is under way (the clock row shows the play's clock and 3rd).
+// - break_play: the last play when a break began, kept while it is still the
+//   last play.
+// - Timeouts ESPN left out (-1): the last count from the same game and half
+//   (each overtime its own); 3 before kickoff, and 3 when the second half
+//   begins, also replacing the first half's counts ESPN keeps sending until
+//   the half's first play; otherwise unknown, which hides the pips. A count
+//   the panel filled in is marked in to_guess and carried only within its
+//   period.
+void carry_football(const GameSnapshot &prev, GameSnapshot &next);
 
 // The team endpoint does not say which league answered, so a freshly parsed
 // Schedule carries league 0 (NFL). Favorites and the live modes choose the

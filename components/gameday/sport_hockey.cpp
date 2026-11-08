@@ -28,7 +28,7 @@ static bool shootout(const GameSnapshot &s) { return s.period >= 5 && !s.nhl.pla
 
 // Between periods ESPN's shortDetail reads "End of 1st" (status END_PERIOD)
 static bool intermission(const GameSnapshot &s) {
-  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0;
+  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0 && !clock_running(s);
 }
 
 static std::string period_name(const GameSnapshot &s) {

@@ -921,7 +921,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     return;
   }
   GameSnapshot old = e.game;
-  ::espn::carry_timeouts(old, j.game);
+  ::espn::carry_football(old, j.game);
   e.game = j.game;
   // A refresh that came back with the same final backs off instead of
   // retrying every minute: six hours when the look-ahead found no game in the
@@ -2637,7 +2637,7 @@ void GamedayComponent::apply_job_() {
     return;
   }
   this->cache_unconfirmed_ = false;
-  ::espn::carry_timeouts(this->game_, j.game);
+  ::espn::carry_football(this->game_, j.game);
   this->prev_ = this->game_;
   this->game_ = j.game;
   this->mark_good_poll_();
@@ -2715,7 +2715,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->emit_({});
   } else if (j.polled) {
     this->prev_ = moved ? GameSnapshot{} : this->game_;
-    ::espn::carry_timeouts(this->prev_, j.game);
+    ::espn::carry_football(this->prev_, j.game);
     this->game_ = j.game;
     this->mark_good_poll_();
     if (this->game_.state == GameState::POST) {
