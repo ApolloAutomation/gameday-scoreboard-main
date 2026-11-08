@@ -1122,6 +1122,7 @@ static void test_carry_football() {
   Pending pd;
   pd.league = (uint8_t) League::NFL;
   CHECK_EQ(pending_snapshot(pd).team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pending_snapshot(pd).to_guess, 3);       // the panel's, not ESPN's
   Final fn;
   fn.league = (uint8_t) League::NFL;
   CHECK_EQ(final_snapshot(fn).team_timeouts, -1);  // unknown: hidden, not all used
@@ -1312,20 +1313,51 @@ static void test_break_timelines() {
   CHECK(!s3b.held);
   CHECK(!football_break(s3b));
 
-  // A play without a clock (some college feeds) that moved the drive resumes the half.
+  // ESPN's seconds left tells the halves apart, plays without a clock included.
   GameSnapshot c1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
+  c1.play_secs_left = 1800;
   carry_football(none, c1);
-  GameSnapshot c2 = c1;
-  c2.last_play = "J.Smith kickoff for 65 yds for a touchback.";
-  c2.short_down_distance = "1st & 10";
-  c2.possession = 2;
+  CHECK(!c1.resumed);  // the half's end
+  GameSnapshot c2 = c1;  // a late first-half play without a clock
+  c2.last_play = "Shotgun #2 QB pass complete to #5 for 9 yds";
+  c2.play_secs_left = 1806;
   carry_football(c1, c2);
-  CHECK(c2.resumed);
-  CHECK_EQ(clock_text(c2), std::string("3rd"));
-  GameSnapshot c3 = c1;  // a clockless text with the drive unchanged doesn't
-  c3.last_play = "Halftime show";
-  carry_football(c1, c3);
-  CHECK(!c3.resumed);
+  CHECK(!c2.resumed);
+  CHECK_EQ(clock_text(c2), std::string("Halftime"));
+  GameSnapshot c3 = c2;  // the 3rd quarter's kickoff
+  c3.last_play = "(15:00) J.Smith kickoff for 65 yds for a touchback.";
+  c3.play_secs_left = 1800;
+  carry_football(c2, c3);
+  CHECK(c3.resumed);
+  CHECK_EQ(clock_text(c3), std::string("15:00 3rd"));
+  GameSnapshot c4 = c2;  // a second-half play without a clock
+  c4.last_play = "#21 T.Lester rush middle for 2 yds";
+  c4.play_secs_left = 1756;
+  carry_football(c2, c4);
+  CHECK(c4.resumed);
+  CHECK_EQ(clock_text(c4), std::string("3rd"));
+  // The panel's first look at a game whose status is stuck at halftime
+  GameSnapshot cold = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
+  cold.play_secs_left = 1720;
+  carry_football(none, cold);
+  CHECK(cold.resumed);
+  CHECK(!football_break(cold));
+  GameSnapshot cold2 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
+  carry_football(none, cold2);  // no seconds left sent: a 10:00 or later clock still tells
+  CHECK(cold2.resumed);
+  GameSnapshot cold3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:21) Run for 4 yards.");
+  carry_football(none, cold3);
+  CHECK(!cold3.resumed);  // a late first-half play
+
+  // ESPN's plays frozen at the half's end into the 4th: the counts stay the guessed 3.
+  GameSnapshot f3 = s3;
+  GameSnapshot f4 = at(4, "STATUS_IN_PROGRESS", "14:00 - 4th", "14:00", "End of Half");
+  f4.team_timeouts = 1;
+  f4.opp_timeouts = 0;
+  carry_football(f3, f4);
+  CHECK(f4.held);
+  CHECK_EQ(f4.team_timeouts, 3);
+  CHECK_EQ(f4.opp_timeouts, 3);
 
   // A gap from mid-2nd to mid-3rd (no halftime seen) doesn't guess 3.
   GameSnapshot m2 = at(2, "STATUS_IN_PROGRESS", "5:00 - 2nd", "5:00", "(05:00) Run.");
@@ -1344,6 +1376,7 @@ static void test_end_of_half_in_progress() {
   CHECK(parse_scoreboard_str(json, "401856720", 99, s));
   CHECK_EQ(s.status_name, std::string("STATUS_IN_PROGRESS"));
   CHECK_EQ(s.short_detail, std::string("End of 2nd"));
+  CHECK_EQ(s.play_secs_left, 1800);
   CHECK(football_break(s));
   TickerOptions all;
   CHECK(status_text(s, all, "").find("2nd & 15") == std::string::npos);

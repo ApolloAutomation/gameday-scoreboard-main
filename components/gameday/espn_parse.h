@@ -228,13 +228,14 @@ struct GameSnapshot {
   int possession{0};
   int team_timeouts{-1}, opp_timeouts{-1};  // -1: no count (see carry_football)
   uint8_t to_guess{0};     // bit 0 ours, bit 1 theirs: a count the panel filled in, not ESPN's
+  // Football: the game seconds left in regulation at the last play, from ESPN
+  // (3600 at kickoff, 1800 at halftime; -1 when not sent, as on extra points).
+  int play_secs_left{-1};
   // Football breaks (carry_football): held from a break until the next play,
-  // the last play seen in it, that play's clock in seconds (-1 none), and the
-  // drive (downs, possession, score) when the break began.
+  // the last play seen in it, and that play's clock in seconds (-1 none).
   bool held{false};
   std::string break_play;
   int break_secs{-1};
-  std::string break_drive;
   bool resumed{false};  // football: the second half's plays came in while ESPN's status still says halftime
   std::string last_play, down_distance;
   std::string short_down_distance;  // "3rd & 10"
@@ -460,10 +461,11 @@ std::string play_clock(const std::string &last_play);
 // Football only, given the previous snapshot of the same board or favorite:
 // - held: a break began and no play has come in since (ESPN's later texts
 //   during the break, and late first-half plays, move break_play along).
-// - resumed: during STATUS_HALFTIME, a play that can only be the second
-//   half's: its clock is later than any seen in the break (the clock counts
-//   down, so a late first-half play's is earlier), or 10:00 or later when
-//   none was; or a play without a clock that moved the drive.
+// - resumed: during STATUS_HALFTIME, a play from the second half: ESPN puts
+//   it under 1800 seconds left, or it is the 3rd quarter's 15:00 kickoff.
+//   For a play without that figure, its clock must be later than any seen in
+//   the break (the clock counts down, so a late first-half play's is earlier),
+//   or 10:00 or later when none was.
 // - Timeouts ESPN left out (-1): the last count from the same game and half
 //   (each overtime its own); 3 before kickoff, and 3 when the 3rd quarter
 //   begins, also over the first half's counts ESPN keeps sending until the

@@ -48,6 +48,7 @@ inline void fill_event_filter(JsonObject ev) {
   JsonObject comp = ev["competitions"].add<JsonObject>();
   comp["timeValid"] = true;
   comp["situation"]["lastPlay"]["text"] = true;
+  comp["situation"]["lastPlay"]["probability"]["secondsLeft"] = true;
   comp["situation"]["downDistanceText"] = true;
   comp["situation"]["shortDownDistanceText"] = true;
   comp["situation"]["isRedZone"] = true;
@@ -205,6 +206,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   s.time_tbd = time_tbd(comp);
   JsonObjectConst sit = comp["situation"];
   s.last_play = str_or_empty(sit["lastPlay"]["text"]);
+  s.play_secs_left = sit["lastPlay"]["probability"]["secondsLeft"] | -1;
   s.down_distance = str_or_empty(sit["downDistanceText"]);
   s.short_down_distance = str_or_empty(sit["shortDownDistanceText"]);
   s.is_red_zone = sit["isRedZone"] | false;

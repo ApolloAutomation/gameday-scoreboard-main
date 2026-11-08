@@ -280,6 +280,7 @@ GameSnapshot pending_snapshot(const Pending &p) {
   g.opp_record = p.home_record;
   g.tv = p.tv;
   g.team_timeouts = g.opp_timeouts = 3;  // before kickoff; a final card's stay unknown (-1)
+  g.to_guess = 3;
   g.team_logo = team_logo_url((League) p.league, p.away_id, p.away_abbr.c_str());
   g.opp_logo = team_logo_url((League) p.league, p.home_id, p.home_abbr.c_str());
   g.sport = league_sport((League) p.league);
@@ -799,11 +800,6 @@ static int play_secs(const std::string &last_play) {
   return atoi(c.substr(0, colon).c_str()) * 60 + atoi(c.substr(colon + 1).c_str());
 }
 
-static std::string drive(const GameSnapshot &s) {
-  return s.short_down_distance + "|" + std::to_string(s.possession) + "|" + std::to_string(s.team_score) + "-" +
-         std::to_string(s.opp_score);
-}
-
 // Halftime or the end of the 2nd or 4th quarter, by ESPN's status alone.
 static bool break_now(const GameSnapshot &s) {
   if (s.sport != Sport::FOOTBALL || s.state != GameState::IN || s.resumed)
@@ -820,28 +816,23 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   if (next.sport != Sport::FOOTBALL)
     return;
   const bool game = prev.valid && prev.event_id == next.event_id;
-  if (game && next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
-    if (prev.resumed) {
+  if (next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
+    const int secs = play_secs(next.last_play);
+    if (game && prev.resumed)
       next.resumed = true;  // until ESPN's status catches up
-    } else if (prev.held && next.last_play != prev.break_play) {
-      const int secs = play_secs(next.last_play);
-      if (secs >= 0)
-        next.resumed = secs > (prev.break_secs >= 0 ? prev.break_secs : 599);
-      else
-        next.resumed = !next.last_play.empty() && next.last_play.rfind("End of", 0) != 0 &&
-                       !next.short_down_distance.empty() && drive(next) != prev.break_drive;
-    }
+    else if (next.play_secs_left >= 0)
+      next.resumed = next.play_secs_left < 1800 || (next.play_secs_left == 1800 && secs == 900);
+    else if (secs >= 0 && (!game || !prev.held || next.last_play != prev.break_play))
+      next.resumed = secs > (game && prev.held && prev.break_secs >= 0 ? prev.break_secs : 599);
   }
   next.held = false;
   next.break_play.clear();
   next.break_secs = -1;
-  next.break_drive.clear();
   if (game && prev.held && !next.resumed && next.state == GameState::IN) {
     if (break_now(next)) {
       // Still in the break: ESPN's later texts and late first-half plays move it along
       next.held = true;
       next.break_play = next.last_play;
-      next.break_drive = prev.break_drive;
       const int secs = play_secs(next.last_play);
       next.break_secs = next.last_play != prev.break_play && secs >= 0 ? secs : prev.break_secs;
     } else if (next.last_play == prev.break_play) {
@@ -849,21 +840,20 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
       next.held = true;
       next.break_play = prev.break_play;
       next.break_secs = prev.break_secs;
-      next.break_drive = prev.break_drive;
     }
   } else if (break_now(next)) {
     next.held = true;
     next.break_play = next.last_play;
     next.break_secs = play_secs(next.last_play);
-    next.break_drive = drive(next);
   }
 
   const int now_p = board_period(next), had_p = board_period(prev);
   const bool same = game && timeout_half(had_p) == timeout_half(now_p);
   // The poll that sees halftime give way to the 3rd quarter (not a jump after a gap)
   const bool new_half = game && next.state == GameState::IN && had_p == 2 && now_p == 3 && (prev.held || prev.resumed);
-  // The 3rd quarter before its first play: ESPN still sends the first half's counts
-  const bool leftovers = next.state == GameState::IN && now_p == 3 && next.held && !break_now(next);
+  // The second half before its first play: ESPN still sends the first half's counts
+  const bool leftovers =
+      next.state == GameState::IN && timeout_half(now_p) == 2 && next.held && !break_now(next);
   next.to_guess = 0;
   auto fill = [&](int had, uint8_t bit, int &now) {
     if (leftovers) {
