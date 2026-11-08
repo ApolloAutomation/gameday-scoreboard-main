@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "alerts.h"
+#include "panel_text.h"
 
 using namespace espn;
 
@@ -87,13 +88,17 @@ void test_interception() {
   const char *sb = "fixtures/scoreboard_ncaa_live.json";
   GameSnapshot cur = from_scoreboard(sb, "401856777", kCincinnati);
   ACHECK_EQ(cur.play_type, "Pass Interception Return");
+  ACHECK_EQ(cur.play_id, "401856777515");
   ACHECK_EQ(cur.team_abbr, "CIN");
   ACHECK(cur.possession == 1);
+  ACHECK(cur.play_side == 1);  // the play ended with CIN, which started it as BC's ball
   cur.state = GameState::IN;  // ESPN's end of the quarter is still "in"
   GameSnapshot prev = cur;
   prev.last_play = "Shotgun #10 M.McKenzie pass complete short left to #4 R.Cronin for 7 yards";
   prev.play_type = "Pass Reception";
+  prev.play_id = "401856777514";
   prev.possession = 2;
+  prev.play_side = 2;
   // One panel breaks the word after its hyphen; two have room for it.
   ACHECK_EQ(splash(prev, cur), "INTER-CEPTION!");
   ACHECK_EQ(splash(prev, cur, true, false, kAlertsAll, true), "INTERCEPTION!");
@@ -104,9 +109,25 @@ void test_interception() {
   GameSnapshot reviewed = cur;
   reviewed.last_play += " The Replay Official reviewed the runner was not down by contact ruling.";
   ACHECK_EQ(splash(cur, reviewed), "");
+  // ESPN fixing the play's words (the return's yards) keeps its id: not new.
+  GameSnapshot corrected = cur;
+  const size_t yards = corrected.last_play.find("return 24 yard");
+  ACHECK(yards != std::string::npos);
+  corrected.last_play.replace(yards, 14, "return 26 yard");
+  ACHECK_EQ(splash(cur, corrected), "");
+  // Without ids, the words decide: an append is the same play, a change a new one.
+  GameSnapshot no_id = cur, no_id_fixed = corrected;
+  no_id.play_id.clear();
+  no_id_fixed.play_id.clear();
+  ACHECK_EQ(splash(no_id, reviewed), "");
+  ACHECK_EQ(splash(no_id, no_id_fixed), "INTER-CEPTION!");  // what the id saves
+  GameSnapshot no_id_prev = prev;
+  no_id_prev.play_id.clear();
+  ACHECK_EQ(splash(no_id_prev, no_id), "INTER-CEPTION!");
   // A read with no last play says nothing about the next one.
   GameSnapshot blank = prev;
   blank.last_play.clear();
+  blank.play_id.clear();
   ACHECK_EQ(splash(blank, cur), "");
 
   // BC's panel: the other side's interception, on its own line when it won't fit.
@@ -114,20 +135,32 @@ void test_interception() {
   bc.state = GameState::IN;
   GameSnapshot bc_prev = bc;
   bc_prev.last_play = prev.last_play;
+  bc_prev.play_id = prev.play_id;
   bc_prev.possession = 1;
-  ACHECK(bc.possession == 2);
+  ACHECK(bc.possession == 2 && bc.play_side == 2);
   ACHECK_EQ(splash(bc_prev, bc), "CIN\nINTER-CEPTION");
   ACHECK_EQ(splash(bc_prev, bc, true, false, kAlertsAll, true), "CIN INTERCEPTION");
   ACHECK_EQ(splash(bc_prev, bc, false), "");
   // Live games: either side, by name.
   ACHECK_EQ(splash(prev, cur, true, true, kAlertsAll, true), "CIN INTERCEPTION");
-  // ESPN left possession out after the play: the side that didn't have it before.
+  // ESPN left possession out after the play: the play's own end team says
+  // who has the ball, even when the read before had it wrong.
   GameSnapshot no_poss = cur;
   no_poss.possession = 0;
   ACHECK_EQ(splash(prev, no_poss), "INTER-CEPTION!");
+  GameSnapshot stale = prev;
+  stale.possession = 1;
+  ACHECK_EQ(splash(stale, no_poss), "INTER-CEPTION!");
+  // Neither: the side that didn't have it before; nothing known, nothing.
+  GameSnapshot bare = no_poss;
+  bare.play_side = 0;
+  ACHECK_EQ(splash(prev, bare), "INTER-CEPTION!");
   GameSnapshot neither = prev;
   neither.possession = 0;
-  ACHECK_EQ(splash(neither, no_poss), "");
+  ACHECK_EQ(splash(neither, bare), "");
+  // A punt read with possession left out still names the team with the ball.
+  GameSnapshot punt = from_scoreboard(sb, "401862694", 2643);
+  ACHECK(punt.possession == 0 && punt.play_side == 1 && punt.play_type == "Punt");
 
   // Without a play type, the words: NFL's capitals, and not a reversed one.
   GameSnapshot nfl = cur;
@@ -153,12 +186,15 @@ void test_interception() {
 void test_fumble() {
   GameSnapshot prev = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856777", kCincinnati);
   prev.state = GameState::IN;
-  prev.possession = 2;
+  prev.possession = prev.play_side = 2;
+  // A new play (its own id) that ended with side poss holding the ball.
+  int plays = 0;
   auto play = [&](const char *type, const char *text, int poss) {
     GameSnapshot c = prev;
     c.play_type = type;
     c.last_play = text;
-    c.possession = poss;
+    c.possession = c.play_side = poss;
+    c.play_id = "40185677760" + std::to_string(++plays);
     return c;
   };
   // The other side recovered: a turnover, whatever ESPN calls it.
@@ -197,6 +233,41 @@ void test_fumble() {
             "");
   // A college play with no type never guesses.
   ACHECK_EQ(splash(prev, play("", "#2 D.Bailey fumbled, forced by #94 L.McFadden-Pressley, recovered by ODU", 2)), "");
+
+  // The offense falling on its own fumble in the end zone is its touchdown,
+  // never a fumble recovery, whichever switches are off. ESPN leaves
+  // possession out after a score; the play's end team is the offense's.
+  // BC's panel, CIN's ball: CIN scores.
+  GameSnapshot bc = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856777", kBostonCollege);
+  bc.state = GameState::IN;
+  bc.possession = bc.play_side = 2;
+  GameSnapshot own_td = bc;
+  own_td.play_type = "Fumble Recovery (Own) Touchdown";
+  own_td.last_play = "C.Ward rush up the middle for 3 yards, FUMBLES, recovered by CIN-T.Jones in the End Zone, TOUCHDOWN.";
+  own_td.play_id = "401856777601";
+  own_td.possession = 0;
+  own_td.opp_score += 6;
+  ACHECK_EQ(splash(bc, own_td), "CIN TOUCHDOWN");
+  ACHECK_EQ(splash(bc, own_td, false), "");
+  ACHECK_EQ(splash(bc, own_td, true, true, kAlertsAll, true), "CIN TOUCHDOWN");
+  ACHECK_EQ(splash(bc, own_td, true, true, all_but(Alert::TOUCHDOWN)), "");
+  ACHECK_EQ(splash(bc, own_td, true, false, all_but(Alert::TOUCHDOWN)), "");
+  // A punt the receiving team muffs and the kicking team recovers stays out.
+  GameSnapshot muff = own_td;
+  muff.play_type = "Punt Team Fumble Recovery";
+  muff.opp_score = bc.opp_score;
+  ACHECK_EQ(splash(bc, muff), "");
+  // The defense taking it back for a touchdown is a lost fumble: with
+  // TOUCHDOWN off, the side the play ended with, not the one with it before.
+  GameSnapshot ret = own_td;
+  ret.play_type = "Fumble Return Touchdown";
+  ret.opp_score = bc.opp_score;
+  ret.team_score += 6;
+  ret.play_side = 1;
+  ACHECK_EQ(splash(bc, ret), "TOUCHDOWN!");
+  ACHECK_EQ(splash(bc, ret, false, false, all_but(Alert::TOUCHDOWN)), "FUMBLE RECOVERY!");
+  ret.play_type = "Fumble Recovery (Opponent) Touchdown";
+  ACHECK_EQ(splash(bc, ret, false, false, all_but(Alert::TOUCHDOWN)), "FUMBLE RECOVERY!");
 }
 
 void test_football_points() {
@@ -223,18 +294,42 @@ void test_football_points() {
   try_good.play_type = "Two Point Pass";
   try_good.opp_score += 2;
   ACHECK_EQ(splash(after_td, try_good), "FUR 2-PT");
-  // A safety: two points with no touchdown before, or a play that says so.
+  // The real touchdown read (APP @ ME): ESPN sent no possession and no down
+  // with it, and the try's read had no situation at all.
+  GameSnapshot app_td = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401866627", 2026);
+  ACHECK(app_td.play_type == "Rushing Touchdown" && app_td.possession == 0 && app_td.down_distance.empty());
+  GameSnapshot app_try = app_td;
+  app_try.last_play.clear();
+  app_try.play_type.clear();
+  app_try.play_id.clear();
+  app_try.team_score += 2;
+  ACHECK_EQ(splash(app_td, app_try), "2-PT!");
+  // Neither read says anything (the situation left out across the review
+  // and the try): a conversion, much the more common two points.
+  GameSnapshot silent = app_try;
+  silent.team_score -= 2;
+  ACHECK_EQ(splash(silent, app_try), "2-PT!");
+  // A safety: a play that says so, whatever came before.
   GameSnapshot safety = prev;
   safety.last_play = "(Shotgun) C.Ward sacked in End Zone for -9 yards, SAFETY (B.Mafe).";
   safety.play_type = "Safety";
   safety.opp_score += 2;
   ACHECK_EQ(splash(after_td, safety), "FUR SAFETY");
+  // Or two points straight from the middle of a drive: the read before had
+  // a team with the ball and a down, which the try after a touchdown never has.
   GameSnapshot quiet = prev;
   quiet.last_play = "(Shotgun) J.Smith rush middle for 3 yards";
   quiet.play_type = "Rush";
+  quiet.possession = 2;
+  quiet.down_distance = "3rd & 8 at FUR 4";
   GameSnapshot plain = quiet;
   plain.team_score += 2;
+  plain.possession = 0;
+  plain.down_distance.clear();
   ACHECK_EQ(splash(quiet, plain), "SAFETY!");
+  GameSnapshot no_down = quiet;
+  no_down.down_distance.clear();
+  ACHECK_EQ(splash(no_down, plain), "2-PT!");
   ACHECK_EQ(splash(quiet, plain, true, false, all_but(Alert::SAFETY)), "");
   ACHECK_EQ(splash(prev, two, true, false, all_but(Alert::TWO_POINT)), "");
   // Each score's own switch, and SCORE goes with the touchdown's.
@@ -274,13 +369,20 @@ void test_home_runs() {
   GameSnapshot nyy_after = event("fixtures/event_mlb_hr.json", Sport::BASEBALL, kYankees);
   ACHECK_EQ(splash(nyy_before, nyy_after), "TB HOME RUN");
   ACHECK_EQ(splash(nyy_before, nyy_after, false), "");
-  // Four runs on a home run is a grand slam, and so is one ESPN calls that.
+  // A home run ESPN says scored four is a grand slam, and so is one it calls that.
+  ACHECK(after.play_points == 2);  // the homer's own runs, from ESPN's play
   GameSnapshot slam = after;
   slam.team_score += 2;
+  slam.play_points = 4;
   ACHECK_EQ(splash(before, slam), "GRAND SLAM!");
   ACHECK_EQ(splash(before, slam, true, false, all_but(Alert::GRAND_SLAM)), "HOME RUN!");
+  // A two-run homer with two runs from an earlier play in the same update is no slam.
+  GameSnapshot two_plays = after;
+  two_plays.team_score += 2;
+  ACHECK_EQ(splash(before, two_plays), "HOME RUN!");
   GameSnapshot nyy_slam = nyy_after;
   nyy_slam.opp_score += 2;
+  nyy_slam.play_points = 4;
   ACHECK_EQ(splash(nyy_before, nyy_slam), "TB\nGRAND SLAM");
   ACHECK_EQ(splash(nyy_before, nyy_slam, true, false, kAlertsAll, true), "TB GRAND SLAM");
   GameSnapshot called = after;
@@ -323,6 +425,26 @@ void test_walk_off() {
   ACHECK_EQ(splash(lad_prev, lad_fin), "ATL\nWALK-OFF");
   ACHECK_EQ(splash(lad_prev, lad_fin, true, false, kAlertsAll, true), "ATL WALK-OFF");
   ACHECK_EQ(splash(lad_prev, lad_fin, false), "");
+  // Reads missed from the bottom of the 8th to the final: the lead may have
+  // come in the 8th, with no bottom of the 9th played, so only the win.
+  GameSnapshot bot8 = event("fixtures/event_mlb_bottom.json", Sport::BASEBALL, kBraves);
+  bot8.period = 8;
+  bot8.short_detail = "Bot 8th";
+  GameSnapshot fin9 = bot8;
+  fin9.period = 9;
+  fin9.team_score += 2;
+  fin9.state = GameState::POST;
+  fin9.completed = true;
+  fin9.mlb.half = Half::NONE;
+  ACHECK_EQ(splash(bot8, fin9), "ATL WINS!");
+  GameSnapshot lad_bot8 = event("fixtures/event_mlb_bottom.json", Sport::BASEBALL, kDodgers);
+  lad_bot8.period = 8;
+  GameSnapshot lad_fin9 = lad_bot8;
+  lad_fin9.period = 9;
+  lad_fin9.opp_score += 2;
+  lad_fin9.state = GameState::POST;
+  lad_fin9.completed = true;
+  ACHECK_EQ(splash(lad_bot8, lad_fin9), "");
   // Not a walk-off: the 8th, the visitors going ahead, or the home side already ahead.
   GameSnapshot eighth = prev, eighth_run = prev;
   eighth.period = eighth_run.period = 8;
@@ -423,13 +545,26 @@ void test_lead_change() {
   ahead.team_score = 103;
   ACHECK_EQ(splash(prev, ahead), "LEAD CHANGE!");
   ACHECK_EQ(splash(prev, ahead, true, false, all_but(Alert::LEAD_CHANGE)), "");
-  // From a tie, too; not one that only ties or adds to a lead.
+  // Not one that only ties, breaks a tie or adds to a lead: IND up 100-98,
+  // MIN ties it, IND ahead again never lost the lead to MIN.
   GameSnapshot tied = prev;
   tied.team_score = 101;
   GameSnapshot from_tie = tied;
   from_tie.team_score = 103;
-  ACHECK_EQ(splash(tied, from_tie), "LEAD CHANGE!");
+  ACHECK_EQ(splash(tied, from_tie), "");
   ACHECK_EQ(splash(prev, tied), "");
+  GameSnapshot up = prev, level = prev, again = prev;
+  up.display_clock = "1:40";
+  up.team_score = 100;
+  up.opp_score = 98;
+  level.display_clock = "1:25";
+  level.team_score = level.opp_score = 100;
+  again.display_clock = "1:12";
+  again.team_score = 102;
+  again.opp_score = 100;
+  ACHECK_EQ(splash(up, level), "");
+  ACHECK_EQ(splash(level, again), "");
+  ACHECK_EQ(splash(level, again, true, true), "");
   GameSnapshot more = ahead;
   more.team_score += 2;
   ACHECK_EQ(splash(ahead, more), "");
@@ -467,7 +602,7 @@ void test_buzzer_beater() {
   // MIL @ OKC, 12.3 left in the 1st, OKC up 44-35: MIL ties it as the quarter ends.
   GameSnapshot prev = hoops("fixtures/event_nba_clock.json", kBucks);
   ACHECK_EQ(prev.display_clock, "12.3");
-  prev.display_clock = "2.6";
+  prev.display_clock = "0.8";
   prev.team_score = 41;
   GameSnapshot tie = prev;
   tie.display_clock = "0.0";
@@ -476,16 +611,32 @@ void test_buzzer_beater() {
   ACHECK_EQ(splash(prev, tie), "BUZZER BEATER!");
   ACHECK_EQ(splash(prev, tie, true, false, kAlertsAll, true), "BUZZER BEATER!");
   ACHECK_EQ(splash(prev, tie, true, false, all_but(Alert::BUZZER_BEATER)), "");
-  // The clock stopped on the basket with under a second left.
+  // The clock stopped on the basket with a second or less left, however
+  // long before the read was (a timeout with 8 seconds, then the shot).
   GameSnapshot stopped = prev;
   stopped.display_clock = "0.6";
   stopped.team_score = 45;
   ACHECK_EQ(splash(prev, stopped), "BUZZER BEATER!");
-  // Not one: the last read was too long before the end, free throws with
-  // the clock already out, a basket that only closes the gap or adds to a lead.
+  GameSnapshot timeout = prev;
+  timeout.display_clock = "8.0";
+  ACHECK_EQ(splash(timeout, stopped), "BUZZER BEATER!");
+  // Not one: the clock ran out from more than a second (a layup at 2.5
+  // seconds, or free throws with the clock stopped at 2.5 and the horn after
+  // the inbound), free throws with the clock already out, a basket that
+  // only closes the gap or adds to a lead.
   GameSnapshot long_ago = prev;
   long_ago.display_clock = "8.0";
   ACHECK_EQ(splash(long_ago, tie), "");
+  GameSnapshot early = prev;
+  early.display_clock = "2.9";
+  early.team_score = 43;
+  GameSnapshot layup = tie;
+  layup.team_score = 45;
+  ACHECK_EQ(splash(early, layup), "");
+  GameSnapshot line = early;
+  line.display_clock = "2.5";
+  line.team_score = 44;
+  ACHECK_EQ(splash(line, layup), "");
   GameSnapshot at_zero = tie;
   at_zero.team_score = 42;
   GameSnapshot free_throws = at_zero;
@@ -495,7 +646,7 @@ void test_buzzer_beater() {
   short_of.team_score = 43;
   ACHECK_EQ(splash(prev, short_of), "");
   GameSnapshot okc = hoops("fixtures/event_nba_clock.json", kThunder);
-  okc.display_clock = "2.6";
+  okc.display_clock = "0.9";
   GameSnapshot okc_more = okc;
   okc_more.display_clock = "0.0";
   okc_more.team_score += 3;
@@ -519,6 +670,20 @@ void test_buzzer_beater() {
   winner.completed = true;
   ACHECK_EQ(splash(fourth, winner), "BUZZER BEATER!");
   ACHECK_EQ(splash(fourth, winner, true, false, all_but(Alert::BUZZER_BEATER)), "MIL WINS!");
+  // Free throws with the clock stopped at 2.5, the horn after: the win.
+  GameSnapshot fourth_line = fourth;
+  fourth_line.display_clock = "2.5";
+  fourth_line.team_score = 44;
+  GameSnapshot ft_win = winner;
+  ft_win.team_score = 45;
+  ACHECK_EQ(splash(fourth_line, ft_win), "MIL WINS!");
+  // ESPN still has the game on when the buzzer beater lands, then marks
+  // it final: the buzzer beater, then the win.
+  GameSnapshot horn = winner;
+  horn.state = GameState::IN;
+  horn.completed = false;
+  ACHECK_EQ(splash(fourth, horn), "BUZZER BEATER!");
+  ACHECK_EQ(splash(horn, winner), "MIL WINS!");
 }
 
 void test_overtime_and_final() {
@@ -538,9 +703,29 @@ void test_overtime_and_final() {
   ACHECK_EQ(splash(end4, ot_start, false, true), "OVERTIME");
   ACHECK(decide_splash(end4, ot_start, true).color == 0xe31837);
   ACHECK_EQ(splash(end4, ot_start, true, false, all_but(Alert::OVERTIME)), "");
-  // ATL goes ahead in it, but it is overtime only once.
-  ACHECK_EQ(splash(ot_start, ot), "LEAD CHANGE!");
-  ACHECK_EQ(splash(ot_start, ot, true, false, all_but(Alert::LEAD_CHANGE)), "");
+  // ATL breaks the tie in it: no lead change, and it is overtime only once.
+  ACHECK_EQ(splash(ot_start, ot), "");
+  // From behind, it is one.
+  GameSnapshot ot_behind = ot_start;
+  ot_behind.display_clock = "1:00";
+  ot_behind.team_score = 96;
+  ot_behind.opp_score = 98;
+  ACHECK_EQ(splash(ot_behind, ot), "LEAD CHANGE!");
+  ACHECK_EQ(splash(ot_behind, ot, true, false, all_but(Alert::LEAD_CHANGE)), "");
+  // The first read in overtime already has a basket in it: overtime says so.
+  GameSnapshot ot_basket = ot_start;
+  ot_basket.display_clock = "4:41";
+  ot_basket.team_score = 92;
+  ACHECK_EQ(splash(end4, ot_basket), "OVERTIME");
+  ACHECK_EQ(splash(ot_basket, ot), "");
+  // Reads missed from late in the 4th, ATL behind, to ATL ahead in
+  // overtime: overtime first; with its switch off, the lead change.
+  GameSnapshot late4 = end4;
+  late4.display_clock = "1:00";
+  late4.nba.phase = Phase::PLAY;
+  late4.team_score = 86;
+  ACHECK_EQ(splash(late4, ot_basket), "OVERTIME");
+  ACHECK_EQ(splash(late4, ot_basket, true, false, all_but(Alert::OVERTIME)), "LEAD CHANGE!");
   GameSnapshot ot2 = ot;
   ot2.period = 6;
   ACHECK_EQ(splash(ot, ot2), "OVERTIME");
@@ -601,10 +786,10 @@ void test_favorites_only() {
 }
 
 // How LVGL lays a splash out: a line break at "\n", else at a space or after
-// a hyphen once the next word won't fit. A word longer than a line would be
-// cut in the middle.
-bool fits(const std::string &text, size_t width, size_t max_lines) {
-  size_t lines = 0;
+// a hyphen once the next word won't fit. The lines, or none when a word is
+// longer than a line (it would be cut in the middle).
+std::vector<std::string> layout(const std::string &text, size_t width) {
+  std::vector<std::string> out;
   size_t start = 0;
   while (start <= text.size()) {
     size_t nl = text.find('\n', start);
@@ -627,34 +812,51 @@ bool fits(const std::string &text, size_t width, size_t max_lines) {
     }
     if (!w.empty())
       words.push_back(w);
-    size_t len = 0;
-    lines++;
+    std::string line;
     for (size_t i = 0; i < words.size(); i++) {
       if (words[i].size() > width)
-        return false;
+        return {};
       const bool joined = i > 0 && words[i - 1].back() == '-';
-      const size_t need = len == 0 ? words[i].size() : len + (joined ? 0 : 1) + words[i].size();
-      if (need > width) {
-        lines++;
-        len = words[i].size();
+      const std::string sep = line.empty() || joined ? "" : " ";
+      if (line.size() + sep.size() + words[i].size() > width) {
+        out.push_back(line);
+        line = words[i];
       } else {
-        len = need;
+        line += sep + words[i];
       }
     }
+    out.push_back(line);
   }
-  return lines <= max_lines;
+  return out;
 }
 
+bool fits(const std::string &text, size_t width, size_t max_lines) {
+  const std::vector<std::string> lines = layout(text, width);
+  return !lines.empty() && lines.size() <= max_lines;
+}
+
+using Lines = std::vector<std::string>;
+
 void test_words_fit() {
+  using esphome::gameday::panel_text;
   ACHECK(fits("DAL TOUCHDOWN", 10, 2) && !fits("DAL TOUCHDOWN", 10, 1));
   ACHECK(fits("INTER-CEPTION!", 10, 2) && !fits("INTERCEPTION!", 10, 3));
   ACHECK(!fits("A B C D", 1, 3));
+  // The splash goes to the panel through panel_text, which keeps its line
+  // break; the ticker's turns it into a space, and LVGL then breaks the
+  // phrase where it likes.
+  ACHECK(layout(panel_text("NYY\nWALK-OFF", true), 10) == (Lines{"NYY", "WALK-OFF"}));
+  ACHECK(layout(panel_text("NYY\nWALK-OFF"), 10) == (Lines{"NYY WALK-", "OFF"}));
+  ACHECK(layout(panel_text("PHI\nFUMBLE RECOVERY", true), 16) == (Lines{"PHI", "FUMBLE RECOVERY"}));
+  ACHECK(layout(panel_text("CIN\nINTER-CEPTION", true), 10) == (Lines{"CIN", "INTER-", "CEPTION"}));
+  ACHECK(layout(panel_text("DAL TOUCHDOWN", true), 10) == (Lines{"DAL", "TOUCHDOWN"}));
   GameSnapshot g;
   g.team_color = "002a5c";
   g.opp_color = "004c54";
   // Every type, side and abbreviation length (ESPN's run from 2 to 5
   // letters), on one panel (10 characters, 3 lines of spleen_12 from y 18)
-  // and two (16 characters, 3 lines of spleen_16 from y 16).
+  // and two (16 characters, 3 lines of spleen_16 from y 16), as the panel
+  // gets it. A phrase put under the abbreviation stays there.
   for (int t = 1; t <= (int) Alert::SCORE; t++)
     for (AlertSide side : {AlertSide::TEAM, AlertSide::OPP, AlertSide::GAME})
       for (const char *abbr : {"NY", "DAL", "UTAH", "UMASS"})
@@ -663,8 +865,12 @@ void test_words_fit() {
             for (int points : {1, 4, 12}) {
               g.team_abbr = g.opp_abbr = abbr;
               BigPlay p{(Alert) t, side, points};
-              const std::string text = big_play_splash(p, g, neutral, wide).text;
-              const bool ok = !text.empty() && fits(text, wide ? 16 : 10, 3);
+              const std::string raw = big_play_splash(p, g, neutral, wide).text;
+              const std::string text = panel_text(raw, true);
+              const Lines lines = layout(text, wide ? 16 : 10);
+              const bool own_line = raw.find('\n') != std::string::npos;
+              const bool ok = !text.empty() && !lines.empty() && lines.size() <= 3 &&
+                              (!own_line || lines[0] == abbr);
               ACHECK(ok);
               if (!ok)
                 printf("  type %d side %d abbr %s wide %d: \"%s\"\n", t, (int) side, abbr, (int) wide, text.c_str());

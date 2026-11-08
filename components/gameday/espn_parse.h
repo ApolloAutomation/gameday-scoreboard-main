@@ -242,6 +242,13 @@ struct GameSnapshot {
   // ESPN's type for the last play, kept for football and baseball only:
   // "Pass Interception Return", "Fumble Recovery (Own)", "Ball".
   std::string play_type;
+  // More of the last play for big-play alerts (alerts.h). Football: ESPN's
+  // id for it ("401856777515", the same however often its words change)
+  // and the side with the ball after it, 1 ours, 2 theirs, 0 not sent.
+  // Baseball: the runs it scored.
+  std::string play_id;
+  int play_side{0};
+  int play_points{0};
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
   std::string odds, over_under, tv, venue;

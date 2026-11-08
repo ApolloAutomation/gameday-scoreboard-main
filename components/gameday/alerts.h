@@ -86,11 +86,15 @@ inline int clock_tenths(const std::string &c) {
   return a < 100000 ? (int) a * 10 + (*end == '.' && isdigit((unsigned char) end[1]) ? end[1] - '0' : 0) : -1;
 }
 
-// The last play is one this read hasn't seen: its words changed, and not by
-// ESPN adding to the old ones (a replay review is appended). A read without a
-// last play says nothing, so the play after it isn't new either: ESPN leaves
-// the situation out between some plays and then sends the same one again.
+// The last play is one this read hasn't seen: ESPN's id for it changed, so a
+// play whose words ESPN corrects (the yards, the tacklers) is not new again.
+// Without ids, its words changed, and not by ESPN adding to the old ones (a
+// replay review is appended). A read without a last play says nothing, so
+// the play after it isn't new either: ESPN leaves the situation out between
+// some plays and then sends the same one again.
 inline bool new_play(const GameSnapshot &prev, const GameSnapshot &cur) {
+  if (!prev.play_id.empty() && !cur.play_id.empty())
+    return prev.play_id != cur.play_id;
   return !prev.last_play.empty() && !cur.last_play.empty() &&
          cur.last_play.compare(0, prev.last_play.size(), prev.last_play) != 0;
 }
@@ -104,28 +108,33 @@ inline bool interception(const GameSnapshot &s) {
          !has_word(s.last_play, "no play");
 }
 
-// Only a fumble the other team recovered: "Fumble Recovery (Opponent)", "Sack
-// Opp Fumble Recovery", "Fumble Return Touchdown", never "Fumble Recovery
-// (Own)". Without a type, the NFL writes the other team's recovery in capitals
-// ("RECOVERED by DAL-D.Bland") and the offense's own in lower case.
+// Only a fumble the other team recovered: "Fumble Recovery (Opponent)" (and
+// its "Touchdown"), "Sack Opp Fumble Recovery", "Fumble Return Touchdown".
+// Never the offense's own, "Fumble Recovery (Own)" or "Fumble Recovery (Own)
+// Touchdown", and never a muffed kick ("Punt Team Fumble Recovery"). Without
+// a type, the NFL writes the other team's recovery in capitals ("RECOVERED by
+// DAL-D.Bland") and the offense's own in lower case.
 inline bool fumble_lost(const GameSnapshot &s) {
   if (!s.play_type.empty())
-    return has_word(s.play_type, "fumble") && (has_word(s.play_type, "opp") || has_word(s.play_type, "touchdown"));
+    return has_word(s.play_type, "fumble") &&
+           (has_word(s.play_type, "opp") || has_word(s.play_type, "fumble return"));
   return s.last_play.find("RECOVERED by") != std::string::npos && has_word(s.last_play, "fumble") &&
          !has_word(s.last_play, "reversed") && !has_word(s.last_play, "no play");
 }
 
-// Two points right after a touchdown are its conversion: the touchdown is
-// this read's last play or the one before's, or the play says it was a
-// conversion. Any other two points, or a play that says safety, are a safety.
-inline bool conversion(const GameSnapshot &prev, const GameSnapshot &cur) {
+// Two points are a safety only on evidence: the play says so, or nothing
+// says touchdown or conversion and the read before was the middle of a
+// drive (the ball and a down), which a safety needs and the try after a
+// touchdown never is. Anything else is a 2-point conversion, much the more
+// common, as when ESPN leaves the situation out around the try.
+inline bool safety(const GameSnapshot &prev, const GameSnapshot &cur) {
   if (has_word(cur.last_play, "safety") || has_word(cur.play_type, "safety"))
-    return false;
+    return true;
   for (const std::string *s : {&cur.last_play, &cur.play_type, &prev.last_play, &prev.play_type})
     for (const char *w : {"touchdown", "two-point", "two point", "2pt", "conversion"})
       if (has_word(*s, w))
-        return true;
-  return false;
+        return false;
+  return prev.possession != 0 && !prev.down_distance.empty();
 }
 
 inline bool home_run(const GameSnapshot &s) {
@@ -144,10 +153,11 @@ inline Alert first_on(uint32_t mask, std::initializer_list<Alert> candidates) {
 }  // namespace detail
 
 // The big play between two reads of one game, the first switched on in this
-// order: the team's (scores first), the other side's when theirs, then the
-// game's. Scores and plays count only while the game is on; at the final
-// only a baseball walk-off, a basketball buzzer beater and basketball's FINAL.
-// Nothing across a boot, a team change or a new game.
+// order: basketball's overtime starting, the team's (scores first), the
+// other side's when theirs, then the game's. Scores and plays count only
+// while the game is on; at the final only a baseball walk-off, a basketball
+// buzzer beater and basketball's FINAL. Nothing across a boot, a team change
+// or a new game.
 inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur, uint32_t mask, bool theirs) {
   using detail::first_on;
   using detail::has_word;
@@ -159,6 +169,10 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
   if (!final && !live)
     return none;
   const Sport sport = cur.sport;
+  // Overtime starting says so first, even when the read has a basket in it.
+  if (sport == Sport::BASKETBALL && live && cur.period > cur.nba.regulation && cur.period > prev.period &&
+      first_on(mask, {Alert::OVERTIME}) != Alert::NONE)
+    return BigPlay{Alert::OVERTIME, AlertSide::GAME, 0};
   for (int side = 0; side < (theirs ? 2 : 1); side++) {
     const int us0 = side ? prev.opp_score : prev.team_score, them0 = side ? prev.team_score : prev.opp_score;
     const int us1 = side ? cur.opp_score : cur.team_score, them1 = side ? cur.team_score : cur.opp_score;
@@ -168,27 +182,32 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
     Alert a = Alert::NONE;
     if (sport == Sport::BASEBALL) {
       const bool hr = detail::home_run(cur);
-      // The home side goes ahead in the bottom of the 9th or later, which ends it.
+      // The home side goes ahead in the bottom of the 9th or later, which
+      // ends it. At the final the read before has to be from the 9th or
+      // later too, or the lead could have come in the 8th, its reads missed.
       const bool home = (side == 0) == cur.team_home;
-      const bool walk_off = home && cur.period >= 9 && us0 <= them0 && us1 > them1 &&
-                            (final || cur.mlb.half == Half::BOTTOM);
+      const bool walk_off = home && us0 <= them0 && us1 > them1 &&
+                            (final ? prev.period >= 9 : cur.period >= 9 && cur.mlb.half == Half::BOTTOM);
+      // A grand slam by the home run's own runs, not the score, which can
+      // hold an earlier play's too.
+      const bool slam = hr && (cur.play_points == 4 || has_word(cur.last_play, "grand slam"));
       a = final ? first_on(mask, {walk_off ? Alert::WALK_OFF : Alert::NONE})
-                : first_on(mask, {walk_off ? Alert::WALK_OFF : Alert::NONE,
-                                  hr && (pts == 4 || has_word(cur.last_play, "grand slam")) ? Alert::GRAND_SLAM
-                                                                                           : Alert::NONE,
+                : first_on(mask, {walk_off ? Alert::WALK_OFF : Alert::NONE, slam ? Alert::GRAND_SLAM : Alert::NONE,
                                   hr ? Alert::HOME_RUN : Alert::NONE, Alert::RUN});
     } else if (sport == Sport::BASKETBALL) {
-      // A basket that ties or takes the lead as a period runs out: the clock
-      // ran between the reads and stopped at a second or less, or ran out
-      // from 3 seconds or less.
+      // A basket that ties or takes the lead with a second or less left in
+      // a period: the clock ran between the reads and stopped at a second or
+      // less, or ran out from a second or less.
       const int t0 = detail::clock_tenths(prev.display_clock), t1 = detail::clock_tenths(cur.display_clock);
       const bool buzzer = cur.period == prev.period && us0 <= them0 && us1 >= them1 && t1 >= 0 && t0 > t1 &&
-                          (t1 > 0 ? t1 <= 10 : t0 <= 30);
-      // Going ahead in the last 2 minutes of regulation or in overtime.
+                          (t1 > 0 ? t1 : t0) <= 10;
+      // The side that was behind goes ahead, in the last 2 minutes of
+      // regulation or in overtime. Breaking a tie isn't one: the side ahead
+      // before the tie may be the one ahead again.
       const int reg = cur.nba.regulation;
       const bool late = cur.period > reg || (cur.period == reg && t1 >= 0 && t1 <= 1200);
       a = first_on(mask, {buzzer ? Alert::BUZZER_BEATER : Alert::NONE,
-                          !final && late && us0 <= them0 && us1 > them1 ? Alert::LEAD_CHANGE : Alert::NONE});
+                          !final && late && us0 < them0 && us1 > them1 ? Alert::LEAD_CHANGE : Alert::NONE});
     } else if (final) {
       continue;  // the win splash says it
     } else if (sport == Sport::HOCKEY) {
@@ -203,18 +222,15 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
       a = pts >= 6 && pts <= 8 ? Alert::TOUCHDOWN
           : pts == 3           ? Alert::FIELD_GOAL
           : pts == 1           ? Alert::EXTRA_POINT
-          : pts == 2           ? (detail::conversion(prev, cur) ? Alert::TWO_POINT : Alert::SAFETY)
+          : pts == 2           ? (detail::safety(prev, cur) ? Alert::SAFETY : Alert::TWO_POINT)
                                : Alert::SCORE;
       a = first_on(mask, {a});
     }
     if (a != Alert::NONE)
       return BigPlay{a, side ? AlertSide::OPP : AlertSide::TEAM, pts};
   }
-  if (sport == Sport::BASKETBALL) {
-    const bool ot = live && cur.period > cur.nba.regulation && cur.period > prev.period;
-    const Alert a = first_on(mask, {final ? Alert::FINAL : ot ? Alert::OVERTIME : Alert::NONE});
-    return a == Alert::NONE ? none : BigPlay{a, AlertSide::GAME, 0};
-  }
+  if (sport == Sport::BASKETBALL)
+    return final && first_on(mask, {Alert::FINAL}) != Alert::NONE ? BigPlay{Alert::FINAL, AlertSide::GAME, 0} : none;
   if (!live)
     return none;
   if (sport == Sport::SOCCER) {
@@ -225,12 +241,16 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
         return BigPlay{Alert::RED_CARD, side ? AlertSide::OPP : AlertSide::TEAM, 0};
   }
   if (sport == Sport::FOOTBALL && detail::new_play(prev, cur)) {
-    // A turnover is the side that has the ball after it, or the one that
-    // didn't before it when ESPN leaves possession out.
+    // A turnover is the side that has the ball after it: the play's own end
+    // team, else possession, else the side that didn't have it before when
+    // ESPN leaves both out.
     const Alert a = first_on(mask, {detail::interception(cur) ? Alert::INTERCEPTION
                                     : detail::fumble_lost(cur) ? Alert::FUMBLE
                                                                : Alert::NONE});
-    const int gainer = cur.possession != 0 ? cur.possession : prev.possession != 0 ? 3 - prev.possession : 0;
+    const int gainer = cur.play_side    ? cur.play_side
+                       : cur.possession  ? cur.possession
+                       : prev.possession ? 3 - prev.possession
+                                         : 0;
     if (a != Alert::NONE && (gainer == 1 || (gainer == 2 && theirs)))
       return BigPlay{a, gainer == 1 ? AlertSide::TEAM : AlertSide::OPP, 0};
   }
@@ -272,7 +292,8 @@ inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neut
   const std::string &abbr = opp ? g.opp_abbr : g.team_abbr;
   // LVGL breaks a line at a space or after a hyphen, so a phrase that won't
   // fit beside the abbreviation could split as "NYY WALK-" and "OFF". The
-  // words this firmware splashed before alerts keep LVGL's own breaks.
+  // "\n" reaches the label (panel_text keeps it for the splash). The words
+  // this firmware splashed before alerts keep LVGL's own breaks.
   const bool older = p.type <= Alert::EXTRA_POINT || p.type == Alert::RUN || p.type == Alert::HOME_RUN ||
                      p.type == Alert::HOCKEY_GOAL || p.type == Alert::SOCCER_GOAL || p.type == Alert::SCORE;
   const bool own_line = !older && word.find_first_of(" -") != std::string::npos &&

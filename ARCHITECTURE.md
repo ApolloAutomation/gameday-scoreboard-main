@@ -145,11 +145,14 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 6. **Splashes.** `decide_splash` compares the new snapshot with the last one
    to pick a big play (`alerts.h`: `detect_big_play`, a pure function of the
    two reads, the alert switches and whether the other side's plays count)
-   or the win. Football's turnovers come from ESPN's last play and its type,
-   kept for football and baseball (`GameSnapshot::play_type`). The alert
+   or the win. Football's turnovers come from ESPN's last play: its type,
+   its id (so a play ESPN rewords isn't new) and the team it ended with
+   (`GameSnapshot::play_type`, `play_id`, `play_side`); baseball keeps the
+   type and the play's own runs (`play_points`) for grand slams. The alert
    switches are their own preference blob (`Prefs9`), and in Live games
    "Favorite teams only" switches them all off for a game without the team or
-   a favorite.
+   a favorite. The splash text goes to the panel through
+   `panel_text(text, true)`, which keeps its line break.
 7. **Drawing.** `emit_` builds `UpdateFields` (status, clock, scores,
    situation, ticker text and so on), rebuilds the state document, and
    `draw_` calls the `on_update` trigger. In YAML that publishes Game Status
