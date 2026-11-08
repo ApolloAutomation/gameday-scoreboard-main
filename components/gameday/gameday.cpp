@@ -100,7 +100,6 @@ static const uint32_t SNTP_ASK_INTERVAL = 15 * 1000;
 static const uint32_t HTTP_CLOCK_WAIT = 5 * 1000;
 static const uint32_t HTTP_CLOCK_RETRY = 30 * 1000;
 static const char *const HTTP_CLOCK_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
-static const int64_t PRE_NEAR_SECONDS = 60 * 60;
 static const uint32_t NO_LIVE_RESCAN = 2 * MINUTE;
 // Install updates automatically: how often loop() looks, and how long a
 // manifest read gets before its answer is used (the HTTP timeout is 20 s,
@@ -850,6 +849,10 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   int refresh = -1;
   for (size_t i = 0; i < this->fav_.size(); i++) {
     const FavEntry &e = this->fav_[i];
+    // Its host refused or failed: the others go on (a minor league team's
+    // games come from MLB, not ESPN).
+    if (this->host_waiting_(e.team->league))
+      continue;
     bool missing = !e.sched.valid || e.stale;
     uint32_t age = now - e.fetched_ms;
     if ((missing && (e.fetched_ms == 0 || age >= RETRY_INTERVAL)) || (!missing && age >= SCHEDULE_INTERVAL)) {
@@ -876,17 +879,18 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
     uint32_t due = this->interval_for_phase_();
     // A live game's poll goes first; a waiting refresh runs in the gap before
     // the next one, so a long list of favorites never stalls the score.
-    if (this->fav_poll_ms_ == 0 || now - this->fav_poll_ms_ >= due)
+    if ((this->fav_poll_ms_ == 0 || now - this->fav_poll_ms_ >= due) &&
+        !this->host_waiting_(this->fav_[this->fav_shown_].team->league))
       refresh = -2;  // poll the shown game
   }
   // Soccer: with nothing else due, one cup's team read per cycle.
   int cup = -1;
   for (size_t i = 0; refresh == -1 && cup < 0 && i < this->fav_.size(); i++) {
     const FavEntry &c = this->fav_[i];
-    if (c.comp_next > 0 && c.comp_next < (int) c.comps.size())
+    if (c.comp_next > 0 && c.comp_next < (int) c.comps.size() && !this->host_waiting_(c.team->league))
       cup = (int) i;
   }
-  if ((refresh == -1 && cup < 0) || this->backing_off_()) {
+  if (refresh == -1 && cup < 0) {
     this->schedule_next_(FAV_TICK);
     // Most ticks read nothing: the watcher's turn, up to the next read due.
     uint32_t refresh_at = now + SCHEDULE_INTERVAL;
@@ -2626,10 +2630,14 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
       {"User-Agent", USER_AGENT},
       {"Accept", "application/json"},
   };
+  // Minor league baseball's reads go to the MLB Stats API: its answers and
+  // refusals are kept apart from ESPN's.
+  const bool mlb = ::espn::is_mlb_url(url);
+  (mlb ? this->job_.read_mlb : this->job_.read_espn) = true;
   this->espn_requests_++;
   auto container = this->http_->get(url, headers, {"retry-after"});
-  this->espn_status_ = container == nullptr ? 0 : container->status_code;
-  this->espn_answer_ms_ = millis() == 0 ? 1 : millis();
+  (mlb ? this->mlb_status_ : this->espn_status_) = container == nullptr ? 0 : container->status_code;
+  (mlb ? this->mlb_answer_ms_ : this->espn_answer_ms_) = millis() == 0 ? 1 : millis();
   if (container == nullptr) {
     ESP_LOGW(TAG, "Request failed: %s", url.c_str());
     return nullptr;
@@ -2638,10 +2646,11 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
     ESP_LOGW(TAG, "HTTP %d for %s", container->status_code, url.c_str());
     if (::espn::is_throttle_status(container->status_code)) {
       // Worker task: the job is this task's until it reports done.
-      this->job_.throttled = true;
+      (mlb ? this->job_.mlb_throttled : this->job_.throttled) = true;
       uint32_t ra = ::espn::parse_retry_after_ms(container->get_response_header("retry-after"));
-      if (ra > this->job_.retry_after_ms)
-        this->job_.retry_after_ms = ra;
+      uint32_t &most = mlb ? this->job_.mlb_retry_after_ms : this->job_.retry_after_ms;
+      if (ra > most)
+        most = ra;
     }
     container->end();
     return nullptr;
@@ -2748,7 +2757,7 @@ void GamedayComponent::captive_tick_() {
       this->captive_suspect_ = false;
       this->set_captive_(false);
     } else if (r == ::espn::Probe::CAPTIVE && network::is_connected() && !this->demo_playing_()) {
-      if (this->clock_set_() && this->fail_run_.streak == 0 && !this->captive_) {
+      if (this->clock_set_() && this->fail_run_.streak == 0 && this->mlb_wait_.run.streak == 0 && !this->captive_) {
         // Nothing says ESPN is out of reach yet (a DNS block page can look
         // like a portal to the probe): ask ESPN now and say so only if that
         // read fails too. With no clock nothing can be read to check.
@@ -2786,14 +2795,21 @@ void GamedayComponent::captive_tick_() {
   // A sign-in network usually blocks the time server too, and with no clock
   // nothing is read from ESPN, so a clock still unset 30 s after joining
   // counts as reads failing.
-  const bool failing =
-      this->fail_run_.streak > 0 || (!this->clock_set_() && now - this->probe_join_ms_ >= 30000);
+  const bool failing = this->fail_run_.streak > 0 || this->mlb_wait_.run.streak > 0 ||
+                       (!this->clock_set_() && now - this->probe_join_ms_ >= 30000);
   if (::espn::probe_due(this->probe_join_done_, this->captive_, failing, now - this->probe_ms_))
     this->start_probe_();
 }
 
 uint32_t GamedayComponent::back_off_() {
   this->read_fails_++;
+  if (this->job_mlb_only_()) {
+    uint32_t ms = this->mlb_wait_.fail(this->job_.mlb_throttled, this->job_.mlb_retry_after_ms, random_uint32(),
+                                       millis());
+    ESP_LOGW(TAG, "%u failed MLB read(s) in a row%s: next try in %us", (unsigned) this->mlb_wait_.run.streak,
+             this->mlb_wait_.run.throttled ? ", MLB is refusing" : "", (unsigned) (ms / 1000));
+    return ms;
+  }
   uint32_t ms = this->fail_run_.fail(this->job_.throttled, this->job_.retry_after_ms, random_uint32());
   ESP_LOGW(TAG, "%u failed read(s) in a row%s: next try in %us", (unsigned) this->fail_run_.streak,
            this->fail_run_.throttled ? ", ESPN is refusing" : "", (unsigned) (ms / 1000));
@@ -2803,6 +2819,8 @@ uint32_t GamedayComponent::back_off_() {
 }
 
 bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, const char *comp_slug) {
+  if (::espn::is_mlb_stats(team->league))
+    return this->fetch_mlb_schedule_(team, out);
   std::string url = comp_slug != nullptr ? ::espn::team_url(team->league, team->espn_id, comp_slug)
                                          : ::espn::team_url(team->league, team->espn_id);
   ESP_LOGD(TAG, "Fetching schedule: %s", url.c_str());
@@ -2854,6 +2872,9 @@ int GamedayComponent::fetch_team_day_(const ::espn::Team *team, uint32_t group, 
 // own day after midnight Eastern.
 void GamedayComponent::take_game_on_now_(const ::espn::Team *team, Schedule &s, const std::string &done_event,
                                          const char *comp_slug) {
+  // Minor league baseball's team read lists today's games itself.
+  if (::espn::is_mlb_stats(team->league))
+    return;
   int64_t now = (int64_t) this->time_->timestamp_now();
   if (!s.event_id.empty() && s.kickoff_epoch <= now)
     return;
@@ -2871,6 +2892,10 @@ void GamedayComponent::take_game_on_now_(const ::espn::Team *team, Schedule &s, 
 }
 
 bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out) {
+  if (::espn::is_mlb_stats(team->league)) {
+    Schedule s;
+    return this->fetch_mlb_schedule_(team, s, &out);
+  }
   const ::espn::LeagueInfo *info = ::espn::league_info(team->league);
   if (info != nullptr && !info->season_list) {
     out.clear();  // the season schedule is megabytes in this league: no Up next list
@@ -2892,7 +2917,10 @@ bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::e
 bool GamedayComponent::fetch_live_games_(League league, std::vector<::espn::LiveGame> &out, int64_t &next_kickoff,
                                          std::vector<::espn::Final> *finals, std::vector<::espn::Pending> *pending,
                                          int64_t epoch) {
-  std::string url = ::espn::scan_url(league, epoch != 0 ? epoch : (int64_t) this->time_->timestamp_now());
+  const int64_t day = epoch != 0 ? epoch : (int64_t) this->time_->timestamp_now();
+  // Minor league baseball's day comes from the MLB Stats API
+  const bool mlb = ::espn::is_mlb_stats(league);
+  std::string url = mlb ? ::espn::mlb_day_url(day) : ::espn::scan_url(league, day);
   ESP_LOGD(TAG, "Scanning for live games: %s", url.c_str());
   auto container = this->open_(url);
   if (container == nullptr)
@@ -2902,7 +2930,8 @@ bool GamedayComponent::fetch_live_games_(League league, std::vector<::espn::Live
   size_t finals_before = finals != nullptr ? finals->size() : 0;
   size_t pending_before = pending != nullptr ? pending->size() : 0;
   int64_t next = 0;
-  bool ok = ::espn::parse_live_games(reader, out, &next, finals, pending);
+  bool ok = mlb ? ::espn::parse_mlb_day(reader, out, &next, finals, pending)
+                : ::espn::parse_live_games(reader, out, &next, finals, pending);
   for (size_t i = before; i < out.size(); i++)
     out[i].league = (uint8_t) league;
   if (finals != nullptr)
@@ -2925,6 +2954,8 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   League league = live || this->job_.fav_index >= 0 ? (League) schedule.league : team->league;
   // A per_event league reads the one game, 8 to 20 KB a poll. The others read
   // the day's scoreboard it sits in, up to 750 KB for college football.
+  if (::espn::is_mlb_stats(league))
+    return this->fetch_mlb_game_(schedule, out);
   const ::espn::LeagueInfo *info = ::espn::league_info(league);
   bool per_event = info != nullptr && info->per_event;
   std::string url = per_event ? ::espn::event_url(league, schedule.event_id, schedule.comp_slug)
@@ -2945,6 +2976,59 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   if (!ok) {
     ESP_LOGW(TAG, "Game %s not parsed (%u bytes)", schedule.event_id.c_str(),
              (unsigned) reader.total());
+    return false;
+  }
+  ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
+           g.team_score, g.opp_abbr.c_str(), g.opp_score, g.short_detail.c_str(), (unsigned) reader.total());
+  out = std::move(g);
+  return true;
+}
+
+// ---- Minor league baseball (MLB Stats API, source_mlbstats.h) ----------------
+
+bool GamedayComponent::fetch_mlb_schedule_(const ::espn::Team *team, Schedule &out,
+                                           std::vector<::espn::Upcoming> *upcoming) {
+  const int64_t now = (int64_t) this->time_->timestamp_now();
+  Schedule s;
+  // The coming days first; with nothing there, the next season's first game.
+  // The Up next list (four: the game on the board and the three after it)
+  // is from the coming days only.
+  for (int pass = 0; pass < (upcoming != nullptr ? 1 : 2); pass++) {
+    std::string url = pass == 0 ? ::espn::mlb_team_url(team->espn_id, now)
+                                : ::espn::mlb_far_url(team->espn_id, team->group, now);
+    ESP_LOGD(TAG, "Fetching schedule: %s", url.c_str());
+    auto container = this->open_(url);
+    if (container == nullptr)
+      return false;
+    ContainerReader reader(container, this->espn_bytes_);
+    int r = ::espn::parse_mlb_team(reader, team->espn_id, now, s, upcoming, 4);
+    container->end();
+    if (r < 0) {
+      ESP_LOGW(TAG, "Schedule parse failed after %u bytes", (unsigned) reader.total());
+      return false;
+    }
+    ESP_LOGI(TAG, "Schedule: game %s kickoff %lld, %u upcoming (%u bytes)", r > 0 ? s.event_id.c_str() : "none",
+             (long long) s.kickoff_epoch, (unsigned) (upcoming != nullptr ? upcoming->size() : 0),
+             (unsigned) reader.total());
+    if (r > 0)
+      break;
+  }
+  out = std::move(s);
+  return true;
+}
+
+bool GamedayComponent::fetch_mlb_game_(const Schedule &schedule, GameSnapshot &out) {
+  std::string url = ::espn::mlb_game_url(schedule.event_id);
+  ESP_LOGD(TAG, "Fetching game: %s", url.c_str());
+  auto container = this->open_(url);
+  if (container == nullptr)
+    return false;
+  ContainerReader reader(container, this->espn_bytes_);
+  GameSnapshot g;
+  bool ok = ::espn::parse_mlb_game(reader, this->our_id_(), schedule.kickoff_epoch, g);
+  container->end();
+  if (!ok) {
+    ESP_LOGW(TAG, "Game %s not parsed (%u bytes)", schedule.event_id.c_str(), (unsigned) reader.total());
     return false;
   }
   ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
@@ -3019,7 +3103,9 @@ uint32_t GamedayComponent::interval_for_phase_() const {
       // A TBD game's kickoff is a midnight placeholder: nothing to close in on.
       int64_t now = (int64_t) this->time_->timestamp_now();
       int64_t until = this->game_.kickoff_epoch - now;
-      ms = until <= PRE_NEAR_SECONDS && !this->game_.time_tbd ? PRE_NEAR_INTERVAL : PRE_FAR_INTERVAL;
+      ms = ::espn::pre_poll_near(until, this->game_.time_tbd, this->game_.sport == ::espn::Sport::BASEBALL)
+               ? PRE_NEAR_INTERVAL
+               : PRE_FAR_INTERVAL;
       break;
     }
     default:
@@ -3076,6 +3162,14 @@ void GamedayComponent::start_job_() {
     j.our_id = this->visit_.away_id;
     this->start_worker_();
     return;
+  }
+  if (j.scan_leagues.size() > 1 && this->mlb_wait_.waiting(now)) {
+    // MLB refused or failed: the other leagues are scanned without it
+    for (size_t i = 0; i < j.scan_leagues.size(); i++)
+      if (::espn::is_mlb_stats(j.scan_leagues[i])) {
+        j.scan_leagues.erase(j.scan_leagues.begin() + i);
+        break;
+      }
   }
   if (this->favorites_mode_()) {
     this->start_fav_job_(now);
@@ -3182,7 +3276,13 @@ void GamedayComponent::start_job_() {
     // have not started, so prefer it when it has one.
     int64_t tnow = (int64_t) this->time_->timestamp_now();
     const ::espn::Upcoming *next = nullptr;
+    // Minor league baseball reads the team again instead: its team read is a
+    // few KB and finds game 2 of a doubleheader, whose start (no time yet,
+    // midnight Eastern) the list has as already past.
+    const bool reread = j.team != nullptr && ::espn::is_mlb_stats(j.team->league);
     for (const auto &u : this->upcoming_) {
+      if (reread)
+        break;
       if (u.kickoff_epoch > tnow && u.event_id != this->game_.event_id) {
         next = &u;
         break;
@@ -3298,8 +3398,14 @@ void GamedayComponent::run_job_() {
     std::vector<::espn::Final> *finals = j.want_finals ? &j.finals : nullptr;
     std::vector<::espn::Pending> *pending = j.want_finals ? &j.pending : nullptr;
     j.scan_ok = true;
-    for (League l : j.scan_leagues)
-      j.scan_ok = this->fetch_live_games_(l, j.live, j.next_kickoff, finals, pending) && j.scan_ok;
+    for (League l : j.scan_leagues) {
+      bool ok = this->fetch_live_games_(l, j.live, j.next_kickoff, finals, pending);
+      if (!ok && ::espn::is_mlb_stats(l) && j.scan_leagues.size() > 1) {
+        j.mlb_scan_failed = true;  // MLB's own backoff (apply_job_), not the scan's
+        continue;
+      }
+      j.scan_ok = ok && j.scan_ok;
+    }
     return;  // the main loop picks a game, then the next cycle polls it
   }
   if (j.need_upcoming) {
@@ -3416,6 +3522,12 @@ void GamedayComponent::apply_job_() {
     return;
   }
   if (j.need_scan) {
+    if (j.mlb_scan_failed) {
+      uint32_t ms = this->mlb_wait_.fail(j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), now);
+      ESP_LOGW(TAG, "Minor league scan failed: next try in %us", (unsigned) (ms / 1000));
+    } else if (j.read_mlb) {
+      this->mlb_wait_.clear();
+    }
     if (this->following_()) {
       // follow=1 came in while this scan ran: the followed game stays up.
       this->schedule_next_(this->interval_for_phase_());
@@ -4176,8 +4288,15 @@ GameSnapshot GamedayComponent::board_prev_(const GameSnapshot &cur) {
 std::string GamedayComponent::no_game_why_() const {
   if (this->game_.valid || this->demo_playing_())
     return "";
+  // The host the board's team comes from: "Can't reach MLB" for a minor
+  // league team (Favorite Teams: the one on the board, else the first).
+  const ::espn::Team *t = this->current_team_();
+  if (this->favorites_mode_())
+    t = this->fav_shown_ >= 0 && this->fav_shown_ < (int) this->fav_.size() ? this->fav_[this->fav_shown_].team
+                                                                            : this->fav_[0].team;
+  const ::espn::Source source = t != nullptr ? ::espn::league_source(t->league) : ::espn::Source::ESPN;
   return ::espn::no_game_text(this->clock_set_(), this->live_mode_(), this->no_game_confirmed_, this->misses_,
-                              this->captive_);
+                              this->captive_, source);
 }
 
 std::string GamedayComponent::standing_text_() const {
@@ -4716,8 +4835,10 @@ std::string GamedayComponent::racing_dates_(int64_t start, int64_t end) const {
 bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
   const uint8_t done = ::espn::kRecapMaxDays + 1;
   const uint16_t leagues = this->recap_leagues_();
+  // MLB refused or failed: its days wait, the other leagues' don't.
+  auto held = [this](uint8_t i) { return ::espn::is_mlb_stats((League) i) && this->mlb_wait_.waiting(millis()); };
   for (uint8_t i = 0; i < ::espn::kLeagueCount; i++) {
-    if (!(leagues & ::espn::recap_bit(i)))
+    if (!(leagues & ::espn::recap_bit(i)) || held(i))
       continue;
     int32_t today = ::espn::espn_day(tnow, i);
     uint8_t &w = this->recap_back_[i];
@@ -4742,7 +4863,7 @@ bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
   if (this->recap_scan_next_ != 0)
     return false;  // a game later today: that is the next kickoff
   for (uint8_t i = 0; i < ::espn::kLeagueCount; i++) {
-    if (!(leagues & ::espn::recap_bit(i)))
+    if (!(leagues & ::espn::recap_bit(i)) || held(i))
       continue;
     int32_t today = ::espn::espn_day(tnow, i);
     uint8_t &w = this->recap_fwd_[i];
@@ -5412,6 +5533,9 @@ std::string GamedayComponent::health_json_() {
   const uint32_t at = this->espn_answer_ms_.load();
   h.espn_status = this->espn_status_.load();
   h.espn_ago = at == 0 ? -1 : (int64_t) ((millis() - at) / 1000);
+  const uint32_t mlb_at = this->mlb_answer_ms_.load();
+  h.mlb_status = this->mlb_status_.load();
+  h.mlb_ago = mlb_at == 0 ? -1 : (int64_t) ((millis() - mlb_at) / 1000);
 #ifdef ESPHOME_PROJECT_VERSION
   h.version = ESPHOME_PROJECT_VERSION;
 #else

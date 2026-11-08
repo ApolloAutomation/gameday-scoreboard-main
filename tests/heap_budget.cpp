@@ -20,6 +20,7 @@
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
 #include "watch.h"
+#include "source_mlbstats.h"
 
 using namespace espn;
 
@@ -306,6 +307,48 @@ int main() {
     measure("schedule_ncaa", [&] {
       std::vector<Upcoming> up;
       return parse_upcoming(json, 2294, 4, up, true);
+    });
+  }
+
+  // Minor league baseball, from the MLB Stats API (source_mlbstats.h): a
+  // team read of twelve days with the Up next list, the far read of next
+  // season's first 88 games, the game poll (three dated entries for a game
+  // postponed twice, the largest), and a full day's scan at four levels.
+  {
+    // As read before the trip: every game not started yet, so the Up next
+    // list fills up.
+    std::string json = slurp("fixtures/mlbstats_team_dur_202604.json");
+    for (size_t at = json.find("\"codedGameState\":\"F\""); at != std::string::npos;
+         at = json.find("\"codedGameState\":\"F\"", at))
+      json[at + 18] = 'S';
+    measure("team_milb", [&] {
+      Schedule s;
+      std::vector<Upcoming> up;
+      return parse_mlb_team(json, 234, parse_iso8601_z("2026-04-06T12:00Z"), s, &up, 4) >= 0;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_far_dur.json");
+    measure("team_far_milb", [&] {
+      Schedule s;
+      return parse_mlb_team(json, 234, parse_iso8601_z("2026-11-08T23:00Z"), s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_game_postponed.json");
+    measure("poll_milb_game", [&] {
+      GameSnapshot g;
+      return parse_mlb_game(json, 234, parse_iso8601_z("2026-04-11T05:00Z"), g);
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_day_milb_20260814.json");
+    measure("scan_milb_day", [&] {
+      std::vector<LiveGame> live;
+      std::vector<Final> finals;
+      std::vector<Pending> pending;
+      int64_t next = 0;
+      return parse_mlb_day(json, live, &next, &finals, &pending);
     });
   }
 

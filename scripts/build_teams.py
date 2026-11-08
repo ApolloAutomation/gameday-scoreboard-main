@@ -22,9 +22,16 @@ school that just finished moving up; see mcbb_teams().
 A golf tour (PGA, LPGA) is followed like a team: its one row is the tour
 itself, with ESPN's league id as the team id; see golf_tour(). A racing
 series (F1, the NASCAR Cup Series) is the same; see racing_series().
+
+Minor league baseball (MILB) is not on ESPN: its teams come from the MLB
+Stats API's team list for Triple-A, Double-A, High-A and Single-A, with the
+MLB Stats team id as the id and the level's sport id (11 to 14) as the group;
+see milb_teams(). --season picks the season (default: this year, or next
+year from October, once the next season's teams are listed).
 """
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -35,6 +42,9 @@ SITE_ROOT = "https://site.api.espn.com/apis/site/v2/sports"
 STANDINGS_ROOT = "https://site.api.espn.com/apis/v2/sports"
 D1_GROUP = "50"  # NCAA Division I, the parent of every D1 basketball conference
 SITE = f"{SITE_ROOT}/football"
+MLB_STATS = "https://statsapi.mlb.com/api/v1"
+# Triple-A, Double-A, High-A and Single-A: MLB Stats sport ids, kept as the group.
+MILB_LEVELS = (11, 12, 13, 14)
 
 # ESPN conference group ids that make up the FBS.
 FBS_GROUPS = {
@@ -57,7 +67,7 @@ LEAGUES_H = COMPONENT / "leagues.h"
 
 # Fewest teams a fresh list may have before the run is treated as a bad read.
 MIN_TEAMS = {"NFL": 32, "NCAA": 120, "MLB": 30, "NBA": 30, "NHL": 32, "WNBA": 13, "MLS": 29, "EPL": 20, "MCBB": 350,
-             "PGA": 1, "LPGA": 1, "F1": 1, "NASCAR": 1}
+             "PGA": 1, "LPGA": 1, "F1": 1, "NASCAR": 1, "MILB": 120}
 
 # A golf tour is followed like a team: one row, ESPN's league id as the id.
 # ESPN calls the LPGA "Ladies Pro Golf Association"; the panel says "LPGA Tour".
@@ -148,6 +158,35 @@ def racing_series(lg, path):
     return [(lg, int(league["id"]), abbr, name, 0)]
 
 
+def milb_teams(season):
+    """Every active team at the four full-season levels, from the MLB Stats
+    API (the panel reads their games there too, source_mlbstats.cpp). The
+    group is the level's sport id, which the panel's far read asks for."""
+    data = get(f"{MLB_STATS}/teams?sportIds={','.join(map(str, MILB_LEVELS))}&season={season}")
+    teams = []
+    for t in data.get("teams", []):
+        level = int((t.get("sport") or {}).get("id", 0))
+        if level not in MILB_LEVELS or not t.get("active", True):
+            continue
+        teams.append(("MILB", int(t["id"]), t["abbreviation"], t["name"], level))
+    return teams
+
+
+def milb_season(asked):
+    """The season to list: the one asked for, else this year, or from October
+    next year's when it is already listed in full."""
+    if asked:
+        return asked
+    today = datetime.date.today()
+    if today.month >= 10:
+        try:
+            if len(milb_teams(today.year + 1)) >= MIN_TEAMS["MILB"]:
+                return today.year + 1
+        except Exception as ex:  # not listed yet: this season's
+            print(f"MILB {today.year + 1}: {ex}", file=sys.stderr)
+    return today.year
+
+
 def cstr(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -174,6 +213,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--league", action="append", default=[], help="league to rebuild, e.g. mlb (repeatable)")
     ap.add_argument("--rewrite", action="store_true", help="rebuild nothing, only re-emit the header")
+    ap.add_argument("--season", type=int, default=0, help="MILB: the season whose teams to list")
     args = ap.parse_args()
     table = league_table()
     paths = dict(table)
@@ -196,6 +236,10 @@ def main():
             fresh = golf_tour(lg, paths[lg])
         elif paths[lg].startswith("racing/"):
             fresh = racing_series(lg, paths[lg])
+        elif lg == "MILB":
+            season = milb_season(args.season)
+            print(f"MILB: season {season}")
+            fresh = milb_teams(season)
         else:
             fresh = pro_teams(lg, paths[lg])
         print(f"{lg}: {len(fresh)} teams")
@@ -218,7 +262,10 @@ def main():
         "  uint32_t espn_id;",
         "  const char *abbr;",
         "  const char *name;",
-        "  uint32_t group;  // conference group id for the college scoreboard, 0 otherwise",
+        "  // college: the conference group id for the scoreboard; minor league",
+        "  // baseball: the level's MLB Stats sport id (11 Triple-A to 14 Single-A);",
+        "  // 0 otherwise",
+        "  uint32_t group;",
         "};",
         "",
         "constexpr Team kTeams[] = {",

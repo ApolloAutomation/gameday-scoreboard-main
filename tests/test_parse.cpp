@@ -3536,6 +3536,7 @@ int run_alert_tests(int &checks);  // test_alerts.cpp
 int run_bet_tests(int &checks);  // test_bets.cpp
 int run_watch_tests(int &checks);  // test_watch.cpp
 int run_player_tests(int &checks);  // test_players.cpp
+int run_mlbstats_tests(int &checks);  // test_mlbstats.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -5871,6 +5872,8 @@ static void test_health_json() {
   h.rssi = INT32_MIN;
   h.espn_status = 999;
   h.espn_ago = UINT32_MAX / 1000;
+  h.mlb_status = 999;
+  h.mlb_ago = UINT32_MAX / 1000;
   h.version = "2026.12.31-beta.1234567";
   h.built = INT64_MAX;
   h.channel = "stable";
@@ -7394,7 +7397,10 @@ static void test_racing_urls() {
     }
   }
   CHECK(lpga < kTeamCount && f1 == lpga + 1 && nascar == lpga + 2);
-  CHECK(nascar == kTeamCount - 1);  // appended: every earlier option keeps its place
+  // Appended: every earlier option keeps its place. Only leagues added later
+  // (minor league baseball) come after.
+  for (size_t i = nascar + 1; i < kTeamCount; i++)
+    CHECK((int) kTeams[i].league > (int) League::NASCAR);
 }
 
 // Sao Paulo, Saturday morning: FP1 and FP2 run, FP3 at 14:30Z
@@ -8932,6 +8938,7 @@ int main() {
   failures += run_bet_tests(checks);
   failures += run_watch_tests(checks);
   failures += run_player_tests(checks);
+  failures += run_mlbstats_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

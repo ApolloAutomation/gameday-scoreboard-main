@@ -83,6 +83,40 @@ struct Backoff {
   }
 };
 
+// The run of failed reads and the wait it started, for one host: the MLB
+// Stats API keeps its own (minor league baseball), so a refusal there never
+// holds back ESPN's reads, nor ESPN's a minor league team's.
+struct HostWait {
+  Backoff run;
+  uint32_t since_ms{0};
+  uint32_t wait_ms{0};  // 0: no wait running
+
+  uint32_t fail(bool refused, uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+    this->wait_ms = this->run.fail(refused, retry_after_ms, rnd);
+    this->since_ms = now;
+    return this->wait_ms;
+  }
+  void clear() {
+    this->run.clear();
+    this->wait_ms = 0;
+  }
+  // Read now, but keep the run so another failure waits longer.
+  void end_wait() { this->wait_ms = 0; }
+  bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
+};
+
+// A game not started yet is read every minute in its last hour and every 15
+// before. One with no start time yet sits at midnight Eastern of its day
+// (tbd_day_epoch): baseball's is game 2 of a doubleheader, which starts
+// about half an hour after game 1 ends, so on its day it is read as if
+// within the hour. until_s is the start minus now.
+static const int64_t kPreNearSeconds = 60 * 60;
+inline bool pre_poll_near(int64_t until_s, bool time_tbd, bool baseball) {
+  if (!time_tbd)
+    return until_s <= kPreNearSeconds;
+  return baseball && until_s <= 0 && until_s > -30 * 3600;
+}
+
 // One more read missed. The ticker and the device page warn from three in a
 // row, so the count stops at 255 instead of wrapping to 0 and dropping the
 // warning while ESPN is still out of reach.

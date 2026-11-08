@@ -62,8 +62,9 @@ _LEAGUE_RE = re.compile(r'\{League::(\w+),\s*"(\w+)",\s*"[^"]+",\s*"([^"]+)",')
 _TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
 # Leagues left out of Home Assistant's team select. Men's college
 # basketball's ~365 teams would push the options past Home Assistant's 16 KB
-# attribute limit; the device page lists them.
-_HA_SKIP_LEAGUES = {"MCBB"}
+# attribute limit, and minor league baseball's 120 would take them from about
+# 9 KB to 12; the device page lists both.
+_HA_SKIP_LEAGUES = {"MCBB", "MILB"}
 
 
 def team_options():

@@ -511,12 +511,13 @@ inline bool is_college(League league) { return league == League::NCAA || league 
 // The board and ticker with no game on the board, in place of the page's
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
-// ESPN has never said this team has no game. Empty for the default, and in
+// ESPN has never said this team has no game ("Can't reach MLB" for a team
+// whose games come from the MLB Stats API, source). Empty for the default, and in
 // a live mode, which has its own words. captive (captive.h: the Wi-Fi answered
 // with a sign-in page and ESPN has not answered since) wins over all of it,
 // live modes included, since nothing can be read until it ends.
 std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses,
-                         bool captive = false);
+                         bool captive = false, Source source = Source::ESPN);
 // Bench only. Every ESPN URL starts with this root; a bench build points
 // it at a host that does not exist to make ESPN unreachable without
 // touching the network. Pass a string literal: only the pointer is kept,
@@ -831,6 +832,8 @@ std::string board_card_text(const GameSnapshot &g, bool wide, const std::string 
 std::string board_event_name(Sport sport, const std::string &name, size_t max);
 
 namespace detail {
+// A UTC epoch's calendar date (y, m 1-12, d 1-31), with no libc.
+void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
 // Ticker helpers shared by the sport files.
 void add_part(std::string &out, const std::string &part);
 // Text helpers shared by the leaderboard sports (sport_golf.cpp): s cut to

@@ -214,14 +214,17 @@ struct Health {
   const char *version;  // the release, "2026.10.0"
   int64_t built;        // the build's compile time, Unix seconds
   const char *channel;  // stable, beta, bar or none
+  int mlb_status{0};    // the same for the MLB Stats API (minor league baseball)
+  int64_t mlb_ago{-1};  // -1 before its first read: no key
 };
 
 // Room for the longest "health" object (GamedayComponent::health_json_
 // sends "{}" when it doesn't fit, and the device page hides Diagnostics).
-static const size_t kHealthJsonSize = 384;
+static const size_t kHealthJsonSize = 416;
 
 // The "health" object in /gameday/state. Optional keys are left out rather
-// than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read.
+// than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read,
+// mlb before a minor league read.
 // Returns what snprintf does; the strings are the firmware's own, no quotes.
 inline int health_json(char *buf, size_t size, const Health &h) {
   char fault[64] = "";
@@ -235,9 +238,12 @@ inline int health_json(char *buf, size_t size, const Health &h) {
   char rssi[24] = "";
   if (h.wifi)
     snprintf(rssi, sizeof(rssi), ",\"rssi\":%d", h.rssi);
-  char espn[48] = "";
+  char espn[96] = "";
+  int at = 0;
   if (h.espn_ago >= 0)
-    snprintf(espn, sizeof(espn), ",\"espn\":%d,\"espn_ago\":%lld", h.espn_status, (long long) h.espn_ago);
+    at = snprintf(espn, sizeof(espn), ",\"espn\":%d,\"espn_ago\":%lld", h.espn_status, (long long) h.espn_ago);
+  if (h.mlb_ago >= 0 && at >= 0 && (size_t) at < sizeof(espn))
+    snprintf(espn + at, sizeof(espn) - at, ",\"mlb\":%d,\"mlb_ago\":%lld", h.mlb_status, (long long) h.mlb_ago);
   return snprintf(buf, size,
                   "{\"up\":%lld,\"start\":\"%s\",\"boots\":%u%s,\"heap_kb\":%.1f,\"block_kb\":%.1f,"
                   "\"psram_kb\":%.1f%s%s,\"version\":\"%s\",\"built\":%lld,\"channel\":\"%s\"}",

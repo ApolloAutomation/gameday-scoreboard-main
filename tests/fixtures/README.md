@@ -195,6 +195,37 @@ dropped; nothing the panel reads changes:
 | `racing_calendar_f1_2026.json` | `.../racing/f1/scoreboard?dates=20261110`: no events, the 2026 calendar of 25 races. Entries have no `id` (it is in `event.$ref`), and their times run 3 hours after the header's |
 | `racing_calendar_nascar_2026.json` | `.../racing/nascar-premier/scoreboard?dates=20261110`: the 2026 calendar of 40 races, exhibitions included |
 
+Minor league baseball, from the MLB Stats API's schedule endpoint
+(`https://statsapi.mlb.com/api/v1/schedule`), recorded 2026-11-08 between
+22:50 and 23:30 UTC with a `curl/8.0` User-Agent, each with the exact query
+`source_mlbstats.cpp` builds (its `fields=` list cuts the document on the
+server; `test_mlbstats.cpp` checks the URLs). Minor league baseball was
+between seasons, so the live documents are winter league games (sport 17,
+the Dominican, Venezuelan, Puerto Rican and Mexican Pacific leagues), which
+the same endpoint serves in the same shape; the team, far, final and
+postponed documents are minor league ones:
+
+| File | Source |
+| --- | --- |
+| `mlbstats_team_dur_202604.json` | Team read, Durham Bulls (234, Triple-A), `startDate=2026-04-06&endDate=2026-04-17`: 815849 at SWB postponed 4/7 (cold), listed again 4/10 as game 2 of a doubleheader (no start time, postponed again) and 4/11 as game 2 (final), a doubleheader each day. Every game over; the tests set the ones from a given day on back to Scheduled to read it as on that morning |
+| `mlbstats_team_none.json` | Team read, Durham, `startDate=2026-11-07&endDate=2026-11-18`: `{"dates":[]}` between seasons |
+| `mlbstats_far_dur.json` | Far read, Durham, `sportId=11&startDate=2026-11-19&endDate=2027-07-06`: next season's first 88 games, the opener 860674 on 2027-03-26 |
+| `mlbstats_game_final.json` | Game read, 816688 MEM @ DUR 2026-08-14, Final 12-2, probable pitchers, the last count and runners still in the line score |
+| `mlbstats_game_final_extra.json` | 815051 RNO @ RR 2026-08-01, Final 9-8 in 11 |
+| `mlbstats_game_final_short.json` | 816400 MEM @ JAX 2026-08-02, called in the 7th of 9 for rain (statusCode FR) |
+| `mlbstats_game_postponed.json` | 815849 DUR @ SWB: three dated entries, postponed (DC), postponed (DI, game 2, no start time), final |
+| `mlbstats_game_pregame.json` | 850461 MXC @ MOC, Pre-Game, the line score already there with an empty count |
+| `mlbstats_game_scheduled.json` | 850462 HER @ GSV, Scheduled, no line score |
+| `mlbstats_game_top.json` | 851475 LIC @ ESC, Top 6th, 2-0, two out, runner on third |
+| `mlbstats_game_middle.json` | 851475, the next read: Middle 6th, LIC scored a run in between |
+| `mlbstats_game_loaded.json` | 851475, Bot 6th, bases loaded after a walk (the count still 4-2) |
+| `mlbstats_game_bottom.json` | 870006 MAR @ ORI, Bot 9th, 2-2, none out |
+| `mlbstats_game_end.json` | 870006, End 9th, MAR 10-6 |
+| `mlbstats_game_over.json` | 870006, the next read: Game Over (codedGameState O), MAR wins |
+| `mlbstats_game_delay.json` | 851497 AGU @ GIG, rain delay in the Top 6th (statusCode IR, reason Rain) with runners on second and third |
+| `mlbstats_day_winter.json` | Day read, `sportId=17&date=2026-11-08` at 23:16 UTC: eight games on (one in a rain delay), one final, seven to come (one listed for 21:21 UTC still Scheduled) |
+| `mlbstats_day_milb_20260814.json` | Day read at all four levels, `date=2026-08-14`: 58 finals (one in 11 innings) and three postponed, listed in start order with the postponed ones last |
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device
