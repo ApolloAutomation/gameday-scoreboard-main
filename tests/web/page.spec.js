@@ -2297,3 +2297,153 @@ test("a night time cleared in its field isn't posted", async ({ page, request })
   await page.locator("#nightstart").fill("21:45");
   await expectSet(request, { nightstart: "21:45" });
 });
+
+// Manual bets (components/gameday/bets.h): the Bets card, folded away at the
+// end, and the bets on the board's game under the board.
+const BET = { slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" };
+const openBets = async (page) => {
+  await page.locator("#betCard summary").click();
+  await expect(page.locator("#betAdd")).toBeVisible();
+};
+
+test("the Bets card adds a spread on a team from the picker, and the board shows it on its game", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#betCard")).toBeVisible();
+  await expect(page.locator("#betAdd")).toBeHidden();  // folded away until opened
+  await openBets(page);
+  await expect(page.locator("#betList")).toHaveText("No bets yet.");
+  await expect(page.locator("#betline")).toBeHidden();
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the bet's team");
+  // A golf tour or a racing series takes no bet.
+  await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
+  await page.locator("#q").fill("Dallas Cowboys");
+  await page.locator("#tiles .tile", { hasText: "Dallas Cowboys" }).click();
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  await expect(page.locator("#betTeam")).toHaveText("Dallas Cowboys");
+  await page.locator("#betLine").fill("-3.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "1,nfl,6,spread,-3.5" });
+  await expect(page.locator("#toast")).toHaveText("Added DAL -3.5");
+  await expect(page.locator("#betList .betrow label")).toHaveCount(1);
+  await expect(page.locator("#betList .betrow label")).toContainText("DAL -3.5");
+  await expect(page.locator("#betList .betrow small")).toContainText("DAL vs PHI");
+  await expect(page.locator("#betSum")).toHaveText("1 of 8");
+  // Before kickoff the board shows the line only.
+  await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5"]);
+  // The team stays picked for the next bet: an over on the same game.
+  await page.locator("#betType").selectOption("over");
+  await expect(page.locator("#betLineHint")).toHaveText("Total points in the game, like 47.5");
+  await page.locator("#betLine").fill("47.5");
+  await page.locator("#betLine").press("Enter");
+  await expectSet(request, { bet: "2,nfl,6,over,47.5" });
+  await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5", "OVER 47.5"]);
+});
+
+test("the Bets card says what's wrong with a bet before posting it", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  const msg = page.locator("#betMsg");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Pick the team first.");
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("Buffalo");
+  await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Type the spread, like -3.5 or +7.");
+  await expect(page.locator("#betLine")).toBeFocused();
+  await page.locator("#betLine").fill("3.25");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Lines go in whole or half points, like 3 or 3.5.");
+  await page.locator("#betLine").fill("three");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("That isn't a number. Type it like -3.5 or +7.");
+  await page.locator("#betLine").fill("-120");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("The panel takes spreads up to 99.5.");
+  await page.locator("#betType").selectOption("under");
+  await expect(msg).toBeHidden();
+  await page.locator("#betLine").fill("-44");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("A total has no + or -. Type it like 47.5.");
+  await page.locator("#betLine").fill("0");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("A total is more than 0.");
+  expect((await sets(request)).filter((q) => q.bet)).toEqual([]);
+  // Pick'em is a spread of 0, a moneyline has no line, and "+7.0" is +7.
+  await page.locator("#betType").selectOption("spread");
+  await page.locator("#betLine").fill("PK");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "1,nfl,2,spread,0" });
+  await expect(msg).toBeHidden();
+  await page.locator("#betType").selectOption("ml");
+  await expect(page.locator("#betLineRow")).toBeHidden();
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "2,nfl,2,ml," });
+  await page.locator("#betType").selectOption("spread");
+  await page.locator("#betLine").fill("+7.0");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "3,nfl,2,spread,+7" });
+  await expect(page.locator("#betList .betrow")).toHaveCount(3);
+  await page.locator("#betLine").fill("7");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("You have that bet already.");
+});
+
+test("a full Bets card says to remove one first", async ({ page, request }) => {
+  const bets = [1, 2, 3, 4, 5, 6, 7, 8].map((slot) => ({ ...BET, slot, half: -slot * 2, text: "DAL -" + slot, st: "waiting" }));
+  await reset(request, { bets });
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#betSum")).toHaveText("8 of 8");
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("Buffalo");
+  await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText("All 8 bets are in use. Remove one first.");
+  expect((await sets(request)).filter((q) => q.bet)).toEqual([]);
+});
+
+test("a bet in a live game shows where it stands on the board and in the card, and can be removed", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  const live = { ...BET, st: "covering", ev: "401772001", kick: g.kick, oa: "PHI", ts: 14, os: 10 };
+  const total = { slot: 3, l: "nfl", id: 21, abbr: "PHI", type: "under", half: 47, text: "UNDER 23.5", st: "not_covering",
+    ev: "401772001", kick: g.kick, oa: "DAL", ts: 10, os: 14 };
+  const waiting = { slot: 5, l: "nba", id: 2, abbr: "BOS", type: "ml", half: 0, text: "BOS ML", st: "waiting" };
+  const won = { slot: 6, l: "nfl", id: 21, abbr: "PHI", type: "spread", half: 7, text: "PHI +3.5", st: "won",
+    ev: "401771999", kick: g.kick - 7 * 86400, oa: "NYG", ts: 20, os: 21 };
+  await reset(request, { game: { ...g, ...LIVE }, bets: [live, total, waiting, won] });
+  await page.goto("/");
+  await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5 COVERING", "UNDER 23.5 NOT COVERING"]);
+  await expect(page.locator("#betline .bet").first()).toHaveClass(/good/);
+  await expect(page.locator("#betline .bet").last()).toHaveClass(/bad/);
+  await openBets(page);
+  const rows = page.locator("#betList .betrow");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0).locator("small")).toHaveText("DAL vs PHI · 14-10");
+  await expect(rows.nth(0).locator(".bet")).toHaveText("COVERING");
+  await expect(rows.nth(1).locator(".bet")).toHaveText("NOT COVERING");
+  await expect(rows.nth(2).locator("small")).toHaveText("Starts when the panel shows a BOS game");
+  await expect(rows.nth(2).locator(".bet")).toHaveCount(0);
+  await expect(rows.nth(3).locator("small")).toHaveText("PHI vs NYG · Final 20-21");
+  await expect(rows.nth(3).locator(".bet")).toHaveText("WON");
+  await rows.nth(0).getByRole("button", { name: "Remove DAL -3.5" }).click();
+  await expectSet(request, { betdel: "1" });
+  await expect(page.locator("#toast")).toHaveText("Removed DAL -3.5");
+  await expect(rows).toHaveCount(3);
+  await expect(page.locator("#betline .bet")).toHaveText(["UNDER 23.5 NOT COVERING"]);
+});
+
+test("firmware without bets has no Bets card", async ({ page, request }) => {
+  await reset(request, { bets: null, betmax: null });
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  await expect(page.locator("#betCard")).toBeHidden();
+  await expect(page.locator("#betline")).toBeHidden();
+});
