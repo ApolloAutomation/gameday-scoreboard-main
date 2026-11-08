@@ -197,7 +197,7 @@ button { font: inherit; color: inherit; }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: clamp(28px, 8vw, 64px); font-weight: 900; letter-spacing: .04em; color: #fff;
   text-shadow: 0 2px 12px rgba(0,0,0,.6); border-radius: inherit; opacity: 0; pointer-events: none;
-  transition: opacity .25s;
+  transition: opacity .25s; text-align: center; white-space: pre-line;
 }
 .splash.on { opacity: 1; animation: splashpop .5s ease-out; }
 @keyframes splashpop { 0% { transform: scale(.7); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
