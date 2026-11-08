@@ -88,7 +88,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`,
-  `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`,
+  `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`,
   `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes

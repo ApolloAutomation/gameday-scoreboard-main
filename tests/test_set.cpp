@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "follow.h"
 #include "set_request.h"
 
 using namespace espn;
@@ -47,12 +48,15 @@ std::string keys(const std::vector<League> &leagues) {
 // What the firmware keeps for the settings a set request reaches, and what
 // apply_set_'s setters store. PanelLayout's 1 to max_cols check (2 in
 // gameday-common.yaml) is the one refusal outside set_request.h.
+// follow is the Follow this game pin, kept in memory only; board says the
+// mode has a game of its own on the panel to follow (not Live games'
+// fallback card or finals rotation, nor an empty board).
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
   int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
-  bool bootaddr{true}, autoupd{false}, beta{false};
+  bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, follow{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
 };
@@ -121,27 +125,53 @@ void load(Settings &s, JsonObjectConst o) {
   flag("bootaddr", s.bootaddr);
   flag("autoupd", s.autoupd);
   flag("beta", s.beta);
+  flag("board", s.board);
+  flag("follow", s.follow);
 }
 
+bool any_favorite(const Settings &s) {
+  for (const auto &f : s.favs)
+    if (f.id != 0)
+      return true;
+  return false;
+}
+
+// A change to what the panel follows lets the Follow this game pin go: a new
+// team or mode (reset_game_), any favorites post (favorites_changed_) and new
+// leagues (set_live_mask_). The same team, mode or leagues again change nothing.
 void apply(Settings &s, const SetOp &op) {
   switch (op.kind) {
     case SetKind::TEAM:
+      if (!(op.team == s.team))
+        s.follow = false;
       s.team = op.team;
       if (op.team.id != 0)
         s.team_league = op.team.league;
       break;
-    case SetKind::MODE: s.mode = op.value; break;
+    case SetKind::MODE:
+      if (op.value != s.mode)
+        s.follow = false;
+      s.mode = op.value;
+      break;
     case SetKind::ROTATE: s.rotate = op.value; break;
     case SetKind::LOCKON: s.lockon = op.value; break;
     case SetKind::RELEASE: s.release = op.value; break;
     case SetKind::COLLIDE: s.collide = op.on; break;
     case SetKind::TODAY: s.today = op.on; break;
-    case SetKind::LIVE: s.live_mask = op.mask; break;
+    case SetKind::LIVE:
+      if (op.mask != s.live_mask)
+        s.follow = false;
+      s.live_mask = op.mask;
+      break;
     case SetKind::FAVS:
       for (int i = 0; i < kFavMax; i++)
         s.favs[i] = i < (int) op.teams.size() ? op.teams[i] : TeamRef{};
+      s.follow = false;
       break;
-    case SetKind::FAV_SLOT: s.favs[op.slot - 1] = op.team; break;
+    case SetKind::FAV_SLOT:
+      s.favs[op.slot - 1] = op.team;
+      s.follow = false;
+      break;
     case SetKind::TZ: s.tz = op.value; break;
     case SetKind::TZ_AUTO: s.tz_auto = op.on; break;
     case SetKind::DOWN: s.down = op.on; break;
@@ -153,6 +183,13 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::BOOTADDR: s.bootaddr = op.on; break;
     case SetKind::AUTOUPD: s.autoupd = op.on; break;
     case SetKind::BETA: s.beta = op.on; break;
+    case SetKind::FOLLOW:
+      // set_follow: a follow=1 with nothing to follow leaves the pin as it was.
+      if (!op.on)
+        s.follow = false;
+      else if (s.board && follow_mode_ok((uint8_t) s.mode, any_favorite(s)))
+        s.follow = true;
+      break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -199,6 +236,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["autoupd"] = s.autoupd;
   doc["beta"] = s.beta;
   doc["panels"] = s.panels;
+  doc["follow"] = s.follow;
 }
 
 void test_fixture_cases() {
@@ -280,6 +318,10 @@ void test_parse_set() {
   SCHECK(!parse_set("tz", "-1", op, kFavMax), "tz -1");
   SCHECK(parse_set("down", "1", op, kFavMax) && op.on, "down 1");
   SCHECK(parse_set("down", "on", op, kFavMax) && !op.on, "down on is off");
+  SCHECK(parse_set("follow", "1", op, kFavMax) && op.kind == SetKind::FOLLOW && op.on, "follow 1");
+  SCHECK(parse_set("follow", "0", op, kFavMax) && op.kind == SetKind::FOLLOW && !op.on, "follow 0");
+  SCHECK(parse_set("follow", "", op, kFavMax) && !op.on, "an empty follow lets go");
+  SCHECK(std::string(kSetKeys[0]) == "follow", "follow applies before the changes that let it go");
 
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {

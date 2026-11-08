@@ -25,6 +25,7 @@
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"
+#include "follow.h"
 #include "guard.h"
 #include "health.h"
 #include "offseason.h"
@@ -158,6 +159,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
+//                                    follow=0/1 (Live games and Favorite teams: keep the game on
+//                                    the board until a while after its final; memory only, follow.h)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -210,6 +213,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_release_seconds(int seconds);
   void set_collision_alternate(bool alternate);
   void set_today_only(bool on);
+  // Follow this game (follow.h): 1 pins the game on the board in Live games
+  // or Favorite teams, 0 lets go. Nothing to follow is logged and ignored.
+  void set_follow(bool on);
   // Live mode's leagues as keys ("nfl,mlb"); "" = the leagues you follow.
   void set_live_leagues(const std::string &keys);
   void set_live_mask_(uint16_t mask);
@@ -763,6 +769,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool fav_choose_(int64_t now_epoch);  // true when the shown entry changed
   void fav_no_event_(FavEntry &e, bool shown, int64_t now_epoch);
   const GameSnapshot &ha_game_() const;  // the game Home Assistant's sensors follow
+  // Follow this game: the pin on the board's game, in memory only. The mode
+  // asks following_() where it would move on; true while the pin holds, and
+  // it lets go once the final has been up for the mode's own time.
+  ::espn::FollowPin follow_;
+  bool following_();
   void start_fav_job_(uint32_t now);
   void apply_fav_job_(uint32_t now);
   uint32_t live_away_id_{0};      // the followed live game's away team

@@ -19,11 +19,13 @@
 namespace espn {
 
 // In the order the firmware applies them, whatever order the request uses.
-constexpr const char *kSetKeys[] = {"team",   "mode",     "rotate", "fav1",    "fav2",    "fav3",
-                                    "fav4",   "tz",       "tzauto", "down",    "play",    "odds",
-                                    "opp",    "panels",   "bootaddr", "lockon", "release", "collide",
-                                    "favs",   "today",    "live",   "autoupd", "count",   "match",
-                                    "beta"};
+// follow comes first: it pins the game the page showed, and a change later in
+// the same request that moves the board lets the pin go again.
+constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "fav1",     "fav2",
+                                    "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
+                                    "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
+                                    "collide", "favs",   "today",   "live",   "autoupd",  "count",
+                                    "match",   "beta"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -170,6 +172,7 @@ enum class SetKind : uint8_t {
   COUNT,     // on, baseball
   MATCH,     // on, soccer
   BETA,      // on, release builds only
+  FOLLOW,    // on: pin the game on the board (follow.h); memory only
 };
 
 struct TeamRef {
@@ -300,6 +303,10 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::AUTOUPD);
   if (k == "beta")
     return on(SetKind::BETA);
+  // A follow=1 with nothing to follow is the firmware's to ignore, not a
+  // refused value.
+  if (k == "follow")
+    return on(SetKind::FOLLOW);
   return false;
 }
 

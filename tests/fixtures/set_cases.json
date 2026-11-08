@@ -7,13 +7,16 @@
     "kSetKeys order) and compares the keys in expect. Teams are written league:id, \"\" for none.",
     "status 400: no key in the request is one the firmware takes, so nothing changes.",
     "The panel keeps the saved team's league byte after the team is cleared, and a fresh panel's",
-    "is NFL, so Live auto counts that league too (team_league in start sets it)."
+    "is NFL, so Live auto counts that league too (team_league in start sets it).",
+    "follow is the Follow this game pin, kept in memory only. board (start only) says the mode",
+    "has a game of its own on the panel to follow: not Live games' fallback card or finals, nor",
+    "an empty board. A new team or mode, any favorites post or new leagues let the pin go."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
-    "autoupd": false, "beta": false, "panels": 1
+    "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -125,6 +128,30 @@
     {"name": "more panels than the build drives is refused", "set": [["panels", "3"]], "expect": {"panels": 1}},
     {"name": "a panel count past a byte is refused, not wrapped to one panel", "start": {"panels": 2}, "set": [["panels", "257"]], "expect": {"panels": 2}},
     {"name": "a negative panel count is refused, not wrapped to two panels", "set": [["panels", "-254"]], "expect": {"panels": 1}},
+
+    {"name": "follow pins the game in Live games", "start": {"mode": 5}, "set": [["follow", "1"]], "expect": {"follow": true}},
+    {"name": "follow pins the game in an old live mode", "start": {"mode": 3}, "set": [["follow", "1"]], "expect": {"follow": true}},
+    {"name": "follow pins a favorite's game in Favorite teams", "start": {"mode": 4, "favs": ["nfl:6", "", "", ""]}, "set": [["follow", "1"]], "expect": {"follow": true}},
+    {"name": "follow in My team is ignored", "set": [["follow", "1"]], "expect": {"follow": false, "mode": 0}},
+    {"name": "follow in Favorite teams with no favorites is ignored", "start": {"mode": 4}, "set": [["follow", "1"]], "expect": {"follow": false}},
+    {"name": "follow with nothing of the mode's own on the board is ignored", "start": {"mode": 5, "board": false}, "set": [["follow", "1"]], "expect": {"follow": false}},
+    {"name": "an ignored follow doesn't stop the rest", "set": [["follow", "1"], ["rotate", "5"]], "expect": {"follow": false, "rotate": 5}},
+    {"name": "follow 0 lets go", "start": {"mode": 5, "follow": true}, "set": [["follow", "0"]], "expect": {"follow": false}},
+    {"name": "follow is on for 1 only, like the switches", "start": {"mode": 5, "follow": true}, "set": [["follow", "on"]], "expect": {"follow": false}},
+    {"name": "follow 1 again keeps the pin", "start": {"mode": 5, "follow": true}, "set": [["follow", "1"]], "expect": {"follow": true}},
+    {"name": "another mode lets the pin go", "start": {"mode": 5, "follow": true}, "set": [["mode", "4"]], "expect": {"follow": false}},
+    {"name": "the same mode keeps the pin", "start": {"mode": 5, "follow": true}, "set": [["mode", "5"]], "expect": {"follow": true}},
+    {"name": "a refused mode keeps the pin", "start": {"mode": 5, "follow": true}, "set": [["mode", "9"]], "expect": {"follow": true, "mode": 5}},
+    {"name": "another team lets the pin go", "start": {"mode": 5, "follow": true}, "set": [["team", "mlb:15"]], "expect": {"follow": false}},
+    {"name": "clearing the team lets the pin go", "start": {"mode": 5, "follow": true}, "set": [["team", "none"]], "expect": {"follow": false}},
+    {"name": "the same team keeps the pin", "start": {"mode": 5, "follow": true}, "set": [["team", "nfl:6"]], "expect": {"follow": true}},
+    {"name": "a favorites post lets the pin go", "start": {"mode": 4, "favs": ["nfl:6", "", "", ""], "follow": true}, "set": [["favs", "nfl:6,mlb:15"]], "expect": {"follow": false}},
+    {"name": "a favorite slot lets the pin go in Live games too", "start": {"mode": 5, "follow": true}, "set": [["fav2", "mlb:15"]], "expect": {"follow": false}},
+    {"name": "a refused favorite slot keeps the pin", "start": {"mode": 5, "follow": true}, "set": [["fav2", "nfl:99999"]], "expect": {"follow": true}},
+    {"name": "new leagues let the pin go", "start": {"mode": 5, "follow": true}, "set": [["live", "mlb"]], "expect": {"follow": false}},
+    {"name": "the same leagues keep the pin", "start": {"mode": 5, "follow": true}, "set": [["live", ""]], "expect": {"follow": true}},
+    {"name": "other settings keep the pin", "start": {"mode": 5, "follow": true}, "set": [["rotate", "10"], ["today", "1"], ["release", "60"]], "expect": {"follow": true, "rotate": 10}},
+    {"name": "follow applies first, so a mode change in the same request lets it go", "start": {"mode": 5}, "set": [["mode", "4"], ["follow", "1"]], "expect": {"follow": false, "mode": 4}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

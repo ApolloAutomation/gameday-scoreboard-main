@@ -95,7 +95,8 @@ INITIAL = {
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
     "autoupd": False, "beta": False,
-    "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "espn_kb": 412, "espn_reads": 23,
+    "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
+    "espn_kb": 412, "espn_reads": 23,
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
                "heap_kb": 143.2, "block_kb": 40.0, "psram_kb": 4100.5, "rssi": -58, "espn": 200,
@@ -205,18 +206,45 @@ def state_doc():
     return STATE
 
 
+def can_follow():
+    """set_follow() (follow.h): the mode put the game on the board itself. Live games
+    (and the old live modes 1-3) with a game it picked, not the team's card or the
+    finals, or Favorite teams with favorites. My team has nothing to pin."""
+    g = STATE.get("game") or {}
+    up = g.get("s", "NOT_FOUND") != "NOT_FOUND" and bool(g.get("id")) and g.get("sport") not in (5, 6)
+    if STATE["mode"] == 4:
+        return up and any(STATE["favs"])
+    return up and STATE["mode"] in (1, 2, 3, 5) and not STATE.get("fallback") and not STATE.get("recap")
+
+
+def let_go():
+    """A new team or mode, any favorites post and new leagues let the pin go."""
+    STATE["follow"] = False
+
+
 def apply_set(kv):
     """GamedayComponent::apply_set_ through set_request.h's parse_set."""
     for k, v in kv:
-        if k == "team":
+        if k == "follow":
+            if v != "1":
+                let_go()
+            elif can_follow():
+                STATE["follow"] = True
+        elif k == "team":
             ref = parse_team_ref(v)
             if ref:
+                if (STATE["team"].get("l"), STATE["team"].get("id")) != ref:
+                    let_go()
                 STATE["team"] = team(*ref)
                 TEAM_LEAGUE[0] = ref[0]
             elif v == "none":
+                if STATE["team"]:
+                    let_go()
                 STATE["team"] = {}
         elif k == "mode":
             if 0 <= atoi(v) < LIMITS["kModeCount"]:
+                if atoi(v) != STATE["mode"]:
+                    let_go()
                 STATE["mode"] = atoi(v)
         elif k == "rotate":
             STATE["rotate"] = clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes")
@@ -236,6 +264,7 @@ def apply_set(kv):
                     refs.append(ref)
             # set_favorites_(): the list in order, then empty slots up to the four remote slots.
             STATE["favs"] = [team(*r) for r in refs] + [{}] * (4 - len(refs))
+            let_go()
         elif k in ("fav1", "fav2", "fav3", "fav4"):
             ref = parse_team_ref(v)
             if ref and ref[0] in BOARD:
@@ -243,10 +272,13 @@ def apply_set(kv):
             if ref is None and v not in ("none", ""):
                 continue
             STATE["favs"][int(k[3]) - 1] = team(*ref) if ref else {}
+            let_go()
         elif k == "today":
             STATE["today"] = v == "1"
         elif k == "live":
             keys = [lg for lg in LEAGUES if lg in v.split(",") and lg not in BOARD]
+            if keys != ([] if STATE.get("live_auto") else STATE["live"]):
+                let_go()
             STATE["live_auto"] = not keys
             STATE["live"] = keys
         elif k == "tz":
@@ -282,6 +314,9 @@ def selftest():
         team_league = start.pop("team_league", "nfl")
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
+        # board: false stands for a board with nothing of the mode's own to follow.
+        if not start.pop("board", True):
+            start["game"] = {"s": "NOT_FOUND"}
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league
