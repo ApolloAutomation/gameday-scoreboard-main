@@ -835,6 +835,38 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(page.locator("#alertFavRow")).toBeHidden();
 });
 
+test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {
+  const sw = (name) => page.getByRole("switch", { name, exact: true });
+  const stay = page.getByRole("combobox", { name: "Stay on a big play" });
+  await reset(request, {});
+  await page.goto("/");
+  await expect(sw("Switch to big plays in other games")).toBeChecked();
+  await expect(sw("Switch from my team")).not.toBeChecked();
+  await expect(stay).toHaveValue("60");
+  await sw("Switch to big plays in other games").click();
+  await expectSet(request, { watch: "0" });
+  await expect(sw("Switch to big plays in other games")).not.toBeChecked();
+  await sw("Switch from my team").click();
+  await expectSet(request, { watchmine: "1" });
+  await expect(sw("Switch from my team")).toBeChecked();
+  await stay.selectOption("180");
+  await expectSet(request, { watchstay: "180" });
+  await expect.poll(async () => (await deviceState(request)).watchstay).toBe(180);
+
+  // A stay the list doesn't have still shows.
+  await reset(request, { watchstay: 40 });
+  await page.reload();
+  await expect(stay).toHaveValue("40");
+
+  // Firmware from before the watcher: none of the three.
+  await reset(request, { watch: null, watchstay: null, watchmine: null });
+  await page.reload();
+  await expect(sw("Opponent scores too")).toBeVisible();
+  await expect(page.locator("#watchRow")).toBeHidden();
+  await expect(page.locator("#watchStayRow")).toBeHidden();
+  await expect(page.locator("#watchMineRow")).toBeHidden();
+});
+
 test("a screen reader gets each control's name, role and state", async ({ page, request }) => {
   await reset(request, { play: false });
   await page.goto("/");
