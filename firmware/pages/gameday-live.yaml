@@ -283,6 +283,8 @@ script:
       opponent_timeouts: int
       team_record: string
       opponent_record: string
+      team_rank: int
+      opponent_rank: int
       splash_text: string
       splash_color: int
       sport: int
@@ -327,23 +329,30 @@ script:
           slot(id(gd_opp_logo_img), id(gd_opp_badge), id(gd_opp_badge_lbl), opponent_abbr, opponent_badge,
                (uint32_t) opponent_color, (uint32_t) opponent_ring);
       - lvgl.label.update:
-          id: tt_away_team_lbl
-          text: !lambda 'return team_abbr;'
-      - lvgl.label.update:
           id: tt_away_score_lbl
           text: !lambda 'return to_string(team_score);'
       - lvgl.label.update:
-          id: tt_home_team_lbl
-          text: !lambda 'return opponent_abbr;'
-      - lvgl.label.update:
           id: tt_home_score_lbl
           text: !lambda 'return to_string(opponent_score);'
-      - lvgl.label.update:
-          id: tt_away_rec_lbl
-          text: !lambda 'return team_record;'
-      - lvgl.label.update:
-          id: tt_home_rec_lbl
-          text: !lambda 'return opponent_record;'
+      - lambda: |-
+          // The abbreviations and records, with a college team's rank ("#5")
+          // in front where it fits the label in its font (espn::rank_label;
+          // the Spleen fonts are fixed width): before the abbreviation on one
+          // panel, before and after the game (the clock has that row during
+          // play), and before the record under the logo on two.
+          const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
+          auto put = [](lv_obj_t *lbl, int rank, const std::string &text) {
+            const lv_font_t *f = lv_obj_get_style_text_font(lbl, LV_PART_MAIN);
+            const int32_t cw = lv_font_get_glyph_width(f, '0', 0);
+            const int32_t w = lv_obj_get_style_width(lbl, LV_PART_MAIN);
+            const size_t fit = cw > 0 && w > 0 ? (size_t) (w / cw) : 0;
+            lv_label_set_text(lbl, ::espn::rank_label((uint8_t) rank, text, fit).c_str());
+          };
+          const bool abbr_rank = !wide && game_state != "IN";
+          put(id(tt_away_team_lbl), abbr_rank ? team_rank : 0, team_abbr);
+          put(id(tt_home_team_lbl), abbr_rank ? opponent_rank : 0, opponent_abbr);
+          put(id(tt_away_rec_lbl), wide ? team_rank : 0, team_record);
+          put(id(tt_home_rec_lbl), wide ? opponent_rank : 0, opponent_record);
       - lambda: |-
           // Update the ticker only when its text changed: rewriting the label
           // restarts the scroll animation, and pushes arrive every few seconds.

@@ -61,6 +61,7 @@ inline void fill_event_filter(JsonObject ev) {
   c["score"] = true;
   c["winner"] = true;
   c["records"].add<JsonObject>()["summary"] = true;
+  c["curatedRank"]["current"] = true;
   c["team"]["abbreviation"] = true;
   c["team"]["color"] = true;
   c["team"]["logo"] = true;
@@ -142,7 +143,13 @@ inline void fill_scan_filter(JsonDocument &f, bool finals = false, bool pending 
 inline void fill_team_filter(JsonDocument &f) {
   f["team"]["id"] = true;
   f["team"]["color"] = true;
-  f["team"]["record"]["items"].add<JsonObject>()["summary"] = true;
+  JsonObject item = f["team"]["record"]["items"].add<JsonObject>();
+  item["summary"] = true;
+  // The Standing setting: the seed is one of the record's stats.
+  JsonObject stat = item["stats"].add<JsonObject>();
+  stat["name"] = true;
+  stat["value"] = true;
+  f["team"]["standingSummary"] = true;
   f["team"]["groups"]["id"] = true;
   JsonObject ne = f["team"]["nextEvent"].add<JsonObject>();
   ne["id"] = true;
@@ -182,6 +189,10 @@ inline std::string format_over_under(JsonVariantConst v) {
     snprintf(buf, sizeof(buf), "%.1f", f);
   return buf;
 }
+
+// A competitor's curatedRank: 1-98, 0 when ESPN says unranked (99) or sends
+// none (espn_parse.cpp, one copy for every parse that reads it).
+uint8_t rank_of(JsonObjectConst c);
 
 inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSnapshot &out) {
   GameSnapshot s;
@@ -246,6 +257,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
     (ours ? s.team_color : s.opp_color) = color;
     (ours ? s.team_logo : s.opp_logo) = logo;
     (ours ? s.team_timeouts : s.opp_timeouts) = timeouts;
+    (ours ? s.team_rank : s.opp_rank) = rank_of(c);
     if (ours) {
       s.team_winner = winner;
       s.team_home = home;
@@ -374,6 +386,16 @@ template<typename TInput> bool parse_team(TInput &input, Schedule &out) {
   Schedule s;
   s.team_color = detail::str_or_empty(team["color"]);
   s.team_record = detail::str_or_empty(team["record"]["items"][0]["summary"]);
+  // The first item is the season's ("total"); its playoffSeed is a number.
+  for (JsonObjectConst st : team["record"]["items"][0]["stats"].as<JsonArrayConst>()) {
+    if (detail::str_or_empty(st["name"]) != "playoffSeed")
+      continue;
+    float seed = st["value"] | 0.0f;
+    if (seed >= 1.0f && seed < 100.0f)  // also false for NaN
+      s.seed = (uint8_t) seed;
+    break;
+  }
+  s.place = place_short(detail::str_or_empty(team["standingSummary"]));
   // ESPN sends the group id as a string ("1"), sometimes as a number.
   JsonVariantConst group = team["groups"]["id"];
   s.group = group.is<const char *>() ? (uint32_t) atol(group.as<const char *>()) : (group | 0);
@@ -439,15 +461,14 @@ bool parse_upcoming(TInput &input, uint32_t our_team_id, size_t max, std::vector
 }
 
 namespace detail {
-// The better AP rank of a game's two sides, 99 when neither is ranked.
-inline uint8_t best_rank(JsonObjectConst comp) {
-  int rank = 99;
-  for (JsonObjectConst c : comp["competitors"].as<JsonArrayConst>()) {
-    int r = c["curatedRank"]["current"] | 99;
-    if (r >= 1 && r < rank)
+// The better rank of a game's two sides (rank_of, 0 unranked), 99 when
+// neither is ranked.
+inline uint8_t best_rank(uint8_t a, uint8_t b) {
+  uint8_t rank = 99;
+  for (uint8_t r : {a, b})
+    if (r != 0 && r < rank)
       rank = r;
-  }
-  return (uint8_t) rank;
+  return rank;
 }
 }  // namespace detail
 
@@ -489,7 +510,7 @@ bool parse_live_games(TInput &input, TOut &out, int64_t *next_kickoff = nullptr,
       GameSnapshot g;
       if (k > 0 && pending != nullptr && away != 0 && detail::snapshot_from_event(ev, away, g)) {
         Pending p;
-        p.rank = detail::best_rank(ev["competitions"][0]);
+        p.rank = detail::best_rank(g.team_rank, g.opp_rank);
         p.kickoff_epoch = k;
         p.event_id = std::move(g.event_id);
         p.away_id = g.team_id;
@@ -500,6 +521,8 @@ bool parse_live_games(TInput &input, TOut &out, int64_t *next_kickoff = nullptr,
         p.home_color = std::move(g.opp_color);
         p.away_record = std::move(g.team_record);
         p.home_record = std::move(g.opp_record);
+        p.away_rank = g.team_rank;
+        p.home_rank = g.opp_rank;
         p.tv = std::move(g.tv);
         // Sorted as it goes and never more than kPendingKeep: a college
         // Saturday has sixty games to come.
@@ -515,7 +538,7 @@ bool parse_live_games(TInput &input, TOut &out, int64_t *next_kickoff = nullptr,
       GameSnapshot g;
       if (away != 0 && detail::snapshot_from_event(ev, away, g)) {
         Final fin;
-        fin.rank = detail::best_rank(ev["competitions"][0]);
+        fin.rank = detail::best_rank(g.team_rank, g.opp_rank);
         fin.kickoff_epoch = g.kickoff_epoch;
         fin.detail = g.short_detail;
         fin.away_id = g.team_id;
@@ -528,6 +551,8 @@ bool parse_live_games(TInput &input, TOut &out, int64_t *next_kickoff = nullptr,
         fin.home_color = g.opp_color;
         fin.away_record = g.team_record;
         fin.home_record = g.opp_record;
+        fin.away_rank = g.team_rank;
+        fin.home_rank = g.opp_rank;
         finals->push_back(std::move(fin));
       }
       continue;

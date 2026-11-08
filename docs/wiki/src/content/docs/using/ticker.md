@@ -18,6 +18,28 @@ The ticker is the line that scrolls along the bottom of the panel. It carries wh
 
 A golf tour's ticker has the tournament's days and course before it, the round and the top 10 during it, and the winner and the next event after it. A racing series' ticker has the next session and when it starts, then the track, before a race weekend; the session and the top 10 with their gaps during it, and what's next between sessions; and the winner and the next race after it.
 
+## Ranks and standings
+
+:::note[Coming in the next release]
+**College teams.** In college football and men's college basketball, a ranked team gets its rank in front of its abbreviation, like "#5 OSU". The rank is ESPN's: it follows the AP poll, then the College Football Playoff ranking once that's out. Unranked teams have none.
+
+- Before the game the ticker starts with the matchup and the ranks, like "#5 OSU vs #12 MICH" or "FSU vs #19 SMU".
+- After the final, and at halftime and other breaks, the records read "#5 OSU 9-1 | #12 MICH 8-2".
+- On a 128x64 board the rank goes in front of the record under the logo, like "#5 9-1". That spot holds 7 characters, so when the two don't fit, like "#12 10-1", the record stays and the rank is left out.
+- On a single 64x64 panel the rank goes in front of the abbreviation, like "#5 OSU", before and after the game. That spot holds 6 characters, so "#12 OSU" or "#5 MICH" shows just the abbreviation. During play the clock has that row.
+- The device page shows the ranks on its board, in the Favorite teams list and in **On now**.
+
+**Pro teams.** **Standing next to pro teams**, in the Panel card on the device page, picks what your team shows where its record goes, under its logo on a 128x64 board, in the ticker and on the device page:
+
+| Choice | Shows |
+| --- | --- |
+| **Record** | The season record, like "10-3". This is where a new panel starts. |
+| **Seed** | ESPN's playoff seed, like "Seed 4". |
+| **Place** | The team's place in its division, conference or league, cut short: "1st in NFC East" is "1st NFCE", "2nd in Pacific Division" is "2nd Pac", "2nd in English Premier League" is "2nd EPL". |
+
+It covers the team you follow in My team, or the favorite on the board in Favorite teams. The other team keeps its record, and in Live games and the finals rotation every team shows its record. When ESPN has no seed or place for your team, like a soccer club's seed, the record shows. Under the logo there's room for 7 characters, so a longer place shows just its first part, like "1st". The panel reads the seed and place from ESPN with the team's schedule, every 6 hours.
+:::
+
 Each sport's page has the details: [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/), [Soccer](/using/soccer/), [Golf](/using/golf/) and [Racing](/using/racing/).
 
 ## The switches

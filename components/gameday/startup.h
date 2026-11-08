@@ -31,7 +31,9 @@ inline int clamp_rotate_minutes(int minutes) {
 
 // The team endpoint's answer for the saved team, kept in flash so a boot can
 // go straight to the scoreboard instead of reading the team endpoint (about
-// 23 KB) first. Only what the scoreboard request needs.
+// 23 KB) first. What the scoreboard request needs, and the team's seed and
+// place for the Standing setting, which only the team endpoint has. A blob of
+// another size (an older firmware's) doesn't load: one team read rebuilds it.
 struct TeamCache {
   uint8_t league;
   uint32_t team_id;
@@ -39,6 +41,8 @@ struct TeamCache {
   int64_t kickoff_epoch;
   uint32_t group;
   int64_t saved_epoch;
+  uint8_t seed;
+  char place[16];  // place_short(), cut to 15 characters
 } __attribute__((packed));
 
 // Older than this, the team endpoint is read again first.
@@ -66,6 +70,8 @@ inline bool team_cache_save(const Schedule &s, League league, uint32_t team_id, 
   out.kickoff_epoch = s.kickoff_epoch;
   out.group = s.group;
   out.saved_epoch = now_epoch;
+  out.seed = s.seed;
+  memcpy(out.place, s.place.c_str(), s.place.size() < sizeof(out.place) ? s.place.size() : sizeof(out.place) - 1);
   return true;
 }
 
@@ -88,6 +94,11 @@ inline bool team_cache_load(const TeamCache &c, League league, uint32_t team_id,
   out.event_id = id;
   out.kickoff_epoch = c.kickoff_epoch;
   out.group = c.group;
+  out.seed = c.seed;
+  char place[sizeof(c.place) + 1];
+  memcpy(place, c.place, sizeof(c.place));
+  place[sizeof(c.place)] = '\0';
+  out.place = place;
   adopt_league(out, league);
   return true;
 }

@@ -70,8 +70,12 @@ struct UpdateFields {
   int possession{0};
   int team_timeouts{0};
   int opponent_timeouts{0};
-  std::string team_record;
+  std::string team_record;  // or the followed pro team's seed or place (the Standing setting)
   std::string opponent_record;
+  // A college team's rank, 0 unranked. The board puts "#5" before the
+  // abbreviation or the record where it fits (pages/gameday-live.yaml).
+  uint8_t team_rank{0};
+  uint8_t opponent_rank{0};
   std::string splash_text;
   uint32_t splash_color{0};
   std::string last_play;
@@ -169,6 +173,7 @@ class GamedaySelect : public select::Select, public Component {
 //                                    teams; memory only, follow.h)
 //                                    alerts=<mask> (the big plays that splash, bit (Alert - 1), alerts.h)
 //                                    alertfav=0/1 (big plays only in games with the team or a favorite)
+//                                    standing=0 record|1 seed|2 place (next to pro teams)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -297,6 +302,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_ticker_down_distance(bool on) { this->set_flag_(FLAG_DOWN, on); }
   void set_ticker_baseball_count(bool on) { this->set_ticker8_(TICK8_COUNT, on); }
   void set_ticker_soccer_stats(bool on) { this->set_ticker8_(TICK8_MATCH, on); }
+  // Standing next to pro teams (espn::Standing): what follows the followed
+  // team's abbreviation where its record goes.
+  void set_standing(uint8_t kind);
   void set_ticker_last_play(bool on) { this->set_flag_(FLAG_PLAY, on); }
   void set_ticker_odds(bool on) { this->set_flag_(FLAG_ODDS, on); }
   void set_opponent_splashes(bool on) { this->set_flag_(FLAG_OPP, on); }
@@ -471,8 +479,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Prefs; Prefs::flags is full. The spare bits are for later settings,
   // since a blob that changes size fails to load and resets.
   struct Prefs8 {
-    uint8_t ticker;  // TICK8_*
-    uint8_t spare[3];
+    uint8_t ticker;    // TICK8_*
+    uint8_t standing;  // espn::Standing, 0 (Record) on a panel from before it
+    uint8_t spare[2];
   } __attribute__((packed));
   static constexpr uint8_t TICK8_COUNT = 1;  // baseball count, outs, pitcher and batter
   static constexpr uint8_t TICK8_MATCH = 2;  // soccer goals, cards, possession and shots
@@ -929,6 +938,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // for the board and for the page and the app. Empty when the board shows
   // a game, or its default or a live mode's words.
   std::string no_game_why_() const;
+  // The Standing setting's seed or place for the team the board follows (My
+  // team, or the favorite on the board), "" for its record: also in the live
+  // modes, the finals rotation and the demo, for a college team, and when
+  // ESPN gave none (espn::standing_text).
+  std::string standing_text_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
   // Bumped by the main loop when it abandons a worker, read by the worker.
   std::atomic<uint32_t> worker_seq_{0};

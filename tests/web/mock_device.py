@@ -94,7 +94,7 @@ INITIAL = {
     "favmax": FAV_MAX, "today": False, "live": ["nfl", "ncaa"], "live_auto": True,
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
-    "autoupd": False, "beta": False,
+    "autoupd": False, "beta": False, "standing": 0,
     # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
@@ -300,6 +300,9 @@ def apply_set(kv):
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)
+        elif k == "standing":
+            if 0 <= atoi(v) < LIMITS["kStandingCount"]:
+                STATE["standing"] = atoi(v)
 
 
 def selftest():

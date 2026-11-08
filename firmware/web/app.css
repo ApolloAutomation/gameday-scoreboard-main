@@ -64,6 +64,8 @@ button { font: inherit; color: inherit; }
 .team .abbr { position: relative; }
 .team .abbr.poss::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: -4px; height: 3px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 10px rgba(255,208,0,.7); }
 .team .rec { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* a college team's rank, small and before the name like a broadcast */
+.team .abbr .rk { font-size: .6em; color: var(--muted); letter-spacing: 0; vertical-align: .25em; }
 .team .pips { display: flex; gap: 5px; margin-top: 2px; }
 .team .pips i { width: 12px; height: 4px; border-radius: 1px; background: #262626; }
 .team .pips i.on { background: var(--gold); box-shadow: 0 0 6px rgba(255,208,0,.6); }

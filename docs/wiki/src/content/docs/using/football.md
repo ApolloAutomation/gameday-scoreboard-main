@@ -20,6 +20,12 @@ The ticker along the bottom carries:
 
 A game whose kickoff time isn't set yet, like a college game a couple of weeks out, shows the day and "TBD", like "Sat TBD".
 
+:::note[Coming in the next release]
+A ranked college team shows its rank in front of its name. Before kickoff the ticker starts with the matchup, like "#5 OSU vs #12 MICH", after the game's name when it has one. On a 128x64 board the rank sits in front of the record under the logo, like "#5 9-1", and on a single 64x64 panel in front of the abbreviation, like "#5 OSU". Each goes in only where it fits, see [Ranks and standings](/using/ticker/#ranks-and-standings).
+
+An NFL team can show its playoff seed or its place in its division where its record goes, with **Standing next to pro teams** on the device page.
+:::
+
 ## During the game
 
 At kickoff the board switches to the live scoreboard:
@@ -88,3 +94,7 @@ The panel goes by ESPN's game status and its plays. ESPN's status sometimes stay
 At the final the ticker says "Final" with the records. The final stays up for half an hour, then the panel moves on to your team's next game. In Live games the panel moves to another game instead, and in Favorite teams **After the final** sets how long it stays; see [Favorite teams](/using/favorites/).
 
 A postponed, canceled or suspended game shows ESPN's word for it instead of "Final", and gets no victory splash.
+
+:::note[Coming in the next release]
+The records at halftime and after the final carry a college team's rank in front of its name, like "Final | #5 OSU 10-1 | MICH 8-3". With **Standing next to pro teams** set to **Seed** or **Place**, your NFL team's seed or place takes its record's place there, like "Final | DAL Seed 4 | NYG 6-7".
+:::

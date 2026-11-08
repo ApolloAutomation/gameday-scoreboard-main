@@ -33,6 +33,10 @@ When the panel holds its brightness down by itself, a notice under the board say
 
 The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
 
+:::note[Coming in the next release]
+A ranked college team shows its rank in front of its abbreviation on the board, like "#5 OSU", and so do the Favorite teams list and the **On now** list. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+:::
+
 ## Up next
 
 In My team, a list under the board shows the next three games after the one on the board, with the opponent, the day and time (in your browser's time) and the TV channel. It appears for football and soccer teams. MLB, NBA, WNBA, men's college basketball and NHL season schedules are too large for the panel to read, so those teams have no Up next list.
@@ -85,6 +89,10 @@ With **Show how to connect when the panel starts** on, the panel's IP address an
 :::
 
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
+
+:::note[Coming in the next release]
+The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. It's hidden while your panel follows only college teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+:::
 
 ### Celebrations
 

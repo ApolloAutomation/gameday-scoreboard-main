@@ -2029,6 +2029,19 @@ static void test_team_cache() {
   CHECK_EQ(s.kickoff_epoch, d.kickoff_epoch);
   CHECK_EQ(s.group, d.group);
   CHECK_EQ(s.league, (uint8_t) League::NFL);
+  // The seed and place the Standing setting shows, which only the team read has
+  CHECK_EQ((int) s.seed, 4);
+  CHECK_EQ(s.place, std::string(""));
+  Schedule placed = d;
+  placed.place = "1st NFCE";
+  TeamCache pc;
+  CHECK(team_cache_save(placed, League::NFL, 6, saved, pc));
+  CHECK(team_cache_load(pc, League::NFL, 6, saved + 60, s));
+  CHECK_EQ(s.place, std::string("1st NFCE"));
+  placed.place = "12th Brazilian Serie";  // past the record's 15 characters: cut
+  CHECK(team_cache_save(placed, League::NFL, 6, saved, pc));
+  CHECK(team_cache_load(pc, League::NFL, 6, saved + 60, s));
+  CHECK_EQ(s.place, std::string("12th Brazilian "));
 
   // Another team, or the same id in the other league: read the team endpoint.
   CHECK(!team_cache_load(c, League::NFL, 21, saved + 60, s));
@@ -3131,7 +3144,8 @@ static void test_mcbb() {
   CHECK_EQ((int) f.nba.regulation, 2);
   CHECK_EQ(f.team_score, 63);
   CHECK_EQ(f.opp_score, 69);
-  CHECK_EQ(status_text(f, o, ""), std::string("Final | CONN 34-6 | MICH 37-3"));
+  // Both ranked going in: the rank before each abbreviation
+  CHECK_EQ(status_text(f, o, ""), std::string("Final | #2 CONN 34-6 | #1 MICH 37-3"));
   CHECK_EQ(basketball_series(f), std::string(""));
 
   // Overtime is period 3 after two halves.
@@ -3706,7 +3720,7 @@ static void test_postseason() {
   CHECK_EQ(ala.opp_score, 38);
   CHECK(!ala.team_winner);
   CHECK_EQ(ala.venue, std::string("Rose Bowl"));
-  CHECK_EQ(status_text(ala, all, ""), std::string("Final | ALA 11-4 | IU 14-0"));
+  CHECK_EQ(status_text(ala, all, ""), std::string("Final | #9 ALA 11-4 | #1 IU 14-0"));
   GameSnapshot iu;
   CHECK(parse_scoreboard_str(qf, "401769072", 84, iu));
   CHECK(iu.team_winner);
@@ -3733,7 +3747,7 @@ static void test_postseason() {
   CHECK(duke.completed);
   CHECK(duke.team_winner);
   CHECK_EQ(duke.short_detail, std::string("Final/OT"));
-  CHECK_EQ(status_text(duke, all, ""), std::string("Final | DUKE 8-5 | UVA 10-3"));
+  CHECK_EQ(status_text(duke, all, ""), std::string("Final | DUKE 8-5 | #17 UVA 10-3"));
 
   // NFL wild card and the Super Bowl
   GameSnapshot chi;
@@ -3756,6 +3770,192 @@ static void test_postseason() {
   CHECK_EQ(duke.game_name, std::string("ACC Championship"));
   CHECK_EQ(chi.game_name, std::string("NFC Wild Card"));
   CHECK_EQ(sea.game_name, std::string("Super Bowl LX"));
+}
+
+// A college team's rank: ESPN's curatedRank on each side of the followed game
+// (99 when unranked), in the ticker's pre-game matchup and its records lines.
+static void test_ranks() {
+  // The Big Ten title game: #2 IU at #1 OSU. The ACC's: DUKE at #17 UVA.
+  const std::string titles = slurp("fixtures/scoreboard_ncaa_conf_titles.json");
+  GameSnapshot iu;
+  CHECK(parse_scoreboard_str(titles, "401777353", 84, iu));
+  CHECK_EQ((int) iu.team_rank, 2);
+  CHECK_EQ((int) iu.opp_rank, 1);
+  GameSnapshot osu;
+  CHECK(parse_scoreboard_str(titles, "401777353", kOhioState, osu));
+  CHECK_EQ((int) osu.team_rank, 1);
+  CHECK_EQ((int) osu.opp_rank, 2);
+  TickerOptions o;
+  CHECK_EQ(status_text(iu, o, ""), std::string("Final | #2 IU 13-0 | #1 OSU 12-1"));
+  GameSnapshot duke;
+  CHECK(parse_scoreboard_str(titles, "401777328", 150, duke));
+  CHECK_EQ((int) duke.team_rank, 0);  // 99: unranked
+  CHECK_EQ((int) duke.opp_rank, 17);
+
+  // Before kickoff: the matchup with each side's rank, the unranked one bare.
+  const std::string sat = slurp("fixtures/scoreboard_ncaa_live.json");
+  GameSnapshot miss;
+  CHECK(parse_scoreboard_str(sat, "401856661", 145, miss));
+  TickerOptions quiet;
+  quiet.odds = false;
+  CHECK_EQ(status_text(miss, quiet, "Sat 7:30 PM"),
+           std::string("Liberty Mutual Music City Kickoff | #9 MISS vs #24 LOU | Sat 7:30 PM | Nissan Stadium"));
+  GameSnapshot fsu;
+  CHECK(parse_scoreboard_str(sat, "401858212", 52, fsu));
+  CHECK_EQ(espn::detail::ranked_matchup(fsu), std::string("FSU vs #19 SMU"));
+  // Neither ranked: no matchup, the line as before.
+  GameSnapshot fiu;
+  CHECK(parse_event_str(slurp("fixtures/event_ncaa_live.json"), Sport::FOOTBALL, 2229, fiu, "401871053"));
+  CHECK_EQ((int) fiu.team_rank, 0);
+  CHECK_EQ((int) fiu.opp_rank, 0);
+  CHECK_EQ(espn::detail::ranked_matchup(fiu), std::string(""));
+  // Live, the ticker has no matchup; halftime's records line keeps the ranks.
+  GameSnapshot ore;
+  CHECK(parse_scoreboard_str(sat, kLiveEvent, kOregon, ore));
+  CHECK_EQ((int) ore.team_rank, 2);
+  CHECK(status_text(ore, o, "").find('#') == std::string::npos);
+  ore.short_detail = "Halftime";
+  ore.status_name = "STATUS_HALFTIME";
+  ore.period = 2;
+  CHECK_EQ(status_text(ore, o, ""), std::string("Halftime | #2 ORE 0-0 | BOIS 0-0"));
+
+  // A pro league's competitors carry 99 as well: no rank, no matchup.
+  GameSnapshot sea;
+  CHECK(parse_scoreboard_str(slurp("fixtures/scoreboard_nfl.json"), kNflEvent, kSeahawks, sea));
+  CHECK_EQ((int) sea.team_rank, 0);
+  CHECK_EQ((int) sea.opp_rank, 0);
+  CHECK(status_text(sea, o, "Sun 1:00 PM").find('#') == std::string::npos);
+
+  // Men's college basketball: the national title game between #2 and #1.
+  GameSnapshot conn = hoops_event("fixtures/event_mcbb_final.json", kUConn);
+  CHECK_EQ((int) conn.team_rank, 2);
+  CHECK_EQ((int) conn.opp_rank, 1);
+  GameSnapshot pre = conn;
+  pre.state = GameState::PRE;
+  CHECK_EQ(status_text(pre, quiet, "Mon 9:20 PM").rfind("#2 CONN vs #1 MICH | Mon 9:20 PM", 0), (size_t) 0);
+
+  // The finals rotation and the later-today cards keep each side's rank.
+  std::vector<LiveGame> live;
+  std::vector<Final> finals;
+  CHECK(parse_live_games(titles, live, nullptr, &finals));
+  CHECK(!finals.empty());
+  if (!finals.empty()) {
+    CHECK_EQ((int) finals[0].away_rank, 2);
+    CHECK_EQ((int) finals[0].home_rank, 1);
+    Final f = finals[0];
+    f.league = (uint8_t) League::NCAA;
+    GameSnapshot card = final_snapshot(f);
+    CHECK_EQ((int) card.team_rank, 2);
+    CHECK_EQ((int) card.opp_rank, 1);
+  }
+  std::vector<LiveGame> on;
+  std::vector<Pending> later;
+  int64_t next = 0;
+  const std::string day = slurp("fixtures/day_ncaa_20261017.json");
+  CHECK(parse_live_games(day, on, &next, nullptr, &later));
+  bool found = false;
+  for (const auto &p : later) {
+    if (p.event_id != "401856723")
+      continue;
+    found = true;
+    CHECK_EQ((int) p.away_rank, 6);   // ALA
+    CHECK_EQ((int) p.home_rank, 14);  // at TENN
+    Pending q = p;
+    q.league = (uint8_t) League::NCAA;
+    GameSnapshot card = pending_snapshot(q);
+    CHECK_EQ((int) card.team_rank, 6);
+    CHECK_EQ((int) card.opp_rank, 14);
+  }
+  CHECK(found);
+}
+
+// Where the panel has room for a rank: before an abbreviation on one panel (32
+// px), before a record under a logo on two (36 px). Spleen 8 is 5 px a
+// character for every glyph the panel draws (the font's BDF), so the panel's
+// measure of label width over glyph width comes to 6 and 7 characters.
+static void test_rank_width() {
+  const size_t abbr = 32 / 5, rec = 36 / 5;
+  CHECK_EQ(abbr, (size_t) 6);
+  CHECK_EQ(rec, (size_t) 7);
+  CHECK_EQ(rank_text(5), std::string("#5"));
+  CHECK_EQ(rank_text(0), std::string(""));
+  CHECK_EQ(rank_label(5, "OSU", abbr), std::string("#5 OSU"));
+  CHECK_EQ(rank_label(25, "IU", abbr), std::string("#25 IU"));
+  CHECK_EQ(rank_label(12, "OSU", abbr), std::string("OSU"));  // "#12 OSU" is 7: the rank drops
+  CHECK_EQ(rank_label(5, "MICH", abbr), std::string("MICH"));
+  CHECK_EQ(rank_label(0, "OSU", abbr), std::string("OSU"));
+  CHECK_EQ(rank_label(5, "", abbr), std::string(""));  // no team yet
+  CHECK_EQ(rank_label(5, "9-1", rec), std::string("#5 9-1"));
+  CHECK_EQ(rank_label(12, "9-1", rec), std::string("#12 9-1"));
+  CHECK_EQ(rank_label(9, "10-1", rec), std::string("#9 10-1"));
+  CHECK_EQ(rank_label(12, "10-1", rec), std::string("10-1"));  // 8: the record stays
+  CHECK_EQ(rank_label(14, "18-6", rec), std::string("18-6"));
+  CHECK_EQ(rank_label(5, "9-1", 0), std::string("9-1"));  // a label the panel couldn't measure
+}
+
+// Standing next to pro teams: ESPN's playoffSeed and standingSummary from the
+// team endpoint, cut short, for the followed team's record's place.
+static void test_standings() {
+  struct Doc {
+    const char *file;
+    int seed;
+    const char *place;
+  };
+  const Doc docs[] = {
+      {"fixtures/team_mlb_atl.json", 3, "1st NLE"},       {"fixtures/team_mlb_mil_live.json", 1, "1st NLC"},
+      {"fixtures/team_nba_ind.json", 5, "2nd Cent"},      {"fixtures/team_nhl_edm.json", 4, "2nd Pac"},
+      {"fixtures/team_nhl_pit_post.json", 8, "3rd Metro"}, {"fixtures/team_wnba_ny.json", 4, "4th East"},
+      {"fixtures/team_epl_ars.json", 0, "2nd EPL"},       {"fixtures/team_mls_mia.json", 0, "3rd MLS"},
+      // A week into the season ESPN had DAL's seed and no summary yet.
+      {"fixtures/team_nfl_dal.json", 4, ""},              {"fixtures/team_ncaa_bc.json", 0, "3rd ACC"},
+  };
+  for (const auto &d : docs) {
+    Schedule s;
+    CHECK(parse_team_str(slurp(d.file), s));
+    CHECK_EQ((int) s.seed, d.seed);
+    CHECK_EQ(s.place, std::string(d.place));
+  }
+  CHECK_EQ(place_short("1st in NFC East"), std::string("1st NFCE"));
+  CHECK_EQ(place_short("2nd in AFC North"), std::string("2nd AFCN"));
+  CHECK_EQ(place_short("1st in Southeast Division"), std::string("1st SE"));
+  CHECK_EQ(place_short("12th in English Premier League"), std::string("12th EPL"));
+  CHECK_EQ(place_short("2nd in Western Conference"), std::string("2nd West"));
+  CHECK_EQ(place_short(""), std::string(""));
+  CHECK_EQ(place_short("First in NFC East"), std::string(""));
+  CHECK_EQ(place_short("in NFC East"), std::string(""));
+  CHECK_EQ(place_short("3rd in "), std::string("3rd"));
+  // A seed that isn't one: left out.
+  Schedule odd;
+  CHECK(parse_team_str(R"({"team":{"id":"6","record":{"items":[{"summary":"2-1","stats":[{"name":"playoffSeed","value":-3}]}]},"standingSummary":7}})", odd));
+  CHECK_EQ((int) odd.seed, 0);
+  CHECK_EQ(odd.place, std::string(""));
+  CHECK_EQ(odd.team_record, std::string("2-1"));
+
+  CHECK_EQ(standing_text(Standing::SEED, 4, "1st NFCE"), std::string("Seed 4"));
+  CHECK_EQ(standing_text(Standing::SEED, 0, "1st NFCE"), std::string(""));  // the record
+  CHECK_EQ(standing_text(Standing::PLACE, 4, "1st NFCE"), std::string("1st NFCE"));
+  CHECK_EQ(standing_text(Standing::PLACE, 4, ""), std::string(""));
+  CHECK_EQ(standing_text(Standing::RECORD, 4, "1st NFCE"), std::string(""));
+  // Under a logo on two panels: 7 characters, else the place's first word.
+  CHECK_EQ(board_standing("Seed 12"), std::string("Seed 12"));
+  CHECK_EQ(board_standing("2nd Pac"), std::string("2nd Pac"));
+  CHECK_EQ(board_standing("1st NFCE"), std::string("1st"));
+  CHECK_EQ(board_standing("3rd Metro"), std::string("3rd"));
+
+  // The ticker: the followed team's standing in its record's place, the
+  // opponent's record as it was.
+  GameSnapshot chi;
+  CHECK(parse_scoreboard_str(slurp("fixtures/scoreboard_nfl_wild_card.json"), "401772981", 3, chi));
+  TickerOptions o;
+  CHECK_EQ(status_text(chi, o, ""), std::string("Final | CHI 11-6 | GB 9-7-1"));
+  TickerOptions seeded;
+  seeded.team_standing = "Seed 2";
+  CHECK_EQ(status_text(chi, seeded, ""), std::string("Final | CHI Seed 2 | GB 9-7-1"));
+  GameSnapshot a = soccer_event("fixtures/event_epl_final.json", kArsenal);
+  TickerOptions placed;
+  placed.team_standing = "2nd EPL";
+  CHECK_EQ(status_text(a, placed, ""),
+           std::string("Full time | Goals ARS 58' Guimaraes, 90'+7' Saka (P) | Red cards SUN 1 | ARS 2nd EPL | W-D-L SUN 1-1-2"));
 }
 
 // Home Assistant's line: no per-play parts, so it only moves on state and score.
@@ -7804,6 +8004,9 @@ int main() {
   test_json_allocator();
   test_timezone_index();
   test_postseason();
+  test_ranks();
+  test_rank_width();
+  test_standings();
   test_badge();
   test_badge_thresholds();
   test_demo();

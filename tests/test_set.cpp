@@ -55,7 +55,7 @@ std::string keys(const std::vector<League> &leagues) {
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
-  int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1};
+  int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
   TeamRef favs[16];
@@ -114,6 +114,7 @@ void load(Settings &s, JsonObjectConst o) {
   num("tz", s.tz);
   num("panels", s.panels);
   num("alerts", s.alerts);
+  num("standing", s.standing);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -211,6 +212,7 @@ void apply(Settings &s, const SetOp &op) {
     }
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
     case SetKind::ALERTFAV: s.alertfav = op.on; break;
+    case SetKind::STANDING: s.standing = op.value; break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -260,6 +262,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["follow"] = s.follow;
   doc["alerts"] = s.alerts;
   doc["alertfav"] = s.alertfav;
+  doc["standing"] = s.standing;
 }
 
 void test_fixture_cases() {
@@ -357,6 +360,11 @@ void test_parse_set() {
   SCHECK(!parse_set("alerts", " ", op, kFavMax), "alerts space");
   SCHECK(parse_set("alerts", " 12x", op, kFavMax) && op.mask == 12, "alerts after a space");
   SCHECK(parse_set("alertfav", "1", op, kFavMax) && op.kind == SetKind::ALERTFAV && op.on, "alertfav 1");
+  SCHECK(parse_set("standing", "2", op, kFavMax) && op.kind == SetKind::STANDING && op.value == (int) Standing::PLACE,
+         "standing 2 is place");
+  SCHECK(parse_set("standing", "1", op, kFavMax) && op.value == (int) Standing::SEED, "standing 1 is seed");
+  SCHECK(!parse_set("standing", "3", op, kFavMax), "standing 3");
+  SCHECK(!parse_set("standing", "-1", op, kFavMax), "standing -1");
 
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {

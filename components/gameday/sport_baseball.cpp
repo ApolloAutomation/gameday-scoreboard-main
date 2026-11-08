@@ -43,7 +43,7 @@ std::string baseball_status_text(const GameSnapshot &s, const TickerOptions &o, 
       // "Final/10" after extra innings
       out = s.short_detail.rfind("Final", 0) == 0 ? s.short_detail : "Final";
       add_part(out, hits_line(s));
-      add_part(out, b.series.empty() ? records_line(s) : b.series);
+      add_part(out, b.series.empty() ? records_line(s, o.team_standing) : b.series);
       return out;
     case GameState::IN:
       break;

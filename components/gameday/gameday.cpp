@@ -1421,6 +1421,17 @@ void GamedayComponent::save_prefs9_() {
   return ::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(), neutral, alerts, this->wide_());
 }
 
+void GamedayComponent::set_standing(uint8_t kind) {
+  if (kind > (uint8_t) ::espn::Standing::PLACE || kind == this->prefs8_.standing)
+    return;
+  this->prefs8_.standing = kind;
+  this->pref8_.save(&this->prefs8_);
+  if (this->game_.valid)
+    this->emit_({});
+  else
+    this->rebuild_state_(&this->last_fields_);
+}
+
 void GamedayComponent::save_prefs_() { this->pref_.save(&this->prefs_); }
 
 void GamedayComponent::set_auto_update(bool on) {
@@ -2972,8 +2983,28 @@ std::string GamedayComponent::no_game_why_() const {
                               this->captive_);
 }
 
+std::string GamedayComponent::standing_text_() const {
+  const auto kind = (::espn::Standing) this->prefs8_.standing;
+  if (kind == ::espn::Standing::RECORD || !this->game_.valid || this->live_mode_() || this->recap_on_ ||
+      this->demo_playing_())
+    return "";
+  const ::espn::Team *team = this->current_team_();
+  const Schedule *s = &this->schedule_;
+  if (this->favorites_mode_()) {
+    if (this->fav_shown_ < 0)
+      return "";
+    team = this->fav_[this->fav_shown_].team;
+    s = &this->fav_[this->fav_shown_].sched;
+  }
+  if (team == nullptr || !s->valid || team->espn_id != this->game_.team_id || ::espn::is_college(team->league))
+    return "";
+  return ::espn::standing_text(kind, s->seed, s->place);
+}
+
 void GamedayComponent::emit_(const ::espn::Splash &splash) {
   const GameSnapshot &g = this->game_;
+  // The followed pro team's seed or place, for the ticker and the board
+  const std::string standing = this->standing_text_();
   UpdateFields f;
   f.game_state = g.valid ? ::espn::state_name(g.state) : "NOT_FOUND";
   f.team_abbr = g.team_abbr;
@@ -2987,8 +3018,10 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   f.possession = brk ? 0 : g.possession;
   f.team_timeouts = g.team_timeouts;
   f.opponent_timeouts = g.opp_timeouts;
-  f.team_record = g.team_record;
+  f.team_record = standing.empty() ? g.team_record : ::espn::board_standing(standing);
   f.opponent_record = g.opp_record;
+  f.team_rank = g.team_rank;
+  f.opponent_rank = g.opp_rank;
   f.last_play = g.last_play;
   if (g.valid && g.state == GameState::IN) {
     f.clock_text = ::espn::clock_text(g);
@@ -3013,7 +3046,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       f.team_marks = g.soc.team_reds;
       f.opp_marks = g.soc.opp_reds;
     }
-    f.team_record = ::espn::soccer_board_record(g.team_record);
+    if (standing.empty())
+      f.team_record = ::espn::soccer_board_record(g.team_record);
     f.opponent_record = ::espn::soccer_board_record(g.opp_record);
   }
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASKETBALL)
@@ -3033,6 +3067,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   opts.soccer_stats = this->ticker_soccer_stats();
   opts.last_play = this->ticker_last_play();
   opts.odds = this->ticker_odds();
+  opts.team_standing = standing;
 
   auto kickoff_of = [this](const GameSnapshot &s) -> std::string {
     if (!s.valid || s.state != GameState::PRE || s.kickoff_epoch <= 0 || this->time_ == nullptr)
@@ -3698,6 +3733,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["alerts"] = this->alerts_on();
   doc["alertfav"] = this->alerts_favorites_only();
   doc["bootaddr"] = this->show_boot_address();
+  doc["standing"] = this->prefs8_.standing;
 #if defined(USE_UPDATE) && !defined(GAMEDAY_BAR)
   // Left out where nothing can be installed (the demo build) or there is no
   // choice (the bar build), so the page and the app hide the switch.
@@ -3757,8 +3793,14 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   game["oa"] = g.opp_abbr;
   game["oi"] = g.opp_id;
   game["os"] = g.opp_score;
-  game["tr"] = g.team_record;
+  const std::string standing = this->standing_text_();
+  game["tr"] = standing.empty() ? g.team_record : standing;
   game["or"] = g.opp_record;
+  // A college team's rank, left out when unranked
+  if (g.team_rank != 0)
+    game["trk"] = g.team_rank;
+  if (g.opp_rank != 0)
+    game["ork"] = g.opp_rank;
   const bool brk = ::espn::football_break(g);
   game["p"] = brk ? 0 : g.possession;
   game["tt"] = g.team_timeouts;
@@ -3882,6 +3924,10 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
         o["tbd"] = true;
       o["oi"] = e.game.opp_id;
       o["oa"] = e.game.opp_abbr;
+      if (e.game.team_rank != 0)
+        o["trk"] = e.game.team_rank;
+      if (e.game.opp_rank != 0)
+        o["ork"] = e.game.opp_rank;
       o["ts"] = e.game.team_score;
       o["os"] = e.game.opp_score;
       o["tv"] = e.game.tv;
@@ -4289,6 +4335,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::FOLLOW:
         this->set_follow(op.on);
+        break;
+      case ::espn::SetKind::STANDING:
+        this->set_standing((uint8_t) op.value);
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)

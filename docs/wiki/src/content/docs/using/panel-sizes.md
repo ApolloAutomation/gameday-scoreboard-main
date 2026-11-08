@@ -21,6 +21,10 @@ The Game Day Scoreboard ships with one 128x64 panel, and its firmware starts on 
 
 The logos sit at the far edges with the abbreviations and big scores between them. Under the scores is the game clock, and under that the situation row: down and distance in football, red in the red zone; the count, a diamond of the runners and the outs in baseball; the latest goal in soccer; the playoff series in basketball. The records sit under the logos, with football's timeout pips or soccer's red card marks under them. The ticker runs along the bottom.
 
+:::note[Coming in the next release]
+A ranked college team's rank goes in front of its record under the logo, like "#5 9-1", when the two fit. A pro team can show its seed or place there instead of its record. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+:::
+
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
 ### Single: 64x64
@@ -28,6 +32,10 @@ On the start-up screen, the QR code sits on the left half with the words beside 
 The two logos sit side by side at the top, with the abbreviations and scores stacked under them. During play the game clock takes the abbreviations' place, and the gold possession line in football goes under the score. Baseball's diamond sits between the two scores with the outs as three dots under it.
 
 A single panel has no room for the records, the timeout pips, the red card marks or the situation row, so down and distance, the count and the soccer goals are in the ticker only, when their switches are on. See [The ticker](/using/ticker/).
+
+:::note[Coming in the next release]
+Before and after the game, a ranked college team's rank goes in front of its abbreviation, like "#5 OSU", when the two fit in the 6 characters there. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+:::
 
 The off-season clock shows the date under the time, and the next game goes in the ticker. On the start-up screen, the QR code and the words take turns.
 

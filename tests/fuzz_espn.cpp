@@ -258,6 +258,9 @@ size_t boot_cache(const Schedule &team, int64_t now) {
   if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
                  back.league != (uint8_t) League::NFL))
     abort();
+  // The Standing setting's seed and place come back too, the place cut to the record's 15 characters.
+  if (loaded && (back.seed != team.seed || back.place != team.place.substr(0, sizeof(c.place) - 1)))
+    abort();
   if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
     abort();
   return back.event_id.size();

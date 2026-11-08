@@ -1441,7 +1441,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=BTN venue=Ohio Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | OSU 1-0 | BALL 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #1 OSU 1-0 | BALL 0-1
  event 401858432 team 2050 ok=1
   valid=1 state=POST event=401858432 kick=1788625800 completed=1
   detail=Final clock=0:00 period=4
@@ -1451,7 +1451,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=BTN venue=Ohio Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | BALL 0-1 | OSU 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | BALL 0-1 | #1 OSU 1-0
  event 401856658 team 61 ok=1
   valid=1 state=POST event=401856658 kick=1788634800 completed=1
   detail=Final clock=0:00 period=4
@@ -1461,7 +1461,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SECN+ venue=Sanford Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UGA 1-0 | TNST 0-2
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #3 UGA 1-0 | TNST 0-2
  event 401856658 team 2634 ok=1
   valid=1 state=POST event=401856658 kick=1788634800 completed=1
   detail=Final clock=0:00 period=4
@@ -1471,7 +1471,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SECN+ venue=Sanford Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | TNST 0-2 | UGA 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | TNST 0-2 | #3 UGA 1-0
  event 401858425 team 84 ok=1
   valid=1 state=POST event=401858425 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1481,7 +1481,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=FOX venue=Memorial Stadium (Bloomington, IN)
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | IU 1-0 | UNT 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #6 IU 1-0 | UNT 0-1
  event 401858425 team 249 ok=1
   valid=1 state=POST event=401858425 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1491,7 +1491,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=FOX venue=Memorial Stadium (Bloomington, IN)
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UNT 0-1 | IU 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UNT 0-1 | #6 IU 1-0
  event 401856634 team 333 ok=1
   valid=1 state=POST event=401856634 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1501,7 +1501,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ABC venue=Bryant-Denny Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | ALA 1-0 | ECU 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #13 ALA 1-0 | ECU 0-1
  event 401856634 team 151 ok=1
   valid=1 state=POST event=401856634 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1511,7 +1511,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ABC venue=Bryant-Denny Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | ECU 0-1 | ALA 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | ECU 0-1 | #13 ALA 1-0
  event 401856778 team 248 ok=1
   valid=1 state=POST event=401856778 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1521,7 +1521,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPNEWS venue=TDECU Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | HOU 1-0 | ORST 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #23 HOU 1-0 | ORST 0-1
  event 401856778 team 204 ok=1
   valid=1 state=POST event=401856778 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1531,7 +1531,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPNEWS venue=TDECU Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | ORST 0-1 | HOU 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | ORST 0-1 | #23 HOU 1-0
  event 401856780 team 277 ok=1
   valid=1 state=POST event=401856780 kick=1788624000 completed=1
   detail=Final clock=0:00 period=4
@@ -1801,10 +1801,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=TA&M -39.5 ou=53.5 tv=ESPN venue=Kyle Field
   clock_text=9/5 7:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:00 PM EDT | Kyle Field
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:00 PM EDT | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Kyle Field
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
+  status[0,1,2,3,4,5,6,7]=#8 TA&M vs MOST | 9/5 - 7:00 PM EDT | Kyle Field
+  status[8,9,10,11,12,13,14,15]=#8 TA&M vs MOST | 9/5 - 7:00 PM EDT | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
+  status[16,17,18,19,20,21,22,23]=#8 TA&M vs MOST | Sun 1:00 PM | Kyle Field
+  status[24,25,26,27,28,29,30,31]=#8 TA&M vs MOST | Sun 1:00 PM | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
  event 401856668 team 2623 ok=1
   valid=1 state=PRE event=401856668 kick=1788649200 completed=0
   detail=9/5 - 7:00 PM EDT clock=0:00 period=0
@@ -1814,10 +1814,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=TA&M -39.5 ou=53.5 tv=ESPN venue=Kyle Field
   clock_text=9/5 7:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:00 PM EDT | Kyle Field
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:00 PM EDT | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Kyle Field
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
+  status[0,1,2,3,4,5,6,7]=MOST vs #8 TA&M | 9/5 - 7:00 PM EDT | Kyle Field
+  status[8,9,10,11,12,13,14,15]=MOST vs #8 TA&M | 9/5 - 7:00 PM EDT | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
+  status[16,17,18,19,20,21,22,23]=MOST vs #8 TA&M | Sun 1:00 PM | Kyle Field
+  status[24,25,26,27,28,29,30,31]=MOST vs #8 TA&M | Sun 1:00 PM | TA&M -39.5 | O/U 53.5 | ESPN | Kyle Field
  event 401856770 team 2641 ok=1
   valid=1 state=PRE event=401856770 kick=1788649200 completed=0
   detail=9/5 - 7:00 PM EDT clock=0:00 period=0
@@ -1827,10 +1827,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=TTU -44.5 ou=60.5 tv=FS1 venue=Galaxy Stadium
   clock_text=9/5 7:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:00 PM EDT | Galaxy Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:00 PM EDT | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Galaxy Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
+  status[0,1,2,3,4,5,6,7]=#12 TTU vs ACU | 9/5 - 7:00 PM EDT | Galaxy Stadium
+  status[8,9,10,11,12,13,14,15]=#12 TTU vs ACU | 9/5 - 7:00 PM EDT | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
+  status[16,17,18,19,20,21,22,23]=#12 TTU vs ACU | Sun 1:00 PM | Galaxy Stadium
+  status[24,25,26,27,28,29,30,31]=#12 TTU vs ACU | Sun 1:00 PM | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
  event 401856770 team 2000 ok=1
   valid=1 state=PRE event=401856770 kick=1788649200 completed=0
   detail=9/5 - 7:00 PM EDT clock=0:00 period=0
@@ -1840,10 +1840,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=TTU -44.5 ou=60.5 tv=FS1 venue=Galaxy Stadium
   clock_text=9/5 7:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:00 PM EDT | Galaxy Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:00 PM EDT | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Galaxy Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
+  status[0,1,2,3,4,5,6,7]=ACU vs #12 TTU | 9/5 - 7:00 PM EDT | Galaxy Stadium
+  status[8,9,10,11,12,13,14,15]=ACU vs #12 TTU | 9/5 - 7:00 PM EDT | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
+  status[16,17,18,19,20,21,22,23]=ACU vs #12 TTU | Sun 1:00 PM | Galaxy Stadium
+  status[24,25,26,27,28,29,30,31]=ACU vs #12 TTU | Sun 1:00 PM | TTU -44.5 | O/U 60.5 | FS1 | Galaxy Stadium
  event 401856669 team 238 ok=1
   valid=1 state=PRE event=401856669 kick=1788649200 completed=0
   detail=9/5 - 7:00 PM EDT clock=0:00 period=0
@@ -2139,10 +2139,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=LSU -10 ou=49.5 tv=ABC venue=Tiger Stadium (LA)
   clock_text=9/5 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:30 PM EDT | Tiger Stadium (LA)
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:30 PM EDT | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Tiger Stadium (LA)
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
+  status[0,1,2,3,4,5,6,7]=#11 LSU vs CLEM | 9/5 - 7:30 PM EDT | Tiger Stadium (LA)
+  status[8,9,10,11,12,13,14,15]=#11 LSU vs CLEM | 9/5 - 7:30 PM EDT | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
+  status[16,17,18,19,20,21,22,23]=#11 LSU vs CLEM | Sun 1:00 PM | Tiger Stadium (LA)
+  status[24,25,26,27,28,29,30,31]=#11 LSU vs CLEM | Sun 1:00 PM | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
  event 401856660 team 228 ok=1
   valid=1 state=PRE event=401856660 kick=1788651000 completed=0
   detail=9/5 - 7:30 PM EDT clock=0:00 period=0
@@ -2152,10 +2152,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=LSU -10 ou=49.5 tv=ABC venue=Tiger Stadium (LA)
   clock_text=9/5 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:30 PM EDT | Tiger Stadium (LA)
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:30 PM EDT | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Tiger Stadium (LA)
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
+  status[0,1,2,3,4,5,6,7]=CLEM vs #11 LSU | 9/5 - 7:30 PM EDT | Tiger Stadium (LA)
+  status[8,9,10,11,12,13,14,15]=CLEM vs #11 LSU | 9/5 - 7:30 PM EDT | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
+  status[16,17,18,19,20,21,22,23]=CLEM vs #11 LSU | Sun 1:00 PM | Tiger Stadium (LA)
+  status[24,25,26,27,28,29,30,31]=CLEM vs #11 LSU | Sun 1:00 PM | LSU -10 | O/U 49.5 | ABC | Tiger Stadium (LA)
  event 401858428 team 130 ok=1
   valid=1 state=PRE event=401858428 kick=1788651000 completed=0
   detail=9/5 - 7:30 PM EDT clock=0:00 period=0
@@ -2165,10 +2165,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=MICH -27.5 ou=49.5 tv=NBC venue=Michigan Stadium
   clock_text=9/5 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:30 PM EDT | Michigan Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:30 PM EDT | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Michigan Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
+  status[0,1,2,3,4,5,6,7]=#16 MICH vs WMU | 9/5 - 7:30 PM EDT | Michigan Stadium
+  status[8,9,10,11,12,13,14,15]=#16 MICH vs WMU | 9/5 - 7:30 PM EDT | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
+  status[16,17,18,19,20,21,22,23]=#16 MICH vs WMU | Sun 1:00 PM | Michigan Stadium
+  status[24,25,26,27,28,29,30,31]=#16 MICH vs WMU | Sun 1:00 PM | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
  event 401858428 team 2711 ok=1
   valid=1 state=PRE event=401858428 kick=1788651000 completed=0
   detail=9/5 - 7:30 PM EDT clock=0:00 period=0
@@ -2178,10 +2178,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=MICH -27.5 ou=49.5 tv=NBC venue=Michigan Stadium
   clock_text=9/5 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 7:30 PM EDT | Michigan Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 7:30 PM EDT | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Michigan Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
+  status[0,1,2,3,4,5,6,7]=WMU vs #16 MICH | 9/5 - 7:30 PM EDT | Michigan Stadium
+  status[8,9,10,11,12,13,14,15]=WMU vs #16 MICH | 9/5 - 7:30 PM EDT | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
+  status[16,17,18,19,20,21,22,23]=WMU vs #16 MICH | Sun 1:00 PM | Michigan Stadium
+  status[24,25,26,27,28,29,30,31]=WMU vs #16 MICH | Sun 1:00 PM | MICH -27.5 | O/U 49.5 | NBC | Michigan Stadium
  event 401856662 team 344 ok=1
   valid=1 state=PRE event=401856662 kick=1788651000 completed=0
   detail=9/5 - 7:30 PM EDT clock=0:00 period=0
@@ -2295,10 +2295,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=BYU -50.5 ou=61.5 tv=ESPN+ venue=LaVell Edwards Stadium
   clock_text=9/5 8:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 8:00 PM EDT | LaVell Edwards Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 8:00 PM EDT | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | LaVell Edwards Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
+  status[0,1,2,3,4,5,6,7]=#14 BYU vs UTU | 9/5 - 8:00 PM EDT | LaVell Edwards Stadium
+  status[8,9,10,11,12,13,14,15]=#14 BYU vs UTU | 9/5 - 8:00 PM EDT | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
+  status[16,17,18,19,20,21,22,23]=#14 BYU vs UTU | Sun 1:00 PM | LaVell Edwards Stadium
+  status[24,25,26,27,28,29,30,31]=#14 BYU vs UTU | Sun 1:00 PM | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
  event 401856775 team 3101 ok=1
   valid=1 state=PRE event=401856775 kick=1788652800 completed=0
   detail=9/5 - 8:00 PM EDT clock=0:00 period=0
@@ -2308,10 +2308,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=BYU -50.5 ou=61.5 tv=ESPN+ venue=LaVell Edwards Stadium
   clock_text=9/5 8:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/5 - 8:00 PM EDT | LaVell Edwards Stadium
-  status[8,9,10,11,12,13,14,15]=9/5 - 8:00 PM EDT | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | LaVell Edwards Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
+  status[0,1,2,3,4,5,6,7]=UTU vs #14 BYU | 9/5 - 8:00 PM EDT | LaVell Edwards Stadium
+  status[8,9,10,11,12,13,14,15]=UTU vs #14 BYU | 9/5 - 8:00 PM EDT | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
+  status[16,17,18,19,20,21,22,23]=UTU vs #14 BYU | Sun 1:00 PM | LaVell Edwards Stadium
+  status[24,25,26,27,28,29,30,31]=UTU vs #14 BYU | Sun 1:00 PM | BYU -50.5 | O/U 61.5 | ESPN+ | LaVell Edwards Stadium
  event 401858427 team 120 ok=1
   valid=1 state=PRE event=401858427 kick=1788652800 completed=0
   detail=9/5 - 8:00 PM EDT clock=0:00 period=0
@@ -2633,7 +2633,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=NBC venue=Los Angeles Memorial Coliseum
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | USC 1-0 | SJSU 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #14 USC 1-0 | SJSU 0-1
  event 401864494 team 23 ok=1
   valid=1 state=POST event=401864494 kick=1788030000 completed=1
   detail=Final clock=0:00 period=4
@@ -2643,7 +2643,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=NBC venue=Los Angeles Memorial Coliseum
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | SJSU 0-1 | USC 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | SJSU 0-1 | #14 USC 1-0
  event 401856766 team 2628 ok=1
   valid=1 state=POST event=401856766 kick=1788019200 completed=1
   detail=Final clock=0:00 period=4
@@ -2793,7 +2793,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPNU venue=Rice-Eccles Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UTAH 1-0 | IDHO 0-2
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #21 UTAH 1-0 | IDHO 0-2
  event 401856768 team 70 ok=1
   valid=1 state=POST event=401856768 kick=1788483600 completed=1
   detail=Final clock=0:00 period=4
@@ -2803,7 +2803,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPNU venue=Rice-Eccles Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | IDHO 0-2 | UTAH 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | IDHO 0-2 | #21 UTAH 1-0
  event 401856663 team 142 ok=1
   valid=1 state=POST event=401856663 kick=1788480000 completed=1
   detail=Final clock=0:00 period=4
@@ -2813,7 +2813,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SEC Network venue=Memorial Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | MIZ 1-0 | UAPB 1-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #25 MIZ 1-0 | UAPB 1-1
  event 401856663 team 2029 ok=1
   valid=1 state=POST event=401856663 kick=1788480000 completed=1
   detail=Final clock=0:00 period=4
@@ -2823,7 +2823,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SEC Network venue=Memorial Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UAPB 1-1 | MIZ 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UAPB 1-1 | #25 MIZ 1-0
  event 401858423 team 164 ok=1
   valid=1 state=POST event=401858423 kick=1788472800 completed=1
   detail=Final clock=0:00 period=4
@@ -3013,7 +3013,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPN venue=Stanford Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | STAN 1-1 | MIA 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | STAN 1-1 | #7 MIA 1-0
  event 401858206 team 2390 ok=1
   valid=1 state=POST event=401858206 kick=1788570000 completed=1
   detail=Final clock=0:00 period=4
@@ -3023,7 +3023,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=ESPN venue=Stanford Stadium
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | MIA 1-0 | STAN 1-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #7 MIA 1-0 | STAN 1-1
  event 401856664 team 201 ok=1
   valid=1 state=POST event=401856664 kick=1788566400 completed=1
   detail=Final clock=0:00 period=4
@@ -3033,7 +3033,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SECN+ venue=Memorial Stadium (Norman, OK)
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | OU 1-0 | UTEP 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #10 OU 1-0 | UTEP 0-1
  event 401856664 team 2638 ok=1
   valid=1 state=POST event=401856664 kick=1788566400 completed=1
   detail=Final clock=0:00 period=4
@@ -3043,7 +3043,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=SECN+ venue=Memorial Stadium (Norman, OK)
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UTEP 0-1 | OU 1-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | UTEP 0-1 | #10 OU 1-0
  event 401858436 team 30 ok=1
   valid=1 state=POST event=401858436 kick=1788570000 completed=1
   detail=Final clock=0:00 period=4
@@ -3053,7 +3053,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=FOX venue=Los Angeles Memorial Coliseum
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | USC 2-0 | FRES 0-1
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | #14 USC 2-0 | FRES 0-1
  event 401858436 team 278 ok=1
   valid=1 state=POST event=401858436 kick=1788570000 completed=1
   detail=Final clock=0:00 period=4
@@ -3063,7 +3063,7 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds= ou= tv=FOX venue=Los Angeles Memorial Coliseum
   clock_text=Final
-  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | FRES 0-1 | USC 2-0
+  status[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]=Final | FRES 0-1 | #14 USC 2-0
  event 401864495 team 2199 ok=1
   valid=1 state=POST event=401864495 kick=1788561000 completed=1
   detail=Final clock=0:00 period=4
@@ -3173,10 +3173,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=WASH -23.5 ou=51.5 tv=NBC venue=Husky Stadium
   clock_text=9/6 4:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/6 - 4:00 PM EDT | Husky Stadium
-  status[8,9,10,11,12,13,14,15]=9/6 - 4:00 PM EDT | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Husky Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
+  status[0,1,2,3,4,5,6,7]=#17 WASH vs WSU | 9/6 - 4:00 PM EDT | Husky Stadium
+  status[8,9,10,11,12,13,14,15]=#17 WASH vs WSU | 9/6 - 4:00 PM EDT | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
+  status[16,17,18,19,20,21,22,23]=#17 WASH vs WSU | Sun 1:00 PM | Husky Stadium
+  status[24,25,26,27,28,29,30,31]=#17 WASH vs WSU | Sun 1:00 PM | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
  event 401858437 team 265 ok=1
   valid=1 state=PRE event=401858437 kick=1788724800 completed=0
   detail=9/6 - 4:00 PM EDT clock=0:00 period=0
@@ -3186,10 +3186,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=WASH -23.5 ou=51.5 tv=NBC venue=Husky Stadium
   clock_text=9/6 4:00 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/6 - 4:00 PM EDT | Husky Stadium
-  status[8,9,10,11,12,13,14,15]=9/6 - 4:00 PM EDT | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Husky Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
+  status[0,1,2,3,4,5,6,7]=WSU vs #17 WASH | 9/6 - 4:00 PM EDT | Husky Stadium
+  status[8,9,10,11,12,13,14,15]=WSU vs #17 WASH | 9/6 - 4:00 PM EDT | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
+  status[16,17,18,19,20,21,22,23]=WSU vs #17 WASH | Sun 1:00 PM | Husky Stadium
+  status[24,25,26,27,28,29,30,31]=WSU vs #17 WASH | Sun 1:00 PM | WASH -23.5 | O/U 51.5 | NBC | Husky Stadium
  event 401858438 team 87 ok=1
   valid=1 state=PRE event=401858438 kick=1788737400 completed=0
   detail=9/6 - 7:30 PM EDT clock=0:00 period=0
@@ -3199,10 +3199,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=ND -20.5 ou=46.5 tv=NBC venue=Lambeau Field
   clock_text=9/6 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/6 - 7:30 PM EDT | Lambeau Field
-  status[8,9,10,11,12,13,14,15]=9/6 - 7:30 PM EDT | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Lambeau Field
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
+  status[0,1,2,3,4,5,6,7]=#4 ND vs WIS | 9/6 - 7:30 PM EDT | Lambeau Field
+  status[8,9,10,11,12,13,14,15]=#4 ND vs WIS | 9/6 - 7:30 PM EDT | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
+  status[16,17,18,19,20,21,22,23]=#4 ND vs WIS | Sun 1:00 PM | Lambeau Field
+  status[24,25,26,27,28,29,30,31]=#4 ND vs WIS | Sun 1:00 PM | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
  event 401858438 team 275 ok=1
   valid=1 state=PRE event=401858438 kick=1788737400 completed=0
   detail=9/6 - 7:30 PM EDT clock=0:00 period=0
@@ -3212,10 +3212,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=ND -20.5 ou=46.5 tv=NBC venue=Lambeau Field
   clock_text=9/6 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/6 - 7:30 PM EDT | Lambeau Field
-  status[8,9,10,11,12,13,14,15]=9/6 - 7:30 PM EDT | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Lambeau Field
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
+  status[0,1,2,3,4,5,6,7]=WIS vs #4 ND | 9/6 - 7:30 PM EDT | Lambeau Field
+  status[8,9,10,11,12,13,14,15]=WIS vs #4 ND | 9/6 - 7:30 PM EDT | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
+  status[16,17,18,19,20,21,22,23]=WIS vs #4 ND | Sun 1:00 PM | Lambeau Field
+  status[24,25,26,27,28,29,30,31]=WIS vs #4 ND | Sun 1:00 PM | ND -20.5 | O/U 46.5 | NBC | Lambeau Field
  event 401856661 team 145 ok=1
   valid=1 state=PRE event=401856661 kick=1788737400 completed=0
   detail=9/6 - 7:30 PM EDT clock=0:00 period=0
@@ -3225,10 +3225,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=MISS -6.5 ou=54.5 tv=ABC venue=Nissan Stadium
   clock_text=9/6 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=Liberty Mutual Music City Kickoff | 9/6 - 7:30 PM EDT | Nissan Stadium
-  status[8,9,10,11,12,13,14,15]=Liberty Mutual Music City Kickoff | 9/6 - 7:30 PM EDT | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
-  status[16,17,18,19,20,21,22,23]=Liberty Mutual Music City Kickoff | Sun 1:00 PM | Nissan Stadium
-  status[24,25,26,27,28,29,30,31]=Liberty Mutual Music City Kickoff | Sun 1:00 PM | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
+  status[0,1,2,3,4,5,6,7]=Liberty Mutual Music City Kickoff | #9 MISS vs #24 LOU | 9/6 - 7:30 PM EDT | Nissan Stadium
+  status[8,9,10,11,12,13,14,15]=Liberty Mutual Music City Kickoff | #9 MISS vs #24 LOU | 9/6 - 7:30 PM EDT | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
+  status[16,17,18,19,20,21,22,23]=Liberty Mutual Music City Kickoff | #9 MISS vs #24 LOU | Sun 1:00 PM | Nissan Stadium
+  status[24,25,26,27,28,29,30,31]=Liberty Mutual Music City Kickoff | #9 MISS vs #24 LOU | Sun 1:00 PM | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
  event 401856661 team 97 ok=1
   valid=1 state=PRE event=401856661 kick=1788737400 completed=0
   detail=9/6 - 7:30 PM EDT clock=0:00 period=0
@@ -3238,10 +3238,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=MISS -6.5 ou=54.5 tv=ABC venue=Nissan Stadium
   clock_text=9/6 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=Liberty Mutual Music City Kickoff | 9/6 - 7:30 PM EDT | Nissan Stadium
-  status[8,9,10,11,12,13,14,15]=Liberty Mutual Music City Kickoff | 9/6 - 7:30 PM EDT | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
-  status[16,17,18,19,20,21,22,23]=Liberty Mutual Music City Kickoff | Sun 1:00 PM | Nissan Stadium
-  status[24,25,26,27,28,29,30,31]=Liberty Mutual Music City Kickoff | Sun 1:00 PM | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
+  status[0,1,2,3,4,5,6,7]=Liberty Mutual Music City Kickoff | #24 LOU vs #9 MISS | 9/6 - 7:30 PM EDT | Nissan Stadium
+  status[8,9,10,11,12,13,14,15]=Liberty Mutual Music City Kickoff | #24 LOU vs #9 MISS | 9/6 - 7:30 PM EDT | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
+  status[16,17,18,19,20,21,22,23]=Liberty Mutual Music City Kickoff | #24 LOU vs #9 MISS | Sun 1:00 PM | Nissan Stadium
+  status[24,25,26,27,28,29,30,31]=Liberty Mutual Music City Kickoff | #24 LOU vs #9 MISS | Sun 1:00 PM | MISS -6.5 | O/U 54.5 | ABC | Nissan Stadium
  event 401858212 team 52 ok=1
   valid=1 state=PRE event=401858212 kick=1788823800 completed=0
   detail=9/7 - 7:30 PM EDT clock=0:00 period=0
@@ -3251,10 +3251,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=SMU -3 ou=53.5 tv=ESPN venue=Doak Campbell Stadium
   clock_text=9/7 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/7 - 7:30 PM EDT | Doak Campbell Stadium
-  status[8,9,10,11,12,13,14,15]=9/7 - 7:30 PM EDT | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Doak Campbell Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
+  status[0,1,2,3,4,5,6,7]=FSU vs #19 SMU | 9/7 - 7:30 PM EDT | Doak Campbell Stadium
+  status[8,9,10,11,12,13,14,15]=FSU vs #19 SMU | 9/7 - 7:30 PM EDT | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
+  status[16,17,18,19,20,21,22,23]=FSU vs #19 SMU | Sun 1:00 PM | Doak Campbell Stadium
+  status[24,25,26,27,28,29,30,31]=FSU vs #19 SMU | Sun 1:00 PM | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
  event 401858212 team 2567 ok=1
   valid=1 state=PRE event=401858212 kick=1788823800 completed=0
   detail=9/7 - 7:30 PM EDT clock=0:00 period=0
@@ -3264,10 +3264,10 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=
   odds=SMU -3 ou=53.5 tv=ESPN venue=Doak Campbell Stadium
   clock_text=9/7 7:30 PM EDT
-  status[0,1,2,3,4,5,6,7]=9/7 - 7:30 PM EDT | Doak Campbell Stadium
-  status[8,9,10,11,12,13,14,15]=9/7 - 7:30 PM EDT | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
-  status[16,17,18,19,20,21,22,23]=Sun 1:00 PM | Doak Campbell Stadium
-  status[24,25,26,27,28,29,30,31]=Sun 1:00 PM | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
+  status[0,1,2,3,4,5,6,7]=#19 SMU vs FSU | 9/7 - 7:30 PM EDT | Doak Campbell Stadium
+  status[8,9,10,11,12,13,14,15]=#19 SMU vs FSU | 9/7 - 7:30 PM EDT | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
+  status[16,17,18,19,20,21,22,23]=#19 SMU vs FSU | Sun 1:00 PM | Doak Campbell Stadium
+  status[24,25,26,27,28,29,30,31]=#19 SMU vs FSU | Sun 1:00 PM | SMU -3 | O/U 53.5 | ESPN | Doak Campbell Stadium
  live ok=1 n=18
   0 401858433 grp=5 away=68 BOIS @ ORE
   0 401856667 grp=8 away=326 TXST @ TEX

@@ -70,7 +70,7 @@ std::string hockey_clock_text(const GameSnapshot &s) {
 std::string hockey_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
   const Hockey &h = s.nhl;
   // The series line replaces the W-L-OTL records in the playoffs
-  const std::string standing = h.series.empty() ? records_line(s) : h.series;
+  const std::string standing = h.series.empty() ? records_line(s, o.team_standing) : h.series;
   std::string out;
   switch (s.state) {
     case GameState::NOT_FOUND:
