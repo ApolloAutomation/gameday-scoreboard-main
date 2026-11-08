@@ -268,6 +268,11 @@ answer up to eight DNS lookups per pass of the main loop instead of one.
 `captive.h` notices a network that wants a sign-in page and says so on the
 panel and the page.
 
+After a new join with "Show how to connect" on, the IP address and `.local`
+name lead the ticker for 30 s once the boot screen goes (`setup_qr.h`,
+`show_join_address`), and a live game on a panel that has a team cuts the
+join's QR screen short (`board_live`, `boot.yaml`).
+
 ## Brightness, heat and power
 
 `guard.h`: the heat guard steps the brightness down to 70, 45 or 25 percent

@@ -67,6 +67,10 @@ A new panel keeps the QR code and the address up for 45 seconds, or until you pi
 
 Until you pick a team or a mode, the ticker along the bottom says **Pick a team at** followed by the panel's IP address, like `192.168.1.50`. Use the IP address if your phone won't open a `.local` address.
 
+:::note[Coming in the next release]
+Once the QR code and the address go, the ticker starts with the panel's IP address and `.local` name for 30 seconds, like **IP 192.168.1.50 | gameday-2f6a70.local**. Both open the device page from a phone or computer on the same Wi-Fi; use the IP address if your phone won't open the `.local` one. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready instead of waiting out the QR code, and the address is in the ticker only. A new panel still says **Pick a team at** and its IP address until you pick one. With **Show how to connect when the panel starts** off, the ticker doesn't add the address.
+:::
+
 To see the address again any time, hold the button on the controller for about 1.5 seconds and let go. The panel shows its full address and IP address for 20 seconds. More on the button in [Buttons and resets](/using/buttons-and-resets/).
 
 :::tip

@@ -802,6 +802,29 @@ static void test_setup_qr() {
   CHECK(device_page_qr("192.168.29.10").size() <= 20);
 }
 
+// The ticker's address line after a join: the IP first, then the .local
+// name, for 30 seconds from when it started, across the millis() wrap.
+static void test_join_ticker() {
+  using esphome::gameday::join_ticker_on;
+  using esphome::gameday::join_ticker_text;
+  using esphome::gameday::kJoinTickerMs;
+  CHECK_EQ(join_ticker_text("192.168.1.23", "gameday-2f6a70"),
+           std::string("IP 192.168.1.23 | gameday-2f6a70.local | "));
+  CHECK_EQ(join_ticker_text("192.168.1.23", ""), std::string("IP 192.168.1.23 | "));
+  // No address, off Wi-Fi: nothing, not "IP  | "
+  CHECK_EQ(join_ticker_text("", "gameday-2f6a70"), std::string(""));
+
+  CHECK_EQ(kJoinTickerMs, (uint32_t) 30000);
+  CHECK(!join_ticker_on(0, 5000));  // never started
+  CHECK(join_ticker_on(1000, 1000));
+  CHECK(join_ticker_on(1000, 30999));
+  CHECK(!join_ticker_on(1000, 31000));
+  CHECK(!join_ticker_on(1000, 90000));
+  // Started just before millis() wrapped
+  CHECK(join_ticker_on(0xFFFFF000u, 0x00001000u));
+  CHECK(!join_ticker_on(0xFFFFF000u, 0x00008000u));
+}
+
 // Who answers on the panel's setup hotspot (hotspot.h). While the portal is
 // up and the panel is off Wi-Fi, every OS's check for internet and every
 // page gets the setup page, the panel's own /gameday/ routes still answer,
@@ -7667,6 +7690,7 @@ int main() {
   test_captive_redirect_host();
   test_ticker_speed();
   test_setup_qr();
+  test_join_ticker();
   test_hotspot_route();
   test_ha_status_text();
   test_short_game_name();

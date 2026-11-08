@@ -1067,6 +1067,12 @@ void GamedayComponent::loop() {
 #endif
   this->captive_tick_();
   this->wifi_tick_();
+  // The address line after a join has run its time: take it off the ticker.
+  if (this->join_addr_ms_ != 0 && !join_ticker_on(this->join_addr_ms_, millis())) {
+    this->join_addr_ms_ = 0;
+    if (this->join_addr_shown_)
+      this->emit_({});
+  }
 #ifdef USE_CAPTIVE_PORTAL
   // The hotspot's DNS server answers one lookup per pass of the main loop,
   // and a phone that has just joined sends a burst of them, its check for
@@ -1270,6 +1276,12 @@ bool GamedayComponent::mark_setup_done_() {
   this->save_prefs_();
   this->fire_action_("team_picked");  // the setup screen listens for this
   return true;
+}
+
+void GamedayComponent::show_join_address() {
+  this->join_addr_ms_ = millis() == 0 ? 1 : millis();
+  ESP_LOGI(TAG, "The ticker starts with the panel's address for %u s", (unsigned) (kJoinTickerMs / 1000));
+  this->emit_({});
 }
 
 void GamedayComponent::apply_team_(const ::espn::Team &t) {
@@ -1637,20 +1649,31 @@ void GamedayComponent::update_state_changed_() {
 #endif
 }
 
-// A game the panel follows is in progress: the one on the board, which
-// covers My team and the live modes, or any favorite's in Favorite teams.
-bool GamedayComponent::followed_game_live_() const {
+// The game on the board is being played.
+bool GamedayComponent::board_live() const {
+  if (!this->game_.valid)
+    return false;
   // A golf event is IN all week, overnight breaks included: only a round
   // being played counts, so the nights between rounds can still update. A
   // race weekend is the same: only a session on track, and not a race
   // stopped overnight.
-  if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF)
+  if (this->game_.sport == ::espn::Sport::GOLF)
     return this->game_.golf.phase == ::espn::GolfPhase::LIVE;
-  if (this->game_.valid && this->game_.sport == ::espn::Sport::RACING)
+  if (this->game_.sport == ::espn::Sport::RACING)
     return ::espn::racing_on_track(this->game_,
                                    this->time_ != nullptr ? (int64_t) this->time_->timestamp_now() : 0);
-  if (this->game_.valid && this->game_.state == GameState::IN)
+  return this->game_.state == GameState::IN;
+}
+
+// A game the panel follows is in progress: the one on the board, which
+// covers My team and the live modes, or any favorite's in Favorite teams.
+bool GamedayComponent::followed_game_live_() const {
+  if (this->board_live())
     return true;
+  // Golf and racing are never favorites, so a tour or series between
+  // sessions has nothing more to look at here.
+  if (this->game_.valid && ::espn::is_board_sport(this->game_.sport))
+    return false;
   if (this->favorites_mode_())
     for (const auto &e : this->fav_)
       if (e.game.valid && e.game.state == GameState::IN)
@@ -3162,6 +3185,18 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       std::string pick = "Pick a team at " + ip + " | ";
       f.status_text = pick + f.status_text;
       f.ha_status_text = pick + f.ha_status_text;
+    }
+  }
+  // For a while after the panel joins Wi-Fi, its address leads the ticker
+  // (setup_qr.h), unless the line above already gives the IP. Only on the
+  // panel and the page's copy of it: Home Assistant has the IP entity, and
+  // its Game Status would log the line coming and going.
+  this->join_addr_shown_ = false;
+  if (join_ticker_on(this->join_addr_ms_, millis()) && this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
+    const std::string line = join_ticker_text(page_ip(), this->hostname());
+    if (!line.empty()) {
+      f.status_text = line + f.status_text;
+      this->join_addr_shown_ = true;
     }
   }
 

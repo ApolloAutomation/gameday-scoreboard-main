@@ -1,9 +1,11 @@
-// What the boot screen's QR code holds (firmware/pages/boot.yaml). A phone's
-// own camera reads both kinds, so setting a panel up needs no app: the
-// camera and a browser are enough. Pure, with no ESPHome includes, so the
-// host tests compile it directly.
+// What the boot screen's QR code holds (firmware/pages/boot.yaml), and the
+// ticker's address line after the panel joins Wi-Fi. A phone's own camera
+// reads both kinds of code, so setting a panel up needs no app: the camera
+// and a browser are enough. Pure, with no ESPHome includes, so the host
+// tests compile it directly.
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace esphome::gameday {
@@ -36,6 +38,30 @@ inline std::string device_page_qr(const std::string &ip) {
   if (ip.empty())
     return std::string();
   return "http://" + ip;
+}
+
+// After a join, once the connect screen has gone (or straight away over a
+// live game, which the connect screen leaves alone), the ticker starts with
+// the panel's address for this long. Only where the connect screen would
+// show the address: a new join with "Show how to connect" on (boot.yaml).
+static const uint32_t kJoinTickerMs = 30 * 1000;
+
+// Whether that line is still due: since_ms is millis() when it started, 0
+// for none. Unsigned subtraction keeps it right across the millis() wrap.
+inline bool join_ticker_on(uint32_t since_ms, uint32_t now_ms) {
+  return since_ms != 0 && (uint32_t) (now_ms - since_ms) < kJoinTickerMs;
+}
+
+// The line itself, ahead of the rest of the ticker: the IP first, which
+// every phone can open, then the .local name, which some can't. Empty
+// without an IP. "IP 192.168.1.50 | gameday-2f6a70.local | "
+inline std::string join_ticker_text(const std::string &ip, const std::string &hostname) {
+  if (ip.empty())
+    return std::string();
+  std::string out = "IP " + ip + " | ";
+  if (!hostname.empty())
+    out += hostname + ".local | ";
+  return out;
 }
 
 }  // namespace esphome::gameday

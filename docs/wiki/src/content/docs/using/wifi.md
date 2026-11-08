@@ -53,6 +53,16 @@ To see how often it happens, look under **Diagnostics** in the Device card on th
 
 Every panel has a name on your network, `gameday-` and six characters, like `gameday-2f6a70`. Its device page is at that name plus `.local`, like `gameday-2f6a70.local`. The panel shows the address when it joins Wi-Fi, and again when you hold the boot button for about 1.5 seconds. The device page shows it in the Device card under **Address** and **Name**.
 
-Some phones can't open `.local` addresses. Use the panel's IP address instead, a number like `192.168.1.50`. The QR code the panel shows when it joins Wi-Fi opens its device page by IP address, like `http://192.168.1.50`, so a phone that can't open `.local` addresses gets there with its camera. The panel also shows the IP address with the address on a boot button hold, and the ticker gives it until you pick a team.
+The `.local` name and the IP address, a number like `192.168.1.50`, open the same device page. The name never changes and is different on every panel, so two panels in one house never get mixed up. The IP address comes from your router, which can hand the panel a different one later. Some phones can't open `.local` addresses: use the IP address there. To find it:
+
+- **The QR code** the panel shows when it joins Wi-Fi opens its device page by IP address, like `http://192.168.1.50`, so a phone that can't open `.local` addresses gets there with its camera.
+- **The boot button**: hold it for about 1.5 seconds and the panel shows its `.local` name and IP address for 20 seconds.
+- **The ticker** says **Pick a team at** and the IP address until you pick a team.
+- **The device page** shows it in the Device card under **Address**, with the `.local` name under **Name**.
+- **Home Assistant** has it as the panel's **IP** entity, and your router's list of connected devices shows it beside the panel's name, `gameday-` and its six characters.
+
+:::note[Coming in the next release]
+After the panel joins Wi-Fi, the ticker also starts with its IP address and `.local` name for 30 seconds, like **IP 192.168.1.50 | gameday-2f6a70.local**, once the QR code and the address go, or straight away when a game is live. It follows **Show how to connect when the panel starts**. See [What the panel shows once it's online](/get-started/setup/#what-the-panel-shows-once-its-online).
+:::
 
 The panel treats your home network as trusted. Anyone on your Wi-Fi can open its device page and change its settings, and it isn't designed to be reached from the internet, so don't forward a port to it.
