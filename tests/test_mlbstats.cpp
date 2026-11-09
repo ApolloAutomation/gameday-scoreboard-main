@@ -74,6 +74,7 @@ bool day_read(std::string json, std::vector<LiveGame> &out, int64_t *next = null
 const uint32_t kDurham = 234, kScranton = 531, kMemphis = 235, kRoundRock = 102, kReno = 2310, kJacksonville = 564;
 const uint32_t kLicey = 672, kEscogido = 671, kAguilas = 667, kGigantes = 670, kMargarita = 697, kOriente = 694;
 const uint32_t kMochis = 675, kMexicali = 673, kHermosillo = 677;
+const uint32_t kEugene = 461;
 
 GameSnapshot game(const std::string &file, uint32_t our_id, int64_t near = 0) {
   std::string json = slurp(file);
@@ -104,8 +105,8 @@ void test_urls() {
   // The same reads as the recorded team, far and game documents.
   MCHECK_EQ(mlb_team_url(kDurham, now),
             std::string("https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&teamId=234"
-                        "&startDate=2026-11-07&endDate=2026-11-18&hydrate=team&fields=dates,games,gamePk,gameDate,"
-                        "status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,teamName,"
+                        "&startDate=2026-11-07&endDate=2026-11-18&hydrate=team&fields=dates,date,games,gamePk,"
+                        "gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,teamName,"
                         "leagueRecord,wins,losses,gameNumber"));
   MCHECK_EQ(mlb_far_url(kDurham, kMilbTripleA, now),
             std::string("https://statsapi.mlb.com/api/v1/schedule?sportId=11&teamId=234&startDate=2026-11-19"
@@ -637,6 +638,39 @@ void test_team() {
   MCHECK_EQ(team_read(slurp("mlbstats_team_dur_202604.json"), kDurham, at("2026-04-18T12:00:00Z"), s, &up, 4),
             0);
   MCHECK(up.empty());
+
+  // Eugene's read the morning of 5/23. MLB lists a game 2 against Tri-City
+  // under 5/22, never played, with no start time and a gameDate in May 2027.
+  // It comes before that night's game in the list, but it isn't 5/22's game
+  // (or any game this read is for): that night's game is next.
+  const std::string may23 = reopened("mlbstats_team_eug_202605.json", "2026-05-23T12:00:00Z");
+  MCHECK_EQ(team_read(may23, kEugene, at("2026-05-23T15:00:00Z"), s, &up, 4), 1);
+  MCHECK_EQ(s.event_id, std::string("819418"));
+  MCHECK_EQ(s.kickoff_epoch, at("2026-05-24T00:05:00Z"));
+  MCHECK(!s.time_tbd);
+  MCHECK_EQ(s.opp_abbr, std::string("HIL"));
+  MCHECK_EQ(up.size(), (size_t) 4);
+  if (up.size() == 4) {
+    MCHECK_EQ(up[0].event_id, std::string("819418"));
+    MCHECK_EQ(up[1].event_id, std::string("819420"));
+    MCHECK_EQ(up[2].event_id, std::string("819088"));
+    MCHECK_EQ(up[3].event_id, std::string("819083"));
+  }
+  // As recorded (every real game over), that entry is the only one not
+  // over, and still not a game to show.
+  MCHECK_EQ(team_read(slurp("mlbstats_team_eug_202605.json"), kEugene, at("2026-05-23T15:00:00Z"), s, &up, 4), 0);
+  MCHECK(up.empty());
+  // Every real game sits 12 to 30 hours after midnight UTC of its date: the
+  // West Coast's night games (5/22's at 01:35 UTC on 5/23) are kept.
+  const std::string may22 = reopened("mlbstats_team_eug_202605.json", "2026-05-22T00:00:00Z");
+  MCHECK_EQ(team_read(may22, kEugene, at("2026-05-22T15:00:00Z"), s), 1);
+  MCHECK_EQ(s.event_id, std::string("819423"));
+  // A document without the dates' own date (an older read) is taken as listed.
+  MCHECK_EQ(team_read(std::string("{\"dates\":[{\"games\":[{\"gamePk\":9,\"gameDate\":\"2027-05-19T00:15:00Z\","
+                                  "\"status\":{\"codedGameState\":\"S\"}}]}]}"),
+                      kEugene, at("2026-05-23T15:00:00Z"), s),
+            1);
+  MCHECK_EQ(s.event_id, std::string("9"));
   // Not a schedule document
   MCHECK_EQ(team_read(std::string("{"), kDurham, nov, s), -1);
   MCHECK_EQ(team_read(std::string("[]"), kDurham, nov, s), -1);

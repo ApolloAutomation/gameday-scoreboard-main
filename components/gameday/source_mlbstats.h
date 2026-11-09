@@ -83,7 +83,9 @@ bool mlb_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t 
 // record. 0: none listed. -1: not a schedule document. With upcoming, also
 // the games not started yet in date order, up to max, for the Up next list.
 // A postponed game is listed again on its new date with the same id; only
-// the entry that isn't over counts. Out is valid with 0 or 1.
+// the entry that isn't over counts. An entry whose start is days away from
+// the date it is listed under (a placeholder MLB never played) is skipped.
+// Out is valid with 0 or 1.
 template<typename TInput>
 int parse_mlb_team(TInput &input, uint32_t our_id, int64_t now, Schedule &out,
                    std::vector<Upcoming> *upcoming = nullptr, size_t max = 0) {

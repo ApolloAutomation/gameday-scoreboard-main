@@ -24,8 +24,11 @@ static const char *const kLevels = "11,12,13,14";
 // fields= keeps only these keys, wherever they sit in the document. A parent
 // must be listed for its children to come through ("teams,away,team,id").
 static const char *const kTeamFields =
-    "dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,teamName,"
-    "leagueRecord,wins,losses,gameNumber";
+    "dates,date,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
+    "teamName,leagueRecord,wins,losses,gameNumber";
+// The far read leaves out each date's own date (listed_on): it lists only
+// games to come, so its first is the opener, ahead of any entry misdated
+// under a later date, and 88 dates would add 1.7 KB to every read.
 static const char *const kFarFields = "dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD";
 static const char *const kGameFields =
     "dates,games,gamePk,gameDate,status,codedGameState,statusCode,detailedState,reason,startTimeTBD,teams,away,home,"
@@ -43,6 +46,11 @@ static const int kTeamDaysBack = 1, kTeamDaysAhead = 10, kFarDaysAhead = 240;
 // start time yet is listed at midnight Eastern, so its day has to be over.
 static const int64_t kStaleStart = 18 * 3600, kStaleTbd = 30 * 3600;
 static const int64_t kEastern = 5 * 3600;
+// Every game the four levels played in 2026 starts 12 to 30 hours after
+// midnight UTC of the date the API lists it under. One entry listed under
+// 2026-05-22 started in May 2027, a placeholder with no time yet: a start
+// outside these bounds of its date is not that date's game.
+static const int64_t kListedBefore = 12 * 3600, kListedAfter = 48 * 3600;
 
 const char *milb_level_name(uint32_t level) {
   switch (level) {
@@ -164,7 +172,9 @@ static void keep_side_team(JsonObject side, std::initializer_list<const char *> 
 }
 
 void fill_mlb_team_filter(JsonDocument &f) {
-  JsonObject g = f["dates"].add<JsonObject>()["games"].add<JsonObject>();
+  JsonObject d = f["dates"].add<JsonObject>();
+  d["date"] = true;
+  JsonObject g = d["games"].add<JsonObject>();
   keep(g, {"gamePk", "gameDate", "gameNumber"});
   keep(g["status"].to<JsonObject>(), {"codedGameState", "startTimeTBD"});
   JsonObject teams = g["teams"].to<JsonObject>();
@@ -219,6 +229,13 @@ static int64_t game_start(JsonObjectConst g, bool &tbd) {
     kick = day * 86400 + kEastern;
   }
   return kick;
+}
+
+// Whether a start belongs to the date its entry is listed under (d, the
+// dates[] entry). A date that isn't there or doesn't parse passes.
+static bool listed_on(JsonObjectConst d, int64_t kick) {
+  int64_t day = parse_iso8601_z(text(d, "date") + "T00:00");
+  return day <= 0 || kick <= 0 || (kick >= day - kListedBefore && kick < day + kListedAfter);
 }
 
 static uint32_t team_id(JsonObjectConst side) { return side["team"]["id"] | 0u; }
@@ -276,6 +293,8 @@ int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedu
       bool tbd = false;
       int64_t kick = game_start(g, tbd);
       if (st == MlbState::PRE && now > 0 && kick > 0 && now - kick > (tbd ? kStaleTbd : kStaleStart))
+        continue;
+      if (!listed_on(d, kick))
         continue;
       Side away = read_side(g, "away"), home = read_side(g, "home");
       bool at_home = our_id != 0 && home.id == our_id;

@@ -203,11 +203,14 @@ server; `test_mlbstats.cpp` checks the URLs). Minor league baseball was
 between seasons, so the live documents are winter league games (sport 17,
 the Dominican, Venezuelan, Puerto Rican and Mexican Pacific leagues), which
 the same endpoint serves in the same shape; the team, far, final and
-postponed documents are minor league ones:
+postponed documents are minor league ones. The two team reads were recorded
+again at 00:30 UTC on 2026-11-09, when the team read's `fields=` list gained
+each date's own `date`; Durham's games are the same as before:
 
 | File | Source |
 | --- | --- |
 | `mlbstats_team_dur_202604.json` | Team read, Durham Bulls (234, Triple-A), `startDate=2026-04-06&endDate=2026-04-17`: 815849 at SWB postponed 4/7 (cold), listed again 4/10 as game 2 of a doubleheader (no start time, postponed again) and 4/11 as game 2 (final), a doubleheader each day. Every game over; the tests set the ones from a given day on back to Scheduled to read it as on that morning |
+| `mlbstats_team_eug_202605.json` | Team read, Eugene Emeralds (461, High-A), `startDate=2026-05-22&endDate=2026-06-02`: under 5/22, after that night's game, 864127 TRI @ EUG, game 2 with no start time, still Scheduled, its `gameDate` 2027-05-19. Of the 8,718 games the four levels list for 2026, the only one more than 30 hours from midnight UTC of its date. Every real game over |
 | `mlbstats_team_none.json` | Team read, Durham, `startDate=2026-11-07&endDate=2026-11-18`: `{"dates":[]}` between seasons |
 | `mlbstats_far_dur.json` | Far read, Durham, `sportId=11&startDate=2026-11-19&endDate=2027-07-06`: next season's first 88 games, the opener 860674 on 2027-03-26 |
 | `mlbstats_game_final.json` | Game read, 816688 MEM @ DUR 2026-08-14, Final 12-2, probable pitchers, the last count and runners still in the line score |
