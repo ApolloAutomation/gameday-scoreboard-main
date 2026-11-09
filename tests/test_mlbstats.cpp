@@ -803,6 +803,32 @@ void test_day() {
   MCHECK(!day_read(std::string("{\"dates\":{}}"), live));
 }
 
+// Live games between scans while MLB waits out a failure: only MLB's reads
+// wait for it. A minor league day MLB failed doesn't hold the finals
+// rotation's other days or the scan for a live game, and the fallback card's
+// failed read never pushes the scan back.
+void test_held_next() {
+  // No wait running: the scan's own time, 0 when it is due.
+  MCHECK_EQ(held_next_ms(90000, 0, false), 90000u);
+  MCHECK_EQ(held_next_ms(0, 0, true), 0u);
+  // MLB waiting: the scan when it is due, beside ESPN's leagues...
+  MCHECK_EQ(held_next_ms(0, 600000, false), 0u);
+  // ...but not a scan of minor league baseball alone, which waits for MLB.
+  MCHECK_EQ(held_next_ms(0, 600000, true), 600000u);
+  // Between scans, whichever comes first: the scan, or MLB's day again.
+  MCHECK_EQ(held_next_ms(120000, 600000, false), 120000u);
+  MCHECK_EQ(held_next_ms(120000, 30000, false), 30000u);
+  MCHECK_EQ(held_next_ms(120000, 30000, true), 30000u);
+  // A refusal's long wait never stands in for the 2 minute rescan.
+  HostWait w;
+  uint32_t ms = w.fail(true, 30 * 60 * 1000, 0, 1000);
+  MCHECK(ms >= 30u * 60 * 1000);
+  MCHECK_EQ(held_next_ms(2 * 60 * 1000, w.left(1000), false), 2u * 60 * 1000);
+  MCHECK_EQ(held_next_ms(0, w.left(1000), false), 0u);
+  // Its end, when it comes first
+  MCHECK_EQ(held_next_ms(3 * 60 * 60 * 1000, w.left(1000 + ms - 5000), false), 5000u);
+}
+
 void test_host_wait() {
   // MLB's run of failures is its own: ESPN's Backoff is a different object.
   HostWait w;
@@ -811,6 +837,9 @@ void test_host_wait() {
   MCHECK(ms >= kBackoffBaseMs / 2 && ms <= kBackoffBaseMs);
   MCHECK(w.waiting(1000 + ms - 1));
   MCHECK(!w.waiting(1000 + ms));
+  MCHECK_EQ(w.left(1000), ms);
+  MCHECK_EQ(w.left(1000 + ms - 1), 1u);
+  MCHECK_EQ(w.left(1000 + ms), 0u);
   MCHECK_EQ((int) w.run.streak, 1);
   // A refusal waits the longer schedule and honors Retry-After
   ms = w.fail(true, 20 * 60 * 1000, 0, 5000);
@@ -1105,6 +1134,7 @@ int run_mlbstats_tests(int &total_checks) {
   test_host_wait();
   test_scan_backoff();
   test_side_backoff();
+  test_held_next();
   test_merged_features();
   test_health();
   total_checks += checks;

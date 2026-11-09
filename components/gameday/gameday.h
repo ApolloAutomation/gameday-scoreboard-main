@@ -967,6 +967,19 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool host_waiting_(League league) const {
     return ::espn::is_mlb_stats(league) ? this->mlb_wait_.waiting(millis()) : this->backing_off_();
   }
+  // The time left in the wait for the host the league's games come from, 0
+  // when that is ESPN (backing_off_) or no wait runs.
+  uint32_t host_left_(League league, uint32_t now) const {
+    return ::espn::is_mlb_stats(league) ? this->mlb_wait_.left(now) : 0;
+  }
+  // The soonest a wait for a host other than ESPN ends, 0 when none runs.
+  uint32_t soonest_host_left_(uint32_t now) const { return this->mlb_wait_.left(now); }
+  // Live games' fallback card: the time until the rescan for a live game,
+  // which nothing the card waits on may outlast.
+  uint32_t rescan_left_() const {
+    const uint32_t since = millis() - this->live_started_ms_;
+    return since >= this->live_rescan_ms_ ? 0 : this->live_rescan_ms_ - since;
+  }
   // Someone asked for fresh data (Refresh Now, a new team, mode or favorite):
   // read now, but keep the failure count so another failure waits longer.
   void end_backoff_wait_() {

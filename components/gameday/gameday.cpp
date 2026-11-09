@@ -2822,6 +2822,10 @@ uint32_t GamedayComponent::back_off_() {
                                        millis());
     ESP_LOGW(TAG, "%u failed MLB read(s) in a row%s: next try in %us", (unsigned) this->mlb_wait_.run.streak,
              this->mlb_wait_.run.throttled ? ", MLB is refusing" : "", (unsigned) (ms / 1000));
+    // Live games' fallback card: the rescan for a live game never waits for
+    // MLB (interval_for_phase_). The card waits out the rest (start_job_).
+    if (this->live_fallback_ && !this->job_.need_scan && ms > this->rescan_left_())
+      ms = this->rescan_left_();
     return ms;
   }
   uint32_t ms = this->fail_run_.fail(this->job_.throttled, this->job_.retry_after_ms, random_uint32());
@@ -3130,8 +3134,7 @@ uint32_t GamedayComponent::interval_for_phase_() const {
   // The fallback card is only borrowing the board: a 15 minute PRE cycle, or
   // the 6 hours an out of season team gets, must never outlast the rescan.
   if (this->live_fallback_) {
-    uint32_t since = millis() - this->live_started_ms_;
-    uint32_t left = since >= this->live_rescan_ms_ ? 0 : this->live_rescan_ms_ - since;
+    uint32_t left = this->rescan_left_();
     if (ms > left)
       ms = left;
   }
@@ -3201,8 +3204,17 @@ void GamedayComponent::start_job_() {
       return;
     }
     uint32_t since = now - this->live_started_ms_;
-    if (this->live_started_ms_ != 0 && since < this->live_rescan_ms_) {
-      this->schedule_next_(this->live_rescan_ms_ - since);
+    uint32_t scan_left =
+        this->live_started_ms_ != 0 && since < this->live_rescan_ms_ ? this->live_rescan_ms_ - since : 0;
+    // A host other than ESPN that failed holds only its own leagues' days
+    // (apply_recap_job_): they are read again when its wait ends, and the
+    // scan doesn't wait for it unless those leagues are all it would read.
+    bool scan_held = !j.scan_leagues.empty();
+    for (League l : j.scan_leagues)
+      scan_held = scan_held && this->host_left_(l, now) != 0;
+    uint32_t wait = ::espn::held_next_ms(scan_left, this->soonest_host_left_(now), scan_held);
+    if (wait != 0) {
+      this->schedule_next_(wait);
       return;
     }
     j.need_scan = true;
@@ -3237,7 +3249,13 @@ void GamedayComponent::start_job_() {
     }
     // In the fallback with the rescan not due: fall through to the My team
     // path below, so the card is fetched and polled by that code and not by
-    // a copy of it.
+    // a copy of it. A minor league team's card waits while its host waits
+    // out a failure, and the rescan never waits for it.
+    uint32_t held = j.team != nullptr ? this->host_left_(j.team->league, now) : 0;
+    if (held != 0) {
+      this->schedule_next_(::espn::held_next_ms(this->rescan_left_(), held, false));
+      return;
+    }
   }
   if (j.team != nullptr && ::espn::is_leaderboard(j.team->league)) {
     // A golf tour or a racing series: one header read, plus the calendar
@@ -4911,8 +4929,11 @@ void GamedayComponent::apply_recap_job_() {
     return;
   if (!this->recap_day_(this->job_)) {
     // The same day again after the backoff. The rotation keeps going with
-    // what it has.
-    this->schedule_next_(this->back_off_());
+    // what it has. A day from a host other than ESPN waits for that host's
+    // wait (recap_job_ holds it) while the other leagues' days and the scan
+    // for a live game go on (start_job_).
+    const uint32_t ms = this->back_off_();
+    this->schedule_next_(this->job_mlb_only_() ? 0 : ms);
     return;
   }
   this->clear_backoff_();

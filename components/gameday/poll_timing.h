@@ -103,6 +103,8 @@ struct HostWait {
   // Read now, but keep the run so another failure waits longer.
   void end_wait() { this->wait_ms = 0; }
   bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
+  // The time left in the wait, 0 when none is running.
+  uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
 };
 
 // A Live games scan's minor league read, folded into the MLB Stats API's
@@ -164,6 +166,21 @@ inline uint8_t add_miss(uint8_t misses) { return misses < 255 ? (uint8_t) (misse
 // decides. Without one, a failed or refused cup read backs off.
 inline bool cup_read_backs_off(bool cup_ok, bool polled, bool game_ok, bool throttled) {
   return polled ? !game_ok : (!cup_ok || throttled);
+}
+
+// Live games between scans, while a host other than ESPN waits out a failure
+// (HostWait): only that host's reads wait for it. The finals rotation's days
+// from it and the fallback card's reads come when its wait ends, while the
+// rotation's other days and the scan for a live game go on. scan_left: the
+// time until the scan, 0 when it is due. held_left: the wait left, 0 when
+// none runs. scan_held: the scan would read only leagues from that host, so
+// it waits too. Returns the time until the next job, 0 to start it now.
+inline uint32_t held_next_ms(uint32_t scan_left, uint32_t held_left, bool scan_held) {
+  if (held_left == 0)
+    return scan_left;
+  if (scan_left == 0)
+    return scan_held ? held_left : 0;
+  return held_left < scan_left ? held_left : scan_left;
 }
 
 }  // namespace espn
