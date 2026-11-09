@@ -2236,8 +2236,9 @@ static void test_rotate_seconds() {
     CHECK(espn::rotate_minutes_valid(m));
     CHECK_EQ(espn::rotate_saved_seconds(m, s < 60), s);  // what is saved reads back the same
   }
-  // The flag counts only next to 1 minute: a minute setting from firmware
-  // that left it set is still minutes, and every panel from before reads as it was.
+  // The flag counts only next to 1 minute: any other minute set on older
+  // firmware, which leaves it set, is still minutes, and every panel from
+  // before reads as it was. 1 minute set there can't be told from 30 seconds.
   CHECK_EQ(espn::rotate_saved_seconds(1, true), 30);
   CHECK_EQ(espn::rotate_saved_seconds(1, false), 60);
   CHECK_EQ(espn::rotate_saved_seconds(10, true), 600);
@@ -8536,6 +8537,23 @@ static void test_idle_busy() {
   CHECK(idle_busy(live));
   live.state = GameState::PRE;
   CHECK(!idle_busy(live));
+  // A game the scan picked, before its first read lands: its board was
+  // cleared for that read, and the scan saw it in progress, so the clock or
+  // Off or dim doesn't come up at each Switch every.
+  BusyInputs picked = live;
+  picked.valid = false;
+  picked.state = GameState::NOT_FOUND;
+  CHECK(!idle_busy(picked));
+  picked.picked = true;
+  CHECK(idle_busy(picked));
+  picked.recap = true;  // the finals rotation follows no game
+  CHECK(!idle_busy(picked));
+  picked.recap = false;
+  picked.live_fallback = true;  // the team's card goes by its own game
+  CHECK(!idle_busy(picked));
+  picked.live_fallback = false;
+  picked.live_mode = false;  // only Live games picks
+  CHECK(!idle_busy(picked));
   live.recap = true;
   live.state = GameState::IN;
   CHECK(!idle_busy(live));

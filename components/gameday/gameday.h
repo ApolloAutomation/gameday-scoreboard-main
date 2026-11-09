@@ -542,8 +542,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t ticker;    // TICK8_*
     uint8_t standing;  // espn::Standing, 0 (Record) on a panel from before it
     // 1: Switch every is 30 seconds. Counts only while Prefs2's minutes are 1,
-    // the minute it is saved with, so a minute set on older firmware, which
-    // leaves this byte as it was, still wins (startup.h, rotate_saved_seconds).
+    // the minute it is saved with. Older firmware leaves this byte as it was:
+    // another minute set there still wins, but 1 minute set there doesn't
+    // clear it (startup.h, rotate_saved_seconds).
     uint8_t rotate_half;
     uint8_t spare;
   } __attribute__((packed));

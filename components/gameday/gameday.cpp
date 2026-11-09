@@ -1973,6 +1973,8 @@ bool GamedayComponent::idle_busy_() const {
   b.live_mode = this->live_mode_();
   b.recap = this->recap_on_;
   b.live_fallback = this->live_fallback_;
+  // The pick's board was cleared for its first read (apply_job_).
+  b.picked = this->live_unread_ && this->schedule_.valid;
   b.favorites = this->favorites_mode_();
   b.fav_locked = this->fav_locked_;
   for (const auto &e : this->fav_)

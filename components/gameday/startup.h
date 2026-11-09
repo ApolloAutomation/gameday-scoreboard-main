@@ -16,8 +16,11 @@ namespace espn {
 // (Prefs2; a saved value outside the range is treated as corrupt at boot and
 // replaced with the default) plus a flag for 30 seconds (Prefs8), which counts
 // only next to 1 minute, the minute it is saved with. Firmware from before
-// 30 seconds reads such a panel as 1 minute, and one minute set there clears
-// it.
+// 30 seconds reads such a panel as 1 minute and never touches the flag: any
+// other minute set there wins after an update to this firmware, but 1 minute
+// set there (left as it shows, or picked again) saves the same Prefs2 or
+// nothing at all, which can't be told from 30 seconds, so the update brings
+// 30 seconds back.
 static const int kRotateMinMinutes = 1;
 static const int kRotateMaxMinutes = 30;
 static const int kRotateDefaultMinutes = 1;
