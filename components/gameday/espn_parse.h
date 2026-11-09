@@ -905,6 +905,18 @@ inline bool schedule_due(bool have_schedule, bool force, uint32_t now, uint32_t 
   return force || !have_schedule || (now - fetched_ms) >= interval;
 }
 
+// MLB's and HockeyTech's team reads list only games still to come, so in My
+// team a read while a final lingers (the six-hour read or Refresh Now) names
+// the next game and would take the final off the board early. ESPN's team
+// endpoint keeps naming the final, and run_job_ skips its look-ahead then.
+// For a team from another host the read waits for the linger to end: the
+// cycle polls the final instead, and Refresh Now's flag stays set for the
+// read after. post_since_ms is when the board first showed the final (0: not
+// final); unsigned subtraction keeps its age right across the millis() wrap.
+inline bool team_read_waits(Source source, uint32_t post_since_ms, uint32_t now, uint32_t linger_ms) {
+  return source != Source::ESPN && post_since_ms != 0 && (now - post_since_ms) < linger_ms;
+}
+
 // ESPN's team endpoint names a team's next game as soon as the current one
 // starts (MIL and LAD on 2026-10-12), so a read during a game skips it.
 // `today` is the team's first unfinished game on the day's scoreboard

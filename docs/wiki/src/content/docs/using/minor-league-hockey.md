@@ -54,7 +54,7 @@ A few things HockeyTech's feed doesn't have:
 
 ## The final
 
-The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for half an hour in My team, then the panel looks up the next game.
+The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for half an hour in My team, then the panel looks up the next game. **Refresh scores** during that half hour reads the final again and keeps it up.
 
 A postponed, canceled or suspended game shows "Postponed", "Canceled" or "Suspended" and gets no victory splash. The panel moves on to the team's next game.
 

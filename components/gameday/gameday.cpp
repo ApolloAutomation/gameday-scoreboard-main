@@ -3389,6 +3389,11 @@ void GamedayComponent::start_job_() {
   }
   j.need_schedule = ::espn::schedule_due(this->schedule_.valid, this->force_schedule_, now,
                                          this->schedule_fetched_ms_, SCHEDULE_INTERVAL);
+  // A minor league team's read names its next game at once: while its final
+  // lingers, poll the final instead and read the team after (team_read_waits).
+  if (j.need_schedule && this->schedule_.valid && j.team != nullptr &&
+      ::espn::team_read_waits(::espn::league_source(j.team->league), this->post_since_ms_, now, this->linger_ms_()))
+    j.need_schedule = false;
   // Soccer: after each league read, one cup's team read per cycle.
   if (this->comp_next_ > 0 && this->comp_next_ < (int) this->comps_.size() && !j.need_schedule) {
     j.comp = this->comp_next_;

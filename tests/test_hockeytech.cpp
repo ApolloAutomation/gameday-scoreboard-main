@@ -354,6 +354,12 @@ void test_team() {
   Schedule s2;
   HCHECK_EQ(team_read(slurp("ht_team_ahl_syr.json"), kSyracuse, now, s2), 1);
   HCHECK_EQ(s2.event_id, std::string("1029294"));
+  // So a read in the half hour the 11/7 final lingers (the six-hour read or
+  // Refresh Now) would put LAV @ SYR, four days away, up in its place: in My
+  // team the read waits for the linger to end and the final is polled.
+  const uint32_t linger = 30u * 60000u, final_ms = 5u * 3600000u;
+  HCHECK(team_read_waits(Source::HOCKEYTECH, final_ms, final_ms + 10u * 60000u, linger));
+  HCHECK(!team_read_waits(Source::HOCKEYTECH, final_ms, final_ms + linger, linger));
   // A game in progress is the one
   HCHECK_EQ(team_read(edited_bar("ht_team_ahl_syr.json", "1029277", "GameStatus", "2"), kSyracuse, now, s, &up, 4), 1);
   HCHECK_EQ(s.event_id, std::string("1029277"));

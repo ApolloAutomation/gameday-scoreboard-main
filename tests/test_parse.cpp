@@ -2027,6 +2027,31 @@ static void test_schedule_due() {
   CHECK(schedule_due(true, false, before_wrap + 1000u + kSix, before_wrap, kSix));
 }
 
+static void test_team_read_waits() {
+  // My team, a final on the board since 10:00 (millis 36,000,000) with a
+  // 30 minute linger (the AHL's and the ECHL's) or 10 (minor league baseball)
+  const uint32_t at_final = 36000000u, min = 60000u, linger = 30 * min;
+  // ESPN's team endpoint keeps naming the final: its read never waits
+  CHECK(!team_read_waits(Source::ESPN, at_final, at_final + 5 * min, linger));
+  // MLB's and HockeyTech's name the next game: the six-hour read or Refresh
+  // Now waits until the final has lingered its time
+  CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final, linger));
+  CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final + 29 * min, linger));
+  CHECK(!team_read_waits(Source::HOCKEYTECH, at_final, at_final + linger, linger));
+  CHECK(team_read_waits(Source::MLB_STATS, at_final, at_final + 9 * min, 10 * min));
+  CHECK(!team_read_waits(Source::MLB_STATS, at_final, at_final + 10 * min, 10 * min));
+  // No final on the board: read as usual
+  CHECK(!team_read_waits(Source::HOCKEYTECH, 0, at_final, linger));
+  CHECK(!team_read_waits(Source::MLB_STATS, 0, 5 * min, linger));
+  // Across the millis() wrap the final's age is still a few minutes
+  const uint32_t before_wrap = 0xFFFFFFFFu - min;
+  CHECK(team_read_waits(Source::HOCKEYTECH, before_wrap, 4 * min, linger));
+  CHECK(!team_read_waits(Source::HOCKEYTECH, before_wrap, linger, linger));
+  // Refresh Now (schedule_due's force) in the linger: the read is due but waits
+  CHECK(schedule_due(true, true, at_final + min, at_final - min, kSix));
+  CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final + min, linger));
+}
+
 static void test_team_cache() {
   Schedule d;
   CHECK(parse_team_str(slurp("fixtures/team_nfl_dal.json"), d));
@@ -8819,6 +8844,7 @@ int main() {
   test_follow();
   test_schedule_league();
   test_schedule_due();
+  test_team_read_waits();
   test_no_live_rescan();
   test_team_cache();
   test_team_cache_edges();

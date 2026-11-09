@@ -47,7 +47,7 @@ A walk-off does get its splash, "WALK-OFF" with fireworks, under the **Walk-off*
 
 ## The final
 
-The ticker says "Final", "Final/10" after extra innings, or "Final/7" for a game called early, with each team's hits and errors and the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for ten minutes, then the panel looks up the next game.
+The ticker says "Final", "Final/10" after extra innings, or "Final/7" for a game called early, with each team's hits and errors and the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for ten minutes, then the panel looks up the next game. **Refresh scores** during those ten minutes reads the final again and keeps it up.
 
 ## Doubleheaders and rainouts
 
