@@ -1307,10 +1307,12 @@
   // Minor league baseball: a day's games at the four levels, from the MLB
   // Stats API like the panel's Live games scan.
   const MLB_DAY = "https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&hydrate=team,linescore"
-    + "&fields=dates,games,gamePk,gameDate,status,codedGameState,teams,away,home,team,id,abbreviation,teamName,score,"
-    + "linescore,currentInning,inningState,scheduledInnings&date=";
+    + "&fields=dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
+    + "teamName,score,linescore,currentInning,inningState,scheduledInnings&date=";
   const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
   // One MLB Stats game as On now's tile: "Top 5th", "Final/10", "Postponed".
+  // Game 2 of a doubleheader has no start time (startTimeTBD) and a
+  // gameDate five minutes after game 1's: "TBD", as the panel shows it.
   const mlbGame = (lg, g) => {
     const c = String((g.status || {}).codedGameState || "S")[0];
     const state = "IMN".includes(c) ? "in" : "FOQR".includes(c) ? "post" : "DCTU".includes(c) ? "off" : "pre";
@@ -1320,6 +1322,7 @@
     const detail = state === "in" ? (half && inning ? half + " " + ordinal(inning) : "In Progress")
       : state === "post" ? (inning && ls.scheduledInnings && inning !== ls.scheduledInnings ? "Final/" + inning : "Final")
       : state === "off" ? ({ D: "Postponed", C: "Canceled" }[c] || "Suspended")
+      : (g.status || {}).startTimeTBD ? "TBD"
       : new Date(g.gameDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const side = (k) => {
       const x = (g.teams || {})[k] || {};

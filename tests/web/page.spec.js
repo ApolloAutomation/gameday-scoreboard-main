@@ -1838,6 +1838,11 @@ test("On now lists today's minor league games from MLB's stats service", async (
               linescore: { currentInning: 7, inningState: "Bottom", scheduledInnings: 9 } },
             { gamePk: 3, gameDate: "2026-07-04T23:35:00Z", status: { codedGameState: "D" },
               teams: { away: side(531, "SWB", "RailRiders"), home: side(552, "SYR", "Mets") } },
+            { gamePk: 4, gameDate: "2026-07-05T00:05:00Z", status: { codedGameState: "S", startTimeTBD: false },
+              teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
+            // Game 2 of a doubleheader: no start time, listed five minutes after game 1
+            { gamePk: 5, gameDate: "2026-07-05T00:10:00Z", status: { codedGameState: "S", startTimeTBD: true },
+              teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
           ],
         }],
       },
@@ -1848,11 +1853,12 @@ test("On now lists today's minor league games from MLB's stats service", async (
   await page.locator("#pick").click();
   // A game on opens the picker on On now
   await expect(page.locator(".tabs button.on")).toHaveText("On now");
-  await expect(page.locator("#tiles .gh")).toHaveText(["Live now", "Final", "Postponed or canceled"]);
-  await expect(page.locator("#tiles .game .det")).toHaveText(["Bot 7th", "Final/11", "Postponed"]);
+  await expect(page.locator("#tiles .gh")).toHaveText(["Live now", "Later today", "Final", "Postponed or canceled"]);
+  await expect(page.locator("#tiles .game .det")).toHaveText(["Bot 7th", /^7:05\sPM$/, "TBD", "Final/11", "Postponed"]);
   await expect(page.locator("#tiles .game.live .side img").first())
     .toHaveAttribute("src", "https://midfield.mlbstatic.com/v1/team/235/spots/64");
   expect(asked.searchParams.get("sportId")).toBe("11,12,13,14");
+  expect(asked.searchParams.get("fields").split(",")).toContain("startTimeTBD");
   expect(asked.searchParams.get("date")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await page.locator("#tiles .side", { hasText: "Bulls" }).click();
   await expectSet(request, { team: "milb:234" });
