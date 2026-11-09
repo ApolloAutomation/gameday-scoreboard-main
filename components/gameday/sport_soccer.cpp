@@ -381,7 +381,15 @@ static std::string stats_line(const GameSnapshot &s) {
   return out;
 }
 
-static std::string records_part(const GameSnapshot &s) { return pair_line("W-D-L", s, s.team_record, s.opp_record); }
+// The followed club's place (the Standing setting) stands apart from the
+// W-D-L records: "ARS 2nd EPL | W-D-L LEE 2-3-3".
+static std::string records_part(const GameSnapshot &s, const std::string &standing) {
+  if (standing.empty())
+    return pair_line("W-D-L", s, s.team_record, s.opp_record);
+  std::string out = s.team_abbr + " " + standing;
+  add_part(out, pair_line("W-D-L", s, "", s.opp_record));
+  return out;
+}
 
 // "Full time", "After extra time", "PSG win 4-3 on penalties".
 static std::string final_line(const GameSnapshot &s) {
@@ -422,7 +430,7 @@ std::string soccer_status_text(const GameSnapshot &s, const TickerOptions &o, co
       add_part(out, goals_line(s));
       add_part(out, pair_line("Red cards", s, f.team_reds > 0 ? std::to_string(f.team_reds) : "",
                               f.opp_reds > 0 ? std::to_string(f.opp_reds) : ""));
-      add_part(out, records_part(s));
+      add_part(out, records_part(s, o.team_standing));
       return ascii_fold(out);
     case GameState::IN:
       break;
@@ -432,7 +440,7 @@ std::string soccer_status_text(const GameSnapshot &s, const TickerOptions &o, co
     add_part(out, goals_line(s));
     add_part(out, pair_line("Cards", s, cards(f.team_yellows, f.team_reds), cards(f.opp_yellows, f.opp_reds)));
     add_part(out, stats_line(s));
-    add_part(out, records_part(s));
+    add_part(out, records_part(s, o.team_standing));
     return ascii_fold(out);
   }
   if (o.soccer_stats) {
@@ -469,6 +477,13 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
       best = (int) i;
   }
   return best >= 0 ? best : over;
+}
+
+void league_standing(std::vector<Schedule> &comps) {
+  for (size_t i = 1; i < comps.size(); i++) {
+    comps[i].seed = comps[0].seed;
+    comps[i].place = comps[0].place;
+  }
 }
 
 }  // namespace espn

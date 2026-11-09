@@ -426,6 +426,140 @@ test("the On now tab asks ESPN for every college game, not the Top 25", async ({
   expect(asked.ncaa.get("groups")).toBe("80");
 });
 
+test("a college team's rank shows before its abbreviation on the board and in the lists", async ({ page, request }) => {
+  // On now (it opens there with a game in progress): ESPN's curatedRank, 99
+  // for an unranked side
+  const side = (homeAway, id, abbr, name, rank) =>
+    ({ homeAway, score: "0", curatedRank: { current: rank }, team: { id, abbreviation: abbr, shortDisplayName: name } });
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard*", (route) =>
+    route.fulfill({
+      json: {
+        events: [{
+          id: "401856723",
+          date: "2026-10-17T23:30Z",
+          status: { type: { state: "in", shortDetail: "8:12 - 2nd" } },
+          competitions: [{ competitors: [side("home", "2633", "TENN", "Tennessee", 14), side("away", "2", "AUB", "Auburn", 99)] }],
+        }],
+      },
+    }),
+  );
+  const g = (await deviceState(request)).game;
+  await reset(request, {
+    team: { l: "ncaa", id: 194, abbr: "OSU", name: "Ohio State Buckeyes" },
+    game: { ...g, l: "ncaa", ta: "OSU", ti: 194, tr: "9-1", trk: 5, oa: "MICH", oi: 130, or: "8-2", ork: 12, tc: "BA0C2F", oc: "00274C" },
+    favs: [{}, {}, {}, {}],
+  });
+  await page.goto("/");
+  await expect(page.locator("#tA .abbr")).toHaveText("#5 OSU");
+  await expect(page.locator("#tA .abbr .rk")).toHaveText("#5");
+  await expect(page.locator("#tA .rec")).toHaveText("9-1");
+  await expect(page.locator("#tB .abbr")).toHaveText("#12 MICH");
+
+  // On now
+  await page.locator("#pick").click();
+  await expect(page.locator(".tabs button.on")).toHaveText("On now");
+  await expect(page.locator("#tiles .side .a")).toHaveText(["AUB", "#14 TENN"]);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+
+  // Unranked: the abbreviation alone
+  await reset(request, { game: { ...g, ork: undefined } });
+  await page.reload();
+  await expect(page.locator("#tA .abbr")).toHaveText("DAL");
+  await expect(page.locator("#tA .abbr .rk")).toHaveCount(0);
+
+  // Favorite teams: each favorite's game with its ranks
+  const t = (l, abbr, name, id) => ({ l, id, abbr, name });
+  await reset(request, {
+    mode: 4,
+    shown: 1,
+    favs: [t("ncaa", "OSU", "Ohio State Buckeyes", 194), t("nfl", "DAL", "Dallas Cowboys", 6), {}, {}],
+    next: [
+      { slot: 1, t: t("ncaa", "OSU", "Ohio State Buckeyes", 194), id: "1", s: "PRE", kick: 1792531500, oi: 130, oa: "MICH", trk: 5, ork: 12, ts: 0, os: 0, tv: "FOX", detail: "" },
+      { slot: 2, t: t("nfl", "DAL", "Dallas Cowboys", 6), id: "2", s: "PRE", kick: 1792531500, oi: 21, oa: "PHI", ts: 0, os: 0, tv: "CBS", detail: "" },
+    ],
+  });
+  await page.reload();
+  await expect(page.locator("#upnextList .un.fav .n")).toHaveText(["#5 OSU vs #12 MICH", "DAL vs PHI"]);
+
+  // My team's Up next: a ranked opponent's rank before its name
+  await reset(request, {
+    team: { l: "ncaa", id: 103, abbr: "BC", name: "Boston College Eagles" },
+    favs: [{}, {}, {}, {}],
+    game: { ...g, l: "ncaa", id: "401858214", ta: "BC", ti: 103, oa: "RUTG", oi: 164 },
+    next: [
+      { id: "401858214", kick: 1792531500, oi: 164, oa: "RUTG", on: "Rutgers", home: true, neutral: false, tv: "ESPN2" },
+      { id: "401858242", kick: 1793136300, oi: 259, oa: "VT", on: "Virginia Tech", home: true, neutral: false, tv: "" },
+      { id: "401858246", kick: 1793741100, oi: 2567, oa: "SMU", on: "SMU", ork: 17, home: false, neutral: false, tv: "ACCN" },
+    ],
+  });
+  await page.reload();
+  await expect(page.locator("#upnextList .un .n")).toHaveText(["vs Virginia Tech", "@ #17 SMU"]);
+});
+
+test("a rank that doesn't fit the board's team column on a narrow phone is left out", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  await reset(request, {
+    team: { l: "ncaa", id: 26, abbr: "UCLA", name: "UCLA Bruins" },
+    favs: [{}, {}, {}, {}],
+    game: { ...g, l: "ncaa", ta: "UCLA", ti: 26, tr: "9-1", trk: 12, oa: "MICH", oi: 130, or: "8-2", ork: 25 },
+  });
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+  await expect(page.locator("#tA .abbr")).toHaveText("UCLA", { useInnerText: true });
+  await expect(page.locator("#tA .abbr .rk")).toBeHidden();
+  await expect(page.locator("#tB .abbr .rk")).toBeHidden();
+  // One line: no rank wrapping above the name
+  const one = await page.locator("#tA .abbr").evaluate((a) => a.getClientRects().length === 1 && a.offsetHeight < 40);
+  expect(one).toBe(true);
+  // Turned to a wider screen, it comes back.
+  await page.setViewportSize({ width: 768, height: 800 });
+  await expect(page.locator("#tA .abbr")).toHaveText("#12 UCLA");
+  await expect(page.locator("#tA .abbr .rk")).toBeVisible();
+  await expect(page.locator("#tB .abbr")).toHaveText("#25 MICH");
+});
+
+test("standing next to pro teams: the record by default, posts seed and place, hidden where it doesn't apply", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const sel = page.getByLabel("Standing next to pro teams");
+  await expect(page.locator("#standingRow")).toBeVisible();
+  // Named like the other settings, the help as its description
+  await expect(page.getByRole("combobox", { name: "Standing next to pro teams", exact: true })).toBeVisible();
+  await expect(sel).toHaveAccessibleDescription(/its playoff seed, or its place/);
+  await expect(sel).toHaveValue("0");
+  await sel.selectOption("1");
+  await expectSet(request, { standing: "1" });
+  await expect(sel).toHaveValue("1");
+  await sel.selectOption({ label: "Place" });
+  await expectSet(request, { standing: "2" });
+  expect((await deviceState(request)).standing).toBe(2);
+
+  // What the panel puts in the record's place shows under the team.
+  const g = (await deviceState(request)).game;
+  await reset(request, { standing: 2, game: { ...g, tr: "1st NFCE" } });
+  await page.reload();
+  await expect(sel).toHaveValue("2");
+  await expect(page.locator("#tA .rec")).toHaveText("1st NFCE");
+  await expect(page.locator("#tB .rec")).toHaveText("0-1");
+
+  // A panel that follows only college teams: they have a rank instead.
+  await reset(request, { team: { l: "ncaa", id: 194, abbr: "OSU", name: "Ohio State Buckeyes" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
+  // Nothing followed yet: shown.
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#standingRow")).toBeVisible();
+  // Firmware from before the setting sends none.
+  await reset(request, { standing: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
+});
+
 const PGA = { l: "pga", id: 1106, abbr: "PGA", name: "PGA Tour" };
 
 test("a golf tour is a team on the Golf tab, and its leaderboard shows on the board", async ({ page, request }) => {

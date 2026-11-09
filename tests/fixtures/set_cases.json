@@ -18,7 +18,7 @@
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
     "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false,
-    "alerts": 524287, "alertfav": false
+    "alerts": 524287, "alertfav": false, "standing": 0
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -169,6 +169,14 @@
     {"name": "favorite teams only on", "set": [["alertfav", "1"]], "expect": {"alertfav": true}},
     {"name": "favorite teams only off", "start": {"alertfav": true}, "set": [["alertfav", "0"]], "expect": {"alertfav": false}},
     {"name": "alerts and favorite teams only in one request", "set": [["alertfav", "1"], ["alerts", "3"]], "expect": {"alerts": 3, "alertfav": true}},
+    {"name": "standing next to pro teams: seed", "set": [["standing", "1"]], "expect": {"standing": 1}},
+    {"name": "standing next to pro teams: place", "set": [["standing", "2"]], "expect": {"standing": 2}},
+    {"name": "standing back to the record", "start": {"standing": 2}, "set": [["standing", "0"]], "expect": {"standing": 0}},
+    {"name": "a standing past place is refused", "start": {"standing": 1}, "set": [["standing", "3"]], "expect": {"standing": 1}},
+    {"name": "a negative standing is refused", "start": {"standing": 2}, "set": [["standing", "-1"]], "expect": {"standing": 2}},
+    {"name": "a standing reads like atoi, so text is the record", "start": {"standing": 2}, "set": [["standing", "seed"]], "expect": {"standing": 0}},
+    {"name": "a standing past int's range is refused, not wrapped to the record", "start": {"standing": 1}, "set": [["standing", "4294967296"]], "expect": {"standing": 1}},
+    {"name": "the standing leaves the ticker switches alone", "set": [["standing", "2"], ["count", "0"]], "expect": {"standing": 2, "count": false, "down": true}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

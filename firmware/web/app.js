@@ -44,13 +44,13 @@
   // when they differ.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
-    ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&" },
+    ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
     mlb: { prefix: "MLB", tab: "MLB", name: "MLB", path: "baseball/mlb", logo: "mlb", byId: false, scan: "" },
     mls: { prefix: "MLS", tab: "MLS", name: "MLS", path: "soccer/usa.1", logo: "soccer", byId: true, scan: "" },
     epl: { prefix: "EPL", tab: "EPL", name: "Premier League", path: "soccer/eng.1", logo: "soccer", byId: true, scan: "" },
     nba: { prefix: "NBA", tab: "NBA", name: "NBA", path: "basketball/nba", logo: "nba", byId: false, scan: "" },
     wnba: { prefix: "WNBA", tab: "WNBA", name: "WNBA", path: "basketball/wnba", logo: "wnba", byId: false, scan: "" },
-    mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&" },
+    mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&", college: true },
     nhl: { prefix: "NHL", tab: "NHL", name: "NHL", path: "hockey/nhl", logo: "nhl", byId: false, scan: "" },
     pga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/pga", logo: "leagues", byId: false, file: "pgatour", scan: "", board: "golf" },
     lpga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/lpga", logo: "leagues", byId: false, file: "lpga", scan: "", board: "golf" },
@@ -62,6 +62,11 @@
   // A golf tour or a racing series: its board is a leaderboard
   const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
   const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
+  // A pro league: its teams have a seed and a place (the Standing setting); a
+  // college league's have a rank instead.
+  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college;
+  // "#5 OSU": a college team's rank (1-25) before its abbreviation
+  const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
   // The picker tab a league is on: the first league with the same tab text.
   const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
   // "" for a league with no logo: its image stays hidden.
@@ -186,6 +191,7 @@
       <div class="card">
         <h2>Panel</h2>
         <div id="panelCtls"></div>
+        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
       </div>
       <div class="card">
         <h2>Favorites</h2>
@@ -343,7 +349,7 @@
   const held = {};       // key -> {v: the value as the state document has it, ack: when the post was answered}
   const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
   const stateForm = {
-    mode: Number, rotate: Number, lockon: Number, release: Number, collide: Number,
+    mode: Number, rotate: Number, lockon: Number, release: Number, collide: Number, standing: Number,
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
@@ -496,7 +502,16 @@
   // marking it done; its detail says which.
   const endedAs = (g) => (g.done === false && g.detail ? g.detail : "Final");
 
-  const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color) => {
+  // The rank stays on the abbreviation's line only where the two fit the
+  // team's column, as on the panel: a phone's narrow board leaves it out.
+  const fitRank = (node) => {
+    const rk = node.querySelector(".abbr .rk");
+    if (!rk) return;
+    rk.hidden = false;
+    rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
+  };
+  window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
+  const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
     const img = node.querySelector("img");
     // No id: a side with no team yet, or the demo build's made-up teams.
     const src = id ? logoUrl(league, id, abbr) : "";
@@ -504,6 +519,9 @@
     img.style.visibility = src ? "visible" : "hidden";
     const a = node.querySelector(".abbr");
     a.textContent = abbr || "---";
+    // A college team's rank before its abbreviation, like a broadcast
+    if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
+    fitRank(node);
     a.classList.toggle("poss", !!poss);
     a.style.color = "#" + (color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
@@ -650,8 +668,8 @@
     st.classList.toggle("live", g.s === "IN");
     st.textContent = g.s === "IN" ? "LIVE" : g.s === "POST" ? endedAs(g).toUpperCase() : "UPCOMING";
     const football = !g.sport;
-    renderTeam($("#tA"), g.l, g.ti, g.ta, g.tr, football ? g.tt : null, g.p === 1, g.tc);
-    renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc);
+    renderTeam($("#tA"), g.l, g.ti, g.ta, g.tr, football ? g.tt : null, g.p === 1, g.tc, g.trk);
+    renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc, g.ork);
     $("#sA").textContent = g.ts;
     $("#sB").textContent = g.os;
     const clock = $("#clock");
@@ -816,6 +834,8 @@
   };
 
   // ---- toggles and favorites (static controls on the state document) --------
+  const standingSel = $("#standing");
+  standingSel.onchange = () => setGD({ standing: standingSel.value });
   document.querySelectorAll(".sw[data-set]").forEach((sw) => {
     sw.setAttribute("role", "switch");
     setOn(sw, false, "aria-checked");
@@ -959,6 +979,11 @@
     // Firmware from before big-play alerts has neither.
     $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
     alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
+    // Older firmware sends no standing. The row shows while nothing is
+    // followed, or a pro team is (college teams have a rank instead).
+    const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
+    $("#standingRow").hidden = S.standing === undefined || (followed.length > 0 && !followed.some((t) => isPro(t.l)));
+    if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
     // Firmware that can't install updates (older, or the demo build) leaves it out.
     $("#autoupdRow").hidden = S.autoupd === undefined;
     // Older firmware and the bar and demo builds have no beta to follow.
@@ -1113,7 +1138,10 @@
           if (!c) continue;
           const side = (ha) => {
             const x = c.competitors.find((k) => k.homeAway === ha) || {};
-            return { id: Number(x.team?.id), abbr: x.team?.abbreviation || "", score: x.score || "0", name: x.team?.shortDisplayName || x.team?.displayName || "" };
+            // curatedRank: a college team's rank, 99 when unranked
+            const rank = Number(x.curatedRank?.current);
+            return { id: Number(x.team?.id), abbr: x.team?.abbreviation || "", score: x.score || "0", name: x.team?.shortDisplayName || x.team?.displayName || "",
+              rank: rank >= 1 && rank < 99 ? rank : 0 };
           };
           const type = ev.status?.type || {};
           // "off": ended without being completed, so postponed, canceled or suspended
@@ -1164,7 +1192,7 @@
         b.appendChild(img);
         const txt = el("div", "st");
         txt.appendChild(el("div", "n", s.name));
-        txt.appendChild(el("div", "a", s.abbr));
+        txt.appendChild(el("div", "a", ranked(s.rank, s.abbr)));
         b.appendChild(txt);
         b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
         b.onclick = () => {
@@ -1416,7 +1444,7 @@
       img.src = logoUrl(n.t.l, n.t.id, n.t.abbr);
       row.appendChild(img);
       const txt = el("div", "ut");
-      const name = n.t.abbr + (n.oa ? " vs " + n.oa : "");
+      const name = ranked(n.trk, n.t.abbr) + (n.oa ? " vs " + ranked(n.ork, n.oa) : "");
       txt.appendChild(el("div", "n", name));
       let when = n.none ? "No game scheduled" : "Not checked yet";
       if (n.s === "IN") when = n.ts + " - " + n.os + (n.detail ? " · " + n.detail : "");
@@ -1448,7 +1476,7 @@
       img.src = logoUrl(lg, u.oi, u.oa);
       row.appendChild(img);
       const txt = el("div", "ut");
-      txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + (u.on || u.oa)));
+      txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + ranked(u.ork, u.on || u.oa)));
       txt.appendChild(el("div", "w", kickLabel(u.kick, u.tbd) + (u.tv ? " · " + u.tv : "")));
       row.appendChild(txt);
       host.appendChild(row);

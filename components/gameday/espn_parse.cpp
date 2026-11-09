@@ -259,6 +259,8 @@ GameSnapshot final_snapshot(const Final &f) {
   g.opp_color = f.home_color;
   g.team_record = f.away_record;
   g.opp_record = f.home_record;
+  g.team_rank = f.away_rank;
+  g.opp_rank = f.home_rank;
   g.team_logo = team_logo_url((League) f.league, f.away_id, f.away_abbr.c_str());
   g.opp_logo = team_logo_url((League) f.league, f.home_id, f.home_abbr.c_str());
   g.sport = league_sport((League) f.league);
@@ -279,6 +281,8 @@ GameSnapshot pending_snapshot(const Pending &p) {
   g.opp_color = p.home_color;
   g.team_record = p.away_record;
   g.opp_record = p.home_record;
+  g.team_rank = p.away_rank;
+  g.opp_rank = p.home_rank;
   g.tv = p.tv;
   g.team_timeouts = g.opp_timeouts = 3;  // before kickoff; a final card's stay unknown (-1)
   g.to_guess = 3;
@@ -290,8 +294,9 @@ GameSnapshot pending_snapshot(const Pending &p) {
 
 bool parse_team_str(const std::string &json, Schedule &out) { return parse_team(json, out); }
 
-bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out) {
-  return parse_upcoming(json, our_team_id, max, out);
+bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out,
+                        bool ranks) {
+  return parse_upcoming(json, our_team_id, max, out, ranks);
 }
 
 bool parse_scoreboard_str(const std::string &json, const std::string &event_id, uint32_t our_team_id,
@@ -388,6 +393,11 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
 
 namespace detail {
 
+uint8_t rank_of(JsonObjectConst c) {
+  int r = c["curatedRank"]["current"] | 99;
+  return r >= 1 && r < 99 ? (uint8_t) r : 0;
+}
+
 void add_part(std::string &out, const std::string &part) {
   if (part.empty())
     return;
@@ -396,13 +406,27 @@ void add_part(std::string &out, const std::string &part) {
   out += part;
 }
 
-std::string records_line(const GameSnapshot &s) {
-  std::string out;
-  if (!s.team_record.empty())
-    add_part(out, s.team_abbr + " " + s.team_record);
-  if (!s.opp_record.empty())
-    add_part(out, s.opp_abbr + " " + s.opp_record);
+// "#5 OSU 9-1", "DAL Seed 4", "MICH 8-2"; "" with neither a record nor a rank.
+static std::string side_line(uint8_t rank, const std::string &abbr, const std::string &rec) {
+  if (rec.empty() && rank == 0)
+    return "";
+  std::string out = rank_label(rank, abbr, SIZE_MAX);
+  if (!rec.empty())
+    out += " " + rec;
   return out;
+}
+
+std::string records_line(const GameSnapshot &s, const std::string &standing) {
+  std::string out;
+  add_part(out, side_line(s.team_rank, s.team_abbr, standing.empty() ? s.team_record : standing));
+  add_part(out, side_line(s.opp_rank, s.opp_abbr, s.opp_record));
+  return out;
+}
+
+std::string ranked_matchup(const GameSnapshot &s) {
+  if (s.team_rank == 0 && s.opp_rank == 0)
+    return "";
+  return rank_label(s.team_rank, s.team_abbr, SIZE_MAX) + " vs " + rank_label(s.opp_rank, s.opp_abbr, SIZE_MAX);
 }
 
 void add_odds(std::string &out, const GameSnapshot &s, const TickerOptions &o, const std::string &odds) {
@@ -457,6 +481,89 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
   return "";
 }
 
+std::string rank_text(uint8_t rank) { return rank == 0 ? std::string() : "#" + std::to_string(rank); }
+
+std::string rank_label(uint8_t rank, const std::string &text, size_t max_chars) {
+  if (rank == 0 || text.empty())
+    return text;
+  std::string t = rank_text(rank) + " " + text;
+  return t.size() <= max_chars ? t : text;
+}
+
+std::string place_short(const std::string &summary) {
+  // "1st", "10th" before " in "
+  const size_t in = summary.find(" in ");
+  if (in == std::string::npos || in == 0 || in > 5 || !isdigit((unsigned char) summary[0]))
+    return "";
+  std::string group = summary.substr(in + 4);
+  size_t at = group.find(" Division");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Division"));
+  // The initials keep "Conference": "National Football Conference" is "NFC".
+  const std::string named = group;
+  at = group.find(" Conference");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Conference"));
+  const size_t sp = group.find(' ');
+  if (sp == std::string::npos) {
+    static const char *const kShort[][2] = {
+        {"Eastern", "East"},       {"Western", "West"}, {"Central", "Cent"},  {"Pacific", "Pac"},  {"Atlantic", "Atl"},
+        {"Metropolitan", "Metro"}, {"Southeast", "SE"}, {"Southwest", "SW"}, {"Northwest", "NW"}, {"Northeast", "NE"},
+    };
+    for (const auto &k : kShort)
+      if (group == k[0])
+        group = k[1];
+  } else {
+    // Two words, the first in capitals ("NFC East", "NL Cent"): the
+    // conference and the direction's letter. Otherwise the initials
+    // ("English Premier League": "EPL").
+    bool caps = sp > 0 && group.find(' ', sp + 1) == std::string::npos;
+    for (size_t i = 0; i < sp; i++)
+      caps = caps && isupper((unsigned char) group[i]);
+    std::string t = caps ? group.substr(0, sp + 2) : std::string();
+    if (caps)
+      t.erase(sp, 1);
+    for (size_t i = 0; !caps && i < named.size(); i++)
+      if (named[i] != ' ' && (i == 0 || named[i - 1] == ' '))
+        t += (char) toupper((unsigned char) named[i]);
+    group = t;
+  }
+  std::string place = summary.substr(0, in);
+  return group.empty() ? place : place + " " + group;
+}
+
+std::string standing_text(Standing kind, uint8_t seed, const std::string &place) {
+  if (kind == Standing::SEED && seed > 0)
+    return "Seed " + std::to_string(seed);
+  return kind == Standing::PLACE ? place : std::string();
+}
+
+size_t record_row_chars(int clock_px, int board_px, int row_px, int char_px) {
+  if (row_px <= 0 || char_px <= 0)
+    return 0;
+  size_t n = (size_t) (row_px / char_px);
+  // LVGL centers a line at the label's x plus half the room left over
+  // (rounded down); the clock's label is centered on the board.
+  const int clock_left = board_px / 2 - (clock_px + 1) / 2;
+  while (clock_px > 0 && n > 0 && (row_px - (int) n * char_px) / 2 + (int) n * char_px >= clock_left)
+    n--;
+  return n;
+}
+
+std::string board_standing(const std::string &standing, size_t room) {
+  if (standing.size() <= room)
+    return standing;
+  const size_t sp = standing.find(' ');
+  if (sp == std::string::npos)
+    return "";
+  std::string t = standing;
+  t.erase(sp, 1);
+  if (t.size() <= room)
+    return t;
+  // A seed's "Seed" alone says nothing
+  return isdigit((unsigned char) standing[0]) && sp <= room ? standing.substr(0, sp) : std::string();
+}
+
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
   if (s.sport == Sport::GOLF)
     return golf_status_text(s, o, kickoff_local);
@@ -476,6 +583,7 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
       return "No upcoming game";
     case GameState::PRE:
       add_part(out, s.game_name);
+      add_part(out, detail::ranked_matchup(s));
       add_part(out, kickoff_local.empty() ? s.short_detail : kickoff_local);
       add_odds(out, s, o);
       if (s.venue != s.game_name)  // "Rose Bowl | ... | Rose Bowl"
@@ -485,14 +593,14 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
       // A game that ended without being completed says why: Postponed,
       // Canceled or Suspended
       out = s.completed || s.short_detail.empty() ? std::string("Final") : s.short_detail;
-      add_part(out, records_line(s));
+      add_part(out, records_line(s, o.team_standing));
       return out;
     case GameState::IN:
       break;
   }
   if (is_halftime(s)) {
     out = "Halftime";
-    add_part(out, records_line(s));
+    add_part(out, records_line(s, o.team_standing));
     return out;
   }
   if (o.down_distance && in_red_zone(s))

@@ -25,7 +25,7 @@ constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "f
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
-                                    "match",   "beta",   "alerts",  "alertfav"};
+                                    "match",   "beta",   "alerts",  "alertfav", "standing"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -34,6 +34,10 @@ enum class Mode : uint8_t { MY_TEAM = 0, LIVE_NFL = 1, LIVE_NCAA = 2, LIVE_ANY =
 // Mode 0 (My team) to 5 (Live games).
 constexpr int kModeCount = 6;
 static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kModeCount - 1");
+
+// Standing next to pro teams: 0 Record, 1 Seed, 2 Place (espn::Standing).
+constexpr int kStandingCount = 3;
+static_assert((int) Standing::PLACE + 1 == kStandingCount, "parse_set takes standings 0 to kStandingCount - 1");
 
 constexpr int kLockonMinMinutes = 5;
 constexpr int kLockonMaxMinutes = 120;
@@ -178,6 +182,7 @@ enum class SetKind : uint8_t {
   FOLLOW,    // on: pin the game on the board (follow.h); memory only
   ALERTS,    // mask, the alert types switched on
   ALERTFAV,  // on, alerts only for games with the team or a favorite
+  STANDING,  // value, espn::Standing
 };
 
 struct TeamRef {
@@ -217,6 +222,11 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.kind = SetKind::MODE;
     op.value = read_int(v);
     return op.value >= 0 && op.value < kModeCount;
+  }
+  if (k == "standing") {
+    op.kind = SetKind::STANDING;
+    op.value = read_int(v);
+    return op.value >= 0 && op.value < kStandingCount;
   }
   if (k == "rotate") {
     op.kind = SetKind::ROTATE;

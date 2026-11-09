@@ -13,6 +13,12 @@ The next-game card shows both logos, your team on the left, with the records und
 
 Basketball teams have no Up next list on the device page: their season schedules are too large for the panel to read.
 
+:::note[Coming in the next release]
+A ranked men's college basketball team shows its rank in front of its name. Before tip-off the ticker starts with the matchup, like "#2 CONN vs #1 MICH", and the records after the final read "#2 CONN 34-6 | #1 MICH 37-3". On a 128x64 board the rank sits in front of the record under the logo, and on a single 64x64 panel in front of the abbreviation before and after the game, each only where it fits. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+
+An NBA or WNBA team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
+:::
+
 ## During the game
 
 - **The clock and period** under the scores, like "1:04 4th", or "45.3 4th" in the last minute, when ESPN drops the minutes. Overtime reads "OT", then "2OT" and so on. College games play halves, so the clock reads "12:34 1st" or "12:34 2nd".

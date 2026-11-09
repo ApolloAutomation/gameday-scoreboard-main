@@ -88,6 +88,7 @@ std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o
     case GameState::NOT_FOUND:
       return "No upcoming game";
     case GameState::PRE:
+      add_part(out, detail::ranked_matchup(s));
       add_part(out, kickoff_local.empty() ? s.short_detail : kickoff_local);
       add_part(out, b.series);
       add_odds(out, s, o);
@@ -99,14 +100,14 @@ std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o
         return s.short_detail;
       // "Final/OT", "Final/2OT" after overtime
       out = s.short_detail.rfind("Final", 0) == 0 ? s.short_detail : "Final";
-      add_part(out, b.series.empty() ? records_line(s) : b.series);
+      add_part(out, b.series.empty() ? records_line(s, o.team_standing) : b.series);
       return out;
     case GameState::IN:
       break;
   }
   if (b.phase == Phase::HALFTIME || b.phase == Phase::END_PERIOD) {
     // The clock row says which break it is.
-    out = b.series.empty() ? records_line(s) : b.series;
+    out = b.series.empty() ? records_line(s, o.team_standing) : b.series;
     return out.empty() ? s.short_detail : out;
   }
   if (o.clock)

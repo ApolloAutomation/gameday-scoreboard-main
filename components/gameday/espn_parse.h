@@ -31,7 +31,16 @@ struct Schedule {
   // team endpoint did not say.
   uint32_t opp_id{0};
   std::string opp_abbr;
+  // The team's standing, for the Standing setting (pro leagues): ESPN's
+  // playoffSeed (0 when it gave none) and its standingSummary cut short
+  // (place_short: "1st NFCE"; "" when it gave none).
+  uint8_t seed{0};
+  std::string place;
 };
+
+// The Standing setting: what follows a pro team's abbreviation where its
+// record goes, for the team the board follows. Saved as a byte (Prefs8).
+enum class Standing : uint8_t { RECORD = 0, SEED = 1, PLACE = 2 };
 
 enum class Half : uint8_t { NONE, TOP, MID, BOTTOM, END };
 
@@ -219,6 +228,10 @@ struct GameSnapshot {
   int period{0};
   std::string team_abbr, opp_abbr;
   uint32_t team_id{0}, opp_id{0};
+  // A college team's rank, ESPN's curatedRank (the AP poll, then the College
+  // Football Playoff's once it ranks): 1-25 (detail::rank_of), 0 unranked or
+  // a pro team.
+  uint8_t team_rank{0}, opp_rank{0};
   int team_score{0}, opp_score{0};
   std::string team_record, opp_record;
   std::string team_color, opp_color;
@@ -271,6 +284,7 @@ struct Upcoming {
   bool time_tbd{false};  // no kickoff time yet (see Schedule::time_tbd)
   uint32_t opp_id{0};
   std::string opp_abbr, opp_name;
+  uint8_t opp_rank{0};  // a college opponent's rank (detail::rank_of), 0 unranked
   bool home{false};     // we are the home side
   bool neutral{false};  // neutral site
   std::string tv;
@@ -292,6 +306,7 @@ struct LiveGame {
 struct Final {
   uint8_t league{0};
   uint8_t rank{99};  // the better AP rank of the two sides, 99 when neither is ranked
+  uint8_t away_rank{0}, home_rank{0};  // each side's, 0 unranked
   int64_t kickoff_epoch{0};
   std::string detail;  // "Final", "Final/OT"
   uint32_t away_id{0}, home_id{0};
@@ -315,6 +330,7 @@ bool is_team_placeholder(const GameSnapshot &g);
 struct Pending {
   uint8_t league{0};
   uint8_t rank{99};  // the better AP rank of the two sides, 99 when neither is ranked
+  uint8_t away_rank{0}, home_rank{0};  // each side's, 0 unranked
   int64_t kickoff_epoch{0};
   std::string event_id;
   uint32_t away_id{0}, home_id{0};
@@ -345,6 +361,9 @@ struct TickerOptions {
   bool soccer_stats{true};    // goals, cards, possession and shots
   bool last_play{true};
   bool odds{true};
+  // The followed pro team's seed or place in its record's place (standing_text,
+  // the Standing setting); "" shows its record.
+  std::string team_standing;
 };
 
 struct Splash {
@@ -384,8 +403,10 @@ std::string dark_logo(const std::string &url);
 std::string team_logo_url(League league, uint32_t espn_id, const char *abbr);  // for a team with no game loaded yet
 
 bool parse_team_str(const std::string &json, Schedule &out);
-// Up to `max` games not yet started, in date order, from the schedule endpoint.
-bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out);
+// Up to `max` games not yet started, in date order, from the schedule endpoint;
+// ranks: each opponent's rank too (a college league's schedule).
+bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out,
+                        bool ranks = false);
 bool parse_scoreboard_str(const std::string &json, const std::string &event_id, uint32_t our_team_id,
                           GameSnapshot &out);
 // The team's next game that is not over yet in a day's scoreboard
@@ -406,6 +427,38 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
                      uint32_t alerts = UINT32_MAX, bool wide = false);
 uint32_t parse_color(const std::string &hex);
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
+// "#5" for a rank, "" for 0 (unranked).
+std::string rank_text(uint8_t rank);
+// text with the rank in front ("#5 OSU", "#5 9-1") when the two fit
+// max_chars, else text alone; text alone for no rank or no text. The panel
+// passes a label's width over its font's character width (the Spleen fonts
+// are fixed width, 5 px a character in spleen_8): 6 for an abbreviation on
+// one panel (32 px), and for a record under a logo on two record_row_chars.
+std::string rank_label(uint8_t rank, const std::string &text, size_t max_chars);
+// ESPN's standingSummary cut short: "1st in NFC East" is "1st NFCE", "2nd in
+// Central Division" "2nd Cent", "4th in Eastern Conference Division" "4th
+// East", "2nd in English Premier League" "2nd EPL", "14th in National
+// Football Conference" "14th NFC". "" when it doesn't read as a place.
+std::string place_short(const std::string &summary);
+// What the Standing setting puts in a pro team's record's place: "Seed 4", the
+// place, or "" (its record) for Record or when ESPN gave neither.
+std::string standing_text(Standing kind, uint8_t seed, const std::string &place);
+// The record row under each logo on two panels (pages/gameday-live.yaml): a
+// label 36 px wide at the board's edge, its text centered, in spleen_8 (5 px
+// a character). While the game is on, the clock sits between the two rows,
+// centered on the 128 px board, in spleen_12 (6 px a character).
+static const int kBoardPx = 128, kRecordRowPx = 36, kRecordCharPx = 5, kClockCharPx = 6;
+// The characters the record row holds a pixel clear of a clock text clock_px
+// wide (0: no clock): 7, and 6 beside a 10-character clock ("End of 2nd").
+// The panel passes its fonts' measured widths.
+size_t record_row_chars(int clock_px, int board_px = kBoardPx, int row_px = kRecordRowPx,
+                        int char_px = kRecordCharPx);
+// A standing in room characters of the record row: as it is, else without
+// the space after the place ("1stNFCE", "Seed10"), else the place alone
+// ("10th"); "" (the record) when none of it fits.
+std::string board_standing(const std::string &standing, size_t room);
+// League-wide: a college league's teams carry a rank, a pro league's a standing.
+inline bool is_college(League league) { return league == League::NCAA || league == League::MCBB; }
 // The board and ticker with no game on the board, in place of the page's
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
@@ -531,6 +584,11 @@ std::string ascii_fold(const std::string &utf8);
 // game that kicked off over four hours ago, or done_event (a game the panel
 // saw finish), only counts when no read names anything else.
 int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const std::string &done_event);
+// The Standing setting's seed and place are the league's: a cup's team read
+// ranks the club in the cup's own table under the league's name ("15th in
+// English Premier League" on a Champions League night). Each cup's read
+// (comps[1] on) takes the league read's, comps[0].
+void league_standing(std::vector<Schedule> &comps);
 // Basketball (sport_basketball.cpp). The JSON filter and extras parse are
 // declared in espn_parse_impl.h, next to ArduinoJson.
 std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
@@ -740,7 +798,10 @@ std::string whole_words(const std::string &s, size_t max);
 // at most line characters, so a wrapping label never breaks one in the
 // middle: "International" is "Int'l", a longer word is cut.
 std::string fit_words(const std::string &s, size_t line);
-std::string records_line(const GameSnapshot &s);
+// standing: in place of our side's record (TickerOptions::team_standing).
+std::string records_line(const GameSnapshot &s, const std::string &standing);
+// "#5 OSU vs #12 MICH" before a game when either side is ranked, else "".
+std::string ranked_matchup(const GameSnapshot &s);
 // The pre-game betting parts when the ticker shows odds: the line, the
 // over/under and the TV listing. Soccer builds its own line.
 void add_odds(std::string &out, const GameSnapshot &s, const TickerOptions &o);

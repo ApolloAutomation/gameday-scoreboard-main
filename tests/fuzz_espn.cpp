@@ -258,6 +258,9 @@ size_t boot_cache(const Schedule &team, int64_t now) {
   if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
                  back.league != (uint8_t) League::NFL))
     abort();
+  // The Standing setting's seed and place come back too, the place cut to the record's 15 characters.
+  if (loaded && (back.seed != team.seed || back.place != team.place.substr(0, sizeof(c.place) - 1)))
+    abort();
   if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
     abort();
   return back.event_id.size();
@@ -444,7 +447,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (parse_team(r, team)) {
       std::vector<Schedule> comps{team, team};
       comps[1].kickoff_epoch = now + 3600;
+      comps[1].place += " cup";  // a cup's own table, which the league's replaces
+      league_standing(comps);
+      if (comps[1].place != team.place || comps[1].seed != team.seed)
+        abort();
       sink = sink + (size_t) (pick_schedule(comps, now, team.event_id) + 1);
+      // The board's cut of the place fits the row beside any clock.
+      const size_t room = record_row_chars((int) (size % 80));
+      if (board_standing(team.place, room).size() > room)
+        abort();
       sink = sink + boot_cache(team, now);
     }
   }
@@ -453,9 +464,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   for (const Pick &p : picks) {
     std::vector<Upcoming> up;
     ChunkReader r1(data, size, chunk);
-    if (parse_upcoming(r1, p.team_id, 5, up))
+    if (parse_upcoming(r1, p.team_id, 5, up, true))
       for (const auto &u : up)
-        sink = sink + u.opp_name.size() + u.tv.size();
+        sink = sink + u.opp_name.size() + u.tv.size() + u.opp_rank;
 
     Schedule day;
     ChunkReader r2(data, size, chunk);
