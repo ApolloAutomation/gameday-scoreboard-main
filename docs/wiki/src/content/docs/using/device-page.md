@@ -111,7 +111,7 @@ With **Show how to connect when the panel starts** on, the panel's IP address an
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
 :::note[Coming in the next release]
-The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it. It's hidden while your panel follows only college teams, minor league teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it, and so does an AHL or ECHL team, since HockeyTech has none either. It's hidden while your panel follows only college teams, minor league baseball, AHL or ECHL teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 The Panel card also has a **When nothing is on** part under **Showing**:
 
@@ -142,7 +142,7 @@ The Celebrations card has a switch for each kind of splash, grouped by sport. Li
 | Basketball | Lead change, Buzzer beater, Overtime, Final |
 | Favorite players | Scores |
 
-They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/). A minor league team counts as baseball here. Its games get **Runs** and **Walk-off** only, since MLB's minor league scores don't say how a run scored.
+They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/). A minor league team counts as baseball here. Its games get **Runs** and **Walk-off** only, since MLB's minor league scores don't say how a run scored. An AHL or ECHL team counts as hockey, and its goals splash under **Goal** like an NHL team's.
 
 **Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
 
@@ -202,6 +202,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 
 :::note[Coming in the next release]
 Minor league baseball adds a **MiLB** tab to the team chooser, after **MLB**, with the teams under a heading for each level, and On now lists minor league games too. A minor league team has an Up next list of its next three games. Diagnostics show **Last MLB read** once the panel has read minor league scores, and the data row becomes **Data used**, counting what the panel downloads from MLB as well as ESPN. When the panel can't reach MLB for a minor league team, the board says **Can't reach MLB**. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
+
+:::note[Coming in the next release]
+The AHL and the ECHL add an **AHL** tab and an **ECHL** tab to the team chooser, after **NHL**, with HockeyTech's logos; On now doesn't list their games, since HockeyTech's feed doesn't answer your browser. An AHL or ECHL team has an Up next list of its next three games. Diagnostics show **Last HockeyTech read** once the panel has read their scores, and **Data used** counts what the panel downloads from HockeyTech too. When the panel can't reach HockeyTech for an AHL or ECHL team, the board says **Can't reach HockeyTech**. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 :::
 
 ### Follow beta

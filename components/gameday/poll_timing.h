@@ -84,8 +84,9 @@ struct Backoff {
 };
 
 // The run of failed reads and the wait it started, for one host: the MLB
-// Stats API keeps its own (minor league baseball), so a refusal there never
-// holds back ESPN's reads, nor ESPN's a minor league team's.
+// Stats API (minor league baseball) and HockeyTech (the AHL and the ECHL)
+// keep their own, so a refusal there never holds back ESPN's reads, nor
+// ESPN's a minor league team's.
 struct HostWait {
   Backoff run;
   uint32_t since_ms{0};
@@ -107,34 +108,36 @@ struct HostWait {
   uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
 };
 
-// A Live games scan's minor league read, folded into the MLB Stats API's
-// wait (apply_job_). read: the scan asked MLB. failed: that read failed.
-// leagues: how many leagues the scan read. Beside ESPN's leagues a failure
-// is counted here and the scan goes on with the others. Scanned alone, the
+// A Live games scan's reads from one host other than ESPN (the MLB Stats
+// API, HockeyTech), folded into that host's wait (apply_job_). read: the
+// scan asked the host. failed: one of those reads failed. others: the scan
+// read leagues from another host too. Beside them a failure is counted here
+// and the scan goes on with the others. With only this host's leagues, the
 // failure is the scan's own, which the scan's backoff (back_off_, for a job
-// that read only MLB) counts once: clearing the run here first would start
-// every failed scan over at the shortest wait. An answer starts the run over.
-// Returns the wait a failure started here, 0 when none did.
-inline uint32_t mlb_scan_result(HostWait &w, bool read, bool failed, size_t leagues, bool refused,
-                                uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+// that read only that host) counts once: clearing the run here first would
+// start every failed scan over at the shortest wait. An answer starts the
+// run over. Returns the wait a failure started here, 0 when none did.
+inline uint32_t host_scan_result(HostWait &w, bool read, bool failed, bool others, bool refused,
+                                 uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
   if (!read)
     return 0;
   if (!failed) {
     w.clear();
     return 0;
   }
-  return leagues > 1 ? w.fail(refused, retry_after_ms, rnd, now) : 0;
+  return others ? w.fail(refused, retry_after_ms, rnd, now) : 0;
 }
 
 // The idle display's scores, read outside the mode (gameday.cpp's side
-// reads): their minor league read keeps to the MLB Stats API's wait too.
-// While it runs they leave minor league baseball out (start_side_job_), and
-// a minor league read of theirs that failed or was refused counts in it,
-// beside ESPN's leagues or alone, since no backoff of the mode's counts it.
-// An answer starts the run over. Returns the wait a failure started, 0 when
-// none did.
-inline uint32_t mlb_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
-                                uint32_t rnd, uint32_t now) {
+// reads): their reads from a host other than ESPN (the MLB Stats API for
+// minor league baseball, HockeyTech for the AHL and the ECHL) keep to that
+// host's wait too. While it runs they leave its leagues out
+// (start_side_job_), and a read of theirs from it that failed or was refused
+// counts in it, beside other hosts' leagues or alone, since no backoff of the
+// mode's counts it. An answer starts the run over. Returns the wait a failure
+// started, 0 when none did.
+inline uint32_t host_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
+                                 uint32_t rnd, uint32_t now) {
   if (!read)
     return 0;
   if (!failed) {

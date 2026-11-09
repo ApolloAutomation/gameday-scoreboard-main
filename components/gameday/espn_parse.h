@@ -25,6 +25,7 @@ struct Schedule {
   uint32_t group{0};
   std::string team_color;
   std::string team_record;
+  std::string opp_record;  // the team read's, where it has one (the AHL and the ECHL)
   const char *comp_slug{nullptr};  // a kCups slug when the game is in that cup, nullptr for the league
   bool next_final{false};          // the team endpoint's next event is already over (ESPN lags)
   // The other side of event_id, so its logo can download early. 0 when the
@@ -338,6 +339,8 @@ struct LiveGame {
   uint32_t away_id{0};      // shown on the left, like a broadcast
   uint32_t home_id{0};      // for its logo, fetched as soon as the game is picked
   std::string away_abbr, home_abbr;
+  // HockeyTech's day read only (the AHL, the ECHL): its game read has none
+  std::string away_record, home_record;
 };
 
 // One game of a day's scoreboard before it is read in full: enough for the
@@ -515,7 +518,8 @@ inline bool is_college(League league) { return league == League::NCAA || league 
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
 // ESPN has never said this team has no game ("Can't reach MLB" for a team
-// whose games come from the MLB Stats API, source). Empty for the default, and in
+// whose games come from the MLB Stats API, "Can't reach HockeyTech" for an
+// AHL or ECHL team: source). Empty for the default, and in
 // a live mode, which has its own words. captive (captive.h: the Wi-Fi answered
 // with a sign-in page and ESPN has not answered since) wins over all of it,
 // live modes included, since nothing can be read until it ends.
@@ -901,6 +905,18 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them);
 // subtraction keeps the age right across the millis() wrap.
 inline bool schedule_due(bool have_schedule, bool force, uint32_t now, uint32_t fetched_ms, uint32_t interval) {
   return force || !have_schedule || (now - fetched_ms) >= interval;
+}
+
+// MLB's and HockeyTech's team reads list only games still to come, so in My
+// team a read while a final lingers (the six-hour read or Refresh Now) names
+// the next game and would take the final off the board early. ESPN's team
+// endpoint keeps naming the final, and run_job_ skips its look-ahead then.
+// For a team from another host the read waits for the linger to end: the
+// cycle polls the final instead, and Refresh Now's flag stays set for the
+// read after. post_since_ms is when the board first showed the final (0: not
+// final); unsigned subtraction keeps its age right across the millis() wrap.
+inline bool team_read_waits(Source source, uint32_t post_since_ms, uint32_t now, uint32_t linger_ms) {
+  return source != Source::ESPN && post_since_ms != 0 && (now - post_since_ms) < linger_ms;
 }
 
 // ESPN's team endpoint names a team's next game as soon as the current one

@@ -20,6 +20,7 @@
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
 #include "watch.h"
+#include "source_hockeytech.h"
 #include "source_mlbstats.h"
 
 using namespace espn;
@@ -349,6 +350,36 @@ int main() {
       std::vector<Pending> pending;
       int64_t next = 0;
       return parse_mlb_day(json, live, &next, &finals, &pending);
+    });
+  }
+
+  // The AHL and the ECHL, from HockeyTech's feed (source_hockeytech.h): the
+  // team read (a scorebar of six games) with the Up next list, the game
+  // centre's clock (the shootout final, the largest), and a full Saturday's
+  // sixteen finals with every goal, the largest day.
+  {
+    std::string json = slurp("fixtures/ht_team_ahl_syr.json");
+    measure("team_hockeytech", [&] {
+      Schedule s;
+      std::vector<Upcoming> up;
+      return parse_ht_team(json, 324, parse_iso8601_z("2026-11-09T01:30Z"), s, &up, 4) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/ht_game_echl_final_so.json");
+    measure("poll_hockeytech_game", [&] {
+      GameSnapshot g;
+      return parse_ht_game(json, League::ECHL, 107, g);
+    });
+  }
+  {
+    std::string json = slurp("fixtures/ht_day_ahl_20261107.json");
+    measure("scan_hockeytech_day", [&] {
+      std::vector<LiveGame> live;
+      std::vector<Final> finals;
+      std::vector<Pending> pending;
+      int64_t next = 0;
+      return parse_ht_day(json, live, &next, &finals, &pending);
     });
   }
 

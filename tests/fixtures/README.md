@@ -229,6 +229,35 @@ each date's own `date`; Durham's games are the same as before:
 | `mlbstats_day_winter.json` | Day read, `sportId=17&date=2026-11-08` at 23:16 UTC: eight games on (one in a rain delay), one final, seven to come (one listed for 21:21 UTC still Scheduled) |
 | `mlbstats_day_milb_20260814.json` | Day read at all four levels, `date=2026-08-14`: 58 finals (one in 11 innings) and three postponed, listed in start order with the postponed ones last |
 
+The AHL and the ECHL, from HockeyTech's feed
+(`https://lscluster.hockeytech.com/feed/index.php`), recorded 2026-11-09
+between 01:12 and 01:28 UTC (Sunday evening in the East) with a `curl/8.0`
+User-Agent, each with the exact query `source_hockeytech.cpp` builds
+(`test_hockeytech.cpp` checks the URLs) and the leagues' public site keys from
+`firmware/gameday-common.yaml`. Every game of the weekend was over and none
+was on, so there is no live document: the tests set a recorded clock's live
+fields (status 2, the period, the clock left, the words) the way the feed
+sends them during play. Hockey has no doubleheaders. The feed's server caches
+the scorebar and the day for four minutes and the game centre's clock for one
+(`Cache-Control`, `X-Cache-Status`):
+
+| File | Source |
+| --- | --- |
+| `ht_team_ahl_syr.json` | Team read (`view=scorebar`, `team_id=324`, one game back and five ahead), Syracuse Crunch: 1029277 HFD @ SYR 11/7, Final OT 3-2, then five games to come from 1029294 LAV @ SYR on 11/11. Its counts are games, not days, around the league's own today |
+| `ht_team_echl_rc.json` | Team read, Rapid City Rush (70): 25606 RC @ IDH 11/7 postponed (status 8, the third postponed game in a row there), then five to come from 25626 TAH @ RC on 11/11 |
+| `ht_team_ahl_abb.json` | Team read, Abbotsford Canucks (440), recorded 02:37 UTC: 1029265 ONT @ ABB 11/7 final, then five to come. Abbotsford's home games are in `America/Vancouver` at `-07:00` ("PCT"), its road games in Los Angeles' zone at `-08:00`: British Columbia stayed on summer time from 1 November 2026 |
+| `ht_team_ahl_cgy.json` | Team read, Calgary Wranglers (444), recorded with it: road games at `-07:00` and `-08:00`, then two home games in `America/Edmonton` at `-06:00` ("MDT" all winter, Alberta the same) |
+| `ht_team_ahl_mb.json` | Team read, Manitoba Moose (321), recorded with it: 1029272 TOR @ MB 11/7 in `America/Winnipeg` at `-05:00` ("CDT", Manitoba the same), then road games in Chicago's and Toronto's zones |
+| `ht_game_ahl_pre.json` | Game read (`feed=gc&tab=clock`), 1029294 LAV @ SYR, not started (status 1, progress " 7:00 PM") |
+| `ht_game_ahl_final.json` | 1029271 CLE @ LAV, Final 4-2 |
+| `ht_game_ahl_final_ot.json` | 1029277 HFD @ SYR, Final OT 3-2, the clock at 2:01 left in the overtime |
+| `ht_game_echl_final_ot.json` | 25617 CIN @ IND, Final OT1 3-2 (the ECHL's words), period name "1st OT" |
+| `ht_game_echl_final_so.json` | 25591 BLM @ FW 2026-11-06, Final SO 5-4: period 4 ("1st OT") with an `SO` entry in the scoring |
+| `ht_game_echl_postponed.json` | 25606 RC @ IDH, postponed (status 8) |
+| `ht_day_ahl_20261107.json` | Day read (`view=gamesbydate&fetch_date=2026-11-07`), the AHL's Saturday: 16 finals, four in overtime, every goal listed. Whole, 103 KB (the heap budget's day read) |
+| `ht_day_echl_20261107.json` | The ECHL's Saturday: 13 finals, three in overtime, and RC @ IDH postponed |
+| `ht_day_echl_20261110.json` | The ECHL's Tuesday, read two days ahead: two games to come, one at 10:30 AM Eastern |
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device

@@ -489,6 +489,13 @@ void test_sources_and_reads() {
   WCHECK(watch_sources(true, {League::MILB}, {}, kAlertsAll).empty());
   WCHECK(watch_sources(false, {}, {dur}, kAlertsAll).empty());
   WCHECK(watch_sources(false, {}, {dur, dal}, kAlertsAll).size() == 1);
+  // The AHL and the ECHL come from HockeyTech: the same.
+  const Team *syr = team(League::AHL, 324), *adk = team(League::ECHL, 74);
+  WCHECK(syr != nullptr && adk != nullptr);
+  const std::vector<WatchSource> with_ht =
+      watch_sources(true, {League::NHL, League::AHL, League::ECHL}, {}, kAlertsAll);
+  WCHECK(with_ht.size() == 1 && with_ht[0].league == (uint8_t) League::NHL);
+  WCHECK(watch_sources(false, {}, {syr, adk}, kAlertsAll).empty());
   {
     WatchCtx c;
     c.live = true;
@@ -499,6 +506,9 @@ void test_sources_and_reads() {
     WCHECK(watch_wants_teams(c, (uint8_t) League::MILB, 102, 2310) == 0);
     WCHECK(watch_wants(c, (uint8_t) League::MILB, "776655", 102, 2310) == 0);
     WCHECK(watch_wants_teams(c, (uint8_t) League::MLB, 10, 12) == 1);
+    c.favs.emplace_back((uint8_t) League::AHL, 324);
+    WCHECK(watch_wants_teams(c, (uint8_t) League::AHL, 324, 440) == 0);
+    WCHECK(watch_wants_teams(c, (uint8_t) League::ECHL, 74, 66) == 0);
   }
 
   // A cycle: the first source's scoreboard, then its games one by one.
@@ -915,6 +925,8 @@ void test_favorites_tick() {
   // may go to ESPN.
   WCHECK(watch_refusal_holds_board(false, false, (uint8_t) League::NFL));    // My team, from ESPN
   WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::MILB));  // My team, from MLB
+  WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::AHL));   // and from HockeyTech
+  WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::ECHL));
   WCHECK(watch_refusal_holds_board(false, true, (uint8_t) League::MILB));    // Live games: its scans read ESPN
   WCHECK(!watch_refusal_holds_board(true, false, (uint8_t) League::NFL));    // Favorite teams waits its own way
   WCHECK(watch_after_wait(1000, 5000, 0) == 1000);    // no wait: overdue stays overdue

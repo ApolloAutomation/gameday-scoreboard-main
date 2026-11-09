@@ -42,6 +42,14 @@ CONF_BETA = "beta"
 CONF_UPDATE_MIRROR = "update_mirror"
 CONF_SOURCE = "source"
 CONF_HOST = "host"
+# HockeyTech's feed (source_hockeytech.h), where the AHL's and the ECHL's
+# games come from: each league's public site key and client code, the ones
+# its own site sends. gameday-common.yaml sets them from substitutions, so
+# they can change without a code edit; a league left out can't be read.
+CONF_HOCKEYTECH = "hockeytech"
+CONF_KEY = "key"
+CONF_CLIENT_CODE = "client_code"
+_HOCKEYTECH_LEAGUES = {"ahl": "AHL", "echl": "ECHL"}
 
 gameday_ns = cg.esphome_ns.namespace("gameday")
 GamedayComponent = gameday_ns.class_("GamedayComponent", cg.Component)
@@ -63,7 +71,8 @@ _TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
 # Leagues left out of Home Assistant's team select. Men's college
 # basketball's ~365 teams would push the options past Home Assistant's 16 KB
 # attribute limit, and minor league baseball's 120 would take them from about
-# 9 KB to 12; the device page lists both.
+# 9 KB to 12; the device page lists both. The AHL's and the ECHL's 62 teams
+# are in it (about 1.6 KB more).
 _HA_SKIP_LEAGUES = {"MCBB", "MILB"}
 
 
@@ -121,6 +130,22 @@ def _not_demo_and_bar(config):
     return config
 
 
+def _url_part(value):
+    """A key or client code goes into the feed's query string as it is."""
+    value = cv.string_strict(value)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+        raise cv.Invalid("use only letters, digits, - and _ (at most 64)")
+    return value
+
+
+HOCKEYTECH_FEED = cv.Schema(
+    {
+        cv.Required(CONF_KEY): _url_part,
+        cv.Required(CONF_CLIENT_CODE): _url_part,
+    }
+)
+
+
 def on_mirror(url, host):
     """`url`'s path (and query) on the mirror `host`."""
     src = urlsplit(url)
@@ -156,6 +181,9 @@ CONFIG_SCHEMA = cv.All(cv.Schema(
                 cv.Required(CONF_SOURCE): cv.url,
                 cv.Required(CONF_HOST): cv.url,
             }
+        ),
+        cv.Optional(CONF_HOCKEYTECH): cv.Schema(
+            {cv.Optional(key): HOCKEYTECH_FEED for key in _HOCKEYTECH_LEAGUES}
         ),
         cv.Optional(CONF_ON_UPDATE): automation.validate_automation(
             {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(UpdateTrigger)}
@@ -217,6 +245,16 @@ async def to_code(config):
         cg.add(
             var.set_panel_layout(await cg.get_variable(config[CONF_PANEL_LAYOUT_ID]))
         )
+    for key, league in _HOCKEYTECH_LEAGUES.items():
+        conf = config.get(CONF_HOCKEYTECH, {}).get(key)
+        if conf:
+            cg.add(
+                var.set_hockeytech_feed(
+                    cg.RawExpression(f"::espn::League::{league}"),
+                    conf[CONF_KEY],
+                    conf[CONF_CLIENT_CODE],
+                )
+            )
     for conf in config.get(CONF_ON_UPDATE, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         await automation.build_automation(

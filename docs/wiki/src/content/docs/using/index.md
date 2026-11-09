@@ -17,6 +17,7 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [Baseball: minor leagues](/using/minor-league-baseball/): Triple-A, Double-A, High-A and Single-A, coming in the next release.
 - [Basketball: NBA, WNBA and college](/using/basketball/)
 - [Hockey: NHL](/using/hockey/)
+- [Hockey: AHL and ECHL](/using/minor-league-hockey/): coming in the next release.
 - [Soccer: MLS and the Premier League](/using/soccer/)
 - [Golf: PGA Tour and LPGA Tour](/using/golf/)
 - [Racing: Formula 1 and NASCAR Cup Series](/using/racing/)

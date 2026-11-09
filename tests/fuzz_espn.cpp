@@ -1,6 +1,7 @@
-// Fuzz target: one input goes through every ESPN parser the panel runs, and
-// minor league baseball's MLB Stats parsers (source_mlbstats.h), the text
-// built from what they read, and the finals rotation (recap.h). ESPN's
+// Fuzz target: one input goes through every ESPN parser the panel runs,
+// minor league baseball's MLB Stats parsers (source_mlbstats.h) and the AHL's
+// and the ECHL's HockeyTech parsers (source_hockeytech.h), the text built
+// from what they read, and the finals rotation (recap.h). ESPN's
 // documents share one shape (events, competitions, competitors), so a
 // mutated scoreboard also reaches the event and team parsers. The same input,
 // line by line, is also read as the response headers the panel acts on (Date,
@@ -20,6 +21,7 @@
 #include "players.h"
 #include "poll_timing.h"
 #include "recap.h"
+#include "source_hockeytech.h"
 #include "source_mlbstats.h"
 #include "startup.h"
 #include "watch.h"
@@ -77,6 +79,16 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
   mg["gamePk"] = true;
   mg["teams"]["away"]["team"]["id"] = true;
   mg["teams"]["home"]["team"]["id"] = true;
+  // HockeyTech: a scorebar's games, a day's, and a game centre clock; the
+  // ids are strings
+  JsonObject hb = filter["SiteKit"]["Scorebar"].add<JsonObject>();
+  for (const char *k : {"ID", "HomeID", "VisitorID"})
+    hb[k] = true;
+  JsonObject hd = filter["SiteKit"]["Gamesbydate"].add<JsonObject>();
+  for (const char *k : {"id", "home_team", "visiting_team"})
+    hd[k] = true;
+  filter["GC"]["Clock"]["home_team"]["team_id"] = true;
+  filter["GC"]["Clock"]["visiting_team"]["team_id"] = true;
   JsonDocument doc;
   std::vector<Pick> picks;
   if (deserializeJson(doc, (const char *) data, size, DeserializationOption::Filter(filter),
@@ -103,6 +115,16 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
         if (team != 0 && picks.size() < 6)
           picks.push_back({std::to_string(g["gamePk"] | 0u), team});
       }
+  for (JsonObjectConst g : doc["SiteKit"]["Scorebar"].as<JsonArrayConst>()) {
+    add_pick(picks, espn::detail::str_or_empty(g["ID"]), g["HomeID"]);
+    add_pick(picks, espn::detail::str_or_empty(g["ID"]), g["VisitorID"]);
+  }
+  for (JsonObjectConst g : doc["SiteKit"]["Gamesbydate"].as<JsonArrayConst>()) {
+    add_pick(picks, espn::detail::str_or_empty(g["id"]), g["home_team"]);
+    add_pick(picks, espn::detail::str_or_empty(g["id"]), g["visiting_team"]);
+  }
+  add_pick(picks, "", doc["GC"]["Clock"]["home_team"]["team_id"]);
+  add_pick(picks, "", doc["GC"]["Clock"]["visiting_team"]["team_id"]);
   return picks;
 }
 
@@ -512,6 +534,20 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     }
   }
 
+  {
+    // The AHL's or the ECHL's day, the same way
+    std::vector<LiveGame> live;
+    std::vector<Final> finals;
+    std::vector<Pending> pending;
+    int64_t next = 0;
+    ChunkReader r(data, size, chunk);
+    if (parse_ht_day(r, live, &next, &finals, &pending)) {
+      if (finals.size() > kRecapCap || pending.size() > kPendingKeep)
+        abort();
+      sink = sink + recap(finals, pending, next, now, (uint8_t) League::ECHL);
+    }
+  }
+
   Schedule team;
   {
     ChunkReader r(data, size, chunk);
@@ -570,6 +606,27 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + render(prev, mg, now);
       sink = sink + render(mg, mg, now);
       prev = mg;
+    }
+
+    // The AHL and the ECHL: the team read with its Up next list, and the
+    // game centre's clock around this team, with the schedule's fill
+    Schedule hs;
+    std::vector<Upcoming> hup;
+    ChunkReader r7(data, size, chunk);
+    int listed = parse_ht_team(r7, p.team_id, now, hs, &hup, 4);
+    if (listed > 0 && (hs.event_id.empty() || hup.size() > 4))
+      abort();
+    if (listed > 0)
+      sink = sink + boot_cache(hs, now) + hup.size();
+    GameSnapshot hg;
+    ChunkReader r8(data, size, chunk);
+    if (parse_ht_game(r8, League::AHL, p.team_id, hg)) {
+      if (hg.sport != Sport::HOCKEY || hg.period < 0 || hg.period > 20)
+        abort();
+      ht_fill_from_schedule(hg, hs);
+      sink = sink + render(prev, hg, now);
+      sink = sink + render(hg, hg, now);
+      prev = hg;
     }
 
     for (Sport sport : kSports) {

@@ -139,6 +139,12 @@ void test_list() {
   bad.league = (uint8_t) League::MILB;
   bad.team_id = 234;
   PCHECK(known_team(bad.league, bad.team_id) && !player_valid(bad));
+  bad.league = (uint8_t) League::AHL;  // nor are the AHL's or the ECHL's
+  bad.team_id = 324;
+  PCHECK(known_team(bad.league, bad.team_id) && !player_valid(bad));
+  bad.league = (uint8_t) League::ECHL;
+  bad.team_id = 74;
+  PCHECK(known_team(bad.league, bad.team_id) && !player_valid(bad));
   bad = allen;
   memset(bad.name, 'A', sizeof(bad.name));  // no end
   PCHECK(!player_valid(bad));

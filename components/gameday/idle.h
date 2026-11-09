@@ -367,8 +367,8 @@ inline int today_pick(const std::vector<TodayGame> &games, const LocalDay &day) 
 // the NHL): that final is read too when it started today (since: the local
 // day's start, 0 when My team today isn't the idle display) and isn't the one
 // kept already (have: its start, as day_order gives it, 0 for none; a later
-// one replaces it). Minor league baseball's team read lists today's final
-// itself, which is read the same way.
+// one replaces it). Minor league baseball's, the AHL's and the ECHL's team
+// reads list today's final themselves, which is read the same way.
 inline bool want_today_final(int64_t since, bool next_final, int64_t kickoff, int64_t have) {
   return since > 0 && next_final && kickoff >= since && kickoff > have;
 }

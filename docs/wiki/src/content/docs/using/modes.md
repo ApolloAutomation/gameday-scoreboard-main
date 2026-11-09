@@ -21,6 +21,10 @@ Far from kickoff the panel checks the game every 15 minutes, and every minute in
 A minor league team's scores come from MLB's stats service instead of ESPN, on the same schedule. If MLB fails or refuses the panel, the panel waits longer before asking MLB again, while everything it reads from ESPN goes on as usual, and the other way around. Game 2 of a doubleheader has no start time, so on its day the panel checks it every minute. See [Baseball: minor leagues](/using/minor-league-baseball/).
 :::
 
+:::note[Coming in the next release]
+An AHL or ECHL team's scores come from HockeyTech instead of ESPN, on the same schedule, and HockeyTech is kept apart the same way: if it fails or refuses the panel, only the AHL and the ECHL wait. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
+:::
+
 A golf tour or a racing series is followed like a team, with its tournament or race weekend in place of a game, on its own update schedule. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 Your team is always on the left of the board.
@@ -59,6 +63,10 @@ Live games doesn't follow golf or racing. There are no Golf, Formula 1 or NASCAR
 A **MiLB** button follows minor league games at all four levels, Triple-A to Single-A, together; you can't pick one level. A minor league team as your team or a favorite adds MiLB to the automatic leagues. If MLB's stats service fails or refuses the panel, the other leagues are still checked and MiLB waits its turn.
 :::
 
+:::note[Coming in the next release]
+**AHL** and **ECHL** buttons follow those leagues' games, and an AHL or ECHL team as your team or a favorite adds its league to the automatic leagues. If HockeyTech fails or refuses the panel, the other leagues are still checked and the AHL and the ECHL wait their turn. Their finals join the rotation below.
+:::
+
 A change takes effect right away. When you change the leagues, or change your favorites so that the automatic leagues change, the panel looks for games in the new leagues at once, without waiting for its next check, instead of leaving the old leagues' scores up.
 
 ### When nothing is live
@@ -93,7 +101,7 @@ Favorite teams with no favorites set works like My team, and the ticker asks you
 
 A game counts as on once it starts. The panel keeps the final up for its usual time first: half an hour in My team (ten minutes for baseball), and **After the final** in Favorite teams, where a favorite's game also takes the panel **Take over** minutes before kickoff, as always. **Follow this game** keeps its game up too. After a restart, a final the panel finds already over gets that wait only if the game started less than 4 hours ago, so an automatic update's restart in the night doesn't light up an **Off or dim** panel for last night's game. A golf tour or a racing series keeps its leaderboard up while a round or a session is on, and for half an hour after the final. Overnight between rounds, between a race weekend's sessions, and after that half hour, the idle display has the panel.
 
-The idle display needs the time of day. What it shows waits for the panel's first board after a restart, or after you pick a new team or mode, but **Off or dim** and the night hours start as soon as the panel knows the time, and a restart keeps it. While the panel isn't on Wi-Fi, **Off or dim** leaves it lit. **Scores** reads today's games from ESPN about once every half hour while games you don't follow are on, and at the next start time otherwise, the same as Live games does. Minor league scores come from MLB, and while MLB fails or refuses the panel they wait for it, as your minor league team's own game does, and the other leagues' scores go on. See [Night hours](/using/brightness-and-clock/#night-hours) for the overnight schedule.
+The idle display needs the time of day. What it shows waits for the panel's first board after a restart, or after you pick a new team or mode, but **Off or dim** and the night hours start as soon as the panel knows the time, and a restart keeps it. While the panel isn't on Wi-Fi, **Off or dim** leaves it lit. **Scores** reads today's games from ESPN about once every half hour while games you don't follow are on, and at the next start time otherwise, the same as Live games does. Minor league scores come from MLB and AHL and ECHL scores from HockeyTech, and while one of them fails or refuses the panel its scores wait for it, as your own team's game from it does, and the other leagues' scores go on. See [Night hours](/using/brightness-and-clock/#night-hours) for the overnight schedule.
 
 A big play in another game counts as a game that's on (see [Big plays in other games](#big-plays-in-other-games)). The panel switches to it over the clock, the scores, **My team today** or **Off or dim**, and lights up for it even when **Off or dim** has it dark. In the night hours it stays at the night brightness. After the stay the idle display has the panel back, and **Scores** comes back without reading today's games again. To keep the panel dark or on the clock while games you don't follow are on, turn off **Switch to big plays in other games**. While **Scores** shows, its reads and the checks of other games take turns between the panel's own reads, and neither holds the other up.
 :::
@@ -120,7 +128,7 @@ It watches up to 8 games at once, your favorites' first, then the closest games,
 - **Follow this game** stops all of it: no switch and no checks of other games while the panel follows a game. If the board is on another game's big play when you turn it on, the panel goes straight back to the game it was showing and follows that one.
 - The idle display gives way to a big play in another game for its stay, at the night brightness in the night hours, even with **Off or dim**, then has the panel back. See [When nothing is on: the idle display](#when-nothing-is-on-the-idle-display).
 - A bet that's on the other game already, because the panel showed that game before, shows in the ticker while the board is on it, and the checks of that game keep the bet up to date and give it its result at the final. Neither the switch nor a check ever puts a bet on a game by itself. See [Bets](/using/bets/).
-- Golf and racing aren't watched, and neither are minor league games, whose scores come from MLB instead of ESPN, or a soccer favorite's cup games, like the Champions League. Neither is a sport whose big-play switches in the Celebrations card are all off.
+- Golf and racing aren't watched, and neither are minor league baseball, AHL and ECHL games, whose scores come from MLB and HockeyTech instead of ESPN, or a soccer favorite's cup games, like the Champions League. Neither is a sport whose big-play switches in the Celebrations card are all off.
 
 The panel checks each watched game about every 45 seconds, in the gaps between its own reads of the game on the board, timed by how long ESPN took the last time so the score on the board doesn't wait for it. When ESPN is slow, a check can hold the board's next update up for a few seconds now and then. When the gaps can't take every check in a round, the ones left out go first in the next, so no watched game goes unchecked round after round. A check ESPN doesn't answer waits for the next round. One that keeps waiting out ESPN's timeout waits a few rounds more each time, up to about 5 minutes, until ESPN answers again, and the panel pauses the checks for a few minutes if ESPN asks it to slow down. That uses more data:
 

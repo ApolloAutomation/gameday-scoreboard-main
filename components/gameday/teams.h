@@ -14,11 +14,15 @@ struct Team {
   const char *name;
   // college: the conference group id for the scoreboard; minor league
   // baseball: the level's MLB Stats sport id (11 Triple-A to 14 Single-A);
+  // the AHL and the ECHL: the season their logo file is named for, plus
+  // kHtNoSmallLogo when the panel draws their badge (source_hockeytech.h);
   // 0 otherwise
   uint32_t group;
 };
 
-constexpr Team kTeams[] = {
+// inline: one copy in the firmware, however many files read it (each
+// would otherwise keep its own, about 17 KB of flash).
+inline constexpr Team kTeams[] = {
     {League::NFL, 22, "ARI", "Arizona Cardinals", 0},
     {League::NFL, 1, "ATL", "Atlanta Falcons", 0},
     {League::NFL, 33, "BAL", "Baltimore Ravens", 0},
@@ -835,6 +839,68 @@ constexpr Team kTeams[] = {
     {League::MILB, 580, "WS", "Winston-Salem Dash", 13},
     {League::MILB, 572, "WIS", "Wisconsin Timber Rattlers", 13},
     {League::MILB, 533, "WOR", "Worcester Red Sox", 11},
+    {League::AHL, 440, "ABB", "Abbotsford Canucks", 0},
+    {League::AHL, 402, "BAK", "Bakersfield Condors", 94},
+    {League::AHL, 413, "BEL", "Belleville Senators", 0},
+    {League::AHL, 444, "CGY", "Calgary Wranglers", 0},
+    {League::AHL, 384, "CLT", "Charlotte Checkers", 0},
+    {League::AHL, 330, "CHI", "Chicago Wolves", 0},
+    {League::AHL, 373, "CLE", "Cleveland Monsters", 94},
+    {League::AHL, 445, "CV", "Coachella Valley Firebirds", 0},
+    {League::AHL, 419, "COL", "Colorado Eagles", 0},
+    {League::AHL, 328, "GR", "Grand Rapids Griffins", 94},
+    {League::AHL, 457, "HAM", "Hamilton Hammers", 65536},
+    {League::AHL, 307, "HFD", "Hartford Wolf Pack", 0},
+    {League::AHL, 437, "HSK", "Henderson Silver Knights", 0},
+    {League::AHL, 319, "HER", "Hershey Bears", 0},
+    {League::AHL, 389, "IA", "Iowa Wild", 0},
+    {League::AHL, 415, "LAV", "Laval Rocket", 0},
+    {League::AHL, 313, "LV", "Lehigh Valley Phantoms", 0},
+    {League::AHL, 321, "MB", "Manitoba Moose", 94},
+    {League::AHL, 327, "MIL", "Milwaukee Admirals", 0},
+    {League::AHL, 403, "ONT", "Ontario Reign", 94},
+    {League::AHL, 309, "PRO", "Providence Bruins", 0},
+    {League::AHL, 323, "ROC", "Rochester Americans", 0},
+    {League::AHL, 372, "RFD", "Rockford IceHogs", 94},
+    {League::AHL, 404, "SD", "San Diego Gulls", 0},
+    {League::AHL, 405, "SJ", "San Jose Barracuda", 94},
+    {League::AHL, 411, "SPR", "Springfield Thunderbirds", 94},
+    {League::AHL, 324, "SYR", "Syracuse Crunch", 0},
+    {League::AHL, 380, "TEX", "Texas Stars", 94},
+    {League::AHL, 335, "TOR", "Toronto Marlies", 94},
+    {League::AHL, 412, "TUC", "Tucson Roadrunners", 94},
+    {League::AHL, 390, "UTC", "Utica Comets", 94},
+    {League::AHL, 316, "WBS", "Wilkes-Barre/Scranton Penguins", 94},
+    {League::ECHL, 74, "ADK", "Adirondack Thunder", 0},
+    {League::ECHL, 66, "ALN", "Allen Americans", 0},
+    {League::ECHL, 10, "ATL", "Atlanta Gladiators", 78},
+    {League::ECHL, 107, "BLM", "Bloomington Bison", 0},
+    {League::ECHL, 5, "CIN", "Cincinnati Cyclones", 0},
+    {League::ECHL, 8, "FLA", "Florida Everblades", 0},
+    {League::ECHL, 60, "FW", "Fort Wayne Komets", 0},
+    {League::ECHL, 108, "GSO", "Greensboro Gargoyles", 0},
+    {League::ECHL, 52, "GVL", "Greenville Swamp Rabbits", 65536},
+    {League::ECHL, 11, "IDH", "Idaho Steelheads", 0},
+    {League::ECHL, 65, "IND", "Indy Fuel", 0},
+    {League::ECHL, 79, "JAX", "Jacksonville Icemen", 78},
+    {League::ECHL, 50, "KAL", "Kalamazoo Wings", 0},
+    {League::ECHL, 68, "KC", "Kansas City Mavericks", 0},
+    {League::ECHL, 82, "MNE", "Maine Mariners", 0},
+    {League::ECHL, 114, "NM", "New Mexico Goatheads", 78},
+    {League::ECHL, 76, "NOR", "Norfolk Admirals", 0},
+    {League::ECHL, 61, "ORL", "Orlando Solar Bears", 0},
+    {League::ECHL, 70, "RC", "Rapid City Rush", 0},
+    {League::ECHL, 17, "REA", "Reading Royals", 0},
+    {League::ECHL, 102, "SAV", "Savannah Ghost Pirates", 0},
+    {League::ECHL, 18, "SC", "South Carolina Stingrays", 0},
+    {League::ECHL, 106, "TAH", "Tahoe Knight Monsters", 78},
+    {League::ECHL, 21, "TOL", "Toledo Walleye", 0},
+    {League::ECHL, 113, "TRE", "Trenton Ironhawks", 78},
+    {League::ECHL, 99, "TR", "Trois-Rivières Lions", 0},
+    {League::ECHL, 71, "TUL", "Tulsa Oilers", 0},
+    {League::ECHL, 25, "WHL", "Wheeling Nailers", 0},
+    {League::ECHL, 72, "WIC", "Wichita Thunder", 0},
+    {League::ECHL, 77, "WOR", "Worcester Railers", 0},
 };
 
 constexpr size_t kTeamCount = sizeof(kTeams) / sizeof(kTeams[0]);

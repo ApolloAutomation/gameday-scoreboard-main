@@ -54,6 +54,10 @@ If your internet plan has a data cap, **ESPN data** in the Device card on the de
 Minor league teams' scores come from MLB's public stats service instead, also free. The row is called **Data used** and counts both.
 :::
 
+:::note[Coming in the next release]
+AHL and ECHL scores come from HockeyTech, the stats service the two leagues use for their own websites, also free. **Data used** counts them too.
+:::
+
 ## Can I follow more than one team?
 
 Yes. **Favorite teams** holds up to 16 teams from any league, in priority order. Turn on **Only today's games** to cycle through only the favorites playing today. When two favorites play at once, the panel sticks with the higher one, or alternates between them if you choose **Alternate**. See [Favorite teams](/using/favorites/).

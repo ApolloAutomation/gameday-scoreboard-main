@@ -329,9 +329,10 @@ inline bool split_fields(const std::string &v, std::string *f, size_t max, size_
 // player=<league>,<athlete id>,<team id>,<name>: "nfl,3918298,2,ALLEN". The
 // league one the panel follows teams in (not a golf tour or a racing
 // series) and reads from ESPN, whose rosters the page picks players from
-// (not minor league baseball), the team one in its list, the athlete's id
-// ESPN's, the name what clean_player_name keeps. playerdel=<league>,<athlete
-// id> drops one. Anything else, extra fields included, is refused.
+// (not minor league baseball, the AHL or the ECHL), the team one in its list,
+// the athlete's id ESPN's, the name what clean_player_name keeps.
+// playerdel=<league>,<athlete id> drops one. Anything else, extra fields
+// included, is refused.
 inline bool parse_player(const std::string &v, bool del, SetOp &op) {
   std::string f[4];
   size_t n = 0;

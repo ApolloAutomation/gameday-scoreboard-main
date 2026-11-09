@@ -560,6 +560,12 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await page.reload();
   await expect(page.locator("#standingRow")).toBeVisible();
   await expect(sel).toHaveAccessibleDescription(/minor league teams always their record/);
+  // AHL and ECHL teams have none from HockeyTech either.
+  await reset(request, { team: { l: "ahl", id: 324, abbr: "SYR", name: "Syracuse Crunch" },
+    favs: [{ l: "echl", id: 70, abbr: "RC", name: "Rapid City Rush" }, { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
   // Nothing followed yet: shown.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
   await page.reload();
@@ -763,10 +769,10 @@ test("golf and racing stay out of favorites, Live games and On now", async ({ pa
   await expect(page.locator("#tiles .none")).toHaveText("No games today");
   expect(golfReads).toBe(0);
   await page.getByRole("button", { name: "Close" }).click();
-  // Live games' chips are the ten leagues it scans
+  // Live games' chips are the twelve leagues it scans
   await reset(request, { mode: 5, live: ["mlb"], live_auto: false });
   await page.reload();
-  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
+  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "AHL", "ECHL"]);
   expect(golfReads).toBe(0);
 });
 
@@ -846,6 +852,21 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await page.reload();
   await expect(sw("Baseball: Grand slam")).toBeVisible();
   await expect(sw("Hockey: Goal")).toBeHidden();
+
+  // An AHL team alone, or the ECHL as the one Live games league, is hockey:
+  // its one switch, no situation switch, and the hint covering their games.
+  await reset(request, { team: { l: "ahl", id: 324, abbr: "SYR", name: "Syracuse Crunch" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(sw("Hockey: Goal")).toBeVisible();
+  await expect(sw("Baseball: Runs")).toBeHidden();
+  await expect(sw("Football: Touchdown")).toBeHidden();
+  await expect(sw("Count and at-bat")).toBeHidden();
+  await expect(page.locator("#alertCtls .alertSport:visible .sub")).toHaveText(["Hockey", "Favorite players"]);
+  await expect(page.locator("#alertCtls .alertSport:visible").first()).toContainText("AHL and ECHL games too");
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}], live_auto: false, live: ["echl"] });
+  await page.reload();
+  await expect(sw("Hockey: Goal")).toBeVisible();
+  await expect(sw("Soccer: Goal")).toBeHidden();
 
   // Nothing picked: every sport's.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
@@ -1060,7 +1081,7 @@ test("Live games chips post the leagues, and move an old live mode to mode 5", a
   await page.goto("/");
   await expect(page.locator("#livebar")).toBeVisible();
   await expect(page.locator("#modes button.on")).toHaveText("Live games");
-  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
+  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "AHL", "ECHL"]);
   await expect(page.locator("#liveChips .chip.on")).toHaveText(["MLB", "NHL"]);
   await page.locator("#liveChips .chip", { hasText: /^NBA$/ }).click();
   await expectSet(request, { live: "mlb,nhl,nba" });
@@ -1818,7 +1839,7 @@ test("the picker has a tab per league and follows a team from another sport", as
   await page.goto("/");
   await page.locator("#pick").click();
   // One Golf tab for both tours and one Racing tab for both series, after the leagues
-  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "Golf", "Racing"]);
+  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "AHL", "ECHL", "Golf", "Racing"]);
   await page.locator(".tabs button", { hasText: "NHL" }).click();
   await expect(page.locator(".tabs button.on")).toHaveText("NHL");
   await expect(page.locator("#tiles .tile")).toHaveCount(32);
@@ -1893,6 +1914,49 @@ test("On now lists today's minor league games from MLB's stats service", async (
   await page.locator("#tiles .side", { hasText: "Bulls" }).click();
   await expectSet(request, { team: "milb:234" });
   await expect(page.locator("#curName")).toHaveText("Durham Bulls");
+});
+
+test("AHL and ECHL teams have their own tabs, with HockeyTech's logos", async ({ page, request }) => {
+  let feedReads = 0;
+  await page.route("https://lscluster.hockeytech.com/**", (route) => {
+    feedReads++;
+    return route.fulfill({ status: 403, body: "" });
+  });
+  await reset(request);
+  await page.goto("/");
+  await page.locator("#pick").click();
+  await page.locator(".tabs button", { hasText: /^AHL$/ }).click();
+  await expect(page.locator(".tabs button.on")).toHaveText("AHL");
+  await expect(page.locator("#tiles .tile")).toHaveCount(32);
+  await expect(page.locator("#tiles .gh")).toHaveCount(0);
+  const crunch = page.locator("#tiles .tile", { hasText: "Syracuse Crunch" });
+  await expect(crunch.locator(".a")).toHaveText("AHL · SYR");
+  await expect(crunch.locator("img")).toHaveAttribute("src", "https://assets.leaguestat.com/ahl/logos/50x50/324.png");
+  // A logo file named for its season
+  await expect(page.locator("#tiles .tile", { hasText: "Cleveland Monsters" }).locator("img"))
+    .toHaveAttribute("src", "https://assets.leaguestat.com/ahl/logos/50x50/373_94.png");
+  // No small copy (the panel draws its badge): the page shows the full-size logo
+  await expect(page.locator("#tiles .tile", { hasText: "Hamilton Hammers" }).locator("img"))
+    .toHaveAttribute("src", "https://assets.leaguestat.com/ahl/logos/457.png");
+  await page.locator(".tabs button", { hasText: "ECHL" }).click();
+  await expect(page.locator("#tiles .tile")).toHaveCount(30);
+  await expect(page.locator("#tiles .tile", { hasText: "Greenville Swamp Rabbits" }).locator("img"))
+    .toHaveAttribute("src", "https://assets.leaguestat.com/echl/logos/52.png");
+  await page.locator("#tiles .tile", { hasText: "Rapid City Rush" }).click();
+  await expectSet(request, { team: "echl:70" });
+  await expect(page.locator("#curName")).toHaveText("Rapid City Rush");
+  await expect(page.locator("#curLg")).toHaveText("ECHL");
+  await expect(page.locator("#curLogo")).toHaveAttribute("src", "https://assets.leaguestat.com/echl/logos/50x50/70.png");
+  // Search finds them by name across the tabs
+  await page.locator("#pick").click();
+  await page.locator("#q").fill("crunch");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Syracuse Crunch"]);
+  // HockeyTech's feed doesn't answer a browser on another site: On now
+  // leaves the two leagues out rather than asking it
+  await page.locator("#q").fill("");
+  await page.locator(".tabs button", { hasText: "On now" }).click();
+  await expect(page.locator("#tiles .none")).toHaveText("No games today");
+  expect(feedReads).toBe(0);
 });
 
 test("the picker's league tabs and Close fit on screen, on a small phone and on a computer", async ({ page, request }) => {
@@ -2192,6 +2256,12 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await expect(page.locator("#hMlbRow")).toBeVisible();
   await expect(page.locator("#hMlb")).toHaveText("HTTP 429, 40 s ago");
   await expect(page.locator("#hEspn")).toHaveText("OK, 9 s ago");
+  // and AHL and ECHL scores read from HockeyTech
+  await expect(page.locator("#hHtRow")).toBeHidden();
+  await reset(request, { health: { ...h, ht: 200, ht_ago: 12 } });
+  await page.reload();
+  await expect(page.locator("#hHtRow")).toBeVisible();
+  await expect(page.locator("#hHt")).toHaveText("OK, 12 s ago");
 
   // A brownout whose time isn't known, before the first ESPN read.
   await reset(request, {
@@ -2616,6 +2686,31 @@ test("the Bets card takes a bet on a minor league team, found by its level too",
   await expect(page.locator("#betList .betrow label")).toContainText("DUR ML");
 });
 
+test("the Bets card takes a bet on an AHL or ECHL team, from its tab", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await page.locator(".tabs button", { hasText: /^AHL$/ }).click();
+  await page.locator("#tiles .tile", { hasText: "Syracuse Crunch" }).click();
+  await expect(page.locator("#betTeam")).toHaveText("Syracuse Crunch");
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,ahl,324,ml," });
+  await expect(page.locator("#toast")).toHaveText("Added SYR ML");
+  await expect(page.locator("#betList .betrow label")).toContainText("SYR ML");
+  // An ECHL total, found by search from any tab
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("rapid city");
+  await expect(page.locator("#tiles .tile")).toHaveCount(1);
+  await page.locator("#tiles .tile", { hasText: "Rapid City Rush" }).click();
+  await page.locator("#betType").selectOption("over");
+  await page.locator("#betLine").fill("6.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,echl,70,over,6.5" });
+  await expect(page.locator("#betList .betrow label")).toContainText(["SYR ML", "OVER 6.5"]);
+});
+
 test("the Bets card says what's wrong with a bet before posting it", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");
@@ -2897,7 +2992,7 @@ test("the Favorite players card adds a player from a team's roster and removes o
   await expect(page.locator("#playerList .playerrow label")).toContainText("VALDES-SCA");
 });
 
-test("the Favorite players card leaves minor league teams out of its team chooser", async ({ page, request }) => {
+test("the Favorite players card leaves minor league, AHL and ECHL teams out of its team chooser", async ({ page, request }) => {
   const side = (id, abbr, teamName, score) => ({ team: { id, abbreviation: abbr, teamName }, score });
   await page.route("https://statsapi.mlb.com/**", (route) => route.fulfill({
     json: { dates: [{ games: [
@@ -2913,6 +3008,9 @@ test("the Favorite players card leaves minor league teams out of its team choose
   await page.locator("#playerTeam").click();
   await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
   await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "ECHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "NHL" })).toBeVisible();
   await expect(page.locator(".tabs button", { hasText: "On now" })).toBeVisible();
   // On now lists the minor league game, but neither side picks a roster.
   await page.locator(".tabs button", { hasText: "On now" }).click();
@@ -2920,13 +3018,15 @@ test("the Favorite players card leaves minor league teams out of its team choose
   await expect(page.locator("#tiles .game .side", { hasText: "Redbirds" })).toBeDisabled();
   // Search across the tabs finds none of them either.
   await page.locator(".tabs button", { hasText: "MLB" }).first().click();
-  for (const q of ["durham", "triple-a", "single-a"]) {
+  for (const q of ["durham", "triple-a", "single-a", "crunch", "adirondack"]) {
     await page.locator("#q").fill(q);
     await expect(page.locator("#tiles .none")).toHaveText("No team matches");
   }
   await page.getByRole("button", { name: "Close" }).click();
   // Choosing the team still has them.
   await page.locator("#pick").click();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeVisible();
+  await expect(page.locator(".tabs button", { hasText: "ECHL" })).toBeVisible();
   await page.locator(".tabs button", { hasText: "MiLB" }).click();
   await expect(page.locator("#tiles .tile")).toHaveCount(120);
   await page.locator("#q").fill("durham");

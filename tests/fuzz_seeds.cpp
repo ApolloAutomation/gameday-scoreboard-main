@@ -14,6 +14,7 @@
 #include <string>
 
 #include "espn_parse.h"
+#include "source_hockeytech.h"
 #include "source_mlbstats.h"
 
 using namespace espn;
@@ -57,6 +58,9 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_mlb_team_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_mlb_game_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_mlb_day_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_team_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_game_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_day_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;
@@ -75,6 +79,11 @@ int main(int argc, char **argv) {
       JsonArray dates = doc["dates"];  // an MLB Stats schedule's
       while (dates.size() > kMaxEvents)
         dates.remove(kMaxEvents);
+      for (const char *list : {"Scorebar", "Gamesbydate"}) {  // HockeyTech's
+        JsonArray games = doc["SiteKit"][list];
+        while (games.size() > kMaxEvents)
+          games.remove(kMaxEvents);
+      }
       std::string out;
       serializeJson(doc, out);
       if (out.size() < 32 || !seen.insert(out).second)
