@@ -11,10 +11,15 @@ namespace espn {
 
 // Saved in prefs and the boot cache: append, never renumber.
 enum class League : uint8_t { NFL = 0, NCAA = 1, NBA = 2, NHL = 3, MLB = 4, WNBA = 5, MLS = 6, EPL = 7, MCBB = 8,
-                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12 };
+                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12, MILB = 13 };
 
 enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5,
                              RACING = 6 };
+
+// Where a league's games come from: ESPN's site API, or for minor league
+// baseball the MLB Stats API (source_mlbstats.h). Each source is read, counted
+// and backed off on its own (GamedayComponent::open_).
+enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1 };
 
 struct LeagueInfo {
   League league;
@@ -27,6 +32,7 @@ struct LeagueInfo {
   bool season_list;    // the team schedule is small enough for the Up next list
   bool logo_by_id;     // logo files are named by team id, not abbreviation
   uint8_t linger_min;  // a final stays on the board this long before the next game
+  Source source{Source::ESPN};
 };
 
 constexpr LeagueInfo kLeagues[] = {
@@ -58,6 +64,13 @@ constexpr LeagueInfo kLeagues[] = {
     // scoreboard header and the season calendar.
     {League::F1, "f1", "racing/f1", "Racing", "leagues", Sport::RACING, false, false, false, 0},
     {League::NASCAR, "nascar", "racing/nascar-premier", "Racing", "leagues", Sport::RACING, false, false, false, 0},
+    // Minor league baseball, all four levels (Team::group is the level's MLB
+    // Stats sport id, 11 Triple-A to 14 Single-A), from the MLB Stats API, not
+    // ESPN: path and logo_dir are not ESPN's and nothing builds an ESPN URL
+    // from them. The team read lists the next ten days, so Up next comes with
+    // it and no look-ahead is needed; logos are by team id. Short linger for
+    // doubleheaders, as MLB's.
+    {League::MILB, "milb", "mlbstats/milb", "MiLB", "milb", Sport::BASEBALL, true, true, true, 10, Source::MLB_STATS},
 };
 
 constexpr size_t kLeagueCount = sizeof(kLeagues) / sizeof(kLeagues[0]);
@@ -99,6 +112,16 @@ inline Sport league_sport(League league) {
   const LeagueInfo *l = league_info(league);
   return l != nullptr ? l->sport : Sport::FOOTBALL;
 }
+
+inline Source league_source(League league) {
+  const LeagueInfo *l = league_info(league);
+  return l != nullptr ? l->source : Source::ESPN;
+}
+// Minor league baseball: read from the MLB Stats API (source_mlbstats.h).
+inline bool is_mlb_stats(League league) { return league_source(league) == Source::MLB_STATS; }
+// Read from ESPN: the only source the big-play watcher reads (watch.h) and
+// the only one with the rosters favorite players come from (players.h).
+inline bool from_espn(League league) { return league_source(league) == Source::ESPN; }
 
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in
 // Live games (set_request.h).

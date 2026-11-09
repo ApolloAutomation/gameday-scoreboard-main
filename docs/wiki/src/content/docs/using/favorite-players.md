@@ -9,12 +9,12 @@ sidebar:
 Favorite players are new in the next release. This page describes them ahead of it.
 :::
 
-Pick the players you follow, from any team in the football, baseball, basketball, hockey and soccer leagues the panel knows. While one of their games is on the board, the ticker shows their stat line whenever ESPN lists them among the game's leaders, and when they score, the celebration says their name, like **ALLEN TOUCHDOWN**. The panel keeps up to eight players. Golf tours and racing series have no players to pick.
+Pick the players you follow, from any team in the football, baseball, basketball, hockey and soccer leagues the panel knows. While one of their games is on the board, the ticker shows their stat line whenever ESPN lists them among the game's leaders, and when they score, the celebration says their name, like **ALLEN TOUCHDOWN**. The panel keeps up to eight players. Golf tours and racing series have no players to pick, and neither do minor league teams: the rosters come from ESPN, which doesn't carry minor league baseball.
 
 ## Adding a player
 
 1. Open the [device page](/using/device-page/) and find the **Favorite players** card.
-2. Tap **Pick a team**. The team chooser opens, the same one you pick teams with, without the **Golf** and **Racing** tabs.
+2. Tap **Pick a team**. The team chooser opens, the same one you pick teams with, without the **Golf**, **Racing** and **MiLB** tabs.
 3. Your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player.
 4. Tap **Add player**.
 

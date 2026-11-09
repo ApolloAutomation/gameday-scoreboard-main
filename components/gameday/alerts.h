@@ -183,12 +183,14 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
     Alert a = Alert::NONE;
     if (sport == Sport::BASEBALL) {
       const bool hr = detail::home_run(cur);
-      // The home side goes ahead in the bottom of the 9th or later, which
-      // ends it. At the final the read before has to be from the 9th or
-      // later too, or the lead could have come in the 8th, its reads missed.
+      // The home side goes ahead in the bottom of the 9th or later (the 7th
+      // in a minor league doubleheader's 7-inning game), which ends it. At
+      // the final the read before has to be from that inning or later too,
+      // or the lead could have come an inning earlier, its reads missed.
       const bool home = (side == 0) == cur.team_home;
+      const int last = cur.mlb.innings > 0 ? cur.mlb.innings : 9;
       const bool walk_off = home && us0 <= them0 && us1 > them1 &&
-                            (final ? prev.period >= 9 : cur.period >= 9 && cur.mlb.half == Half::BOTTOM);
+                            (final ? prev.period >= last : cur.period >= last && cur.mlb.half == Half::BOTTOM);
       // A grand slam by the home run's own runs, not the score, which can
       // hold an earlier play's too.
       const bool slam = hr && (cur.play_points == 4 || has_word(cur.last_play, "grand slam"));

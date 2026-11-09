@@ -134,6 +134,11 @@ void test_list() {
   bad = allen;
   bad.league = 200;
   PCHECK(!player_valid(bad));
+  // A minor league team is in the list, but its roster isn't ESPN's.
+  bad = allen;
+  bad.league = (uint8_t) League::MILB;
+  bad.team_id = 234;
+  PCHECK(known_team(bad.league, bad.team_id) && !player_valid(bad));
   bad = allen;
   memset(bad.name, 'A', sizeof(bad.name));  // no end
   PCHECK(!player_valid(bad));

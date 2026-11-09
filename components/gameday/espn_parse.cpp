@@ -1,5 +1,6 @@
 #include "espn_parse.h"
 #include "alerts.h"
+#include "source_mlbstats.h"
 
 #include <atomic>
 #include <cstdio>
@@ -52,7 +53,7 @@ std::string schedule_url(League league, uint32_t espn_id) {
   return team_url(league, espn_id) + "/schedule";
 }
 
-static void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
+using detail::civil_from_epoch;
 
 std::string team_day_url(League league, uint32_t group, int64_t day_epoch) {
   return team_day_url(league, group, day_epoch, nullptr);
@@ -97,7 +98,7 @@ std::string event_url(League league, const std::string &event_id, const char *co
 
 // Number of days since 1970-01-01 for a UTC epoch, then split into y/m/d.
 // Avoids gmtime_r so the host and device agree regardless of libc quirks.
-static void civil_from_epoch(int64_t epoch, int &y, int &m, int &d) {
+void detail::civil_from_epoch(int64_t epoch, int &y, int &m, int &d) {
   int64_t z = epoch / 86400 + 719468;
   if (epoch < 0 && epoch % 86400 != 0)
     z -= 1;
@@ -216,6 +217,8 @@ std::string team_logo_url(League league, uint32_t espn_id, const char *abbr) {
   const LeagueInfo *l = league_info(league);
   if (l == nullptr || is_board_sport(l->sport))
     return "";  // a golf tour's or a racing series' board has no logo
+  if (l->source == Source::MLB_STATS)
+    return mlb_logo_url(espn_id);  // the same URL the game read gives the team
   std::string file = l->logo_by_id ? std::to_string(espn_id) : a;
   bool scoreboard = league == League::NFL || league == League::MLB || league == League::NBA || league == League::NHL;
   return dark_logo(std::string("https://a.espncdn.com/i/teamlogos/") + l->logo_dir +
@@ -525,7 +528,8 @@ using detail::add_odds;
 using detail::add_part;
 using detail::records_line;
 
-std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses, bool captive) {
+std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses, bool captive,
+                         Source source) {
   if (captive)
     return "Wi-Fi needs a sign-in";
   if (!clock_set)
@@ -533,7 +537,7 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
   if (live_mode)
     return "";
   if (!no_game_confirmed && misses > 0)
-    return "Can't reach ESPN";
+    return source == Source::MLB_STATS ? "Can't reach MLB" : "Can't reach ESPN";
   return "";
 }
 

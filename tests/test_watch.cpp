@@ -479,6 +479,27 @@ void test_sources_and_reads() {
   WCHECK(fav.size() == 2);
   WCHECK(fav[0].league == (uint8_t) League::NFL && fav[0].group == 0 && fav[0].by_event && !fav[0].fed);
   WCHECK(fav[1].league == (uint8_t) League::NCAA && fav[1].group == tex->group && fav[1].group != 0);
+  // Minor league baseball comes from MLB, not ESPN: never a source, in Live
+  // games or as a favorite, and none of its games is wanted, even the
+  // panel's team's.
+  const Team *dur = team(League::MILB, 234);
+  WCHECK(dur != nullptr);
+  const std::vector<WatchSource> with_milb = watch_sources(true, {League::MLB, League::MILB}, {}, kAlertsAll);
+  WCHECK(with_milb.size() == 1 && with_milb[0].league == (uint8_t) League::MLB);
+  WCHECK(watch_sources(true, {League::MILB}, {}, kAlertsAll).empty());
+  WCHECK(watch_sources(false, {}, {dur}, kAlertsAll).empty());
+  WCHECK(watch_sources(false, {}, {dur, dal}, kAlertsAll).size() == 1);
+  {
+    WatchCtx c;
+    c.live = true;
+    c.mask = kAlertsAll;
+    c.team = {(uint8_t) League::MILB, 234};
+    c.favs.emplace_back((uint8_t) League::MILB, 235);
+    WCHECK(watch_wants_teams(c, (uint8_t) League::MILB, 234, 235) == 0);
+    WCHECK(watch_wants_teams(c, (uint8_t) League::MILB, 102, 2310) == 0);
+    WCHECK(watch_wants(c, (uint8_t) League::MILB, "776655", 102, 2310) == 0);
+    WCHECK(watch_wants_teams(c, (uint8_t) League::MLB, 10, 12) == 1);
+  }
 
   // A cycle: the first source's scoreboard, then its games one by one.
   const uint32_t now = 100000;
@@ -884,6 +905,24 @@ void test_favorites_tick() {
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999) == 11000);
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 8000) == 8000);  // a team read comes first
   WCHECK(watch_fav_due(5000, false, 1000, 10000, 8000) == 8000);  // the playlist: only team reads
+  // A minor league game's poll waits out MLB's backoff: the watcher has the
+  // gap until then, and an overdue team read of a waiting host is due when
+  // the wait ends, not now.
+  WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 60000) == 65000);
+  WCHECK(watch_fav_due(5000, true, 1000, 10000, 30000, 60000) == 30000);  // a team read before the wait ends
+  WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 1000) == 11000);  // a wait over before the poll is due
+  // ESPN refusing a check holds the board's next read only when that read
+  // may go to ESPN.
+  WCHECK(watch_refusal_holds_board(false, false, (uint8_t) League::NFL));    // My team, from ESPN
+  WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::MILB));  // My team, from MLB
+  WCHECK(watch_refusal_holds_board(false, true, (uint8_t) League::MILB));    // Live games: its scans read ESPN
+  WCHECK(!watch_refusal_holds_board(true, false, (uint8_t) League::NFL));    // Favorite teams waits its own way
+  WCHECK(watch_after_wait(1000, 5000, 0) == 1000);    // no wait: overdue stays overdue
+  WCHECK(watch_after_wait(1000, 5000, 3000) == 8000);
+  WCHECK(watch_after_wait(9000, 5000, 3000) == 9000);
+  WCHECK(watch_after_wait(0xFFFFF000u, 0xFFFFF800u, 0x1000) == 0x800);  // across millis() wrapping
+  WCHECK(!watch_read_fits(5000, watch_after_wait(1000, 5000, 0), watch_expect_ms(0, true)));
+  WCHECK(watch_read_fits(5000, watch_after_wait(1000, 5000, 60000), watch_expect_ms(0, true)));
   FetchModel m;
   m.fav = true;
   WatchSource s = day_source(League::NFL);

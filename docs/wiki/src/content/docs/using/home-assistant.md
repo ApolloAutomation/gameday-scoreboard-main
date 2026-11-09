@@ -63,6 +63,10 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
+:::note[Coming in the next release]
+Minor league teams aren't in the **Team** list either, since 120 more would make it too long for one entity; pick them on the device page. For a minor league team, **Game Status** follows the game and **Last Play** stays empty, since the panel gets no plays from MLB. **ESPN Data** keeps its name but counts what the panel downloads from MLB for a minor league team too.
+:::
+
 While a golf tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22". See [Golf](/using/golf/).
 
 While a racing series is the team, **Game Status** is the race weekend in one line, like "MSC Cruises Sao Paulo Grand Prix | Practice 2 final | Fastest: Antonelli", "MSC Cruises United States Grand Prix | Race | Leader: Antonelli", "MSC Cruises United States Grand Prix | Final | Antonelli wins" or "NASCAR Cup Series at Miami | Race Sun 3:00p". It changes with the leader or the session, not on every lap. See [Racing](/using/racing/).

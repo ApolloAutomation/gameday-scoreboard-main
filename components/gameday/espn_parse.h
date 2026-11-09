@@ -55,6 +55,9 @@ struct Baseball {
   std::string batter, pitcher;               // "A. Riley", while a half inning is on
   std::string team_probable, opp_probable;   // starting pitchers, pre-game
   std::string series;                        // "LAD lead series 2-1", postseason
+  // Innings scheduled: 9, or 7 for a minor league doubleheader's games (MLB
+  // Stats API; ESPN's reads leave the 9).
+  uint8_t innings{9};
 };
 
 // One goal from a soccer event's details. Names are plain ASCII (the panel
@@ -511,12 +514,13 @@ inline bool is_college(League league) { return league == League::NCAA || league 
 // The board and ticker with no game on the board, in place of the page's
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
-// ESPN has never said this team has no game. Empty for the default, and in
+// ESPN has never said this team has no game ("Can't reach MLB" for a team
+// whose games come from the MLB Stats API, source). Empty for the default, and in
 // a live mode, which has its own words. captive (captive.h: the Wi-Fi answered
 // with a sign-in page and ESPN has not answered since) wins over all of it,
 // live modes included, since nothing can be read until it ends.
 std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses,
-                         bool captive = false);
+                         bool captive = false, Source source = Source::ESPN);
 // Bench only. Every ESPN URL starts with this root; a bench build points
 // it at a host that does not exist to make ESPN unreachable without
 // touching the network. Pass a string literal: only the pointer is kept,
@@ -543,6 +547,11 @@ std::string day_label(const struct tm &kick_local, const struct tm &now_local);
 // needs the game's day uses noon Eastern instead: the same calendar day from
 // Hawaii to central Europe.
 inline int64_t tbd_day_epoch(int64_t placeholder) { return placeholder + 12 * 3600; }
+// Which of two games came later, as a start to compare: a game with no start
+// time goes after every game of its day that has one, the way a
+// doubleheader's game 2 (minor league baseball's always has none) follows
+// game 1.
+inline int64_t day_order(int64_t kickoff, bool time_tbd) { return time_tbd ? kickoff + 24 * 3600 - 1 : kickoff; }
 int64_t parse_iso8601_z(const std::string &s);
 // An HTTP Date header, "Sat, 17 Oct 2026 23:39:29 GMT" (the only form a
 // server may send), as a UTC epoch. 0 when it is anything else or outside
@@ -831,6 +840,8 @@ std::string board_card_text(const GameSnapshot &g, bool wide, const std::string 
 std::string board_event_name(Sport sport, const std::string &name, size_t max);
 
 namespace detail {
+// A UTC epoch's calendar date (y, m 1-12, d 1-31), with no libc.
+void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
 // Ticker helpers shared by the sport files.
 void add_part(std::string &out, const std::string &part);
 // Text helpers shared by the leaderboard sports (sport_golf.cpp): s cut to

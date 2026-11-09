@@ -549,6 +549,17 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await page.reload();
   await expect(page.locator("#hostname")).not.toBeEmpty();
   await expect(page.locator("#standingRow")).toBeHidden();
+  // Minor league teams have no seed or place from MLB: only their record.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
+  // With a pro team as a favorite, back, and saying what a minor league team shows.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" },
+    favs: [{ l: "nfl", id: 6, abbr: "DAL", name: "Dallas Cowboys" }, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#standingRow")).toBeVisible();
+  await expect(sel).toHaveAccessibleDescription(/minor league teams always their record/);
   // Nothing followed yet: shown.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
   await page.reload();
@@ -726,7 +737,8 @@ test("golf and racing stay out of favorites, Live games and On now", async ({ pa
   await expect(page.locator("#modal")).toHaveClass(/open/);
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
   await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
-  for (const q of ["tour", "golf", "racing", "formula", "nascar"]) {
+  // "pga", not "tour": the Asheville Tourists are a team
+  for (const q of ["pga", "golf", "racing", "formula", "nascar"]) {
     await page.locator("#q").fill(q);
     await expect(page.locator("#tiles .none")).toHaveText("No team matches");
   }
@@ -735,7 +747,7 @@ test("golf and racing stay out of favorites, Live games and On now", async ({ pa
   // name or by "golf"
   await page.locator("#pick").click();
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeVisible();
-  await page.locator("#q").fill("tour");
+  await page.locator("#q").fill("pga tour");
   await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
   await page.locator("#q").fill("golf");
   await expect(page.locator("#tiles .tile .n")).toHaveText(["PGA Tour", "LPGA Tour"]);
@@ -751,10 +763,10 @@ test("golf and racing stay out of favorites, Live games and On now", async ({ pa
   await expect(page.locator("#tiles .none")).toHaveText("No games today");
   expect(golfReads).toBe(0);
   await page.getByRole("button", { name: "Close" }).click();
-  // Live games' chips are the nine leagues it scans
+  // Live games' chips are the ten leagues it scans
   await reset(request, { mode: 5, live: ["mlb"], live_auto: false });
   await page.reload();
-  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
+  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
   expect(golfReads).toBe(0);
 });
 
@@ -815,6 +827,25 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await sw("Basketball: Final").click();
   await expectSet(request, { alerts: String(ALL) });
   await expect(sw("Basketball: Final")).toBeChecked();
+
+  // A minor league team alone is baseball too: its switches and the count,
+  // with the hints saying what a minor league game gets.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(sw("Baseball: Runs")).toBeVisible();
+  await expect(sw("Baseball: Walk-off")).toBeChecked();
+  await expect(sw("Football: Touchdown")).toBeHidden();
+  await expect(sw("Soccer: Goal")).toBeHidden();
+  await expect(sw("Count and at-bat")).toBeVisible();
+  await expect(sw("Down and distance")).toBeHidden();
+  // Favorite players' switch shows whatever the sports.
+  await expect(page.locator("#alertCtls .alertSport:visible .sub")).toHaveText(["Baseball", "Favorite players"]);
+  await expect(page.locator("#alertCtls .alertSport:visible").first()).toContainText("every minor league run");
+  // Picked by hand as the one Live games league, with no team, the same.
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}], live_auto: false, live: ["milb"] });
+  await page.reload();
+  await expect(sw("Baseball: Grand slam")).toBeVisible();
+  await expect(sw("Hockey: Goal")).toBeHidden();
 
   // Nothing picked: every sport's.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
@@ -1029,7 +1060,7 @@ test("Live games chips post the leagues, and move an old live mode to mode 5", a
   await page.goto("/");
   await expect(page.locator("#livebar")).toBeVisible();
   await expect(page.locator("#modes button.on")).toHaveText("Live games");
-  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
+  await expect(page.locator("#liveChips .chip")).toHaveText(["NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL"]);
   await expect(page.locator("#liveChips .chip.on")).toHaveText(["MLB", "NHL"]);
   await page.locator("#liveChips .chip", { hasText: /^NBA$/ }).click();
   await expectSet(request, { live: "mlb,nhl,nba" });
@@ -1787,7 +1818,7 @@ test("the picker has a tab per league and follows a team from another sport", as
   await page.goto("/");
   await page.locator("#pick").click();
   // One Golf tab for both tours and one Racing tab for both series, after the leagues
-  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "Golf", "Racing"]);
+  await expect(page.locator(".tabs button")).toHaveText(["On now", "NFL", "NCAAF", "MLB", "MiLB", "MLS", "EPL", "NBA", "WNBA", "NCAAM", "NHL", "Golf", "Racing"]);
   await page.locator(".tabs button", { hasText: "NHL" }).click();
   await expect(page.locator(".tabs button.on")).toHaveText("NHL");
   await expect(page.locator("#tiles .tile")).toHaveCount(32);
@@ -1795,6 +1826,73 @@ test("the picker has a tab per league and follows a team from another sport", as
   await expectSet(request, { team: "nhl:25" });
   await expect(page.locator("#curName")).toHaveText("Anaheim Ducks");
   await expect(page.locator("#curLg")).toHaveText("NHL");
+});
+
+test("minor league teams sit under their level in a MiLB tab, with MLB's logos", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await page.locator("#pick").click();
+  await page.locator(".tabs button", { hasText: "MiLB" }).click();
+  await expect(page.locator(".tabs button.on")).toHaveText("MiLB");
+  await expect(page.locator("#tiles .tile")).toHaveCount(120);
+  await expect(page.locator("#tiles .gh")).toHaveText(["Triple-A", "Double-A", "High-A", "Single-A"]);
+  const bulls = page.locator("#tiles .tile", { hasText: "Durham Bulls" });
+  await expect(bulls.locator(".a")).toHaveText("Triple-A · DUR");
+  await expect(bulls.locator("img")).toHaveAttribute("src", "https://midfield.mlbstatic.com/v1/team/234/spots/64");
+  // Search finds a level, across the tabs, without the headings
+  await page.locator("#q").fill("single-a");
+  await expect(page.locator("#tiles .tile")).toHaveCount(30);
+  await expect(page.locator("#tiles .gh")).toHaveCount(0);
+  await page.locator("#q").fill("bulls");
+  await page.locator("#tiles .tile", { hasText: "Durham Bulls" }).click();
+  await expectSet(request, { team: "milb:234" });
+  await expect(page.locator("#curName")).toHaveText("Durham Bulls");
+  await expect(page.locator("#curLg")).toHaveText("Minor league baseball, Triple-A");
+  await expect(page.locator("#curLogo")).toHaveAttribute("src", "https://midfield.mlbstatic.com/v1/team/234/spots/64");
+});
+
+test("On now lists today's minor league games from MLB's stats service", async ({ page, request }) => {
+  let asked = null;
+  const side = (id, abbr, teamName, score) => ({ team: { id, abbreviation: abbr, teamName }, score });
+  await page.route("https://statsapi.mlb.com/**", (route) => {
+    asked = new URL(route.request().url());
+    return route.fulfill({
+      json: {
+        dates: [{
+          games: [
+            { gamePk: 1, gameDate: "2026-07-04T17:05:00Z", status: { codedGameState: "F" },
+              teams: { away: side(102, "RR", "Express", 9), home: side(2310, "RNO", "Aces", 8) },
+              linescore: { currentInning: 11, scheduledInnings: 9 } },
+            { gamePk: 2, gameDate: "2026-07-04T23:05:00Z", status: { codedGameState: "I" },
+              teams: { away: side(235, "MEM", "Redbirds", 3), home: side(234, "DUR", "Bulls", 2) },
+              linescore: { currentInning: 7, inningState: "Bottom", scheduledInnings: 9 } },
+            { gamePk: 3, gameDate: "2026-07-04T23:35:00Z", status: { codedGameState: "D" },
+              teams: { away: side(531, "SWB", "RailRiders"), home: side(552, "SYR", "Mets") } },
+            { gamePk: 4, gameDate: "2026-07-05T00:05:00Z", status: { codedGameState: "S", startTimeTBD: false },
+              teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
+            // Game 2 of a doubleheader: no start time, listed five minutes after game 1
+            { gamePk: 5, gameDate: "2026-07-05T00:10:00Z", status: { codedGameState: "S", startTimeTBD: true },
+              teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
+          ],
+        }],
+      },
+    });
+  });
+  await reset(request);
+  await page.goto("/");
+  await page.locator("#pick").click();
+  // A game on opens the picker on On now
+  await expect(page.locator(".tabs button.on")).toHaveText("On now");
+  await expect(page.locator("#tiles .gh")).toHaveText(["Live now", "Later today", "Final", "Postponed or canceled"]);
+  await expect(page.locator("#tiles .game .det")).toHaveText(["Bot 7th", /^7:05\sPM$/, "TBD", "Final/11", "Postponed"]);
+  await expect(page.locator("#tiles .game.live .side img").first())
+    .toHaveAttribute("src", "https://midfield.mlbstatic.com/v1/team/235/spots/64");
+  expect(asked.searchParams.get("sportId")).toBe("11,12,13,14");
+  expect(asked.searchParams.get("fields").split(",")).toContain("startTimeTBD");
+  expect(asked.searchParams.get("date")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await page.locator("#tiles .side", { hasText: "Bulls" }).click();
+  await expectSet(request, { team: "milb:234" });
+  await expect(page.locator("#curName")).toHaveText("Durham Bulls");
 });
 
 test("the picker's league tabs and Close fit on screen, on a small phone and on a computer", async ({ page, request }) => {
@@ -2086,6 +2184,14 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await expect(page.locator("#hEspn")).toHaveText("No answer, 2 min ago");
   await expect(page.locator("#hFw")).toHaveText("1.5.4 beta, built Oct 17, 8:01 PM");
   await expect(page.locator("#rssi")).toHaveText("Not connected");
+
+  // Minor league scores read from MLB: their own row, only once there is one
+  await expect(page.locator("#hMlbRow")).toBeHidden();
+  await reset(request, { health: { ...h, mlb: 429, mlb_ago: 40 } });
+  await page.reload();
+  await expect(page.locator("#hMlbRow")).toBeVisible();
+  await expect(page.locator("#hMlb")).toHaveText("HTTP 429, 40 s ago");
+  await expect(page.locator("#hEspn")).toHaveText("OK, 9 s ago");
 
   // A brownout whose time isn't known, before the first ESPN read.
   await reset(request, {
@@ -2493,6 +2599,23 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5", "OVER 47.5"]);
 });
 
+test("the Bets card takes a bet on a minor league team, found by its level too", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeVisible();
+  await page.locator("#q").fill("triple-a durham");
+  await expect(page.locator("#tiles .tile")).toHaveCount(1);
+  await page.locator("#tiles .tile", { hasText: "Durham Bulls" }).click();
+  await expect(page.locator("#betTeam")).toHaveText("Durham Bulls");
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,milb,234,ml," });
+  await expect(page.locator("#toast")).toHaveText("Added DUR ML");
+  await expect(page.locator("#betList .betrow label")).toContainText("DUR ML");
+});
+
 test("the Bets card says what's wrong with a bet before posting it", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");
@@ -2772,6 +2895,42 @@ test("the Favorite players card adds a player from a team's roster and removes o
   await expect(page.locator("#toast")).toHaveText("Removed ALLEN");
   await expect(page.locator("#playerList .playerrow label")).toHaveCount(1);
   await expect(page.locator("#playerList .playerrow label")).toContainText("VALDES-SCA");
+});
+
+test("the Favorite players card leaves minor league teams out of its team chooser", async ({ page, request }) => {
+  const side = (id, abbr, teamName, score) => ({ team: { id, abbreviation: abbr, teamName }, score });
+  await page.route("https://statsapi.mlb.com/**", (route) => route.fulfill({
+    json: { dates: [{ games: [
+      { gamePk: 2, gameDate: "2026-07-04T23:05:00Z", status: { codedGameState: "I" },
+        teams: { away: side(235, "MEM", "Redbirds", 3), home: side(234, "DUR", "Bulls", 2) },
+        linescore: { currentInning: 7, inningState: "Bottom", scheduledInnings: 9 } },
+    ] }] },
+  }));
+  // The panel follows a minor league team: the chooser still opens on a tab
+  // whose teams have ESPN rosters.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" } });
+  await page.goto("/");
+  await page.locator("#playerTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "On now" })).toBeVisible();
+  // On now lists the minor league game, but neither side picks a roster.
+  await page.locator(".tabs button", { hasText: "On now" }).click();
+  await expect(page.locator("#tiles .game .side", { hasText: "Bulls" })).toBeDisabled();
+  await expect(page.locator("#tiles .game .side", { hasText: "Redbirds" })).toBeDisabled();
+  // Search across the tabs finds none of them either.
+  await page.locator(".tabs button", { hasText: "MLB" }).first().click();
+  for (const q of ["durham", "triple-a", "single-a"]) {
+    await page.locator("#q").fill(q);
+    await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  }
+  await page.getByRole("button", { name: "Close" }).click();
+  // Choosing the team still has them.
+  await page.locator("#pick").click();
+  await page.locator(".tabs button", { hasText: "MiLB" }).click();
+  await expect(page.locator("#tiles .tile")).toHaveCount(120);
+  await page.locator("#q").fill("durham");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Durham Bulls"]);
 });
 
 test("the Favorite players card says when ESPN's roster can't be read, and tells two brothers apart", async ({ page, request }) => {

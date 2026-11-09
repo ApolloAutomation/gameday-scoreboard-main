@@ -36,17 +36,17 @@
 <body>
 <main>
   <h1>Privacy</h1>
-  <p class="sub">Effective 2026-10-18.</p>
+  <p class="sub">Effective 2026-11-08. This version adds MLB's stats and image servers, which the panel and its web page use for minor league baseball.</p>
 
   <div class="card">
     <h2>The short version</h2>
-    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores and to GitHub for firmware updates. That's the whole picture.</p>
+    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores, to MLB for minor league baseball scores, and to GitHub for firmware updates. That's the whole picture.</p>
   </div>
 
   <div class="card">
     <h2>What the panel does</h2>
-    <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked and a request for the current schedule.</p>
-    <p>The panel's own web page, opened in your browser, asks ESPN for today's games and team logos and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it.</p>
+    <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. For a minor league baseball team it asks MLB's public stats service (statsapi.mlb.com) instead, and downloads that team's logos from MLB's image server (midfield.mlbstatic.com). It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked and a request for the current schedule.</p>
+    <p>The panel's own web page, opened in your browser, asks ESPN for today's games and team logos, MLB for today's minor league games and their logos, and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it.</p>
   </div>
 
   <div class="card">
@@ -62,7 +62,7 @@
   <div class="card">
     <h2>What we don't do</h2>
     <p>No accounts. No analytics or crash reporting. No advertising. The app and the panel collect nothing, so there's nothing to sell or share.</p>
-    <p>Like any website, ESPN and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
+    <p>Like any website, ESPN, MLB and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
   </div>
 
   <div class="card">

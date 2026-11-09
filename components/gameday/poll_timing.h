@@ -83,6 +83,79 @@ struct Backoff {
   }
 };
 
+// The run of failed reads and the wait it started, for one host: the MLB
+// Stats API keeps its own (minor league baseball), so a refusal there never
+// holds back ESPN's reads, nor ESPN's a minor league team's.
+struct HostWait {
+  Backoff run;
+  uint32_t since_ms{0};
+  uint32_t wait_ms{0};  // 0: no wait running
+
+  uint32_t fail(bool refused, uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+    this->wait_ms = this->run.fail(refused, retry_after_ms, rnd);
+    this->since_ms = now;
+    return this->wait_ms;
+  }
+  void clear() {
+    this->run.clear();
+    this->wait_ms = 0;
+  }
+  // Read now, but keep the run so another failure waits longer.
+  void end_wait() { this->wait_ms = 0; }
+  bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
+  // The time left in the wait, 0 when none is running.
+  uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
+};
+
+// A Live games scan's minor league read, folded into the MLB Stats API's
+// wait (apply_job_). read: the scan asked MLB. failed: that read failed.
+// leagues: how many leagues the scan read. Beside ESPN's leagues a failure
+// is counted here and the scan goes on with the others. Scanned alone, the
+// failure is the scan's own, which the scan's backoff (back_off_, for a job
+// that read only MLB) counts once: clearing the run here first would start
+// every failed scan over at the shortest wait. An answer starts the run over.
+// Returns the wait a failure started here, 0 when none did.
+inline uint32_t mlb_scan_result(HostWait &w, bool read, bool failed, size_t leagues, bool refused,
+                                uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return leagues > 1 ? w.fail(refused, retry_after_ms, rnd, now) : 0;
+}
+
+// The idle display's scores, read outside the mode (gameday.cpp's side
+// reads): their minor league read keeps to the MLB Stats API's wait too.
+// While it runs they leave minor league baseball out (start_side_job_), and
+// a minor league read of theirs that failed or was refused counts in it,
+// beside ESPN's leagues or alone, since no backoff of the mode's counts it.
+// An answer starts the run over. Returns the wait a failure started, 0 when
+// none did.
+inline uint32_t mlb_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
+                                uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return w.fail(refused, retry_after_ms, rnd, now);
+}
+
+// A game not started yet is read every minute in its last hour and every 15
+// before. One with no start time yet sits at midnight Eastern of its day
+// (tbd_day_epoch): baseball's is game 2 of a doubleheader, which starts
+// about half an hour after game 1 ends, so on its day it is read as if
+// within the hour. until_s is the start minus now.
+static const int64_t kPreNearSeconds = 60 * 60;
+inline bool pre_poll_near(int64_t until_s, bool time_tbd, bool baseball) {
+  if (!time_tbd)
+    return until_s <= kPreNearSeconds;
+  return baseball && until_s <= 0 && until_s > -30 * 3600;
+}
+
 // One more read missed. The ticker and the device page warn from three in a
 // row, so the count stops at 255 instead of wrapping to 0 and dropping the
 // warning while ESPN is still out of reach.
@@ -93,6 +166,21 @@ inline uint8_t add_miss(uint8_t misses) { return misses < 255 ? (uint8_t) (misse
 // decides. Without one, a failed or refused cup read backs off.
 inline bool cup_read_backs_off(bool cup_ok, bool polled, bool game_ok, bool throttled) {
   return polled ? !game_ok : (!cup_ok || throttled);
+}
+
+// Live games between scans, while a host other than ESPN waits out a failure
+// (HostWait): only that host's reads wait for it. The finals rotation's days
+// from it and the fallback card's reads come when its wait ends, while the
+// rotation's other days and the scan for a live game go on. scan_left: the
+// time until the scan, 0 when it is due. held_left: the wait left, 0 when
+// none runs. scan_held: the scan would read only leagues from that host, so
+// it waits too. Returns the time until the next job, 0 to start it now.
+inline uint32_t held_next_ms(uint32_t scan_left, uint32_t held_left, bool scan_held) {
+  if (held_left == 0)
+    return scan_left;
+  if (scan_left == 0)
+    return scan_held ? held_left : 0;
+  return held_left < scan_left ? held_left : scan_left;
 }
 
 }  // namespace espn

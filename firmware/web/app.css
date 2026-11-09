@@ -249,6 +249,7 @@ button { font: inherit; color: inherit; }
 /* Today's games */
 .games { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .gh { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 8px 2px 0; }
+.tiles .gh { grid-column: 1 / -1; }
 .game { display: grid; grid-template-columns: 1fr 74px 1fr; align-items: stretch; gap: 6px; }
 .game .side {
   display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 8px;

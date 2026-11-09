@@ -1,5 +1,6 @@
-// Fuzz target: one input goes through every ESPN parser the panel runs, the
-// text built from what they read, and the finals rotation (recap.h). ESPN's
+// Fuzz target: one input goes through every ESPN parser the panel runs, and
+// minor league baseball's MLB Stats parsers (source_mlbstats.h), the text
+// built from what they read, and the finals rotation (recap.h). ESPN's
 // documents share one shape (events, competitions, competitors), so a
 // mutated scoreboard also reaches the event and team parsers. The same input,
 // line by line, is also read as the response headers the panel acts on (Date,
@@ -19,6 +20,7 @@
 #include "players.h"
 #include "poll_timing.h"
 #include "recap.h"
+#include "source_mlbstats.h"
 #include "startup.h"
 #include "watch.h"
 
@@ -70,6 +72,11 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
   ev["id"] = true;
   ev["competitions"][0]["competitors"][0]["id"] = true;
   ev["competitions"][0]["competitors"][0]["team"]["id"] = true;
+  // An MLB Stats schedule: dates[].games[], the teams' ids are numbers
+  JsonObject mg = filter["dates"].add<JsonObject>()["games"].add<JsonObject>();
+  mg["gamePk"] = true;
+  mg["teams"]["away"]["team"]["id"] = true;
+  mg["teams"]["home"]["team"]["id"] = true;
   JsonDocument doc;
   std::vector<Pick> picks;
   if (deserializeJson(doc, (const char *) data, size, DeserializationOption::Filter(filter),
@@ -89,6 +96,13 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
       add_pick(picks, id, c["team"]["id"]);
     }
   }
+  for (JsonObjectConst d : doc["dates"].as<JsonArrayConst>())
+    for (JsonObjectConst g : d["games"].as<JsonArrayConst>())
+      for (const char *side : {"away", "home"}) {
+        uint32_t team = g["teams"][side]["team"]["id"] | 0u;
+        if (team != 0 && picks.size() < 6)
+          picks.push_back({std::to_string(g["gamePk"] | 0u), team});
+      }
   return picks;
 }
 
@@ -484,6 +498,20 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + racing(racing_next_snapshot(next), GolfNext{}, now);
   }
 
+  {
+    // Minor league baseball's day: its live games, finals and games to come
+    std::vector<LiveGame> live;
+    std::vector<Final> finals;
+    std::vector<Pending> pending;
+    int64_t next = 0;
+    ChunkReader r(data, size, chunk);
+    if (parse_mlb_day(r, live, &next, &finals, &pending)) {
+      if (finals.size() > kRecapCap || pending.size() > kPendingKeep)
+        abort();
+      sink = sink + recap(finals, pending, next, now, (uint8_t) League::MILB);
+    }
+  }
+
   Schedule team;
   {
     ChunkReader r(data, size, chunk);
@@ -522,6 +550,26 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (parse_scoreboard(r3, p.event_id, p.team_id, g)) {
       sink = sink + render(prev, g, now);
       prev = g;
+    }
+
+    // Minor league baseball: the team read with its Up next list, and the
+    // game read around this team
+    Schedule ms;
+    std::vector<Upcoming> mup;
+    ChunkReader r5(data, size, chunk);
+    int found = parse_mlb_team(r5, p.team_id, now, ms, &mup, 4);
+    if (found > 0 && (ms.event_id.empty() || mup.size() > 4))
+      abort();
+    if (found > 0)
+      sink = sink + boot_cache(ms, now) + mup.size();
+    GameSnapshot mg;
+    ChunkReader r6(data, size, chunk);
+    if (parse_mlb_game(r6, p.team_id, now, mg)) {
+      if (mg.sport != Sport::BASEBALL || mg.mlb.balls > 4 || mg.mlb.outs > 3)
+        abort();
+      sink = sink + render(prev, mg, now);
+      sink = sink + render(mg, mg, now);
+      prev = mg;
     }
 
     for (Sport sport : kSports) {

@@ -8,7 +8,7 @@
 
 ![Touchdown fireworks on the panel](docs/site/media/touchdown.gif)
 
-A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS, the Premier League, golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series.
+A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, minor league baseball (Triple-A to Single-A, read from MLB's own stats API, since ESPN doesn't carry it), the NBA, the WNBA, men's college basketball, the NHL, MLS, the Premier League, golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series.
 
 Watch the [full demo](https://apolloautomation.github.io/gameday-scoreboard-main/) on the installer page. The [docs](docs/wiki/src/content/docs/) cover setup, every setting, each sport's board, troubleshooting and running the firmware on your own board.
 
@@ -100,9 +100,9 @@ The parser and game logic have host tests: `make -C tests` (needs g++). The devi
 
 ## Notes
 
-- ESPN's API is unofficial and can change without notice. The device sends a curl-style User-Agent because ESPN's edge rejects unfamiliar ones.
+- ESPN's API is unofficial and can change without notice. The device sends a curl-style User-Agent because ESPN's edge rejects unfamiliar ones. The MLB Stats API, which the panel reads for minor league baseball, is public but undocumented in the same way.
 - All HTTPS requests (ESPN, logos, firmware updates) are certificate-verified against the ESP-IDF bundle. If ESPN ever moves to a certificate authority outside that bundle, fetches will fail until a rebuild.
-- Team logos are ESPN's and are fetched at runtime, not bundled.
+- Team logos are ESPN's (minor league teams' are MLB's) and are fetched at runtime, not bundled.
 - Fetching runs on its own task, so the panel animation keeps going while a document downloads.
 
 ### On your network

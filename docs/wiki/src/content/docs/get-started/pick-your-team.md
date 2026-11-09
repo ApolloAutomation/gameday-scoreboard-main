@@ -39,6 +39,10 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 | MLS | Every team |
 | Premier League (EPL) | Every team |
 
+:::note[Coming in the next release]
+A **MiLB** tab adds minor league baseball: every Triple-A, Double-A, High-A and Single-A team, 120 in all, under a heading for each level. Search finds a team by its level too, like "high-a". Their scores come from MLB's stats service instead of ESPN. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
+
 A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
 
 A **Racing** tab holds **Formula 1** and the **NASCAR Cup Series**. Pick one to follow that series' race weekends: each session's order, the race's winner and the next race. See [Racing](/using/racing/).
@@ -52,6 +56,10 @@ Each sport has its own board. Golf's is a tournament's leaderboard, and racing's
 The first tab in the team picker, **On now**, lists today's games across the leagues, straight from ESPN. They're grouped as **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow and the panel switches to that team. Golf and racing aren't in it; pick a tour or a series from its own tab.
 
 Your browser reads this list from ESPN, so the tab needs your phone or computer to be online, not only the panel.
+
+:::note[Coming in the next release]
+On now lists today's minor league games too, which your browser reads from MLB's stats service.
+:::
 
 ## Changes take effect right away
 

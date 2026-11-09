@@ -29,6 +29,10 @@
       "heap": 3000,
       "json": 18447
     },
+    "poll_milb_game": {
+      "heap": 1264,
+      "json": 9038
+    },
     "poll_mlb_event": {
       "heap": 1581,
       "json": 8815
@@ -77,6 +81,10 @@
       "heap": 1600,
       "json": 17922
     },
+    "scan_milb_day": {
+      "heap": 13568,
+      "json": 61507
+    },
     "scan_mlb_day": {
       "heap": 1704,
       "json": 7003
@@ -112,6 +120,14 @@
     "team_day_ncaa": {
       "heap": 1042,
       "json": 6101
+    },
+    "team_far_milb": {
+      "heap": 1024,
+      "json": 27437
+    },
+    "team_milb": {
+      "heap": 1744,
+      "json": 15671
     },
     "team_mlb": {
       "heap": 1042,

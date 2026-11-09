@@ -44,13 +44,16 @@
   // by team id; file: one logo for the whole league ("" for none); scan:
   // extra query for today's scoreboard; board: a leaderboard sport ("golf"
   // for a golf tour, "racing" for a racing series), followed like a team but
-  // never a favorite, a Live games league or in On now. scripts/build_web.py
-  // checks prefix, path, logo and byId against leagues.h and stops the build
-  // when they differ.
+  // never a favorite, a Live games league or in On now; source: "mlb" for a
+  // league whose games and logos come from MLB, not ESPN (minor league
+  // baseball), as on the panel, with sport its sport, which ESPN's path
+  // gives for the others. scripts/build_web.py checks prefix, path, logo and
+  // byId against leagues.h and stops the build when they differ.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
     ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
     mlb: { prefix: "MLB", tab: "MLB", name: "MLB", path: "baseball/mlb", logo: "mlb", byId: false, scan: "" },
+    milb: { prefix: "MiLB", tab: "MiLB", name: "Minor league baseball", path: "mlbstats/milb", logo: "milb", byId: true, scan: "", source: "mlb", sport: "baseball" },
     mls: { prefix: "MLS", tab: "MLS", name: "MLS", path: "soccer/usa.1", logo: "soccer", byId: true, scan: "" },
     epl: { prefix: "EPL", tab: "EPL", name: "Premier League", path: "soccer/eng.1", logo: "soccer", byId: true, scan: "" },
     nba: { prefix: "NBA", tab: "NBA", name: "NBA", path: "basketball/nba", logo: "nba", byId: false, scan: "" },
@@ -67,17 +70,30 @@
   // A golf tour or a racing series: its board is a leaderboard
   const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
   const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
-  // A pro league: its teams have a seed and a place (the Standing setting); a
-  // college league's have a rank instead.
-  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college;
+  // Games and logos from MLB's own servers (minor league baseball)
+  const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
+  // A league read from ESPN: the only rosters favorite players come from
+  // (set_request.h's parse_player refuses the others).
+  const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
+  // "football", "baseball": the sport's situation switch and splashes
+  const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
+  // A pro league whose teams have a seed and a place from ESPN (the Standing
+  // setting). A college league's have a rank instead, and minor league teams
+  // neither: MLB lists no seed or place for them.
+  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !isMlb(lg);
   // "#5 OSU": a college team's rank (1-25) before its abbreviation
   const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
+  // A minor league team's level: the fifth field of its TEAMS row (its MLB
+  // Stats sport id, teams.h's group).
+  const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
+  const levelOf = (t) => (t && LEVELS[t[4]]) || "";
   // The picker tab a league is on: the first league with the same tab text.
   const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
   // "" for a league with no logo: its image stays hidden.
   const logoUrl = (league, id, abbr) => {
     const l = lgInfo(league);
     if (l.file === "") return "";
+    if (l.source === "mlb") return `https://midfield.mlbstatic.com/v1/team/${id}/spots/64`;
     return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.file || (l.byId ? id : String(abbr).toLowerCase())}.png`;
   };
   const keyOf = (t) => t[0] + ":" + t[1];
@@ -203,7 +219,7 @@
       <div class="card">
         <h2>Panel</h2>
         <div id="panelCtls"></div>
-        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="idleCtls" hidden>
           <div class="sub">When nothing is on</div>
           <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
@@ -328,6 +344,7 @@
           <div class="ctl" id="hTempRow" hidden><label>Chip temperature<small>Above 75 C the panel dims until it cools</small></label><span class="val" id="hTemp"></span></div>
           <div class="ctl" id="hPowerRow" hidden><label>Power dips<small>Brownout restarts since the panel was made</small></label><span class="val" id="hPower"></span></div>
           <div class="ctl"><label>Last ESPN read</label><span class="val" id="hEspn"></span></div>
+          <div class="ctl" id="hMlbRow" hidden><label>Last MLB read<small>Minor league baseball</small></label><span class="val" id="hMlb"></span></div>
           <div class="ctl"><label>Firmware</label><span class="val" id="hFw"></span></div>
         </div>
         <div class="ctl"><label>Signal</label><span class="val" id="rssi"></span></div>
@@ -340,7 +357,7 @@
           <div class="ctl"><label>Wi-Fi drops<small id="wifiLast"></small></label><span class="val" id="wifiDrops"></span></div>
         </div>
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
-        <div class="ctl"><label>ESPN data<small>Scores and logos since the panel started</small></label><span class="val" id="espnData"></span></div>
+        <div class="ctl"><label>Data used<small>Scores and logos from ESPN and MLB since the panel started</small></label><span class="val" id="espnData"></span></div>
       </div>
       <details class="card betcard" id="betCard" hidden>
         <summary><h2>Bets</h2><span class="val" id="betSum"></span></summary>
@@ -362,7 +379,7 @@
     <p class="foot">
       <span id="ver"></span><span>·</span>
       <a href="https://github.com/${REPO}" target="_blank" rel="noopener">gameday-scoreboard</a>
-      <span>·</span><span>scores from ESPN</span>
+      <span>·</span><span>scores from ESPN and MLB</span>
     </p>
   </div>
 
@@ -993,9 +1010,10 @@
       ["Interception"],
       ["Fumble recovery", "Only a fumble the other team recovers."]]],
     ["baseball", "Baseball", [
-      ["Runs", "Runs that aren't a home run."], ["Home run"],
-      ["Grand slam", "A home run that scores four."],
-      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game."]]],
+      ["Runs", "Runs that aren't a home run, and every minor league run: MLB doesn't say how those scored."],
+      ["Home run", "MLB games."],
+      ["Grand slam", "A home run that scores four, in MLB games."],
+      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game. In a minor league doubleheader's 7-inning game, the 7th."]]],
     ["hockey", "Hockey", [["Goal", "Every goal the same way: ESPN doesn't say which came on a power play or into an empty net."]]],
     ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
     ["basketball", "Basketball", [
@@ -1117,7 +1135,7 @@
     // empty (NFL on a new panel). Hockey and basketball have no situation
     // line, so no switch.
     const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
-      .concat(S.live_auto ? [] : S.live || []).map((lg) => lgInfo(lg).path.split("/")[0]));
+      .concat(S.live_auto ? [] : S.live || []).map(sportOf));
     document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
       row.hidden = row.dataset.sport === "players" ? S.players === undefined : sports.size > 0 && !sports.has(row.dataset.sport);
     });
@@ -1294,6 +1312,33 @@
 
   // ---- today's games (fetched by the browser, not the device) -------------
   const ESPN = "https://site.api.espn.com/apis/site/v2/sports/";
+  // Minor league baseball: a day's games at the four levels, from the MLB
+  // Stats API like the panel's Live games scan.
+  const MLB_DAY = "https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&hydrate=team,linescore"
+    + "&fields=dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
+    + "teamName,score,linescore,currentInning,inningState,scheduledInnings&date=";
+  const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+  // One MLB Stats game as On now's tile: "Top 5th", "Final/10", "Postponed".
+  // Game 2 of a doubleheader has no start time (startTimeTBD) and a
+  // gameDate five minutes after game 1's: "TBD", as the panel shows it.
+  const mlbGame = (lg, g) => {
+    const c = String((g.status || {}).codedGameState || "S")[0];
+    const state = "IMN".includes(c) ? "in" : "FOQR".includes(c) ? "post" : "DCTU".includes(c) ? "off" : "pre";
+    const ls = g.linescore || {};
+    const half = { Top: "Top", Bottom: "Bot", Middle: "Mid", End: "End" }[ls.inningState];
+    const inning = Number(ls.currentInning) || 0;
+    const detail = state === "in" ? (half && inning ? half + " " + ordinal(inning) : "In Progress")
+      : state === "post" ? (inning && ls.scheduledInnings && inning !== ls.scheduledInnings ? "Final/" + inning : "Final")
+      : state === "off" ? ({ D: "Postponed", C: "Canceled" }[c] || "Suspended")
+      : (g.status || {}).startTimeTBD ? "TBD"
+      : new Date(g.gameDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const side = (k) => {
+      const x = (g.teams || {})[k] || {};
+      const t = x.team || {};
+      return { id: Number(t.id), abbr: t.abbreviation || "", score: String(x.score ?? 0), name: t.teamName || t.name || "" };
+    };
+    return { league: lg, id: String(g.gamePk), state, detail, away: side("away"), home: side("home"), date: g.gameDate };
+  };
   let games = null;        // [{league, id, state, detail, away:{...}, home:{...}}]
   let gamesAt = 0;
   const teamById = (lg, id) => TEAMS.find((t) => t[0] === lg && t[1] === id);
@@ -1309,11 +1354,16 @@
     // Golf's and racing's scoreboards have no home and away (golf's is
     // hundreds of kilobytes): not On now.
     const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg))
-      .map((lg) => [lg, `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
+      .map((lg) => [lg, isMlb(lg) ? MLB_DAY + d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6)
+        : `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
     const out = [];
     await Promise.all(urls.map(async ([lg, u]) => {
       try {
         const j = await (await fetch(u)).json();
+        if (isMlb(lg)) {
+          for (const day of j.dates || []) for (const g of day.games || []) out.push(mlbGame(lg, g));
+          return;
+        }
         for (const ev of j.events || []) {
           const c = ev.competitions?.[0];
           if (!c) continue;
@@ -1364,7 +1414,8 @@
       const mkSide = (s) => {
         const t = teamById(g.league, s.id);
         const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
-        b.disabled = !t;
+        // A favorite player's team needs ESPN's roster: no minor league side.
+        b.disabled = !t || (pickPlayer && !fromEspn(t[0]));
         b.title = t ? "Follow the " + t[3] : "Not in the team list";
         const img = el("img");
         img.loading = "lazy";
@@ -1789,14 +1840,24 @@
     // A tab can hold more than one league (Golf: both tours; Racing: both
     // series). A tour or a series is never a favorite yet, and search finds
     // one by its tab's name too.
-    const words = (t) => (isBoard(t[0]) ? lgInfo(t[0]).tab + " " : "") + t[3] + " " + t[2];
-    const list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0]))
+    // A minor league team is found by its level too ("double-a").
+    const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
+    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
       return;
     }
+    // Minor league teams under a heading per level, Triple-A first, each
+    // level in name order.
+    const byLevel = !q && list.some(levelOf);
+    if (byLevel) list = list.slice().sort((a, b) => (a[4] || 0) - (b[4] || 0));
+    let level = null;
     for (const t of list) {
+      if (byLevel && levelOf(t) !== level) {
+        level = levelOf(t);
+        tiles.appendChild(el("div", "gh", level));
+      }
       const tile = el("button", "tile" + (keyOf(t) === cur ? " on" : ""));
       const img = el("img");
       img.loading = "lazy";
@@ -1806,7 +1867,7 @@
       img.alt = "";
       tile.appendChild(img);
       tile.appendChild(el("div", "n", t[3]));
-      tile.appendChild(el("div", "a", lgInfo(t[0]).prefix + " · " + t[2]));
+      tile.appendChild(el("div", "a", (levelOf(t) || lgInfo(t[0]).prefix) + " · " + t[2]));
       tile.onclick = () => choose(t);
       tiles.appendChild(tile);
     }
@@ -1828,10 +1889,12 @@
     $(".sheet").setAttribute("aria-label", player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
     const cur = player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
     const team = fav || bet || player;
-    league = cur && !(team && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
+    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
+    league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf and racing can't be a favorite yet, take a bet or have favorite
-    // players: no Golf or Racing tab while picking one.
-    tabButtons.forEach((b) => { b.hidden = team && isBoard(b.dataset.lg); });
+    // players: no Golf or Racing tab while picking one. Favorite players come
+    // from ESPN's rosters: no MiLB tab while picking a player's team.
+    tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
     try {
       const list = await loadGames(false);
       if (list.some((g) => g.state === "in")) league = "now";
@@ -1902,7 +1965,7 @@
     img.style.visibility = src ? "visible" : "hidden";
     if (src) img.src = src;
     $("#curName").textContent = t[3];
-    $("#curLg").textContent = lgInfo(t[0]).name;
+    $("#curLg").textContent = lgInfo(t[0]).name + (levelOf(t) ? ", " + levelOf(t) : "");
   };
 
   // ---- timezone suggestion from the browser --------------------------------
@@ -2114,8 +2177,11 @@
     $("#hFault").textContent = !h.fault ? "None"
       : restartName(h.fault) + (h.fault_ago != null ? ", " + span(h.fault_ago) + " ago" : "");
     $("#hHeap").textContent = Math.round(h.heap_kb) + " KiB, largest piece " + Math.round(h.block_kb) + " KiB";
-    $("#hEspn").textContent = h.espn == null ? "None yet"
-      : (h.espn === 200 ? "OK" : h.espn === 0 ? "No answer" : "HTTP " + h.espn) + ", " + span(h.espn_ago) + " ago";
+    const answer = (code, ago) => (code === 200 ? "OK" : code === 0 ? "No answer" : "HTTP " + code) + ", " + span(ago) + " ago";
+    $("#hEspn").textContent = h.espn == null ? "None yet" : answer(h.espn, h.espn_ago);
+    // Only once the panel has read minor league scores from MLB
+    $("#hMlbRow").hidden = h.mlb == null;
+    if (h.mlb != null) $("#hMlb").textContent = answer(h.mlb, h.mlb_ago);
     const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
     // The build time comes in Unix seconds; shown in the browser's own time
     const b = h.built ? new Date(h.built * 1000) : null;

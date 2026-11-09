@@ -40,6 +40,7 @@
 #include "set_request.h"
 #include "scroll_speed.h"
 #include "setup_qr.h"
+#include "source_mlbstats.h"
 #include "startup.h"
 #include "update_mirror.h"
 #include "watch.h"
@@ -297,9 +298,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // such as a host on the LAN that answers like a portal. Pass a string
   // literal: only the pointer is kept, and the probe task reads it.
   void set_probe_url(const char *url) { this->probe_url_.store(url); }
-  // What the panel has downloaded from ESPN since boot: reply bodies and
-  // logos. Each request also spends about 6 KB on headers and the TLS
-  // handshake, which this does not see.
+  // What the panel has downloaded for scores since boot: reply bodies and
+  // logos, from ESPN and, for minor league baseball, from MLB (the "ESPN
+  // Data" sensor keeps its name and id). Each request also spends about 6 KB
+  // on headers and the TLS handshake, which this does not see.
   uint64_t espn_bytes() const { return this->espn_bytes_.load() + this->logos_.bytes_downloaded(); }
   uint32_t espn_requests() const { return this->espn_requests_.load(); }
   // True while a boot screen hold that started at since_ms should go on
@@ -632,6 +634,17 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // ESPN answered 403 or 429 to a request in this job (set by open_)
     bool throttled{false};
     uint32_t retry_after_ms{0};
+    // The same for the MLB Stats API (minor league baseball), counted on its
+    // own: one host refusing the panel never holds back reads from the other.
+    bool mlb_throttled{false};
+    uint32_t mlb_retry_after_ms{0};
+    // Which hosts this job asked (open_): a failure is the backoff of the
+    // host it came from (back_off_), and a scan's minor league read that
+    // failed beside ESPN's leagues backs off minor league baseball only
+    // (mlb_scan_result). mlb_scan_failed: the scan's minor league read failed.
+    bool read_espn{false};
+    bool read_mlb{false};
+    bool mlb_scan_failed{false};
     // A leaderboard sport (golf, racing): the league's scoreboard header into game
     // (no_event when it lists none), then after a final, a canceled event or
     // none listed, the calendar for the next event (espn::board_next).
@@ -641,10 +654,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // display in My team or Favorite teams: it goes in between the mode's
     // reads and leaves their timing alone (start_side_job_).
     bool side{false};
-    // My team today: a team read whose look-ahead skips today's final reads
-    // that final into today_final too (idle.h, want_today_final). since is
-    // the local day's start, 0 when My team today isn't the idle display;
-    // have the start of the final kept already. Allocated only when read.
+    // My team today: a team read whose look-ahead skips today's final, or a
+    // minor league team read, which lists it, reads that final into
+    // today_final too (idle.h, want_today_final). since is the local day's
+    // start, 0 when My team today isn't the idle display; have the start of
+    // the final kept already (day_order). Allocated only when read.
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
@@ -757,6 +771,14 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   std::string racing_dates_(int64_t start, int64_t end) const;
   bool fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out);
   bool fetch_game_(const ::espn::Team *team, const Schedule &schedule, GameSnapshot &out);
+  // Minor league baseball's reads from the MLB Stats API (source_mlbstats.h),
+  // which the three above hand a MiLB team to (fetch_live_games_ reads its
+  // day itself).
+  // With upcoming: only the coming days' read, for the Up next list. With
+  // last_final: the coming days' read's latest final (parse_mlb_team).
+  bool fetch_mlb_schedule_(const ::espn::Team *team, Schedule &out,
+                           std::vector<::espn::Upcoming> *upcoming = nullptr, Schedule *last_final = nullptr);
+  bool fetch_mlb_game_(const Schedule &schedule, GameSnapshot &out);
   // epoch picks the day (now when 0); finals and pending, when given, also
   // get that day's finished games and the ones not started yet.
   bool fetch_live_games_(League league, std::vector<::espn::LiveGame> &out, int64_t &next_kickoff,
@@ -882,6 +904,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   GameSnapshot &side_card_() { return this->idle_snaps_[0]; }
   GameSnapshot &today_final_() { return this->idle_snaps_[1]; }
   const GameSnapshot &today_final_() const { return this->idle_snaps_[1]; }
+  // Job::today_have: when the kept final started (day_order), 0 for none.
+  int64_t today_have_() const {
+    const GameSnapshot &f = this->today_final_();
+    return f.valid ? ::espn::day_order(f.kickoff_epoch, f.time_tbd) : 0;
+  }
   void note_final_(const GameSnapshot &g);  // a followed game is final: My team today keeps it until midnight
   // The scores rotation as the idle display in My team or Favorite teams.
   // Its reads go in between the mode's own (start_side_job_ from loop()),
@@ -912,9 +939,21 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     this->clear_backoff_();
   }
   // A read failed: start the next, longer wait (poll_timing.h) and return it.
+  // A job that read only the MLB Stats API backs off minor league baseball,
+  // never ESPN (mlb_wait_).
   uint32_t back_off_();
-  // ESPN answered: the next failure starts the backoff over.
+  // Every read in the job went to the MLB Stats API.
+  bool job_mlb_only_() const { return this->job_.read_mlb && !this->job_.read_espn; }
+  // ESPN or the MLB Stats API answered 403 or 429 in this job: back off
+  // (back_off_ picks the host) rather than ask again right away.
+  bool job_refused_() const { return this->job_.throttled || this->job_.mlb_throttled; }
+  // ESPN answered (or the MLB Stats API, for a job that read only it): the
+  // next failure starts that host's backoff over.
   void clear_backoff_() {
+    if (this->job_mlb_only_()) {
+      this->mlb_wait_.clear();
+      return;
+    }
     this->fail_run_.clear();
     this->backoff_ms_ = 0;
   }
@@ -923,9 +962,30 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool backing_off_() const {
     return this->backoff_ms_ != 0 && (millis() - this->backoff_since_ms_) < this->backoff_ms_;
   }
+  // Inside a wait for the host the league's games come from (Favorite Teams
+  // mode skips that favorite until it ends).
+  bool host_waiting_(League league) const {
+    return ::espn::is_mlb_stats(league) ? this->mlb_wait_.waiting(millis()) : this->backing_off_();
+  }
+  // The time left in the wait for the host the league's games come from, 0
+  // when that is ESPN (backing_off_) or no wait runs.
+  uint32_t host_left_(League league, uint32_t now) const {
+    return ::espn::is_mlb_stats(league) ? this->mlb_wait_.left(now) : 0;
+  }
+  // The soonest a wait for a host other than ESPN ends, 0 when none runs.
+  uint32_t soonest_host_left_(uint32_t now) const { return this->mlb_wait_.left(now); }
+  // Live games' fallback card: the time until the rescan for a live game,
+  // which nothing the card waits on may outlast.
+  uint32_t rescan_left_() const {
+    const uint32_t since = millis() - this->live_started_ms_;
+    return since >= this->live_rescan_ms_ ? 0 : this->live_rescan_ms_ - since;
+  }
   // Someone asked for fresh data (Refresh Now, a new team, mode or favorite):
   // read now, but keep the failure count so another failure waits longer.
-  void end_backoff_wait_() { this->backoff_ms_ = 0; }
+  void end_backoff_wait_() {
+    this->backoff_ms_ = 0;
+    this->mlb_wait_.end_wait();
+  }
   // True once a poll has actually put game data on the board this boot.
   bool ever_polled_good_() const { return this->last_good_ms_ != 0; }
   // Seconds since the last good poll. With nothing ever polled, report the
@@ -1208,6 +1268,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ::espn::Backoff fail_run_;
   uint32_t backoff_since_ms_{0};
   uint32_t backoff_ms_{0};      // 0 = no wait running
+  // The MLB Stats API's own run of failures and wait (minor league baseball).
+  ::espn::HostWait mlb_wait_;
   uint32_t last_good_ms_{0};  // millis() of the last successful game poll, 0 = never
   // ESPN itself answered that the team on the board has no game. Until it
   // has, an empty board after a failed read means ESPN could not be reached.
@@ -1243,6 +1305,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // and millis() when it came, 0 before the first. Fetch task, HTTP task.
   std::atomic<int> espn_status_{0};
   std::atomic<uint32_t> espn_answer_ms_{0};
+  // The same for the MLB Stats API, the health block's "mlb".
+  std::atomic<int> mlb_status_{0};
+  std::atomic<uint32_t> mlb_answer_ms_{0};
 
   // Sign-in Wi-Fi (captive.h). The probe runs on its own short task, since
   // it is needed before the clock is set, when no fetch job runs.

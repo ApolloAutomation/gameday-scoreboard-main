@@ -111,7 +111,7 @@ With **Show how to connect when the panel starts** on, the panel's IP address an
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
 :::note[Coming in the next release]
-The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. It's hidden while your panel follows only college teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it. It's hidden while your panel follows only college teams, minor league teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 The Panel card also has a **When nothing is on** part under **Showing**:
 
@@ -142,7 +142,7 @@ The Celebrations card has a switch for each kind of splash, grouped by sport. Li
 | Basketball | Lead change, Buzzer beater, Overtime, Final |
 | Favorite players | Scores |
 
-They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/).
+They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/). A minor league team counts as baseball here. Its games get **Runs** and **Walk-off** only, since MLB's minor league scores don't say how a run scored.
 
 **Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
 
@@ -199,6 +199,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
 - **ESPN data**: how much the panel has downloaded from ESPN since it started, for anyone on a capped internet plan.
+
+:::note[Coming in the next release]
+Minor league baseball adds a **MiLB** tab to the team chooser, after **MLB**, with the teams under a heading for each level, and On now lists minor league games too. A minor league team has an Up next list of its next three games. Diagnostics show **Last MLB read** once the panel has read minor league scores, and the data row becomes **Data used**, counting what the panel downloads from MLB as well as ESPN. When the panel can't reach MLB for a minor league team, the board says **Can't reach MLB**. See [Baseball: minor leagues](/using/minor-league-baseball/).
+:::
 
 ### Follow beta
 
