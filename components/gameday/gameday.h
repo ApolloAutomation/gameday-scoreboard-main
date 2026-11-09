@@ -166,7 +166,8 @@ class GamedaySelect : public select::Select, public Component {
 //   GET  /gameday/state              full snapshot + settings, and "wifi" (wifi_history.h)
 //   GET  /gameday/heap               free heap now: internal, largest internal block, PSRAM (KiB)
 //   POST /gameday/set?key=value...   (the keys and limits are in set_request.h)
-//                                    team=nfl:6|none mode=0-5 rotate=1-30 fav1..fav4=nfl:6|none
+//                                    team=nfl:6|none mode=0-5 rotate=1-30 (min) rotatesec=30-1800 (s: 30,
+//                                    or whole minutes) fav1..fav4=nfl:6|none
 //                                    favs=nfl:6,mlb:10,... (up to FAV_MAX in order, "" clears)
 //                                    today=0/1 live=nfl,mlb,... ("" = the leagues you follow)
 //                                    tz=<name, IANA name or index> tzauto=0/1
@@ -237,8 +238,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Favorites: four team slots for the remote's numbered buttons.
   void select_favorite(uint8_t slot, const std::string &option);
   void press_favorite(uint8_t slot);
-  void set_rotate_minutes(int minutes);
-  int rotate_minutes() const { return this->prefs2_.rotate_minutes; }
+  // Switch every (Live games) and Alternate every (Favorite teams), in
+  // seconds: 30, or whole minutes up to 30 (startup.h).
+  void set_rotate_seconds(int seconds);
+  int rotate_seconds() const {
+    return ::espn::rotate_saved_seconds(this->prefs2_.rotate_minutes, this->prefs8_.rotate_half == 1);
+  }
   // Favorite Teams mode timing (see favorites.h for the rules).
   void set_lockon_minutes(int minutes);
   void set_release_seconds(int seconds);
@@ -491,10 +496,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t flags;
   } __attribute__((packed));
   // Kept separate so adding fields never invalidates the original blob.
+  // rotate_minutes is 1 to 30 on every firmware; 30 seconds is Prefs8's
+  // rotate_half next to 1 minute.
   struct Prefs2 {
     uint8_t mode;
     uint8_t rotate_minutes;
   } __attribute__((packed));
+  static_assert(sizeof(Prefs2) == 2, "Prefs2 keeps its size, or the mode and Switch every reset");
   struct Prefs3 {
     uint8_t fav_league[4];
     uint32_t fav_id[4];  // 0 = slot empty
@@ -533,8 +541,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   struct Prefs8 {
     uint8_t ticker;    // TICK8_*
     uint8_t standing;  // espn::Standing, 0 (Record) on a panel from before it
-    uint8_t spare[2];
+    // 1: Switch every is 30 seconds. Counts only while Prefs2's minutes are 1,
+    // the minute it is saved with, so a minute set on older firmware, which
+    // leaves this byte as it was, still wins (startup.h, rotate_saved_seconds).
+    uint8_t rotate_half;
+    uint8_t spare;
   } __attribute__((packed));
+  static_assert(sizeof(Prefs8) == 4, "Prefs8 keeps its size, or the ticker, standing and Switch every reset");
   static constexpr uint8_t TICK8_COUNT = 1;  // baseball count, outs, pitcher and batter
   static constexpr uint8_t TICK8_MATCH = 2;  // soccer goals, cards, possession and shots
   void set_ticker8_(uint8_t f, bool on);
@@ -1227,8 +1240,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void start_fav_job_(uint32_t now);
   void apply_fav_job_(uint32_t now);
   uint32_t live_away_id_{0};      // the followed live game's away team
-  uint32_t live_started_ms_{0};   // when the current live game was picked,
-                                  // or, in the fallback, when the last scan ran
+  uint32_t live_started_ms_{0};   // when the current live game's first read landed
+                                  // (or it was picked, until one does), or, in
+                                  // the fallback, when the last scan ran
+  // The game the scan picked hasn't had a good read yet: the first one starts
+  // its turn (Switch every), so a short turn still shows the game whole.
+  bool live_unread_{false};
   bool live_none_{false};         // last scan found nothing in progress
   // With nothing live, the wait until the next scan: up to the next kickoff.
   uint32_t live_rescan_ms_{2 * 60 * 1000};

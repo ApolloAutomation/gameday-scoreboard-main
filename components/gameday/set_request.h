@@ -23,19 +23,20 @@ namespace espn {
 
 // In the order the firmware applies them, whatever order the request uses.
 // follow comes first: it pins the game the page showed, and a change later in
-// the same request that moves the board lets the pin go again. wiring comes
+// the same request that moves the board lets the pin go again. rotatesec
+// comes after rotate, so a request with both keeps rotatesec's. wiring comes
 // right after panels, so a request that picks the 2x2 and its wiring saves
 // both before the restart either one asks for. betdel comes before bet, so a
 // request with both empties a slot and then fills it, and playerdel before
 // player the same way.
-constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",     "rotate",   "fav1",       "fav2",
-                                    "fav3",      "fav4",      "tz",       "tzauto",   "down",       "play",
-                                    "odds",      "opp",       "panels",   "wiring",   "bootaddr",   "lockon",
-                                    "release",   "collide",   "favs",     "today",    "live",       "autoupd",
-                                    "count",     "match",     "beta",     "alerts",   "alertfav",   "watch",
-                                    "watchstay", "watchmine", "standing", "idle",     "idledim",    "night",
-                                    "nightstart", "nightend", "nightbri", "betdel",   "bet",        "playerdel",
-                                    "player"};
+constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",       "rotate",   "rotatesec",  "fav1",
+                                    "fav2",      "fav3",      "fav4",       "tz",       "tzauto",     "down",
+                                    "play",      "odds",      "opp",        "panels",   "wiring",     "bootaddr",
+                                    "lockon",    "release",   "collide",    "favs",     "today",      "live",
+                                    "autoupd",   "count",     "match",      "beta",     "alerts",     "alertfav",
+                                    "watch",     "watchstay", "watchmine",  "standing", "idle",       "idledim",
+                                    "night",     "nightstart", "nightend",  "nightbri", "betdel",     "bet",
+                                    "playerdel", "player"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -202,7 +203,7 @@ inline bool live_scan_changed(uint8_t mode, const std::vector<League> &before, c
 enum class SetKind : uint8_t {
   TEAM,      // team, id 0 clears it
   MODE,      // value
-  ROTATE,    // value, minutes
+  ROTATE,    // value, seconds: 30, or 60 to 1800 in whole minutes (startup.h)
   FAV_SLOT,  // slot (1-4), team (id 0 clears the slot)
   TZ,        // value, index into kTimezones
   TZ_AUTO,   // on
@@ -437,9 +438,21 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.value = read_int(v);
     return op.value >= 0 && op.value < kStandingCount;
   }
+  // Switch every (Live games) and Alternate every (Favorite teams), one
+  // setting. rotate is whole minutes, 1 to 30, as before 30 seconds: 0 and
+  // anything lower is still 1 minute, so a page, app or script from before
+  // never sets 30 seconds by accident. rotatesec, which nothing from before
+  // sends, is seconds: under a minute is 30 seconds, a minute or more whole
+  // minutes, rounded down, at most 30. The state document has both: "rotate"
+  // in minutes (1 for 30 seconds) and "rotatesec" in seconds.
   if (k == "rotate") {
     op.kind = SetKind::ROTATE;
-    op.value = clamp_rotate_minutes(read_int(v));
+    op.value = clamp_rotate_minutes(read_int(v)) * 60;
+    return true;
+  }
+  if (k == "rotatesec") {
+    op.kind = SetKind::ROTATE;
+    op.value = clamp_rotate_seconds(read_int(v));
     return true;
   }
   if (k == "lockon") {
