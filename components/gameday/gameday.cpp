@@ -3799,9 +3799,12 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
 // to its game, or on the panel's team's live game without "Switch from my
 // team".
 bool GamedayComponent::watching_() const {
-  if (!this->watch_on() || this->demo_playing_() || !this->board_ready_ || this->backing_off_() ||
-      (this->alerts_on() & ~::espn::alert_bit(::espn::Alert::FINAL)) == 0 || !this->switch_allowed_() ||
-      (this->own_team_live_() && !this->watch_from_mine()))
+  // Neither the final nor a favorite player's score switches the board: the
+  // reads of other games splash no final and keep no players.
+  const uint32_t plays =
+      this->alerts_on() & ~(::espn::alert_bit(::espn::Alert::FINAL) | ::espn::alert_bit(::espn::Alert::PLAYER));
+  if (!this->watch_on() || this->demo_playing_() || !this->board_ready_ || this->backing_off_() || plays == 0 ||
+      !this->switch_allowed_() || (this->own_team_live_() && !this->watch_from_mine()))
     return false;
   if (this->live_mode_())
     return !this->recap_on_ && !this->live_fallback_ && this->schedule_.valid;
@@ -4120,10 +4123,11 @@ void GamedayComponent::apply_visit_job_() {
   this->game_ = std::move(j.game);
   ::espn::carry_football(this->prev_, this->game_);
   // Its first poll says the big play that brought the board here; later ones
-  // splash as a live game's do, both sides counting.
-  const Splash splash = this->visit_.first ? this->visit_.splash
-                                           : ::espn::decide_splash(this->prev_, this->game_, true, true,
-                                                                   this->alerts_on(), this->wide_());
+  // splash as a live game's do, both sides counting, a favorite player's
+  // score naming them (players.h).
+  const Splash splash = ::espn::visit_splash(this->visit_.first, this->visit_.splash, this->prev_, this->game_,
+                                             this->alerts_on(), this->wide_(), this->visit_.sched.league,
+                                             this->players_.players);
   this->visit_.first = false;
   this->mark_good_poll_();
   this->emit_(splash);

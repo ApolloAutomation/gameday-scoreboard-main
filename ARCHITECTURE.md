@@ -267,7 +267,16 @@ for a late lead change or a buzzer beater; by goal in soccer; by an
 unambiguous name in the goal's words in hockey) and its splash takes the
 team's place. The page folds a player's name with the firmware's own
 `ascii_fold` table (`build_web.py` copies it into the bundle), so a hockey
-name matches the goal's words.
+name matches the goal's words. During a visit (watch.h) the board's game is
+the visit's: its poll reads with the visit's league's favorites, the
+stat lines take `board_league_()` (the visit's), and `apply_visit_job_`
+splashes through `visit_splash`, the watcher's splash on the first poll
+and `board_splash_with_players` after it, so the play that brought the
+board there splashes once and never with a name. The watcher's own reads
+pass no `PlayerWatch`, so a favorite player never starts a visit, and
+`watching_()` counts neither the final's bit nor the Favorite player bit
+as a big play switched on. `watch_back_prev` leaves a favorite's score
+from while the board was away unsplashed, as it does the team's.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery

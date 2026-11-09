@@ -15,6 +15,7 @@
 #include "panel_text.h"
 #include "players.h"
 #include "splash_layout.h"
+#include "watch.h"
 
 using namespace espn;
 
@@ -478,6 +479,42 @@ void test_baseball() {
   PCHECK_EQ(splash(before, slam, MLB, tb), "MESA JR.\nGRAND SLAM");
 }
 
+// Another game's big play on the board (watch.h). The reads of other games
+// keep no players, so the play that brought the board there is the team's,
+// and it splashes once; a favorite's score in a later poll of that game names
+// them, as on the board's own game. Back on the board's game, nothing that
+// happened while it was away is splashed, a favorite's score included.
+void test_watcher() {
+  const List tb{make_player(MLB, 4917849, 30, "MESA JR.")};
+  GameSnapshot before = read("fixtures/event_mlb_hr_before.json", Sport::BASEBALL, 10, tb, MLB);
+  GameSnapshot hr = read("fixtures/event_mlb_hr.json", Sport::BASEBALL, 10, tb, MLB);
+  const Splash brought{"TB HOME RUN", 0x092c5c};
+  // The first poll's read credits him, but its splash is the one that brought the board.
+  PCHECK_EQ(visit_splash(true, brought, GameSnapshot{}, hr, kAlertsAll, false, MLB, tb.p).text, "TB HOME RUN");
+  // The next poll reads the same play: nothing again.
+  PCHECK_EQ(visit_splash(false, brought, hr, hr, kAlertsAll, false, MLB, tb.p).text, "");
+  // His home run between two later polls names him, either side counting.
+  PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, MLB, tb.p).text, "MESA JR.\nHOME RUN");
+  const List nyy{make_player(MLB, 33912, 10, "BELLINGER")};
+  PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, MLB, nyy.p).text, "TB HOME RUN");
+  // The Favorite player switch off, or the visited game in another league
+  // than the list's: the team's splash.
+  PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll & ~alert_bit(Alert::PLAYER), false, MLB, tb.p).text,
+            "TB HOME RUN");
+  PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, NFL, tb.p).text, "TB HOME RUN");
+  // A favorite player's score is no switch the watcher reads.
+  PCHECK((watch_sport_mask(Sport::BASEBALL) & alert_bit(Alert::PLAYER)) == 0);
+  // Back on the board's game after the visit: his home run while it was
+  // away isn't splashed.
+  PCHECK_EQ(splash(watch_back_prev(before, hr), hr, MLB, tb), "");
+  // A game that ended meanwhile gets its win, never his name.
+  GameSnapshot final_read = hr;
+  final_read.state = GameState::POST;
+  final_read.completed = true;
+  PCHECK_EQ(splash(watch_back_prev(before, final_read), final_read, MLB, tb, false, kAlertsAll, true, true),
+            "TB WINS!");
+}
+
 void test_basketball() {
   // IND 74, MIN 73 in the 3rd: McDaniels' jumper for MIN, read as MIN's game.
   const List min{make_player(NBA, 4431671, 16, "MCDANIELS")};
@@ -725,6 +762,7 @@ int run_player_tests(int &total_checks) {
   test_football();
   test_college_try();
   test_baseball();
+  test_watcher();
   test_basketball();
   test_soccer();
   test_hockey();

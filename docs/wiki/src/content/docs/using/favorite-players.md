@@ -75,6 +75,14 @@ The **Celebrations** card on the device page has a **Favorite players** switch, 
 
 Only the game on the board, in every mode. A favorite player whose team isn't on the board shows nothing, and in [Favorite teams](/using/favorites/) the favorites' games that aren't on the board are left out too. Follow the player's team, or make it a favorite, to see more of their games.
 
+### Big plays in other games
+
+When the board switches to a big play in another game (see [Big plays in other games](/using/modes/#big-plays-in-other-games)), that game is the one on the board for its stay. A favorite player in it gets their stat line, and when they score later in the stay, the celebration says their name.
+
+The big play that brought the board there shows the team's splash, even when a favorite player made it, and only once. The panel's checks of other games see the score, not who scored, so they never name a player. For the same reason a favorite player never makes the panel switch: it watches and switches for teams only, and a favorite player's team counts as a favorite only if you made it one, for **Switch from my team** too. The **Favorite players** switch on its own doesn't make the panel check other games.
+
+When the board goes back to its own game, a favorite player's score from while it was away doesn't celebrate late, just like the team's.
+
 ## Data and Home Assistant
 
 The panel reads nothing more from ESPN for favorite players: no rosters and no extra pages. It keeps a little more of each read it already makes of a game, and only while a favorite player is in that game's league, so a panel without favorite players reads and keeps exactly what it did before. The rosters are read by your browser, once, when you pick a team in the card.

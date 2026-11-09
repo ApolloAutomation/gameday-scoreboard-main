@@ -399,4 +399,17 @@ inline Splash board_splash_with_players(const GameSnapshot &prev, const GameSnap
   return decide_splash(prev, cur, opponent_splashes, neutral, alerts, wide);
 }
 
+// What a poll of another game's big play splashes (a visit, watch.h): the
+// first, the big play that brought the board there (brought), the team's,
+// since the reads of other games keep no players; later ones as a live
+// game's, both sides counting, a favorite's score named in place of the
+// team's. The first poll's read has no read before it, so the play that
+// brought the board there splashes once, never again with the name.
+inline Splash visit_splash(bool first, const Splash &brought, const GameSnapshot &prev, const GameSnapshot &cur,
+                           uint32_t alerts, bool wide, uint8_t league, const FavPlayer *list) {
+  if (first)
+    return brought;
+  return board_splash_with_players(prev, cur, true, true, alerts, wide, league, list);
+}
+
 }  // namespace espn
