@@ -25,7 +25,7 @@ Installing erases whatever firmware was on the board. This installer is for boar
 4. Click **Install for MoonHub75** and pick the board's port when the browser asks.
 5. When the install finishes, enter your Wi-Fi details in the dialog that follows.
 
-The two pictures install two builds of the same firmware. The 64x64 choice installs the build from `firmware/gameday.yaml`. The 128x64 choice installs the build from `firmware/gameday-2panel.yaml`, which is the same firmware starting two panels wide. You can change the layout later on the device page either way.
+The two pictures install two builds of the same firmware. The 64x64 choice installs the build from `firmware/gameday.yaml`. The 128x64 choice installs the build from `firmware/gameday-2panel.yaml`, which is the same firmware starting two panels wide. You can change the layout later on the device page either way. For three or four panels, pick **One 64x64 panel** here, then **Three wide**, **Four wide** or **Two rows of two** on the device page once the panel is on Wi-Fi. See [Panels and power](/diy/panels/#one-to-four-panels).
 
 ## If you skip the Wi-Fi dialog
 

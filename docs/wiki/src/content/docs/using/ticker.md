@@ -1,6 +1,6 @@
 ---
 title: "The ticker"
-description: "The scrolling line along the bottom of the panel: what it shows before, during and after a game, the switches that control it, and its speed."
+description: "The scrolling line along the bottom of the panel: what it shows before, during and after a game, ranks and standings, bets and favorite players, the switches that control it, its size and its speed."
 sidebar:
   order: 10
 ---
@@ -18,17 +18,12 @@ The ticker is the line that scrolls along the bottom of the panel. It carries wh
 
 A golf tour's ticker has the tournament's days and course before it, the round and the top 10 during it, and the winner and the next event after it. A racing series' ticker has the next session and when it starts, then the track, before a race weekend; the session and the top 10 with their gaps during it, and what's next between sessions; and the winner and the next race after it.
 
-:::note[Coming in the next release]
-Bets you typed into the device page's **Bets** card go at the end of the ticker of their game while it's on the board: the bet before the start, like **BET BUF -3.5**, then **BUF -3.5 COVERING**, **NOT COVERING** or **PUSH** during the game, and **WON**, **LOST** or **PUSH** after the final until midnight. The panel never connects to a sportsbook. See [Bets](/using/bets/).
-:::
+During the game, a stat line for each of your favorite players that ESPN lists among the game's leaders, like **ALLEN 21/34, 241 YDS, 2 TD** or **EDWARDS 19 PTS, 7 AST**, comes after the game's own parts. A player has a line only while they lead a category, and football, basketball and baseball are the sports that have leaders. See [Favorite players](/using/favorite-players/#the-stat-line).
 
-:::note[Coming in the next release]
-During the game, a stat line for each of your favorite players that ESPN lists among the game's leaders, like **ALLEN 21/34, 241 YDS, 2 TD** or **EDWARDS 19 PTS, 7 AST**, after the game's own parts and before your bets. A player has a line only while they lead a category, and football, basketball and baseball are the sports that have leaders. See [Favorite players](/using/favorite-players/#the-stat-line).
-:::
+Bets you typed into the device page's **Bets** card go at the end of the ticker of their game while it's on the board: the bet before the start, like **BET BUF -3.5**, then **BUF -3.5 COVERING**, **NOT COVERING** or **PUSH** during the game, and **WON**, **LOST** or **PUSH** after the final until midnight. The panel never connects to a sportsbook. See [Bets](/using/bets/).
 
 ## Ranks and standings
 
-:::note[Coming in the next release]
 **College teams.** In college football and men's college basketball, a ranked team gets its rank in front of its abbreviation, like "#5 OSU". It's the rank ESPN shows next to the team, so it changes when ESPN's does. Unranked teams have none.
 
 - Before the game the ticker starts with the matchup and the ranks, like "#5 OSU vs #12 MICH" or "FSU vs #19 SMU".
@@ -46,7 +41,6 @@ During the game, a stat line for each of your favorite players that ESPN lists a
 | **Place** | The team's place in its division, conference or league, as ESPN gives it, cut short: "1st in NFC East" is "1st NFCE", "3rd in American Football Conference" is "3rd AFC", "2nd in Pacific Division" is "2nd Pac", "2nd in English Premier League" is "2nd EPL". |
 
 It covers the team you follow in My team, or the favorite on the board in Favorite teams. The other team keeps its record, and in Live games and the finals rotation every team shows its record. When ESPN has no seed or place for your team, like a soccer club's seed, the record shows. A minor league team always shows its record, since MLB has no seed or place for it, and so does an AHL or ECHL team, since HockeyTech has none either. None of them has a rank. A soccer club keeps its league place on cup nights too. Under the logo there's room for 7 characters, so a longer place drops its space, like "1stNFCE", and one still too long shows just the place, like "10th". Next to a long break on the game clock, like "End of 1st", or a long wait in **My team today**'s countdown, like "in 10h 30m", the spot holds 6, so "Seed 12" reads "Seed12" and "1st NFCE" reads "1st" there. On three or four panels in a row it always holds 7. The panel reads the seed and place from ESPN with the team's schedule, every 6 hours.
-:::
 
 Each sport's page has the details: [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/), [Soccer](/using/soccer/), [Golf](/using/golf/) and [Racing](/using/racing/).
 
@@ -56,7 +50,7 @@ The Ticker card on the device page has a switch for each part. All of them start
 
 | Switch | What it adds |
 | --- | --- |
-| **Down and distance** | Football: the down, yards to go and where the ball is, like "3rd & 4 at FIU 31". In the next release it starts with "RED ZONE" when the team with the ball is inside the 20. |
+| **Down and distance** | Football: the down, yards to go and where the ball is, like "3rd & 4 at FIU 31". It starts with "RED ZONE" when the team with the ball is inside the 20. |
 | **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
 | **Match stats** | Soccer: goals, cards, possession and shots. |
 | **Last play** | ESPN's latest play in every sport. In soccer, the latest goal or card. A very long play is cut short. |
@@ -77,22 +71,19 @@ The ticker also says when something needs your attention:
 - **Favorites: add teams at** and the panel's IP address, or **Favorites: add teams on the device page** while the panel has no address: the panel is in Favorite teams with no favorites.
 - **No live games, showing** and your team, like "No live NFL games, showing DAL": Live games found nothing on, so it shows your team until a game starts. See [Show: My team, Favorite teams, Live games](/using/modes/#when-nothing-is-live).
 - **Too warm, dimming** in orange, or **Check power supply** in red: the panel is holding its brightness down because it's too warm or its power supply is too weak. The line covers the ticker for 15 seconds every two minutes, until the panel has cooled and is back at your brightness, or until you fix the power and press **Clear** on the device page. See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/#heat-and-power-protection).
+- **IP** and the panel's IP address, then its `.local` name, like **IP 192.168.1.50 | gameday-2f6a70.local**: the panel just joined Wi-Fi. The line leads the ticker for 30 seconds once the QR code and the address go, or straight away when a game is live, with **Show how to connect when the panel starts** on. Open either address in a browser on the same Wi-Fi to get to the device page. Home Assistant's Game Status leaves it out.
 
-:::note[Coming in the next release]
-**IP** and the panel's IP address, then its `.local` name, like **IP 192.168.1.50 | gameday-2f6a70.local**: the panel just joined Wi-Fi. The line leads the ticker for 30 seconds once the QR code and the address go, or straight away when a game is live, with **Show how to connect when the panel starts** on. Open either address in a browser on the same Wi-Fi to get to the device page. Home Assistant's Game Status leaves it out.
+For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).
+
+## The second area's ticker
 
 On two rows of two, the board's ticker runs along the bottom of the top half, and the bottom half, the [second area](/using/panel-sizes/#the-second-area), has a ticker of its own, in bigger letters under its clock. The **Too warm, dimming** or **Check power supply** line goes along the bottom edge.
 
 The second area's ticker, on two rows of two or three or four panels in a row, never repeats the board's: under its clock, your next games, leaving out the game on the board; under today's scores, its own card's line; under a second team's game, that game's line with its bets and your favorite players' stat lines; under the rotation, the other live games' scores. It says **not updating** when its own reads keep failing, and asks for a team on the device page while **A second team's game** has none.
-:::
-
-For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).
 
 ## Text size
 
-:::note[Coming in the next release]
 **Text size** in the Panel card on the device page sets the ticker's letters: **Normal**, where a panel starts, or **Large**, half again as tall. With **Large** the ticker sits four rows higher, with room for the tails of letters like y, p and q, and the row above it moves up a little to make room: down and distance, the count, the bases and the outs, a goal or a series on a 128x64 board or wider, and the scores on a single 64x64 panel. A game's ticker in the [second area](/using/panel-sizes/#the-second-area) grows the same way. A golf or racing leaderboard keeps the small letters, since its sixth row leaves no room, and the second area's ticker under its clock is in big letters at either size. **Too warm, dimming** and **Check power supply** cover the bigger ticker the same way. A change shows at once, with no restart. **Clock size**, next to it, sets the clock; see [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
-:::
 
 ## Ticker speed
 

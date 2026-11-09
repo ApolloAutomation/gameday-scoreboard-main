@@ -1,6 +1,6 @@
 ---
 title: "Basketball: NBA, WNBA and college"
-description: "What the panel shows for an NBA, WNBA or men's college basketball game: the period and clock, the playoff series and the victory splash."
+description: "What the panel shows for an NBA, WNBA or men's college basketball game: the period and clock, the playoff series, ranks, lead changes, buzzer beaters, overtime and the final."
 sidebar:
   order: 7
 ---
@@ -13,11 +13,9 @@ The next-game card shows both logos, your team on the left, with the records und
 
 Basketball teams have no Up next list on the device page: their season schedules are too large for the panel to read.
 
-:::note[Coming in the next release]
 A ranked men's college basketball team shows its rank in front of its name. Before tip-off the ticker starts with the matchup, like "#2 CONN vs #1 MICH", and the records after the final read "#2 CONN 34-6 | #1 MICH 37-3". On a 128x64 board the rank sits in front of the record under the logo, and on a single 64x64 panel in front of the abbreviation before and after the game, each only where it fits. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 An NBA or WNBA team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
-:::
 
 ## During the game
 
@@ -32,24 +30,18 @@ On a single 64x64 panel the clock takes the abbreviations' place during play. Th
 
 ## Splashes
 
-Basketball only celebrates the win. A game has around a hundred scoring plays, so splashing each basket would keep the screen covered. When your team wins, a victory splash with fireworks says your abbreviation and "WINS". **Opponent scores too** makes no difference for basketball.
-
-:::note[Coming in the next release]
-Baskets still don't splash, but four moments do, each with its own switch in the Celebrations card:
+Baskets don't splash. A game has around a hundred scoring plays, so splashing each basket would keep the screen covered. Four moments do, each with its own switch in the Celebrations card:
 
 - **LEAD CHANGE**: the team that was behind goes ahead in the last 2 minutes of the 4th quarter (of the 2nd half in college) or in overtime. Breaking a tie doesn't count, since the team ahead before the tie may just be ahead again.
 - **BUZZER BEATER**, with fireworks: a basket in the last second of a period that ties the game or takes the lead. The panel reads the game about every 10 seconds, so it counts a basket when the clock stopped on it with a second or less left, or when the clock ran out and the update before showed a second or less. A basket from further out that beats the horn may get no splash. When ESPN marks the game final in the same update, a game winner at the buzzer gets this instead of the victory splash. When ESPN marks it final an update later, the buzzer beater shows first and the victory splash follows.
 - **OVERTIME**: when overtime starts, and each overtime after that, even when the first update in overtime already has a basket in it.
 - **FINAL**: when the game ends and your team didn't win. A win still gets the victory splash, and in Live games every final does.
 
-The other side's lead changes and buzzer beaters put its abbreviation first, like "MIN LEAD CHANGE", and need **Opponent scores too**. See [Celebrations](/using/device-page/#celebrations).
+When your team wins, a victory splash with fireworks shows your logo and "WINS".
 
-Each of these shows a logo with its words: a lead change or a buzzer beater the logo of the team that scored, a buzzer beater with the points, like **+3**, and overtime and the final both teams' logos. The logo says whose play it was, so the other side's splash leaves its abbreviation out. The victory splash shows the winner's logo with "WINS". See [Splashes](/using/panel-sizes/#splashes).
-:::
+Each of these shows a logo with its words: a lead change or a buzzer beater the logo of the team that scored, a buzzer beater with the points, like **+3**, and overtime and the final both teams' logos. The logo says whose play it was, so the other side's splash leaves its abbreviation out. The other side's lead changes and buzzer beaters need **Opponent scores too**. See [Splashes](/using/panel-sizes/#splashes) and [Celebrations](/using/device-page/#celebrations).
 
-:::note[Coming in the next release]
 A late lead change or overtime in another basketball game can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those games about every 45 seconds, so a buzzer beater switches it only when a check lands on the last second, and a final never does, since that game is over. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
-:::
 
 ## The final
 

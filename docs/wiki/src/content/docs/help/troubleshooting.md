@@ -28,9 +28,7 @@ You joined the panel's **Game Day** hotspot and no page opened.
 - Open `192.168.4.1` in your browser.
 - Still nothing? Turn off mobile data while you set the panel up, then open `192.168.4.1` again.
 
-:::note[Coming in the next release]
-`192.168.4.1` opens the setup page on every panel. Until now, on a panel that had been on Wi-Fi before, one that lost its Wi-Fi or one you gave a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi), it could open the device page instead, which has no place to enter a network.
-:::
+`192.168.4.1` opens the setup page on every panel: a new one, one that lost its Wi-Fi and one you gave a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
 
 **Why:** a phone that joins a network checks for internet by opening a plain `http://` web address it knows. On the panel's hotspot every `http://` address is the setup page, and getting that instead of what it expected is what makes the phone offer the page. Some phones don't open it by themselves, and a phone that decides the hotspot has no internet can send your browser over mobile data, where the panel isn't. Secure `https://` sites, which is most of them, show an error on the hotspot instead of the setup page, so open `192.168.4.1` rather than a site you know.
 
@@ -52,7 +50,7 @@ The panel says **Wi-Fi / lost / reconnecting** while it tries to get back on. If
 
 If you changed your router or your Wi-Fi password, wait for the panel's **Game Day** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
 
-**Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, and restarts itself once, a minute into the outage.
+**Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, except with three or four panels, and restarts itself once, a minute into the outage.
 
 ## The panel says Can't reach ESPN
 
@@ -60,13 +58,7 @@ Check that other devices on the same network can get online. The panel keeps try
 
 **Why:** the panel is on your Wi-Fi but can't get an answer from ESPN, where the scores come from. That's usually the internet connection, and sometimes ESPN itself.
 
-:::note[Coming in the next release]
-For a minor league team the panel says **Can't reach MLB** instead, since those scores come from MLB's stats service. The same steps apply. If only MLB is out, your other teams and leagues keep updating from ESPN.
-:::
-
-:::note[Coming in the next release]
-For an AHL or ECHL team it says **Can't reach HockeyTech**, since those scores come from HockeyTech. The same steps apply, and if only HockeyTech is out, your other teams and leagues keep updating.
-:::
+For a minor league baseball team the panel says **Can't reach MLB** instead, since those scores come from MLB's stats service, and for an AHL or ECHL team **Can't reach HockeyTech**, since those come from HockeyTech. The same steps apply. If only one of them is out, your other teams and leagues keep updating.
 
 ## The panel says Getting ready for a long time
 
@@ -76,14 +68,16 @@ Check that other devices on the same network can get online. If they can, try an
 
 ## Half the board is blank, or the picture shows twice
 
-Open the device page and find **Matrix** in the Setup card. Click the picture that matches your panel:
+Open the device page and find **Matrix** in the Setup card (tap **Setup** if it's folded). Click the picture that matches your panel:
 
 | Your panel | Pick |
 | --- | --- |
 | The 128x64 panel from the Game Day Scoreboard, or two 64x64 panels side by side | **One 128x64 panel** |
 | A single 64x64 panel | **One 64x64 panel** |
+| Three or four 64x64 panels side by side | **Three wide** or **Four wide** |
+| Four 64x64 panels in two rows of two | **Two rows of two** |
 
-The panel restarts with the new layout.
+The page asks before it restarts the panel with the new layout. For more panels, and a two rows of two board that shows partly upside down, see [Wrong size?](/using/panel-sizes/#wrong-size).
 
 **Why:** the panel's layout setting doesn't match the panel, so it draws the board for a different size. A 128x64 panel set to **One 64x64 panel**, for one, draws the picture twice side by side. See [Panel sizes](/using/panel-sizes/).
 

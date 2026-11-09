@@ -5,10 +5,6 @@ sidebar:
   order: 8.5
 ---
 
-:::note[Coming in the next release]
-The AHL and the ECHL come with the next release. Everything on this page describes them.
-:::
-
 The panel can follow any of the AHL's 32 teams and the ECHL's 30. An AHL or ECHL team gets the same board as an NHL team: the period and the clock, overtime, the shootout and the goal splashes. See [Hockey: NHL](/using/hockey/) for the board itself. This page covers what's different.
 
 ## Where the scores come from
@@ -56,7 +52,7 @@ Every goal splashes the same way, yours and, with **Opponent scores too** on, th
 
 ## The final
 
-The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for half an hour in My team, then the panel looks up the next game. **Refresh scores** during that half hour reads the final again and keeps it up.
+The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks shows your logo and "WINS", or your abbreviation in a box for a team with no small logo. The final stays up for half an hour in My team, then the panel looks up the next game. **Refresh scores** during that half hour reads the final again and keeps it up.
 
 A postponed, canceled or suspended game shows "Postponed", "Canceled" or "Suspended" and gets no victory splash. The panel moves on to the team's next game.
 

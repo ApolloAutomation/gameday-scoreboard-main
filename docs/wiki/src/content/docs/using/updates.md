@@ -30,9 +30,7 @@ If the check can't reach the update server, the page says **Could not reach the 
 1. Open the device page and tap **Install** in the Firmware box.
 2. Confirm. The panel downloads the update and restarts.
 
-:::note[Coming in the next release]
 The Device card, where the Firmware box is, starts folded. When an update is out, or one didn't take, the card opens by itself with **Install** in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say **Update available** and the version, **Update didn't take**, or **Installing** and the version: tap **Device** to open it. See [The Device card](/using/device-page/#the-device-card).
-:::
 
 While it installs, the box says **Installing** and the version, with **Keep the panel powered. It reboots when done and this page reconnects.** Leave the panel plugged in until it's back. The page reloads by itself once the panel answers on the new version.
 

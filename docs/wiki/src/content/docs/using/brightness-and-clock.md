@@ -1,15 +1,11 @@
 ---
 title: "Brightness, panel on and off, and the clock"
-description: "Set the panel's brightness, turn it off and on, dim it for the night, and switch between the scoreboard and the clock."
+description: "Set the panel's brightness, turn it off and on, dim it for the night, switch between the scoreboard and the clock, and make the clock and the ticker bigger."
 sidebar:
   order: 17
 ---
 
-The Panel card on the device page holds the settings for the screen itself: **Panel on**, **Brightness**, **Ticker speed** and **Showing**. The Game Day app and Home Assistant have the same settings.
-
-:::note[Coming in the next release]
-**Panel on** and **Brightness** move to the Quick settings card at the top of the device page, right under the board. **Ticker speed** and **Showing** stay in the Panel card. See [Settings](/using/device-page/#settings).
-:::
+**Panel on** and **Brightness** are in the Quick settings card at the top of the device page, right under the board. The Panel card under it holds the rest of the settings for the screen itself: **Ticker speed**, **Showing**, **Clock size**, **Text size** and **Night hours**. The Game Day app and Home Assistant have **Panel on**, **Brightness**, **Ticker speed** and **Showing** too. See [Settings](/using/device-page/#settings).
 
 ## Brightness
 
@@ -31,15 +27,12 @@ A few things turn a dark panel back on by themselves, since they mean someone wa
 
 The panel always comes back on after a restart or a power cut.
 
-:::note[Coming in the next release]
 With the **Idle display** set to **Off or dim**, the panel also goes dark, or down to its **Dim to** level, while none of the games it follows is on, and lights up again by itself when one starts. That isn't the same as **Panel on**: the switch stays on, Home Assistant still sees the panel as on, and your Brightness setting doesn't change. Pressing **ON** on the remote doesn't light a panel that's dark this way; pick another idle display, or turn **Off or dim** back off, to see it. The remote's brighter and dimmer buttons do nothing while the panel is dark or dimmed this way, so they can't change your Brightness without you seeing it; **NIGHT** still sets your Brightness to the night level. The panel stays lit while it isn't on Wi-Fi, so you can see its screens about getting connected. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
 
 With a [second area](/using/panel-sizes/#the-second-area), **Off or dim** darkens or dims the whole panel, and the panel lights up for the second area too while its team's game is on or its final is still up, or while a big play has it. What the board shows stays as the idle display says. Today's scores aren't read while the panel is dark or dimmed this way.
-:::
 
 ## Night hours
 
-:::note[Coming in the next release]
 Turn on **Night hours** in the Panel card on the device page, and set **From** and **To** and a **Night brightness**. A panel starts with 10 PM to 7 AM and a night brightness of 20, the level the remote's **NIGHT** button uses. The hours can run past midnight. During them:
 
 - The panel runs at the night brightness.
@@ -49,7 +42,6 @@ Turn on **Night hours** in the Panel card on the device page, and set **From** a
 - On two rows of two, or three or four panels in a row, the [second area](/using/panel-sizes/#the-second-area) shows the clock in place of today's scores and the rotation of live games. A second team's game that's on, and a big play there, still show.
 
 If you change the brightness during the night hours, on the device page, in Home Assistant or with the remote's brightness buttons or **NIGHT**, your change holds until the hours end, and the next night starts at the night brightness again. The night hours never change your Brightness setting itself, and **Off or dim** stays darker than the night brightness when its level is lower. The panel needs the time of day for them, so after a power cut they start once its clock is set. A restart keeps the clock, so a restart in the night hours, like an automatic update's, comes back at the night brightness, or dark with **Off or dim**. Picking a new team or mode at night doesn't end your brightness change either.
-:::
 
 ## Showing: the scoreboard or the clock
 
@@ -66,13 +58,10 @@ Separate from the Clock page, the scoreboard shows a clock of its own when there
 
 On a single 64x64 panel the date goes under the time, and the next game goes in the ticker. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).
 
-:::note[Coming in the next release]
 The same clock can stand in whenever nothing you follow is on, in season too: set the **Idle display** to **Clock**. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
-:::
 
 ## Clock size and text size
 
-:::note[Coming in the next release]
 **Clock size** and **Text size** in the Panel card on the device page make the clock and the ticker bigger. Each is **Normal**, where a panel starts, or **Large**, and a change shows at once, with no restart.
 
 **Clock size** sets the time wherever the scoreboard shows a clock: the off-season clock, the idle display's **Clock**, and the second area's **Clock and date** on two rows of two or three or four panels in a row. **Large** has bigger digits where they fit:
@@ -84,7 +73,6 @@ The same clock can stand in whenever nothing you follow is on, in season too: se
 The date and the line with your next game stay as they are. The **Clock** page under **Showing** has its own clock and doesn't change.
 
 **Text size** sets the ticker; see [Text size](/using/ticker/#text-size).
-:::
 
 ## Heat and power protection
 

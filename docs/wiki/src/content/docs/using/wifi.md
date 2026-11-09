@@ -57,12 +57,8 @@ The `.local` name and the IP address, a number like `192.168.1.50`, open the sam
 
 - **The QR code** the panel shows when it joins Wi-Fi opens its device page by IP address, like `http://192.168.1.50`, so a phone that can't open `.local` addresses gets there with its camera.
 - **The boot button**: hold it for about 1.5 seconds and the panel shows its `.local` name and IP address for 20 seconds.
-- **The ticker** says **Pick a team at** and the IP address until you pick a team.
+- **The ticker** starts with the IP address and the `.local` name for 30 seconds after the panel joins Wi-Fi, like **IP 192.168.1.50 | gameday-2f6a70.local**, once the QR code and the address go, or straight away when a game is live. It follows **Show how to connect when the panel starts**. See [What the panel shows once it's online](/get-started/setup/#what-the-panel-shows-once-its-online). Until you pick a team, it also says **Pick a team at** and the IP address.
 - **The device page** shows it in the Device card under **Address**, with the `.local` name under **Name**.
 - **Home Assistant** has it as the panel's **IP** entity, and your router's list of connected devices shows it beside the panel's name, `gameday-` and its six characters.
-
-:::note[Coming in the next release]
-After the panel joins Wi-Fi, the ticker also starts with its IP address and `.local` name for 30 seconds, like **IP 192.168.1.50 | gameday-2f6a70.local**, once the QR code and the address go, or straight away when a game is live. It follows **Show how to connect when the panel starts**. See [What the panel shows once it's online](/get-started/setup/#what-the-panel-shows-once-its-online).
-:::
 
 The panel treats your home network as trusted. Anyone on your Wi-Fi can open its device page and change its settings, and it isn't designed to be reached from the internet, so don't forward a port to it.

@@ -1,15 +1,13 @@
 ---
 title: "Hockey: NHL"
-description: "What the panel shows for an NHL game: the period and clock, overtime and shootouts, goal splashes and the playoff series."
+description: "What the panel shows for an NHL game, and the same board for the AHL and the ECHL: the period and clock, overtime and shootouts, goal splashes and the playoff series."
 sidebar:
   order: 8
 ---
 
 NHL games get their own board. This page describes a 128x64 display and notes where a single 64x64 panel differs. See [Panel sizes and layouts](/using/panel-sizes/).
 
-:::note[Coming in the next release]
 AHL and ECHL teams get this same board, with their scores from HockeyTech, the leagues' own stats service, instead of ESPN. See [Hockey: AHL and ECHL](/using/minor-league-hockey/) for what's different.
-:::
 
 ## Before the game
 
@@ -22,12 +20,8 @@ NHL teams have no Up next list on the device page: their season schedules are to
 - **The clock and period** under the scores, like "12:34 2nd".
 - **Overtime** reads "OT". In the playoffs, where overtime goes on until someone scores, later periods read "2OT", "3OT" and so on.
 - **A shootout**, in the regular season, reads "SO".
-- **Intermissions** show ESPN's words, like "End of 1st", and the ticker shows the series, or the records outside the playoffs.
+- **Intermissions** show ESPN's words, like "End of 1st", and the ticker shows the series, or the records outside the playoffs. The clock comes back as soon as ESPN says the next period has started.
 - **The ticker** with the last play. Turn it off with **Last play** in the Ticker card. See [The ticker](/using/ticker/).
-
-:::note[Coming in the next release]
-The clock comes back as soon as the next period starts, instead of ESPN's "End of 1st" staying up for a while.
-:::
 
 The board doesn't show power plays. ESPN's NHL data has no power play field, and working one out from the penalties would be wrong when penalties offset.
 
@@ -35,23 +29,15 @@ On a single 64x64 panel the clock takes the abbreviations' place during play, an
 
 ## Goal splashes
 
-A goal fills the screen for 4 seconds with fireworks on black, in the scoring team's color. Yours says "GOAL". The other side's says their abbreviation and "GOAL", like "PIT GOAL", unless you turn off **Opponent scores too** in the Celebrations card. The winning goal in a shootout splashes like any other.
+A goal fills the screen for 4 seconds with fireworks on black, in the scoring team's color, with the scoring team's logo, **+1** and "GOAL". The logo says whose goal it was, so the other side's splash leaves its abbreviation out. The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. The winning goal in a shootout splashes like any other. See [Splashes](/using/panel-sizes/#splashes).
 
-When your team wins, a victory splash with fireworks says your abbreviation and "WINS".
-
-:::note[Coming in the next release]
-A goal's splash shows the scoring team's logo and **+1** with "GOAL", and the logo says whose goal it was, so the other side's leaves its abbreviation out. The victory splash shows the winner's logo with "WINS". See [Splashes](/using/panel-sizes/#splashes).
-:::
-
-:::note[Coming in the next release]
 Goal splashes have their own switch in the Celebrations card. See [Celebrations](/using/device-page/#celebrations).
 
 Every goal splashes the same way. ESPN's words for a goal don't say whether it came on a power play or into an empty net, and the number after the scorer's name counts goals this season, not this game, so there is no power play goal, empty net goal or hat trick splash.
-:::
 
-:::note[Coming in the next release]
+When your team wins, a victory splash with fireworks shows your logo and "WINS".
+
 A goal in another hockey game can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those games about every 45 seconds. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
-:::
 
 ## The playoff series
 

@@ -9,7 +9,7 @@ The panel works with a WiZ WizMote, the small battery remote sold for WiZ smart 
 
 ## Pairing
 
-1. Open the device page, or the Remote section in the Game Day app, and find the **Remote** card.
+1. Open the device page, or the Remote section in the Game Day app, and find the **Remote** card. On the device page it starts folded: tap **Remote** to open it.
 2. Turn on **Discovery**. The status line says **Discovery on: press any button on the remote**.
 3. Press any button on the WizMote.
 
@@ -30,9 +30,7 @@ The panel pairs with one remote at a time. Pairing another one replaces the firs
 
 The brightness buttons move the same **Brightness** setting as the device page and the app.
 
-:::note[Coming in the next release]
 While the **Idle display** setting **Off or dim** has the panel dark or dimmed, the brighter and dimmer buttons do nothing, and **ON** doesn't light it. **NIGHT** still sets the Brightness to the night level. See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/#turning-the-panel-off-and-on).
-:::
 
 ## The numbered buttons
 

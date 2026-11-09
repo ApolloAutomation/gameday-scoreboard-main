@@ -5,10 +5,6 @@ sidebar:
   order: 6.5
 ---
 
-:::note[Coming in the next release]
-Minor league baseball comes with the next release. Everything on this page describes it.
-:::
-
 The panel can follow any of the 120 minor league teams at the four full-season levels: Triple-A, Double-A, High-A and Single-A. A minor league team gets the same board as an MLB team: the inning, the count, the outs, the runners and the run splashes. See [Baseball: MLB](/using/baseball/) for the board itself. This page covers what's different.
 
 ## Where the scores come from
@@ -47,7 +43,7 @@ A walk-off does get its splash, "WALK-OFF" with fireworks, under the **Walk-off*
 
 ## The final
 
-The ticker says "Final", "Final/10" after extra innings, or "Final/7" for a game called early, with each team's hits and errors and the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for ten minutes, then the panel looks up the next game. **Refresh scores** during those ten minutes reads the final again and keeps it up.
+The ticker says "Final", "Final/10" after extra innings, or "Final/7" for a game called early, with each team's hits and errors and the records. A victory splash with fireworks shows your logo and "WINS". The final stays up for ten minutes, then the panel looks up the next game. **Refresh scores** during those ten minutes reads the final again and keeps it up.
 
 ## Doubleheaders and rainouts
 

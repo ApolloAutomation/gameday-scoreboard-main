@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Game Day Scoreboard is an LED panel that shows your team's live score, game clock and next game. It follows the NFL, college football, MLB, the NBA, the WNBA, men's college basketball, the NHL, MLS and the Premier League. Once it's on your Wi-Fi it gets the scores from ESPN by itself, with no hub, account or other computer to run.
+Game Day Scoreboard is an LED panel that shows your team's live score, game clock and next game. It follows the NFL, college football, MLB, minor league baseball, the NBA, the WNBA, men's college basketball, the NHL, the AHL, the ECHL, MLS and the Premier League, and golf's PGA Tour and LPGA Tour and racing's Formula 1 and NASCAR Cup Series. Once it's on your Wi-Fi it gets the scores by itself, from ESPN, and for minor league baseball from MLB's stats service and for the AHL and the ECHL from HockeyTech, with no hub, account or other computer to run.
 
 It follows golf and racing too. Pick the PGA Tour or the LPGA Tour and the panel shows that tour's tournament and leaderboard. See [Golf](/using/golf/). Pick Formula 1 or the NASCAR Cup Series and it shows the race weekend, the order of each session and the race's winner. See [Racing](/using/racing/).
 
