@@ -15,6 +15,18 @@ One firmware drives three arrangements of HUB75 LED panels. The panel size is a 
 
 The Game Day Scoreboard ships with one 128x64 panel, and its firmware starts on the wide layout. Built your own? See [Panels](/diy/panels/).
 
+:::note[Coming in the next release]
+Three more arrangements, for 64x64 panels:
+
+| Arrangement | Layout | Pick on the device page |
+| --- | --- | --- |
+| Three 64x64 panels side by side | Wide, 192x64 | **Three wide** |
+| Four 64x64 panels side by side | Wide, 256x64 | **Four wide** |
+| Four 64x64 panels in two rows of two | Two rows, 128x128 | **Two rows of two** |
+
+With three or four panels, Bluetooth setup is off, so the panel sets up Wi-Fi through its hotspot only: scan the QR code on its setup screen with your phone's camera. Power them from a supply rated for all of them. See [Panels and power](/diy/panels/).
+:::
+
 ## What each layout shows
 
 ### Wide: 128x64
@@ -26,6 +38,12 @@ A ranked college team's rank goes in front of its record under the logo, like "#
 :::
 
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
+
+:::note[Coming in the next release]
+**Three or four wide (192x64, 256x64).** The wide layout spreads across the whole width: the logos at the far ends, the abbreviations and big scores between them, the game clock and the situation row in the middle, and the ticker along the whole bottom. A golf or racing leaderboard sits in the middle. A touchdown's or a win's fireworks go off in the middle behind the words. On the start-up screen, the words take everything to the right of the QR code.
+
+**Two rows of two (128x128).** The top half is the 128x64 board, the same as on one 128x64 panel. The bottom half shows the time and the date, and under them the ticker in bigger letters. Under the off-season clock, which already shows the time, the bottom half shows only the ticker. The start-up and setup screens sit in the middle of the four panels.
+:::
 
 ### Single: 64x64
 
@@ -47,11 +65,29 @@ The off-season clock shows the date under the time, and the next game goes in th
 
 Your team and settings stay as they were. A [factory reset](/using/buttons-and-resets/) puts the layout back to the one the firmware starts on: 128x64 for the Game Day Scoreboard and the two-panel DIY build, 64x64 for the one-panel DIY build.
 
+:::note[Coming in the next release]
+The page asks before it restarts the panel, and says **Restarting as** and the size once you agree. For **Two rows of two**, a **How the rows are mounted** choice appears under the pictures once the panel is back: **Bottom row upside down** (folded under, where a new panel starts), **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-two-64x64-panels) for the wiring.
+:::
+
 ## Wrong size?
 
 If the layout doesn't match the panel, the picture looks wrong:
 
 - **The picture shows twice, side by side** (two QR codes during setup, for example): the panel is set to one 64x64 panel but is a 128x64 display. Pick **One 128x64 panel**.
 - **Half the board is blank, or only part of it shows**: the panel is set to 128x64 but is a single 64x64 panel. Pick **One 64x64 panel**.
+
+:::note[Coming in the next release]
+- **The picture repeats across the panels, or some panels stay dark**: the count doesn't match. Pick the picture with as many panels as you have.
+- **Part of a two rows of two board is upside down**: the wiring choice doesn't match how the rows are mounted.
+
+| You picked | What you see | Pick instead |
+| --- | --- | --- |
+| **Bottom row upside down** | The bottom half upside down | **All upright** |
+| **Bottom row upside down** | Both halves upside down | **Top row upside down** |
+| **All upright** | The bottom half upside down | **Bottom row upside down** |
+| **All upright** | The top half upside down | **Top row upside down** |
+| **Top row upside down** | Both halves upside down | **Bottom row upside down** |
+| **Top row upside down** | The top half upside down | **All upright** |
+:::
 
 More fixes are in [Troubleshooting](/help/troubleshooting/).
