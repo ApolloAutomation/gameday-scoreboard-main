@@ -20,8 +20,9 @@ namespace esphome::gameday {
 
 namespace {
 
-// The page's board, in PSRAM: only its pointer is static.
+// The page's board and the second area, in PSRAM: only their pointers are static.
 BoardView *page_view = nullptr;
+AreaView *area_ptr = nullptr;
 
 void show(lv_obj_t *o, bool on) {
   if (o == nullptr)
@@ -110,6 +111,36 @@ void underline(lv_obj_t *lbl, lv_obj_t *bar, bool on) {
   lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
 }
 
+// A plain container or label for the second area: no theme styles (no
+// background, border, padding or scrollbar), white text in font f.
+lv_obj_t *plain_obj(lv_obj_t *parent) {
+  lv_obj_t *o = lv_obj_create(parent);
+  lv_obj_remove_style_all(o);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  return o;
+}
+
+lv_obj_t *plain_label(lv_obj_t *parent, const lv_font_t *f, lv_opa_t opa, bool wrap = false) {
+  lv_obj_t *l = lv_label_create(parent);
+  lv_obj_remove_style_all(l);
+  lv_obj_set_style_text_font(l, f, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_set_style_text_opa(l, opa, 0);
+  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(l, wrap ? LV_LABEL_LONG_WRAP : LV_LABEL_LONG_CLIP);
+  lv_label_set_text(l, "");
+  return l;
+}
+
+lv_obj_t *plain_bar(lv_obj_t *parent, uint32_t color) {
+  lv_obj_t *o = plain_obj(parent);
+  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(o, lv_color_hex(color), 0);
+  lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+  return o;
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -130,18 +161,9 @@ void board_layout(BoardView &v, int w, int h) {
   v.w = (int16_t) w;
   const GameGeom g = game_geom(w);
   const SplashBox sb = splash_box(w, h);
-  // The 2x2's bottom half: the time and date, and the ticker in spleen_16,
-  // which board_draw and gd_clock_tick fill. The ticker runs there only, not
-  // along the board's bottom as well.
-  const bool own_ticker = board_ticker(h);
-  show(v.ticker, own_ticker);
-  if (!own_ticker && v.lower != nullptr) {
-    lv_obj_set_pos(v.lower, 0, kBoardRows);
-    lv_obj_set_size(v.lower, w, h - kBoardRows);
-    for (lv_obj_t *l : {v.lower_time, v.lower_date, v.lower_ticker})
-      put_width(l, w);
-  }
-  show(v.lower, !own_ticker);
+  // The board's own ticker, along its bottom. The second area (split.h) has
+  // its own, laid out by area_layout.
+  show(v.ticker, board_ticker(h));
   // A splash covers the whole screen, a 2x2's bottom half too, with its
   // words and fireworks in the board's 64 rows (the middle ones of a 2x2)
   // and the 128 wide fireworks canvas in the middle of a wider board.
@@ -287,12 +309,10 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
 
   // The ticker only when its text changed: rewriting the label restarts the
   // scroll, and pushes arrive every few seconds.
-  lv_obj_t *ticker = v.ticker != nullptr ? v.ticker : v.lower_ticker;
-  if (ticker != nullptr) {
-    const char *cur = lv_label_get_text(ticker);
+  if (v.ticker != nullptr) {
+    const char *cur = lv_label_get_text(v.ticker);
     if (cur == nullptr || status != cur) {
       put_text(v.ticker, status.c_str());
-      put_text(v.lower_ticker, status.c_str());
       r.ticker_changed = true;
     }
   }
@@ -351,17 +371,8 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   if (v.ticker != nullptr && host != nullptr && lv_obj_get_parent(v.ticker) != host)
     lv_obj_set_parent(v.ticker, host);
   // The clock card has the date under its time on one panel or with no next
-  // game, else the next game. A 2x2's bottom half (lower_half): under the
-  // clock card, which has the time already, no time, and the date only when
-  // the card has the next game in its place.
+  // game, else the next game.
   const bool card_date = clock_card_date(W, !next_line.empty());
-  const LowerHalf lower = lower_half(f.clock, card_date);
-  show(v.lower_time, lower.time);
-  show(v.lower_date, lower.date);
-  if (v.lower_date != nullptr)
-    lv_obj_set_y(v.lower_date, lower.date_y);
-  if (v.lower_ticker != nullptr)
-    lv_obj_set_y(v.lower_ticker, lower.ticker_y);
   if (f.clock) {
     show(v.msg, false);
     put_color(v.clock_time, f.team_color);
@@ -482,6 +493,142 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   }
   return r;
 }
+
+AreaView *area_view() { return area_ptr; }
+
+AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const lv_font_t *f8,
+                     const lv_font_t *f12, const lv_font_t *f16, image::Image *blank) {
+  if (area_ptr != nullptr || root == nullptr)
+    return area_ptr;
+  void *p = heap_caps_malloc_prefer(sizeof(AreaView), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
+  if (p == nullptr)
+    return nullptr;
+  AreaView *a = new (p) AreaView();
+  a->root = root;
+  a->time = time;
+  a->date = date;
+  a->blank = blank;
+  BoardView &v = a->game;
+  v.f8 = f8;
+  v.f12 = f12;
+  v.f16 = f16;
+  a->ticker = ticker;
+  // In front of the time, date and ticker, which the game layout's empty
+  // rows leave showing; the splash in front of everything.
+  v.game = plain_obj(root);
+  v.no_game = plain_obj(root);
+  lv_obj_add_flag(v.game, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(v.no_game, LV_OBJ_FLAG_HIDDEN);
+  for (int i = 0; i < 2; i++) {
+    v.logo[i] = lv_image_create(v.game);
+    lv_obj_remove_style_all(v.logo[i]);
+    if (blank != nullptr)
+      ::lv_image_set_src(v.logo[i], blank->get_lv_image_dsc());
+    // The abbreviation badge in the logo's place for a team with no logo
+    // small enough (an AHL or ECHL team's, badge.h), as on the main board:
+    // a rounded square in its color with a ring, which board_draw fills.
+    v.badge[i] = plain_obj(v.game);
+    lv_obj_set_size(v.badge[i], 32, 32);
+    lv_obj_set_style_radius(v.badge[i], 8, 0);
+    lv_obj_set_style_bg_opa(v.badge[i], LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(v.badge[i], 2, 0);
+    lv_obj_add_flag(v.badge[i], LV_OBJ_FLAG_HIDDEN);
+    v.badge_lbl[i] = plain_label(v.badge[i], f12, LV_OPA_COVER);
+    lv_obj_center(v.badge_lbl[i]);
+    v.abbr[i] = plain_label(v.game, f12, 230);
+    v.score[i] = plain_label(v.game, f16, LV_OPA_COVER);
+    v.rec[i] = plain_label(v.game, f8, 191);
+    v.poss[i] = plain_bar(v.game, 0xFFD000);
+  }
+  v.clock = plain_label(v.game, f12, LV_OPA_COVER);
+  v.down = plain_label(v.game, f8, 191);
+  v.msg = plain_label(v.no_game, f12, 230, true);
+  v.splash = plain_bar(root, 0x000000);
+  v.splash_lbl = plain_label(v.splash, f16, LV_OPA_COVER, true);
+  area_ptr = a;
+  return a;
+}
+
+void area_layout(AreaView &a, bool on, int x, int y, int w, int h) {
+  show(a.root, on);
+  if (!on)
+    return;
+  a.w = (int16_t) w;
+  a.h = (int16_t) h;
+  lv_obj_set_pos(a.root, x, y);
+  lv_obj_set_size(a.root, w, h);
+  put_width(a.time, w);
+  put_width(a.date, w);
+  put_width(a.ticker, w);
+  board_layout(a.game, w, h);
+}
+
+namespace {
+
+// Only what changed: a new font, or new text, restarts the ticker's scroll.
+void put_y(lv_obj_t *o, int y) {
+  if (o != nullptr && lv_obj_get_style_y(o, LV_PART_MAIN) != y)
+    lv_obj_set_y(o, y);
+}
+
+bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &text) {
+  if (t == nullptr)
+    return false;
+  bool changed = false;
+  if (font != nullptr && lv_obj_get_style_text_font(t, LV_PART_MAIN) != font) {
+    lv_obj_set_style_text_font(t, font, 0);
+    changed = true;
+  }
+  put_y(t, y);
+  const char *cur = lv_label_get_text(t);
+  if (cur == nullptr || text != cur) {
+    lv_label_set_text(t, text.c_str());
+    changed = true;
+  }
+  return changed;
+}
+
+}  // namespace
+
+DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date) {
+  BoardView &v = a.game;
+  const std::string line = panel_text(f.status_text);
+  DrawResult r;
+  if (clock) {
+    // The time and the date, and the area's line under them in spleen_16,
+    // as two rows of two showed before its bottom half had its own content.
+    show(v.game, false);
+    show(v.no_game, false);
+    const LowerHalf lower = lower_half(main_clock, main_date);
+    show(a.time, lower.time);
+    show(a.date, lower.date);
+    put_y(a.date, lower.date_y);
+    r.ticker_changed = put_ticker(a.ticker, v.f16, lower.ticker_y, line);
+    r.clock_card = true;
+    return r;
+  }
+  show(a.time, false);
+  show(a.date, false);
+  r = board_draw(v, f);
+  // A game card's ticker runs along the area's bottom 8 rows, as on one row
+  // of panels.
+  r.ticker_changed = put_ticker(a.ticker, v.f8, a.h - 8, line);
+  if (r.splash) {
+    put_bg(v.splash, f.splash_color);
+    put_color(v.splash_lbl, 0xFFFFFF);
+    r.big_splash = false;
+  }
+  return r;
+}
+
+void area_logos(AreaView &a, image::Image *team, image::Image *opp) {
+  image::Image *img[2] = {team != nullptr ? team : a.blank, opp != nullptr ? opp : a.blank};
+  for (int i = 0; i < 2; i++)
+    if (a.game.logo[i] != nullptr && img[i] != nullptr)
+      ::lv_image_set_src(a.game.logo[i], img[i]->get_lv_image_dsc());
+}
+
+void area_hide_splash(AreaView &a) { show(a.game.splash, false); }
 
 }  // namespace esphome::gameday
 

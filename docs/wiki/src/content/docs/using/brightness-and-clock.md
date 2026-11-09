@@ -29,6 +29,8 @@ The panel always comes back on after a restart or a power cut.
 
 :::note[Coming in the next release]
 With the **Idle display** set to **Off or dim**, the panel also goes dark, or down to its **Dim to** level, while none of the games it follows is on, and lights up again by itself when one starts. That isn't the same as **Panel on**: the switch stays on, Home Assistant still sees the panel as on, and your Brightness setting doesn't change. Pressing **ON** on the remote doesn't light a panel that's dark this way; pick another idle display, or turn **Off or dim** back off, to see it. The remote's brighter and dimmer buttons do nothing while the panel is dark or dimmed this way, so they can't change your Brightness without you seeing it; **NIGHT** still sets your Brightness to the night level. The panel stays lit while it isn't on Wi-Fi, so you can see its screens about getting connected. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+
+With a [second area](/using/panel-sizes/#the-second-area), **Off or dim** darkens or dims the whole panel, and the panel lights up for the second area too while its team's game is on or its final is still up, or while a big play has it. What the board shows stays as the idle display says. Today's scores aren't read while the panel is dark or dimmed this way.
 :::
 
 ## Night hours
@@ -40,6 +42,7 @@ Turn on **Night hours** in the Panel card on the device page, and set **From** a
 - It shows the idle display, with the clock in place of **Next game** and **Scores**. **Clock**, **My team today** and **Off or dim** stay as they are. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
 - A game you follow still shows when it's on, at the night brightness, and the panel goes back to the idle display after its final.
 - A big play in another game still shows for its stay, at the night brightness, unless **Switch to big plays in other games** is off. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+- On two rows of two, or three or four panels in a row, the [second area](/using/panel-sizes/#the-second-area) shows the clock in place of today's scores and the rotation of live games. A second team's game that's on, and a big play there, still show.
 
 If you change the brightness during the night hours, on the device page, in Home Assistant or with the remote's brightness buttons or **NIGHT**, your change holds until the hours end, and the next night starts at the night brightness again. The night hours never change your Brightness setting itself, and **Off or dim** stays darker than the night brightness when its level is lower. The panel needs the time of day for them, so after a power cut they start once its clock is set. A restart keeps the clock, so a restart in the night hours, like an automatic update's, comes back at the night brightness, or dark with **Off or dim**. Picking a new team or mode at night doesn't end your brightness change either.
 :::

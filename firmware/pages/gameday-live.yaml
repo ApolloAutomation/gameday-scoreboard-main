@@ -3,9 +3,11 @@
 # a 64-wide display it stacks logos over scores; at 128 wide and up (three and
 # four panels in a row too) it spreads logos to the edges with big scores,
 # records, and timeout pips in the middle. A 2x2 (128x128) draws the 128x64
-# board in its top half, without its ticker, and the time, the date and the
-# ticker in a bigger font in its bottom half (gd_lower); a splash covers all
-# four panels (components/gameday/board_layout.h).
+# board in its top half and the second area in its bottom half (gd_lower);
+# three and four in a row can give their right end to it too, the board
+# then 128 wide on the left (components/gameday/split.h). The second area
+# shows the time, the date and its own ticker in a bigger font, or a game
+# card the component builds and draws there (board_view.h, area_build).
 # The gameday component's on_update (gameday-common.yaml) draws each update
 # into it with the board renderer (components/gameday/board_view.h); logos
 # come from its logo cache through gd_show_logos there.
@@ -117,10 +119,6 @@ script:
           v.msg = id(tt_no_game_msg_lbl);
           v.clock_time = id(gd_clock_time_lbl);
           v.clock_sub = id(gd_clock_sub_lbl);
-          v.lower = id(gd_lower);
-          v.lower_time = id(gd_lower_time_lbl);
-          v.lower_date = id(gd_lower_date_lbl);
-          v.lower_ticker = id(gd_lower_ticker_lbl);
           v.splash = id(tt_splash);
           v.splash_lbl = id(tt_splash_lbl);
           v.fx = id(tt_fx_canvas);
@@ -129,6 +127,9 @@ script:
           v.f16 = id(spleen_16)->get_lv_font();
           v.w = lv_disp_get_hor_res(lv_disp_get_default());
           gameday::board_view_set(v);
+          // The second area (split.h) in gd_lower, with its own game layout.
+          gameday::area_build(id(gd_lower), id(gd_lower_time_lbl), id(gd_lower_date_lbl), id(gd_lower_ticker_lbl),
+                              v.f8, v.f12, v.f16, id(gd_logo_blank));
 
   - id: tt_apply_layout
     then:
@@ -137,15 +138,22 @@ script:
           // Everything is positioned at runtime rather than in the widget
           // config so one page file serves 64x64, 128x64, wider chains (192
           // and 256 wide) and the 2x2 alike. The board is always the top 64
-          // rows; the renderer places the game layout, the no-game screen,
-          // the splash and a 2x2's bottom half (board_layout.h).
-          const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          const int H = lv_disp_get_ver_res(lv_disp_get_default());
+          // rows, 128 wide beside a second area (split.h); the renderer
+          // places the game layout, the no-game screen, the splash and the
+          // second area (board_layout.h, board_view.h). Run again when the
+          // second area comes or goes (the "layout" action).
+          const ::espn::SplitArea area = id(gameday_ctl).split_area();
+          const int W = area.main_w;
+          const int H = area.on ? 64 : lv_disp_get_ver_res(lv_disp_get_default());
           const bool wide = W >= 128;
           if (gameday::board_view() == nullptr)
             id(tt_bind_view).execute();
           if (gameday::board_view() != nullptr)
             gameday::board_layout(*gameday::board_view(), W, H);
+          if (gameday::AreaView *a = gameday::area_view()) {
+            gameday::area_layout(*a, area.on, area.x, area.y, area.w, area.h);
+            id(gameday_ctl).redraw_area();
+          }
           // The leaderboard (golf, racing): a status row and six rows of
           // place, name, value (golf's score to par, racing's car number) and
           // (wide) detail (holes played, a gap), in spleen_8 (5 px a
@@ -238,7 +246,7 @@ script:
                                  id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
           lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
                                   id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
-          const bool one = lv_disp_get_hor_res(lv_disp_get_default()) < 128;
+          const bool one = id(gameday_ctl).split_area().main_w < 128;
           for (int i = 0; i < 6; i++) {
             if (one) {
               // Golf's score column, or racing's names in its room
@@ -261,7 +269,7 @@ script:
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
   # changes, so once a minute.
-  # The 2x2's bottom half has the time and date too.
+  # The second area (gd_lower) has the time and date too.
   - id: gd_clock_tick
     then:
       - lambda: |-
@@ -744,12 +752,13 @@ lvgl:
                   id: gd_board_detail6
                   text: ""
 
-        # The 2x2's bottom half (128x64 under the board): the time, the date
-        # and the ticker in spleen_16, the ticker ending above the heat and
-        # power warning's bottom line (pages/guard.yaml). Placed and shown by
-        # tt_apply_layout, the time and date by gd_clock_tick, the ticker by
-        # the renderer, which also picks which show (gameday::lower_half).
-        # Listed before the splash, which covers all four panels.
+        # The second area (split.h): the 2x2's bottom half, or the right end
+        # of three or four in a row. The time, the date and its own ticker in
+        # spleen_16, the ticker ending above the heat and power warning's
+        # bottom line (pages/guard.yaml), or a game card the component builds
+        # in here (board_view.h, area_build), with the ticker along its
+        # bottom in spleen_8. Placed and shown by tt_apply_layout, the time
+        # and date by gd_clock_tick, the rest by the component (area_draw).
         - obj:
             id: gd_lower
             scrollbar_mode: "OFF"

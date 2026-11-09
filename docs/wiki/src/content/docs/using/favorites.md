@@ -17,6 +17,10 @@ The order is the priority. Higher teams win when two games clash (unless you cho
 
 Then tap **Favorite teams** under the board to switch the panel to it. The list is kept when you switch to another mode and back.
 
+:::note[Coming in the next release]
+On two rows of two, or three or four panels in a row, the [second area](/using/panel-sizes/#the-second-area) can show a second team's game. That team doesn't need to be a favorite. If it is one, the playlist skips it while it has its own area, so the board and the second area don't show the same team.
+:::
+
 ## Between games: the playlist
 
 When none of your favorites has a game on, the panel shows each favorite's card in turn, 10 seconds each, in list order, and starts again from the top. A card is that team's next game, its game in progress, or its last final.

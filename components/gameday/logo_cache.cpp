@@ -88,14 +88,15 @@ void LogoCache::prefetch(const std::string &url) {
   this->start_task_();
 }
 
-void LogoCache::pin(const std::string &team, const std::string &opponent) {
-  if (this->lock_ == nullptr || (team == this->pinned_[0] && opponent == this->pinned_[1]))
+void LogoCache::pin_at_(size_t at, const std::string &team, const std::string &opponent) {
+  std::string *p = this->pinned_ + at;
+  if (this->lock_ == nullptr || (team == p[0] && opponent == p[1]))
     return;
   Locked guard(this->lock_);
-  this->pinned_[2] = std::move(this->pinned_[0]);
-  this->pinned_[3] = std::move(this->pinned_[1]);
-  this->pinned_[0] = team;
-  this->pinned_[1] = opponent;
+  p[2] = std::move(p[0]);
+  p[3] = std::move(p[1]);
+  p[0] = team;
+  p[1] = opponent;
 }
 
 bool LogoCache::pinned_url_(std::string_view url) const {

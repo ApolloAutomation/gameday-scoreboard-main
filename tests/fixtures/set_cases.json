@@ -28,7 +28,10 @@
     "playerdel=<league>,<id> drops one. Start players are listed in the order of their slots.",
     "rotate is Switch every (and Alternate every) in whole minutes, rotatesec the same setting in",
     "seconds: 30, or whole minutes. 30 seconds shows as rotate 1. A start with rotate alone",
-    "means that many minutes."
+    "means that many minutes.",
+    "split is what the second area shows (0 off, 1 rotating live games, 2 a second team's game,",
+    "3 today's scores, 4 clock and date), one digit and nothing else; splitteam its team, never a",
+    "golf tour, a racing series or the panel's own team, \"none\" or \"\" clearing it."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -38,7 +41,7 @@
     "final": false, "alerts": 1048575, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false,
     "visit": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
-    "bets": [], "players": []
+    "bets": [], "players": [], "split": 0, "splitteam": ""
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -341,6 +344,30 @@
     {"name": "a favorite player changes no other setting", "start": {"mode": 5, "follow": true}, "set": [["player", "nfl,3918298,2,ALLEN"]], "expect": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}], "follow": true, "mode": 5}},
     {"name": "a new team keeps the favorite players", "start": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}]}, "set": [["team", "mlb:15"]], "expect": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}], "team": "mlb:15"}},
 
+    {"name": "the second area's choice", "set": [["split", "3"]], "expect": {"split": 3}},
+    {"name": "the second area's clock and date", "start": {"split": 1}, "set": [["split", "4"]], "expect": {"split": 4}},
+    {"name": "the second area off", "start": {"split": 2}, "set": [["split", "0"]], "expect": {"split": 0}},
+    {"name": "the second area refuses 5", "start": {"split": 3}, "set": [["split", "5"]], "expect": {"split": 3}},
+    {"name": "the second area refuses -1", "start": {"split": 3}, "set": [["split", "-1"]], "expect": {"split": 3}},
+    {"name": "the second area refuses 999", "set": [["split", "999"]], "expect": {"split": 0}},
+    {"name": "the second area refuses a word", "start": {"split": 2}, "set": [["split", "abc"]], "expect": {"split": 2}},
+    {"name": "the second area refuses nothing", "start": {"split": 2}, "set": [["split", ""]], "expect": {"split": 2}},
+    {"name": "the second area refuses trailing letters", "set": [["split", "3x"]], "expect": {"split": 0}},
+    {"name": "the second area refuses a space", "set": [["split", " 3"]], "expect": {"split": 0}},
+    {"name": "the second team", "set": [["splitteam", "nfl:21"]], "expect": {"splitteam": "nfl:21"}},
+    {"name": "the second team from another league", "set": [["splitteam", "mlb:10"]], "expect": {"splitteam": "mlb:10"}},
+    {"name": "the second team can be a minor league baseball team", "set": [["splitteam", "milb:234"]], "expect": {"splitteam": "milb:234"}},
+    {"name": "the second team can be an AHL team", "set": [["splitteam", "ahl:324"]], "expect": {"splitteam": "ahl:324"}},
+    {"name": "the second team can be an ECHL team", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", "echl:70"]], "expect": {"splitteam": "echl:70"}},
+    {"name": "the second team none clears it", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", "none"]], "expect": {"splitteam": ""}},
+    {"name": "the second team empty clears it", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", ""]], "expect": {"splitteam": ""}},
+    {"name": "the second team refuses a golf tour", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", "pga:1106"]], "expect": {"splitteam": "nfl:21"}},
+    {"name": "the second team refuses a racing series", "set": [["splitteam", "f1:2030"]], "expect": {"splitteam": ""}},
+    {"name": "the second team refuses an unknown team", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", "nfl:999999"]], "expect": {"splitteam": "nfl:21"}},
+    {"name": "the second team refuses garbage", "start": {"splitteam": "nfl:21"}, "set": [["splitteam", "nfl"]], "expect": {"splitteam": "nfl:21"}},
+    {"name": "the second team is never the panel's own team", "set": [["splitteam", "nfl:6"]], "expect": {"splitteam": ""}},
+    {"name": "the second team can be the team's opponent", "set": [["splitteam", "nfl:21"], ["team", "nfl:28"]], "expect": {"team": "nfl:28", "splitteam": "nfl:21"}},
+    {"name": "the second team and its choice in one request, the team first", "set": [["split", "2"], ["splitteam", "nfl:21"]], "expect": {"split": 2, "splitteam": "nfl:21"}},
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},
     {"name": "one refused key doesn't stop the rest", "set": [["mode", "9"], ["rotate", "5"], ["tz", "Mars"]], "expect": {"mode": 0, "rotate": 5, "tz": 1}},

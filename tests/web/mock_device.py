@@ -128,6 +128,12 @@ INITIAL = {
     # "today"; night_now inside the night hours; dark while Off has it dark.
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
+    # Split mode (components/gameday/split.h): the saved choice (0 off, 1 rotating
+    # live games, 2 a second team's game, 3 today's scores, 4 clock and date) and
+    # team; where the second area is ("bottom", "right2", "right1", "" for none) and
+    # what it shows now ("live", "team", "scores", "clock", "date", "" for nothing);
+    # split_n, the rotation's live games. state_doc() works out split_at and split_now.
+    "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
     "espn_kb": 412, "espn_reads": 23,
     # Manual bets (components/gameday/bets.h), filled slots only, and how many fit.
     "bets": [], "betmax": LIMITS["kBetSlots"],
@@ -271,10 +277,40 @@ def live_auto_leagues():
     return [lg for lg in LEAGUES if lg in used and lg not in BOARD] or ["nfl"]
 
 
+SPLIT_NOW = {1: "live", 2: "team", 3: "scores", 4: "clock"}
+
+
+def split_doc():
+    """split.h's split_at and split_effective, and a split_now for the choice: the
+    clock for Off on two rows of two and for a second team's game with no team, the
+    rotation with split_n games or else the clock. The panel's own split_now also
+    follows the night hours and what the main board shows."""
+    if "split" not in STATE:
+        return
+    cols, rows = STATE.get("panels", 1), STATE.get("rows", 1)
+    at = "bottom" if (cols, rows) == (2, 2) else "right2" if (cols, rows) == (4, 1) else \
+        "right1" if (cols, rows) == (3, 1) else ""
+    STATE["split_at"] = at
+    show = STATE["split"] if at else 0
+    if at == "bottom" and show == 0:
+        show = 4
+    now = SPLIT_NOW.get(show, "")
+    if show == 2 and not STATE.get("splitteam"):
+        now = "clock"
+    if show == 1 and not STATE.get("split_n"):
+        now = "clock"
+    STATE["split_now"] = now
+    if show == 1:
+        STATE.setdefault("split_n", 0)
+    else:
+        STATE.pop("split_n", None)
+
+
 def state_doc():
     """rebuild_state_() works the auto leagues out each time from the team and favorites."""
     if STATE.get("live_auto"):
         STATE["live"] = live_auto_leagues()
+    split_doc()
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
     return STATE
@@ -549,6 +585,18 @@ def apply_set(kv):
         elif k == "wiring":
             if 0 <= atoi(v) < WIRING_COUNT:
                 STATE["wiring"] = atoi(v)
+        elif k == "split":
+            # One ASCII digit, 0 to kSplitCount - 1, nothing else.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"]:
+                STATE["split"] = int(v)
+        elif k == "splitteam":
+            # set_split_team(): "none" or "" clears it; never a golf tour, a racing
+            # series or the panel's own team.
+            ref = parse_team_ref(v)
+            if v in ("none", ""):
+                STATE["splitteam"] = {}
+            elif ref and ref[0] not in BOARD and (STATE["team"].get("l"), STATE["team"].get("id")) != ref:
+                STATE["splitteam"] = team(*ref)
         elif k == "standing":
             if 0 <= atoi(v) < LIMITS["kStandingCount"]:
                 STATE["standing"] = atoi(v)
@@ -575,7 +623,7 @@ def selftest():
         return team(*parse_team_ref(ref)) if ref else {}
 
     def compact(key, value):
-        if key == "team":
+        if key in ("team", "splitteam"):
             return f'{value["l"]}:{value["id"]}' if value else ""
         if key == "favs":
             return [compact("team", t) for t in value]
@@ -590,6 +638,7 @@ def selftest():
         team_league = start.pop("team_league", "nfl")
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
+        start["splitteam"] = to_team(start.get("splitteam", ""))
         # board: false stands for a board with nothing of the mode's own to follow,
         # final: true for its game having ended. During a visit that game is the
         # mode's own, the one visit_follow says can be followed.

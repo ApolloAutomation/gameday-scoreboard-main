@@ -1,11 +1,11 @@
 // The parts of the scoreboard page (firmware/pages/gameday-live.yaml) that
 // change with the panel arrangement: the board's width, where each of the
 // board's widgets goes on it (board_view.cpp places them), where a splash
-// goes, what a 2x2's bottom half shows and where the heat and power warning
-// (pages/guard.yaml) goes. The board itself is always 64 rows: the whole
-// screen of one row of panels (64, 128, 192 or 256 wide), the top half of a
-// 2x2 (128x128). Pure, with no ESPHome or LVGL includes, so the host tests
-// compile it directly.
+// goes, what the second area's clock shows (split.h) and where the heat and
+// power warning (pages/guard.yaml) goes. The board itself is always 64
+// rows: the whole screen of one row of panels (64, 128, 192 or 256 wide, or
+// 128 beside a second area), the top half of a 2x2 (128x128). Pure, with no
+// ESPHome or LVGL includes, so the host tests compile it directly.
 #pragma once
 
 #include <cstddef>
@@ -55,16 +55,17 @@ inline SplashBox splash_box(int w, int h) {
 static const int kGuardRows = 9;
 inline int guard_line_y(int h) { return h - kGuardRows; }
 
-// The board's own ticker, along its bottom 8 rows, shows on one row of
-// panels. A 2x2 has the ticker once, bigger, in its bottom half.
+// The board's own ticker, along its bottom 8 rows, shows when the board is
+// the whole screen's height: one row of panels, or the top half of a 2x2
+// beside its second area (split.h), which has a ticker of its own.
 inline bool board_ticker(int h) { return h <= kBoardRows; }
 
-// A 2x2's bottom half (gd_lower, 64 rows under the board): the time
-// (spleen_16, 16 rows from row 5), the date (spleen_12) and the ticker
-// (spleen_16). Under the clock card, which has the time already, the time
-// stays hidden; the date shows only when the card has the next game under
-// its time rather than the date, so neither is up twice. card_date: the
-// clock card shows the date. The ticker always ends above the heat and power
+// The second area's clock (split.h; gd_lower, 64 rows): the time
+// (spleen_16, 16 rows from row 5), the date (spleen_12) and its ticker
+// (spleen_16). Under the main board's clock card, which has the time
+// already, the time stays hidden; the date shows only when the card has the
+// next game under its time rather than the date, so neither is up twice.
+// card_date: the clock card shows the date. The ticker always ends above the heat and power
 // warning's line (guard_line_y), which would cut its letters off; under the
 // clock card what shows is centered in the 64 rows.
 struct LowerHalf {
