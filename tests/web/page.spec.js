@@ -2737,6 +2737,91 @@ test("a full Favorite players card says to remove one first", async ({ page, req
   expect((await sets(request)).filter((q) => q.player)).toEqual([]);
 });
 
+const SEVEN = Array.from({ length: 7 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
+const BILLS_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster";
+
+test("a player posted counts until the panel lists them, so two quick adds can't both take the last slot", async ({ page, request }) => {
+  await reset(request, { players: SEVEN });
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(7);
+  await pickPlayerTeam(page, "Buffalo Bills");
+  await page.locator("#playerPick").selectOption("3918298");
+  await page.locator("#playerAdd").click();
+  await page.locator("#playerPick").selectOption("4379399");
+  await page.locator("#playerAdd").click();
+  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  // "Added" once the panel lists him.
+  await expect(page.locator("#toast")).toHaveText("Added Josh Allen");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(8);
+  expect((await sets(request)).filter((q) => q.player)).toEqual([{ player: "nfl,3918298,2,ALLEN" }]);
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "ALLEN"]);
+});
+
+test("a double tap on Add player posts the player once", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await pickPlayerTeam(page, "Buffalo Bills");
+  await page.locator("#playerPick").selectOption("3918298");
+  await page.locator("#playerAdd").dblclick();
+  await expect(page.locator("#toast")).toHaveText("Added Josh Allen");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.player)).toEqual([{ player: "nfl,3918298,2,ALLEN" }]);
+  await expect(page.locator("#playerMsg")).toBeHidden();
+});
+
+test("a player the panel didn't keep is never shown as added", async ({ page, request }) => {
+  await reset(request, { players: SEVEN });
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(7);
+  await pickPlayerTeam(page, "Buffalo Bills");
+  // Another page takes the last slot; this one still lists seven.
+  await request.post("/gameday/set?player=" + encodeURIComponent("nfl,4379399,2,COOK"));
+  await page.locator("#playerPick").selectOption("3918298");
+  await page.locator("#playerAdd").click();
+  await expectSet(request, { player: "nfl,3918298,2,ALLEN" });
+  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  await expect(page.locator("#playerList .playerrow label").last()).toContainText("COOK");
+  expect(await page.locator("#toast").textContent()).not.toBe("Added Josh Allen");
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "COOK"]);
+});
+
+// Letters the panel folds the way the firmware folds ESPN's words, and
+// teammates who share a last name and an initial.
+const NAMES_ROSTER = {
+  athletes: [
+    { id: "203669", firstName: "Martin", lastName: "\u00d8degaard", displayName: "Martin \u00d8degaard", jersey: "8" },
+    { id: "5001", firstName: "Ceadach", lastName: "O\u2019Neill", displayName: "Ceadach O\u2019Neill" },
+    { id: "5002", firstName: "Rasmus", lastName: "H\u00f8jlund", displayName: "Rasmus H\u00f8jlund" },
+    { id: "5003", firstName: "Jeremiah", lastName: "Smith", displayName: "Jeremiah Smith" },
+    { id: "5004", firstName: "James", lastName: "Smith", displayName: "James Smith" },
+    { id: "5005", firstName: "Elias", lastName: "Pettersson", displayName: "Elias Pettersson" },
+    { id: "5006", firstName: "Elias", lastName: "Pettersson", displayName: "Elias N. Pettersson" },
+  ],
+};
+
+test("the Favorite players card folds letters as the panel does and tells teammates apart", async ({ page, request }) => {
+  await reset(request);
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/359/roster", (route) => route.fulfill({ json: NAMES_ROSTER }));
+  await page.goto("/");
+  await pickPlayerTeam(page, "Arsenal");
+  const add = async (id, name) => {
+    await page.locator("#playerPick").selectOption(id);
+    await page.locator("#playerAdd").click();
+    await expectSet(request, { player: "epl," + id + ",359," + name });
+  };
+  await add("203669", "ODEGAARD");
+  await add("5001", "O'NEILL");
+  await add("5002", "HOJLUND");
+  await add("5003", "JE. SMITH");
+  await add("5004", "JA. SMITH");
+  // The same first name too: nothing in the name tells them apart.
+  await add("5005", "E. PETTERS");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(6);
+});
+
 test("the board shows the favorite players' stat lines on its game", async ({ page, request }) => {
   await reset(request);
   const g = (await deviceState(request)).game;

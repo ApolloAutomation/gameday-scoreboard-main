@@ -71,7 +71,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   sets it with `lv_qrcode_update`, only when the text changes.
 - `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
   component sends, for 64 and 128 pixel wide layouts, with the splashes and
-  fireworks.
+  fireworks (which splashes get them: `splash_fireworks`, `alerts.h`).
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.
@@ -261,10 +261,13 @@ game is live) to the ticker before the bets, and the state document has
 them as `game.pl`. `board_splash_` goes through
 `board_splash_with_players`: with the Favorite player alert bit on,
 `player_scored` credits a favorite on the play that scored between two
-reads (by id in football, baseball and basketball, the last only for a
-late lead change or a buzzer beater; by goal in soccer; by an
+live reads (by id in football, baseball and basketball, never on a
+football try, whose athletes are the touchdown's, and in basketball only
+for a late lead change or a buzzer beater; by goal in soccer; by an
 unambiguous name in the goal's words in hockey) and its splash takes the
-team's place.
+team's place. The page folds a player's name with the firmware's own
+`ascii_fold` table (`build_web.py` copies it into the bundle), so a hockey
+name matches the goal's words.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery

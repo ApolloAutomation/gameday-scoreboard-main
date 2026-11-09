@@ -11,7 +11,9 @@
 // "Game Status" event, sent on every board update, is the cue to re-read the
 // state document.
 // Bundled with the team table by scripts/build_web.py, which defines
-// TEAMS = [[league, espnId, abbr, name], ...] and TZS = [[name, iana], ...].
+// TEAMS = [[league, espnId, abbr, name], ...], TZS = [[name, iana], ...] and
+// the firmware's table for folding accented letters to plain ASCII, FOLD
+// (U+00C0..U+017F, a letter each) and FOLD2 ({code point: letters}).
 
 (() => {
   "use strict";
@@ -426,6 +428,7 @@
   };
 
   let stateTimer = null;
+  let stateLeft = 0;     // when the read the page last drew left, for posts it must reflect
   let stateInflight = false;
   let stateAgain = false;
   const fetchState = async () => {
@@ -447,6 +450,7 @@
       if (!connected && !restart && Date.now() - streamAt > 10000) connect();
       if (r.ok) {
         D = await r.json();
+        stateLeft = left;
         for (const k of Object.keys(held)) {
           const h = held[k];
           if (h.ack && (same(k, D[k], h.v) || left > h.ack + APPLY_MS)) delete held[k];
@@ -1513,9 +1517,21 @@
   let roster = [];       // that team's players: [{id, name, pos, jersey, panel}]
   let rosterFor = "";    // the team the roster read was for
   let playerDrawn = null;
+  // Players posted that the panel doesn't list yet: {l, id, name, at, ack},
+  // ack when the panel answered the post.
+  let playerPending = [];
   const PANEL_NAME_MAX = 10;
-  // The letters the panel takes: capitals, digits, spaces and . ' -, accents dropped.
-  const panelLetters = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+  // A letter folded to plain ASCII the way the firmware folds ESPN's words
+  // (sport_soccer.cpp's table): \u00d8 is O, \u00c6 AE, \u2019 an apostrophe.
+  const foldChar = (ch) => {
+    const cp = ch.codePointAt(0);
+    if (FOLD2[cp] !== undefined) return FOLD2[cp];
+    return cp >= 0xc0 && cp < 0x180 ? FOLD[cp - 0xc0] : ch;
+  };
+  // The letters the panel takes: capitals, digits, spaces and . ' -, folded
+  // as the firmware folds them, and any other accent dropped.
+  const panelLetters = (v) => Array.from(String(v || "").normalize("NFC"), foldChar).join("")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
     .replace(/[^A-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
   const fitName = (v) => {
     let n = panelLetters(v);
@@ -1536,13 +1552,21 @@
   const words = (v) => String(v || "").trim().split(/\s+/).filter(Boolean);
   const lastOf = (a) => a.lastName || words(a.displayName || a.fullName).slice(-1)[0] || "";
   const firstOf = (a) => a.firstName || words(a.displayName || a.fullName)[0] || "";
-  // Each player's name on the panel, in the roster's order.
+  // Each player's name on the panel, in the roster's order: the last name,
+  // with the first initial when a teammate has the same last name, and the
+  // first name's first two or three letters when the initial is the same
+  // too ("J. HUGHES" and "L. HUGHES", "JE. SMITH" and "JA. SMITH"). Teammates
+  // with the same first name keep the initial: nothing in a name tells them apart.
   const panelNames = (list) => {
-    const count = {};
-    for (const a of list) { const k = panelLetters(lastOf(a)); count[k] = (count[k] || 0) + 1; }
-    return list.map((a) => {
-      const first = panelLetters(firstOf(a));
-      return fitName(count[panelLetters(lastOf(a))] > 1 && first ? first[0] + ". " + lastOf(a) : lastOf(a));
+    const lasts = list.map((a) => panelLetters(lastOf(a)));
+    const firsts = list.map((a) => panelLetters(firstOf(a)).replace(/[^A-Z0-9]/g, ""));
+    return list.map((a, i) => {
+      const mates = firsts.filter((f, j) => j !== i && lasts[j] === lasts[i]);
+      if (!mates.length || !firsts[i]) return fitName(lastOf(a));
+      const shared = (k) => mates.some((f) => f.startsWith(firsts[i].slice(0, k)));
+      let k = 1;
+      while (k < 3 && k < firsts[i].length && shared(k)) k++;
+      return fitName(firsts[i].slice(0, shared(k) ? 1 : k) + ". " + lastOf(a));
     });
   };
   const playerSay = (t) => {
@@ -1595,6 +1619,25 @@
     }
     $("#playerPickRow").hidden = $("#playerAdd").hidden = !roster.length;
   };
+  // A player posted is added once a read lists them. A read that left after
+  // the panel answered the post without them means the panel didn't keep
+  // them: every slot was in use (another page may have filled the last one).
+  const settlePlayers = () => {
+    const list = S.players || [];
+    const max = S.playermax || 8;
+    playerPending = playerPending.filter((p) => {
+      if (list.some((pl) => pl.l === p.l && pl.id === p.id)) {
+        toast("Added " + p.name);
+        return false;
+      }
+      if (p.ack && stateLeft > p.ack + APPLY_MS) {
+        playerSay(list.length >= max ? "All " + max + " players are in use. Remove one first."
+          : "The panel didn't add " + p.name + ". Try again.");
+        return false;
+      }
+      return Date.now() - p.at < 10000;  // no read since: the panel is away
+    });
+  };
   // The board's line of stat lines, and the card's list.
   const renderPlayers = () => {
     const card = $("#playerCard");
@@ -1606,6 +1649,7 @@
     for (const text of lines) line.appendChild(el("span", "bet", text));
     line.hidden = !lines.length;
     if (card.hidden) return;
+    settlePlayers();
     const list = S.players || [];
     const sig = JSON.stringify(list);
     if (sig === playerDrawn) return;
@@ -1644,10 +1688,19 @@
     if (!t || !a) return playerSay("Pick the player first.");
     const list = S.players || [];
     const max = S.playermax || 8;
-    if (list.some((pl) => pl.l === t[0] && pl.id === a.id)) return playerSay(a.name + " is a favorite already.");
-    if (list.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
+    const same = (pl) => pl.l === t[0] && pl.id === a.id;
+    // A player posted a moment ago counts until the panel lists them: a
+    // double tap posts once, and a second player can't take the last slot too.
+    if (playerPending.some(same)) return;
+    if (list.some(same)) return playerSay(a.name + " is a favorite already.");
+    if (list.length + playerPending.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
     playerSay("");
-    setGD({ player: [t[0], a.id, t[1], a.panel].join(",") }).then((ok) => ok && toast("Added " + a.name));
+    const mine = { l: t[0], id: a.id, name: a.name, at: Date.now(), ack: 0 };
+    playerPending.push(mine);
+    setGD({ player: [t[0], a.id, t[1], a.panel].join(",") }).then((ok) => {
+      if (ok) mine.ack = Date.now();
+      else playerPending = playerPending.filter((p) => p !== mine);
+    });
   };
   renderPlayerForm();
 

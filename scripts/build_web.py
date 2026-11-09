@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Bundle the device web page: team table (from teams.h) + app.js -> bundle.js.
 
+The bundle also gets the timezone list (timezones.h) and the table the
+firmware folds accented letters to plain ASCII with (sport_soccer.cpp's
+kFold and fold_special), so the page names a favorite player the way the
+panel reads ESPN's words.
+
 ESPHome embeds a single js_include file, so the team list and the app are
 concatenated here. bundle-demo.js is the same plus demo.js, for the demo
 build only (firmware/pages/demo.yaml). Run after editing firmware/web/app.js
@@ -30,6 +35,35 @@ LEAGUE_RE = re.compile(
 JS_LEAGUE_RE = re.compile(r'^\s*(\w+): \{ prefix: "([^"]*)",.*?path: "([^"]*)", logo: "([^"]*)", byId: (true|false)', re.M)
 TZ_H = ROOT / "components" / "gameday" / "timezones.h"
 TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
+SOCCER_CPP = ROOT / "components" / "gameday" / "sport_soccer.cpp"
+
+
+def fold_tables(cpp):
+    """sport_soccer.cpp's ASCII folding: kFold (U+00C0..U+017F, one letter each, '*' for the
+    two-letter ones) and fold_special()'s code points, each to its letters."""
+    m = re.search(r'static const char kFold\[\] =\s*((?:"[^"]*"\s*)+);', cpp)
+    if not m:
+        raise SystemExit("sport_soccer.cpp has no kFold table")
+    fold = "".join(re.findall(r'"([^"]*)"', m.group(1)))
+    if len(fold) != 0x180 - 0xC0:
+        raise SystemExit(f"kFold has {len(fold)} letters, not {0x180 - 0xC0}")
+    body = re.search(r"fold_special\(uint32_t cp\) \{(.*?)\n\}", cpp, re.S)
+    if not body:
+        raise SystemExit("sport_soccer.cpp has no fold_special()")
+    special, cases = {}, []
+    for case, ret in re.findall(r'case (0x[0-9A-Fa-f]+):|return "((?:[^"\\]|\\.)*)";', body.group(1)):
+        if case:
+            cases.append(int(case, 16))
+        else:
+            for cp in cases:
+                special[cp] = ret.encode().decode("unicode_escape")
+            cases = []
+    if special.get(0x2019) != "'" or "*" in "".join(special.values()):
+        raise SystemExit("fold_special() doesn't parse")
+    for i, ch in enumerate(fold):
+        if ch == "*" and 0xC0 + i not in special:
+            raise SystemExit(f"kFold has '*' for U+{0xC0 + i:04X} but fold_special() doesn't")
+    return fold, special
 
 
 def check_leagues(leagues, app_js):
@@ -60,7 +94,10 @@ def main():
     if not tzs:
         raise SystemExit("timezones.h has no entries")
     tz = "const TZS=" + json.dumps(tzs, separators=(",", ":")) + ";\n"
-    page = header + teams + tz + app_js
+    fold, special = fold_tables(SOCCER_CPP.read_text(encoding="utf-8"))
+    folds = ("const FOLD=" + json.dumps(fold) + ";\nconst FOLD2=" +
+             json.dumps({str(cp): v for cp, v in sorted(special.items())}, separators=(",", ":")) + ";\n")
+    page = header + teams + tz + folds + app_js
     BUNDLE.write_text(page, encoding="utf-8", newline="\n")
     print(f"wrote {BUNDLE} ({BUNDLE.stat().st_size} bytes, {len(rows)} teams)")
     demo = page.replace("from teams.h and app.js", "from teams.h, app.js and demo.js", 1)
