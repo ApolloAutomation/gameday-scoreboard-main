@@ -20,8 +20,8 @@
     "game and status, which the comparison leaves out. bet= into slot 0 takes the first empty",
     "slot, what the device page sends, and with every slot in use changes nothing.",
     "visit is another game's big play on the board for a moment (watch.h). board and final then",
-    "describe the mode's own game, which follow=1 follows, ending the visit; watch=0 and a new team",
-    "or mode end it too."
+    "describe the mode's own game, which follow=1 follows while it hasn't ended, ending the visit;",
+    "watch=0 and a new team or mode end it too."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -241,6 +241,7 @@
     {"name": "a stay past int's range clamps down, not around", "set": [["watchstay", "99999999999"]], "expect": {"watchstay": 300}},
     {"name": "follow during another game's big play follows the mode's game and goes back to it", "start": {"mode": 5, "visit": true}, "set": [["follow", "1"]], "expect": {"follow": true, "visit": false}},
     {"name": "follow with nothing to follow leaves another game's big play up", "start": {"mode": 0, "visit": true}, "set": [["follow", "1"]], "expect": {"follow": false, "visit": true}},
+    {"name": "follow during another game's big play leaves it up when the mode's game has ended", "start": {"mode": 5, "visit": true, "final": true}, "set": [["follow", "1"]], "expect": {"follow": false, "visit": true}},
     {"name": "follow off leaves another game's big play up", "start": {"mode": 5, "visit": true}, "set": [["follow", "0"]], "expect": {"follow": false, "visit": true}},
     {"name": "turning off big plays in other games ends the one on the board", "start": {"mode": 5, "visit": true}, "set": [["watch", "0"]], "expect": {"watch": false, "visit": false}},
     {"name": "a new team ends another game's big play on the board", "start": {"visit": true}, "set": [["team", "mlb:15"]], "expect": {"visit": false, "team": "mlb:15"}},

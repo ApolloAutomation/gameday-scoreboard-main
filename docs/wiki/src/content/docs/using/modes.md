@@ -103,7 +103,8 @@ Which games it watches depends on the mode:
 
 It watches up to 8 games at once, your favorites' first, then the closest games, late ones ahead of early ones.
 
-- Your team's game is never left for another game's big play from its start time on, unless a favorite plays in that game and **Switch from my team** is on. It starts off. If your team's game starts while the board is on another game, the board goes back to it.
+- Your team's game is never left for another game's big play from its start time on, unless a favorite plays in that game and **Switch from my team** is on. It starts off. If your team's game starts while the board is on another game, the board goes back to it. For a golf tour or a racing series, that's while a round or a session is on.
+- If the game the board was showing ends while the board is on another game, its victory splash shows when the board comes back. A big play it had meanwhile doesn't splash late.
 - Another big play while the board is on another game can move it on to that one during the first stay, so the board is back on its own game within two stays.
 - The panel doesn't switch while the board's own splash is up, and a game it has just started watching never switches it for a score from before.
 - A basketball final doesn't switch the board, since that game is over.
@@ -113,9 +114,9 @@ It watches up to 8 games at once, your favorites' first, then the closest games,
 - A bet that's on the other game already, because the panel showed that game before, shows in the ticker while the board is on it, and the checks of that game keep the bet up to date and give it its result at the final. Neither the switch nor a check ever puts a bet on a game by itself. See [Bets](/using/bets/).
 - Golf and racing aren't watched, and neither are a soccer favorite's cup games, like the Champions League. Neither is a sport whose big-play switches in the Celebrations card are all off.
 
-The panel checks each watched game about every 45 seconds, in the gaps between its own reads of the game on the board, timed by how long ESPN took the last time so the score on the board doesn't wait for it. When ESPN is slow, a check can hold the board's next update up for a few seconds now and then. A check ESPN doesn't answer waits for the next round, and the panel pauses the checks for a few minutes if ESPN asks it to slow down. That uses more data:
+The panel checks each watched game about every 45 seconds, in the gaps between its own reads of the game on the board, timed by how long ESPN took the last time so the score on the board doesn't wait for it. When ESPN is slow, a check can hold the board's next update up for a few seconds now and then. When the gaps can't take every check in a round, the ones left out go first in the next, so no watched game goes unchecked round after round. A check ESPN doesn't answer waits for the next round. One that keeps waiting out ESPN's timeout waits a few rounds more each time, up to about 5 minutes, until ESPN answers again, and the panel pauses the checks for a few minutes if ESPN asks it to slow down. That uses more data:
 
-- In Live games it reads each league's whole day of games at once: about 250 KB each time on an NFL Sunday, up to about 20 MB an hour, and about as much on a full day of baseball. A league with nothing else on is checked again at its next start, or when the board moves to another game.
+- In Live games it reads each league's whole day of games at once: about 250 KB each time on an NFL Sunday, up to about 20 MB an hour, and about as much on a full day of baseball. A league with nothing else on is checked again at its next start, or when a game that's on leaves the board.
 - College games, which come in much larger days, and your favorites' games in My team and Favorite teams are read one at a time, 10 to 20 KB each, about 1 to 1.5 MB an hour per game. The panel looks for a favorite's game at its start time, and every few hours otherwise.
 - In Live games, a college game that starts after the panel last looked for live games is watched from its next look, after **Switch every** or when the game on the board ends.
 

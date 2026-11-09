@@ -689,7 +689,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apply_visit_job_();
   void end_visit_();  // back to what the mode was showing
   void watch_refused_(uint32_t now);  // ESPN refused a watcher read or a visit's poll
-  GameSnapshot board_prev_();         // game_ as a poll's read before
+  GameSnapshot board_prev_(const GameSnapshot &cur);  // game_ as the read before cur, a poll's
   bool visit_back_{false};  // the next poll of the mode's game is its first after a visit
   // No visit any more, with no way back: what the board follows changed.
   void drop_visit_() {
@@ -704,7 +704,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // millis(): no read before this (a moment, a refusal, a worker given up on); 0 none
   uint32_t watch_hold_until_{0};
   bool watch_idle_{false};        // this cycle's reads are done
-  uint32_t watch_board_{0};       // what it kept off at the last cycle (watch_board_moved)
+  ::espn::WatchKept watch_board_;  // what it kept off at the last cycle (watch_board_moved)
   ::espn::WatchTimes watch_times_;
   uint32_t splash_ms_{0};  // millis() of the last splash sent to the panel, 0 none
   // The board on a big play's game: since the first switch and the last,
@@ -1052,6 +1052,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // own time, or the game can't be read or never finishes.
   ::espn::FollowPin follow_;
   bool following_();
+  // Whether follow=1 would pin the mode's game now (set_follow): during a
+  // visit, the one it saved, which may have ended or be gone.
+  bool follow_can_start_() const;
+  bool follow_picked_() const;  // the mode put the board's game up itself (follow_start's picked)
   // Manual bets (bets.h), entered on the device page and kept in their own
   // blob. bets_tick_ ties each to a game the panel holds (the board's, and
   // in Favorite teams each favorite's card), keeps its result at the final,

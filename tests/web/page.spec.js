@@ -1274,7 +1274,7 @@ test("Follow this game during another game's big play follows the game the panel
   await reset(request);
   const g = (await deviceState(request)).game;
   // The board is on another game's big play, even one that has just ended
-  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, visit: true });
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, visit: true, visit_follow: true });
   await page.goto("/");
   await expect(page.locator("#gstate")).toHaveText("FINAL");
   await expect(bar).toBeVisible();
@@ -1286,12 +1286,21 @@ test("Follow this game during another game's big play follows the game the panel
   await expect(sw).toBeChecked();
   await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
   // Favorite teams says After the final
-  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true });
+  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true, visit_follow: true });
   await page.reload();
   await expect(bar).toBeVisible();
   await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until its final has been up for After the final.");
+  // Not when the game the panel was showing has ended meanwhile, or Favorite
+  // teams had no favorite's card up: the panel couldn't follow it
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, visit: true, visit_follow: false });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("LIVE");
+  await expect(bar).toBeHidden();
+  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true, visit_follow: false });
+  await page.reload();
+  await expect(bar).toBeHidden();
   // Not in My team, which has nothing to follow
-  await reset(request, { mode: 0, visit: true });
+  await reset(request, { mode: 0, visit: true, visit_follow: true });
   await page.reload();
   await expect(bar).toBeHidden();
 });

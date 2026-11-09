@@ -209,21 +209,30 @@ struct WatchCtx {
   std::vector<std::pair<uint8_t, uint32_t>> favs;  // league and ESPN id
   uint8_t board_league{0}, visit_league{0};
   std::string board_event, visit_event;
-  uint32_t mask{0};  // the alert types switched on (alerts.h)
-  bool wide{false};  // splash words for two panels
+  bool board_live{false};  // the mode's game is on (watch_live)
+  uint32_t mask{0};        // the alert types switched on (alerts.h)
+  bool wide{false};        // splash words for two panels
 };
 
-// 0: not watched. 1: watched. 2: watched, and the panel's team or a favorite plays.
-inline int watch_wants(const WatchCtx &c, uint8_t league, const std::string &event_id, uint32_t away, uint32_t home) {
-  if (event_id.empty() || (league == c.board_league && event_id == c.board_event) ||
-      (league == c.visit_league && event_id == c.visit_event) ||
-      (c.mask & watch_sport_mask(league_sport((League) league))) == 0)
+// Whether a game of these teams is one to watch, wherever the board is: 0
+// no, 1 yes, 2 yes, and the panel's team or a favorite plays.
+inline int watch_wants_teams(const WatchCtx &c, uint8_t league, uint32_t away, uint32_t home) {
+  if ((c.mask & watch_sport_mask(league_sport((League) league))) == 0)
     return 0;
   const bool fav = game_has_team(league, away, home, c.favs.data(), c.favs.size()) ||
                    (c.live && game_has_team(league, away, home, &c.team, 1));
   if (fav)
     return 2;
   return c.live && !c.fav_only ? 1 : 0;
+}
+
+// The same for one game, never the board's or a visit's: 0: not watched. 1:
+// watched. 2: watched, and the panel's team or a favorite plays.
+inline int watch_wants(const WatchCtx &c, uint8_t league, const std::string &event_id, uint32_t away, uint32_t home) {
+  if (event_id.empty() || (league == c.board_league && event_id == c.board_event) ||
+      (league == c.visit_league && event_id == c.visit_event))
+    return 0;
+  return watch_wants_teams(c, league, away, home);
 }
 
 // Favorites first, then the closest games (in scores: 8 points in football,
@@ -362,7 +371,12 @@ inline std::vector<WatchSource> watch_sources(bool live, const std::vector<Leagu
 // (game, an index into games), or a source's day scoreboard (game -1) once
 // its wait is over. Source -1 when none fits now (waiting: some are still
 // due) or the cycle's reads are done. Each read is tried once a cycle, and
-// one that doesn't fit never holds up the reads after it.
+// one that doesn't fit never holds up the reads after it. Of the reads that
+// fit, the one tried longest ago goes first, then the first in order (the
+// sources', then watch_rank's): when the gaps can't take every read in a
+// cycle, the ones left out go first the next, so each is read at least every
+// other cycle while the gaps take half of them, instead of the same last
+// ones never being read.
 struct WatchRead {
   int source{-1};
   int game{-1};
@@ -372,23 +386,33 @@ struct WatchRead {
 template<typename Fits>
 inline WatchRead watch_next(const std::vector<WatchSource> &src, const std::vector<WatchGame> &games, uint32_t cycle,
                             uint32_t now, Fits fits) {
-  WatchRead none;
+  WatchRead best, none;
+  uint32_t best_age = 0;
+  auto consider = [&](size_t s, int game, uint32_t tried, bool event) {
+    const uint32_t age = cycle - tried;
+    if (best.source >= 0 && age <= best_age)
+      return;  // one as old or older, earlier in order, fits already
+    if (!fits(src[s], event)) {
+      none.waiting = true;
+      return;
+    }
+    best = WatchRead{(int) s, game, false};
+    best_age = age;
+  };
   for (size_t s = 0; s < src.size(); s++) {
     const WatchSource &w = src[s];
+    // Its game tried longest ago; its other games take as long.
+    int oldest = -1;
     for (size_t i = 0; w.by_event && i < games.size(); i++)
-      if (games[i].league == w.league && games[i].group == w.group && games[i].tried_cycle != cycle) {
-        if (fits(w, true))
-          return WatchRead{(int) s, (int) i, false};
-        none.waiting = true;
-        break;  // its other games take as long
-      }
-    if (!w.fed && w.read_cycle != cycle && (w.wait_until == 0 || (int32_t) (now - w.wait_until) >= 0)) {
-      if (fits(w, false))
-        return WatchRead{(int) s, -1, false};
-      none.waiting = true;
-    }
+      if (games[i].league == w.league && games[i].group == w.group && games[i].tried_cycle != cycle &&
+          (oldest < 0 || cycle - games[i].tried_cycle > cycle - games[oldest].tried_cycle))
+        oldest = (int) i;
+    if (oldest >= 0)
+      consider(s, oldest, games[oldest].tried_cycle, true);
+    if (!w.fed && w.read_cycle != cycle && (w.wait_until == 0 || (int32_t) (now - w.wait_until) >= 0))
+      consider(s, -1, w.read_cycle, false);
   }
-  return none;
+  return best.source >= 0 ? best : none;
 }
 
 inline WatchRead watch_next(const std::vector<WatchSource> &src, const std::vector<WatchGame> &games, uint32_t cycle,
@@ -422,37 +446,60 @@ inline bool watch_read_fits(uint32_t now, uint32_t next_board_ms, uint32_t expec
 
 // The watcher's read times by kind: each league's day scoreboard, and the
 // last one a game on its own (0 untimed), with a bit for each kind no gap
-// could take this cycle.
+// could take this cycle. A failed read that took longer than its kind was
+// expected to (one that hung until the HTTP timeout, say) says nothing of
+// how long a good one takes: its kind keeps its time and waits for the next
+// cycle instead, so the board isn't held up again that cycle. One that fails
+// that way again right after waits two cycles more, then six more each time
+// (about 5 minutes), until one of its kind answers.
+static const uint8_t kWatchSlowFailsMax = 3;
 struct WatchTimes {
   static_assert(kLeagueCount < 32, "a bit per kind of read");
   uint16_t ms[kLeagueCount + 1]{};
+  uint8_t slow_fails[kLeagueCount + 1]{};  // such failures in a row, at most kWatchSlowFailsMax
+  uint8_t held[kLeagueCount + 1]{};        // cycles still to wait, this one counted
   uint32_t skipped{0};
   static size_t kind(uint8_t league, bool event) { return event ? kLeagueCount : league < kLeagueCount ? league : 0; }
   // Whether that read fits before due, the board's next read (watch_next's
-  // fits); one that doesn't is marked until a read of its kind starts.
+  // fits); one that doesn't is marked until a read of its kind starts. A
+  // kind waiting after a slow failure fits nowhere, and isn't marked.
   bool fits(uint32_t now, uint32_t due, uint8_t league, bool event) {
     const size_t k = kind(league, event);
+    if (this->held[k] != 0)
+      return false;
     if (watch_read_fits(now, due, watch_expect_ms(this->ms[k], event)))
       return true;
     this->skipped |= 1u << k;
     return false;
   }
   void started(uint8_t league, bool event) { this->skipped &= ~(1u << kind(league, event)); }
-  // A read took took_ms: a good one's own time is kept, a failed one's only
-  // when longer, so a read that hung until the HTTP timeout isn't expected
-  // to be quick the next time.
+  // A read took took_ms: a good one's own time is kept; a failed one that
+  // took longer than expected holds its kind (1, 3, then 7 cycles), and a
+  // quick failure changes nothing.
   void took(uint8_t league, bool event, uint32_t took_ms, bool ok) {
-    uint16_t &m = this->ms[kind(league, event)];
+    const size_t k = kind(league, event);
     const uint16_t t = (uint16_t) std::min(took_ms, kWatchTimedMaxMs);
-    m = ok || t > m ? t : m;
+    if (ok) {
+      this->ms[k] = t;
+      this->slow_fails[k] = 0;
+      return;
+    }
+    if (t <= watch_expect_ms(this->ms[k], event))
+      return;
+    if (this->slow_fails[k] < kWatchSlowFailsMax)
+      this->slow_fails[k]++;
+    this->held[k] = (uint8_t) ((1u << this->slow_fails[k]) - 1);
   }
   // A new cycle: a kind no gap could take all the last one is expected an
   // eighth quicker, so a slow read gets its turn, and a new time, before
-  // long instead of never.
+  // long instead of never; a held kind has a cycle less to wait.
   void cycle() {
-    for (size_t k = 0; k <= kLeagueCount; k++)
+    for (size_t k = 0; k <= kLeagueCount; k++) {
       if ((this->skipped >> k) & 1)
         this->ms[k] -= this->ms[k] / 8;
+      if (this->held[k] != 0)
+        this->held[k]--;
+    }
     this->skipped = 0;
   }
 };
@@ -469,18 +516,38 @@ inline uint32_t watch_fav_due(uint32_t now, bool locked, uint32_t poll_ms, uint3
   return (int32_t) (poll - refresh_at) < 0 ? poll : refresh_at;
 }
 
-// At a new cycle, with key what the watcher kept off at the last (WatchCtx's
-// board and visit games): when that changed, every day scoreboard is read
-// again this cycle, waits or not, as a game that just left the board can be
-// one to watch now.
-inline void watch_board_moved(std::vector<WatchSource> &src, uint32_t &key, const WatchCtx &c) {
-  const uint32_t k =
-      watch_hash(std::to_string(c.board_league) + c.board_event + "/" + std::to_string(c.visit_league) + c.visit_event);
-  if (k == key)
-    return;
-  key = k;
-  for (auto &s : src)
-    s.wait_until = 0;
+// The games on now that the watcher kept off at a cycle (watch_board_moved):
+// the mode's game while it is on, and a visit's. Event ids hashed, 0 none.
+struct WatchKept {
+  uint8_t board_league{0}, visit_league{0};
+  uint32_t board{0}, visit{0};
+};
+
+// At a new cycle, with kept what the watcher kept off at the last: a game
+// on that has left the board since can be one to watch now, so its league's
+// day scoreboards are read again this cycle, waits or not. A card that isn't
+// on coming and going (Favorite teams' playlist turns one every 10 seconds)
+// reads nothing: a game still to start moves the wait to its start time
+// even while it is on the board (watch_want_day).
+inline void watch_board_moved(std::vector<WatchSource> &src, WatchKept &kept, const WatchCtx &c) {
+  WatchKept now;
+  if (c.board_live && !c.board_event.empty()) {
+    now.board_league = c.board_league;
+    now.board = watch_hash(c.board_event);
+  }
+  now.visit_league = c.visit_league;
+  now.visit = watch_hash(c.visit_event);
+  auto left = [&](uint8_t league, uint32_t event) {
+    if (event == 0 || (league == now.board_league && event == now.board) ||
+        (league == now.visit_league && event == now.visit))
+      return;
+    for (auto &s : src)
+      if (s.league == league)
+        s.wait_until = 0;
+  };
+  left(kept.board_league, kept.board);
+  left(kept.visit_league, kept.visit);
+  kept = now;
 }
 
 // A big play found in a watched game, and what the board needs to go there.
@@ -542,15 +609,17 @@ struct WatchJob {
 // Should the read take this game of the day's scoreboard in full: a wanted
 // game that is on, or one watched as on that has ended (its last play can
 // be a walk-off or a buzzer beater). A wanted game still to start only
-// moves next_start.
+// moves next_start, even while it is the board's or a visit's: by its start
+// the board can have moved on (watch_board_moved reads nothing for that).
 inline bool watch_want_day(WatchJob &job, const DayGame &d) {
-  if (watch_wants(job.ctx, job.league, d.event_id, d.away_id, d.home_id) == 0)
-    return false;
   if (d.state == GameState::PRE) {
-    if (!d.time_tbd && d.kickoff_epoch > 0 && (job.next_start == 0 || d.kickoff_epoch < job.next_start))
+    if (!d.event_id.empty() && watch_wants_teams(job.ctx, job.league, d.away_id, d.home_id) != 0 && !d.time_tbd &&
+        d.kickoff_epoch > 0 && (job.next_start == 0 || d.kickoff_epoch < job.next_start))
       job.next_start = d.kickoff_epoch;
     return false;
   }
+  if (watch_wants(job.ctx, job.league, d.event_id, d.away_id, d.home_id) == 0)
+    return false;
   if (d.state == GameState::IN)
     return true;
   for (const auto &g : job.games)
@@ -620,10 +689,46 @@ template<typename TInput> bool watch_read_day(TInput &input, WatchJob &job) {
 
 // The panel's own team's game counts as live from its start time on, even
 // while ESPN still says it is to come, or while the board's read of it is
-// from before another game's big play took the board.
+// from before another game's big play took the board. A golf tour's or a
+// racing series' leaderboard is live while a round is played or a session
+// is on track, as the board and the idle display count it (board_live).
 inline bool watch_live(const GameSnapshot &g, int64_t now_epoch) {
+  if (g.valid && g.sport == Sport::GOLF)
+    return g.golf.phase == GolfPhase::LIVE;
+  if (g.valid && g.sport == Sport::RACING)
+    return racing_on_track(g, now_epoch);
   return g.valid && (g.state == GameState::IN || (g.state == GameState::PRE && !g.time_tbd && g.kickoff_epoch > 0 &&
                                                   now_epoch >= g.kickoff_epoch));
+}
+
+// The mode's game g is the panel's team's (league and ESPN id, 0 none): a
+// game it plays in, or for a golf tour or a racing series, whose leaderboard
+// names no team, the leaderboard itself.
+inline bool watch_own_game(const GameSnapshot &g, uint8_t league, uint32_t team_id) {
+  if (!g.valid || team_id == 0 || league >= kLeagueCount)
+    return false;
+  if (is_leaderboard((League) league))
+    return is_board_sport(g.sport) && league_sport((League) league) == g.sport;
+  return g.team_id == team_id || g.opp_id == team_id;
+}
+
+// The first read of the mode's game after a visit, cur, has the board from
+// before the visit (before) as its read before: what changed while the
+// board was away isn't splashed, since it showed none of it, but a game that
+// ended meanwhile still gets its victory splash (decide_splash), as if the
+// read before were this one just before the final. A leaderboard, which
+// splashes only its winner, keeps the board from before.
+inline GameSnapshot watch_back_prev(GameSnapshot before, const GameSnapshot &cur) {
+  if (!detail::same_game(before, cur))
+    return GameSnapshot{};
+  if (is_board_sport(cur.sport))
+    return before;
+  if (!detail::went_final(before, cur))
+    return GameSnapshot{};
+  GameSnapshot p = cur;
+  p.state = before.state;
+  p.completed = before.completed;
+  return p;
 }
 
 // What decides a switch to a watched game's big play.

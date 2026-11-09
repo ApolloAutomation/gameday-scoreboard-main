@@ -1022,7 +1022,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
   bool switched = this->fav_choose_(tnow);
   if (!switched && shown) {
     // Same game on the board: render the new poll with its splash.
-    this->prev_ = this->board_prev_();
+    this->prev_ = this->board_prev_(e.game);
     this->game_ = e.game;
     this->emit_(this->board_splash_(false));
   } else if (!switched) {
@@ -1048,13 +1048,11 @@ void GamedayComponent::set_follow(bool on) {
     this->rebuild_state_(&this->last_fields_);
     return;
   }
-  bool fav = this->favorites_mode_();
-  bool picked = fav ? this->fav_shown_ >= 0 : this->live_mode_() && !this->live_fallback_ && !this->recap_on_;
   // While another game's big play has the board (watch.h), the mode's own
   // game is the one to follow, and the board goes straight back to it.
   const GameSnapshot &g = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
   if (!::espn::follow_start(this->follow_, ::espn::follow_mode_ok(this->prefs2_.mode, !this->fav_.empty()),
-                            picked && !this->demo_playing_(), g, (int64_t) this->time_->timestamp_now())) {
+                            this->follow_picked_(), g, (int64_t) this->time_->timestamp_now())) {
     ESP_LOGW(TAG, "Follow this game: no game to follow in this mode, or it has ended");
     return;
   }
@@ -1063,6 +1061,20 @@ void GamedayComponent::set_follow(bool on) {
     this->end_visit_();  // emits the mode's board, with the page's state
   else
     this->rebuild_state_(&this->last_fields_);
+}
+
+// follow_start's picked: the mode put the game up itself, Live games' pick
+// or a favorite's card.
+bool GamedayComponent::follow_picked_() const {
+  const bool picked = this->favorites_mode_() ? this->fav_shown_ >= 0
+                                              : this->live_mode_() && !this->live_fallback_ && !this->recap_on_;
+  return picked && !this->demo_playing_();
+}
+
+bool GamedayComponent::follow_can_start_() const {
+  return ::espn::follow_can_start(this->follow_, ::espn::follow_mode_ok(this->prefs2_.mode, !this->fav_.empty()),
+                                  this->follow_picked_(),
+                                  ::espn::watch_mode_game(this->game_, this->visit_.saved.get()));
 }
 
 // The final stays up for the mode's own time (follow_after_final_s), and a
@@ -1353,7 +1365,7 @@ void GamedayComponent::loop() {
         this->watch_hold_until_ = (now + RETRY_INTERVAL) | 1;
         if (this->job_.need_watch) {
           // A watcher read that hung counts as a failed one that took the
-          // whole wait, so that kind of read is expected slow from now on.
+          // whole wait: that kind of read waits a cycle or more (WatchTimes).
           const ::espn::WatchJob &w = this->job_.watch;
           this->watch_times_.took(w.league, !w.event_id.empty(), deadline, false);
           if (!w.event_id.empty())
@@ -3533,7 +3545,7 @@ void GamedayComponent::apply_job_() {
   }
   this->cache_unconfirmed_ = false;
   ::espn::carry_football(this->game_, j.game);
-  this->prev_ = this->board_prev_();
+  this->prev_ = this->board_prev_(j.game);
   this->game_ = j.game;
   this->mark_good_poll_();
   if (this->upcoming_after_poll_) {
@@ -3609,7 +3621,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->drop_team_placeholder_();
     this->emit_({});
   } else if (j.polled) {
-    this->prev_ = this->board_prev_();
+    this->prev_ = this->board_prev_(j.game);
     if (moved)
       this->prev_ = GameSnapshot{};
     ::espn::carry_football(this->prev_, j.game);
@@ -3706,7 +3718,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
   for (auto &r : j.game.golf.rows)
     r.set_tee(r.tee_epoch > 0 ? ::espn::golf_tee_label(ESPTime::from_epoch_local((time_t) r.tee_epoch).to_c_tm())
                               : std::string());
-  this->prev_ = this->board_prev_();
+  this->prev_ = this->board_prev_(j.game);
   this->game_ = std::move(j.game);  // leaves job_ without the rows
   this->no_game_confirmed_ = false;
   // The idle display's wait after the final (idle.h, idle_busy)
@@ -3788,11 +3800,12 @@ uint8_t GamedayComponent::mode_league_() const {
 
 // During a visit the mode's game is the one it saved, read before the visit:
 // from its start time on it counts as live (watch_live), so a kickoff during
-// a visit ends it.
+// a visit ends it. A golf tour or a racing series is the team's leaderboard,
+// live while a round or a session is on (watch_own_game, watch_live).
 bool GamedayComponent::own_team_live_() const {
-  const GameSnapshot &g = this->visit_.saved ? *this->visit_.saved : this->game_;
-  const uint32_t id = this->prefs_.team_id;
-  return id != 0 && this->mode_league_() == this->prefs_.league && (g.team_id == id || g.opp_id == id) &&
+  const GameSnapshot &g = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
+  return this->mode_league_() == this->prefs_.league &&
+         ::espn::watch_own_game(g, this->prefs_.league, this->prefs_.team_id) &&
          ::espn::watch_live(g, (int64_t) this->time_->timestamp_now());
 }
 
@@ -3804,9 +3817,10 @@ bool GamedayComponent::own_team_live_() const {
   for (const auto &e : this->fav_)
     c.favs.emplace_back((uint8_t) e.team->league, e.team->espn_id);
   // Neither the mode's game (as a visit saved it) nor a visit's is watched.
-  const GameSnapshot &g = this->visit_.saved ? *this->visit_.saved : this->game_;
+  const GameSnapshot &g = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
   c.board_league = this->mode_league_();
   c.board_event = g.valid ? g.event_id : this->schedule_.event_id;
+  c.board_live = ::espn::watch_live(g, (int64_t) this->time_->timestamp_now());
   if (this->visit_.active) {
     c.visit_league = this->visit_.sched.league;
     c.visit_event = this->visit_.sched.event_id;
@@ -3946,8 +3960,9 @@ void GamedayComponent::apply_watch_job_(uint32_t now) {
   const bool event = !w.event_id.empty();
   this->watch_times_.took(w.league, event, w.took_ms, w.ok);
   if (!w.ok) {
-    // ESPN didn't answer: that read waits for the next cycle and the others
-    // go on, and a game whose own reads fail twice drops out. A refusal
+    // ESPN didn't answer: that read waits for the next cycle (its kind too,
+    // and longer when it keeps hanging, WatchTimes::took) and the others go
+    // on, and a game whose own reads fail twice drops out. A refusal
     // holds the watcher, and the board waits as after a refusal of its own.
     if (event)
       ::espn::watch_failed(this->watch_, w.league, w.event_id);
@@ -4065,7 +4080,7 @@ void GamedayComponent::end_visit_() {
     this->game_ = std::move(*this->visit_.saved);
   this->drop_visit_();
   this->prev_ = GameSnapshot{};
-  this->visit_back_ = true;  // that read checks for big plays against nothing (board_prev_)
+  this->visit_back_ = true;  // that read splashes only a final reached meanwhile (board_prev_)
   this->emit_({});
   this->schedule_next_(0);  // the mode's own read, now
 }
@@ -4080,12 +4095,14 @@ void GamedayComponent::watch_refused_(uint32_t now) {
     this->schedule_next_(ms);
 }
 
-// The board's last read as the next poll's read before, moved out; none for
-// the first poll after a visit, whose board is from before it (end_visit_).
-GameSnapshot GamedayComponent::board_prev_() {
+// The board's last read as the read before cur, the next poll's, moved out;
+// for the first poll after a visit, whose board is from before it
+// (end_visit_), one that splashes only a final reached meanwhile
+// (watch_back_prev).
+GameSnapshot GamedayComponent::board_prev_(const GameSnapshot &cur) {
   if (this->visit_back_) {
     this->visit_back_ = false;
-    return GameSnapshot{};
+    return ::espn::watch_back_prev(std::move(this->game_), cur);
   }
   return std::move(this->game_);
 }
@@ -5037,8 +5054,10 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["recap"] = this->recap_on_;
   doc["follow"] = this->follow_.on;  // Follow this game holds the board's game
   // Another game's big play has the board for a moment (watch.h): Follow
-  // this game would follow the mode's own game, and go back to it.
+  // this game would follow the mode's own game, and go back to it, when that
+  // one can still be followed (visit_follow: not once it has ended).
   doc["visit"] = this->visit_.active;
+  doc["visit_follow"] = this->visit_.active && this->follow_can_start_();
   // The idle display and the night hours (idle.h), and what they do now:
   // idle_view is what the panel shows in place of the mode's board ("" for
   // none), dark that it is off until a followed game starts.

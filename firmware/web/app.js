@@ -829,14 +829,16 @@
   // racing board, or a game that has ended and isn't followed already.
   // While another game's big play has the board for a moment (S.visit), the
   // board shows that game, but the switch follows the game the panel was
-  // showing, and the panel goes straight back to it.
+  // showing, and the panel goes straight back to it: only while that one can
+  // still be followed (S.visit_follow), not once it has ended.
   const renderFollow = (mode) => {
     const favMode = mode === "4" && (S.favs || []).some(refKey);
     const liveGame = isLive(mode) && !S.fallback && !S.recap;
     const g = game;
     const on = !!S.follow;
-    const up = !!S.visit
-      || !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
+    const up = S.visit
+      ? !!S.visit_follow || on
+      : !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
     // Firmware from before the switch leaves follow out.
     $("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
     $("#followbar").classList.toggle("on", on);

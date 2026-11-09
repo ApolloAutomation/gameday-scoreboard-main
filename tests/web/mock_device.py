@@ -102,8 +102,9 @@ INITIAL = {
     # The big-play watcher (components/gameday/watch.h): stay in seconds.
     "watch": True, "watchstay": 60, "watchmine": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
-    # Another game's big play has the board for a moment (watch.h).
-    "visit": False,
+    # Another game's big play has the board for a moment (watch.h), and
+    # whether Follow this game could still follow the mode's own game then.
+    "visit": False, "visit_follow": False,
     # The idle display and the night hours (components/gameday/idle.h), and
     # what they do now: idle_view "" (the mode's board), "clock", "scores" or
     # "today"; night_now inside the night hours; dark while Off has it dark.
@@ -235,10 +236,11 @@ def can_follow():
     finals, or Favorite teams with favorites. My team has nothing to pin, and a game
     that has ended has nothing left to keep up (a pin it already has stays). While
     another game's big play has the board (visit), the game to follow is the mode's
-    own, which the mock doesn't keep: it counts as up."""
+    own, which the mock doesn't keep: visit_follow says whether it can be followed."""
     g = STATE.get("game") or {}
     up = g.get("s", "NOT_FOUND") not in ("NOT_FOUND", "POST") and bool(g.get("id")) and g.get("sport") not in (5, 6)
-    up = up or bool(STATE.get("visit"))
+    if STATE.get("visit"):
+        up = bool(STATE.get("visit_follow"))
     if STATE["mode"] == 4:
         return up and any(STATE["favs"])
     return up and STATE["mode"] in (1, 2, 3, 5) and not STATE.get("fallback") and not STATE.get("recap")
@@ -252,6 +254,7 @@ def let_go():
 def end_visit():
     """end_visit_() and drop_visit_(): another game's big play gives the board back."""
     STATE["visit"] = False
+    STATE["visit_follow"] = False
 
 
 def bet_line(v, spread):
@@ -463,7 +466,10 @@ def selftest():
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
         # board: false stands for a board with nothing of the mode's own to follow,
-        # final: true for its game having ended.
+        # final: true for its game having ended. During a visit that game is the
+        # mode's own, the one visit_follow says can be followed.
+        if start.get("visit"):
+            start["visit_follow"] = start.get("board", True) and not start.get("final", False)
         if start.pop("final", False):
             start["game"] = {**INITIAL["game"], "s": "POST"}
         if not start.pop("board", True):
