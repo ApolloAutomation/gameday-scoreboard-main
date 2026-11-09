@@ -1942,21 +1942,96 @@ test("the timezone line's button keeps the keyboard focus through the page's reg
   await expect(page.locator("#tzpick")).toBeVisible();
 });
 
-test("the panel picker posts the new layout", async ({ page, request }) => {
+test("the panel picker asks first, then posts the new layout", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");
   await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
   await expect(page.locator("#panels .panelpick.on")).toContainText("One 128x64 panel");
+  await expect(page.locator("#panels .panelpick")).toHaveCount(5);
+  await expect(page.locator("#wiringRow")).toBeHidden();
+  let asked = "";
+  page.once("dialog", (d) => { asked = d.message(); d.accept(); });
   await page.locator('#panels .panelpick[data-cols="1"]').click();
   await expectSet(request, { panels: "1" });
+  expect(asked).toBe("Restart the panel as 64x64?");
   await expect(page.locator("#toast")).toHaveText("Restarting as 64x64");
   await expect(page.locator('#panels .panelpick[data-cols="2"]')).toBeDisabled();
+});
+
+test("cancelling the restart keeps the layout and posts nothing", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  let asked = "";
+  page.once("dialog", (d) => { asked = d.message(); d.dismiss(); });
+  await page.getByRole("button", { name: "Four 64x64 panels side by side" }).click();
+  expect(asked).toBe("Restart the panel as 256x64?");
+  await sleep(300);
+  expect(await sets(request)).toEqual([]);
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
+  await expect(page.getByRole("button", { name: "Four 64x64 panels side by side" })).toBeEnabled();
+});
+
+test("three wide and four wide post their counts", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Three 64x64 panels side by side" }).click();
+  await expectSet(request, { panels: "3" });
+  await expect(page.locator("#toast")).toHaveText("Restarting as 192x64");
+  await reset(request, { panels: 3 });
+  await page.reload();
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "3");
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Four 64x64 panels side by side" }).click();
+  await expectSet(request, { panels: "4" });
+  await expect(page.locator("#toast")).toHaveText("Restarting as 256x64");
+});
+
+test("the 2x2 keeps its saved wiring, and on a 2x2 the wiring can be changed", async ({ page, request }) => {
+  await reset(request, { wiring: 2 });
+  await page.goto("/");
+  await expect(page.locator("#wiringRow")).toBeHidden();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Four 64x64 panels in two rows of two" }).click();
+  await expectSet(request, { panels: "2x2", wiring: "2" });
+  await expect(page.locator("#toast")).toHaveText("Restarting as 128x128");
+
+  await reset(request, { panels: 2, rows: 2, wiring: 0 });
+  await page.reload();
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2x2");
+  await expect(page.locator("#wiringRow")).toBeVisible();
+  await expect(page.locator("#wiringSel")).toHaveValue("0");
+  // Cancelled: the choice goes back and nothing is sent.
+  page.once("dialog", (d) => d.dismiss());
+  await page.locator("#wiringSel").selectOption("1");
+  await expect(page.locator("#wiringSel")).toHaveValue("0");
+  expect(await sets(request)).toEqual([]);
+  let asked = "";
+  page.once("dialog", (d) => { asked = d.message(); d.accept(); });
+  await page.locator("#wiringSel").selectOption("1");
+  await expectSet(request, { wiring: "1" });
+  expect(asked).toBe("Restart the panel with the new wiring?");
+  await expect(page.locator("#toast")).toHaveText("Restarting with the new wiring");
+  // Picking the two-wide picture from the 2x2 is a change of layout.
+  await reset(request, { panels: 2, rows: 2, wiring: 0 });
+  await page.reload();
+  page.once("dialog", (d) => d.accept());
+  await page.locator('#panels .panelpick[data-cols="2"]').click();
+  await expectSet(request, { panels: "2" });
+});
+
+test("firmware that sends no rows or wiring shows its count and no wiring choice", async ({ page, request }) => {
+  await reset(request, { panels: 1, rows: null, wiring: null });
+  await page.goto("/");
+  await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "1");
+  await expect(page.locator("#wiringRow")).toBeHidden();
 });
 
 test("a layout change the panel never got doesn't claim it's restarting", async ({ page, request }) => {
   await reset(request, {}, ["set"]);
   await page.goto("/");
   await expect(page.locator("#panels .panelpick.on")).toHaveAttribute("data-cols", "2");
+  page.once("dialog", (d) => d.accept());
   await page.locator('#panels .panelpick[data-cols="1"]').click();
   await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
   await expect(page.locator("#gone")).toBeHidden();
