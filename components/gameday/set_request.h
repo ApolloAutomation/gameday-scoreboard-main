@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "../panel_layout/layouts.h"
 #include "bets.h"
 #include "idle.h"
 #include "leagues.h"
@@ -22,16 +23,19 @@ namespace espn {
 
 // In the order the firmware applies them, whatever order the request uses.
 // follow comes first: it pins the game the page showed, and a change later in
-// the same request that moves the board lets the pin go again. betdel comes
-// before bet, so a request with both empties a slot and then fills it, and
-// playerdel before player the same way.
-constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "fav1",     "fav2",
-                                    "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
-                                    "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
-                                    "collide", "favs",   "today",   "live",   "autoupd",  "count",
-                                    "match",   "beta",   "alerts",  "alertfav", "watch",  "watchstay",
-                                    "watchmine", "standing", "idle", "idledim", "night", "nightstart",
-                                    "nightend", "nightbri", "betdel", "bet",  "playerdel", "player"};
+// the same request that moves the board lets the pin go again. wiring comes
+// right after panels, so a request that picks the 2x2 and its wiring saves
+// both before the restart either one asks for. betdel comes before bet, so a
+// request with both empties a slot and then fills it, and playerdel before
+// player the same way.
+constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",     "rotate",   "fav1",       "fav2",
+                                    "fav3",      "fav4",      "tz",       "tzauto",   "down",       "play",
+                                    "odds",      "opp",       "panels",   "wiring",   "bootaddr",   "lockon",
+                                    "release",   "collide",   "favs",     "today",    "live",       "autoupd",
+                                    "count",     "match",     "beta",     "alerts",   "alertfav",   "watch",
+                                    "watchstay", "watchmine", "standing", "idle",     "idledim",    "night",
+                                    "nightstart", "nightend", "nightbri", "betdel",   "bet",        "playerdel",
+                                    "player"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -206,7 +210,8 @@ enum class SetKind : uint8_t {
   PLAY,      // on
   ODDS,      // on
   OPP,       // on
-  PANELS,    // value, 1-255; PanelLayout refuses a count it can't drive
+  PANELS,    // value (panels wide) and rows, 1-255 each; PanelLayout refuses an arrangement it can't drive
+  WIRING,    // value, the 2x2's wiring (panel_layouts::Wiring)
   BOOTADDR,  // on
   LOCKON,    // value, minutes
   RELEASE,   // value, seconds
@@ -246,6 +251,7 @@ struct TeamRef {
 struct SetOp {
   SetKind kind{SetKind::TEAM};
   int value{0};
+  int rows{1};  // PANELS only
   bool on{false};
   uint8_t slot{0};
   uint32_t mask{0};
@@ -444,11 +450,19 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k == "panels") {
-    // PanelLayout takes the count as a byte and refuses one it can't drive;
-    // a value that doesn't fit would wrap first (257 to one panel).
+    // The panels wide ("2"), or wide by high ("2x2"). PanelLayout takes each
+    // as a byte and refuses an arrangement it can't drive; a value that
+    // doesn't fit would wrap first (257 to one panel).
     op.kind = SetKind::PANELS;
     op.value = read_int(v);
-    return op.value >= 1 && op.value <= UINT8_MAX;
+    const size_t x = v.find('x');
+    op.rows = x == std::string::npos ? 1 : read_int(v.substr(x + 1));
+    return op.value >= 1 && op.value <= UINT8_MAX && op.rows >= 1 && op.rows <= UINT8_MAX;
+  }
+  if (k == "wiring") {
+    op.kind = SetKind::WIRING;
+    op.value = read_int(v);
+    return op.value >= 0 && op.value < panel_layouts::kWiringCount;
   }
   if (k == "tz") {
     op.kind = SetKind::TZ;

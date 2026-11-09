@@ -5047,7 +5047,10 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["name"] = this->hostname();
   doc["version"] = App.get_comment();
   doc["setup"] = this->flag_(FLAG_SETUP);
+  // Panels wide, rows of them (2 for the 2x2) and the 2x2's wiring.
   doc["panels"] = this->panels_ != nullptr ? this->panels_->cols() : 0;
+  doc["rows"] = this->panels_ != nullptr ? this->panels_->rows() : 1;
+  doc["wiring"] = this->panels_ != nullptr ? this->panels_->wiring() : 0;
   JsonObject team = doc["team"].to<JsonObject>();
   put_team(team, this->prefs_.league, this->prefs_.team_id);
   doc["mode"] = this->prefs2_.mode;
@@ -5808,7 +5811,13 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)
-          this->panels_->set_cols((uint8_t) op.value);
+          this->panels_->set_layout((uint8_t) op.value, (uint8_t) op.rows);
+        break;
+      case ::espn::SetKind::WIRING:
+        // Off a 2x2 the wiring is only saved, with no restart, so the page
+        // needs the new state.
+        if (this->panels_ != nullptr && this->panels_->set_wiring((uint8_t) op.value))
+          dirty = true;
         break;
     }
   }

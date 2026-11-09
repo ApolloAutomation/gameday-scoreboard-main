@@ -63,6 +63,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         break;
       case SetKind::PANELS:
         require(op.value >= 1 && op.value <= UINT8_MAX, "the count wraps in the byte PanelLayout takes", k, v);
+        require(op.rows >= 1 && op.rows <= UINT8_MAX, "the rows wrap in the byte PanelLayout takes", k, v);
+        break;
+      case SetKind::WIRING:
+        require(op.value >= 0 && op.value < panel_layouts::kWiringCount, "the wiring is past panel_layouts::Wiring",
+                k, v);
         break;
       case SetKind::FAV_SLOT:
         require(op.slot >= 1 && op.slot <= 4, "the slot is not 1 to 4", k, v);

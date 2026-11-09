@@ -22,11 +22,14 @@ substitutions:
 
   display_panel_width: "64"
   display_panel_height: "64"
+  # The longest chain this firmware drives, four panels in a row. The
+  # arrangement actually driven (one to four wide, or the 2x2 and its wiring)
+  # comes from the saved "Panels" choice: panel_layout writes it into the
+  # display's settings at boot, before the driver starts, and the driver sizes
+  # its DMA buffers and LVGL its draw buffer from that, not from these.
   display_layout: HORIZONTAL
   display_layout_rows: "1"
-  # The widest chain this firmware supports. The count actually driven comes
-  # from the saved "Panels" choice, applied by panel_layout at boot.
-  display_layout_cols: "2"
+  display_layout_cols: "4"
   # Panels driven before anyone picks: 1 for a DIY 64x64, 2 on boards that ship
   # with a 128x64. Also what Factory Reset returns to.
   default_panel_cols: "1"
@@ -155,7 +158,10 @@ esphome:
         # scan. With it on, Wi-Fi was ready 12 s after boot instead of 5.
         # A panel with no saved network, or in setup after a reset, turns it on
         # now for setup. A panel with a saved network gets the dropout grace,
-        # which on_connect cancels.
+        # which on_connect cancels. With three or four panels it stays off:
+        # their DMA buffers leave the Bluetooth stack too little internal RAM
+        # to start (on a 2x2 it crashed while starting up), so those set up
+        # through the hotspot and its QR code.
         - if:
             condition:
               lambda: |-
@@ -165,7 +171,11 @@ esphome:
             then:
               - script.execute: gd_ble_grace
             else:
-              - ble.enable:
+              - if:
+                  condition:
+                    lambda: 'return id(gd_panels).bluetooth_ok();'
+                  then:
+                    - ble.enable:
 
 external_components:
   - source:
@@ -222,12 +232,16 @@ font:
   - id: !extend spleen_16
     glyphs: *panel_glyphs
 
-# Panel count from the saved preference, applied before the display starts.
+# Panel arrangement from the saved preference, applied before the display
+# starts: one to four panels wide, or four in a 2x2 (max_rows 2). More than
+# two panels leave too little internal RAM for Bluetooth, so those set up
+# through the hotspot only (ble.enable below asks bluetooth_ok() first).
 panel_layout:
   id: gd_panels
   display_id: matrix
   default_cols: ${default_panel_cols}
-  max_cols: 2
+  max_cols: 4
+  max_rows: 2
 
 logger:
   baud_rate: 115200
@@ -366,7 +380,12 @@ script:
     mode: restart
     then:
       - delay: 30s
-      - ble.enable:
+      # Never with three or four panels (see on_boot).
+      - if:
+          condition:
+            lambda: 'return id(gd_panels).bluetooth_ok();'
+          then:
+            - ble.enable:
 
   # A panel that has a saved network but cannot get back on it is stuck in a
   # way nothing else recovers from. ESPHome's own reboot_timeout is disabled
@@ -471,6 +490,8 @@ captive_portal:
 
 improv_serial:
 
+# Off at boot, so the stack's memory is only taken when on_boot or
+# gd_ble_grace turns it on, which they never do with more than two panels.
 esp32_ble:
   enable_on_boot: false
 
