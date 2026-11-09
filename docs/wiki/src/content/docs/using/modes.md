@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-The three buttons under the board on the device page, **My team**, **Live games** and **Favorite teams**, choose what the panel follows. The Game Day app has the same choice. The panel changes over right away and keeps the choice through restarts.
+The three mode buttons on the device page, **My team**, **Live games** and **Favorite teams**, choose what the panel follows. The Game Day app has the same choice. The panel changes over right away and keeps the choice through restarts.
 
 ## My team
 

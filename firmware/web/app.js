@@ -371,7 +371,7 @@
         <p class="hint">With three or four panels, set up Wi-Fi through the panel's hotspot: Bluetooth setup is off to leave memory for the panels. Use a 5 V supply rated for all of them.</p>
       </details>
       <details class="card" id="deviceCard">
-        <summary><h2>Device</h2><span class="peek">Updates, Wi-Fi, diagnostics</span></summary>
+        <summary><h2>Device</h2><span class="peek" id="devicePeek">Updates, Wi-Fi, diagnostics</span></summary>
         <div class="actions" id="actions"></div>
         <div class="fw" id="fw" hidden>
           <div class="fwline"><span id="fwText">Firmware</span><button class="btn primary" id="fwInstall" hidden>Install</button></div>
@@ -448,6 +448,7 @@
   // ---- cards that fold ---------------------------------------------------
   // Ticker, Celebrations, Remote, Setup and Device start folded, Panel open,
   // and Favorites, Favorite players and Bets open when they hold anything.
+  // Device opens when it offers an update (renderUpdate).
   // The cards the viewer opens or folds stay so in this browser, when it has
   // storage. localStorage "gd.expand" = "1" opens every card (the page tests).
   let folds = {};
@@ -475,6 +476,7 @@
     const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets };
     for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
   };
+  const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
 
   // ---- helpers ---------------------------------------------------------
   let toastTimer;
@@ -2421,6 +2423,7 @@
       + " dBm" + (weak ? ", weak for " + span(weak * step) : "") : "No signal readings yet");
   };
   const renderWifi = () => {
+    renderDevicePeek();
     const w = S && S.wifi;
     $("#wifiDiag").hidden = !w;
     if (!w) return;
@@ -2620,9 +2623,20 @@
   // What the firmware box reads from the state document, and what it last drew with.
   const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
   let fwDrawn = fwInputs();
+  // While Device is folded, the words beside its name say what wants the
+  // owner in it, in place of what it holds: an update to install, one that
+  // didn't take, one installing, or a weak signal.
+  let fwNote = "";
+  const renderDevicePeek = () => {
+    const note = fwNote || (S && S.wifi && S.wifi.weak ? "Weak signal" : "");
+    const peek = $("#devicePeek");
+    peek.textContent = note || "Updates, Wi-Fi, diagnostics";
+    peek.classList.toggle("alert", !!note);
+  };
   const renderUpdate = (u) => {
     const box = $("#fw");
     box.hidden = false;
+    fwNote = "";
     const cur = u.current_version ? "v" + u.current_version : "";
     const latest = u.value ? "v" + u.value : "";
     const st = String(u.state || "").toUpperCase();
@@ -2631,7 +2645,8 @@
     btn.hidden = true;
     fwDrawn = fwInputs();
     if (st.includes("INSTALLING") || installing) {
-      $("#fwText").textContent = "Installing " + (latest || "update");
+      fwNote = "Installing " + (latest || "update");
+      $("#fwText").textContent = fwNote;
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
@@ -2646,14 +2661,20 @@
       // minute); it won't install it on its own again, but Install still tries.
       const failed = !!(S && S.update_failed && S.update_failed === u.value);
       if (failed) {
+        fwNote = "Update didn't take";
         $("#fwText").textContent = "The update to " + latest + " didn't take and the panel went back to " + (cur || "its old version");
         sub.textContent = "Install tries it again." + (S.autoupd || S.bar ? " It won't install this one on its own." : "");
       } else {
-        $("#fwText").textContent = "Update available: " + latest;
+        fwNote = "Update available: " + latest;
+        $("#fwText").textContent = fwNote;
         sub.textContent = (cur ? "You have " + cur + "." : "") + (S && (S.autoupd || S.bar) ? " It installs on its own between 3 and 5 AM." : "");
       }
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
+      // An update known to be newer, or one that didn't take, opens the card
+      // with Install in sight, unless the viewer opened or folded it; not
+      // before the running version is known, which can show the offer is older.
+      if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
       btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;
@@ -2684,6 +2705,7 @@
       sub.appendChild(document.createTextNode(sub.textContent ? " " : ""));
       sub.appendChild(a);
     }
+    renderDevicePeek();
   };
 
   // ---- saved Wi-Fi networks ---------------------------------------------

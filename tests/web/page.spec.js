@@ -3516,6 +3516,65 @@ test.describe("cards that fold", () => {
     expect(await isOpen(page, "tickerCard")).toBe(false);
   });
 
+  test("an update on offer opens Device, and a folded Device says an update, one that didn't take or a weak signal beside its name", async ({ page, request }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await reset(request, { autoupd: false });
+    const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+    let entity = { ...fw, value: "2026.11.0-beta.812", current_version: "2026.10.2" };
+    await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+    const peek = card(page, "deviceCard").locator("summary .peek");
+    const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    await page.goto("/");
+    // The card opens by itself, with Install in sight.
+    await expect(page.locator("#fwInstall")).toBeVisible();
+    expect(await isOpen(page, "deviceCard")).toBe(true);
+    // Folded by the viewer, its name says an update is out, and it stays folded.
+    await card(page, "deviceCard").locator("summary").click();
+    await expect(page.locator("#fwInstall")).toBeHidden();
+    await expect(peek).toBeVisible();
+    await expect(peek).toHaveText("Update available: v2026.11.0-beta.812");
+    await expect(peek).toHaveClass(/\balert\b/);
+    expect(await wide()).toBeLessThanOrEqual(0);
+    await page.reload();
+    await expect(peek).toHaveText("Update available: v2026.11.0-beta.812");
+    await sleep(500);
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    await expect(peek).toBeVisible();
+
+    // One that didn't take opens the card too, and says so folded.
+    await page.evaluate(() => localStorage.clear());
+    entity = { ...fw, value: "2026.10.3", current_version: "2026.10.2" };
+    await reset(request, { update_failed: "2026.10.3" });
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("The update to v2026.10.3 didn't take and the panel went back to v2026.10.2");
+    await expect(page.locator("#fwInstall")).toBeVisible();
+    await card(page, "deviceCard").locator("summary").click();
+    await expect(peek).toHaveText("Update didn't take");
+    await expect(peek).toBeVisible();
+
+    // An offer older than the panel's version is nothing to install: Device stays folded.
+    await page.evaluate(() => localStorage.clear());
+    entity = { ...fw, value: "2026.10.2", current_version: "2026.11.0-beta.812" };
+    await reset(request);
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v2026.11.0-beta.812");
+    await sleep(500);
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    await expect(peek).toHaveText("Updates, Wi-Fi, diagnostics");
+    await expect(peek).not.toHaveClass(/\balert\b/);
+
+    // A weak signal shows beside the name, and leaves the card folded.
+    entity = { ...fw, state: "NO UPDATE", value: "2026.10.2", current_version: "2026.10.2" };
+    await reset(request, { wifi: { rssi: -81, step: 300, hist: [-80, -81], weak: true, drops: 0, day: 0, causes: {} } });
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("You're up to date, v2026.10.2");
+    await expect(peek).toHaveText("Weak signal");
+    await expect(peek).toBeVisible();
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    // None of it is posted to the panel.
+    expect(await sets(request)).toEqual([]);
+  });
+
   test("the restart and reset buttons are together at the bottom of the Device card", async ({ page, request }) => {
     await reset(request);
     await page.goto("/");

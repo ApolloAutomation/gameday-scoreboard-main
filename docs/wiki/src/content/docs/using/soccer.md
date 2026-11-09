@@ -70,4 +70,4 @@ A postponed or canceled match shows ESPN's word for it and gets no victory splas
 
 ## The next three games
 
-On the device page, the **Up next** list under the board shows your club's next three games after the one on the board, with the opponent, the day and time and the TV channel. It comes from the club's league schedule, so a cup game the panel is about to follow may not be in it.
+On the device page, the **Up next** list shows your club's next three games after the one on the board, with the opponent, the day and time and the TV channel. It comes from the club's league schedule, so a cup game the panel is about to follow may not be in it.

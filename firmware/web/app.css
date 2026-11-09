@@ -151,6 +151,8 @@ details.card[open] > summary { margin-bottom: -6px; }
 details.card[open] > summary::after { content: "\25BE"; }
 .peek { flex: 1; min-width: 0; text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
+/* Something in the folded card wants the owner: an update, or a weak signal */
+.peek.alert { color: var(--gold); }
 /* Quick settings: what owners change most, under the board, in two columns on a wide screen */
 .quick { margin-top: 14px; }
 .qcols { display: grid; grid-template-columns: 1fr; }
