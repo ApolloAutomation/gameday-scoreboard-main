@@ -85,6 +85,7 @@ inline void fill_baseball_filter(JsonObject ev) {
   sit["batter"]["athlete"]["shortName"] = true;
   sit["pitcher"]["athlete"]["shortName"] = true;
   sit["lastPlay"]["type"]["text"] = true;
+  sit["lastPlay"]["scoreValue"] = true;  // a grand slam (alerts.h)
   JsonObject c = comp["competitors"][0];
   c["hits"] = true;
   c["errors"] = true;
@@ -205,8 +206,17 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
     return false;
   s.time_tbd = time_tbd(comp);
   JsonObjectConst sit = comp["situation"];
-  s.last_play = str_or_empty(sit["lastPlay"]["text"]);
-  s.play_secs_left = sit["lastPlay"]["probability"]["secondsLeft"] | -1;
+  JsonObjectConst lp = sit["lastPlay"];
+  s.last_play = str_or_empty(lp["text"]);
+  s.play_secs_left = lp["probability"]["secondsLeft"] | -1;
+  // The rest is in the filter for football (type, id, teams) and baseball
+  // (type, runs) only.
+  s.play_type = str_or_empty(lp["type"]["text"]);
+  s.play_id = str_or_empty(lp["id"]);
+  s.play_points = lp["scoreValue"] | 0;
+  std::string play_team = str_or_empty(lp["end"]["team"]["id"]);  // who has the ball after it
+  if (play_team.empty())
+    play_team = str_or_empty(lp["team"]["id"]);
   s.down_distance = str_or_empty(sit["downDistanceText"]);
   s.short_down_distance = str_or_empty(sit["shortDownDistanceText"]);
   s.is_red_zone = sit["isRedZone"] | false;
@@ -242,6 +252,8 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
     }
     if (!possession.empty() && possession == str_or_empty(c["id"]))
       s.possession = ours ? 1 : 2;
+    if (!play_team.empty() && play_team == str_or_empty(c["id"]))
+      s.play_side = ours ? 1 : 2;
   }
   if (!found_us)
     return false;
@@ -284,7 +296,6 @@ inline void baseball_from_event(JsonObjectConst ev, GameSnapshot &s) {
     return;
   b.half = half_from_detail(s.short_detail);
   JsonObjectConst sit = comp["situation"];
-  b.play_type = str_or_empty(sit["lastPlay"]["type"]["text"]);
   if (b.half != Half::TOP && b.half != Half::BOTTOM)
     return;  // between half innings ESPN keeps the last count; it means nothing
   if (!sit["balls"].isNull())
@@ -587,6 +598,16 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
                  const std::string &event_id = "") {
   JsonDocument filter(detail::json_allocator());
   detail::fill_event_filter(filter.to<JsonObject>());
+  if (sport == Sport::FOOTBALL) {
+    // An interception or a lost fumble (alerts.h): what the play was, which
+    // play, and who has the ball after it, which ESPN sends even when it
+    // leaves possession out around a score.
+    JsonObject lp = filter["competitions"][0]["situation"]["lastPlay"];
+    lp["type"]["text"] = true;
+    lp["id"] = true;
+    lp["end"]["team"]["id"] = true;
+    lp["team"]["id"] = true;
+  }
   if (sport == Sport::BASEBALL)
     detail::fill_baseball_filter(filter.as<JsonObject>());
   if (sport == Sport::SOCCER)

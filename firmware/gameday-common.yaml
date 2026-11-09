@@ -663,7 +663,8 @@ gameday:
         opponent_timeouts: !lambda 'return x.opponent_timeouts;'
         team_record: !lambda 'return gameday::panel_text(x.team_record);'
         opponent_record: !lambda 'return gameday::panel_text(x.opponent_record);'
-        splash_text: !lambda 'return gameday::panel_text(x.splash_text);'
+        # A big play's splash can be two lines ("PHI" over "FUMBLE RECOVERY").
+        splash_text: !lambda 'return gameday::panel_text(x.splash_text, true);'
         splash_color: !lambda 'return (int) x.splash_color;'
         sport: !lambda 'return (int) x.sport;'
         situation: !lambda 'return x.situation;'

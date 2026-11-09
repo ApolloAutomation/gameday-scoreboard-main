@@ -1,5 +1,5 @@
-// Soccer's parse extras, ticker, clock row and splashes. Pure, no ESPHome
-// includes.
+// Soccer's parse extras, ticker and clock row. Pure, no ESPHome includes. Its
+// splashes are alerts.h's.
 #include "espn_parse.h"
 
 #include <cstdio>
@@ -469,32 +469,6 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
       best = (int) i;
   }
   return best >= 0 ? best : over;
-}
-
-// ---- splashes ------------------------------------------------------------------
-
-// A goal for us is "GOAL!", theirs "LEE GOAL" (with opponent splashes on). The
-// win splashes at full time; a draw gets none. A shootout decides a level
-// game.
-Splash soccer_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
-  Splash none;
-  if (!detail::same_game(prev, cur))
-    return none;
-  if (detail::went_final(prev, cur)) {
-    int us = cur.team_score, them = cur.opp_score;
-    if (us == them && cur.soc.team_shootout >= 0 && cur.soc.opp_shootout >= 0) {
-      us = cur.soc.team_shootout;
-      them = cur.soc.opp_shootout;
-    }
-    return detail::win_splash(cur, neutral, us, them);
-  }
-  if (prev.state != GameState::IN || cur.state != GameState::IN)
-    return none;
-  if (cur.team_score > prev.team_score)
-    return Splash{neutral ? cur.team_abbr + " GOAL" : "GOAL!", parse_color(cur.team_color)};
-  if (cur.opp_score > prev.opp_score && opponent_splashes)
-    return Splash{cur.opp_abbr + " GOAL", parse_color(cur.opp_color)};
-  return none;
 }
 
 }  // namespace espn

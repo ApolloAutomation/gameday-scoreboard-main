@@ -179,9 +179,11 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       </div>
       <div class="card">
         <h2>Celebrations</h2>
-        <p class="hint">Full-screen splashes for scores. Yours always show.</p>
+        <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
-          <div class="ctl"><label>Opponent scores too<small>The other side's scores in football, baseball, hockey and soccer. Basketball celebrates only the win.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
+          <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
+          <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
+          <div id="alertCtls"></div>
         </div>
       </div>
       <div class="card">
@@ -348,6 +350,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
+    alerts: Number, alertfav: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -821,6 +824,48 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     setOn(sw, false, "aria-checked");
     sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
   });
+  // Big-play splashes (components/gameday/alerts.h): a switch per type, in
+  // the order of the bits of the state document's "alerts" mask, by sport.
+  const ALERTS = [
+    ["football", "Football", [
+      ["Touchdown"], ["Field goal"], ["Extra point"],
+      ["2-point conversion", "Two points after a touchdown, and any two points that aren't clearly a safety."],
+      ["Safety", "Two points ESPN calls a safety, or that come in the middle of a drive."],
+      ["Interception"],
+      ["Fumble recovery", "Only a fumble the other team recovers."]]],
+    ["baseball", "Baseball", [
+      ["Runs", "Runs that aren't a home run."], ["Home run"],
+      ["Grand slam", "A home run that scores four."],
+      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game."]]],
+    ["hockey", "Hockey", [["Goal", "Every goal the same way: ESPN doesn't say which came on a power play or into an empty net."]]],
+    ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
+    ["basketball", "Basketball", [
+      ["Lead change", "The team that was behind goes ahead, in the last 2 minutes or in overtime."],
+      ["Buzzer beater", "A basket in the last second of a period that ties the game or takes the lead."],
+      ["Overtime", "When overtime starts."],
+      ["Final", "When the game ends, unless your team won: then the victory splash."]]],
+  ];
+  const alertSws = [];
+  for (const [sport, name, kinds] of ALERTS) {
+    const group = el("div", "alertSport");
+    group.dataset.sport = sport;
+    group.append(el("div", "sub", name));
+    for (const [label, hint] of kinds) {
+      const row = el("div", "ctl");
+      const lab = el("label", "", label);
+      if (hint) lab.append(el("small", "", hint));
+      const sw = el("button", "sw");
+      const bit = alertSws.length;
+      sw.setAttribute("role", "switch");
+      sw.setAttribute("aria-label", name + ": " + label);
+      setOn(sw, false, "aria-checked");
+      sw.onclick = () => S && S.alerts !== undefined && setGD({ alerts: (S.alerts ^ (1 << bit)) >>> 0 });
+      row.append(lab, sw);
+      group.append(row);
+      alertSws.push(sw);
+    }
+    $("#alertCtls").append(group);
+  }
   // Favorites: one row per team in priority order. Every change posts the
   // whole list (favs=) so the device always sees one ordered list.
   let favKeys = [];
@@ -911,9 +956,12 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     // line, so no switch.
     const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
       .concat(S.live_auto ? [] : S.live || []).map((lg) => lgInfo(lg).path.split("/")[0]));
-    document.querySelectorAll("#tickerCtls .ctl[data-sport]").forEach((row) => {
+    document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
       row.hidden = sports.size > 0 && !sports.has(row.dataset.sport);
     });
+    // Firmware from before big-play alerts has neither.
+    $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
+    alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
     // Firmware that can't install updates (older, or the demo build) leaves it out.
     $("#autoupdRow").hidden = S.autoupd === undefined;
     // Older firmware and the bar and demo builds have no beta to follow.
@@ -1413,8 +1461,9 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   let splashTimer = null;
   const renderSplash = () => {
     if (!S || !S.splash) return;
-    // One splash per score change: the same text with the same score is a repeat.
-    const key = S.splash + "|" + (game ? game.ts + "-" + game.os : "");
+    // One splash per play: the same text with the same score and last play is
+    // a repeat. A turnover or a card changes the play, not the score.
+    const key = S.splash + "|" + (game ? game.ts + "-" + game.os + "|" + (game.lp || "") : "");
     if (key === lastSplashKey) return;
     lastSplashKey = key;
     const n = $("#splash");

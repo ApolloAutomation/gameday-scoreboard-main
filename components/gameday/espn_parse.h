@@ -46,7 +46,6 @@ struct Baseball {
   std::string batter, pitcher;               // "A. Riley", while a half inning is on
   std::string team_probable, opp_probable;   // starting pitchers, pre-game
   std::string series;                        // "LAD lead series 2-1", postseason
-  std::string play_type;                     // last play's type: "Home Run", "Ball"
 };
 
 // One goal from a soccer event's details. Names are plain ASCII (the panel
@@ -240,6 +239,16 @@ struct GameSnapshot {
   int break_secs{-1};
   bool resumed{false};  // football: the second half's plays came in while ESPN's status still says halftime
   std::string last_play, down_distance;
+  // ESPN's type for the last play, kept for football and baseball only:
+  // "Pass Interception Return", "Fumble Recovery (Own)", "Ball".
+  std::string play_type;
+  // More of the last play for big-play alerts (alerts.h). Football: ESPN's
+  // id for it ("401856777515", the same however often its words change)
+  // and the side with the ball after it, 1 ours, 2 theirs, 0 not sent.
+  // Baseball: the runs it scored.
+  std::string play_id;
+  int play_side{0};
+  int play_points{0};
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
   std::string odds, over_under, tv, venue;
@@ -388,8 +397,13 @@ bool parse_team_game_str(const std::string &json, uint32_t our_team_id, Schedule
 bool parse_event_str(const std::string &json, Sport sport, uint32_t our_team_id, GameSnapshot &out,
                      const std::string &event_id = "");
 
-// neutral = nobody is "our" team (live-game modes): both sides splash with their abbreviation.
-Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral = false);
+// The splash for two reads of one game: a big play (alerts.h) whose switch
+// is on in alerts, or the win. neutral = nobody is "our" team (live-game
+// modes): both sides splash with their abbreviation. opponent_splashes: the
+// other side's plays count too. wide: the words fit two panels (16
+// characters a line) rather than one (10).
+Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral = false,
+                     uint32_t alerts = UINT32_MAX, bool wide = false);
 uint32_t parse_color(const std::string &hex);
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 // The board and ticker with no game on the board, in place of the page's
@@ -491,22 +505,19 @@ inline void adopt_league(Schedule &s, League league) { s.league = (uint8_t) leag
 // A cup's team endpoint does not name the cup either.
 inline void adopt_comp(Schedule &s, const char *comp_slug) { s.comp_slug = comp_slug; }
 
-// Per-sport text and splashes. status_text, clock_text and decide_splash hand
-// any snapshot that is not football to these (sport_baseball.cpp).
+// Per-sport text. status_text and clock_text hand any snapshot that is not
+// football to these (sport_baseball.cpp).
 std::string baseball_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 std::string baseball_clock_text(const GameSnapshot &s);
-Splash baseball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral);
 // The count while a half inning is on ("2-1"), else "".
 std::string baseball_count(const GameSnapshot &s);
 // Hockey (sport_hockey.cpp).
 std::string hockey_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 std::string hockey_clock_text(const GameSnapshot &s);
-Splash hockey_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral);
 
 // Soccer (sport_soccer.cpp).
 std::string soccer_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 std::string soccer_clock_text(const GameSnapshot &s);
-Splash soccer_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral);
 // The latest goal for the 128-wide situation row, at most `max` characters:
 // "52' Saka", "55' Hany OG", "52' Saka (P)". "" before the first goal.
 std::string soccer_situation(const GameSnapshot &s, size_t max = 12);
@@ -524,7 +535,6 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
 // declared in espn_parse_impl.h, next to ArduinoJson.
 std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 std::string basketball_clock_text(const GameSnapshot &s);
-Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral);
 // The playoff series in at most 12 characters for the situation row
 // ("NY lead 2-1", "Series 2-2"), else "".
 std::string basketball_series(const GameSnapshot &s);

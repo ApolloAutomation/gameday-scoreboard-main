@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "alerts.h"
 #include "auto_update.h"
 #include "badge.h"
 #include "captive.h"
@@ -435,14 +436,29 @@ static void test_splash() {
   CHECK_EQ(decide_splash(live(0, 0), live(8, 0), true).text, std::string("TOUCHDOWN!"));
   CHECK_EQ(decide_splash(live(7, 0), live(10, 0), true).text, std::string("FIELD GOAL!"));
   CHECK_EQ(decide_splash(live(6, 0), live(7, 0), true).text, std::string("EXTRA POINT!"));
-  CHECK_EQ(decide_splash(live(6, 0), live(8, 0), true).text, std::string("2-POINT!"));
+  // Two points are a conversion unless something says safety: the play, or
+  // a read before from the middle of a drive (alerts.h).
+  CHECK_EQ(decide_splash(live(6, 0), live(8, 0), true).text, std::string("2-PT!"));
+  GameSnapshot td = live(6, 0);
+  td.last_play = "Pass short left to D.Moore for 11 yards, TOUCHDOWN.";
+  CHECK_EQ(decide_splash(td, live(8, 0), true).text, std::string("2-PT!"));
+  GameSnapshot drive = live(6, 0);
+  drive.possession = 2;
+  drive.down_distance = "3rd & 9 at PHI 3";
+  CHECK_EQ(decide_splash(drive, live(8, 0), true).text, std::string("SAFETY!"));
   CHECK_EQ(decide_splash(live(0, 0), live(5, 0), true).text, std::string("SCORE!"));
   CHECK_EQ(decide_splash(live(0, 0), live(6, 0), true).color, (uint32_t) 0x002a5c);
   // Opponent
   CHECK_EQ(decide_splash(live(0, 0), live(0, 6), true).text, std::string("PHI TOUCHDOWN"));
   CHECK_EQ(decide_splash(live(0, 0), live(0, 3), true).text, std::string("PHI FIELD GOAL"));
   CHECK_EQ(decide_splash(live(0, 6), live(0, 7), true).text, std::string("PHI EXTRA POINT"));
-  CHECK_EQ(decide_splash(live(0, 6), live(0, 8), true).text, std::string("PHI 2-POINT"));
+  CHECK_EQ(decide_splash(live(0, 6), live(0, 8), true).text, std::string("PHI 2-PT"));
+  GameSnapshot safety_them = live(0, 8);
+  safety_them.last_play = "D.Prescott sacked in End Zone for -7 yards, SAFETY.";
+  CHECK_EQ(decide_splash(live(0, 6), safety_them, true).text, std::string("PHI SAFETY"));
+  GameSnapshot td_them = live(0, 6);
+  td_them.last_play = "J.Hurts up the middle for 1 yard, TOUCHDOWN.";
+  CHECK_EQ(decide_splash(td_them, live(0, 8), true).text, std::string("PHI 2-PT"));
   CHECK_EQ(decide_splash(live(0, 0), live(0, 6), true).color, (uint32_t) 0x004c54);
   CHECK_EQ(decide_splash(live(0, 0), live(0, 6), false).text, std::string(""));
   // Both scored between polls: ours wins
@@ -478,12 +494,16 @@ static void test_win_splash_every_sport() {
       return s;
     };
     const GameSnapshot was = at(3, 3, GameState::IN, false);
+    // Basketball says FINAL when there is no win to celebrate (alerts.h).
+    const std::string no_win = sport == Sport::BASKETBALL ? "FINAL" : "";
     CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), true).text, std::string("DAL WINS!"));
     CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), false).color, (uint32_t) 0x002a5c);
-    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true).text, std::string(""));
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true).text, no_win);
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).text, std::string("PHI WINS!"));
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).color, (uint32_t) 0x004c54);
-    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, std::string(""));  // a draw
+    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, no_win);  // a draw
+    CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true, false, kAlertsAll & ~alert_bit(Alert::FINAL)).text,
+             std::string(""));
     // Suspended or canceled: post, never completed, no winner
     CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, false), true).text, std::string(""));
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, false), true, true).text, std::string(""));
@@ -2156,7 +2176,7 @@ static void test_mlb_live() {
   CHECK_EQ(t.mlb.team_errors, 2);
   CHECK_EQ(t.mlb.opp_errors, 0);
   CHECK_EQ(t.mlb.series, std::string("LAD lead series 2-1"));
-  CHECK_EQ(t.mlb.play_type, std::string("Ball"));
+  CHECK_EQ(t.play_type, std::string("Ball"));
   CHECK_EQ(t.last_play, std::string("Pitch 3 : Ball 2"));
   CHECK_EQ(t.team_logo, std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/mlb/500-dark/scoreboard/atl.png&w=64&h=64"));
   CHECK_EQ(clock_text(t), std::string("Top 7th"));
@@ -2242,12 +2262,18 @@ static void test_mlb_splash() {
     GameSnapshot c = prev;
     c.team_score += us;
     c.opp_score += them;
-    c.mlb.play_type = play;
+    c.play_type = play;
+    c.play_points = us + them;  // one play scored them all
     return c;
   };
   CHECK_EQ(decide_splash(prev, after(1, 0, "Play Result"), true).text, std::string("RUN!"));
   CHECK_EQ(decide_splash(prev, after(3, 0, "Play Result"), true).text, std::string("3 RUNS!"));
-  CHECK_EQ(decide_splash(prev, after(4, 0, "Home Run"), true).text, std::string("HOME RUN!"));
+  CHECK_EQ(decide_splash(prev, after(2, 0, "Home Run"), true).text, std::string("HOME RUN!"));
+  CHECK_EQ(decide_splash(prev, after(4, 0, "Home Run"), true).text, std::string("GRAND SLAM!"));
+  // Four runs in the update but two from the home run itself (alerts.h).
+  GameSnapshot two_and_two = after(4, 0, "Home Run");
+  two_and_two.play_points = 2;
+  CHECK_EQ(decide_splash(prev, two_and_two, true).text, std::string("HOME RUN!"));
   CHECK_EQ(decide_splash(prev, after(1, 0, "Play Result"), true).color, (uint32_t) 0x0c2340);
   CHECK_EQ(decide_splash(prev, after(0, 1, "Play Result"), true).text, std::string("LAD SCORES"));
   CHECK_EQ(decide_splash(prev, after(0, 2, "Play Result"), true).text, std::string("LAD 2 RUNS"));
@@ -2901,7 +2927,7 @@ static void test_wnba_live() {
   CHECK_EQ(decide_splash(ot, f, true).color, (uint32_t) 0xe31837);
   GameSnapshot ny_ot = hoops_event("fixtures/event_wnba_ot.json", kLiberty);
   GameSnapshot ny_f = hoops_event("fixtures/event_wnba_final.json", kLiberty);
-  CHECK_EQ(decide_splash(ny_ot, ny_f, true).text, std::string(""));
+  CHECK_EQ(decide_splash(ny_ot, ny_f, true).text, std::string("FINAL"));
   CHECK_EQ(decide_splash(ny_ot, ny_f, true, true).text, std::string("ATL WINS!"));
 
   // The short series line fits the 12-character situation row.
@@ -2951,14 +2977,14 @@ static void test_nba_splash() {
     c.completed = st == GameState::POST;
     return c;
   };
-  // Baskets never splash, whoever scores.
+  // Baskets in the 3rd quarter never splash, whoever scores.
   CHECK_EQ(decide_splash(prev, after(3, 0, GameState::IN), true).text, std::string(""));
   CHECK_EQ(decide_splash(prev, after(0, 2, GameState::IN), true).text, std::string(""));
   CHECK_EQ(decide_splash(prev, after(2, 0, GameState::IN), true, true).text, std::string(""));
   Splash win = decide_splash(prev, after(10, 0, GameState::POST), true);
   CHECK_EQ(win.text, std::string("IND WINS!"));
   CHECK_EQ(win.color, (uint32_t) 0x0c2340);
-  CHECK_EQ(decide_splash(prev, after(0, 10, GameState::POST), true).text, std::string(""));
+  CHECK_EQ(decide_splash(prev, after(0, 10, GameState::POST), true).text, std::string("FINAL"));
   CHECK_EQ(decide_splash(prev, after(0, 10, GameState::POST), true, true).text, std::string("MIN WINS!"));
   GameSnapshot fin = after(10, 0, GameState::POST);
   CHECK_EQ(decide_splash(fin, fin, true).text, std::string(""));
@@ -2968,7 +2994,7 @@ static void test_nba_splash() {
   CHECK_EQ(decide_splash(hoops_event("fixtures/event_nba_live.json", kWolves),
                          hoops_event("fixtures/event_nba_final.json", kWolves), true)
                .text,
-           std::string(""));
+           std::string("FINAL"));
 }
 
 // Men's college basketball, recorded 2026-10-07 in the off season: last
@@ -3055,7 +3081,7 @@ static void test_mlb_home_run() {
   const uint32_t kRays = 30, kYankees = 10;
   GameSnapshot before = mlb_event("fixtures/event_mlb_hr_before.json", kRays);
   GameSnapshot after = mlb_event("fixtures/event_mlb_hr.json", kRays);
-  CHECK_EQ(after.mlb.play_type, std::string("Play Result"));
+  CHECK_EQ(after.play_type, std::string("Play Result"));
   CHECK(after.last_play.find("homered") != std::string::npos);
   CHECK_EQ(after.team_score - before.team_score, 2);
   CHECK_EQ(decide_splash(before, after, true).text, std::string("HOME RUN!"));
@@ -3392,6 +3418,7 @@ static void test_lookahead() {
 
 int run_football_golden();  // golden_football.cpp
 int run_set_tests(int &checks);  // test_set.cpp
+int run_alert_tests(int &checks);  // test_alerts.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -5713,6 +5740,10 @@ static void test_panel_text() {
   CHECK_EQ(panel_text("a\xC2\xA0" "b\xE2\x80\x89" "c"), std::string("a b c"));
   CHECK_EQ(panel_text("a\xE2\x80\x8B" "b\xC2\xAD" "c\xEF\xBB\xBF"), std::string("abc"));
   CHECK_EQ(panel_text("line\none\ttwo"), std::string("line one two"));
+  // A splash keeps its line break ("PHI" over "FUMBLE RECOVERY"), nothing else.
+  CHECK_EQ(panel_text("PHI\nFUMBLE RECOVERY", true), std::string("PHI\nFUMBLE RECOVERY"));
+  CHECK_EQ(panel_text("a\r\nb\tc", true), std::string("a \nb c"));
+  CHECK_EQ(panel_text("Mu\xC3\xB1oz\nGOAL", true), std::string("Mu\xC3\xB1oz\nGOAL"));
   // Anything else is a '?', never a box.
   CHECK_EQ(panel_text("Home \xF0\x9F\x8F\x88"), std::string("Home ?"));
   CHECK_EQ(panel_text("\xF0\x9F\x91\x8D\xF0\x9F\x8F\xBD"), std::string("?"));
@@ -7716,6 +7747,7 @@ int main() {
   test_wifi_history();
   test_wifi_causes();
   failures += run_set_tests(checks);
+  failures += run_alert_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

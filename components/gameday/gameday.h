@@ -20,6 +20,7 @@
 #include "esphome/core/defines.h"
 #include "esphome/core/preferences.h"
 
+#include "alerts.h"
 #include "auto_update.h"
 #include "badge.h"
 #include "captive.h"
@@ -162,6 +163,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    follow=0/1 (Live games and Favorite teams: keep the game on
 //                                    the board until it ends, plus After the final in Favorite
 //                                    teams; memory only, follow.h)
+//                                    alerts=<mask> (the big plays that splash, bit (Alert - 1), alerts.h)
+//                                    alertfav=0/1 (big plays only in games with the team or a favorite)
 //   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -283,6 +286,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_ticker_last_play(bool on) { this->set_flag_(FLAG_PLAY, on); }
   void set_ticker_odds(bool on) { this->set_flag_(FLAG_ODDS, on); }
   void set_opponent_splashes(bool on) { this->set_flag_(FLAG_OPP, on); }
+  // Big-play alerts (alerts.h): the types switched on, as bit (Alert - 1),
+  // and Favorite teams only.
+  uint32_t alerts_on() const { return ::espn::kAlertsAll & ~this->prefs9_.alerts_off; }
+  bool alerts_favorites_only() const { return (this->prefs9_.flags & ALERT9_FAV) != 0; }
+  void set_alerts(uint32_t on);
+  void set_alerts_favorites_only(bool on);
   // "Install updates automatically", off unless the owner turns it on.
 #ifdef GAMEDAY_BAR
   // The bar build (firmware/pages/bar.yaml) always installs from the beta
@@ -454,6 +463,21 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   static constexpr uint8_t TICK8_COUNT = 1;  // baseball count, outs, pitcher and batter
   static constexpr uint8_t TICK8_MATCH = 2;  // soccer goals, cards, possession and shots
   void set_ticker8_(uint8_t f, bool on);
+  // Big-play alerts. The types turned off rather than on, so a type added
+  // later starts on. Its own blob, fixed in size like the others: a blob that
+  // changes size fails to load and resets every setting in it.
+  struct Prefs9 {
+    uint32_t alerts_off;  // bit (Alert - 1) per type turned off
+    uint8_t flags;        // ALERT9_FAV
+    uint8_t spare[3];
+  } __attribute__((packed));
+  static constexpr uint8_t ALERT9_FAV = 1;  // only games with the team or a favorite
+  void save_prefs9_();
+  // The splash for the game on the board, from the read before (prev_) to
+  // this one (game_). neutral: the live modes, where nobody is "our" team.
+  ::espn::Splash board_splash_(bool neutral) const;
+  // One panel or two: how wide a splash's words can run.
+  bool wide_() const { return this->panels_ != nullptr && this->panels_->cols() >= 2; }
 
   bool flag_(uint8_t f) const { return (this->prefs_.flags & f) != 0; }
   void set_flag_(uint8_t f, bool on);
@@ -718,6 +742,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   Prefs7 prefs7_{};
   ESPPreferenceObject pref8_;
   Prefs8 prefs8_{};
+  ESPPreferenceObject pref9_;
+  Prefs9 prefs9_{};
   // The team endpoint's answer for the saved team (startup.h), so a boot can
   // skip that read and go straight to the scoreboard.
   ESPPreferenceObject team_cache_pref_;

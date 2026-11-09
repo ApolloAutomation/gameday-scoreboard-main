@@ -57,9 +57,10 @@ struct Settings {
   uint8_t team_league{0};
   int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
-  bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false};
+  bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
+  int alerts{(1 << kAlertBits) - 1};
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 2;
@@ -112,6 +113,7 @@ void load(Settings &s, JsonObjectConst o) {
   num("release", s.release);
   num("tz", s.tz);
   num("panels", s.panels);
+  num("alerts", s.alerts);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -129,6 +131,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("board", s.board);
   flag("final", s.final);
   flag("follow", s.follow);
+  flag("alertfav", s.alertfav);
 }
 
 bool any_favorite(const Settings &s) {
@@ -165,7 +168,7 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::LIVE:
       if (op.mask != s.live_mask)
         s.follow = false;
-      s.live_mask = op.mask;
+      s.live_mask = (uint16_t) op.mask;
       break;
     case SetKind::FAVS:
       for (int i = 0; i < kFavMax; i++)
@@ -206,6 +209,8 @@ void apply(Settings &s, const SetOp &op) {
       s.follow = p.on;
       break;
     }
+    case SetKind::ALERTS: s.alerts = (int) op.mask; break;
+    case SetKind::ALERTFAV: s.alertfav = op.on; break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -253,6 +258,8 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["beta"] = s.beta;
   doc["panels"] = s.panels;
   doc["follow"] = s.follow;
+  doc["alerts"] = s.alerts;
+  doc["alertfav"] = s.alertfav;
 }
 
 void test_fixture_cases() {
@@ -338,6 +345,18 @@ void test_parse_set() {
   SCHECK(parse_set("follow", "0", op, kFavMax) && op.kind == SetKind::FOLLOW && !op.on, "follow 0");
   SCHECK(parse_set("follow", "", op, kFavMax) && !op.on, "an empty follow lets go");
   SCHECK(std::string(kSetKeys[0]) == "follow", "follow applies before the changes that let it go");
+  SCHECK(parse_set("alerts", "0", op, kFavMax) && op.kind == SetKind::ALERTS && op.mask == 0, "alerts 0");
+  SCHECK(parse_set("alerts", std::to_string((1 << kAlertBits) - 1), op, kFavMax) && op.mask == (1u << kAlertBits) - 1,
+         "alerts all");
+  SCHECK(!parse_set("alerts", std::to_string(1 << kAlertBits), op, kFavMax), "alerts past the known types");
+  SCHECK(!parse_set("alerts", "-1", op, kFavMax), "alerts -1");
+  SCHECK(!parse_set("alerts", "99999999999", op, kFavMax), "alerts past int");
+  // No number at all is refused, not read as 0, which would turn every switch off.
+  SCHECK(!parse_set("alerts", "", op, kFavMax), "alerts empty");
+  SCHECK(!parse_set("alerts", "abc", op, kFavMax), "alerts text");
+  SCHECK(!parse_set("alerts", " ", op, kFavMax), "alerts space");
+  SCHECK(parse_set("alerts", " 12x", op, kFavMax) && op.mask == 12, "alerts after a space");
+  SCHECK(parse_set("alertfav", "1", op, kFavMax) && op.kind == SetKind::ALERTFAV && op.on, "alertfav 1");
 
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {

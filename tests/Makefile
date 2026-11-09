@@ -14,7 +14,8 @@ all: build/test_parse build/test_networks
 	./build/test_parse
 	./build/test_networks
 
-SRCS = test_parse.cpp golden_football.cpp test_set.cpp ../components/gameday/espn_parse.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp
+TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp
+SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp
 
 build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h)
 	@mkdir -p build
@@ -30,9 +31,9 @@ build/test_networks: test_networks.cpp ../components/saved_networks/network_list
 #   make replay && ./build/replay <folder> <sport: 1 baseball, 2 basketball, 3 hockey, 4 soccer> [name prefix]
 replay: build/replay
 
-build/replay: replay.cpp $(filter-out test_parse.cpp golden_football.cpp test_set.cpp,$(SRCS)) $(wildcard ../components/gameday/*.h)
+build/replay: replay.cpp $(filter-out $(TESTS),$(SRCS)) $(wildcard ../components/gameday/*.h)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) replay.cpp $(filter-out test_parse.cpp golden_football.cpp test_set.cpp,$(SRCS)) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) replay.cpp $(filter-out $(TESTS),$(SRCS)) -o $@ $(LDFLAGS)
 
 # Not part of `all`: the memory each ESPN read takes, as JSON for
 # scripts/size_budget.py (CI's budget check, firmware/budget.json).
@@ -41,9 +42,9 @@ heap: build/heap_budget
 	./build/heap_budget > build/heap.json
 	cat build/heap.json
 
-build/heap_budget: heap_budget.cpp $(filter-out test_parse.cpp golden_football.cpp test_set.cpp,$(SRCS)) $(wildcard ../components/gameday/*.h)
+build/heap_budget: heap_budget.cpp $(filter-out $(TESTS),$(SRCS)) $(wildcard ../components/gameday/*.h)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) heap_budget.cpp $(filter-out test_parse.cpp golden_football.cpp test_set.cpp,$(SRCS)) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) heap_budget.cpp $(filter-out $(TESTS),$(SRCS)) -o $@ $(LDFLAGS)
 
 # Not part of `all`: fuzzing. fuzz_espn runs mutated ESPN documents through
 # every parser, the text code and the finals rotation; fuzz_set runs mutated
@@ -69,7 +70,7 @@ else
 FUZZ_ENGINE = fuzz_main.cpp
 FUZZ_DEPS = fuzz_main.cpp
 endif
-PARSER_SRCS = $(filter-out test_parse.cpp golden_football.cpp test_set.cpp,$(SRCS))
+PARSER_SRCS = $(filter-out $(TESTS),$(SRCS))
 FUZZ_RUN = -max_total_time=$(FUZZ_TIME) -timeout=10 -rss_limit_mb=2048 -artifact_prefix=build/ -print_final_stats=1
 
 build/fuzz_espn: fuzz_espn.cpp $(FUZZ_DEPS) $(PARSER_SRCS) $(wildcard ../components/gameday/*.h)

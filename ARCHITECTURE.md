@@ -87,7 +87,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
-  `sport_golf.cpp`, `sport_racing.cpp`,
+  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`,
   `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -143,7 +143,16 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    doubling to 1 h after a 403 or 429, honoring `Retry-After`
    (`poll_timing.h`).
 6. **Splashes.** `decide_splash` compares the new snapshot with the last one
-   (per sport) to pick a touchdown, field goal, goal, home run or win splash.
+   to pick a big play (`alerts.h`: `detect_big_play`, a pure function of the
+   two reads, the alert switches and whether the other side's plays count)
+   or the win. Football's turnovers come from ESPN's last play: its type,
+   its id (so a play ESPN rewords isn't new) and the team it ended with
+   (`GameSnapshot::play_type`, `play_id`, `play_side`); baseball keeps the
+   type and the play's own runs (`play_points`) for grand slams. The alert
+   switches are their own preference blob (`Prefs9`), and in Live games
+   "Favorite teams only" switches them all off for a game without the team or
+   a favorite. The splash text goes to the panel through
+   `panel_text(text, true)`, which keeps its line break.
 7. **Drawing.** `emit_` builds `UpdateFields` (status, clock, scores,
    situation, ticker text and so on), rebuilds the state document, and
    `draw_` calls the `on_update` trigger. In YAML that publishes Game Status
@@ -348,7 +357,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 - `make -C tests`: `test_parse.cpp` (parsers, game logic, splash rules,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
-  table) and `test_networks.cpp` (saved networks).
+  table), `test_alerts.cpp` (every big-play alert, and that each splash fits
+  the panel's lines) and `test_networks.cpp` (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.

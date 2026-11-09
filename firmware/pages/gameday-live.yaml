@@ -560,11 +560,16 @@ script:
           then:
             - lambda: |-
                 lv_label_set_text(id(tt_splash_lbl), splash_text.c_str());
-                // Touchdowns and the win get fireworks on black with the text in
-                // the team color; smaller scores keep the solid color flash.
+                // Touchdowns, home runs, goals, walk-offs, buzzer beaters and the
+                // win get fireworks on black with the text in the team color; the
+                // rest (smaller scores, turnovers, cards, lead changes) keep the
+                // solid color flash. A "\n" in the text starts a new line.
                 const bool big = splash_text.find("TOUCHDOWN") != std::string::npos ||
                                  splash_text.find("WINS") != std::string::npos ||
                                  splash_text.find("HOME RUN") != std::string::npos ||
+                                 splash_text.find("GRAND SLAM") != std::string::npos ||
+                                 splash_text.find("WALK-OFF") != std::string::npos ||
+                                 splash_text.find("BUZZER") != std::string::npos ||
                                  ((sport == 3 || sport == 4) && splash_text.find("GOAL") != std::string::npos);
                 if (big) {
                   uint32_t c = (uint32_t) splash_color;

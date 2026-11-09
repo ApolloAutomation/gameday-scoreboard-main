@@ -640,6 +640,67 @@ test("ticker, celebration and startup switches post 0 and 1", async ({ page, req
   await expect(page.locator('.sw[data-set="play"]')).toHaveClass(/\bon\b/);
 });
 
+test("big-play switches post the alert mask, for the sports the panel follows", async ({ page, request }) => {
+  const sw = (name) => page.getByRole("switch", { name, exact: true });
+  const ALL = 524287;  // every alert type on (kAlertBits in set_request.h)
+  // A Cowboys panel with no favorites: football's switches only.
+  await reset(request, { favs: [{}, {}, {}, {}] });
+  await page.goto("/");
+  await expect(sw("Football: Touchdown")).toBeChecked();
+  await expect(sw("Football: Fumble recovery")).toBeChecked();
+  await expect(sw("Baseball: Walk-off")).toBeHidden();
+  await expect(sw("Basketball: Lead change")).toBeHidden();
+  await expect(sw("Favorite teams only")).not.toBeChecked();
+  // Interception is bit 5, safety bit 4.
+  await sw("Football: Interception").click();
+  await expectSet(request, { alerts: String(ALL - 32) });
+  await expect(sw("Football: Interception")).not.toBeChecked();
+  await sw("Football: Safety").click();
+  await expectSet(request, { alerts: String(ALL - 32 - 16) });
+  await expect(sw("Football: Safety")).not.toBeChecked();
+  await expect(sw("Football: Touchdown")).toBeChecked();
+  expect((await deviceState(request)).alerts).toBe(ALL - 48);
+  await sw("Football: Interception").click();
+  await expectSet(request, { alerts: String(ALL - 16) });
+  await sw("Favorite teams only").click();
+  await expectSet(request, { alertfav: "1" });
+  await expect(sw("Favorite teams only")).toBeChecked();
+
+  // A Yankees panel with an Arsenal and a Pacers favorite.
+  await reset(request, {
+    team: { l: "mlb", id: 10, abbr: "NYY", name: "New York Yankees" },
+    favs: [{ l: "epl", id: 359, abbr: "ARS", name: "Arsenal" }, { l: "nba", id: 11, abbr: "IND", name: "Indiana Pacers" }, {}, {}],
+    alerts: ALL - (1 << 18),
+  });
+  await page.reload();
+  await expect(sw("Football: Touchdown")).toBeHidden();
+  await expect(sw("Hockey: Goal")).toBeHidden();
+  await expect(sw("Baseball: Grand slam")).toBeChecked();
+  await expect(sw("Soccer: Red card")).toBeChecked();
+  await expect(sw("Basketball: Final")).not.toBeChecked();
+  await sw("Basketball: Final").click();
+  await expectSet(request, { alerts: String(ALL) });
+  await expect(sw("Basketball: Final")).toBeChecked();
+
+  // Nothing picked: every sport's.
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(sw("Hockey: Goal")).toBeVisible();
+  await expect(sw("Soccer: Goal")).toBeVisible();
+  await expect(page.locator("#alertCtls .ctl")).toHaveCount(19);
+  // Each sport's heading sits as far from the switch above it as the other cards' headings do.
+  const heads = page.locator("#alertCtls .alertSport .sub");
+  await expect(heads).toHaveCount(5);
+  for (const h of await heads.all()) await expect(h).toHaveCSS("margin-top", "14px");
+
+  // Firmware from before alerts: no switches, no Favorite teams only.
+  await reset(request, { alerts: null, alertfav: null });
+  await page.reload();
+  await expect(sw("Opponent scores too")).toBeVisible();
+  await expect(page.locator("#alertCtls")).toBeHidden();
+  await expect(page.locator("#alertFavRow")).toBeHidden();
+});
+
 test("a screen reader gets each control's name, role and state", async ({ page, request }) => {
   await reset(request, { play: false });
   await page.goto("/");

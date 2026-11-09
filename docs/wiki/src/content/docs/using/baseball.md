@@ -44,6 +44,15 @@ A home run gets fireworks on black with the words in the team's color. Other run
 
 When your team wins, a victory splash with fireworks says your abbreviation and "WINS".
 
+:::note[Coming in the next release]
+Two more splashes, both with fireworks:
+
+- **GRAND SLAM**: a home run that ESPN says scored four runs, or one ESPN's play calls a grand slam. Runs from an earlier play in the same update don't make a home run a grand slam.
+- **WALK-OFF**: the home team goes ahead in the bottom of the 9th inning or later, which ends the game. Your walk-off says "WALK-OFF" and the other side's says its abbreviation first, like "NYY WALK-OFF". When ESPN marks the game final in the same update, the walk-off takes the victory splash's place. When ESPN marks it final an update later, the walk-off shows first and the victory splash follows. If the panel missed every update from the 8th inning to the final, it can't tell where the lead came from, so the final gets only its usual splash.
+
+Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 ## The final
 
 The ticker says "Final", or "Final/10" after extra innings, with each team's hits and errors and the series or the records. The final stays up for ten minutes in My team, shorter than other sports because game two of a doubleheader can start soon after game one. Then the panel looks up your team's next game.

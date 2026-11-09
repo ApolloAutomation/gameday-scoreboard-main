@@ -144,6 +144,8 @@ button { font: inherit; color: inherit; }
 .ctl label small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.35; }
 .card .sub { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
 .card .sub:first-of-type { margin-top: 4px; }
+/* Each sport's heading in Celebrations follows switches, so it is no first heading. */
+.card .alertSport .sub { margin-top: 14px; }
 .ctl .val { color: var(--muted); font-size: 12px; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 .card p.weak { color: var(--gold); font-size: 13px; margin: 4px 0 8px; }
 .spark { padding: 6px 0 9px; border-top: 1px solid #1a2029; }
@@ -197,7 +199,7 @@ button { font: inherit; color: inherit; }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: clamp(28px, 8vw, 64px); font-weight: 900; letter-spacing: .04em; color: #fff;
   text-shadow: 0 2px 12px rgba(0,0,0,.6); border-radius: inherit; opacity: 0; pointer-events: none;
-  transition: opacity .25s;
+  transition: opacity .25s; text-align: center; white-space: pre-line;
 }
 .splash.on { opacity: 1; animation: splashpop .5s ease-out; }
 @keyframes splashpop { 0% { transform: scale(.7); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }

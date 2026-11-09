@@ -25,7 +25,7 @@ constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "f
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
-                                    "match",   "beta"};
+                                    "match",   "beta",   "alerts",  "alertfav"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -39,6 +39,9 @@ constexpr int kLockonMinMinutes = 5;
 constexpr int kLockonMaxMinutes = 120;
 constexpr int kReleaseMinSeconds = 30;
 constexpr int kReleaseMaxSeconds = 3600;
+// Big-play alert types (alerts.h), one switch each: "alerts" is the mask of
+// the ones on, bit (type - 1).
+constexpr int kAlertBits = 19;
 
 inline int clamp_lockon_minutes(int minutes) {
   return minutes < kLockonMinMinutes ? kLockonMinMinutes : minutes > kLockonMaxMinutes ? kLockonMaxMinutes : minutes;
@@ -173,6 +176,8 @@ enum class SetKind : uint8_t {
   MATCH,     // on, soccer
   BETA,      // on, release builds only
   FOLLOW,    // on: pin the game on the board (follow.h); memory only
+  ALERTS,    // mask, the alert types switched on
+  ALERTFAV,  // on, alerts only for games with the team or a favorite
 };
 
 struct TeamRef {
@@ -186,7 +191,7 @@ struct SetOp {
   int value{0};
   bool on{false};
   uint8_t slot{0};
-  uint16_t mask{0};
+  uint32_t mask{0};
   TeamRef team;
   std::vector<TeamRef> teams;
   std::vector<std::string> refused;  // favs entries left out, for the log
@@ -244,6 +249,16 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.kind = SetKind::LIVE;
     op.mask = live_mask_from_keys(v);
     return true;
+  }
+  if (k == "alerts") {
+    // A bit past the known types is refused, not dropped: the page sends
+    // only what it knows. So is a value with no number in it, which atoi
+    // would read as 0 and so turn every switch off.
+    op.kind = SetKind::ALERTS;
+    char *end = nullptr;
+    const long n = strtol(v.c_str(), &end, 10);
+    op.mask = (uint32_t) n;
+    return end != v.c_str() && n >= 0 && n < (1L << kAlertBits);
   }
   if (k == "favs") {
     // "mlb:15,nfl:6,..." in priority order; "" clears the list. Unknown teams,
@@ -307,6 +322,8 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   // refused value.
   if (k == "follow")
     return on(SetKind::FOLLOW);
+  if (k == "alertfav")
+    return on(SetKind::ALERTFAV);
   return false;
 }
 

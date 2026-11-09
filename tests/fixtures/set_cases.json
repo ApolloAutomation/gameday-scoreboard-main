@@ -17,7 +17,8 @@
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
-    "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false
+    "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false,
+    "alerts": 524287, "alertfav": false
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -156,6 +157,18 @@
     {"name": "the same leagues keep the pin", "start": {"mode": 5, "follow": true}, "set": [["live", ""]], "expect": {"follow": true}},
     {"name": "other settings keep the pin", "start": {"mode": 5, "follow": true}, "set": [["rotate", "10"], ["today", "1"], ["release", "60"]], "expect": {"follow": true, "rotate": 10}},
     {"name": "follow applies first, so a mode change in the same request lets it go", "start": {"mode": 5}, "set": [["mode", "4"], ["follow", "1"]], "expect": {"follow": false, "mode": 4}},
+    {"name": "alerts sets which big plays splash", "set": [["alerts", "5"]], "expect": {"alerts": 5}},
+    {"name": "alerts 0 turns every big play off", "set": [["alerts", "0"]], "expect": {"alerts": 0}},
+    {"name": "alerts back on", "start": {"alerts": 0}, "set": [["alerts", "524287"]], "expect": {"alerts": 524287}},
+    {"name": "an alert past the known ones is refused", "start": {"alerts": 7}, "set": [["alerts", "524288"]], "expect": {"alerts": 7}},
+    {"name": "negative alerts are refused", "start": {"alerts": 7}, "set": [["alerts", "-1"]], "expect": {"alerts": 7}},
+    {"name": "alerts past int's range are refused", "start": {"alerts": 7}, "set": [["alerts", "99999999999"]], "expect": {"alerts": 7}},
+    {"name": "alerts with no number are refused, not read as every switch off", "start": {"alerts": 7}, "set": [["alerts", "abc"]], "expect": {"alerts": 7}},
+    {"name": "empty alerts are refused too", "start": {"alerts": 7}, "set": [["alerts", ""]], "expect": {"alerts": 7}},
+    {"name": "alerts after spaces read like atoi", "set": [["alerts", " 12x"]], "expect": {"alerts": 12}},
+    {"name": "favorite teams only on", "set": [["alertfav", "1"]], "expect": {"alertfav": true}},
+    {"name": "favorite teams only off", "start": {"alertfav": true}, "set": [["alertfav", "0"]], "expect": {"alertfav": false}},
+    {"name": "alerts and favorite teams only in one request", "set": [["alertfav", "1"], ["alerts", "3"]], "expect": {"alerts": 3, "alertfav": true}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

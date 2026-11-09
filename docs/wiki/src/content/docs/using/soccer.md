@@ -47,6 +47,15 @@ A goal fills the screen for 4 seconds with fireworks on black, in the scoring cl
 
 At full time a win gets a victory splash with fireworks, your abbreviation and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.
 
+:::note[Coming in the next release]
+Two more splashes:
+
+- **PENALTY GOAL**, with fireworks: a goal from the penalty spot, from ESPN's match details. Kicks in a shootout don't count.
+- **RED CARD**: a red card for either side, with that side's abbreviation, like "SUN RED CARD", on a red screen. It shows whichever side gets the card, whatever **Opponent scores too** says.
+
+Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 ## Full time
 
 The clock row says "FT", "AET" after extra time, or "PENS" after a shootout. The ticker says "Full time", "After extra time" or who won on penalties, like "PSG win 4-3 on penalties", then the cup stage, the goals, any red cards and both records. The final stays up for half an hour in My team, then the panel looks up the next match.

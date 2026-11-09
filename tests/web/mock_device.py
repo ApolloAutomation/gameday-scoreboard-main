@@ -95,6 +95,8 @@ INITIAL = {
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
     "autoupd": False, "beta": False,
+    # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
+    "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
     "espn_kb": 412, "espn_reads": 23,
     # GamedayComponent::health_json_(), added at the end of each read.
@@ -288,8 +290,13 @@ def apply_set(kv):
                 STATE["tz"], STATE["tz_name"] = i, TZS[i]
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
-        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta"):
+        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav"):
             STATE[k] = v == "1"
+        elif k == "alerts":
+            # A bit past the known types, a negative number or no number at
+            # all (which atoi would read as every switch off) is refused.
+            if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
+                STATE["alerts"] = atoi(v)
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)

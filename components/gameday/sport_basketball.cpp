@@ -1,5 +1,5 @@
-// Basketball's parse extras, ticker, clock row and splash (NBA, WNBA, men's
-// college). Pure, no ESPHome includes.
+// Basketball's parse extras, ticker and clock row (NBA, WNBA, men's college).
+// Pure, no ESPHome includes. Its splashes are alerts.h's.
 #include "espn_parse.h"
 
 namespace espn {
@@ -137,14 +137,6 @@ std::string basketball_clock_text(const GameSnapshot &s) {
   if (dash != std::string::npos)
     t.replace(dash, 3, " ");
   return t;
-}
-
-// Win only: a basketball game has around a hundred scoring plays.
-Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool /*opponent_splashes*/,
-                         bool neutral) {
-  if (!detail::same_game(prev, cur) || !detail::went_final(prev, cur))
-    return Splash{};
-  return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
 }
 
 }  // namespace espn
