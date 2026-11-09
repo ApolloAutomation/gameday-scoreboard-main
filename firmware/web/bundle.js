@@ -123,6 +123,11 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       <div class="splash" id="splash"></div>
     </section>
 
+    <div class="teambar followbar" id="followbar" hidden>
+      <div class="cur"><div><div class="name" id="followName">Follow this game</div><div class="lg" id="followLg"></div></div></div>
+      <button class="sw" data-set="follow" aria-label="Follow this game"></button>
+    </div>
+
     <div class="teambar guardbar" id="guard" role="status" hidden>
       <div class="cur"><div><div class="name" id="guardName"></div><div class="lg" id="guardText"></div></div></div>
       <button class="btn" id="guardClear" hidden>Clear</button>
@@ -342,6 +347,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     mode: Number, rotate: Number, lockon: Number, release: Number, collide: Number,
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
+    follow: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -721,10 +727,12 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     const auto = liveAuto();
     // With nothing live the device shows the saved team's card, or with no
     // team a rotation of recent finals, and keeps scanning.
+    // Follow this game (the bar under the board) holds the game up.
     $("#liveName").textContent = S.fallback ? "No live game right now, showing your team until one starts"
       : S.recap ? "No live game right now, showing recent finals"
-        : "Following a random game in progress";
-    $("#liveLg").textContent = (S.fallback || S.recap ? "" : "Moves on when it ends, or after Switch every. ")
+        : S.follow ? "Staying on the game you follow"
+          : "Following a random game in progress";
+    $("#liveLg").textContent = (S.fallback || S.recap || S.follow ? "" : "Moves on when it ends, or after Switch every. ")
       + (auto ? "Leagues follow your team and favorites. Tap a league to choose by hand:" : "Leagues:");
     $("#liveChips").classList.toggle("auto", auto);
     $("#liveAuto").hidden = auto || String(S.mode || 0) !== "5";
@@ -752,6 +760,29 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     const on = liveKeys();
     for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
   };
+  // Follow this game: Live games and Favorite teams keep the game on the
+  // board instead of moving on, until it ends (Favorite teams: until its
+  // final has been up for After the final). The switch posts follow=1 or 0
+  // like the others (.sw[data-set]). Not in My team, which follows one team
+  // already, nor over Live games' team card or recent finals, a golf or
+  // racing board, or a game that has ended and isn't followed already.
+  const renderFollow = (mode) => {
+    const favMode = mode === "4" && (S.favs || []).some(refKey);
+    const liveGame = isLive(mode) && !S.fallback && !S.recap;
+    const g = game;
+    const on = !!S.follow;
+    const up = !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
+    // Firmware from before the switch leaves follow out.
+    $("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
+    $("#followbar").classList.toggle("on", on);
+    $("#followName").textContent = on ? "Following this game" : "Follow this game";
+    const until = favMode ? "until its final has been up for After the final" : "until it ends";
+    $("#followLg").textContent = on
+      ? "The panel stays on this game " + until + ". Turn this off to go back to "
+        + (favMode ? "your favorites." : "switching games.")
+      : "Keep this game on the panel " + until + ", instead of "
+        + (favMode ? "moving to another favorite." : "switching to another game.");
+  };
   const renderMode = () => {
     if (!S) return;
     const mode = String(S.mode || 0);
@@ -775,10 +806,13 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
       const shown = (S.next || []).find((n) => n.slot === S.shown);
       $("#favName").textContent = !set
         ? "No favorites set yet"
-        : S.locked && shown
-          ? "Locked on " + (shown.t.name || shown.t.abbr)
-          : "Cycling through your favorites";
+        : S.follow && shown
+          ? "Following " + (shown.t.name || shown.t.abbr)
+          : S.locked && shown
+            ? "Locked on " + (shown.t.name || shown.t.abbr)
+            : "Cycling through your favorites";
     }
+    renderFollow(mode);
   };
 
   // ---- toggles and favorites (static controls on the state document) --------

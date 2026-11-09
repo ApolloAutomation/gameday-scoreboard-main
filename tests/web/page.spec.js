@@ -939,6 +939,151 @@ test("Live games bar says when nothing is live and the panel shows your team or 
   await expect(page.locator("#liveLg")).toHaveText("Leagues follow your team and favorites. Tap a league to choose by hand:");
 });
 
+test("Follow this game shows in Live games and Favorite teams with a game up, and posts follow 1 and 0", async ({ page, request }) => {
+  const bar = page.locator("#followbar");
+  const sw = page.getByRole("switch", { name: "Follow this game" });
+  const name = page.locator("#followName");
+  // My team follows one team already
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  await expect(bar).toBeHidden();
+
+  // Live games, on a game it picked
+  const g = (await deviceState(request)).game;
+  await reset(request, { mode: 5, game: { ...g, ...LIVE } });
+  await page.reload();
+  await expect(bar).toBeVisible();
+  await expect(sw).not.toBeChecked();
+  await expect(name).toHaveText("Follow this game");
+  await expect(page.locator("#followLg")).toHaveText("Keep this game on the panel until it ends, instead of switching to another game.");
+  await sw.click();
+  await expectSet(request, { follow: "1" });
+  await expect(sw).toBeChecked();
+  await expect(name).toHaveText("Following this game");
+  await expect(page.locator("#followLg")).toHaveText(/Turn this off to go back to switching games\.$/);
+  await expect(bar).toHaveClass(/\bon\b/);
+  await expect(page.locator("#liveName")).toHaveText("Staying on the game you follow");
+  await expect(page.locator("#liveLg")).toHaveText("Leagues follow your team and favorites. Tap a league to choose by hand:");
+  await expect.poll(async () => (await deviceState(request)).follow).toBe(true);
+  await sw.click();
+  await expectSet(request, { follow: "0" });
+  await expect(sw).not.toBeChecked();
+  await expect(name).toHaveText("Follow this game");
+  await expect(page.locator("#liveName")).toHaveText("Following a random game in progress");
+  await expect.poll(async () => (await deviceState(request)).follow).toBe(false);
+
+  // An old football live mode shows as Live games, and follows the same way
+  await reset(request, { mode: 2 });
+  await page.reload();
+  await expect(bar).toBeVisible();
+
+  // Not over your team's card or recent finals with nothing live, nor an empty board
+  await reset(request, { mode: 5, fallback: true });
+  await page.reload();
+  await expect(page.locator("#liveName")).toHaveText("No live game right now, showing your team until one starts");
+  await expect(bar).toBeHidden();
+  await reset(request, { mode: 5, team: {}, recap: true, game: { s: "POST", l: "mlb" } });
+  await page.reload();
+  await expect(page.locator("#liveName")).toHaveText("No live game right now, showing recent finals");
+  await expect(bar).toBeHidden();
+  await reset(request, { mode: 5, game: { s: "NOT_FOUND" } });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("NO GAME");
+  await expect(bar).toBeHidden();
+
+  // Favorite teams: the favorite on the board
+  const t = (abbr, tname, id) => ({ l: "nfl", id, abbr, name: tname });
+  await reset(request, {
+    mode: 4,
+    shown: 1,
+    next: [{ slot: 1, t: t("DAL", "Dallas Cowboys", 6), id: "401772001", s: "PRE", kick: 1792531500, oi: 21, oa: "PHI", ts: 0, os: 0, tv: "FOX", detail: "" }],
+  });
+  await page.reload();
+  await expect(page.locator("#favName")).toHaveText("Cycling through your favorites");
+  await expect(bar).toBeVisible();
+  await expect(page.locator("#followLg")).toHaveText("Keep this game on the panel until its final has been up for After the final, instead of moving to another favorite.");
+  await sw.click();
+  await expectSet(request, { follow: "1" });
+  await expect(sw).toBeChecked();
+  await expect(page.locator("#favName")).toHaveText("Following Dallas Cowboys");
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until its final has been up for After the final. Turn this off to go back to your favorites.");
+
+  // A favorite's last final is over already: nothing to follow
+  await reset(request, {
+    mode: 4,
+    shown: 1,
+    game: { ...g, s: "POST", ts: 24, os: 17 },
+    next: [{ slot: 1, t: t("DAL", "Dallas Cowboys", 6), id: "401772001", s: "POST", kick: 1792531500, oi: 21, oa: "PHI", ts: 24, os: 17, tv: "FOX", detail: "Final" }],
+  });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(page.locator("#favName")).toHaveText("Cycling through your favorites");
+  await expect(bar).toBeHidden();
+  // Nor a final in Live games, the minute before it moves on
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" } });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeHidden();
+
+  // Favorite teams with no favorites runs as My team
+  await reset(request, { mode: 4, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#favName")).toHaveText("No favorites set yet");
+  await expect(bar).toBeHidden();
+
+  // Firmware from before the switch
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: null });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("LIVE");
+  await expect(bar).toBeHidden();
+});
+
+test("Follow this game shows what the panel has, turns off on an open page when the panel lets go, and a follow the panel ignored goes back off", async ({ page, request }) => {
+  const sw = page.getByRole("switch", { name: "Follow this game" });
+  const bar = page.locator("#followbar");
+  const name = page.locator("#followName");
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  // Following, as the state document says
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: true });
+  await page.clock.install();
+  await page.goto("/");
+  await expect(sw).toBeChecked();
+  await expect(name).toHaveText("Following this game");
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
+
+  // The page's regular read: the game ended, and the switch stays on over the final the panel still holds
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: true });
+  await page.clock.fastForward(16000);
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeVisible();
+  await expect(sw).toBeChecked();
+  // The panel let go by itself after the final: the switch goes, since a final has nothing left to follow
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: false });
+  await page.clock.fastForward(16000);
+  await expect(bar).toBeHidden();
+
+  // The panel let go on a game still on (a change made in the app): the switch turns off on the open page
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: true });
+  await page.clock.fastForward(16000);
+  await expect(sw).toBeChecked();
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: false });
+  await page.clock.fastForward(16000);
+  await expect(sw).not.toBeChecked();
+  await expect(name).toHaveText("Follow this game");
+  await expect(page.locator("#liveName")).toHaveText("Following a random game in progress");
+
+  // A follow=1 the panel answered but didn't take: the switch shows the tap, then the panel's off
+  await page.route("**/gameday/set*", (route) => route.fulfill({ json: { ok: true } }));
+  const posted = page.waitForRequest((r) => r.url().includes("/gameday/set?follow=1"));
+  await sw.click();
+  expect(await sw.getAttribute("aria-checked")).toBe("true");
+  await posted;
+  await expect(sw).not.toBeChecked();
+  await expect(page.locator("#followName")).toHaveText("Follow this game");
+});
+
 test("a slow settings post isn't overtaken by the next tap's", async ({ page, request }) => {
   await reset(request, { mode: 5, live: ["mlb"], live_auto: false });
   await page.goto("/");

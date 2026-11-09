@@ -35,6 +35,12 @@ A new panel has no team. Until you pick one, it shows live NFL and college footb
 
 The panel follows a game in progress, picked at random from the leagues you choose, and moves to another one when that game ends or after **Switch every** minutes (1 to 30). When it moves on, it picks a different game from the one it showed last, if another one is on. Splashes name the team that scored, like "DAL TOUCHDOWN", since there is no "your team" here. With **Opponent scores too** off, only the team on the left gets them.
 
+:::note[Coming in the next release]
+To stay with one game, turn on **Follow this game** under the board on the device page. The panel then keeps that game up past **Switch every** and doesn't look for another game. When the game ends, the panel goes back to switching games by itself, the same as without the switch, so the final shows for about a minute. Turn the switch off to go back to switching sooner.
+
+If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it and goes back to switching games. Changing the mode, your team, your favorites or the leagues stops following too. So does a restart, since the panel doesn't save it. The switch shows only while Live games has a game it picked on the board that hasn't ended, not while it shows your team's card or recent finals with nothing live. My team follows one team already, so it has no such switch.
+:::
+
 ### Choosing the leagues
 
 The league buttons under the mode buttons pick the leagues. Until you pick any, Live games follows the leagues of your team and your favorites, and the page says so. Tap a league to choose by hand; **Back to automatic** goes back to following your team and favorites. At least one league stays on.
@@ -55,6 +61,10 @@ The panel waits for the next kickoff before it checks again, instead of checking
 ## Favorite teams
 
 The panel cycles through up to 16 favorite teams, and a favorite's game takes the panel shortly before kickoff. See [Favorite teams](/using/favorites/) for how the playlist works and its settings.
+
+:::note[Coming in the next release]
+**Follow this game** under the board keeps the favorite on the board there, with no playlist and no other favorite's game taking over, until its final has been up for **After the final**. See [Favorite teams](/using/favorites/#when-a-game-is-on).
+:::
 
 Favorite teams with no favorites set works like My team, and the ticker asks you to add teams.
 

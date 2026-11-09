@@ -475,6 +475,7 @@ void GamedayComponent::set_favorites_(const std::vector<std::pair<uint8_t, uint3
 void GamedayComponent::favorites_changed_(bool first_pick, const std::vector<League> &live_before) {
   bool was_fav_mode = this->favorites_mode_();
   this->rebuild_favorites_(true);
+  this->follow_ = ::espn::FollowPin{};  // a new list: back to the mode's own pick
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && (was_fav_mode || this->favorites_mode_())) {
     // The list changed under the mode: drop the board and let the next
     // cycle refresh what is missing and re-pick.
@@ -508,10 +509,12 @@ void GamedayComponent::press_favorite(uint8_t slot) {
   }
   ESP_LOGI(TAG, "Remote button %u: %s", (unsigned) slot, option.c_str());
   if (this->favorites_mode_()) {
-    // Jump to that favorite and pin it: a live game holds, a card seeds the playlist.
+    // Jump to that favorite and pin it: a live game holds, a card seeds the
+    // playlist. It takes over from Follow this game.
     for (size_t i = 0; i < this->fav_.size(); i++) {
       if (this->fav_[i].slot != slot)
         continue;
+      this->follow_ = ::espn::FollowPin{};
       this->fav_pinned_ = (int) i;
       this->fav_shown_ = (int) i;
       this->fav_shown_since_ = (int64_t) this->time_->timestamp_now();
@@ -630,6 +633,7 @@ void GamedayComponent::set_live_mask_(uint16_t mask) {
   std::vector<League> before = this->live_leagues_();
   this->prefs7_.live_mask = mask;
   this->pref7_.save(&this->prefs7_);
+  this->follow_ = ::espn::FollowPin{};  // other leagues: back to switching games
   if (!this->live_leagues_changed_(before))
     this->rebuild_state_(&this->last_fields_);
 }
@@ -728,6 +732,15 @@ std::vector<::espn::FavGame> GamedayComponent::fav_games_() const {
 // Runs the pick and puts the chosen entry's card on the board when it differs
 // from what is up. Returns true on a switch.
 bool GamedayComponent::fav_choose_(int64_t now_epoch) {
+  if (this->fav_shown_ >= 0 && this->following_()) {
+    // Follow this game: the favorite on the board keeps it. Its own lock
+    // still decides how often its game is polled.
+    bool was_locked = this->fav_locked_;
+    this->fav_locked_ = ::espn::fav_locked(this->fav_games_()[this->fav_shown_], now_epoch, this->fav_rules_());
+    if (was_locked != this->fav_locked_)
+      this->fav_poll_ms_ = 0;
+    return false;
+  }
   ::espn::FavChoice c = ::espn::pick_favorite(this->fav_games_(), now_epoch, this->fav_rules_(), this->fav_shown_,
                                               this->fav_shown_since_, this->fav_pinned_);
   bool was_locked = this->fav_locked_;
@@ -757,7 +770,7 @@ bool GamedayComponent::fav_choose_(int64_t now_epoch) {
 // The board's game, except in the Favorites idle playlist, where the card on
 // the board changes every 10 s and Home Assistant would log each one.
 const GameSnapshot &GamedayComponent::ha_game_() const {
-  if (!this->favorites_mode_() || this->fav_locked_ || this->demo_playing_())
+  if (!this->favorites_mode_() || this->fav_locked_ || this->follow_.on || this->demo_playing_())
     return this->game_;
   int i = ::espn::followed_favorite(this->fav_games_());
   return i >= 0 ? this->fav_[i].game : this->game_;
@@ -951,6 +964,49 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
   if (this->fav_shown_ >= 0 && this->game_.valid)
     this->mark_board_ready_();
   this->schedule_next_(0);
+}
+
+// ---- Follow this game ---------------------------------------------------------
+
+// follow=1 pins the game on the board: a game Live games picked, or the
+// favorite Favorite teams shows. My team, an empty board, a game that has
+// ended, and Live games' fallback card and finals rotation have nothing to
+// follow.
+void GamedayComponent::set_follow(bool on) {
+  if (!on) {
+    if (!this->follow_.on)
+      return;
+    ESP_LOGI(TAG, "Follow this game: off");
+    this->follow_ = ::espn::FollowPin{};
+    this->rebuild_state_(&this->last_fields_);
+    return;
+  }
+  bool fav = this->favorites_mode_();
+  bool picked = fav ? this->fav_shown_ >= 0 : this->live_mode_() && !this->live_fallback_ && !this->recap_on_;
+  if (!::espn::follow_start(this->follow_, ::espn::follow_mode_ok(this->prefs2_.mode, !this->fav_.empty()),
+                            picked && !this->demo_playing_(), this->game_,
+                            (int64_t) this->time_->timestamp_now())) {
+    ESP_LOGW(TAG, "Follow this game: no game to follow in this mode, or it has ended");
+    return;
+  }
+  ESP_LOGI(TAG, "Follow this game: %s vs %s (event %s)", this->game_.team_abbr.c_str(), this->game_.opp_abbr.c_str(),
+           this->game_.event_id.c_str());
+  this->rebuild_state_(&this->last_fields_);
+}
+
+// The final stays up for the mode's own time (follow_after_final_s), and a
+// game the panel can no longer read, or that never finishes, lets go too.
+bool GamedayComponent::following_() {
+  if (!this->follow_.on)
+    return false;
+  bool fav = this->favorites_mode_();
+  int64_t after_final = ::espn::follow_after_final_s(fav, this->prefs4_.release_seconds);
+  if (::espn::follow_holds(this->follow_, this->game_, (int64_t) this->time_->timestamp_now(), after_final,
+                           this->stale_seconds_()))
+    return true;
+  ESP_LOGI(TAG, "Follow this game: over, back to %s", fav ? "the favorites" : "switching games");
+  this->rebuild_state_(&this->last_fields_);
+  return false;
 }
 
 uint32_t GamedayComponent::our_id_() const {
@@ -1664,6 +1720,7 @@ void GamedayComponent::drop_team_placeholder_() {
 
 void GamedayComponent::reset_game_() {
   this->rebuild_favorites_(true);
+  this->follow_ = ::espn::FollowPin{};  // the pin goes with the board
   this->lingered_event_.clear();
   this->linger_backoff_ms_ = 0;
   this->live_away_id_ = 0;
@@ -2193,9 +2250,11 @@ void GamedayComponent::start_job_() {
         // fire another one on the retry a minute later.
         this->live_started_ms_ = now == 0 ? 1 : now;
       } else {
-        bool rotate = this->live_started_ms_ != 0 &&
+        // Follow this game: no switch and no rescan while the pin holds.
+        bool held = this->following_();
+        bool rotate = !held && this->live_started_ms_ != 0 &&
                       (now - this->live_started_ms_) >= (uint32_t) this->prefs2_.rotate_minutes * MINUTE;
-        bool ended = this->game_.valid && this->game_.state != GameState::IN;
+        bool ended = !held && this->game_.valid && this->game_.state != GameState::IN;
         j.need_scan = !this->schedule_.valid || rotate || ended || this->live_none_;
       }
       // With no team, nothing live means the finals rotation: the scan keeps
@@ -2460,6 +2519,11 @@ void GamedayComponent::apply_job_() {
     return;
   }
   if (j.need_scan) {
+    if (this->following_()) {
+      // follow=1 came in while this scan ran: the followed game stays up.
+      this->schedule_next_(this->interval_for_phase_());
+      return;
+    }
     if (!j.scan_ok && j.live.empty()) {
       this->misses_ = ::espn::add_miss(this->misses_);
       if (this->recap_on_)
@@ -3575,6 +3639,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     doc["clock_approx"] = true;
   doc["fallback"] = this->live_fallback_;
   doc["recap"] = this->recap_on_;
+  doc["follow"] = this->follow_.on;  // Follow this game holds the board's game
 
   JsonObject game = doc["game"].to<JsonObject>();
   game["s"] = g.valid ? ::espn::state_name(g.state) : "NOT_FOUND";
@@ -4086,6 +4151,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::BETA:
         this->set_follow_beta(op.on);
+        break;
+      case ::espn::SetKind::FOLLOW:
+        this->set_follow(op.on);
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)
