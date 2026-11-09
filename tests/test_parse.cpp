@@ -4360,6 +4360,105 @@ static void test_board_layout() {
     }
 }
 
+// Where the board renderer (board_view.cpp) puts the game layout's widgets
+// on each width (board_layout.h, game_geom): the places the page has always
+// used, and nothing in the way of anything else.
+static void test_game_geom() {
+  using namespace esphome::gameday;
+  auto at = [](const Spot &s, int x, int y, int w) { return s.x == x && s.y == y && s.w == w; };
+
+  // One panel: logos side by side, the abbreviations (or the clock while
+  // the game is on) and the scores stacked under them.
+  const GameGeom one = game_geom(64);
+  CHECK(!one.wide);
+  CHECK_EQ(one.logo_x[0], 0);
+  CHECK_EQ(one.logo_x[1], 32);
+  CHECK_EQ(one.logo_y, 0);
+  CHECK(one.abbr_font == BoardFont::S8 && one.score_font == BoardFont::S12 && one.clock_font == BoardFont::S8);
+  CHECK(at(one.abbr[0], 0, 33, 32) && at(one.abbr[1], 32, 33, 32));
+  CHECK(at(one.score[0], 0, 42, 32) && at(one.score[1], 32, 42, 32));
+  CHECK(at(one.clock, 0, 33, 64));
+  CHECK(one.msg_font == BoardFont::S8 && one.sub_font == BoardFont::S8 && one.splash_font == BoardFont::S12);
+  CHECK_EQ(one.clock_time_y, 14);
+  CHECK_EQ(one.clock_sub_y, 34);
+  CHECK_EQ(one.ticker_y, 56);
+  // The bases between the scores, the outs as dots under them
+  CHECK_EQ(one.base_px, 3);
+  CHECK(one.base_x[0] == 35 && one.base_y[0] == 47);  // first, on the right
+  CHECK(one.base_x[1] == 31 && one.base_y[1] == 43);
+  CHECK(one.base_x[2] == 27 && one.base_y[2] == 47);
+  CHECK(one.out_x[0] == 27 && one.out_x[1] == 31 && one.out_x[2] == 35 && one.out_y == 51);
+  // No room for records, pips or the situation row: hidden, with no place
+  CHECK(at(one.rec[0], 0, 0, 0) && at(one.down, 0, 0, 0) && at(one.count, 0, 0, 0));
+
+  // Two, three and four panels: logos at the edges, two columns between them.
+  struct Wide {
+    int w, colw, opp_logo, home_col, home_rec, mid_w, home_pip, count_w;
+  };
+  for (Wide e : {Wide{128, 28, 94, 64, 92, 64, 101, 23}, Wide{192, 60, 158, 96, 156, 128, 165, 55},
+                 Wide{256, 92, 222, 128, 220, 192, 229, 87}}) {
+    const GameGeom g = game_geom(e.w);
+    const int half = e.w / 2;
+    CHECK(g.wide);
+    CHECK_EQ(g.logo_x[0], 2);
+    CHECK_EQ(g.logo_x[1], e.opp_logo);
+    CHECK_EQ(g.logo_y, 4);
+    CHECK(g.abbr_font == BoardFont::S12 && g.score_font == BoardFont::S16 && g.clock_font == BoardFont::S12);
+    CHECK(at(g.abbr[0], 36, 4, e.colw) && at(g.abbr[1], e.home_col, 4, e.colw));
+    CHECK(at(g.score[0], 36, 18, e.colw) && at(g.score[1], e.home_col, 18, e.colw));
+    CHECK(at(g.rec[0], 0, 38, 36) && at(g.rec[1], e.home_rec, 38, 36));
+    CHECK(at(g.clock, 32, 35, e.mid_w));
+    CHECK(at(g.down, 32, 48, e.mid_w));
+    CHECK(g.pip_x[0] == 9 && g.pip_x[1] == 16 && g.pip_x[2] == 23);
+    CHECK(g.pip_x[3] == e.home_pip && g.pip_x[4] == e.home_pip + 7 && g.pip_x[5] == e.home_pip + 14);
+    CHECK_EQ(g.pip_y, 48);
+    CHECK(g.msg_font == BoardFont::S12 && g.sub_font == BoardFont::S12 && g.splash_font == BoardFont::S16);
+    CHECK_EQ(g.clock_time_y, 6);
+    CHECK_EQ(g.clock_sub_y, 26);
+    CHECK_EQ(g.ticker_y, 56);
+    CHECK_EQ(g.base_px, 4);
+    CHECK(g.base_x[0] == half + 3 && g.base_y[0] == 51);
+    CHECK(g.base_x[1] == half - 2 && g.base_y[1] == 47);
+    CHECK(g.base_x[2] == half - 7 && g.base_y[2] == 51);
+    CHECK(at(g.count, 32, 48, e.count_w));
+    CHECK(at(g.outs, half + 9, 48, 28));
+    // The columns sit between the logos, side by side; the records and
+    // pips under the logos; the count and the outs either side of the
+    // diamond, clear of it; everything on the board and above the ticker.
+    CHECK(g.abbr[0].x >= g.logo_x[0] + 32 && g.abbr[0].x + g.abbr[0].w <= g.abbr[1].x);
+    CHECK(g.abbr[1].x + g.abbr[1].w <= g.logo_x[1]);
+    CHECK(g.rec[1].x + g.rec[1].w == e.w);
+    CHECK(g.pip_x[0] >= 0 && g.pip_x[5] + 5 <= e.w);
+    CHECK(g.count.x + g.count.w < g.base_x[2] && g.base_x[0] + g.base_px < g.outs.x);
+    CHECK(g.outs.x + g.outs.w <= e.w);
+    CHECK(g.down.y + 8 <= g.ticker_y);
+  }
+
+  // A team color the board can show: dark ones lifted, black white.
+  CHECK_EQ(lift_color(0x000000, 0xC0), 0xFFFFFFu);
+  CHECK_EQ(lift_color(0xFFFFFF, 0xC0), 0xFFFFFFu);
+  CHECK_EQ(lift_color(0xC00000, 0xC0), 0xC00000u);
+  CHECK_EQ(lift_color(0x800000, 0xC0), 0xC00000u);
+  CHECK_EQ(lift_color(0x002244, 0xC0), 0x0060C0u);  // in proportion
+  CHECK_EQ(lift_color(0x101010, 0xE0), 0xE0E0E0u);
+  CHECK_EQ(lift_color(0xD00000, 0xE0), 0xE00000u);
+  CHECK_EQ(lift_color(0xE01020, 0xE0), 0xE01020u);
+
+  // The no-game screen and the clock card's second line
+  CHECK(!no_game_screen("IN", false, false));
+  CHECK(!no_game_screen("PRE", false, false));
+  CHECK(!no_game_screen("POST", false, false));
+  CHECK(no_game_screen("", false, false));
+  CHECK(no_game_screen("NOT_FOUND", false, false));
+  CHECK(no_game_screen("BYE", false, false));
+  CHECK(no_game_screen("IN", true, false));  // the clock card
+  CHECK(no_game_screen("PRE", false, true));  // a leaderboard's card
+  CHECK(clock_card_date(64, true));
+  CHECK(!clock_card_date(128, true));
+  CHECK(clock_card_date(128, false));
+  CHECK(!clock_card_date(256, true));
+}
+
 // Home Assistant's line: no per-play parts, so it only moves on state and score.
 static void test_ha_status_text() {
   GameSnapshot s = live(24, 21);
@@ -9041,6 +9140,7 @@ int main() {
   test_standings();
   test_record_row();
   test_board_layout();
+  test_game_geom();
   test_badge();
   test_badge_thresholds();
   test_demo();

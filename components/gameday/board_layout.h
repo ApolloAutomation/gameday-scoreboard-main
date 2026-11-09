@@ -1,6 +1,7 @@
 // The parts of the scoreboard page (firmware/pages/gameday-live.yaml) that
-// change with the panel arrangement: the board's width, where a splash goes,
-// what a 2x2's bottom half shows and where the heat and power warning
+// change with the panel arrangement: the board's width, where each of the
+// board's widgets goes on it (board_view.cpp places them), where a splash
+// goes, what a 2x2's bottom half shows and where the heat and power warning
 // (pages/guard.yaml) goes. The board itself is always 64 rows: the whole
 // screen of one row of panels (64, 128, 192 or 256 wide), the top half of a
 // 2x2 (128x128). Pure, with no ESPHome or LVGL includes, so the host tests
@@ -8,6 +9,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace esphome::gameday {
 
@@ -79,5 +82,142 @@ inline LowerHalf lower_half(bool clock_card, bool card_date) {
     return LowerHalf{false, false, 23, (kBoardRows - kLowerTickerRows) / 2};
   return LowerHalf{false, true, 12, 36};
 }
+
+// Where the game layout's widgets go on a board w px wide. From 128 wide
+// the logos sit at the far edges with the abbreviations and big scores in
+// two columns between them, the records (or a college rank) under the logos
+// with the timeout pips below them, and the game clock and the situation
+// row (down and distance, a goal, a series, baseball's count, bases and
+// outs) in the middle. On one panel the logos sit side by side over the
+// abbreviations (the clock in their row while the game is on) and the
+// scores, with the bases between the scores and the outs as dots under
+// them; a single panel has no room for records, pips or the situation row,
+// which stay hidden and keep no place here (zero). A badge takes its logo's
+// place. Index 0 is the team's side, on the left; 1 the opponent's.
+enum class BoardFont : uint8_t { S8, S12, S16 };  // spleen_8, spleen_12, spleen_16
+
+struct Spot {
+  int16_t x, y, w;
+};
+
+struct GameGeom {
+  bool wide;  // 128 wide and up
+  int16_t logo_x[2], logo_y;
+  BoardFont abbr_font, score_font, clock_font;
+  Spot abbr[2], score[2], clock;
+  Spot rec[2], down;      // wide only
+  int16_t pip_x[6];       // wide only: the team's three timeouts, then the opponent's
+  int16_t pip_y;
+  BoardFont msg_font;     // the no-game message (centered both ways)
+  BoardFont sub_font;     // the clock card's second line, under its spleen_16 time
+  int16_t clock_time_y, clock_sub_y;
+  BoardFont splash_font;  // the splash's words, at splash_box's text_y
+  int16_t ticker_y;       // the board's own ticker, along its bottom
+  // Baseball: first, second and third base as a small diamond (first on the
+  // right), each base_px square.
+  int16_t base_px;
+  int16_t base_x[3], base_y[3];
+  int16_t out_x[3], out_y;  // one panel only: the out dots
+  Spot count, outs;         // wide only: the count left of the diamond, "2 OUT" right of it
+};
+
+inline GameGeom game_geom(int w) {
+  GameGeom g{};
+  const bool wide = w >= 128;
+  const int half = w / 2;  // also the diamond's middle
+  g.wide = wide;
+  g.ticker_y = kBoardRows - 8;
+  g.msg_font = g.sub_font = wide ? BoardFont::S12 : BoardFont::S8;
+  g.clock_time_y = wide ? 6 : 14;
+  g.clock_sub_y = wide ? 26 : 34;
+  g.splash_font = wide ? BoardFont::S16 : BoardFont::S12;
+  if (wide) {
+    const int colw = half - 36;
+    g.logo_x[0] = 2;
+    g.logo_x[1] = w - 34;
+    g.logo_y = 4;
+    g.abbr_font = BoardFont::S12;
+    g.score_font = BoardFont::S16;
+    g.clock_font = BoardFont::S12;
+    g.abbr[0] = {36, 4, (int16_t) colw};
+    g.abbr[1] = {(int16_t) half, 4, (int16_t) colw};
+    g.score[0] = {36, 18, (int16_t) colw};
+    g.score[1] = {(int16_t) half, 18, (int16_t) colw};
+    g.clock = {32, 35, (int16_t) (w - 64)};  // the records' row, between them
+    g.rec[0] = {0, 38, 36};
+    g.rec[1] = {(int16_t) (w - 36), 38, 36};
+    g.down = {32, 48, (int16_t) (w - 64)};
+    // Centered under each logo, 18 px in from its edge
+    for (int i = 0; i < 3; i++) {
+      g.pip_x[i] = (int16_t) (18 - 9 + i * 7);
+      g.pip_x[3 + i] = (int16_t) (w - 18 - 9 + i * 7);
+    }
+    g.pip_y = 48;
+    g.base_px = 4;
+    g.base_x[0] = (int16_t) (half + 3);
+    g.base_x[1] = (int16_t) (half - 2);
+    g.base_x[2] = (int16_t) (half - 7);
+    g.base_y[0] = 51;
+    g.base_y[1] = 47;
+    g.base_y[2] = 51;
+    g.count = {32, 48, (int16_t) (half - 9 - 32)};
+    g.outs = {(int16_t) (half + 9), 48, 28};  // "2 OUT" is 25 px in spleen_8
+  } else {
+    g.logo_x[0] = 0;
+    g.logo_x[1] = (int16_t) (w - 32);
+    g.logo_y = 0;
+    g.abbr_font = BoardFont::S8;
+    g.score_font = BoardFont::S12;
+    g.clock_font = BoardFont::S8;
+    g.abbr[0] = {0, 33, (int16_t) half};
+    g.abbr[1] = {(int16_t) half, 33, (int16_t) half};
+    g.score[0] = {0, 42, (int16_t) half};
+    g.score[1] = {(int16_t) half, 42, (int16_t) half};
+    g.clock = {0, 33, (int16_t) w};  // in the abbreviations' row
+    g.base_px = 3;
+    g.base_x[0] = (int16_t) (half + 3);
+    g.base_x[1] = (int16_t) (half - 1);
+    g.base_x[2] = (int16_t) (half - 5);
+    g.base_y[0] = 47;
+    g.base_y[1] = 43;
+    g.base_y[2] = 47;
+    for (int i = 0; i < 3; i++)
+      g.out_x[i] = (int16_t) (half - 5 + i * 4);
+    g.out_y = 51;
+  }
+  return g;
+}
+
+// A team color the board can show as text: a dark color vanishes on the
+// panel, so its brightest channel is lifted to floor with the others in
+// proportion, and black becomes white. The abbreviations lift to 0xC0, a
+// fireworks splash's words to 0xE0.
+inline uint32_t lift_color(uint32_t c, uint32_t floor) {
+  uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+  uint32_t m = r > g ? r : g;
+  if (b > m)
+    m = b;
+  if (m == 0)
+    return 0xFFFFFF;
+  if (m < floor) {
+    r = r * floor / m;
+    g = g * floor / m;
+    b = b * floor / m;
+  }
+  return (r << 16) | (g << 8) | b;
+}
+
+// The no-game screen is up in the game's place: the clock card, a
+// leaderboard's card, or no game to show (game_state "NOT_FOUND", "BYE" or
+// empty). Its message is a leaderboard card's next_line, the component's
+// words (the finals rotation's headers, "No live games") or "No upcoming
+// game".
+inline bool no_game_screen(const std::string &game_state, bool clock_card, bool board_card) {
+  return clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state.empty();
+}
+
+// The clock card's second line is the date, not the next game: on one panel,
+// or with no next game known.
+inline bool clock_card_date(int w, bool have_next) { return w < 128 || !have_next; }
 
 }  // namespace esphome::gameday
