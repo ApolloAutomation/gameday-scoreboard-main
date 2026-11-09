@@ -640,7 +640,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint32_t mlb_retry_after_ms{0};
     // Which hosts this job asked (open_): a failure is the backoff of the
     // host it came from (back_off_), and a scan's minor league read that
-    // failed beside ESPN's that answered backs off minor league baseball only.
+    // failed beside ESPN's leagues backs off minor league baseball only
+    // (mlb_scan_result). mlb_scan_failed: the scan's minor league read failed.
     bool read_espn{false};
     bool read_mlb{false};
     bool mlb_scan_failed{false};
@@ -936,6 +937,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t back_off_();
   // Every read in the job went to the MLB Stats API.
   bool job_mlb_only_() const { return this->job_.read_mlb && !this->job_.read_espn; }
+  // ESPN or the MLB Stats API answered 403 or 429 in this job: back off
+  // (back_off_ picks the host) rather than ask again right away.
+  bool job_refused_() const { return this->job_.throttled || this->job_.mlb_throttled; }
   // ESPN answered (or the MLB Stats API, for a job that read only it): the
   // next failure starts that host's backoff over.
   void clear_backoff_() {

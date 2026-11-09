@@ -105,6 +105,25 @@ struct HostWait {
   bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
 };
 
+// A Live games scan's minor league read, folded into the MLB Stats API's
+// wait (apply_job_). read: the scan asked MLB. failed: that read failed.
+// leagues: how many leagues the scan read. Beside ESPN's leagues a failure
+// is counted here and the scan goes on with the others. Scanned alone, the
+// failure is the scan's own, which the scan's backoff (back_off_, for a job
+// that read only MLB) counts once: clearing the run here first would start
+// every failed scan over at the shortest wait. An answer starts the run over.
+// Returns the wait a failure started here, 0 when none did.
+inline uint32_t mlb_scan_result(HostWait &w, bool read, bool failed, size_t leagues, bool refused,
+                                uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return leagues > 1 ? w.fail(refused, retry_after_ms, rnd, now) : 0;
+}
+
 // A game not started yet is read every minute in its last hour and every 15
 // before. One with no start time yet sits at midnight Eastern of its day
 // (tbd_day_epoch): baseball's is game 2 of a doubleheader, which starts

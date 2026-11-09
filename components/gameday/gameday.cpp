@@ -3400,9 +3400,10 @@ void GamedayComponent::run_job_() {
     j.scan_ok = true;
     for (League l : j.scan_leagues) {
       bool ok = this->fetch_live_games_(l, j.live, j.next_kickoff, finals, pending);
-      if (!ok && ::espn::is_mlb_stats(l) && j.scan_leagues.size() > 1) {
-        j.mlb_scan_failed = true;  // MLB's own backoff (apply_job_), not the scan's
-        continue;
+      if (::espn::is_mlb_stats(l)) {
+        j.mlb_scan_failed = !ok;
+        if (j.scan_leagues.size() > 1)
+          continue;  // MLB's own backoff (mlb_scan_result), not the scan's
       }
       j.scan_ok = ok && j.scan_ok;
     }
@@ -3522,12 +3523,12 @@ void GamedayComponent::apply_job_() {
     return;
   }
   if (j.need_scan) {
-    if (j.mlb_scan_failed) {
-      uint32_t ms = this->mlb_wait_.fail(j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), now);
-      ESP_LOGW(TAG, "Minor league scan failed: next try in %us", (unsigned) (ms / 1000));
-    } else if (j.read_mlb) {
-      this->mlb_wait_.clear();
-    }
+    // Scanned alone, a failed minor league read is the scan's failure below,
+    // which back_off_ counts against MLB.
+    uint32_t mlb_ms = ::espn::mlb_scan_result(this->mlb_wait_, j.read_mlb, j.mlb_scan_failed, j.scan_leagues.size(),
+                                              j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), now);
+    if (mlb_ms != 0)
+      ESP_LOGW(TAG, "Minor league scan failed: next try in %us", (unsigned) (mlb_ms / 1000));
     if (this->following_()) {
       // follow=1 came in while this scan ran: the followed game stays up.
       this->schedule_next_(this->interval_for_phase_());
@@ -3657,7 +3658,7 @@ void GamedayComponent::apply_job_() {
     this->rebuild_state_(&this->last_fields_);
     // The list is optional and waits for the next schedule read, but a
     // refusal still holds back the game poll that would come next.
-    this->schedule_next_(j.throttled ? this->back_off_() : this->interval_for_phase_());
+    this->schedule_next_(this->job_refused_() ? this->back_off_() : this->interval_for_phase_());
     return;
   }
   if (j.comp > 0) {
@@ -3703,9 +3704,10 @@ void GamedayComponent::apply_job_() {
   }
   if (!j.game_ok) {
     this->misses_ = ::espn::add_miss(this->misses_);
-    if (this->cache_unconfirmed_ && !j.throttled) {
-      // ESPN has no such game any more, or the read failed: the cache may be
-      // wrong, so read the team endpoint now, not in six hours.
+    if (this->cache_unconfirmed_ && !this->job_refused_()) {
+      // ESPN (or MLB) has no such game any more, or the read failed: the
+      // cache may be wrong, so read the team endpoint now, not in six hours.
+      // A refusal backs off below instead of asking that host again at once.
       ESP_LOGI(TAG, "Cached game not found: reading the team again");
       this->cache_unconfirmed_ = false;
       this->force_schedule_ = true;

@@ -793,6 +793,52 @@ void test_host_wait() {
   MCHECK(w.waiting(0x10));
 }
 
+void test_scan_backoff() {
+  // Live games scanning minor league baseball alone while MLB refuses: the
+  // scan fails with nothing live, and back_off_ (a job that read only MLB)
+  // counts it against MLB. The scan's own step must leave the run alone, so
+  // each failed scan waits longer, up to the hour, instead of starting over.
+  HostWait w;
+  uint32_t now = 1000, last = 0;
+  for (int scan = 1; scan <= 5; scan++) {
+    MCHECK_EQ(mlb_scan_result(w, true, true, 1, true, 0, 0, now), 0u);
+    MCHECK_EQ((int) w.run.streak, scan - 1);
+    uint32_t ms = w.fail(true, 0, 0, now);  // back_off_
+    MCHECK_EQ((int) w.run.streak, scan);
+    MCHECK(ms > last);
+    last = ms;
+    now += ms;
+  }
+  MCHECK(last >= 60u * 60 * 1000 / 2);  // half the hour cap at least, with the jitter
+  // The same after ordinary failures (a timeout, a 5xx)
+  HostWait plain;
+  MCHECK_EQ(mlb_scan_result(plain, true, true, 1, false, 0, 0, 0), 0u);
+  plain.fail(false, 0, 0, 0);
+  MCHECK_EQ(mlb_scan_result(plain, true, true, 1, false, 0, 0, 0), 0u);
+  plain.fail(false, 0, 0, 0);
+  MCHECK_EQ((int) plain.run.streak, 2);
+  // An answer starts the run over
+  MCHECK_EQ(mlb_scan_result(w, true, false, 1, false, 0, 0, now), 0u);
+  MCHECK_EQ((int) w.run.streak, 0);
+  MCHECK(!w.waiting(now));
+  // Beside ESPN's leagues the scan goes on with them, so MLB's failure is
+  // counted here, and back_off_ (if the scan failed too) is ESPN's.
+  HostWait mixed;
+  uint32_t ms = mlb_scan_result(mixed, true, true, 3, true, 20 * 60 * 1000, 0, 5000);
+  MCHECK(ms >= 20u * 60 * 1000);
+  MCHECK_EQ((int) mixed.run.streak, 1);
+  MCHECK(mixed.waiting(5000));
+  MCHECK(mlb_scan_result(mixed, true, true, 3, true, 0, 0, 5000) > 0u);
+  MCHECK_EQ((int) mixed.run.streak, 2);
+  MCHECK_EQ(mlb_scan_result(mixed, true, false, 3, false, 0, 0, 5000), 0u);
+  MCHECK_EQ((int) mixed.run.streak, 0);
+  // A scan that didn't ask MLB (it was waiting) leaves the run as it is.
+  mixed.fail(true, 0, 0, 5000);
+  MCHECK_EQ(mlb_scan_result(mixed, false, false, 2, false, 0, 0, 5000), 0u);
+  MCHECK_EQ((int) mixed.run.streak, 1);
+  MCHECK(mixed.waiting(5000));
+}
+
 void test_health() {
   Health h{};
   h.start = Restart::RESTART;
@@ -835,6 +881,7 @@ int run_mlbstats_tests(int &total_checks) {
   test_team();
   test_day();
   test_host_wait();
+  test_scan_backoff();
   test_health();
   total_checks += checks;
   return failures;
