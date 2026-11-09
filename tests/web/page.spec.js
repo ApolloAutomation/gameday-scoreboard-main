@@ -2642,6 +2642,118 @@ test("the idle display says what the panel shows now, and hides on firmware with
   await expect(page.locator("#idleCtls")).toBeHidden();
 });
 
+// Split mode (components/gameday/split.h): the second area's block in the
+// Panel card, on three and four wide and two rows of two.
+test("the second area shows on three and four wide and two rows of two, titled for where it is", async ({ page, request }) => {
+  await reset(request);  // two panels: no second area
+  await page.goto("/");
+  await expect(page.locator("#idleCtls")).toBeVisible();
+  await expect(page.locator("#splitCtls")).toBeHidden();
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  const choices = page.locator("#split option");
+
+  await reset(request, { panels: 2, rows: 2 });
+  await page.reload();
+  await expect(page.locator("#splitTitle")).toHaveText("Bottom half");
+  // Two rows of two always has it: no Nothing, and Off is the clock.
+  await expect(choices).toHaveText(["Rotating live games", "A second team's game", "Today's scores", "Clock and date"]);
+  await expect(split).toHaveValue("4");
+  await expect(page.locator("#splitHint")).toContainText("The time and the date");
+
+  await reset(request, { panels: 4 });
+  await page.reload();
+  await expect(page.locator("#splitTitle")).toHaveText("Right two panels");
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date"]);
+  await expect(split).toHaveValue("0");
+  await expect(page.locator("#splitTeamRow")).toBeHidden();
+
+  await reset(request, { panels: 3, split: 3 });
+  await page.reload();
+  await expect(page.locator("#splitTitle")).toHaveText("Right panel");
+  await expect(split).toHaveValue("3");
+  await expect(page.locator("#splitNow")).toHaveText("Showing today's scores.");
+
+  // Firmware without split mode sends no split: no block.
+  await reset(request, { panels: 4, split: null, split_at: null, split_now: null, splitteam: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#splitCtls")).toBeHidden();
+});
+
+test("the second area posts its choice, and its team from the chooser, a minor league one too, never the panel's own or a tour", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2 });
+  await page.goto("/");
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  await split.selectOption("2");
+  await expectSet(request, { split: "2" });
+  await expect(page.locator("#splitTeamRow")).toBeVisible();
+  await expect(page.locator("#splitNow")).toHaveText("Pick a team for it.");
+  await page.locator("#splitTeam").click();
+  await expect(page.locator("#modal")).toHaveClass(/open/);
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the second team");
+  await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
+  await page.locator("#q").fill("pga tour");
+  await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  // A minor league baseball, AHL or ECHL team can be the second team: its
+  // tabs are there, and "tour" finds the Asheville Tourists, never a tour.
+  for (const tab of ["MiLB", "AHL", "ECHL"])
+    await expect(page.locator(".tabs button", { hasText: new RegExp(`^${tab}$`) })).toBeVisible();
+  await page.locator("#q").fill("tour");
+  await expect(page.locator("#tiles .tile")).toHaveCount(1);
+  await expect(page.locator("#tiles .tile")).toContainText("Asheville Tourists");
+  // The panel's own team is refused, and the chooser stays open.
+  await page.locator("#q").fill("cowboys");
+  await page.locator("#tiles .tile", { hasText: "Dallas Cowboys" }).click();
+  await expect(page.locator("#toast")).toContainText("panel's own team");
+  await expect(page.locator("#modal")).toHaveClass(/open/);
+  await page.locator("#q").fill("eagles");
+  await page.locator("#tiles .tile", { hasText: "Philadelphia Eagles" }).click();
+  await expectSet(request, { splitteam: "nfl:21" });
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  await expect(page.locator("#splitTeam")).toHaveText("Philadelphia Eagles");
+  await expect(page.locator("#splitNow")).toHaveText("Showing PHI's game.");
+  expect(await sets(request)).toEqual([{ split: "2" }, { splitteam: "nfl:21" }]);
+  const st = await deviceState(request);
+  expect([st.split, st.splitteam.id, st.split_now]).toEqual([2, 21, "team"]);
+  // Back to the clock, which keeps the team for later.
+  await split.selectOption("4");
+  await expectSet(request, { split: "4" });
+  await expect(page.locator("#splitTeamRow")).toBeHidden();
+  expect((await deviceState(request)).splitteam.id).toBe(21);
+});
+
+test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {
+  await reset(request, { panels: 4 });
+  await page.goto("/");
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  await expect(split).toHaveValue("0");
+  await slowReads(page, 1000);
+  await split.selectOption("3");
+  await sleep(600);
+  await page.getByRole("switch", { name: "Night hours" }).click();
+  await expect(split).toHaveValue("3");
+  await staysAs(page.locator("#splitHint"),
+    ["Recent final scores and the games still to come today, for your team's and your favorites' leagues."], 2500);
+  expect(await sets(request)).toEqual([{ split: "3" }, { night: "1" }]);
+});
+
+test("with the second area rotating live games, big plays show there and Switch from my team goes", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2, split: 1, split_n: 3 });
+  await page.goto("/");
+  await expect(page.locator("#splitNow")).toHaveText("Rotating 3 live games.");
+  await expect(page.locator("#watchHint")).toContainText("shows in the second area");
+  await expect(page.locator("#watchMineRow")).toBeHidden();
+  await reset(request, { panels: 2, rows: 2, split: 1, split_n: 0 });
+  await page.reload();
+  await expect(page.locator("#splitNow")).toHaveText("No other live games: showing the clock.");
+  await reset(request, { panels: 2, rows: 2, split: 4 });
+  await page.reload();
+  await expect(page.locator("#watchHint")).toContainText("about every 45 seconds");
+  await expect(page.locator("#watchMineRow")).toBeVisible();
+});
+
 test("a night time cleared in its field isn't posted", async ({ page, request }) => {
   await reset(request, { night: true });
   await page.goto("/");

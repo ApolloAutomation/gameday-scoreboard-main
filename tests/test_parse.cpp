@@ -3667,6 +3667,7 @@ int run_watch_tests(int &checks);  // test_watch.cpp
 int run_player_tests(int &checks);  // test_players.cpp
 int run_mlbstats_tests(int &checks);  // test_mlbstats.cpp
 int run_hockeytech_tests(int &checks);  // test_hockeytech.cpp
+int run_split_tests(int &checks);  // test_split.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -9190,6 +9191,7 @@ int main() {
   failures += run_player_tests(checks);
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
+  failures += run_split_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

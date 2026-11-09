@@ -62,6 +62,10 @@ struct IdleInputs {
   // On Wi-Fi. Off it, the panel's own screens about getting connected (the
   // hotspot's QR code among them) are never dark or dimmed by the idle display.
   bool connected{false};
+  // The second area (split.h) shows something followed that is on: its
+  // team's game or its final's wait, or a big play's stay. Off or dim lets
+  // the panel light for it; what the main board shows stays as it is.
+  bool area2_busy{false};
 };
 
 // Inside the night hours, start included and end not. An end before the start
@@ -112,7 +116,7 @@ inline IdleState idle_state(const IdleInputs &in) {
   if (in.busy)
     return s;
   s = idle_choice(in.show, s.night);
-  if (!in.connected)
+  if (!in.connected || in.area2_busy)
     s.dim = false;
   if (!in.board_ready)
     s.view = IdleView::BOARD;

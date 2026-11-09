@@ -28,7 +28,8 @@ namespace espn {
 // right after panels, so a request that picks the 2x2 and its wiring saves
 // both before the restart either one asks for. betdel comes before bet, so a
 // request with both empties a slot and then fills it, and playerdel before
-// player the same way.
+// player the same way. splitteam comes before split, so a request that picks
+// A second team's game and its team has the team first.
 constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",       "rotate",   "rotatesec",  "fav1",
                                     "fav2",      "fav3",      "fav4",       "tz",       "tzauto",     "down",
                                     "play",      "odds",      "opp",        "panels",   "wiring",     "bootaddr",
@@ -36,7 +37,7 @@ constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",       "rot
                                     "autoupd",   "count",     "match",      "beta",     "alerts",     "alertfav",
                                     "watch",     "watchstay", "watchmine",  "standing", "idle",       "idledim",
                                     "night",     "nightstart", "nightend",  "nightbri", "betdel",     "bet",
-                                    "playerdel", "player"};
+                                    "playerdel", "player",    "splitteam",  "split"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -45,6 +46,11 @@ enum class Mode : uint8_t { MY_TEAM = 0, LIVE_NFL = 1, LIVE_NCAA = 2, LIVE_ANY =
 // Mode 0 (My team) to 5 (Live games).
 constexpr int kModeCount = 6;
 static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kModeCount - 1");
+
+// What the second area shows (split.h), kept as a byte: OFF, Rotating live
+// games, A second team's game, Today's scores, Clock and date.
+enum class SplitShow : uint8_t { OFF = 0, LIVE = 1, TEAM = 2, SCORES = 3, CLOCK = 4 };
+constexpr int kSplitCount = 5;
 
 // Standing next to pro teams: 0 Record, 1 Seed, 2 Place (espn::Standing).
 constexpr int kStandingCount = 3;
@@ -241,6 +247,8 @@ enum class SetKind : uint8_t {
   WATCHMINE,    // on, a favorite's big play can take the board from the team's live game
   PLAYER,       // team (league, team id), athlete, name: a favorite player (players.h)
   PLAYER_DEL,   // team.league, athlete: drops that favorite player
+  SPLIT,        // value, split.h's SplitShow: what the second area shows
+  SPLIT_TEAM,   // team: the second area's team (id 0 clears it)
 };
 
 struct TeamRef {
@@ -603,6 +611,21 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.kind = SetKind::WATCHSTAY;
     op.value = clamp_watch_stay_seconds(read_int(v));
     return true;
+  }
+  if (k == "split") {
+    // One digit, nothing else: the page sends only the choices it shows.
+    op.kind = SetKind::SPLIT;
+    op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
+    return op.value >= 0;
+  }
+  if (k == "splitteam") {
+    // "none" or "" clears it. Not a golf tour or a racing series, as for a
+    // favorite: the area shows a game.
+    op.kind = SetKind::SPLIT_TEAM;
+    if (v == "none" || v.empty())
+      return true;
+    return parse_team_ref(v, op.team.league, op.team.id) && known_team(op.team.league, op.team.id) &&
+           !is_leaderboard((League) op.team.league);
   }
   if (k == "player" || k == "playerdel") {
     op.kind = k == "player" ? SetKind::PLAYER : SetKind::PLAYER_DEL;

@@ -627,6 +627,20 @@ gameday:
           lambda: 'return x == "guard";'
         then:
           - script.execute: gd_guard
+    # Split mode (components/gameday/split.h): the second area came or went,
+    # so the board is laid out again with no restart; the area's ticker has a
+    # new line or font, or its clock is up (pages/gameday-live.yaml).
+    - if:
+        condition:
+          lambda: 'return x == "layout";'
+        then:
+          - script.execute: tt_apply_layout
+    - if:
+        condition:
+          lambda: 'return x == "a2";'
+        then:
+          - script.execute: tt_ticker_timing
+          - script.execute: gd_clock_tick
     # The idle display or the night hours changed the brightness the panel
     # should have (components/gameday/idle.h): dark, the dim level, the night
     # brightness or the owner's again. Power and the saved Brightness stay as

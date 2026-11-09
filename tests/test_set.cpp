@@ -55,9 +55,12 @@ std::string keys(const std::vector<League> &leagues) {
 // fallback card or finals rotation, nor an empty board), and final that the
 // game has ended. bets are the manual bets by slot (bets.h), as entered.
 // visit: another game's big play has the board for a moment (watch.h), the
-// mode's own game being the one board and final describe.
+// mode's own game being the one board and final describe. split and
+// splitteam: what the second area shows and its team (split.h).
 struct Settings {
   TeamRef team;
+  TeamRef splitteam;
+  int split{0};
   uint8_t team_league{0};
   // rotatesec: Switch every in seconds (startup.h), what set_rotate_seconds keeps.
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
@@ -99,6 +102,8 @@ void load(Settings &s, JsonObjectConst o) {
     if (s.team.id != 0)
       s.team_league = s.team.league;
   }
+  if (o["splitteam"].is<const char *>())
+    s.splitteam = team_ref(o["splitteam"]);
   if (o["favs"].is<JsonArrayConst>()) {
     int i = 0;
     for (auto f : o["favs"].as<JsonArrayConst>())
@@ -135,6 +140,7 @@ void load(Settings &s, JsonObjectConst o) {
   num("alerts", s.alerts);
   num("standing", s.standing);
   num("watchstay", s.watchstay);
+  num("split", s.split);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -302,6 +308,11 @@ void apply(Settings &s, const SetOp &op) {
       break;
     }
     case SetKind::WIRING: s.wiring = op.value; break;
+    case SetKind::SPLIT: s.split = op.value; break;
+    case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
+      if (op.team.id == 0 || !(op.team == s.team))
+        s.splitteam = op.team;
+      break;
     case SetKind::IDLE: s.idle = op.value; break;
     case SetKind::IDLE_DIM: s.idledim = op.value; break;
     case SetKind::NIGHT: s.night = op.on; break;
@@ -377,6 +388,8 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watch"] = s.watch;
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
+  doc["split"] = s.split;
+  doc["splitteam"] = team_str(s.splitteam);
   // The favorite players, filled slots in slot order.
   JsonArray players = doc["players"].to<JsonArray>();
   for (const FavPlayer &p : s.players) {

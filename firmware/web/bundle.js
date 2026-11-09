@@ -235,7 +235,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         <div id="celebCtls">
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
-          <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small>The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.</small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
+          <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
           <div class="ctl" id="watchStayRow"><label for="watchstay">Stay on a big play<small>How long the panel stays on the other game before it goes back.</small></label><select id="watchstay">
             <option value="30">30 s</option><option value="60">1 min</option><option value="90">90 s</option><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option>
           </select></div>
@@ -247,6 +247,12 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         <h2>Panel</h2>
         <div id="panelCtls"></div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div id="splitCtls" hidden>
+          <div class="sub" id="splitTitle">Second area</div>
+          <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
+          <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
+          <p class="hint" id="splitNow" role="status"></p>
+        </div>
         <div id="idleCtls" hidden>
           <div class="sub">When nothing is on</div>
           <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
@@ -478,6 +484,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
+    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}),
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -485,6 +492,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   const sameForm = {
     mode: (a, b) => (a || 0) === (b || 0),
     team: (a, b) => refKey(a) === refKey(b),
+    splitteam: (a, b) => refKey(a) === refKey(b),
     live: (a, b) => (a || []).slice().sort().join(",") === (b || []).slice().sort().join(","),
     favs: (a, b) => (a || []).map(refKey).filter(Boolean).join(",") === (b || []).map(refKey).filter(Boolean).join(","),
   };
@@ -1014,6 +1022,65 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         : S.night_now ? "In the night hours." : "";
   };
 
+  // ---- the second area (Panel card) -----------------------------------------
+  // Split mode (components/gameday/split.h): on two rows of two the bottom
+  // half, on four wide the right two panels, on three wide the right panel.
+  // One or two panels have none, and firmware without it sends no split.
+  const SPLIT_TITLES = { bottom: "Bottom half", right2: "Right two panels", right1: "Right panel" };
+  const SPLIT_CHOICES = [
+    ["Nothing: the board fills the row", "The board stretches across every panel, as before."],
+    ["Rotating live games", "The other live games in the leagues you follow, about 8 seconds each, leaving out minor league baseball, AHL and ECHL games. With Switch to big plays in other games on, a big play there shows in this area and the main board stays on its game. Uses more data."],
+    ["A second team's game", "Another team's next game, its live game with its own celebrations, and its final. Uses more data while it plays."],
+    ["Today's scores", "Recent final scores and the games still to come today, for your team's and your favorites' leagues."],
+    ["Clock and date", "The time and the date, with your next games underneath."],
+  ];
+  const WATCH_HINT = "The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.";
+  const WATCH_HINT_SPLIT = "A big play in another live game shows in the second area for the time below, and the main board stays on its game, even while you follow one.";
+  // What the second area shows by choice: Off is the clock on two rows of two.
+  const splitShows = () => {
+    if (!S || S.split === undefined || !S.split_at) return -1;
+    const show = Number(S.split) || 0;
+    return S.split_at === "bottom" && show === 0 ? 4 : show;
+  };
+  const splitSelect = $("#split");
+  splitSelect.onchange = () => setGD({ split: splitSelect.value });
+  $("#splitTeam").onclick = () => openPicker(false, false, false, true);
+  let splitOptions = "";
+  const renderSplit = () => {
+    const show = splitShows();
+    $("#splitCtls").hidden = show < 0;
+    if (show < 0) return;
+    $("#splitTitle").textContent = SPLIT_TITLES[S.split_at] || "Second area";
+    // Nothing is offered on three and four wide only.
+    const offered = S.split_at === "bottom" ? "1234" : "01234";
+    if (splitOptions !== offered) {
+      splitOptions = offered;
+      splitSelect.innerHTML = "";
+      for (const c of offered) splitSelect.add(new Option(SPLIT_CHOICES[c][0], c));
+    }
+    if (document.activeElement !== splitSelect) splitSelect.value = String(show);
+    $("#splitHint").textContent = SPLIT_CHOICES[show][1];
+    const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
+    $("#splitTeamRow").hidden = show !== 2;
+    $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
+    // What it shows now
+    const n = Number(S.split_n) || 0;
+    const now = S.split_now;
+    let line = "";
+    if (now === "live") line = n === 1 ? "Showing the one other live game." : "Rotating " + n + " live games.";
+    else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
+    else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
+    else if (now === "clock" || now === "date") {
+      line = show === 2 && !t ? "Pick a team for it."
+        : show === 2 ? "Showing the clock: " + t.abbr + " isn't on now, or is on the main board."
+          : show === 1 ? "No other live games: showing the clock."
+            : show === 3 ? "No scores yet: showing the clock."
+              : "";
+      if (now === "date" && show === 4) line = "The main board has the time, so this shows the date.";
+    }
+    $("#splitNow").textContent = line;
+  };
+
   // ---- toggles and favorites (static controls on the state document) --------
   const standingSel = $("#standing");
   standingSel.onchange = () => setGD({ standing: standingSel.value });
@@ -1171,6 +1238,11 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
     // Nor the switches for other games' big plays. A stay the list lacks gets its own entry.
     $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
+    // With the second area rotating live games, big plays show there and the
+    // main board stays on its game, so Switch from my team has nothing to do.
+    const rotating = splitShows() === 1;
+    $("#watchHint").textContent = rotating ? WATCH_HINT_SPLIT : WATCH_HINT;
+    if (rotating) $("#watchMineRow").hidden = true;
     if (document.activeElement !== staySelect && S.watchstay) {
       const v = String(S.watchstay);
       if (![...staySelect.options].some((o) => o.value === v)) staySelect.add(new Option(v + " s", v));
@@ -1451,7 +1523,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
         b.onclick = () => {
           if (!t) return;
-          if (pickFav || pickBet || pickPlayer) return choose(t);
+          if (pickFav || pickBet || pickPlayer || pickSplit) return choose(t);
           setGD({ team: keyOf(t) });
           toast("Now following the " + t[3]);
           closePicker();
@@ -1832,13 +1904,22 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
 
   // ---- team chooser ------------------------------------------------------
   // The picker sets My team, with pickFav adds a favorite, with pickBet
-  // picks the team for a new bet, and with pickPlayer the team whose roster
-  // the Favorite players card lists.
+  // picks the team for a new bet, with pickPlayer the team whose roster
+  // the Favorite players card lists, and with pickSplit the second area's
+  // team (never the panel's own).
   let pickFav = false;
   let pickBet = false;
   let pickPlayer = false;
+  let pickSplit = false;
   const choose = (t) => {
-    if (pickPlayer) {
+    if (pickSplit) {
+      if (S && refKey(S.team) === keyOf(t)) {
+        toast("That's the panel's own team. Pick another.");
+        return;
+      }
+      setGD({ splitteam: keyOf(t) });
+      toast("The second area shows the " + t[3]);
+    } else if (pickPlayer) {
       playerTeam = keyOf(t);
       loadRoster(playerTeam);
     } else if (pickBet) {
@@ -1864,7 +1945,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     // one by its tab's name too.
     // A minor league team is found by its level too ("double-a").
     const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
-    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
+    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1903,14 +1984,16 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   // A dialog: Tab stays inside it, and closing hands focus back to the
   // button that opened it.
   let pickerFrom = null;
-  const openPicker = async (fav, bet = false, player = false) => {
+  const openPicker = async (fav, bet = false, player = false, split = false) => {
     pickFav = fav;
     pickBet = bet;
     pickPlayer = player;
+    pickSplit = split;
     pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
-    const cur = player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
-    const team = fav || bet || player;
+    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+    const cur = split && S && S.splitteam && S.splitteam.id ? teamByKey(refKey(S.splitteam))
+      : player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
+    const team = fav || bet || player || split;
     const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf and racing can't be a favorite yet, take a bet or have favorite
@@ -2149,6 +2232,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     renderCurrentTeam();
     renderMode();
     renderSettings();
+    renderSplit();
     renderIdle();
     renderPanels();
     renderTime();

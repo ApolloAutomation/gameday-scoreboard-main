@@ -43,8 +43,10 @@ inline bool watch_by_event(League l) { return l == League::NCAA || l == League::
 
 // One watched game, as its last read left it: who plays, where it was found,
 // and what detect_big_play needs from the read before (watch_prev rebuilds
-// it). Plain characters, copied as a block, 72 bytes. The away side is
-// "team", as in the live modes.
+// it), and what a card of it needs in the second area's rotation (split.h,
+// rot_card): the abbreviations cut to 5, the colors and a college rank.
+// Plain characters, copied as a block, 92 bytes. The away side is "team", as
+// in the live modes.
 struct WatchGame {
   char event_id[16]{};
   uint8_t league{0};
@@ -64,9 +66,26 @@ struct WatchGame {
   int16_t team_score{0}, opp_score{0};
   char clock[8]{};
   uint32_t play{0};  // ESPN's id for the last play, hashed (watch_hash); 0 none
+  char away_abbr[6]{}, home_abbr[6]{};
+  uint8_t away_rgb[3]{}, home_rgb[3]{};
+  uint8_t away_rank{0}, home_rank{0};
 };
 static_assert(std::is_trivially_copyable<WatchGame>::value, "watched games copy as a block");
-static_assert(sizeof(WatchGame) == 72, "eight watched games keep under 600 bytes of internal RAM");
+static_assert(sizeof(WatchGame) == 92, "eight watched games keep under 800 bytes of internal RAM");
+
+// A team color as the card keeps it, from ESPN's hex ("C8102E").
+inline void watch_rgb(uint8_t (&out)[3], const std::string &hex) {
+  const uint32_t c = hex.size() == 6 ? (uint32_t) strtoul(hex.c_str(), nullptr, 16) : 0xFFFFFF;
+  out[0] = (uint8_t) (c >> 16);
+  out[1] = (uint8_t) (c >> 8);
+  out[2] = (uint8_t) c;
+}
+
+// Who plays, for a card of the game: the abbreviations, cut to 5.
+inline void watch_teams(WatchGame &w, const std::string &away, const std::string &home) {
+  snprintf(w.away_abbr, sizeof(w.away_abbr), "%s", away.c_str());
+  snprintf(w.home_abbr, sizeof(w.home_abbr), "%s", home.c_str());
+}
 
 inline bool watch_same(const WatchGame &g, uint8_t league, const std::string &event_id) {
   return g.league == league && event_id == g.event_id;
@@ -200,11 +219,19 @@ inline uint32_t watch_sport_mask(Sport s) {
 // Who the watched games are for. In Live games every live game, or with
 // Favorite teams only on those with the panel's team or a favorite; in My
 // team and Favorite teams, the favorites' games. Only sports with a big play
-// switched on, and never the mode's own game (board) or the one a big play
-// has the board on (visit).
+// switched on, and never the mode's own game (board), the one a big play
+// has the board on (visit) or the second area's team's (a2, split.h).
+// all: the second area rotates the other live games, so every live game of
+// the sources' leagues is kept, of every sport with big plays (read_mask),
+// whatever the alert switches say; Favorite teams only then keeps the
+// others' big plays from counting.
 struct WatchCtx {
   bool live{false};
+  bool all{false};
   bool fav_only{false};
+  uint32_t read_mask{0};
+  uint8_t a2_league{0};
+  std::string a2_event;
   std::pair<uint8_t, uint32_t> team{0, 0};         // the panel's team, id 0 for none
   std::vector<std::pair<uint8_t, uint32_t>> favs;  // league and ESPN id
   uint8_t board_league{0}, visit_league{0};
@@ -220,20 +247,26 @@ struct WatchCtx {
 // watcher reads ESPN's scoreboards and games only, and those leagues' hosts
 // are backed off on their own.
 inline int watch_wants_teams(const WatchCtx &c, uint8_t league, uint32_t away, uint32_t home) {
-  if ((c.mask & watch_sport_mask(league_sport((League) league))) == 0 || !from_espn((League) league))
+  if (((c.all ? c.read_mask : c.mask) & watch_sport_mask(league_sport((League) league))) == 0 ||
+      !from_espn((League) league))
     return 0;
   const bool fav = game_has_team(league, away, home, c.favs.data(), c.favs.size()) ||
-                   (c.live && game_has_team(league, away, home, &c.team, 1));
+                   ((c.live || c.all) && game_has_team(league, away, home, &c.team, 1));
   if (fav)
     return 2;
-  return c.live && !c.fav_only ? 1 : 0;
+  return (c.live && !c.fav_only) || c.all ? 1 : 0;
 }
+
+// A big play in a watched game counts: always with the panel's team or a
+// favorite in it, the others' only without Favorite teams only.
+inline bool watch_may_alert(const WatchCtx &c, bool fav) { return fav || !c.fav_only; }
 
 // The same for one game, never the board's or a visit's: 0: not watched. 1:
 // watched. 2: watched, and the panel's team or a favorite plays.
 inline int watch_wants(const WatchCtx &c, uint8_t league, const std::string &event_id, uint32_t away, uint32_t home) {
   if (event_id.empty() || (league == c.board_league && event_id == c.board_event) ||
-      (league == c.visit_league && event_id == c.visit_event))
+      (league == c.visit_league && event_id == c.visit_event) ||
+      (league == c.a2_league && event_id == c.a2_event))
     return 0;
   return watch_wants_teams(c, league, away, home);
 }
@@ -668,9 +701,14 @@ inline void watch_take(WatchJob &job, GameSnapshot &cur) {
   g.fav = wants == 2;
   g.read_cycle = g.tried_cycle = job.cycle;
   watch_store(g, cur);
+  watch_teams(g, cur.team_abbr, cur.opp_abbr);
+  watch_rgb(g.away_rgb, cur.team_color);
+  watch_rgb(g.home_rgb, cur.opp_color);
+  g.away_rank = cur.team_rank;
+  g.home_rank = cur.opp_rank;
   for (const auto &prev : job.games) {
     if (!watch_same(prev, job.league, cur.event_id) || job.cycle - prev.read_cycle > kWatchStaleCycles ||
-        (job.alert.valid && (job.alert.fav || !g.fav)))
+        !watch_may_alert(job.ctx, g.fav) || (job.alert.valid && (job.alert.fav || !g.fav)))
       continue;
     const BigPlay p = watch_detect(prev, cur, job.ctx.mask);
     if (p.type == Alert::NONE)
