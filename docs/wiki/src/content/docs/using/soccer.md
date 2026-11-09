@@ -54,6 +54,8 @@ Two more splashes:
 - **RED CARD**: a red card for either side, with that side's abbreviation, like "SUN RED CARD", on a red screen. It shows whichever side gets the card, whatever **Opponent scores too** says.
 
 Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
+
+A goal or a penalty goal shows the scoring club's logo and **+1** with its words, and a red card the logo of the side that got it, with no points. The logo says which club it was, so the words leave its abbreviation out. The victory splash shows the winner's logo with "WINS". See [Splashes](/using/panel-sizes/#splashes).
 :::
 
 :::note[Coming in the next release]

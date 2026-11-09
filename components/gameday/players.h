@@ -194,6 +194,8 @@ struct PlayerScore {
   int slot{-1};
   std::string word;
   AlertSide side{AlertSide::TEAM};
+  Alert type{Alert::NONE};  // the play, for its points (splash_points)
+  int points{0};            // what the play in word scored (own_points)
 };
 
 namespace detail {
@@ -309,6 +311,8 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
   const uint32_t team = p.side == AlertSide::TEAM ? cur.team_id : cur.opp_id;
   PlayerScore out;
   out.side = p.side;
+  out.type = p.type;
+  out.points = p.points;
   if (cur.sport == Sport::SOCCER) {
     if (cur.soc.goals.size() <= prev.soc.goals.size())
       return none;
@@ -355,18 +359,26 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
       out.slot = i;
   if (out.slot < 0)
     return none;
+  // The points shown come from where the words do (own_points), so the two
+  // never disagree: "FIELD GOAL" with "+3" when a touchdown came in the same
+  // read, "2 RBI" with "+2" after an earlier run.
   if (cur.sport == Sport::FOOTBALL) {
     // The play's own points say what it was, not the score: a field goal
-    // and a touchdown can come in one read.
+    // and a touchdown can come in one read. A touchdown with ESPN's college
+    // try after it keeps the two's points, as the team's splash has them.
     const int pts = cur.play_points;
     out.word = alert_word(is_try || pts == 6 ? Alert::TOUCHDOWN
                           : pts == 3         ? Alert::FIELD_GOAL
                           : pts == 2         ? Alert::SAFETY  // a 2-point conversion is a try
                                              : p.type);
+    if (!is_try && (pts == 6 || pts == 3 || pts == 2))
+      out.points = own_points(p.points, pts);
   } else if (p.type == Alert::RUN) {
     out.word = cur.play_points == 1 ? std::string("RBI") : std::to_string(cur.play_points) + " RBI";
+    out.points = own_points(p.points, cur.play_points);
   } else {
     out.word = alert_word(p.type);  // HOME RUN, GRAND SLAM, WALK-OFF, LEAD CHANGE, BUZZER BEATER
+    out.points = homer_points(p, cur);
   }
   return out;
 }
@@ -374,14 +386,16 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
 // The splash for a favorite's score: their name and the play's words, beside
 // each other when they fit a line (10 characters on one panel, 16 on two),
 // else the words under the name, in their side's color. The words are the
-// team splashes' own, so the panel gives the same ones fireworks.
+// team splashes' own, so the panel gives the same ones fireworks. The panel
+// shows their team's logo and the points with them, as for the team's.
 inline Splash player_splash(const PlayerScore &s, const GameSnapshot &g, const FavPlayer *list, bool wide) {
   if (s.slot < 0 || s.slot >= kPlayerSlots || player_empty(list[s.slot]) || s.word.empty())
     return Splash{};
   const std::string name = list[s.slot].name;
   const bool one_line = name.size() + 1 + s.word.size() <= (wide ? 16u : 10u);
-  return Splash{name + (one_line ? " " : "\n") + s.word,
-                parse_color(s.side == AlertSide::OPP ? g.opp_color : g.team_color)};
+  const bool opp = s.side == AlertSide::OPP;
+  return Splash{name + (one_line ? " " : "\n") + s.word, parse_color(opp ? g.opp_color : g.team_color),
+                opp ? g.opp_abbr : g.team_abbr, false, 0, splash_points(s.type, s.points)};
 }
 
 // What the board splashes for two reads of its game: a favorite player's

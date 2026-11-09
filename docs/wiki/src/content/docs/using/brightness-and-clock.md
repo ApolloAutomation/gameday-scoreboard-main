@@ -66,6 +66,22 @@ On a single 64x64 panel the date goes under the time, and the next game goes in 
 The same clock can stand in whenever nothing you follow is on, in season too: set the **Idle display** to **Clock**. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
 :::
 
+## Clock size and text size
+
+:::note[Coming in the next release]
+**Clock size** and **Text size** in the Panel card on the device page make the clock and the ticker bigger. Each is **Normal**, where a panel starts, or **Large**, and a change shows at once, with no restart.
+
+**Clock size** sets the time wherever the scoreboard shows a clock: the off-season clock, the idle display's **Clock**, and the second area's **Clock and date** on two rows of two or three or four panels in a row. **Large** has bigger digits where they fit:
+
+- On a 128x64 board, and in the second area on two rows of two or the right two panels of four wide, the time is half again as tall, like "12:45 PM".
+- On three or four panels in a row, with the board across the whole row, its clock is twice as tall.
+- On a single 64x64 panel, and in the right panel of three wide, the digits are half again as tall and **AM** or **PM** goes on a small line of its own under them.
+
+The date and the line with your next game stay as they are. The **Clock** page under **Showing** has its own clock and doesn't change.
+
+**Text size** sets the ticker; see [Text size](/using/ticker/#text-size).
+:::
+
 ## Heat and power protection
 
 The panel holds its brightness down by itself when it gets too warm or its power supply can't keep up, and says so on the screen.

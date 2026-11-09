@@ -1786,6 +1786,22 @@ void GamedayComponent::set_ticker8_(uint8_t f, bool on) {
     this->rebuild_state_(&this->last_fields_);
 }
 
+void GamedayComponent::set_size8_(uint8_t f, int size) {
+  if (size < 0 || size >= ::espn::kSizeCount)
+    return;
+  const uint8_t next = size ? (this->prefs8_.sizes | f) : (this->prefs8_.sizes & ~f);
+  if (next == this->prefs8_.sizes)
+    return;
+  this->prefs8_.sizes = next;
+  this->pref8_.save(&this->prefs8_);
+  ESP_LOGI(TAG, "Clock size %s, text size %s", this->clock_large() ? "Large" : "Normal",
+           this->text_large() ? "Large" : "Normal");
+  // The page lays the board and the second area out again at the new sizes
+  // (tt_apply_layout), with no restart, and both draw again.
+  this->fire_action_("layout");
+  this->emit_({});
+}
+
 void GamedayComponent::set_alerts(uint32_t on) {
   const uint32_t off = ::espn::kAlertsAll & ~on;
   if (off == this->prefs9_.alerts_off)
@@ -4923,7 +4939,14 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   }
   const bool clock = v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE;
   const UpdateFields &m = this->last_fields_;
-  const DrawResult r = area_draw(*av, f, clock, m.clock, clock_card_date(this->split_area().main_w, !m.next_line.empty()));
+  // A splash's logos, the cached ones or none while they download (its badge shows).
+  image::Image *team_logo = nullptr, *opp_logo = nullptr;
+  if (!clock && !f.splash_text.empty()) {
+    team_logo = this->logos_.get(f.team_logo);
+    opp_logo = this->logos_.get(f.opponent_logo);
+  }
+  const DrawResult r = area_draw(*av, f, clock, m.clock, clock_card_date(this->split_area().main_w, !m.next_line.empty()),
+                                 team_logo, opp_logo);
   this->a2_logo_[0] = clock ? std::string() : f.team_logo;
   this->a2_logo_[1] = clock ? std::string() : f.opponent_logo;
   this->a2_show_logos_();
@@ -4943,7 +4966,9 @@ void GamedayComponent::a2_show_logos_() {
   if (av == nullptr || this->a2_view_ == ::espn::AreaView::NONE)
     return;
   this->logos_.pin_a2(this->a2_logo_[0], this->a2_logo_[1]);
-  area_logos(*av, this->logos_.get(this->a2_logo_[0]), this->logos_.get(this->a2_logo_[1]));
+  image::Image *team = this->logos_.get(this->a2_logo_[0]), *opp = this->logos_.get(this->a2_logo_[1]);
+  area_logos(*av, team, opp);
+  splash_logos(av->game, team, opp);
 #endif
 }
 
@@ -5729,6 +5754,18 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
 #endif
   f.splash_text = splash.text;
   f.splash_color = splash.color;
+  // Whose logo goes with it, by abbreviation: a read of another game (a
+  // visit, the second area's) can have its sides the other way round.
+  if (!splash.text.empty()) {
+    if (splash.both)
+      f.splash_side = 2;
+    else if (!splash.abbr.empty() && splash.abbr == g.team_abbr)
+      f.splash_side = 0;
+    else if (!splash.abbr.empty() && splash.abbr == g.opp_abbr)
+      f.splash_side = 1;
+    f.splash_lead = splash.lead;
+    f.splash_points = splash.points;
+  }
 
   TickerOptions opts;
   opts.clock = false;  // the clock has its own row on the panel; never in the ticker
@@ -6388,6 +6425,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["watchmine"] = this->watch_from_mine();
   doc["bootaddr"] = this->show_boot_address();
   doc["standing"] = this->prefs8_.standing;
+  doc["clocksize"] = this->clock_large() ? 1 : 0;
+  doc["textsize"] = this->text_large() ? 1 : 0;
 #if defined(USE_UPDATE) && !defined(GAMEDAY_BAR)
   // Left out where nothing can be installed (the demo build) or there is no
   // choice (the bar build), so the page and the app hide the switch.
@@ -7091,6 +7130,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::STANDING:
         this->set_standing((uint8_t) op.value);
+        break;
+      case ::espn::SetKind::CLOCK_SIZE:
+        this->set_clock_size(op.value);
+        break;
+      case ::espn::SetKind::TEXT_SIZE:
+        this->set_text_size(op.value);
         break;
       case ::espn::SetKind::IDLE:
         this->set_idle(op.value);

@@ -885,7 +885,7 @@ Splash racing_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool wid
   // spleen_16 on a wide board, spleen_12 on one panel
   name = fit_words(name, wide ? 16 : 10);
   trim_right(name);
-  return Splash{name + " WINS!", kRaceGold};
+  return Splash{name + " WINS!", kRaceGold, "", false, 0, ""};
 }
 
 // ---- timing ---------------------------------------------------------------------

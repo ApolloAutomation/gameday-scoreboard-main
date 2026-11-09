@@ -226,8 +226,9 @@ packages:
 # The theme's Spleen fonts, with Latin-1 added to ESPHome's default ASCII so
 # accented names (São Paulo, Atlético) draw. Text from outside the panel goes
 # through panel_text() (components/gameday/panel_text.h), which only puts out
-# these characters, so all three sizes carry the same list. A glyph listed
-# here that a font lacks fails the build rather than drawing a box.
+# these characters, so every size that draws it carries the same list. A
+# glyph listed here that a font lacks fails the build rather than drawing a
+# box.
 font:
   - id: !extend spleen_8
     glyphs: &panel_glyphs
@@ -241,6 +242,19 @@ font:
     glyphs: *panel_glyphs
   - id: !extend spleen_16
     glyphs: *panel_glyphs
+  # Bigger digits, for a Large clock's time ("12:45 PM") and a splash's
+  # points ("+6", "+2 RUNS"). The component writes both itself and never
+  # draws outside text in them, so they hold only those characters: about 1 KB
+  # and 1.5 KB of flash, where every letter would be 12 KB and 17 KB.
+  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-12x24.bdf"
+    id: spleen_24
+    size: 24
+    glyphs: &digit_glyphs
+      - ' +0123456789:AMNPRSU'
+  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-16x32.bdf"
+    id: spleen_32
+    size: 32
+    glyphs: *digit_glyphs
 
 # Panel arrangement from the saved preference, applied before the display
 # starts: one to four panels wide, or four in a 2x2 (max_rows 2). More than
@@ -377,6 +391,9 @@ script:
           image::Image *opp = logos.get(id(gd_opp_logo_url));
           lv_image_set_src(id(gd_team_logo_img), team != nullptr ? team : id(gd_logo_blank));
           lv_image_set_src(id(gd_opp_logo_img), opp != nullptr ? opp : id(gd_logo_blank));
+          // A splash up with a badge for a logo that just came in
+          if (gameday::BoardView *v = gameday::board_view())
+            gameday::splash_logos(*v, team, opp);
 
   # Bluetooth back on, but not for every two second blip. Bringing Bluedroid
   # up and down is a large internal-RAM alloc and free each time, and that
@@ -630,11 +647,15 @@ gameday:
     # Split mode (components/gameday/split.h): the second area came or went,
     # so the board is laid out again with no restart; the area's ticker has a
     # new line or font, or its clock is up (pages/gameday-live.yaml).
+    # Clock size or Text size changed too: the fonts are new, so the
+    # ticker's scroll time and the clock's text follow.
     - if:
         condition:
           lambda: 'return x == "layout";'
         then:
           - script.execute: tt_apply_layout
+          - script.execute: tt_ticker_timing
+          - script.execute: gd_clock_tick
     - if:
         condition:
           lambda: 'return x == "a2";'
@@ -733,12 +754,18 @@ gameday:
     # Assistant keeps the original above. The page's scripts do the rest: the
     # ticker's scroll time, the clock card's time, the splash's fireworks and
     # its end, the leaderboard's rows (gd_board reads them from the update in
-    # progress, board_fields) and the logos.
+    # progress, board_fields) and the logos. A splash's logo is the one cached
+    # for the board, or its badge while it downloads, so it never waits.
     - lambda: |-
         if (gameday::board_view() == nullptr)
           id(tt_bind_view).execute();
         if (gameday::BoardView *v = gameday::board_view()) {
-          const gameday::DrawResult r = gameday::board_draw(*v, x);
+          image::Image *team_logo = nullptr, *opp_logo = nullptr;
+          if (!x.splash_text.empty()) {
+            team_logo = id(gameday_ctl).logos().get(x.team_logo);
+            opp_logo = id(gameday_ctl).logos().get(x.opponent_logo);
+          }
+          const gameday::DrawResult r = gameday::board_draw(*v, x, team_logo, opp_logo);
           if (r.ticker_changed)
             id(tt_ticker_timing).execute();
           if (r.clock_card) {

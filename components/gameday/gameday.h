@@ -86,6 +86,12 @@ struct UpdateFields {
   uint8_t opponent_rank{0};
   std::string splash_text;
   uint32_t splash_color{0};
+  // The splash's logo (board_layout.h, splash_layout): -1 none, 0 the team's,
+  // 1 the opponent's, 2 both; splash_lead of its text's characters name that
+  // side, which the logo says; splash_points what it scored ("+6"), or "".
+  int8_t splash_side{-1};
+  uint8_t splash_lead{0};
+  std::string splash_points;
   std::string last_play;
   std::string clock_text;  // "5:36 - 3rd" while the game is live, else empty
   std::string down_distance;  // "3rd & 10" while live, else empty
@@ -183,6 +189,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    alerts=<mask> (the big plays that splash, bit (Alert - 1), alerts.h)
 //                                    alertfav=0/1 (big plays only in games with the team or a favorite)
 //                                    standing=0 record|1 seed|2 place (next to pro teams)
+//                                    clocksize=0/1 textsize=0/1 (Normal or Large: the clock's
+//                                    digits, the ticker's letters; board_layout.h)
 //                                    idle=0-4 (idle.h) idledim=0-255 night=0/1
 //                                    nightstart=HH:MM nightend=HH:MM nightbri=1-255
 //                                    bet=<slot>,<league>,<team id>,<type>,<line> betdel=<slot>
@@ -337,6 +345,14 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Standing next to pro teams (espn::Standing): what follows the followed
   // team's abbreviation where its record goes.
   void set_standing(uint8_t kind);
+  // Clock size and Text size, Normal (0) or Large (1): the clock's digits, and
+  // the ticker's letters where a bigger font fits its row (board_layout.h).
+  // The page lays itself out again with no restart.
+  bool clock_large() const { return (this->prefs8_.sizes & SIZE8_CLOCK) != 0; }
+  bool text_large() const { return (this->prefs8_.sizes & SIZE8_TEXT) != 0; }
+  Sizes sizes() const { return Sizes{this->clock_large(), this->text_large()}; }
+  void set_clock_size(int size) { this->set_size8_(SIZE8_CLOCK, size); }
+  void set_text_size(int size) { this->set_size8_(SIZE8_TEXT, size); }
   void set_ticker_last_play(bool on) { this->set_flag_(FLAG_PLAY, on); }
   void set_ticker_odds(bool on) { this->set_flag_(FLAG_ODDS, on); }
   void set_opponent_splashes(bool on) { this->set_flag_(FLAG_OPP, on); }
@@ -562,12 +578,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // another minute set there still wins, but 1 minute set there doesn't
     // clear it (startup.h, rotate_saved_seconds).
     uint8_t rotate_half;
-    uint8_t spare;
+    uint8_t sizes;  // SIZE8_*, 0 (both Normal) on a panel from before them
   } __attribute__((packed));
-  static_assert(sizeof(Prefs8) == 4, "Prefs8 keeps its size, or the ticker, standing and Switch every reset");
+  static_assert(sizeof(Prefs8) == 4,
+                "Prefs8 keeps its size, or the ticker, standing, Switch every and the sizes reset");
   static constexpr uint8_t TICK8_COUNT = 1;  // baseball count, outs, pitcher and batter
   static constexpr uint8_t TICK8_MATCH = 2;  // soccer goals, cards, possession and shots
+  static constexpr uint8_t SIZE8_CLOCK = 1;  // Clock size Large
+  static constexpr uint8_t SIZE8_TEXT = 2;   // Text size Large
   void set_ticker8_(uint8_t f, bool on);
+  void set_size8_(uint8_t f, int size);
   // Big-play alerts. The types turned off rather than on, so a type added
   // later starts on. Its own blob, fixed in size like the others: a blob that
   // changes size fails to load and resets every setting in it.

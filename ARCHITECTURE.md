@@ -91,7 +91,12 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   restart. The second area's clock is `gd_lower`'s time, date and bigger
   ticker, ending above the heat and power line; its game card is built in
   C++ under `gd_lower` (`area_build`) and drawn by the component itself
-  (`area_draw`). Each area's splash covers that area only.
+  (`area_draw`). The second area's splash covers that area only; the
+  board's covers the board, and all four panels of a 2x2. The splash's logo
+  tiles, its points and a Large clock's AM or PM are built in C++ too
+  (`board_build`). Clock size and Text size (`Prefs8::sizes`) pick the fonts
+  and places: `game_geom`, `clock_card_geom` and `lower_half` in
+  `board_layout.h`; a size change runs `layout` again.
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.
@@ -181,7 +186,14 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    switches are their own preference blob (`Prefs9`), and in Live games
    "Favorite teams only" switches them all off for a game without the team or
    a favorite. The splash text goes to the panel through
-   `panel_text(text, true)`, which keeps its line break.
+   `panel_text(text, true)`, which keeps its line break. A `Splash` also
+   names its side by abbreviation (`abbr`, or `both` for the whole game's)
+   and its points (`splash_points`); `game_fields_` turns that into the
+   update's side of the board (a read of another game can have its sides the
+   other way round), and `splash_layout` (`board_layout.h`) places the logo
+   tiles, the points and the words for each board, the side's name left out
+   of the words. A tile shows the cached logo, or the team's badge until it
+   comes in (`splash_logos`), so a splash never waits for a download.
 7. **Drawing.** `emit_` builds `UpdateFields` (status, clock, scores,
    situation, ticker text and so on), rebuilds the state document, and
    `draw_` calls the `on_update` trigger. In YAML that publishes Game Status

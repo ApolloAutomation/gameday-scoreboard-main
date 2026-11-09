@@ -125,11 +125,18 @@ script:
           v.f8 = id(spleen_8)->get_lv_font();
           v.f12 = id(spleen_12)->get_lv_font();
           v.f16 = id(spleen_16)->get_lv_font();
+          v.f24 = id(spleen_24)->get_lv_font();
+          v.f32 = id(spleen_32)->get_lv_font();
+          v.blank = id(gd_logo_blank);
           v.w = lv_disp_get_hor_res(lv_disp_get_default());
-          gameday::board_view_set(v);
+          gameday::BoardView *bv = gameday::board_view_set(v);
+          if (bv == nullptr)
+            return;
+          // The splash's logos and points, and a Large clock's AM or PM
+          gameday::board_build(*bv);
           // The second area (split.h) in gd_lower, with its own game layout.
           gameday::area_build(id(gd_lower), id(gd_lower_time_lbl), id(gd_lower_date_lbl), id(gd_lower_ticker_lbl),
-                              v.f8, v.f12, v.f16, id(gd_logo_blank));
+                              *bv, id(gd_logo_blank));
 
   - id: tt_apply_layout
     then:
@@ -140,18 +147,22 @@ script:
           // and 256 wide) and the 2x2 alike. The board is always the top 64
           // rows, 128 wide beside a second area (split.h); the renderer
           // places the game layout, the no-game screen, the splash and the
-          // second area (board_layout.h, board_view.h). Run again when the
-          // second area comes or goes (the "layout" action).
+          // second area (board_layout.h, board_view.h), at the owner's Clock
+          // size and Text size. Run again when the second area comes or goes,
+          // or a size changes (the "layout" action). A splash covers the
+          // board, and on a 2x2 all four panels.
           const ::espn::SplitArea area = id(gameday_ctl).split_area();
+          const gameday::Sizes sizes = id(gameday_ctl).sizes();
           const int W = area.main_w;
-          const int H = area.on ? 64 : lv_disp_get_ver_res(lv_disp_get_default());
+          const int screen_h = lv_disp_get_ver_res(lv_disp_get_default());
+          const int H = area.on ? 64 : screen_h;
           const bool wide = W >= 128;
           if (gameday::board_view() == nullptr)
             id(tt_bind_view).execute();
           if (gameday::board_view() != nullptr)
-            gameday::board_layout(*gameday::board_view(), W, H);
+            gameday::board_layout(*gameday::board_view(), W, H, screen_h, sizes);
           if (gameday::AreaView *a = gameday::area_view()) {
-            gameday::area_layout(*a, area.on, area.x, area.y, area.w, area.h);
+            gameday::area_layout(*a, area.on, area.x, area.y, area.w, area.h, sizes);
             id(gameday_ctl).redraw_area();
           }
           // The leaderboard (golf, racing): a status row and six rows of
@@ -268,35 +279,15 @@ script:
 
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
-  # changes, so once a minute.
-  # The second area (gd_lower) has the time and date too.
+  # changes, so once a minute. The second area (gd_lower) has the time and
+  # date too. A Large clock's AM or PM can have a line of its own
+  # (board_view.h, clock_tick).
   - id: gd_clock_tick
     then:
       - lambda: |-
-          const bool card = !lv_obj_has_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN);
-          const bool lower = !lv_obj_has_flag(id(gd_lower), LV_OBJ_FLAG_HIDDEN);
-          if (!card && !lower)
-            return;
           ESPTime now = id(ha_time).now();
-          if (!now.is_valid())
-            return;
-          struct tm t = now.to_c_tm();
-          auto put = [](lv_obj_t *lbl, const std::string &text) {
-            const char *cur = lv_label_get_text(lbl);
-            if (cur == nullptr || text != cur)
-              lv_label_set_text(lbl, text.c_str());
-          };
-          const std::string time_text = ::espn::clock_time_text(t);
-          const std::string date_text = ::espn::clock_date_text(t);
-          if (lower) {
-            put(id(gd_lower_time_lbl), time_text);
-            put(id(gd_lower_date_lbl), date_text);
-          }
-          if (!card)
-            return;
-          put(id(gd_clock_time_lbl), time_text);
-          if (id(gd_clock_date))
-            put(id(gd_clock_sub_lbl), date_text);
+          if (now.is_valid())
+            gameday::clock_tick(now.to_c_tm(), id(gd_clock_date));
 
 interval:
   - interval: 1s
@@ -799,8 +790,11 @@ lvgl:
                   text: ""
                   styles: ["tt_st_status_text"]
 
-        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores.
-        # Sized and placed by tt_apply_layout (gameday::splash_box).
+        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores,
+        # all four panels of a 2x2. Sized and placed by tt_apply_layout
+        # (gameday::splash_box); the renderer adds the side's logo tiles and
+        # the points (board_view.h, board_build) and places them with the
+        # words (board_layout.h, splash_layout).
         - obj:
             id: tt_splash
             scrollbar_mode: "OFF"

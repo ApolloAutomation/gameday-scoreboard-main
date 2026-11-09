@@ -607,6 +607,39 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await expect(page.locator("#standingRow")).toBeHidden();
 });
 
+test("clock size and text size: normal by default, each posts large and back, hidden on older firmware", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#sizeCtls")).toBeVisible();
+  const clock = page.getByRole("combobox", { name: "Clock size", exact: true });
+  const text = page.getByRole("combobox", { name: "Text size", exact: true });
+  await expect(clock).toHaveAccessibleDescription(/bigger digits/);
+  await expect(text).toHaveAccessibleDescription(/bigger letters/);
+  await expect(clock).toHaveValue("0");
+  await expect(text).toHaveValue("0");
+  await clock.selectOption({ label: "Large" });
+  await expectSet(request, { clocksize: "1" });
+  await expect(clock).toHaveValue("1");
+  await text.selectOption({ label: "Large" });
+  await expectSet(request, { textsize: "1" });
+  let s = await deviceState(request);
+  expect([s.clocksize, s.textsize]).toEqual([1, 1]);
+  await clock.selectOption({ label: "Normal" });
+  await expectSet(request, { clocksize: "0" });
+  await expect.poll(async () => (await deviceState(request)).clocksize).toBe(0);
+  s = await deviceState(request);
+  expect(s.textsize).toBe(1);
+  // What the panel has shows after a reload.
+  await page.reload();
+  await expect(text).toHaveValue("1");
+  await expect(clock).toHaveValue("0");
+  // Firmware from before the settings sends neither.
+  await reset(request, { clocksize: null, textsize: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#sizeCtls")).toBeHidden();
+});
+
 const PGA = { l: "pga", id: 1106, abbr: "PGA", name: "PGA Tour" };
 
 test("a golf tour is a team on the Golf tab, and its leaderboard shows on the board", async ({ page, request }) => {

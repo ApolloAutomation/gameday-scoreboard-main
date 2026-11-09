@@ -30,14 +30,14 @@ namespace espn {
 // request with both empties a slot and then fills it, and playerdel before
 // player the same way. splitteam comes before split, so a request that picks
 // A second team's game and its team has the team first.
-constexpr const char *kSetKeys[] = {"follow",    "team",      "mode",       "rotate",   "rotatesec",  "fav1",
-                                    "fav2",      "fav3",      "fav4",       "tz",       "tzauto",     "down",
-                                    "play",      "odds",      "opp",        "panels",   "wiring",     "bootaddr",
-                                    "lockon",    "release",   "collide",    "favs",     "today",      "live",
-                                    "autoupd",   "count",     "match",      "beta",     "alerts",     "alertfav",
-                                    "watch",     "watchstay", "watchmine",  "standing", "idle",       "idledim",
-                                    "night",     "nightstart", "nightend",  "nightbri", "betdel",     "bet",
-                                    "playerdel", "player",    "splitteam",  "split"};
+constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rotate",   "rotatesec",  "fav1",
+                                    "fav2",      "fav3",       "fav4",      "tz",       "tzauto",     "down",
+                                    "play",      "odds",       "opp",       "panels",   "wiring",     "bootaddr",
+                                    "lockon",    "release",    "collide",   "favs",     "today",      "live",
+                                    "autoupd",   "count",      "match",     "beta",     "alerts",     "alertfav",
+                                    "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
+                                    "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
+                                    "betdel",    "bet",        "playerdel", "player",   "splitteam",  "split"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -51,6 +51,9 @@ static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kM
 // games, A second team's game, Today's scores, Clock and date.
 enum class SplitShow : uint8_t { OFF = 0, LIVE = 1, TEAM = 2, SCORES = 3, CLOCK = 4 };
 constexpr int kSplitCount = 5;
+
+// Clock size and Text size: 0 Normal, 1 Large (board_layout.h, Sizes).
+constexpr int kSizeCount = 2;
 
 // Standing next to pro teams: 0 Record, 1 Seed, 2 Place (espn::Standing).
 constexpr int kStandingCount = 3;
@@ -249,6 +252,8 @@ enum class SetKind : uint8_t {
   PLAYER_DEL,   // team.league, athlete: drops that favorite player
   SPLIT,        // value, split.h's SplitShow: what the second area shows
   SPLIT_TEAM,   // team: the second area's team (id 0 clears it)
+  CLOCK_SIZE,   // value, 0 Normal or 1 Large: the clock's digits
+  TEXT_SIZE,    // value, 0 Normal or 1 Large: the ticker's letters
 };
 
 struct TeamRef {
@@ -616,6 +621,12 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     // One digit, nothing else: the page sends only the choices it shows.
     op.kind = SetKind::SPLIT;
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
+    return op.value >= 0;
+  }
+  if (k == "clocksize" || k == "textsize") {
+    // One digit, nothing else, as for split.
+    op.kind = k == "clocksize" ? SetKind::CLOCK_SIZE : SetKind::TEXT_SIZE;
+    op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSizeCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
   if (k == "splitteam") {

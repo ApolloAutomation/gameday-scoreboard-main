@@ -115,7 +115,9 @@ Only the ticker switches for sports your panel follows are shown. Hockey, basket
 :::note[Coming in the next release]
 The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it, and so does an AHL or ECHL team, since HockeyTech has none either. It's hidden while your panel follows only college teams, minor league baseball, AHL or ECHL teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
-The Panel card also has a **When nothing is on** part under **Showing**:
+The Panel card also has **Clock size** and **Text size**, each **Normal** (where a panel starts) or **Large**: bigger digits for the clock, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
+
+It also has a **When nothing is on** part under **Showing**:
 
 | Setting | What it does |
 | --- | --- |

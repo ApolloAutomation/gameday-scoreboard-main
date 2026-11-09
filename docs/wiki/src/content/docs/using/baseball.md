@@ -49,6 +49,10 @@ A home run gets fireworks on black with the words in the team's color. Other run
 When your team wins, a victory splash with fireworks says your abbreviation and "WINS".
 
 :::note[Coming in the next release]
+Each splash shows the logo of the team that scored, with the runs it gained. A home run, a grand slam or a walk-off says how many, like **+2 RUNS** with HOME RUN, and other runs, whose words count them already, just the number, like **+2**. A home run counts its own runs and a grand slam is always **+4 RUNS**, even when another run scored earlier in the same update. On a single 64x64 panel, and at the right end of three or four panels in a row, there's room for the number only. The logo says whose run it was, so the other side's splash leaves its abbreviation out. See [Splashes](/using/panel-sizes/#splashes).
+:::
+
+:::note[Coming in the next release]
 Two more splashes, both with fireworks:
 
 - **GRAND SLAM**: a home run that ESPN says scored four runs, or one ESPN's play calls a grand slam. Runs from an earlier play in the same update don't make a home run a grand slam.

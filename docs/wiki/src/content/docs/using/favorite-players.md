@@ -47,7 +47,7 @@ A long line is cut after its last part that fits. There's no stat line before th
 
 ## The celebration
 
-When a favorite player scores in the game on the board, the celebration says their name and the play, in place of the team's splash for that play, never as well. It gets the same colors and fireworks the team's splash would, whatever the player's name.
+When a favorite player scores in the game on the board, the celebration says their name and the play, in place of the team's splash for that play, never as well. It gets the same colors and fireworks the team's splash would, whatever the player's name, and the same logo of the player's team with the points of the player's play, like **+6**, **+3** or **+2 RUNS**. They always match the play's words: a field goal shows **+3** even when a touchdown came in the same update, and **JUDGE 2 RBI** shows **+2** even when another run scored just before. A late lead change has no points. See [Splashes](/using/panel-sizes/#splashes).
 
 | Sport | What names the player |
 | --- | --- |
@@ -61,7 +61,7 @@ The panel compares each read of the game with the one before, so a score shows w
 
 A play that ends the game, like a walk-off or a buzzer beater that wins it, names the player only when a read catches it while ESPN still has the game on. Once ESPN posts the final, it no longer lists the last play, so a game-ending play read only at the final gets the team's splash.
 
-On one panel the name and the play take two or three lines, like **ALLEN** over **TOUCHDOWN**. On a 128x64 display they share a line when they fit, and on three or four panels in a row or two rows of two they're laid out the same way, centered across the whole width. On two rows of two the celebration covers all four panels, with the name and the play across the middle.
+On one panel the name and the play go under the logo in two lines, like **ALLEN** over **TOUCHDOWN**, or in three in smaller letters when a long name comes with a two-word play. On a 128x64 display they share a line when they fit, and on three or four panels in a row they sit between the logo and the points. On two rows of two the celebration covers all four panels, with the name and the play across the middle under the logo.
 
 ### Its switch
 
