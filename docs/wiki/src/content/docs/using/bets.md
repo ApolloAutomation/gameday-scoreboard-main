@@ -46,6 +46,8 @@ The panel follows bets only on games it's already reading from ESPN:
 - the game on the board, in every mode
 - in Favorite teams, each favorite's game
 
+The panel's checks of other games for big plays, and the minute the board spends on another game's big play, only keep up a bet that's on that game already: the ticker and the Bets card show how it's doing while the board is on that game, and it gets its result at the final even when the board has moved on. They never put a bet on a game or move it to another one. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+
 A bet on a team the panel isn't showing waits until a game of that team comes on the board, and the Bets card says **Starts when the panel shows a BUF game**. In Favorite teams the panel reads the game on the board most often. A favorite's game that isn't on the board is checked less often, so its bet can lag behind until that game takes the board.
 
 ## Where it shows
@@ -70,6 +72,6 @@ Home Assistant's Game Status leaves bets out.
 
 ## When a bet goes away
 
-After the final, the result stays until midnight in the panel's timezone, then the panel drops the bet. A bet whose game the panel stops showing before its final, because you changed the team or the mode, or the game was called off, goes away a day and a half after the game's start.
+After the final, the result stays until midnight in the panel's timezone, then the panel drops the bet. A bet whose game the panel stops showing before its final, because you changed the team or the mode, or the game was called off, goes away a day and a half after the game's start, unless the panel's checks of other games for big plays see that final and give the bet its result.
 
 Bets are saved on the panel, so they stay through a restart or an update.

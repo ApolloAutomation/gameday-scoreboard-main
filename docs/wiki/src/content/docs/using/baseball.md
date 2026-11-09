@@ -53,6 +53,10 @@ Two more splashes, both with fireworks:
 Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
 :::
 
+:::note[Coming in the next release]
+A big play in another baseball game can take the board for a minute, with **Switch to big plays in other games** on. The panel checks those games about every 45 seconds, and by then ESPN's last play is often the next batter's, so a home run is also told from the score and the bases: the batting team scored its runners plus one, the bases are now empty and the outs haven't changed. With the bases loaded before, that's a grand slam. Other runs show as runs, so turn off **Runs** if a switch for every run is too much. A walk-off counts when the panel saw the game in the 9th inning or later. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+:::
+
 ## The final
 
 The ticker says "Final", or "Final/10" after extra innings, with each team's hits and errors and the series or the records. The final stays up for ten minutes in My team, shorter than other sports because game two of a doubleheader can start soon after game one. Then the panel looks up your team's next game.

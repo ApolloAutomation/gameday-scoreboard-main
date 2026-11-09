@@ -81,6 +81,10 @@ Both flash the screen in the color of the team that took the ball away. The othe
 Every splash on this page has its own switch in the Celebrations card, so you can keep touchdowns and turn off extra points, for example. See [Celebrations](/using/device-page/#celebrations).
 :::
 
+:::note[Coming in the next release]
+A big play in another football game can take the board for a minute, with **Switch to big plays in other games** on. The panel checks those games about every 45 seconds, so it goes mostly by the score: 6 to 8 points are a touchdown (with its try, when both land in one check), 3 a field goal and 1 an extra point. Other points between two checks, like a touchdown and a field goal, show as SCORE, under the **Touchdown** switch. An interception or a lost fumble switches the board only when it's still ESPN's latest play at the check. Either team's big play counts. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+:::
+
 When your team wins, a victory splash with fireworks says your abbreviation and "WINS".
 
 ## Halftime and the final

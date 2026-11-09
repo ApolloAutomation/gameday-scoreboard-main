@@ -71,6 +71,13 @@ inline bool follow_start(FollowPin &p, bool mode_ok, bool picked, const GameSnap
   return true;
 }
 
+// Whether follow=1 would pin g now (follow_start), the pin left as it is:
+// the device page shows the switch only then.
+inline bool follow_can_start(const FollowPin &p, bool mode_ok, bool picked, const GameSnapshot &g) {
+  FollowPin copy = p;
+  return follow_start(copy, mode_ok, picked, g, 0);
+}
+
 // When g started, for the 8 hour limit: not before the pin, and for a game
 // with no start time yet (a midnight placeholder), the end of its day.
 inline int64_t follow_start_epoch(const FollowPin &p, const GameSnapshot &g) {

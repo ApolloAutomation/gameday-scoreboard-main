@@ -40,6 +40,8 @@ To stay with one game, turn on **Follow this game** under the board on the devic
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it and goes back to switching games. Changing the mode, your team, your favorites or the leagues stops following too. So does a restart, since the panel doesn't save it. The switch shows only while Live games has a game it picked on the board that hasn't ended, not while it shows your team's card or recent finals with nothing live. My team follows one team already, so it has no such switch.
 
+While the panel follows a game, it doesn't switch to big plays in other games and doesn't check those games, so it uses no data on them. If the board is on another game's big play when you turn the switch on, the panel goes straight back to the game it was showing and follows that one. See [Big plays in other games](#big-plays-in-other-games).
+
 Turn on **Favorite teams only** in the Celebrations card and only games with your team or one of your favorites get big-play splashes, like touchdowns, goals and lead changes. The victory splash still shows for every game. See [Celebrations](/using/device-page/#celebrations).
 :::
 
@@ -84,6 +86,41 @@ Favorite teams with no favorites set works like My team, and the ticker asks you
 A game counts as on once it starts. The panel keeps the final up for its usual time first: half an hour in My team (ten minutes for baseball), and **After the final** in Favorite teams, where a favorite's game also takes the panel **Take over** minutes before kickoff, as always. **Follow this game** keeps its game up too. After a restart, a final the panel finds already over gets that wait only if the game started less than 4 hours ago, so an automatic update's restart in the night doesn't light up an **Off or dim** panel for last night's game. A golf tour or a racing series keeps its leaderboard up while a round or a session is on, and for half an hour after the final. Overnight between rounds, between a race weekend's sessions, and after that half hour, the idle display has the panel.
 
 The idle display needs the time of day. What it shows waits for the panel's first board after a restart, or after you pick a new team or mode, but **Off or dim** and the night hours start as soon as the panel knows the time, and a restart keeps it. While the panel isn't on Wi-Fi, **Off or dim** leaves it lit. **Scores** reads today's games from ESPN about once every half hour while games you don't follow are on, and at the next start time otherwise, the same as Live games does. See [Night hours](/using/brightness-and-clock/#night-hours) for the overnight schedule.
+
+A big play in another game counts as a game that's on (see [Big plays in other games](#big-plays-in-other-games)). The panel switches to it over the clock, the scores, **My team today** or **Off or dim**, and lights up for it even when **Off or dim** has it dark. In the night hours it stays at the night brightness. After the stay the idle display has the panel back, and **Scores** comes back without reading today's games again. To keep the panel dark or on the clock while games you don't follow are on, turn off **Switch to big plays in other games**. While **Scores** shows, its reads and the checks of other games take turns between the panel's own reads, and neither holds the other up.
+:::
+
+## Big plays in other games
+
+:::note[Coming in the next release]
+While the panel shows its game, it can keep an eye on other live games too. When one of them has a big play, like a touchdown, a home run, a goal or a late lead change, the panel switches to that game, shows the splash, stays there for a minute, then goes back to what it was showing. It's on unless you turn off **Switch to big plays in other games** in the Celebrations card, where **Stay on a big play** sets how long it stays, 30 seconds to 5 minutes. See [Celebrations](/using/device-page/#celebrations).
+
+Which games it watches depends on the mode:
+
+- **Live games**: every other game on in the leagues Live games follows. With **Favorite teams only** on, only games with your team or a favorite.
+- **Favorite teams**: your other favorites' games.
+- **My team**: your favorites' games, if you have any.
+
+It watches up to 8 games at once, your favorites' first, then the closest games, late ones ahead of early ones.
+
+- Your team's game is never left for another game's big play from its start time on, unless a favorite plays in that game and **Switch from my team** is on. It starts off. If your team's game starts while the board is on another game, the board goes back to it. For a golf tour or a racing series, that's while a round or a session is on.
+- If the game the board was showing ends while the board is on another game, its victory splash shows when the board comes back. A big play it had meanwhile doesn't splash late.
+- Another big play while the board is on another game can move it on to that one during the first stay, so the board is back on its own game within two stays.
+- The panel doesn't switch while the board's own splash is up, and a game it has just started watching never switches it for a score from before.
+- A basketball final doesn't switch the board, since that game is over.
+- Home Assistant's Game Status and Last Play stay on the game the mode follows.
+- **Follow this game** stops all of it: no switch and no checks of other games while the panel follows a game. If the board is on another game's big play when you turn it on, the panel goes straight back to the game it was showing and follows that one.
+- The idle display gives way to a big play in another game for its stay, at the night brightness in the night hours, even with **Off or dim**, then has the panel back. See [When nothing is on: the idle display](#when-nothing-is-on-the-idle-display).
+- A bet that's on the other game already, because the panel showed that game before, shows in the ticker while the board is on it, and the checks of that game keep the bet up to date and give it its result at the final. Neither the switch nor a check ever puts a bet on a game by itself. See [Bets](/using/bets/).
+- Golf and racing aren't watched, and neither are a soccer favorite's cup games, like the Champions League. Neither is a sport whose big-play switches in the Celebrations card are all off.
+
+The panel checks each watched game about every 45 seconds, in the gaps between its own reads of the game on the board, timed by how long ESPN took the last time so the score on the board doesn't wait for it. When ESPN is slow, a check can hold the board's next update up for a few seconds now and then. When the gaps can't take every check in a round, the ones left out go first in the next, so no watched game goes unchecked round after round. A check ESPN doesn't answer waits for the next round. One that keeps waiting out ESPN's timeout waits a few rounds more each time, up to about 5 minutes, until ESPN answers again, and the panel pauses the checks for a few minutes if ESPN asks it to slow down. That uses more data:
+
+- In Live games it reads each league's whole day of games at once: about 250 KB each time on an NFL Sunday, up to about 20 MB an hour, and about as much on a full day of baseball. A league with nothing else on is checked again at its next start, or when a game that's on leaves the board.
+- College games, which come in much larger days, and your favorites' games in My team and Favorite teams are read one at a time, 10 to 20 KB each, about 1 to 1.5 MB an hour per game. The panel looks for a favorite's game at its start time, and every few hours otherwise.
+- In Live games, a college game that starts after the panel last looked for live games is watched from its next look, after **Switch every** or when the game on the board ends.
+
+A check every 45 seconds sees less than the board's every 10, so a big play in another game is told mostly by the score. The sport pages say what that means for each: [football](/using/football/), [baseball](/using/baseball/), [basketball](/using/basketball/), [hockey](/using/hockey/) and [soccer](/using/soccer/).
 :::
 
 ## Remote buttons and modes

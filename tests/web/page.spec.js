@@ -835,6 +835,38 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(page.locator("#alertFavRow")).toBeHidden();
 });
 
+test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {
+  const sw = (name) => page.getByRole("switch", { name, exact: true });
+  const stay = page.getByRole("combobox", { name: "Stay on a big play" });
+  await reset(request, {});
+  await page.goto("/");
+  await expect(sw("Switch to big plays in other games")).toBeChecked();
+  await expect(sw("Switch from my team")).not.toBeChecked();
+  await expect(stay).toHaveValue("60");
+  await sw("Switch to big plays in other games").click();
+  await expectSet(request, { watch: "0" });
+  await expect(sw("Switch to big plays in other games")).not.toBeChecked();
+  await sw("Switch from my team").click();
+  await expectSet(request, { watchmine: "1" });
+  await expect(sw("Switch from my team")).toBeChecked();
+  await stay.selectOption("180");
+  await expectSet(request, { watchstay: "180" });
+  await expect.poll(async () => (await deviceState(request)).watchstay).toBe(180);
+
+  // A stay the list doesn't have still shows.
+  await reset(request, { watchstay: 40 });
+  await page.reload();
+  await expect(stay).toHaveValue("40");
+
+  // Firmware from before the watcher: none of the three.
+  await reset(request, { watch: null, watchstay: null, watchmine: null });
+  await page.reload();
+  await expect(sw("Opponent scores too")).toBeVisible();
+  await expect(page.locator("#watchRow")).toBeHidden();
+  await expect(page.locator("#watchStayRow")).toBeHidden();
+  await expect(page.locator("#watchMineRow")).toBeHidden();
+});
+
 test("a screen reader gets each control's name, role and state", async ({ page, request }) => {
   await reset(request, { play: false });
   await page.goto("/");
@@ -1233,6 +1265,43 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: null });
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("LIVE");
+  await expect(bar).toBeHidden();
+});
+
+test("Follow this game during another game's big play follows the game the panel was showing", async ({ page, request }) => {
+  const bar = page.locator("#followbar");
+  const sw = page.getByRole("switch", { name: "Follow this game" });
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  // The board is on another game's big play, even one that has just ended
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, visit: true, visit_follow: true });
+  await page.goto("/");
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeVisible();
+  await expect(sw).not.toBeChecked();
+  await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until it ends.");
+  await sw.click();
+  await expectSet(request, { follow: "1" });
+  await expect.poll(async () => (await deviceState(request)).visit).toBe(false);
+  await expect(sw).toBeChecked();
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
+  // Favorite teams says After the final
+  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true, visit_follow: true });
+  await page.reload();
+  await expect(bar).toBeVisible();
+  await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until its final has been up for After the final.");
+  // Not when the game the panel was showing has ended meanwhile, or Favorite
+  // teams had no favorite's card up: the panel couldn't follow it
+  await reset(request, { mode: 5, game: { ...g, ...LIVE }, visit: true, visit_follow: false });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("LIVE");
+  await expect(bar).toBeHidden();
+  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true, visit_follow: false });
+  await page.reload();
+  await expect(bar).toBeHidden();
+  // Not in My team, which has nothing to follow
+  await reset(request, { mode: 0, visit: true, visit_follow: true });
+  await page.reload();
   await expect(bar).toBeHidden();
 });
 

@@ -87,7 +87,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
-  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`,
+  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -176,6 +176,75 @@ first gives way to an earlier one until it starts), keeps the final's
 result and goes at local midnight (`bets_expire`). Live standing is worked
 out from the snapshot each time and never saved. `emit_` adds the bets on
 the board's game to the ticker, and the state document lists every bet.
+
+**Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
+in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
+the board's gaps: `loop()` calls `start_watch_job_` while the next board poll
+is not due, after the idle display's scores read (`start_side_job_`), which
+goes first when it is due and isn't fitted to the board's next read; each is
+bounded (a scan every half hour or at the next start, a read per source or
+game every cycle), so neither keeps the other from its reads (in Favorite
+teams, `start_fav_job_` hands the watcher the one-second ticks
+that read nothing, with the locked game's next poll or the next team read as
+the board's next read, `watch_fav_due`). It starts a read (a `Job` with
+`need_watch`) only when that read is further off than the read's last time
+plus a second (`WatchTimes`, timed per league's day scoreboard and for a game
+on its own by its last good read), so the board's 10 s poll waits only when
+ESPN is slower than last time. A failed read that took longer than expected
+(a hang to the HTTP timeout) keeps the time and holds its kind for the rest
+of the cycle, then 3 and 7 cycles when it does it again, until one answers.
+`watch_next` skips a read that doesn't fit for the next one that does, takes
+the one tried longest ago first (then the sources' order and `watch_rank`'s),
+so the reads a full cycle left out go first the next, and a kind no gap took
+all cycle is expected an eighth quicker the next, so a slow scoreboard is
+timed again instead of never read. Every 45 s (`kWatchCycleMs`) each source is
+read once: in Live games a pro league's day scoreboard (`scan_url`), and one
+game at a time (`event_url`) for a college league, whose games come from the
+board's own scan (`watch_feed_`), and for the favorites in My team and
+Favorite teams, found by their league's or college conference's day
+scoreboard at their next start (the board's own card's start counts too,
+`watch_want_day`), or when a game that's on leaves the board, which reads
+its league's again (`watch_board_moved`; Favorite teams' playlist of cards
+that aren't on reads nothing). Only sports with a big play switched on are read
+(`watch_sport_mask`). Up to 8 games are kept (`WatchGame`, 72 bytes each, in
+internal RAM; the documents are PSRAM's), favorites and close games first
+(`watch_rank`, `watch_keep`, which never lets a list grow past 8). The fetch
+task runs `detect_big_play` on each game against its last good read
+(`watch_detect`, which rebuilds the read before from the `WatchGame` and
+tells a home run from the score and the bases when the last play has moved
+on), never on a game's first read or one more than two cycles old. A failed
+read waits for the next cycle without holding up the others, a game whose
+own read fails twice drops out (`watch_failed`), and a refusal (403, 429)
+holds the watcher at least 5 minutes and backs the board off as its own
+would (`watch_refused_`). Like the scores' reads, it reads nothing while the
+board backs off, and nothing for a full retry after the loop gives up on a
+worker; a watcher read given up on counts as a failed one that took the
+whole wait (`WatchTimes::took`). A big play the board may take (`watch_may_switch`:
+not during its own splash, not from the panel's team's game from its start
+time on, `watch_live` (a golf tour's or a racing series' leaderboard while a
+round or a session is on, `watch_own_game`), unless a favorite plays and "Switch from my team" is
+on, a chained one only during the first stay, and `switch_allowed_()`,
+false while Follow this game holds) starts a visit: `start_job_` polls that
+game, its first poll carries the splash, and after "Stay on a big play", or
+once the panel's team's game starts, `end_visit_` puts the mode's own board
+back and reads it at once, that first read splashing only a final reached
+meanwhile (`board_prev_`, `watch_back_prev`: the victory splash, never a big
+play from while the board was away). Neither the mode's game nor the visit's
+is watched. Home Assistant keeps the mode's game (`ha_game_`), and the state
+document says `visit`, and `visit_follow` while Follow this game could still
+pin the mode's game (`follow_can_start`): the page shows the switch only
+then. Follow this game pins the mode's own game, the visit's saved
+board (`watch_mode_game`), and ends a visit up then (`set_follow`, and
+`watch_visit_over` with `allowed` false); while it holds, `watching_()` is
+false, so nothing is read and the watched games start over after it. A
+visit is busy for the idle display (`idle_busy_`'s hold): it shows over the
+clock, the scores or Off or dim, at the night brightness in the night hours,
+and the scores keep their scan's timing when back within two stays
+(`side_off_ms_`). For bets, `bets_tick_` hands a visit's game to
+`bets_update`, not `bets_observe`, and a watcher read hands back the games
+the bets are tied to already (`WatchJob::bet_events`, `WatchJob::bets`):
+those bets keep their details and take a result, but no read ties a bet to
+a game or moves one.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -386,7 +455,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
-  the panel's lines), `test_bets.cpp` (manual bets) and `test_networks.cpp`
+  the panel's lines), `test_bets.cpp` (manual bets), `test_watch.cpp` (the
+  big-play watcher: which games, big plays from day scoreboards, when a read
+  may run, when the board switches and goes back) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

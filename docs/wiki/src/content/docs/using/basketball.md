@@ -45,6 +45,10 @@ Baskets still don't splash, but four moments do, each with its own switch in the
 The other side's lead changes and buzzer beaters put its abbreviation first, like "MIN LEAD CHANGE", and need **Opponent scores too**. See [Celebrations](/using/device-page/#celebrations).
 :::
 
+:::note[Coming in the next release]
+A late lead change or overtime in another basketball game can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those games about every 45 seconds, so a buzzer beater switches it only when a check lands on the last second, and a final never does, since that game is over. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+:::
+
 ## The final
 
 The ticker says "Final", or "Final/OT" after overtime, with the series or the records. The final stays up for half an hour in My team, then the panel looks up your team's next game.

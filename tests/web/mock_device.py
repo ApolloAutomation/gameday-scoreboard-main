@@ -99,7 +99,12 @@ INITIAL = {
     "autoupd": False, "beta": False, "standing": 0,
     # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
+    # The big-play watcher (components/gameday/watch.h): stay in seconds.
+    "watch": True, "watchstay": 60, "watchmine": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
+    # Another game's big play has the board for a moment (watch.h), and
+    # whether Follow this game could still follow the mode's own game then.
+    "visit": False, "visit_follow": False,
     # The idle display and the night hours (components/gameday/idle.h), and
     # what they do now: idle_view "" (the mode's board), "clock", "scores" or
     # "today"; night_now inside the night hours; dark while Off has it dark.
@@ -229,9 +234,13 @@ def can_follow():
     """set_follow() (follow.h): the mode put the game on the board itself. Live games
     (and the old live modes 1-3) with a game it picked, not the team's card or the
     finals, or Favorite teams with favorites. My team has nothing to pin, and a game
-    that has ended has nothing left to keep up (a pin it already has stays)."""
+    that has ended has nothing left to keep up (a pin it already has stays). While
+    another game's big play has the board (visit), the game to follow is the mode's
+    own, which the mock doesn't keep: visit_follow says whether it can be followed."""
     g = STATE.get("game") or {}
     up = g.get("s", "NOT_FOUND") not in ("NOT_FOUND", "POST") and bool(g.get("id")) and g.get("sport") not in (5, 6)
+    if STATE.get("visit"):
+        up = bool(STATE.get("visit_follow"))
     if STATE["mode"] == 4:
         return up and any(STATE["favs"])
     return up and STATE["mode"] in (1, 2, 3, 5) and not STATE.get("fallback") and not STATE.get("recap")
@@ -240,6 +249,12 @@ def can_follow():
 def let_go():
     """A new team or mode, any favorites post and new leagues let the pin go."""
     STATE["follow"] = False
+
+
+def end_visit():
+    """end_visit_() and drop_visit_(): another game's big play gives the board back."""
+    STATE["visit"] = False
+    STATE["visit_follow"] = False
 
 
 def bet_line(v, spread):
@@ -323,22 +338,27 @@ def apply_set(kv):
             if v != "1":
                 let_go()
             elif can_follow():
+                # The mode's own game, and the board goes straight back to it.
                 STATE["follow"] = True
+                end_visit()
         elif k == "team":
             ref = parse_team_ref(v)
             if ref:
                 if (STATE["team"].get("l"), STATE["team"].get("id")) != ref:
                     let_go()
+                    end_visit()
                 STATE["team"] = team(*ref)
                 TEAM_LEAGUE[0] = ref[0]
             elif v == "none":
                 if STATE["team"]:
                     let_go()
+                    end_visit()
                 STATE["team"] = {}
         elif k == "mode":
             if 0 <= atoi(v) < LIMITS["kModeCount"]:
                 if atoi(v) != STATE["mode"]:
                     let_go()
+                    end_visit()
                 STATE["mode"] = atoi(v)
         elif k == "rotate":
             STATE["rotate"] = clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes")
@@ -381,8 +401,11 @@ def apply_set(kv):
                 STATE["tz"], STATE["tz_name"] = i, TZS[i]
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
-        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav"):
+        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "watch",
+                   "watchmine"):
             STATE[k] = v == "1"
+            if k == "watch" and v != "1":
+                end_visit()
         elif k == "alerts":
             # A bit past the known types, a negative number or no number at
             # all (which atoi would read as every switch off) is refused.
@@ -395,6 +418,9 @@ def apply_set(kv):
             bet = parse_bet(v)
             if bet:
                 put_bet(bet[0], bet_on_board(bet_doc(*bet)))
+        elif k == "watchstay":
+            # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
+            STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)
@@ -440,7 +466,10 @@ def selftest():
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
         # board: false stands for a board with nothing of the mode's own to follow,
-        # final: true for its game having ended.
+        # final: true for its game having ended. During a visit that game is the
+        # mode's own, the one visit_follow says can be followed.
+        if start.get("visit"):
+            start["visit_follow"] = start.get("board", True) and not start.get("final", False)
         if start.pop("final", False):
             start["game"] = {**INITIAL["game"], "s": "POST"}
         if not start.pop("board", True):

@@ -52,15 +52,19 @@ std::string keys(const std::vector<League> &leagues) {
 // mode has a game of its own on the panel to follow (not Live games'
 // fallback card or finals rotation, nor an empty board), and final that the
 // game has ended. bets are the manual bets by slot (bets.h), as entered.
+// visit: another game's big play has the board for a moment (watch.h), the
+// mode's own game being the one board and final describe.
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
   int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
+  bool watch{true}, watchmine{false}, visit{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
   int alerts{(1 << kAlertBits) - 1};
+  int watchstay{60};
   // The idle display and the night hours (IdlePrefs' defaults)
   int idle{0}, idledim{0}, nightstart{kNightStartDefault}, nightend{kNightEndDefault},
       nightbri{kNightBrightnessDefault};
@@ -120,6 +124,7 @@ void load(Settings &s, JsonObjectConst o) {
   num("panels", s.panels);
   num("alerts", s.alerts);
   num("standing", s.standing);
+  num("watchstay", s.watchstay);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -137,6 +142,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("board", s.board);
   flag("final", s.final);
   flag("follow", s.follow);
+  flag("visit", s.visit);
   flag("alertfav", s.alertfav);
   num("idle", s.idle);
   num("idledim", s.idledim);
@@ -164,6 +170,8 @@ void load(Settings &s, JsonObjectConst o) {
         printf("FAIL set_cases.json: a start bet doesn't parse: %s\n", value.c_str());
     }
   }
+  flag("watch", s.watch);
+  flag("watchmine", s.watchmine);
 }
 
 bool any_favorite(const Settings &s) {
@@ -182,14 +190,14 @@ void apply(Settings &s, const SetOp &op) {
   switch (op.kind) {
     case SetKind::TEAM:
       if (!(op.team == s.team))
-        s.follow = false;
+        s.follow = s.visit = false;  // reset_game_ drops the visit too
       s.team = op.team;
       if (op.team.id != 0)
         s.team_league = op.team.league;
       break;
     case SetKind::MODE:
       if (op.value != s.mode)
-        s.follow = false;
+        s.follow = s.visit = false;
       s.mode = op.value;
       break;
     case SetKind::ROTATE: s.rotate = op.value; break;
@@ -239,6 +247,8 @@ void apply(Settings &s, const SetOp &op) {
       }
       follow_start(p, follow_mode_ok((uint8_t) s.mode, any_favorite(s)), s.board, g, 0);
       s.follow = p.on;
+      if (s.follow)
+        s.visit = false;  // the board goes straight back to the game it follows (end_visit_)
       break;
     }
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
@@ -246,6 +256,13 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::STANDING: s.standing = op.value; break;
     case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // set_bet_
     case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
+    case SetKind::WATCH:
+      s.watch = op.on;
+      if (!op.on)
+        s.visit = false;  // set_watch ends the visit
+      break;
+    case SetKind::WATCHSTAY: s.watchstay = op.value; break;
+    case SetKind::WATCHMINE: s.watchmine = op.on; break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -299,6 +316,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["beta"] = s.beta;
   doc["panels"] = s.panels;
   doc["follow"] = s.follow;
+  doc["visit"] = s.visit;
   doc["alerts"] = s.alerts;
   doc["alertfav"] = s.alertfav;
   doc["standing"] = s.standing;
@@ -321,6 +339,9 @@ void state_doc(const Settings &s, JsonDocument &doc) {
     o["type"] = bet_type_key(b);
     o["half"] = b.line;
   }
+  doc["watch"] = s.watch;
+  doc["watchstay"] = s.watchstay;
+  doc["watchmine"] = s.watchmine;
 }
 
 void test_fixture_cases() {
@@ -451,6 +472,13 @@ void test_parse_set() {
     at++;
   }
   SCHECK(del_at >= 0 && del_at < bet_at, "betdel empties a slot before bet fills it");
+  SCHECK(parse_set("watch", "0", op, kFavMax) && op.kind == SetKind::WATCH && !op.on, "watch 0");
+  SCHECK(parse_set("watchmine", "1", op, kFavMax) && op.kind == SetKind::WATCHMINE && op.on, "watchmine 1");
+  SCHECK(parse_set("watchstay", "120", op, kFavMax) && op.kind == SetKind::WATCHSTAY && op.value == 120,
+         "watchstay 120");
+  SCHECK(parse_set("watchstay", "5", op, kFavMax) && op.value == kWatchStayMinSeconds, "watchstay floor");
+  SCHECK(parse_set("watchstay", "99999999999", op, kFavMax) && op.value == kWatchStayMaxSeconds, "watchstay ceiling");
+  SCHECK(parse_set("watchstay", "45", op, kFavMax) && op.value == 40, "watchstay in tens of seconds");
 
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {

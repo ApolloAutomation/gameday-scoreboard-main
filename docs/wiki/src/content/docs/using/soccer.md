@@ -56,6 +56,10 @@ Two more splashes:
 Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
 :::
 
+:::note[Coming in the next release]
+A goal, a penalty goal or a red card in another match can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those matches about every 45 seconds, from the league's day of matches, so a favorite's cup match, like one in the Champions League, isn't watched. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+:::
+
 ## Full time
 
 The clock row says "FT", "AET" after extra time, or "PENS" after a shootout. The ticker says "Full time", "After extra time" or who won on penalties, like "PSG win 4-3 on penalties", then the cup stage, the goals, any red cards and both records. The final stays up for half an hour in My team, then the panel looks up the next match.

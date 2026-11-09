@@ -10,7 +10,8 @@
 // (ManualBets, kept in flash) are the only one now. A bet tracker's API could
 // be another source of the same Bet records, and the panel would follow its
 // bets the same way (bets_observe, bets_expire). Likewise a BetGame is any
-// game the panel has read; a later watcher could feed more of them.
+// game the panel has read: the big-play watcher's reads of other games
+// (watch.h) feed theirs too, to the bets tied to them already (bets_update).
 // Pure, no ESPHome includes, so the host tests cover it.
 #pragma once
 
@@ -410,6 +411,23 @@ class ManualBets final : public BetSource {
 inline void bets_observe(BetSource &src, const BetGame &g, int64_t now, int64_t midnight) {
   for (uint8_t i = 0; i < src.size(); i++)
     if (bet_observe(src.at(i), g, now, midnight))
+      src.changed();
+}
+
+// The panel read g for another reason than following it: the big-play
+// watcher's look at another game, or the board on that game's big play for a
+// moment (watch.h). Only a bet tied to g already keeps its details and takes
+// its result; none ties to g or moves to it, which only the games the panel
+// follows do (bets_observe).
+inline bool bet_update(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
+  if (bet_empty(b) || b.event == 0 || b.event != g.event || b.league != g.league)
+    return false;
+  return bet_observe(b, g, now, midnight);
+}
+
+inline void bets_update(BetSource &src, const BetGame &g, int64_t now, int64_t midnight) {
+  for (uint8_t i = 0; i < src.size(); i++)
+    if (bet_update(src.at(i), g, now, midnight))
       src.changed();
 }
 

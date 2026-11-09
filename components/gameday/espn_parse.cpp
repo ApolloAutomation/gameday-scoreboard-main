@@ -21,6 +21,7 @@ static std::string site_base(League league) {
   return std::string(site_root.load(std::memory_order_relaxed)) + (l != nullptr ? l->path : "football/nfl");
 }
 
+GameSnapshot::GameSnapshot() = default;
 GameSnapshot::GameSnapshot(const GameSnapshot &) = default;
 GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
 GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
@@ -460,6 +461,61 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
   if (neutral && them > us)
     return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
   return Splash{};
+}
+
+void fill_game_filter(JsonObject ev, Sport sport) {
+  fill_event_filter(ev);
+  if (sport == Sport::FOOTBALL) {
+    // An interception or a lost fumble (alerts.h): what the play was, which
+    // play, and who has the ball after it, which ESPN sends even when it
+    // leaves possession out around a score.
+    JsonObject lp = ev["competitions"][0]["situation"]["lastPlay"];
+    lp["type"]["text"] = true;
+    lp["id"] = true;
+    lp["end"]["team"]["id"] = true;
+    lp["team"]["id"] = true;
+  }
+  if (sport == Sport::BASEBALL)
+    fill_baseball_filter(ev);
+  if (sport == Sport::SOCCER)
+    fill_soccer_filter(ev);
+  if (sport == Sport::BASKETBALL)
+    fill_basketball_filter(ev);
+  if (sport == Sport::HOCKEY)
+    fill_hockey_filter(ev);
+}
+
+bool game_from_event(JsonObjectConst ev, Sport sport, uint32_t our_team_id, GameSnapshot &out) {
+  GameSnapshot s;
+  if (!snapshot_from_event(ev, our_team_id, s))
+    return false;
+  s.sport = sport;
+  if (sport == Sport::BASEBALL)
+    baseball_from_event(ev, s);
+  if (sport == Sport::SOCCER)
+    soccer_from_event(ev, s);
+  if (sport == Sport::BASKETBALL)
+    basketball_from_event(ev, s);
+  if (sport == Sport::HOCKEY)
+    hockey_from_event(ev, s);
+  out = std::move(s);
+  return true;
+}
+
+DayGame day_game(JsonObjectConst ev) {
+  DayGame d;
+  d.event_id = str_or_empty(ev["id"]);
+  const std::string state = str_or_empty(ev["status"]["type"]["state"]);
+  d.state = state == "in"     ? GameState::IN
+            : state == "post" ? GameState::POST
+            : state == "pre"  ? GameState::PRE
+                              : GameState::NOT_FOUND;
+  d.kickoff_epoch = parse_iso8601_z(str_or_empty(ev["date"]));
+  JsonObjectConst comp = ev["competitions"][0];
+  d.time_tbd = time_tbd(comp);
+  for (JsonObjectConst c : comp["competitors"].as<JsonArrayConst>())
+    (str_or_empty(c["homeAway"]) == "home" ? d.home_id : d.away_id) = (uint32_t) atol(str_or_empty(c["id"]).c_str());
+  return d;
 }
 
 }  // namespace detail

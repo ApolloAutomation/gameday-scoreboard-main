@@ -19,6 +19,7 @@
 #include "poll_timing.h"
 #include "recap.h"
 #include "startup.h"
+#include "watch.h"
 
 using namespace espn;
 
@@ -407,6 +408,31 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     parse_live_games(r, live);
     for (const auto &g : live)
       sink = sink + g.away_abbr.size() + g.home_abbr.size();
+  }
+
+  for (League league : {League::NFL, League::MLB, League::NBA, League::NHL, League::MLS}) {
+    // The big-play watcher reading a day scoreboard twice in Live games, the
+    // second read checked against the first, and folded into its games.
+    WatchJob first;
+    first.league = (uint8_t) league;
+    first.ctx.live = true;
+    first.ctx.mask = kAlertsAll;
+    ChunkReader r(data, size, chunk);
+    if (!watch_read_day(r, first))
+      continue;
+    WatchJob second = first;
+    second.games = first.fresh;
+    second.fresh.clear();
+    ChunkReader r2(data, size, chunk);
+    watch_read_day(r2, second);
+    std::vector<WatchGame> games = first.fresh;
+    WatchScope scope;
+    scope.kind = WatchScope::SOURCE;
+    scope.league = (uint8_t) league;
+    watch_merge(games, second.fresh, scope);
+    if (games.size() > kWatchMax)
+      abort();
+    sink = sink + games.size() + second.alert.splash.text.size();
   }
 
   {

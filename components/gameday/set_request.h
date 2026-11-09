@@ -28,9 +28,9 @@ constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "f
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
-                                    "match",   "beta",   "alerts",  "alertfav", "standing", "idle",
-                                    "idledim", "night",  "nightstart", "nightend", "nightbri", "betdel",
-                                    "bet"};
+                                    "match",   "beta",   "alerts",  "alertfav", "watch",  "watchstay",
+                                    "watchmine", "standing", "idle", "idledim", "night", "nightstart",
+                                    "nightend", "nightbri", "betdel", "bet"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -51,6 +51,16 @@ constexpr int kReleaseMaxSeconds = 3600;
 // Big-play alert types (alerts.h), one switch each: "alerts" is the mask of
 // the ones on, bit (type - 1).
 constexpr int kAlertBits = 19;
+// "Stay on a big play" (watch.h), in seconds, kept in tens of seconds.
+constexpr int kWatchStayMinSeconds = 30;
+constexpr int kWatchStayMaxSeconds = 300;
+
+inline int clamp_watch_stay_seconds(int seconds) {
+  const int s = seconds < kWatchStayMinSeconds   ? kWatchStayMinSeconds
+                : seconds > kWatchStayMaxSeconds ? kWatchStayMaxSeconds
+                                                 : seconds;
+  return s / 10 * 10;
+}
 
 inline int clamp_lockon_minutes(int minutes) {
   return minutes < kLockonMinMinutes ? kLockonMinMinutes : minutes > kLockonMaxMinutes ? kLockonMaxMinutes : minutes;
@@ -215,6 +225,9 @@ enum class SetKind : uint8_t {
   NIGHT_BRI,    // value, 1 to 255
   BET,          // slot (1-kBetSlots), bet: a manual bet into that slot (bets.h)
   BET_DEL,      // slot: empties it
+  WATCH,        // on, switch to big plays in other games
+  WATCHSTAY,    // value, seconds on the big play's game
+  WATCHMINE,    // on, a favorite's big play can take the board from the team's live game
 };
 
 struct TeamRef {
@@ -457,6 +470,15 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   if (k == "betdel") {
     op.kind = SetKind::BET_DEL;
     return parse_bet_slot(v, op.slot);
+  }
+  if (k == "watch")
+    return on(SetKind::WATCH);
+  if (k == "watchmine")
+    return on(SetKind::WATCHMINE);
+  if (k == "watchstay") {
+    op.kind = SetKind::WATCHSTAY;
+    op.value = clamp_watch_stay_seconds(read_int(v));
+    return true;
   }
   return false;
 }
