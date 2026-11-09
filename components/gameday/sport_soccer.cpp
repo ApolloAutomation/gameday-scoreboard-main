@@ -217,6 +217,7 @@ void soccer_from_event(JsonObjectConst ev, GameSnapshot &s) {
       g.ours = ours;
       g.own_goal = d["ownGoal"] | false;
       g.penalty = d["penaltyKick"] | false;
+      g.athlete = id_of(d["athletesInvolved"][0]["id"]);  // in the filter only for a favorite player
       f.goals.push_back(g);
     }
   }

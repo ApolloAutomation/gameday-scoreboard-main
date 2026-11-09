@@ -172,6 +172,28 @@ static void watch_day(const char *name, const std::string &file, League league) 
   });
 }
 
+// The same with favorite players in the league (players.h): the read keeps
+// their leader lines and the last play's athletes too. ids are the
+// favorites, those in the game first.
+static void event_players(const char *name, const std::string &file, Sport sport,
+                          std::initializer_list<uint32_t> ids) {
+  std::string json = slurp("fixtures/" + file);
+  JsonDocument doc;
+  deserializeJson(doc, json);
+  std::string event_id = doc["id"] | "";
+  uint32_t team = (uint32_t) atol(doc["competitions"][0]["competitors"][0]["id"] | "0");
+  doc.clear();
+  doc.shrinkToFit();
+  PlayerWatch w;
+  for (uint32_t id : ids)
+    if (w.n < PlayerWatch::kMax)
+      w.ids[w.n++] = id;
+  measure(name, [&] {
+    GameSnapshot g;
+    return parse_event(json, sport, team, g, event_id, &w);
+  });
+}
+
 int main() {
   JsonCounter json_alloc;
   set_json_allocator(&json_alloc);
@@ -197,6 +219,16 @@ int main() {
   event("poll_nba_event", "event_nba_live.json", Sport::BASKETBALL);
   event("poll_nhl_event", "event_nhl_live.json", Sport::HOCKEY);
   event("poll_soccer_event", "event_soccer_second_half.json", Sport::SOCCER);
+  // Eight favorites in the league, as many of them leaders in the game as
+  // ESPN lists.
+  event_players("poll_ncaa_event_players", "event_ncaa_live.json", Sport::FOOTBALL,
+                {4870883, 5122157, 4879999, 5079684, 1, 2, 3, 4});
+  event_players("poll_mlb_event_players", "event_mlb_hr.json", Sport::BASEBALL,
+                {4917849, 40960, 4867424, 33912, 40576, 1, 2, 3});
+  event_players("poll_nba_event_players", "event_nba_live.json", Sport::BASKETBALL,
+                {4396909, 4017837, 5106060, 4594268, 3032976, 4432816, 4431671, 1});
+  event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
+                {199680, 205448, 1, 2, 3, 4, 5, 6});
 
   // The watcher: an NFL Sunday's 16 games, a baseball and a soccer day, and
   // a college conference's Saturday (the scoreboard that finds a college

@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <initializer_list>
 #include <utility>
 
@@ -333,6 +334,76 @@ inline void baseball_from_event(JsonObjectConst ev, GameSnapshot &s) {
   s.possession = we_bat ? 1 : 2;
 }
 
+// Favorite players (players.h): what a game read keeps on top of its
+// sport's own fields while a favorite player is in its league. Football,
+// baseball and basketball: the last play's id, its points and the athletes
+// in it, and ESPN's game leaders (football's for the game, basketball's per
+// team, baseball's both). Soccer: each goal's scorer. Hockey: nothing, since
+// ESPN names no athletes there (players.h matches the scorer's name in the
+// play's words).
+inline void fill_player_filter(JsonObject ev, Sport sport) {
+  JsonObject comp = ev["competitions"][0];
+  if (sport == Sport::SOCCER) {
+    comp["details"][0]["athletesInvolved"][0]["id"] = true;
+    return;
+  }
+  if (sport != Sport::FOOTBALL && sport != Sport::BASEBALL && sport != Sport::BASKETBALL)
+    return;
+  JsonObject lp = comp["situation"]["lastPlay"];
+  lp["id"] = true;
+  lp["scoreValue"] = true;
+  JsonObject who = lp["athletesInvolved"].add<JsonObject>();
+  who["id"] = true;
+  who["team"]["id"] = true;
+  auto leaders = [](JsonObject o) {
+    JsonObject cat = o["leaders"].add<JsonObject>();
+    cat["name"] = true;
+    JsonObject l = cat["leaders"].add<JsonObject>();
+    l["displayValue"] = true;
+    l["athlete"]["id"] = true;
+  };
+  leaders(comp);
+  leaders(comp["competitors"][0]);
+}
+
+inline uint32_t id_of(JsonVariantConst v) {
+  const char *s = v.as<const char *>();
+  if (s == nullptr || *s < '0' || *s > '9')
+    return 0;
+  unsigned long long n = strtoull(s, nullptr, 10);
+  return n > UINT32_MAX ? 0 : (uint32_t) n;
+}
+
+// The athletes of the last play and the leaders that are favorites, into s.
+// Basketball keeps each category a favorite leads; the other sports' lines
+// for one player say the same in every category (a batting line), so they
+// keep the player's first, without the category.
+inline void players_from_event(JsonObjectConst ev, const PlayerWatch &w, Sport sport, GameSnapshot &s) {
+  JsonObjectConst comp = ev["competitions"][0];
+  for (JsonObjectConst a : comp["situation"]["lastPlay"]["athletesInvolved"].as<JsonArrayConst>()) {
+    const uint32_t id = id_of(a["id"]);
+    if (id != 0 && s.play_athletes.size() < 4)
+      s.play_athletes.push_back(PlayAthlete{id, id_of(a["team"]["id"])});
+  }
+  const bool cats = sport == Sport::BASKETBALL;
+  auto take = [&](JsonArrayConst list) {
+    for (JsonObjectConst cat : list)
+      for (JsonObjectConst l : cat["leaders"].as<JsonArrayConst>()) {
+        const uint32_t id = id_of(l["athlete"]["id"]);
+        if (!w.has(id) || s.leaders.size() >= 16)
+          continue;
+        bool have = false;
+        for (const Leader &k : s.leaders)
+          have = have || (k.athlete == id && !cats);
+        if (!have)
+          s.leaders.push_back(Leader{id, cats ? str_or_empty(cat["name"]) : std::string(), str_or_empty(l["displayValue"])});
+      }
+  };
+  take(comp["leaders"].as<JsonArrayConst>());
+  for (JsonObjectConst c : comp["competitors"].as<JsonArrayConst>())
+    take(c["leaders"].as<JsonArrayConst>());
+}
+
 // Soccer (sport_soccer.cpp): the status name, details, form, stats and
 // moneyline on top of the shared event filter, read into s.soc.
 void fill_soccer_filter(JsonObject ev);
@@ -638,11 +709,16 @@ int parse_team_game(TInput &input, uint32_t our_team_id, const std::string &skip
 // scoreboard, at a tenth of the size or less. Returns false on a JSON error,
 // when our team is not in it, or when event_id is given and the document is
 // some other game.
+// players: the favorite players in the game's league (players.h); with
+// any, the read keeps their leader lines and the last play's athletes too.
 template<typename TInput>
 bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot &out,
-                 const std::string &event_id = "") {
+                 const std::string &event_id = "", const PlayerWatch *players = nullptr) {
   JsonDocument filter(detail::json_allocator());
   detail::fill_game_filter(filter.to<JsonObject>(), sport);
+  const bool watch = players != nullptr && players->n > 0;
+  if (watch)
+    detail::fill_player_filter(filter.as<JsonObject>(), sport);
   JsonDocument doc(detail::json_allocator());
   DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
                                               DeserializationOption::NestingLimit(40));
@@ -650,7 +726,11 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     return false;
   if (!event_id.empty() && detail::str_or_empty(doc["id"]) != event_id)
     return false;
-  return detail::game_from_event(doc.as<JsonObjectConst>(), sport, our_team_id, out);
+  if (!detail::game_from_event(doc.as<JsonObjectConst>(), sport, our_team_id, out))
+    return false;
+  if (watch)
+    detail::players_from_event(doc.as<JsonObjectConst>(), *players, sport, out);
+  return true;
 }
 
 // A golf tour's scoreboard header (header_url). 1: the tour's event in

@@ -23,14 +23,15 @@ namespace espn {
 // In the order the firmware applies them, whatever order the request uses.
 // follow comes first: it pins the game the page showed, and a change later in
 // the same request that moves the board lets the pin go again. betdel comes
-// before bet, so a request with both empties a slot and then fills it.
+// before bet, so a request with both empties a slot and then fills it, and
+// playerdel before player the same way.
 constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "fav1",     "fav2",
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
                                     "match",   "beta",   "alerts",  "alertfav", "watch",  "watchstay",
                                     "watchmine", "standing", "idle", "idledim", "night", "nightstart",
-                                    "nightend", "nightbri", "betdel", "bet"};
+                                    "nightend", "nightbri", "betdel", "bet",  "playerdel", "player"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -50,7 +51,7 @@ constexpr int kReleaseMinSeconds = 30;
 constexpr int kReleaseMaxSeconds = 3600;
 // Big-play alert types (alerts.h), one switch each: "alerts" is the mask of
 // the ones on, bit (type - 1).
-constexpr int kAlertBits = 19;
+constexpr int kAlertBits = 20;
 // "Stay on a big play" (watch.h), in seconds, kept in tens of seconds.
 constexpr int kWatchStayMinSeconds = 30;
 constexpr int kWatchStayMaxSeconds = 300;
@@ -61,6 +62,10 @@ inline int clamp_watch_stay_seconds(int seconds) {
                                                  : seconds;
   return s / 10 * 10;
 }
+// Favorite players (players.h): how many the panel keeps, and the longest
+// name it shows for one, a line of the splash on one panel.
+constexpr int kPlayerSlots = 8;
+constexpr int kPlayerNameMax = 10;
 
 inline int clamp_lockon_minutes(int minutes) {
   return minutes < kLockonMinMinutes ? kLockonMinMinutes : minutes > kLockonMaxMinutes ? kLockonMaxMinutes : minutes;
@@ -228,6 +233,8 @@ enum class SetKind : uint8_t {
   WATCH,        // on, switch to big plays in other games
   WATCHSTAY,    // value, seconds on the big play's game
   WATCHMINE,    // on, a favorite's big play can take the board from the team's live game
+  PLAYER,       // team (league, team id), athlete, name: a favorite player (players.h)
+  PLAYER_DEL,   // team.league, athlete: drops that favorite player
 };
 
 struct TeamRef {
@@ -246,7 +253,92 @@ struct SetOp {
   std::vector<TeamRef> teams;
   std::vector<std::string> refused;  // favs entries left out, for the log
   Bet bet;                           // BET: what was bet, with no game yet
+  uint32_t athlete{0};               // PLAYER, PLAYER_DEL: ESPN's athlete id
+  std::string name;                  // PLAYER: the panel's name for the player (clean_player_name)
 };
+
+// The panel's name for a favorite player, from what the page sends: capital
+// letters, digits, spaces and . ' - only (lower case is raised), spaces at
+// either end dropped, cut to kPlayerNameMax characters, and a cut never
+// left ending in a space or . ' -. "" when a character is anything else or
+// nothing is left, which refuses the request. "Allen" is "ALLEN",
+// "J. Hughes" "J. HUGHES", "St. Brown" "ST. BROWN".
+inline std::string clean_player_name(const std::string &v) {
+  size_t a = 0, b = v.size();
+  while (a < b && v[a] == ' ')
+    a++;
+  while (b > a && v[b - 1] == ' ')
+    b--;
+  std::string out;
+  for (size_t i = a; i < b; i++) {
+    char c = v[i];
+    if (c >= 'a' && c <= 'z')
+      c = (char) (c - 'a' + 'A');
+    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '.' || c == '\'' || c == '-'))
+      return "";
+    out += c;
+  }
+  if (out.size() > (size_t) kPlayerNameMax) {
+    out.resize(kPlayerNameMax);
+    while (!out.empty() && (out.back() == ' ' || out.back() == '.' || out.back() == '\'' || out.back() == '-'))
+      out.pop_back();
+  }
+  return out;
+}
+
+// An ESPN id as the page sends it: 1 to 10 digits, nothing else, not 0 and
+// under 2^32.
+inline bool parse_espn_id(const std::string &v, uint32_t &id) {
+  if (v.empty() || v.size() > 10)
+    return false;
+  uint64_t n = 0;
+  for (char c : v) {
+    if (c < '0' || c > '9')
+      return false;
+    n = n * 10 + (uint64_t) (c - '0');
+  }
+  if (n == 0 || n > UINT32_MAX)
+    return false;
+  id = (uint32_t) n;
+  return true;
+}
+
+// The comma-separated fields of v, at most max (false for more).
+inline bool split_fields(const std::string &v, std::string *f, size_t max, size_t &n) {
+  n = 0;
+  size_t start = 0;
+  while (true) {
+    if (n == max)
+      return false;
+    size_t comma = v.find(',', start);
+    f[n++] = v.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+    if (comma == std::string::npos)
+      return true;
+    start = comma + 1;
+  }
+}
+
+// player=<league>,<athlete id>,<team id>,<name>: "nfl,3918298,2,ALLEN". The
+// league one the panel follows teams in (not a golf tour or a racing
+// series), the team one in its list, the athlete's id ESPN's, the name what
+// clean_player_name keeps. playerdel=<league>,<athlete id> drops one.
+// Anything else, extra fields included, is refused.
+inline bool parse_player(const std::string &v, bool del, SetOp &op) {
+  std::string f[4];
+  size_t n = 0;
+  if (!split_fields(v, f, del ? 2 : 4, n) || n != (del ? 2u : 4u))
+    return false;
+  const LeagueInfo *info = league_by_key(f[0].c_str());
+  if (info == nullptr || is_board_sport(info->sport) || !parse_espn_id(f[1], op.athlete))
+    return false;
+  op.team.league = (uint8_t) info->league;
+  if (del)
+    return true;
+  if (!parse_espn_id(f[2], op.team.id) || !known_team(op.team.league, op.team.id))
+    return false;
+  op.name = clean_player_name(f[3]);
+  return !op.name.empty();
+}
 
 // A bet slot as the page sends it: one digit, 1 to kBetSlots, or with
 // free_ok 0 for the first empty slot (bet_put).
@@ -479,6 +571,10 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.kind = SetKind::WATCHSTAY;
     op.value = clamp_watch_stay_seconds(read_int(v));
     return true;
+  }
+  if (k == "player" || k == "playerdel") {
+    op.kind = k == "player" ? SetKind::PLAYER : SetKind::PLAYER_DEL;
+    return parse_player(v, k == "playerdel", op);
   }
   return false;
 }

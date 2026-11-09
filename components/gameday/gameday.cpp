@@ -372,6 +372,15 @@ void GamedayComponent::setup() {
   if (!this->bets_pref_.load(&this->bets_.blob))
     this->bets_.blob = ::espn::BetBlob{};
   this->bets_.loaded();
+  // Favorite players (players.h), the same way: none until the owner picks
+  // one, and a slot that doesn't make sense (a league or team this firmware
+  // doesn't know) is emptied.
+  this->players_pref_ = global_preferences->make_preference<::espn::PlayerBlob>(fnv1_hash("gameday_players_v1"));
+  if (!this->players_pref_.load(&this->players_))
+    this->players_ = ::espn::PlayerBlob{};
+  for (auto &p : this->players_.players)
+    if (!::espn::player_empty(p) && !::espn::player_valid(p))
+      p = ::espn::FavPlayer{};
 #ifdef GAMEDAY_BETA_CHANNEL
   // Before the update entity's first check, which waits for the main loop.
   this->beta_pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("gameday_beta_v1"));
@@ -894,6 +903,7 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   int index = cup >= 0 ? cup : refresh >= 0 ? refresh : this->fav_shown_;
   FavEntry &e = this->fav_[index];
   this->new_job_();
+  j.players = this->players_;
   j.team = e.team;
   j.our_id = e.team->espn_id;
   j.fav_index = index;
@@ -1126,6 +1136,45 @@ void GamedayComponent::remove_bet_(uint8_t slot) {
     this->emit_({});
   else
     this->rebuild_state_(&this->last_fields_);
+}
+
+// ---- Favorite players ---------------------------------------------------------
+
+// player=: a new player into the first empty slot, or a player already
+// there keeps their slot with the new team and name. Their stat line and
+// plays come with the next read of a game in their league.
+void GamedayComponent::set_player_(const ::espn::SetOp &op) {
+  const ::espn::FavPlayer p = ::espn::make_player(op.team.league, op.athlete, op.team.id, op.name);
+  const uint8_t at = ::espn::player_put(this->players_.players, p);
+  if (at == 0) {
+    ESP_LOGW(TAG, "Favorite player %s %s ignored: all %d player slots are in use",
+             ::espn::league_key((League) p.league), p.name, ::espn::kPlayerSlots);
+    return;
+  }
+  ESP_LOGI(TAG, "Favorite player %u: %s %s (%u)", (unsigned) at, ::espn::league_key((League) p.league), p.name,
+           (unsigned) p.athlete);
+  this->players_changed_();
+}
+
+void GamedayComponent::remove_player_(uint8_t league, uint32_t athlete) {
+  if (!::espn::player_drop(this->players_.players, league, athlete))
+    return;
+  ESP_LOGI(TAG, "Favorite player %s %u removed", ::espn::league_key((League) league), (unsigned) athlete);
+  this->players_changed_();
+}
+
+void GamedayComponent::players_changed_() {
+  this->players_pref_.save(&this->players_);
+  if (this->game_.valid)
+    this->emit_({});  // the ticker drops a removed player's line now
+  else
+    this->rebuild_state_(&this->last_fields_);
+}
+
+std::vector<std::string> GamedayComponent::player_lines_(const GameSnapshot &g) const {
+  if (this->demo_playing_())
+    return {};
+  return ::espn::player_lines(g, this->board_league_(), this->players_.players);
 }
 
 // The games the panel holds are the board's and, in Favorite teams, each
@@ -1726,7 +1775,12 @@ void GamedayComponent::save_prefs9_() {
     if (!::espn::game_has_team(this->schedule_.league, this->game_.team_id, this->game_.opp_id, teams, FAV_MAX + 1))
       alerts = 0;
   }
-  return ::espn::decide_splash(this->prev_, this->game_, this->opponent_splashes(), neutral, alerts, this->wide_());
+  // A favorite player's score names them, in place of the team's splash for
+  // that play (players.h). Not in the demo's scripted game.
+  if (this->demo_playing_())
+    alerts &= ~::espn::alert_bit(::espn::Alert::PLAYER);
+  return ::espn::board_splash_with_players(this->prev_, this->game_, this->opponent_splashes(), neutral, alerts,
+                                           this->wide_(), this->board_league_(), this->players_.players);
 }
 
 void GamedayComponent::set_standing(uint8_t kind) {
@@ -2879,7 +2933,10 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
     return false;
   ContainerReader reader(container, this->espn_bytes_);
   GameSnapshot g;
-  bool ok = per_event ? ::espn::parse_event(reader, info->sport, this->our_id_(), g, schedule.event_id)
+  // Favorite players in this league: the read keeps their leader lines and
+  // the last play's athletes too (players.h). None: the read is as before.
+  const ::espn::PlayerWatch watch = ::espn::player_watch(this->job_.players.players, (uint8_t) league);
+  bool ok = per_event ? ::espn::parse_event(reader, info->sport, this->our_id_(), g, schedule.event_id, &watch)
                       : ::espn::parse_scoreboard(reader, schedule.event_id, this->our_id_(), g);
   container->end();
   if (!ok) {
@@ -3004,6 +3061,7 @@ GamedayComponent::Job &GamedayComponent::new_job_() {
 void GamedayComponent::start_job_() {
   uint32_t now = millis();
   Job &j = this->new_job_();
+  j.players = this->players_;
   j.team = this->current_team_();
   j.mode = this->effective_mode_();
   j.scan_leagues = this->scan_leagues_();
@@ -4475,9 +4533,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
-  // The bets on the mode's own game (bets.h), not on an idle display card.
-  if (&g == &this->game_)
+  // The favorite players' stat lines (players.h) and the bets (bets.h) on
+  // the mode's own game, not on an idle display card.
+  if (&g == &this->game_) {
+    for (const std::string &line : this->player_lines_(g))
+      f.status_text += (f.status_text.empty() ? "" : " | ") + line;
     this->bets_ticker_(f.status_text);
+  }
 }
 
 // A board with different logos from the one up now waits for them, so it goes
@@ -5123,6 +5185,15 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     snprintf(color, sizeof(color), "%06X", (unsigned) (idle ? ::espn::parse_color(g.opp_color) : f->opponent_color));
     game["oc"] = color;
     doc["status"] = idle ? this->page_status_ : f->status_text;
+    // The favorite players' stat lines on the board's game, for the page's board.
+    if (!idle) {
+      const std::vector<std::string> lines = this->player_lines_(g);
+      if (!lines.empty()) {
+        JsonArray pl = game["pl"].to<JsonArray>();
+        for (const auto &line : lines)
+          pl.add(line);
+      }
+    }
     doc["clock"] = f->clock;
     doc["splash"] = f->splash_text;
     snprintf(color, sizeof(color), "%06X", (unsigned) f->splash_color);
@@ -5286,6 +5357,18 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     }
   }
   doc["betmax"] = ::espn::kBetSlots;
+  // Favorite players (players.h), in slot order.
+  JsonArray players = doc["players"].to<JsonArray>();
+  for (const auto &p : this->players_.players) {
+    if (::espn::player_empty(p))
+      continue;
+    JsonObject o = players.add<JsonObject>();
+    o["l"] = ::espn::league_key((League) p.league);
+    o["id"] = p.athlete;
+    o["team"] = p.team_id;
+    o["name"] = (const char *) p.name;
+  }
+  doc["playermax"] = ::espn::kPlayerSlots;
   std::string out;
   serializeJson(doc, out);
   std::lock_guard<std::mutex> lock(this->state_mutex_);
@@ -5708,6 +5791,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::BET_DEL:
         this->remove_bet_(op.slot);
+        break;
+      case ::espn::SetKind::PLAYER:
+        this->set_player_(op);
+        break;
+      case ::espn::SetKind::PLAYER_DEL:
+        this->remove_player_(op.team.league, op.athlete);
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)

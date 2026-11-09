@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "follow.h"
+#include "players.h"
 #include "set_request.h"
 
 using namespace espn;
@@ -70,6 +71,7 @@ struct Settings {
       nightbri{kNightBrightnessDefault};
   bool night{false};
   Bet bets[kBetSlots]{};
+  FavPlayer players[kPlayerSlots]{};
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 2;
@@ -172,6 +174,21 @@ void load(Settings &s, JsonObjectConst o) {
   }
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
+  // players: the state document's l, id, team and name of each favorite
+  // player, in slot order.
+  if (o["players"].is<JsonArrayConst>()) {
+    for (auto &p : s.players)
+      p = FavPlayer{};
+    for (JsonObjectConst j : o["players"].as<JsonArrayConst>()) {
+      std::string value = std::string(j["l"] | "") + "," + std::to_string(j["id"] | 0u) + "," +
+                          std::to_string(j["team"] | 0u) + "," + (j["name"] | "");
+      SetOp op;
+      if (parse_set("player", value, op, kFavMax))
+        player_put(s.players, make_player(op.team.league, op.athlete, op.team.id, op.name));
+      else
+        printf("FAIL set_cases.json: a start player doesn't parse: %s\n", value.c_str());
+    }
+  }
 }
 
 bool any_favorite(const Settings &s) {
@@ -263,6 +280,10 @@ void apply(Settings &s, const SetOp &op) {
       break;
     case SetKind::WATCHSTAY: s.watchstay = op.value; break;
     case SetKind::WATCHMINE: s.watchmine = op.on; break;
+    case SetKind::PLAYER:  // set_player_: nothing changes when every slot is in use
+      player_put(s.players, make_player(op.team.league, op.athlete, op.team.id, op.name));
+      break;
+    case SetKind::PLAYER_DEL: player_drop(s.players, op.team.league, op.athlete); break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -342,6 +363,17 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watch"] = s.watch;
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
+  // The favorite players, filled slots in slot order.
+  JsonArray players = doc["players"].to<JsonArray>();
+  for (const FavPlayer &p : s.players) {
+    if (player_empty(p))
+      continue;
+    JsonObject o = players.add<JsonObject>();
+    o["l"] = league_key((League) p.league);
+    o["id"] = p.athlete;
+    o["team"] = p.team_id;
+    o["name"] = (const char *) p.name;
+  }
 }
 
 void test_fixture_cases() {
@@ -479,12 +511,23 @@ void test_parse_set() {
   SCHECK(parse_set("watchstay", "5", op, kFavMax) && op.value == kWatchStayMinSeconds, "watchstay floor");
   SCHECK(parse_set("watchstay", "99999999999", op, kFavMax) && op.value == kWatchStayMaxSeconds, "watchstay ceiling");
   SCHECK(parse_set("watchstay", "45", op, kFavMax) && op.value == 40, "watchstay in tens of seconds");
+  int pdel_at = -1, player_at = -1;
+  at = 0;
+  for (const char *key : kSetKeys) {
+    if (std::string(key) == "playerdel")
+      pdel_at = at;
+    if (std::string(key) == "player")
+      player_at = at;
+    at++;
+  }
+  SCHECK(pdel_at >= 0 && pdel_at < player_at, "playerdel drops a player before player adds one");
 
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {
     bool known = parse_set(key, "1", op, kFavMax) || parse_set(key, "nfl:6", op, kFavMax) ||
                  parse_set(key, "", op, kFavMax) || parse_set(key, "07:00", op, kFavMax) ||
-                 parse_set(key, "1,nfl,6,ml,", op, kFavMax);
+                 parse_set(key, "1,nfl,6,ml,", op, kFavMax) || parse_set(key, "nfl,3918298,2,ALLEN", op, kFavMax) ||
+                 parse_set(key, "nfl,3918298", op, kFavMax);
     SCHECK(known, "kSetKeys has %s but parse_set refuses every value", key);
   }
 }

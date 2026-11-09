@@ -64,6 +64,7 @@ struct SoccerGoal {
   std::string name;
   bool ours{false};  // counts for our side; an own goal counts for the side it helped
   bool own_goal{false}, penalty{false};
+  uint32_t athlete{0};  // the scorer's ESPN id, read only for a favorite player (players.h); 0 otherwise
 };
 
 // Soccer's goals and cards (the event's details), form, shootout, match
@@ -206,6 +207,38 @@ struct Racing {
   bool next_unknown{false};              // the calendar read failed after a final
 };
 
+// Favorite players (players.h). A game is read with their ESPN ids in its
+// league (parse_event's players): only then does the read keep the last
+// play's athletes and the game leaders, so a panel without favorite players
+// reads and keeps what it always did. The ids are 32-bit (ESPN's run to
+// about five million).
+struct PlayerWatch {
+  static constexpr int kMax = 8;  // kPlayerSlots (set_request.h)
+  uint32_t ids[kMax]{};
+  uint8_t n{0};
+  bool has(uint32_t id) const {
+    for (uint8_t i = 0; i < this->n; i++)
+      if (id != 0 && this->ids[i] == id)
+        return true;
+    return false;
+  }
+};
+
+// One athlete ESPN lists for the last play, and the team it lists them on (0
+// when it didn't say).
+struct PlayAthlete {
+  uint32_t id{0};
+  uint32_t team{0};
+};
+
+// One of ESPN's game leaders that is a favorite player: their line ("21/34,
+// 241 YDS, 2 TD", "19") and, in basketball, the category's name ("points",
+// "rating"; empty elsewhere, where a player's lines are all the same).
+struct Leader {
+  uint32_t athlete{0};
+  std::string cat, value;
+};
+
 // One scoreboard event, resolved to "us" and "them".
 struct GameSnapshot {
   // Made, copied and moved all over the component: one out-of-line copy of each
@@ -264,6 +297,10 @@ struct GameSnapshot {
   int play_points{0};
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
+  // Favorite players only (PlayerWatch): the last play's athletes, at most
+  // four, and the game leaders that are favorites. Empty otherwise.
+  std::vector<PlayAthlete> play_athletes;
+  std::vector<Leader> leaders;
   std::string odds, over_under, tv, venue;
   // Other sports. Football leaves these at their defaults.
   Sport sport{Sport::FOOTBALL};
@@ -425,8 +462,10 @@ bool parse_team_game_str(const std::string &json, uint32_t our_team_id, Schedule
                          const std::string &skip_event = "");
 // The single-event document from event_url(). With event_id, a document for
 // some other game reads as a failure.
+// players: the favorite players in the game's league, whose leader lines
+// and plays the read then keeps too (PlayerWatch).
 bool parse_event_str(const std::string &json, Sport sport, uint32_t our_team_id, GameSnapshot &out,
-                     const std::string &event_id = "");
+                     const std::string &event_id = "", const PlayerWatch *players = nullptr);
 
 // The splash for two reads of one game: a big play (alerts.h) whose switch
 // is on in alerts, or the win. neutral = nobody is "our" team (live-game

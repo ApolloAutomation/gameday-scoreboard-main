@@ -3534,6 +3534,7 @@ int run_set_tests(int &checks);  // test_set.cpp
 int run_alert_tests(int &checks);  // test_alerts.cpp
 int run_bet_tests(int &checks);  // test_bets.cpp
 int run_watch_tests(int &checks);  // test_watch.cpp
+int run_player_tests(int &checks);  // test_players.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -8785,6 +8786,7 @@ int main() {
   failures += run_alert_tests(checks);
   failures += run_bet_tests(checks);
   failures += run_watch_tests(checks);
+  failures += run_player_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

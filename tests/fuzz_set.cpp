@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "panel_text.h"
+#include "players.h"
 #include "set_request.h"
 
 using namespace espn;
@@ -113,6 +114,17 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       }
       case SetKind::BET_DEL:
         require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        break;
+      case SetKind::PLAYER: {
+        const FavPlayer fp = make_player(op.team.league, op.athlete, op.team.id, op.name);
+        require(player_valid(fp), "the player isn't one the panel can keep", k, v);
+        require(op.name.size() <= (size_t) kPlayerNameMax, "the name is longer than the blob holds", k, v);
+        FavPlayer list[kPlayerSlots]{};
+        require(player_put(list, fp) == 1, "the player went nowhere", k, v);
+        break;
+      }
+      case SetKind::PLAYER_DEL:
+        require(op.athlete != 0 && op.team.league < kLeagueCount, "the player to drop is no player", k, v);
         break;
       default:
         break;

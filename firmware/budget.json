@@ -33,9 +33,21 @@
       "heap": 1581,
       "json": 8815
     },
+    "poll_mlb_event_players": {
+      "heap": 2300,
+      "json": 14600
+    },
     "poll_nba_event": {
       "heap": 1648,
       "json": 8052
+    },
+    "poll_nba_event_players": {
+      "heap": 2300,
+      "json": 9200
+    },
+    "poll_ncaa_event_players": {
+      "heap": 2000,
+      "json": 9400
     },
     "poll_ncaa_scoreboard": {
       "heap": 1508,
@@ -56,6 +68,10 @@
     "poll_soccer_event": {
       "heap": 1850,
       "json": 14444
+    },
+    "poll_soccer_event_players": {
+      "heap": 1700,
+      "json": 14700
     },
     "racing_calendar": {
       "heap": 1600,

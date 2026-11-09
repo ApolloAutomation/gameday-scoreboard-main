@@ -310,8 +310,8 @@ bool parse_team_game_str(const std::string &json, uint32_t our_team_id, Schedule
 }
 
 bool parse_event_str(const std::string &json, Sport sport, uint32_t our_team_id, GameSnapshot &out,
-                     const std::string &event_id) {
-  return parse_event(json, sport, our_team_id, out, event_id);
+                     const std::string &event_id, const PlayerWatch *players) {
+  return parse_event(json, sport, our_team_id, out, event_id, players);
 }
 
 uint32_t parse_color(const std::string &hex) {
