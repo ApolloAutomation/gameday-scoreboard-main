@@ -76,6 +76,12 @@ AHL and ECHL teams can take a bet. The Bets card's team chooser has the **AHL** 
 
 With **My team today** as the idle display, an AHL or ECHL team's game shows on the day it plays, and its final stays up until midnight, after a restart too. **Scores** includes AHL and ECHL finals and games still to come when their leagues are among yours. While HockeyTech fails or refuses the panel, they wait for it and the other leagues' scores go on. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
 
+## Big plays and favorite players
+
+**Switch to big plays in other games** leaves AHL and ECHL games out: the panel checks other games on ESPN only, so a goal in another AHL or ECHL game never switches the board. An AHL or ECHL game on the board still gets its own goal splashes, and the panel can leave it for a big play in another league's game and come back, as with any game. While HockeyTech fails or refuses the panel, the checks of ESPN's games go on, and if ESPN refuses those checks, your AHL or ECHL team's game keeps updating from HockeyTech in My team. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+
+AHL and ECHL teams have no [favorite players](/using/favorite-players/), since the rosters come from ESPN. The Favorite players card's team chooser has no **AHL** or **ECHL** tab.
+
 ## Live games and On now
 
 **Live games** has an **AHL** button and an **ECHL** button. When nothing is live and no team is picked, the finals rotation shows their finals with the other leagues' and the games still to come today. See [Modes](/using/modes/).

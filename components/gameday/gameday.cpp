@@ -896,8 +896,9 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   if (refresh == -1 && cup < 0) {
     this->schedule_next_(FAV_TICK);
     // Most ticks read nothing: the watcher's turn, up to the next read due.
-    // A favorite whose host waits (a minor league team's MLB) is read when
-    // that wait is over, so its overdue read never leaves the watcher no gap.
+    // A favorite whose host waits (a minor league team's MLB, an AHL or ECHL
+    // team's HockeyTech) is read when that wait is over, so its overdue read
+    // never leaves the watcher no gap.
     uint32_t refresh_at = now + SCHEDULE_INTERVAL;
     for (const auto &e : this->fav_) {
       const bool missing = !e.sched.valid || e.stale;

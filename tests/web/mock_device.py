@@ -62,7 +62,7 @@ LEAGUES = LEAGUE_RE.findall(LEAGUES_H)
 # The golf tours and racing series: a team, but never a favorite or a Live
 # games league (set_request.h).
 BOARD = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(?:GOLF|RACING)', LEAGUES_H))
-# Leagues not read from ESPN (minor league baseball): no favorite players,
+# Leagues not read from ESPN (minor league baseball, the AHL and the ECHL): no favorite players,
 # whose rosters come from ESPN (set_request.h's parse_player).
 NOT_ESPN = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Source::(?!ESPN\b)\w+', LEAGUES_H))
 TZ_TEXT = "\n".join(ln for ln in (REPO / "components/gameday/timezones.h").read_text(encoding="utf-8").splitlines()

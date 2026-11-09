@@ -2992,7 +2992,7 @@ test("the Favorite players card adds a player from a team's roster and removes o
   await expect(page.locator("#playerList .playerrow label")).toContainText("VALDES-SCA");
 });
 
-test("the Favorite players card leaves minor league teams out of its team chooser", async ({ page, request }) => {
+test("the Favorite players card leaves minor league, AHL and ECHL teams out of its team chooser", async ({ page, request }) => {
   const side = (id, abbr, teamName, score) => ({ team: { id, abbreviation: abbr, teamName }, score });
   await page.route("https://statsapi.mlb.com/**", (route) => route.fulfill({
     json: { dates: [{ games: [
@@ -3008,6 +3008,9 @@ test("the Favorite players card leaves minor league teams out of its team choose
   await page.locator("#playerTeam").click();
   await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
   await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "ECHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "NHL" })).toBeVisible();
   await expect(page.locator(".tabs button", { hasText: "On now" })).toBeVisible();
   // On now lists the minor league game, but neither side picks a roster.
   await page.locator(".tabs button", { hasText: "On now" }).click();
@@ -3015,13 +3018,15 @@ test("the Favorite players card leaves minor league teams out of its team choose
   await expect(page.locator("#tiles .game .side", { hasText: "Redbirds" })).toBeDisabled();
   // Search across the tabs finds none of them either.
   await page.locator(".tabs button", { hasText: "MLB" }).first().click();
-  for (const q of ["durham", "triple-a", "single-a"]) {
+  for (const q of ["durham", "triple-a", "single-a", "crunch", "adirondack"]) {
     await page.locator("#q").fill(q);
     await expect(page.locator("#tiles .none")).toHaveText("No team matches");
   }
   await page.getByRole("button", { name: "Close" }).click();
   // Choosing the team still has them.
   await page.locator("#pick").click();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeVisible();
+  await expect(page.locator(".tabs button", { hasText: "ECHL" })).toBeVisible();
   await page.locator(".tabs button", { hasText: "MiLB" }).click();
   await expect(page.locator("#tiles .tile")).toHaveCount(120);
   await page.locator("#q").fill("durham");

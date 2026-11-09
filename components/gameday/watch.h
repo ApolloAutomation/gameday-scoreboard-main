@@ -216,9 +216,9 @@ struct WatchCtx {
 
 // Whether a game of these teams is one to watch, wherever the board is: 0
 // no, 1 yes, 2 yes, and the panel's team or a favorite plays. Never a game of
-// a league not read from ESPN (minor league baseball): the watcher reads
-// ESPN's scoreboards and games only, and that league's host is backed off on
-// its own.
+// a league not read from ESPN (minor league baseball, the AHL, the ECHL): the
+// watcher reads ESPN's scoreboards and games only, and those leagues' hosts
+// are backed off on their own.
 inline int watch_wants_teams(const WatchCtx &c, uint8_t league, uint32_t away, uint32_t home) {
   if ((c.mask & watch_sport_mask(league_sport((League) league))) == 0 || !from_espn((League) league))
     return 0;
@@ -342,7 +342,7 @@ struct WatchSource {
 // favorite's league, a college favorite's by its conference (Team::group).
 // Only leagues of a sport with a big play in mask (watch_sport_mask), so never
 // golf or racing, and only ESPN's (from_espn): never minor league baseball,
-// which ESPN has no scoreboard for.
+// the AHL or the ECHL, which ESPN has no scoreboard for.
 inline std::vector<WatchSource> watch_sources(bool live, const std::vector<League> &leagues,
                                               const std::vector<const Team *> &favs, uint32_t mask) {
   std::vector<WatchSource> out;
@@ -509,8 +509,8 @@ struct WatchTimes {
 };
 
 // A read due at (millis()) whose host waits left ms more from now (a minor
-// league team's MLB after a refusal or a failure; 0: no wait) runs once
-// that wait is over at the earliest.
+// league team's MLB or an AHL or ECHL team's HockeyTech after a refusal or a
+// failure; 0: no wait) runs once that wait is over at the earliest.
 inline uint32_t watch_after_wait(uint32_t at, uint32_t now, uint32_t left) {
   return left != 0 && (int32_t) (at - (now + left)) < 0 ? now + left : at;
 }
@@ -519,9 +519,9 @@ inline uint32_t watch_after_wait(uint32_t at, uint32_t now, uint32_t left) {
 // read waits out ESPN's backoff as well (board_league: mode_league_()). Not
 // in Favorite teams, which waits it out favorite by favorite
 // (start_fav_job_), nor in My team for a team whose games come from another
-// host (a minor league team's MLB): none of its reads go to ESPN, so it
-// keeps updating. Live games' next read can be a scan of ESPN's leagues
-// whatever its game, so it waits.
+// host (a minor league team's MLB, an AHL or ECHL team's HockeyTech): none
+// of its reads go to ESPN, so it keeps updating. Live games' next read can
+// be a scan of ESPN's leagues whatever its game, so it waits.
 inline bool watch_refusal_holds_board(bool favorites, bool live, uint8_t board_league) {
   return !favorites && (live || from_espn((League) board_league));
 }
