@@ -45,7 +45,7 @@ During the game, a stat line for each of your favorite players that ESPN lists a
 | **Seed** | ESPN's playoff seed, like "Seed 4". |
 | **Place** | The team's place in its division, conference or league, as ESPN gives it, cut short: "1st in NFC East" is "1st NFCE", "3rd in American Football Conference" is "3rd AFC", "2nd in Pacific Division" is "2nd Pac", "2nd in English Premier League" is "2nd EPL". |
 
-It covers the team you follow in My team, or the favorite on the board in Favorite teams. The other team keeps its record, and in Live games and the finals rotation every team shows its record. When ESPN has no seed or place for your team, like a soccer club's seed, the record shows. A soccer club keeps its league place on cup nights too. Under the logo there's room for 7 characters, so a longer place drops its space, like "1stNFCE", and one still too long shows just the place, like "10th". Next to a long break on the game clock, like "End of 1st", the spot holds 6, so "Seed 12" reads "Seed12" there. The panel reads the seed and place from ESPN with the team's schedule, every 6 hours.
+It covers the team you follow in My team, or the favorite on the board in Favorite teams. The other team keeps its record, and in Live games and the finals rotation every team shows its record. When ESPN has no seed or place for your team, like a soccer club's seed, the record shows. A soccer club keeps its league place on cup nights too. Under the logo there's room for 7 characters, so a longer place drops its space, like "1stNFCE", and one still too long shows just the place, like "10th". Next to a long break on the game clock, like "End of 1st", or a long wait in **My team today**'s countdown, like "in 10h 30m", the spot holds 6, so "Seed 12" reads "Seed12" and "1st NFCE" reads "1st" there. On three or four panels in a row it always holds 7. The panel reads the seed and place from ESPN with the team's schedule, every 6 hours.
 :::
 
 Each sport's page has the details: [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/), [Soccer](/using/soccer/), [Golf](/using/golf/) and [Racing](/using/racing/).
@@ -80,6 +80,8 @@ The ticker also says when something needs your attention:
 
 :::note[Coming in the next release]
 **IP** and the panel's IP address, then its `.local` name, like **IP 192.168.1.50 | gameday-2f6a70.local**: the panel just joined Wi-Fi. The line leads the ticker for 30 seconds once the QR code and the address go, or straight away when a game is live, with **Show how to connect when the panel starts** on. Open either address in a browser on the same Wi-Fi to get to the device page. Home Assistant's Game Status leaves it out.
+
+On two rows of two, the ticker runs once, in bigger letters in the bottom half, and the **Too warm, dimming** or **Check power supply** line goes along the bottom edge under it instead of covering it.
 :::
 
 For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).

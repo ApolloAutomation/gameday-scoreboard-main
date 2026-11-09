@@ -4390,13 +4390,11 @@ void GamedayComponent::idle_fields_(UpdateFields &f) {
   if (v == ::espn::IdleView::TODAY) {
     const GameSnapshot *t = this->today_game_();
     if (t != nullptr) {
-      this->game_fields_(*t, {}, out);
+      // The countdown in the clock's place (game_fields_), the kickoff and
+      // the records in the ticker (a single panel has no room for the
+      // records).
+      this->game_fields_(*t, {}, out, true);
       if (t->state == GameState::PRE) {
-        // The countdown in the clock's place, the kickoff and the records in
-        // the ticker (a single panel has no room for the records).
-        if (!t->time_tbd)
-          out.clock_text =
-              ::espn::countdown_text(t->kickoff_epoch - (int64_t) this->time_->timestamp_now());
         // "#5 TEX 7-1 | OKLA 6-2": each side's college poll rank when it has one
         std::string rec = ::espn::detail::records_line(*t, std::string());
         if (!rec.empty())
@@ -4419,7 +4417,8 @@ void GamedayComponent::idle_fields_(UpdateFields &f) {
 
 // One game's fields for the board: the scoreboard, its ticker and kickoff,
 // and a leaderboard's columns.
-void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f) {
+void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f,
+                                    bool countdown) {
   // The followed pro team's seed or place, for the ticker and the board: the
   // mode's own game only, not an idle display card.
   const std::string standing = &g == &this->game_ ? this->standing_text_() : std::string();
@@ -4440,12 +4439,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   f.team_rank = g.team_rank;
   f.opponent_rank = g.opp_rank;
   f.last_play = g.last_play;
-  if (g.valid && g.state == GameState::IN) {
-    f.clock_text = ::espn::clock_text(g);
-    if (!brk) {
-      f.down_distance = g.short_down_distance;
-      f.is_red_zone = ::espn::in_red_zone(g);
-    }
+  // The clock row, the game clock or My team today's countdown, before the
+  // record rows beside it are sized below.
+  const int64_t now = countdown && this->time_ != nullptr ? (int64_t) this->time_->timestamp_now() : 0;
+  f.clock_text = ::espn::board_clock_text(g, countdown, now);
+  if (g.valid && g.state == GameState::IN && !brk) {
+    f.down_distance = g.short_down_distance;
+    f.is_red_zone = ::espn::in_red_zone(g);
   }
   f.sport = (uint8_t) g.sport;
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASEBALL) {
@@ -4467,9 +4467,9 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
     f.opponent_record = ::espn::soccer_board_record(g.opp_record);
   }
   if (!standing.empty()) {
-    // In the record's place, in the room beside the clock while it shows
-    // (all of it on three or four panels, where the clock is far away); the
-    // record when none of it fits.
+    // In the record's place, in the room beside the clock while it shows, My
+    // team today's countdown too (all of it on three or four panels, where
+    // the clock is far away); the record when none of it fits.
     const int clock_px = (int) f.clock_text.size() * ::espn::kClockCharPx;
     std::string board =
         ::espn::board_standing(standing, ::espn::record_row_chars(clock_px, this->board_px_()));

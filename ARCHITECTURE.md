@@ -76,9 +76,10 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 - `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
   component sends, for boards 64, 128, 192 and 256 pixels wide, with the
   splashes and fireworks (which splashes get them: `splash_fireworks`,
-  `alerts.h`). A 2x2 (128x128) has the 128 wide board in its top half and the
-  time, the date and a bigger ticker in its bottom half; a splash covers all
-  of it (`components/gameday/board_layout.h`).
+  `alerts.h`). A 2x2 (128x128) has the 128 wide board, without its own
+  ticker, in its top half and the time, the date and a bigger ticker in its
+  bottom half, ending above the heat and power line along the bottom; a
+  splash covers all of it (`components/gameday/board_layout.h`).
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.

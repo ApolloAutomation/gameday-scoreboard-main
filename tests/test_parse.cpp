@@ -4119,6 +4119,39 @@ static void test_record_row() {
   // it the same way.
   CHECK_EQ(countdown_text(23 * 3600 + 59 * 60).size(), (size_t) 10);
   CHECK_EQ(record_row_chars((int) countdown_text(23 * 3600 + 59 * 60).size() * kClockCharPx), (size_t) 6);
+
+  // The clock row the record rows are sized beside (board_clock_text): the
+  // game clock during play, and My team today's countdown before a kickoff
+  // that has a time. A pro team's place under its logo keeps clear of the
+  // countdown like a rank: "1st NFCE" beside "in 11h 20m" is "1st" on 128
+  // px, all seven characters on three or four panels.
+  const int64_t now = 1794000000;
+  GameSnapshot today = live(0, 0, GameState::PRE);
+  today.kickoff_epoch = now + 11 * 3600 + 20 * 60;
+  CHECK_EQ(board_clock_text(today, true, now), std::string("in 11h 20m"));
+  CHECK_EQ(board_clock_text(today, false, now), std::string(""));  // the mode's own board: the kickoff
+  auto standing_beside = [](const GameSnapshot &g, int64_t at, int w) {
+    return board_standing("1st NFCE", record_row_chars((int) board_clock_text(g, true, at).size() * kClockCharPx, w));
+  };
+  CHECK_EQ(standing_beside(today, now, kBoardPx), std::string("1st"));
+  CHECK_EQ(standing_beside(today, now, board_px(3)), std::string("1stNFCE"));
+  CHECK_EQ(standing_beside(today, now, board_px(4)), std::string("1stNFCE"));
+  CHECK_EQ(board_standing("Seed 10", record_row_chars(10 * kClockCharPx)), std::string("Seed10"));
+  // A shorter countdown leaves the seven: "in 9h 5m" is 8 characters.
+  CHECK_EQ(standing_beside(today, today.kickoff_epoch - (9 * 3600 + 5 * 60), kBoardPx), std::string("1stNFCE"));
+  // No countdown without a kickoff time, or without the time of day.
+  GameSnapshot tbd = today;
+  tbd.time_tbd = true;
+  CHECK_EQ(board_clock_text(tbd, true, now), std::string(""));
+  CHECK_EQ(board_clock_text(today, true, 0), std::string(""));
+  CHECK_EQ(standing_beside(tbd, now, kBoardPx), std::string("1stNFCE"));
+  // During play the game clock, countdown or not; nothing after the final.
+  GameSnapshot on = live(7, 3);
+  on.sport = Sport::FOOTBALL;
+  on.short_detail = "End of 2nd";
+  CHECK_EQ(board_clock_text(on, true, now), clock_text(on));
+  CHECK_EQ(board_clock_text(on, false, now), clock_text(on));
+  CHECK_EQ(board_clock_text(live(7, 3, GameState::POST), true, now), std::string(""));
 }
 
 // The parts of the scoreboard page that change with the arrangement
@@ -4156,12 +4189,21 @@ static void test_board_layout() {
   CHECK_EQ(splash_chars(192), (size_t) 24);
   CHECK_EQ(splash_chars(256), (size_t) 32);
 
+  // The heat and power warning's 9 rows along the bottom of the screen:
+  // over the ticker on one row of panels, as before, and on a 2x2 along its
+  // bottom edge. The board's own ticker shows on one row of panels only; a
+  // 2x2 has it once, in its bottom half.
+  CHECK_EQ(guard_line_y(kBoardRows), 55);
+  CHECK_EQ(guard_line_y(2 * kBoardRows), 119);
+  CHECK(board_ticker(kBoardRows));
+  CHECK(!board_ticker(2 * kBoardRows));
+
   // A 2x2's bottom half. With the board up: the time, the date and the
-  // ticker, as before.
+  // ticker, the ticker ending above the warning's line.
   const LowerHalf board = lower_half(false, false);
   CHECK(board.time && board.date);
   CHECK_EQ(board.date_y, 23);
-  CHECK_EQ(board.ticker_y, 44);
+  CHECK_EQ(board.ticker_y, 39);
   CHECK(lower_half(false, true).time);  // card_date only counts under the clock card
   // Under the clock card no time twice, and the date only when the card has
   // the next game in its place.
@@ -4179,6 +4221,9 @@ static void test_board_layout() {
       CHECK(!l.time || kLowerTimeY + kLowerTimeRows <= l.date_y);
       CHECK(!l.date || l.date_y + kLowerDateRows <= l.ticker_y);
       CHECK(l.ticker_y + kLowerTickerRows <= kBoardRows);
+      // The warning's line, on the screen's bottom rows, never cuts the
+      // ticker's letters off.
+      CHECK(kBoardRows + l.ticker_y + kLowerTickerRows <= guard_line_y(2 * kBoardRows));
       if (card)
         CHECK_EQ(top + (l.ticker_y + kLowerTickerRows), kBoardRows);
     }

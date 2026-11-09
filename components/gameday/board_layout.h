@@ -1,9 +1,10 @@
 // The parts of the scoreboard page (firmware/pages/gameday-live.yaml) that
-// change with the panel arrangement: the board's width, where a splash goes
-// and what a 2x2's bottom half shows. The board itself is always
-// 64 rows: the whole screen of one row of panels (64, 128, 192 or 256 wide),
-// the top half of a 2x2 (128x128). Pure, with no ESPHome or LVGL includes,
-// so the host tests compile it directly.
+// change with the panel arrangement: the board's width, where a splash goes,
+// what a 2x2's bottom half shows and where the heat and power warning
+// (pages/guard.yaml) goes. The board itself is always 64 rows: the whole
+// screen of one row of panels (64, 128, 192 or 256 wide), the top half of a
+// 2x2 (128x128). Pure, with no ESPHome or LVGL includes, so the host tests
+// compile it directly.
 #pragma once
 
 #include <cstddef>
@@ -45,12 +46,24 @@ inline SplashBox splash_box(int w, int h) {
   return b;
 }
 
+// The heat and power warning (pages/guard.yaml): a line kGuardRows high
+// along the bottom of a screen h rows high. On one row of panels it covers
+// the ticker; on a 2x2 it sits under the bottom half's ticker.
+static const int kGuardRows = 9;
+inline int guard_line_y(int h) { return h - kGuardRows; }
+
+// The board's own ticker, along its bottom 8 rows, shows on one row of
+// panels. A 2x2 has the ticker once, bigger, in its bottom half.
+inline bool board_ticker(int h) { return h <= kBoardRows; }
+
 // A 2x2's bottom half (gd_lower, 64 rows under the board): the time
 // (spleen_16, 16 rows from row 5), the date (spleen_12) and the ticker
 // (spleen_16). Under the clock card, which has the time already, the time
 // stays hidden; the date shows only when the card has the next game under
 // its time rather than the date, so neither is up twice. card_date: the
-// clock card shows the date. What shows is centered in the 64 rows.
+// clock card shows the date. The ticker always ends above the heat and power
+// warning's line (guard_line_y), which would cut its letters off; under the
+// clock card what shows is centered in the 64 rows.
 struct LowerHalf {
   bool time;
   bool date;
@@ -61,7 +74,7 @@ static const int kLowerTimeY = 5, kLowerTimeRows = 16, kLowerDateRows = 12, kLow
 
 inline LowerHalf lower_half(bool clock_card, bool card_date) {
   if (!clock_card)
-    return LowerHalf{true, true, 23, 44};
+    return LowerHalf{true, true, 23, kBoardRows - kGuardRows - kLowerTickerRows};
   if (card_date)
     return LowerHalf{false, false, 23, (kBoardRows - kLowerTickerRows) / 2};
   return LowerHalf{false, true, 12, 36};

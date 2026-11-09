@@ -240,6 +240,20 @@ inline std::string countdown_text(int64_t seconds) {
   return buf;
 }
 
+// The board's clock row for a game: the game clock while it's on and, on My
+// team today's card (countdown), the countdown to a kickoff that has a time,
+// from now (a Unix time); "" otherwise. The record rows under the logos are
+// sized beside it (record_row_chars), a pro team's standing too.
+inline std::string board_clock_text(const GameSnapshot &g, bool countdown, int64_t now) {
+  if (!g.valid)
+    return "";
+  if (g.state == GameState::IN)
+    return clock_text(g);
+  if (countdown && g.state == GameState::PRE && !g.time_tbd && g.kickoff_epoch > 0 && now > 0)
+    return countdown_text(g.kickoff_epoch - now);
+  return "";
+}
+
 // "22:00" for 22 * 60, the form the page's time fields use.
 inline std::string clock_hhmm(int minute) {
   if (minute < 0 || minute >= kDayMinutes)

@@ -812,7 +812,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void emit_(const ::espn::Splash &splash);
   // The board's fields for one game: the scoreboard, its ticker and a
   // leaderboard's columns, before any mode's or the idle display's words.
-  void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f);
+  // countdown: My team today's card, with the countdown to a kickoff in the
+  // clock's place (espn::board_clock_text).
+  void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f, bool countdown = false);
   // "Sun 3:25 PM" for a game not started yet, in the panel's time zone.
   std::string kickoff_of_(const GameSnapshot &g) const;
   // The mode's own words over its board (board: g is a leaderboard).
