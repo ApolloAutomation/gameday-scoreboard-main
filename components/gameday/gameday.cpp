@@ -2771,10 +2771,11 @@ void GamedayComponent::captive_tick_() {
       this->captive_suspect_ = false;
       this->set_captive_(false);
     } else if (r == ::espn::Probe::CAPTIVE && network::is_connected() && !this->demo_playing_()) {
-      if (this->clock_set_() && this->fail_run_.streak == 0 && this->mlb_wait_.run.streak == 0 && !this->captive_) {
+      if (this->clock_set_() && this->fail_run_.streak == 0 && !this->captive_) {
         // Nothing says ESPN is out of reach yet (a DNS block page can look
         // like a portal to the probe): ask ESPN now and say so only if that
-        // read fails too. With no clock nothing can be read to check.
+        // read fails too. With no clock nothing can be read to check. MLB
+        // failing alone says nothing here: a sign-in page blocks ESPN too.
         ESP_LOGI(TAG, "Wi-Fi check saw a sign-in page: reading ESPN now to check");
         this->captive_suspect_ = true;
         this->suspect_fails_mark_ = this->read_fails_;
