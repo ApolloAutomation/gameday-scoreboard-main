@@ -31,7 +31,9 @@
     "means that many minutes.",
     "split is what the second area shows (0 off, 1 rotating live games, 2 a second team's game,",
     "3 today's scores, 4 clock and date), one digit and nothing else; splitteam its team, never a",
-    "golf tour, a racing series or the panel's own team, \"none\" or \"\" clearing it."
+    "golf tour, a racing series or the panel's own team, \"none\" or \"\" clearing it.",
+    "clocksize and textsize are Clock size and Text size, 0 Normal or 1 Large, one digit and",
+    "nothing else."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -41,7 +43,7 @@
     "final": false, "alerts": 1048575, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false,
     "visit": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
-    "bets": [], "players": [], "split": 0, "splitteam": ""
+    "bets": [], "players": [], "split": 0, "splitteam": "", "clocksize": 0, "textsize": 0
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -343,6 +345,16 @@
     {"name": "a full list still takes a new name for a player in it", "start": {"players": [{"l": "nfl", "id": 1001, "team": 2, "name": "P1"}, {"l": "nfl", "id": 1002, "team": 2, "name": "P2"}, {"l": "nfl", "id": 1003, "team": 2, "name": "P3"}, {"l": "nfl", "id": 1004, "team": 2, "name": "P4"}, {"l": "nfl", "id": 1005, "team": 2, "name": "P5"}, {"l": "nfl", "id": 1006, "team": 2, "name": "P6"}, {"l": "nfl", "id": 1007, "team": 2, "name": "P7"}, {"l": "nfl", "id": 1008, "team": 2, "name": "P8"}]}, "set": [["player", "nfl,1001,2,NEW"]], "expect": {"players": [{"l": "nfl", "id": 1001, "team": 2, "name": "NEW"}, {"l": "nfl", "id": 1002, "team": 2, "name": "P2"}, {"l": "nfl", "id": 1003, "team": 2, "name": "P3"}, {"l": "nfl", "id": 1004, "team": 2, "name": "P4"}, {"l": "nfl", "id": 1005, "team": 2, "name": "P5"}, {"l": "nfl", "id": 1006, "team": 2, "name": "P6"}, {"l": "nfl", "id": 1007, "team": 2, "name": "P7"}, {"l": "nfl", "id": 1008, "team": 2, "name": "P8"}]}},
     {"name": "a favorite player changes no other setting", "start": {"mode": 5, "follow": true}, "set": [["player", "nfl,3918298,2,ALLEN"]], "expect": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}], "follow": true, "mode": 5}},
     {"name": "a new team keeps the favorite players", "start": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}]}, "set": [["team", "mlb:15"]], "expect": {"players": [{"l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN"}], "team": "mlb:15"}},
+
+    {"name": "a large clock", "set": [["clocksize", "1"]], "expect": {"clocksize": 1, "textsize": 0}},
+    {"name": "large text", "set": [["textsize", "1"]], "expect": {"textsize": 1, "clocksize": 0}},
+    {"name": "both sizes in one request", "set": [["clocksize", "1"], ["textsize", "1"]], "expect": {"clocksize": 1, "textsize": 1}},
+    {"name": "the clock back to normal", "start": {"clocksize": 1, "textsize": 1}, "set": [["clocksize", "0"]], "expect": {"clocksize": 0, "textsize": 1}},
+    {"name": "a clock size past large is refused", "start": {"clocksize": 1}, "set": [["clocksize", "2"]], "expect": {"clocksize": 1}},
+    {"name": "a negative text size is refused", "start": {"textsize": 1}, "set": [["textsize", "-1"]], "expect": {"textsize": 1}},
+    {"name": "a text size in words is refused", "set": [["textsize", "large"]], "expect": {"textsize": 0}},
+    {"name": "a clock size with a space is refused", "set": [["clocksize", "1 "]], "expect": {"clocksize": 0}},
+    {"name": "the sizes leave the standing alone", "start": {"standing": 2}, "set": [["clocksize", "1"]], "expect": {"clocksize": 1, "standing": 2}},
 
     {"name": "the second area's choice", "set": [["split", "3"]], "expect": {"split": 3}},
     {"name": "the second area's clock and date", "start": {"split": 1}, "set": [["split", "4"]], "expect": {"split": 4}},

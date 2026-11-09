@@ -115,6 +115,8 @@ INITIAL = {
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
     "autoupd": False, "beta": False, "standing": 0,
+    # Clock size and Text size (components/gameday/board_layout.h): 0 Normal, 1 Large.
+    "clocksize": 0, "textsize": 0,
     # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
     # The big-play watcher (components/gameday/watch.h): stay in seconds.
@@ -600,6 +602,10 @@ def apply_set(kv):
         elif k == "standing":
             if 0 <= atoi(v) < LIMITS["kStandingCount"]:
                 STATE["standing"] = atoi(v)
+        elif k in ("clocksize", "textsize"):
+            # One ASCII digit, 0 to kSizeCount - 1, nothing else, as for split.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSizeCount"]:
+                STATE[k] = int(v)
         elif k == "idle":
             if 0 <= atoi(v) < LIMITS["kIdleCount"]:
                 STATE["idle"] = atoi(v)

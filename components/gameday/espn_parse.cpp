@@ -462,10 +462,15 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
   // false. Only a completed game has a winner.
   if (!cur.completed)
     return Splash{};
+  // The winner's logo with "WINS!"
+  auto win = [](const std::string &abbr, const std::string &color) {
+    return Splash{abbr + " WINS!", parse_color(color), abbr, false, (uint8_t) (abbr.size() < 255 ? abbr.size() + 1 : 0),
+                  ""};
+  };
   if (us > them)
-    return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
+    return win(cur.team_abbr, cur.team_color);
   if (neutral && them > us)
-    return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
+    return win(cur.opp_abbr, cur.opp_color);
   return Splash{};
 }
 

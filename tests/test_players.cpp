@@ -500,7 +500,7 @@ void test_watcher() {
   const List tb{make_player(MLB, 4917849, 30, "MESA JR.")};
   GameSnapshot before = read("fixtures/event_mlb_hr_before.json", Sport::BASEBALL, 10, tb, MLB);
   GameSnapshot hr = read("fixtures/event_mlb_hr.json", Sport::BASEBALL, 10, tb, MLB);
-  const Splash brought{"TB HOME RUN", 0x092c5c};
+  const Splash brought{"TB HOME RUN", 0x092c5c, "TB", false, 3, "+1 RUN"};
   // The first poll's read credits him, but its splash is the one that brought the board.
   PCHECK_EQ(visit_splash(true, brought, GameSnapshot{}, hr, kAlertsAll, false, MLB, tb.p).text, "TB HOME RUN");
   // The next poll reads the same play: nothing again.

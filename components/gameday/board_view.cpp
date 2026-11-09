@@ -2,6 +2,7 @@
 
 #ifdef USE_LVGL
 
+#include <algorithm>
 #include <cstring>
 #include <new>
 #include <string>
@@ -59,7 +60,12 @@ void put_font(lv_obj_t *o, const lv_font_t *f) {
 }
 
 const lv_font_t *font_of(const BoardView &v, BoardFont f) {
-  return f == BoardFont::S8 ? v.f8 : f == BoardFont::S12 ? v.f12 : v.f16;
+  const lv_font_t *p = f == BoardFont::S8    ? v.f8
+                       : f == BoardFont::S12 ? v.f12
+                       : f == BoardFont::S16 ? v.f16
+                       : f == BoardFont::S24 ? v.f24
+                                             : v.f32;
+  return p != nullptr ? p : v.f16;
 }
 
 void put_text(lv_obj_t *o, const char *t) {
@@ -90,8 +96,9 @@ int char_px(lv_obj_t *lbl) {
   return (int) lv_font_get_glyph_width(lv_obj_get_style_text_font(lbl, LV_PART_MAIN), '0', 0);
 }
 
-// Possession: a gold bar under lbl's text, at least 6 px wide.
-void underline(lv_obj_t *lbl, lv_obj_t *bar, bool on) {
+// Possession: a gold bar under lbl's text, at least 6 px wide, dy rows under
+// the label's top (its line's height when negative).
+void underline(lv_obj_t *lbl, lv_obj_t *bar, bool on, int dy = -1) {
   if (bar == nullptr)
     return;
   if (!on || lbl == nullptr) {
@@ -107,7 +114,7 @@ void underline(lv_obj_t *lbl, lv_obj_t *bar, bool on) {
     tw = 6;
   int32_t lx = lv_obj_get_x(lbl), lw = lv_obj_get_width(lbl), ly = lv_obj_get_y(lbl);
   lv_obj_set_size(bar, tw, 2);
-  lv_obj_set_pos(bar, lx + (lw - tw) / 2, ly + lv_font_get_line_height(f));
+  lv_obj_set_pos(bar, lx + (lw - tw) / 2, ly + (dy < 0 ? lv_font_get_line_height(f) : dy));
   lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -141,6 +148,49 @@ lv_obj_t *plain_bar(lv_obj_t *parent, uint32_t color) {
   return o;
 }
 
+// A splash tile with its logo, on black with round corners.
+void tile_logo(BoardView &v, int i, image::Image *img) {
+  put_bg(v.tile[i], 0x000000);
+  lv_obj_set_style_border_width(v.tile[i], 0, 0);
+  lv_obj_set_style_radius(v.tile[i], 6, 0);
+  ::lv_image_set_src(v.tile_img[i], img->get_lv_image_dsc());
+  show(v.tile_img[i], true);
+  show(v.tile_lbl[i], false);
+  v.tile_waiting[i] = false;
+}
+
+// A splash tile for side (0 the team, 1 the opponent): its logo, or its
+// abbreviation badge by the app's rules (badge.h) while the logo downloads,
+// and always for a side with no logo to fetch (team_badge): the demo build's
+// made-up teams, and an AHL or ECHL team HockeyTech has no small logo for,
+// as the board's own badge. A badge with no ring of its own gets a black
+// one, so it stands out on a flash in its own color.
+void paint_tile(BoardView &v, int i, int side, const UpdateFields &f, image::Image *img) {
+  if (v.tile[i] == nullptr)
+    return;
+  const bool made_up = side == 0 ? f.team_badge : f.opponent_badge;
+  v.tile_side[i] = (int8_t) side;
+  if (img != nullptr && !made_up) {
+    tile_logo(v, i, img);
+    return;
+  }
+  v.tile_waiting[i] = !made_up;
+  const uint32_t fill = side == 0 ? f.team_color : f.opponent_color;
+  const uint32_t ring = made_up ? (side == 0 ? f.team_ring : f.opponent_ring) : fill;
+  const ::espn::BadgeStyle st = ::espn::badge_style(fill, ring);
+  put_bg(v.tile[i], st.fill);
+  lv_obj_set_style_radius(v.tile[i], 8, 0);
+  lv_obj_set_style_border_width(v.tile[i], 2, 0);
+  lv_obj_set_style_border_color(v.tile[i], lv_color_hex(st.has_ring ? st.ring : 0x000000), 0);
+  put_text(v.tile_lbl[i], panel_text(side == 0 ? f.team_abbr : f.opponent_abbr).c_str());
+  put_color(v.tile_lbl[i], st.dark_text ? 0x000000 : 0xFFFFFF);
+  show(v.tile_img[i], false);
+  show(v.tile_lbl[i], true);
+}
+
+// The two logos an update has, to tell a later update's from them.
+uint32_t logos_key(const UpdateFields &f) { return fnv1_hash(f.team_logo) * 31u + fnv1_hash(f.opponent_logo); }
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -157,10 +207,38 @@ BoardView *board_view_set(const BoardView &bound) {
   return page_view;
 }
 
-void board_layout(BoardView &v, int w, int h) {
+void board_build(BoardView &v) {
+  if (v.clock_ampm == nullptr && v.no_game != nullptr && v.clock_time != nullptr) {
+    v.clock_ampm = plain_label(v.no_game, v.f8, LV_OPA_COVER);
+    lv_obj_add_flag(v.clock_ampm, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (v.splash == nullptr || v.tile[0] != nullptr)
+    return;
+  for (int i = 0; i < 2; i++) {
+    lv_obj_t *t = plain_obj(v.splash);
+    lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+    lv_obj_add_flag(t, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t *img = lv_image_create(t);
+    lv_obj_remove_style_all(img);
+    if (v.blank != nullptr)
+      ::lv_image_set_src(img, v.blank->get_lv_image_dsc());
+    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *lbl = plain_label(t, v.f12, LV_OPA_COVER);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
+    v.tile[i] = t;
+    v.tile_img[i] = img;
+    v.tile_lbl[i] = lbl;
+  }
+  v.splash_pts = plain_label(v.splash, v.f16, LV_OPA_COVER);
+  lv_obj_add_flag(v.splash_pts, LV_OBJ_FLAG_HIDDEN);
+}
+
+void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   v.w = (int16_t) w;
-  const GameGeom g = game_geom(w);
-  const SplashBox sb = splash_box(w, h);
+  v.splash_h = (int16_t) splash_h;
+  v.sizes = sizes;
+  const GameGeom g = game_geom(w, sizes.text);
+  const SplashBox sb = splash_box(w, splash_h);
   // The board's own ticker, along its bottom. The second area (split.h) has
   // its own, laid out by area_layout.
   show(v.ticker, board_ticker(h));
@@ -180,13 +258,20 @@ void board_layout(BoardView &v, int w, int h) {
   if (v.msg != nullptr)
     lv_obj_align(v.msg, LV_ALIGN_CENTER, 0, 0);
   // The clock card: the time, and under it the next game (two lines) on a
-  // wide board or the date on a single panel.
+  // wide board or the date on a single panel; a Large clock's AM or PM on a
+  // line of its own on one panel (clock_card_geom).
+  const ClockCardGeom c = clock_card_geom(w, sizes.clock);
+  v.clock_split = c.ampm;
   put_width(v.clock_time, w);
   put_width(v.clock_sub, w);
-  put_font(v.clock_time, v.f16);
-  put_font(v.clock_sub, font_of(v, g.sub_font));
-  put_pos(v.clock_time, 0, g.clock_time_y);
-  put_pos(v.clock_sub, 0, g.clock_sub_y);
+  put_width(v.clock_ampm, w);
+  put_font(v.clock_time, font_of(v, c.time_font));
+  put_font(v.clock_sub, font_of(v, c.sub_font));
+  put_pos(v.clock_time, 0, c.time_y);
+  put_pos(v.clock_sub, 0, c.sub_y);
+  put_pos(v.clock_ampm, 0, c.ampm_y);
+  if (!c.ampm)
+    show(v.clock_ampm, false);
   put_width(v.ticker, w);
   for (int i = 0; i < 2; i++) {
     put_pos(v.logo[i], g.logo_x[i], g.logo_y);
@@ -221,6 +306,9 @@ void board_layout(BoardView &v, int w, int h) {
   put_pos(v.ticker, 0, g.ticker_y);
   put_font(v.splash_lbl, font_of(v, g.splash_font));
   put_pos(v.splash_lbl, 0, sb.text_y);
+  for (lv_obj_t *t : v.tile)
+    show(t, false);
+  show(v.splash_pts, false);
   // Baseball's bases and outs, which board_draw shows during a half inning
   for (int i = 0; i < 3; i++) {
     put_size(v.base[i], g.base_px, g.base_px);
@@ -241,10 +329,11 @@ void board_layout(BoardView &v, int w, int h) {
   }
 }
 
-DrawResult board_draw(BoardView &v, const UpdateFields &f) {
+DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo, image::Image *opp_logo) {
   DrawResult r;
   const int W = v.w;
   const bool wide = W >= 128;
+  const GameGeom g = game_geom(W, v.sizes.text);
   const bool live = f.game_state == "IN";
   // The text through panel_text(), so a character the fonts lack never draws
   // as a box. The situation and the clock card's next game come ready.
@@ -307,9 +396,19 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   put_rank(v.rec[0], wide ? f.team_rank : 0, rec[0], true);
   put_rank(v.rec[1], wide ? f.opponent_rank : 0, rec[1], true);
 
-  // The ticker only when its text changed: rewriting the label restarts the
-  // scroll, and pushes arrive every few seconds.
+  // The ticker only when its text or its font changed: rewriting the label
+  // restarts the scroll, and pushes arrive every few seconds. Large text
+  // makes it spleen_12 (game_geom), but a leaderboard's sixth row leaves room
+  // for the small one only.
   if (v.ticker != nullptr) {
+    const lv_font_t *tf = f.board ? v.f8 : font_of(v, g.ticker_font);
+    if (tf != nullptr && lv_obj_get_style_text_font(v.ticker, LV_PART_MAIN) != tf) {
+      lv_obj_set_style_text_font(v.ticker, tf, 0);
+      r.ticker_changed = true;
+    }
+    const int ty = f.board ? kBoardRows - 8 : g.ticker_y;
+    if (lv_obj_get_style_y(v.ticker, LV_PART_MAIN) != ty)
+      lv_obj_set_y(v.ticker, ty);
     const char *cur = lv_label_get_text(v.ticker);
     if (cur == nullptr || status != cur) {
       put_text(v.ticker, status.c_str());
@@ -335,7 +434,8 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   put_color(v.score[1], 0xFFFFFF);
   const bool under_scores = !wide && live && !clock_text.empty();
   for (int i = 0; i < 2; i++)
-    underline(under_scores ? v.score[i] : v.abbr[i], v.poss[i], live && f.possession == i + 1);
+    underline(under_scores ? v.score[i] : v.abbr[i], v.poss[i], live && f.possession == i + 1,
+              under_scores ? g.score_poss_dy : -1);
 
   // The game layout, a leaderboard or the no-game screen
   const bool no_game = no_game_screen(f.game_state, f.clock, f.board_card);
@@ -376,16 +476,19 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   if (f.clock) {
     show(v.msg, false);
     put_color(v.clock_time, f.team_color);
+    put_color(v.clock_ampm, f.team_color);
     r.clock_card = true;
     r.clock_date = card_date;
     if (!card_date)
       put_changed(v.clock_sub, next_line.c_str());
     show(v.clock_time, true);
     show(v.clock_sub, true);
+    show(v.clock_ampm, v.clock_split);
   } else {
     show(v.msg, true);
     show(v.clock_time, false);
     show(v.clock_sub, false);
+    show(v.clock_ampm, false);
   }
   // Records sit under the logos on a wide board, live or not; a single
   // panel has no room for them.
@@ -473,31 +576,107 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f) {
   // fireworks on black with the text in the team color; the rest (smaller
   // scores, turnovers, cards, lead changes) keep the solid color flash
   // (espn::splash_fireworks, alerts.h). A "\n" in the text starts a new line
-  // ("PHI" over "FUMBLE RECOVERY").
+  // ("PHI" over "FUMBLE RECOVERY"). With the side's logo, or both for the
+  // whole game's, and a score's points (board_layout.h, splash_layout): the
+  // words leave the side's name out, which the logo says.
   const std::string splash = panel_text(f.splash_text, true);
   if (!splash.empty()) {
-    put_text(v.splash_lbl, splash.c_str());
+    const int tiles = f.splash_side == 2 ? 2 : f.splash_side >= 0 ? 1 : 0;
+    const std::string words =
+        tiles == 1 ? panel_text(f.splash_text.substr(std::min<size_t>(f.splash_lead, f.splash_text.size())), true)
+                   : splash;
+    const SplashLayout L = splash_layout(W, v.splash_h, v.tile[0] != nullptr ? tiles : 0, f.splash_points, words);
+    image::Image *const logo[2] = {team_logo, opp_logo};
+    for (int i = 0; i < 2; i++) {
+      if (!L.logos || i >= L.tiles) {
+        show(v.tile[i], false);
+        v.tile_waiting[i] = false;
+        continue;
+      }
+      const int side = L.tiles == 2 ? i : f.splash_side;
+      paint_tile(v, i, side, f, logo[side]);
+      put_pos(v.tile[i], L.tile_x[i], L.tile_y);
+      put_size(v.tile[i], L.tile_px, L.tile_px);
+      show(v.tile[i], true);
+    }
+    v.tile_logos = logos_key(f);
+    if (L.logos) {
+      put_font(v.splash_lbl, font_of(v, L.words_font));
+      place(v.splash_lbl, L.words);
+      put_text(v.splash_lbl, words.c_str());
+    } else {
+      put_font(v.splash_lbl, font_of(v, g.splash_font));
+      put_pos(v.splash_lbl, 0, splash_box(W, v.splash_h).text_y);
+      put_width(v.splash_lbl, W);
+      put_text(v.splash_lbl, splash.c_str());
+    }
+    if (L.points) {
+      put_font(v.splash_pts, font_of(v, L.points_font));
+      place(v.splash_pts, L.pts);
+      put_text(v.splash_pts, (L.points_whole ? f.splash_points : points_number(f.splash_points)).c_str());
+    }
+    show(v.splash_pts, L.points);
     const bool big = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
+    const uint32_t ink = big ? lift_color(f.splash_color, 0xE0) : 0xFFFFFF;
     if (big) {
       put_bg(v.splash, 0x000000);
-      put_color(v.splash_lbl, lift_color(f.splash_color, 0xE0));
       show(v.fx, true);
     } else {
       show(v.fx, false);
       put_bg(v.splash, f.splash_color);
-      put_color(v.splash_lbl, 0xFFFFFF);
     }
+    put_color(v.splash_lbl, ink);
+    put_color(v.splash_pts, ink);
     show(v.splash, true);
     r.splash = true;
     r.big_splash = big;
+  } else if (logos_key(f) != v.tile_logos) {
+    // The board moved on under the splash: a logo that comes in now is
+    // another game's.
+    v.tile_waiting[0] = v.tile_waiting[1] = false;
   }
   return r;
 }
 
+void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo) {
+  if (v.splash == nullptr || lv_obj_has_flag(v.splash, LV_OBJ_FLAG_HIDDEN))
+    return;
+  for (int i = 0; i < 2; i++) {
+    image::Image *img = v.tile_side[i] == 0 ? team_logo : v.tile_side[i] == 1 ? opp_logo : nullptr;
+    if (v.tile_waiting[i] && img != nullptr && v.tile[i] != nullptr)
+      tile_logo(v, i, img);
+  }
+}
+
+void clock_tick(const struct tm &t, bool card_date) {
+  BoardView *v = page_view;
+  AreaView *a = area_ptr;
+  const bool card = v != nullptr && v->clock_time != nullptr && !lv_obj_has_flag(v->clock_time, LV_OBJ_FLAG_HIDDEN);
+  const bool lower = a != nullptr && a->root != nullptr && !lv_obj_has_flag(a->root, LV_OBJ_FLAG_HIDDEN);
+  if (!card && !lower)
+    return;
+  // A label is only rewritten when its text changes, so once a minute.
+  const std::string time = ::espn::clock_time_text(t);
+  const std::string date = ::espn::clock_date_text(t);
+  const std::string ampm = clock_ampm(time);
+  const std::string digits = clock_digits(time);
+  if (lower) {
+    put_changed(a->time, a->time_split ? digits.c_str() : time.c_str());
+    put_changed(a->ampm, ampm.c_str());
+    put_changed(a->date, date.c_str());
+  }
+  if (!card)
+    return;
+  put_changed(v->clock_time, v->clock_split ? digits.c_str() : time.c_str());
+  put_changed(v->clock_ampm, ampm.c_str());
+  if (card_date)
+    put_changed(v->clock_sub, date.c_str());
+}
+
 AreaView *area_view() { return area_ptr; }
 
-AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const lv_font_t *f8,
-                     const lv_font_t *f12, const lv_font_t *f16, image::Image *blank) {
+AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
+                     image::Image *blank) {
   if (area_ptr != nullptr || root == nullptr)
     return area_ptr;
   void *p = heap_caps_malloc_prefer(sizeof(AreaView), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
@@ -509,10 +688,16 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
   a->date = date;
   a->blank = blank;
   BoardView &v = a->game;
+  const lv_font_t *f8 = fonts.f8, *f12 = fonts.f12, *f16 = fonts.f16;
   v.f8 = f8;
   v.f12 = f12;
   v.f16 = f16;
+  v.f24 = fonts.f24;
+  v.f32 = fonts.f32;
+  v.blank = blank;
   a->ticker = ticker;
+  a->ampm = plain_label(root, f8, LV_OPA_COVER);
+  lv_obj_add_flag(a->ampm, LV_OBJ_FLAG_HIDDEN);
   // In front of the time, date and ticker, which the game layout's empty
   // rows leave showing; the splash in front of everything.
   v.game = plain_obj(root);
@@ -545,11 +730,12 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
   v.msg = plain_label(v.no_game, f12, 230, true);
   v.splash = plain_bar(root, 0x000000);
   v.splash_lbl = plain_label(v.splash, f16, LV_OPA_COVER, true);
+  board_build(v);
   area_ptr = a;
   return a;
 }
 
-void area_layout(AreaView &a, bool on, int x, int y, int w, int h) {
+void area_layout(AreaView &a, bool on, int x, int y, int w, int h, Sizes sizes) {
   show(a.root, on);
   if (!on)
     return;
@@ -559,8 +745,9 @@ void area_layout(AreaView &a, bool on, int x, int y, int w, int h) {
   lv_obj_set_size(a.root, w, h);
   put_width(a.time, w);
   put_width(a.date, w);
+  put_width(a.ampm, w);
   put_width(a.ticker, w);
-  board_layout(a.game, w, h);
+  board_layout(a.game, w, h, h, sizes);
 }
 
 namespace {
@@ -590,32 +777,42 @@ bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &te
 
 }  // namespace
 
-DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date) {
+DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date,
+                     image::Image *team_logo, image::Image *opp_logo) {
   BoardView &v = a.game;
   const std::string line = panel_text(f.status_text);
   DrawResult r;
   if (clock) {
     // The time and the date, and the area's line under them in spleen_16,
-    // as two rows of two showed before its bottom half had its own content.
+    // as two rows of two showed before its bottom half had its own content,
+    // at the owner's sizes (lower_half).
     show(v.game, false);
     show(v.no_game, false);
-    const LowerHalf lower = lower_half(main_clock, main_date);
+    const LowerHalf lower = lower_half(main_clock, main_date, a.w, v.sizes);
+    a.time_split = lower.ampm;
     show(a.time, lower.time);
+    show(a.ampm, lower.time && lower.ampm);
     show(a.date, lower.date);
+    put_font(a.time, font_of(v, lower.time_font));
+    put_y(a.time, lower.time_y);
+    put_y(a.ampm, lower.ampm_y);
     put_y(a.date, lower.date_y);
     r.ticker_changed = put_ticker(a.ticker, v.f16, lower.ticker_y, line);
     r.clock_card = true;
     return r;
   }
   show(a.time, false);
+  show(a.ampm, false);
   show(a.date, false);
-  r = board_draw(v, f);
-  // A game card's ticker runs along the area's bottom 8 rows, as on one row
-  // of panels.
-  r.ticker_changed = put_ticker(a.ticker, v.f8, a.h - 8, line);
+  r = board_draw(v, f, team_logo, opp_logo);
+  // A game card's ticker runs along the area's bottom, as on one row of
+  // panels.
+  const GameGeom g = game_geom(a.w, v.sizes.text);
+  r.ticker_changed = put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
     put_bg(v.splash, f.splash_color);
     put_color(v.splash_lbl, 0xFFFFFF);
+    put_color(v.splash_pts, 0xFFFFFF);
     r.big_splash = false;
   }
   return r;

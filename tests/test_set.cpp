@@ -56,11 +56,13 @@ std::string keys(const std::vector<League> &leagues) {
 // game has ended. bets are the manual bets by slot (bets.h), as entered.
 // visit: another game's big play has the board for a moment (watch.h), the
 // mode's own game being the one board and final describe. split and
-// splitteam: what the second area shows and its team (split.h).
+// splitteam: what the second area shows and its team (split.h). clocksize
+// and textsize: Clock size and Text size, 0 Normal or 1 Large.
 struct Settings {
   TeamRef team;
   TeamRef splitteam;
   int split{0};
+  int clocksize{0}, textsize{0};
   uint8_t team_league{0};
   // rotatesec: Switch every in seconds (startup.h), what set_rotate_seconds keeps.
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
@@ -141,6 +143,8 @@ void load(Settings &s, JsonObjectConst o) {
   num("standing", s.standing);
   num("watchstay", s.watchstay);
   num("split", s.split);
+  num("clocksize", s.clocksize);
+  num("textsize", s.textsize);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -309,6 +313,8 @@ void apply(Settings &s, const SetOp &op) {
     }
     case SetKind::WIRING: s.wiring = op.value; break;
     case SetKind::SPLIT: s.split = op.value; break;
+    case SetKind::CLOCK_SIZE: s.clocksize = op.value; break;
+    case SetKind::TEXT_SIZE: s.textsize = op.value; break;
     case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
       if (op.team.id == 0 || !(op.team == s.team))
         s.splitteam = op.team;
@@ -389,6 +395,8 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
   doc["split"] = s.split;
+  doc["clocksize"] = s.clocksize;
+  doc["textsize"] = s.textsize;
   doc["splitteam"] = team_str(s.splitteam);
   // The favorite players, filled slots in slot order.
   JsonArray players = doc["players"].to<JsonArray>();
@@ -554,6 +562,12 @@ void test_parse_set() {
   SCHECK(parse_set("standing", "1", op, kFavMax) && op.value == (int) Standing::SEED, "standing 1 is seed");
   SCHECK(!parse_set("standing", "3", op, kFavMax), "standing 3");
   SCHECK(!parse_set("standing", "-1", op, kFavMax), "standing -1");
+  SCHECK(parse_set("clocksize", "1", op, kFavMax) && op.kind == SetKind::CLOCK_SIZE && op.value == 1, "clocksize 1");
+  SCHECK(parse_set("textsize", "0", op, kFavMax) && op.kind == SetKind::TEXT_SIZE && op.value == 0, "textsize 0");
+  for (const char *bad : {"2", "-1", "", "01", "1 ", "L", "large"}) {
+    SCHECK(!parse_set("clocksize", bad, op, kFavMax), "clocksize %s", bad);
+    SCHECK(!parse_set("textsize", bad, op, kFavMax), "textsize %s", bad);
+  }
 
   SCHECK(parse_set("idle", "4", op, kFavMax) && op.kind == SetKind::IDLE && op.value == 4, "idle 4");
   SCHECK(parse_set("idle", "0", op, kFavMax) && op.value == 0, "idle 0");

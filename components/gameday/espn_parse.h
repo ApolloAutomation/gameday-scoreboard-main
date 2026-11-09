@@ -422,6 +422,18 @@ struct TickerOptions {
 struct Splash {
   std::string text;
   uint32_t color{0};
+  // Whose logo the panel shows with the words (board_layout.h,
+  // splash_layout): the abbreviation of the side that scored, took the
+  // ball, got the card or won. Empty for nobody's (golf, racing), or with
+  // both the whole game's (overtime, basketball's final), which shows both.
+  std::string abbr;
+  bool both{false};
+  // How many of text's first characters name abbr ("PHI ", "CIN\n"), which
+  // the logo says instead.
+  uint8_t lead{0};
+  // What the side gained: "+6", "+3", "+2 RUNS"; empty for a play that
+  // scores none, a lead change, overtime, the final or a win.
+  std::string points;
 };
 
 const char *league_path(League league);  // the last part of the ESPN path: "nfl"

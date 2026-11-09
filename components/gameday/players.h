@@ -194,6 +194,8 @@ struct PlayerScore {
   int slot{-1};
   std::string word;
   AlertSide side{AlertSide::TEAM};
+  Alert type{Alert::NONE};  // the play, for its points (splash_points)
+  int points{0};            // what the side gained
 };
 
 namespace detail {
@@ -309,6 +311,8 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
   const uint32_t team = p.side == AlertSide::TEAM ? cur.team_id : cur.opp_id;
   PlayerScore out;
   out.side = p.side;
+  out.type = p.type;
+  out.points = p.points;
   if (cur.sport == Sport::SOCCER) {
     if (cur.soc.goals.size() <= prev.soc.goals.size())
       return none;
@@ -374,14 +378,16 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
 // The splash for a favorite's score: their name and the play's words, beside
 // each other when they fit a line (10 characters on one panel, 16 on two),
 // else the words under the name, in their side's color. The words are the
-// team splashes' own, so the panel gives the same ones fireworks.
+// team splashes' own, so the panel gives the same ones fireworks. The panel
+// shows their team's logo and the points with them, as for the team's.
 inline Splash player_splash(const PlayerScore &s, const GameSnapshot &g, const FavPlayer *list, bool wide) {
   if (s.slot < 0 || s.slot >= kPlayerSlots || player_empty(list[s.slot]) || s.word.empty())
     return Splash{};
   const std::string name = list[s.slot].name;
   const bool one_line = name.size() + 1 + s.word.size() <= (wide ? 16u : 10u);
-  return Splash{name + (one_line ? " " : "\n") + s.word,
-                parse_color(s.side == AlertSide::OPP ? g.opp_color : g.team_color)};
+  const bool opp = s.side == AlertSide::OPP;
+  return Splash{name + (one_line ? " " : "\n") + s.word, parse_color(opp ? g.opp_color : g.team_color),
+                opp ? g.opp_abbr : g.team_abbr, false, 0, splash_points(s.type, s.points)};
 }
 
 // What the board splashes for two reads of its game: a favorite player's

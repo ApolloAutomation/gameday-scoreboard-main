@@ -241,6 +241,10 @@
       <div class="card">
         <h2>Panel</h2>
         <div id="panelCtls"></div>
+        <div id="sizeCtls" hidden>
+          <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The time when the panel shows a clock: the off-season clock, the idle display's Clock and the second area's Clock and date. Large has bigger digits.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
+          <div class="ctl"><label for="textsize">Text size<small id="textsizeHelp">The ticker along the bottom of the board, and of the second area's game. Large has bigger letters. A golf or racing leaderboard keeps the small ones, and the ticker under the second area's clock is big at either size.</small></label><select id="textsize" aria-label="Text size" aria-describedby="textsizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
+        </div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="splitCtls" hidden>
           <div class="sub" id="splitTitle">Second area</div>
@@ -472,6 +476,7 @@
   const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
   const stateForm = {
     mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
+    clocksize: Number, textsize: Number,
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
@@ -1079,6 +1084,12 @@
   // ---- toggles and favorites (static controls on the state document) --------
   const standingSel = $("#standing");
   standingSel.onchange = () => setGD({ standing: standingSel.value });
+  // Clock size and Text size: Normal (0) or Large (1)
+  const sizeSels = ["clocksize", "textsize"].map((k) => {
+    const sel = $("#" + k);
+    sel.onchange = () => setGD({ [k]: sel.value });
+    return sel;
+  });
   document.querySelectorAll(".sw[data-set]").forEach((sw) => {
     sw.setAttribute("role", "switch");
     setOn(sw, false, "aria-checked");
@@ -1231,6 +1242,9 @@
     const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
     $("#standingRow").hidden = S.standing === undefined || (followed.length > 0 && !followed.some((t) => isPro(t.l)));
     if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
+    // Older firmware sends no sizes.
+    $("#sizeCtls").hidden = S.clocksize === undefined;
+    sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
     // Nor the switches for other games' big plays. A stay the list lacks gets its own entry.
     $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
     // With the second area rotating live games, big plays show there and the
