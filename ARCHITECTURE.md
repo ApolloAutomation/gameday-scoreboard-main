@@ -2,7 +2,8 @@
 
 How Game Day Scoreboard is put together: the builds, the components, the
 path a score takes from ESPN (or for minor league baseball, the MLB Stats
-API) to the panel and the device page, the update channels, and the sites,
+API, and for the AHL and the ECHL, HockeyTech's feed) to the panel and the
+device page, the update channels, and the sites,
 scripts, CI and tests around them. File and line
 references are to `dev` when this was written; follow the names, since line
 numbers drift.
@@ -31,7 +32,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 
 - **Substitutions**: `name`, `friendly_name`, `version` (bumped at release
   time), `site_base` (the project's site, every update URL is built from it),
-  `update_source`, `beta_update_source`, panel geometry, and
+  `update_source`, `beta_update_source`, panel geometry, the AHL's and the
+  ECHL's HockeyTech site keys and client codes (`hockeytech_*`), and
   `hub75_studio_ref` (the hub75-studio commit the theme and clock packages are
   pinned to).
 - **esp32**: a 16 KB loop task stack; Bluetooth and mbedTLS buffers moved to
@@ -57,8 +59,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 - **Updates**: the `http_request` update entity `gd_firmware_update` (every
   6 h, and once 3 s after the first clock sync, since TLS fails before the
   clock is set).
-- **gameday**: the component's settings (`beta_channel`, `on_action`,
-  `on_update`).
+- **gameday**: the component's settings (`beta_channel`, `hockeytech`,
+  `on_action`, `on_update`).
 - **Home Assistant entities**: only the ones worth automating (Team, Mode,
   Power, Brightness, Scroll Speed, Select Page, Install Updates
   Automatically, the buttons, Game Status, Last Play, IP, ESPN Data, RSSI and
@@ -98,6 +100,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
+  `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -377,22 +380,53 @@ doubleheader) sits at midnight Eastern like ESPN's TBD games, and
 MLB's 64 px PNG spots (`mlb_logo_url`). There are no team colors, last play
 or home run flag in the feed, so its big-play splashes (`alerts.h`) are runs
 and walk-offs, the latter from the 7th in a 7-inning game
-(`Baseball::innings`), and it has no rank, seed or place. `open_` tells the hosts apart (`is_mlb_url`):
-an MLB read's status, refusals and `Retry-After` go to the job's `mlb_*`
-fields, and a job that read only MLB backs off on `mlb_wait_`
+(`Baseball::innings`), and it has no rank, seed or place.
+
+**Minor league hockey.** `League::AHL` and `League::ECHL` (the last two
+values the 16-bit league masks have room for) are read from HockeyTech's
+feed (`Source::HOCKEYTECH`, `source_hockeytech.cpp`), the leagues' own stats
+service, with each league's public site key and client code from the
+`hockeytech_*` substitutions (the component's `hockeytech:` block, into
+`ht_set_feed`). Their 62 teams come from its `teamsbyseason` view
+(`build_teams.py --league ahl --league echl`); `Team::group` is the season
+their logo file is named for, plus `kHtNoSmallLogo` when the logo server's
+50 px copy is missing or too large for the logo cache, and `emit_` then
+draws the team's badge (`badge.h`) in the logo's place. The four fetch
+functions hand an AHL or ECHL team or league to three reads: the team read
+(`ht_team_url`, the `scorebar` view for one team, whose day counts are
+games around the league's today: one back and five ahead, about 11 KB, with
+both records and the Up next list), the game poll (`ht_game_url`, the game
+centre's `clock` tab, about 1.9 KB, which the feed's server caches a minute
+where the scorebar's is four; `ht_fill_from_schedule` adds the records and
+a TBD placeholder it lacks) and the day scan (`ht_day_url`, the
+`gamesbydate` view, about 6.5 KB a finished game with its goals, up to
+about 105 KB; its start times are local, turned to UTC by
+`ht_local_epoch`'s North American zones). Status codes 1, 2, 3 and 4, 8 and
+9 are not started, in progress, final (3 unofficial), postponed and
+suspended; the clock at zero in a period, or the words, mark an
+intermission, and a shootout leaves the period at OT, so the words and the
+scoring's `SO` key mark it. The feed refuses requests that carry another
+site's Origin, so the device page's On now leaves both leagues out.
+
+Each host other than ESPN keeps its own accounting. `open_` tells the
+hosts apart (`is_mlb_url`, `is_ht_url`): a read's status, refusals and
+`Retry-After` go to the job's `host[]` slot for its `Source`, and a job
+that read only one other host backs off on that host's `host_wait_`
 (`HostWait`, poll_timing.h), never ESPN's run, and the other way round.
 Favorite Teams skips a favorite whose host is waiting (`host_waiting_`), a
-scan leaves MiLB out while MLB's wait runs, and a failed MiLB scan read
-beside ESPN's that answered backs off MLB alone. The idle display's scores
-reads keep to the same wait: they leave MiLB out while it runs, and their
-own failed MiLB read counts in it (`mlb_side_result`). Its bytes count in the same
-"ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`. The
+scan leaves a waiting host's leagues out while others are left, and a
+failed read from one host in a scan that read others backs off that host
+alone (`host_scan_result`). The idle display's scores reads keep to the
+same waits: they leave a waiting host's leagues out (`drop_source`), and
+their own failed read from one counts in its wait (`host_side_result`).
+Their bytes count in the same "ESPN Data" figure, and the health block adds
+`mlb` and `mlb_ago`, `ht` and `ht_ago`. The
 big-play watcher and favorite players stay ESPN's (`from_espn`):
-`watch_sources` and `watch_wants_teams` leave MiLB out, `parse_player` and
-`player_valid` refuse its teams, Favorite Teams' watcher gap counts a
-favorite whose host waits as due when that wait ends (`watch_after_wait`),
-and ESPN refusing a watcher read holds My team's board only when its team
-is ESPN's (`watch_refusal_holds_board`).
+`watch_sources` and `watch_wants_teams` leave the other hosts' leagues out,
+`parse_player` and `player_valid` refuse their teams, Favorite Teams'
+watcher gap counts a favorite whose host waits as due when that wait ends
+(`watch_after_wait`), and ESPN refusing a watcher read holds My team's
+board only when its team is ESPN's (`watch_refusal_holds_board`).
 
 ## The device page and its routes
 
@@ -416,8 +450,9 @@ The page reads the state document, re-reads it when ESPHome's event stream
 sends a Game Status event, holds each tapped setting until the panel
 confirms it, and uses entity endpoints only for what Home Assistant also
 has (Brightness, Power, the update entity). In the browser it reads today's
-games and logos from ESPN (minor league ones from the MLB Stats API and MLB's
-image server) and release notes from GitHub.
+games and logos from ESPN (minor league baseball's from the MLB Stats API
+and MLB's image server, AHL and ECHL logos from HockeyTech's logo server, but
+not their games) and release notes from GitHub.
 `tests/fixtures/set_cases.json` is the shared table of settings cases that
 the host tests, the page's mock and the fuzzer all use.
 
@@ -485,7 +520,8 @@ the planned flag in the health block's restart log, the firmware's only
 RTC_NOINIT variable); `python3 scripts/crash_report.py <panel>` prints it and
 decodes the backtrace with the release's ELF. `health.h` records why the
 panel last started (planned, power on, crash, watchdog, brownout) in RTC
-memory and reports it, with uptime, memory and the ESPN status, in the
+memory and reports it, with uptime, memory and the ESPN, MLB and HockeyTech
+status, in the
 state document.
 
 ## Sites

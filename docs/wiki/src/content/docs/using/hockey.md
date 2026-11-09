@@ -7,6 +7,10 @@ sidebar:
 
 NHL games get their own board. This page describes a 128x64 display and notes where a single 64x64 panel differs. See [Panel sizes and layouts](/using/panel-sizes/).
 
+:::note[Coming in the next release]
+AHL and ECHL teams get this same board, with their scores from HockeyTech, the leagues' own stats service, instead of ESPN. See [Hockey: AHL and ECHL](/using/minor-league-hockey/) for what's different.
+:::
+
 ## Before the game
 
 The next-game card shows both logos, your team on the left, with the records under them. The ticker carries the puck drop day and time in the panel's timezone, the playoff series when there is one, the betting line, over/under and TV channel when ESPN has them and **Pre-game odds and TV** is on, and the arena.

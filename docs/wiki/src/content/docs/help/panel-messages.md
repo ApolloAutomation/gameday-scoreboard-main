@@ -70,6 +70,10 @@ A panel with no team picked also brings the QR code that opens its device page b
 **Can't reach MLB** is the same as **Can't reach ESPN** for a minor league team, whose scores come from MLB's stats service. Check the internet connection; the panel keeps trying. A minor league doubleheader's game 2 shows as **Today TBD** until it starts. See [Baseball: minor leagues](/using/minor-league-baseball/).
 :::
 
+:::note[Coming in the next release]
+**Can't reach HockeyTech** is the same for an AHL or ECHL team, whose scores come from HockeyTech, the leagues' own stats service. Check the internet connection; the panel keeps trying. An AHL or ECHL team with no small logo shows its abbreviation in a box in the logo's place. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
+:::
+
 ## When you hold the button
 
 The button on the controller shows the panel's address and resets it. Nothing resets until you let go, and the screen says what letting go will do. See [Buttons and resets](/using/buttons-and-resets/).

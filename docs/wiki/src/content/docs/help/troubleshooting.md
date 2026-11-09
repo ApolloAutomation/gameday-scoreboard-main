@@ -64,6 +64,10 @@ Check that other devices on the same network can get online. The panel keeps try
 For a minor league team the panel says **Can't reach MLB** instead, since those scores come from MLB's stats service. The same steps apply. If only MLB is out, your other teams and leagues keep updating from ESPN.
 :::
 
+:::note[Coming in the next release]
+For an AHL or ECHL team it says **Can't reach HockeyTech**, since those scores come from HockeyTech. The same steps apply, and if only HockeyTech is out, your other teams and leagues keep updating.
+:::
+
 ## The panel says Getting ready for a long time
 
 Check that other devices on the same network can get online. If they can, try another network, like your home Wi-Fi or a phone hotspot.

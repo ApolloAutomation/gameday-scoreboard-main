@@ -204,6 +204,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 Minor league baseball adds a **MiLB** tab to the team chooser, after **MLB**, with the teams under a heading for each level, and On now lists minor league games too. A minor league team has an Up next list of its next three games. Diagnostics show **Last MLB read** once the panel has read minor league scores, and the data row becomes **Data used**, counting what the panel downloads from MLB as well as ESPN. When the panel can't reach MLB for a minor league team, the board says **Can't reach MLB**. See [Baseball: minor leagues](/using/minor-league-baseball/).
 :::
 
+:::note[Coming in the next release]
+The AHL and the ECHL add an **AHL** tab and an **ECHL** tab to the team chooser, after **NHL**, with HockeyTech's logos; On now doesn't list their games, since HockeyTech's feed doesn't answer your browser. An AHL or ECHL team has an Up next list of its next three games. Diagnostics show **Last HockeyTech read** once the panel has read their scores, and **Data used** counts what the panel downloads from HockeyTech too. When the panel can't reach HockeyTech for an AHL or ECHL team, the board says **Can't reach HockeyTech**. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
+:::
+
 ### Follow beta
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.

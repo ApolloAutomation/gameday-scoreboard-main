@@ -21,6 +21,10 @@ Far from kickoff the panel checks the game every 15 minutes, and every minute in
 A minor league team's scores come from MLB's stats service instead of ESPN, on the same schedule. If MLB fails or refuses the panel, the panel waits longer before asking MLB again, while everything it reads from ESPN goes on as usual, and the other way around. Game 2 of a doubleheader has no start time, so on its day the panel checks it every minute. See [Baseball: minor leagues](/using/minor-league-baseball/).
 :::
 
+:::note[Coming in the next release]
+An AHL or ECHL team's scores come from HockeyTech instead of ESPN, on the same schedule, and HockeyTech is kept apart the same way: if it fails or refuses the panel, only the AHL and the ECHL wait. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
+:::
+
 A golf tour or a racing series is followed like a team, with its tournament or race weekend in place of a game, on its own update schedule. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 Your team is always on the left of the board.
@@ -57,6 +61,10 @@ Live games doesn't follow golf or racing. There are no Golf, Formula 1 or NASCAR
 
 :::note[Coming in the next release]
 A **MiLB** button follows minor league games at all four levels, Triple-A to Single-A, together; you can't pick one level. A minor league team as your team or a favorite adds MiLB to the automatic leagues. If MLB's stats service fails or refuses the panel, the other leagues are still checked and MiLB waits its turn.
+:::
+
+:::note[Coming in the next release]
+**AHL** and **ECHL** buttons follow those leagues' games, and an AHL or ECHL team as your team or a favorite adds its league to the automatic leagues. If HockeyTech fails or refuses the panel, the other leagues are still checked and the AHL and the ECHL wait their turn. Their finals join the rotation below.
 :::
 
 A change takes effect right away. When you change the leagues, or change your favorites so that the automatic leagues change, the panel looks for games in the new leagues at once, without waiting for its next check, instead of leaving the old leagues' scores up.

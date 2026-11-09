@@ -43,6 +43,10 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 A **MiLB** tab adds minor league baseball: every Triple-A, Double-A, High-A and Single-A team, 120 in all, under a heading for each level. Search finds a team by its level too, like "high-a". Their scores come from MLB's stats service instead of ESPN. See [Baseball: minor leagues](/using/minor-league-baseball/).
 :::
 
+:::note[Coming in the next release]
+**AHL** and **ECHL** tabs add minor league hockey: the AHL's 32 teams and the ECHL's 30. Their scores come from HockeyTech, the stats service the two leagues use for their own websites, instead of ESPN. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
+:::
+
 A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
 
 A **Racing** tab holds **Formula 1** and the **NASCAR Cup Series**. Pick one to follow that series' race weekends: each session's order, the race's winner and the next race. See [Racing](/using/racing/).
@@ -58,7 +62,7 @@ The first tab in the team picker, **On now**, lists today's games across the lea
 Your browser reads this list from ESPN, so the tab needs your phone or computer to be online, not only the panel.
 
 :::note[Coming in the next release]
-On now lists today's minor league games too, which your browser reads from MLB's stats service.
+On now lists today's minor league games too, which your browser reads from MLB's stats service. It doesn't list AHL or ECHL games: HockeyTech's feed answers the panel but not your browser.
 :::
 
 ## Changes take effect right away
