@@ -40,7 +40,7 @@ The dot at the top right says **live** while the page is connected to the panel 
 
 A **Follow this game** switch shows in the Quick settings card under the board while the panel shows a game Live games picked, or a favorite's game in Favorite teams, that hasn't ended. It doesn't show over your team's card or recent finals while Live games has nothing live. Turn it on to keep that game on the panel instead of moving on, and the switch reads **Following this game**. The panel goes back to switching games once the game ends, or to your favorites once its final has been up for **After the final**, or when you turn the switch off. A restart turns it off, since the panel doesn't save it. See [Live games](/using/modes/#follow-this-game) and [Favorite teams](/using/favorites/#follow-this-game).
 
-While the panel follows a game it doesn't switch to big plays in other games, or check those games at all. When the board is on another game's big play for a moment, the switch still shows, and the line under it says so: turning it on takes the panel straight back to the game it was showing and follows that one, not the other game. If that game has ended in the meantime, the switch doesn't show, since there's nothing left to follow. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+While the panel follows a game it doesn't switch to big plays in other games, or check those games at all, except for the second area's **Rotating live games**, which keeps checking and shows big plays there. When the board is on another game's big play for a moment, the switch still shows, and the line under it says so: turning it on takes the panel straight back to the game it was showing and follows that one, not the other game. If that game has ended in the meantime, the switch doesn't show, since there's nothing left to follow. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 ## Up next
 
@@ -161,7 +161,7 @@ Three more controls under it are for big plays in other games:
 
 | Control | What it does | Starts at |
 | --- | --- | --- |
-| **Switch to big plays in other games** | The panel also checks the other live games it would show, about every 45 seconds, and switches to one for its big play. In Live games that's every game in its leagues (only your team's and favorites' with **Favorite teams only** on); in My team and Favorite teams, your favorites' games. The switches above pick which big plays count, and a sport with all of them off isn't checked. A big play shows over the idle display too. Nothing is checked while you follow a game with **Follow this game**. It uses more data. | On |
+| **Switch to big plays in other games** | The panel also checks the other live games it would show, about every 45 seconds, and switches to one for its big play. In Live games that's every game in its leagues (only your team's and favorites' with **Favorite teams only** on); in My team and Favorite teams, your favorites' games. The switches above pick which big plays count, and a sport with all of them off isn't checked. A big play shows over the idle display too. Nothing is checked while you follow a game with **Follow this game**, except for the second area's **Rotating live games**. It uses more data. | On |
 | **Stay on a big play** | How long the board stays on the other game before going back: 30 seconds, 1 minute, 90 seconds, 2, 3 or 5 minutes. | 1 minute |
 | **Switch from my team** | Lets a favorite's big play take the board from your team's live game. Off, your team's game is never left from its start time on, and a golf tour's or a racing series' leaderboard isn't left while a round or a session is on. | Off |
 
@@ -216,7 +216,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.10.3-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.1-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

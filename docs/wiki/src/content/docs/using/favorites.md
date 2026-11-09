@@ -49,7 +49,7 @@ To stay with the favorite on the board, turn on **Follow this game** in the Quic
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it. Pressing a numbered button on the remote for one of your favorites, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
 
-Following a game also stops the panel switching to your other favorites' big plays, below, and checking their games. If the board is on another favorite's big play when you turn the switch on, the panel goes straight back to the favorite it was showing and follows that one.
+Following a game also stops the panel switching to your other favorites' big plays, below, and checking their games, except for the second area's **Rotating live games**, which keeps checking and shows big plays there. If the board is on another favorite's big play when you turn the switch on, the panel goes straight back to the favorite it was showing and follows that one.
 
 ### Big plays in your other favorites' games
 

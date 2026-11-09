@@ -56,7 +56,7 @@ Each sport has its own board. Golf's is a tournament's leaderboard, and racing's
 
 ## The On now tab
 
-The first tab in the team picker, **On now**, lists today's games across the leagues, straight from ESPN. They're grouped as **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow and the panel switches to that team. Golf and racing aren't in it; pick a tour or a series from its own tab.
+The first tab in the team picker, **On now**, lists today's games across the leagues. They're grouped as **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow and the panel switches to that team. Golf and racing aren't in it; pick a tour or a series from its own tab.
 
 Your browser reads this list from ESPN, and today's minor league games from MLB's stats service, so the tab needs your phone or computer to be online, not only the panel. It doesn't list AHL or ECHL games: HockeyTech's feed answers the panel but not your browser, so pick those teams from their tabs.
 

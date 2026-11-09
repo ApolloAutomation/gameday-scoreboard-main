@@ -78,7 +78,7 @@ One or two panels have no second area, and the device page doesn't offer one. Wi
 
 ## Splashes
 
-A score's or a big play's splash shows the logo of the team it's about, with the points the team gained and the play's words. The logo sits on a black tile with round corners, so it stands out on a flash in the team's own color too. Overtime and basketball's final show both teams' logos, and a turnover, a red card, a lead change and the victory splash show the logo with no points. A golf or racing winner's splash has no logo and looks as before.
+A score's or a big play's splash shows the logo of the team it's about, with the points the team gained and the play's words. The logo sits on a black tile with round corners, so it stands out on a flash in the team's own color too. Overtime and basketball's final show both teams' logos, and a turnover, a red card, a lead change and the victory splash show the logo with no points. A golf or racing winner's splash has no logo: the winner's name with fireworks.
 
 | Arrangement | Where the parts go |
 | --- | --- |

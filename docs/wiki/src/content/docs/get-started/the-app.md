@@ -16,7 +16,7 @@ The Game Day app is a separate project. Apollo Automation does not maintain it, 
 - **Finds your panels.** A new panel shows up as a new panel nearby, over Bluetooth. A panel that's already on your Wi-Fi shows up under the panels found on your network.
 - **Sets a new panel up over Bluetooth.** The panel sends the app the Wi-Fi networks it can see, strongest first. You pick yours and enter the password. See [Set up your panel](/get-started/setup/). A panel set up with three or four panels keeps Bluetooth off, so the app can't set it up; use its hotspot instead. See [Panel sizes and layouts](/using/panel-sizes/).
 - **Picks your team** and the mode, the same choices as the device page. See [Pick your team](/get-started/pick-your-team/).
-- **Changes the panel's settings**: the ticker, celebrations, favorites, brightness, the remote and the rest. The app's screens follow the device page's cards, so a setting is in the same place in both.
+- **Changes the panel's settings**: the ticker, celebrations, favorites, brightness, the remote and the rest.
 
 ## If the app doesn't list your panel
 

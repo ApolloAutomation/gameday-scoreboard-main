@@ -29,7 +29,7 @@ Once the panel is on your Wi-Fi, its QR code opens the device page, where you pi
 
 ## Does it need Home Assistant?
 
-No. The panel runs on its own and gets its scores from ESPN by itself. If you use Home Assistant, it finds the panel on your network and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
+No. The panel runs on its own and gets its scores by itself, from ESPN, and from MLB and HockeyTech for minor league baseball, the AHL and the ECHL. If you use Home Assistant, it finds the panel on your network and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
 
 ## How often does it check scores?
 

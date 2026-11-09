@@ -29,7 +29,7 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - College teams' ranks, and a pro team's seed or place in place of its record if you like
 - Favorite players' stat lines in the ticker while they lead their game, and their name on the celebration when they score
 - Bets you type in by hand, with whether each is covering during the game and won or lost after; the panel never connects to a sportsbook
-- A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
+- A device page that mirrors the panel, celebrates with it, lists the next three games in football, soccer, minor league baseball, the AHL and the ECHL, and holds every setting
 - Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
 - Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting. Three or four panels and two rows of two can show a second area beside the board: the clock, today's scores, a second team's game or other live games
@@ -62,7 +62,7 @@ Team changes take effect immediately and survive reboots. Wrong panel size? Clic
 
 ## The device page
 
-The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games straight from ESPN (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond the logos and the "On now" tab, which your browser reads from ESPN. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
+The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, and rosters from ESPN when you add a favorite player. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
 
 | Setting | What it does |
 | --- | --- |
@@ -95,7 +95,7 @@ cd gameday-scoreboard-main/firmware
 esphome run gameday.yaml
 ```
 
-`gameday.yaml` only names the build and picks the controller pin map from `firmware/controllers/`; everything else lives in `gameday-common.yaml`. The panel count is a saved preference applied at boot by `components/panel_layout`, so one binary serves both layouts. The scoreboard page is in `pages/gameday-live.yaml`, the ESPN logic in `components/gameday`, and the device web page in `firmware/web` (edit `app.js`, `app.css` or `demo.js`, then run `python3 scripts/build_web.py` to refresh the embedded bundles). The theme and clock packages come from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit.
+`gameday.yaml` only names the build and picks the controller pin map from `firmware/controllers/`; everything else lives in `gameday-common.yaml`. The panel count is a saved preference applied at boot by `components/panel_layout`, so one binary serves every layout. The scoreboard page is in `pages/gameday-live.yaml`, the ESPN logic in `components/gameday`, and the device web page in `firmware/web` (edit `app.js`, `app.css` or `demo.js`, then run `python3 scripts/build_web.py` to refresh the embedded bundles). The theme and clock packages come from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit.
 
 ## How it works
 

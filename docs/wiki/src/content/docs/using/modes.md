@@ -51,7 +51,7 @@ To stay with one game, turn on **Follow this game** in the Quick settings card u
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it and goes back to switching games. Changing the mode, your team, your favorites or the leagues stops following too. So does a restart, since the panel doesn't save it. The switch shows only while Live games has a game it picked on the board that hasn't ended, not while it shows your team's card or recent finals with nothing live. My team follows one team already, so it has no such switch.
 
-While the panel follows a game, it doesn't switch to big plays in other games and doesn't check those games, so it uses no data on them. If the board is on another game's big play when you turn the switch on, the panel goes straight back to the game it was showing and follows that one. See [Big plays in other games](#big-plays-in-other-games).
+While the panel follows a game, it doesn't switch to big plays in other games and doesn't check those games, so it uses no data on them, except for the second area's **Rotating live games**, which keeps checking and shows big plays there. If the board is on another game's big play when you turn the switch on, the panel goes straight back to the game it was showing and follows that one. See [Big plays in other games](#big-plays-in-other-games).
 
 ### Choosing the leagues
 
