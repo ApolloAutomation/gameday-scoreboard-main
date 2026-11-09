@@ -1268,6 +1268,34 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await expect(bar).toBeHidden();
 });
 
+test("Follow this game during another game's big play follows the game the panel was showing", async ({ page, request }) => {
+  const bar = page.locator("#followbar");
+  const sw = page.getByRole("switch", { name: "Follow this game" });
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  // The board is on another game's big play, even one that has just ended
+  await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, visit: true });
+  await page.goto("/");
+  await expect(page.locator("#gstate")).toHaveText("FINAL");
+  await expect(bar).toBeVisible();
+  await expect(sw).not.toBeChecked();
+  await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until it ends.");
+  await sw.click();
+  await expectSet(request, { follow: "1" });
+  await expect.poll(async () => (await deviceState(request)).visit).toBe(false);
+  await expect(sw).toBeChecked();
+  await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
+  // Favorite teams says After the final
+  await reset(request, { mode: 4, shown: 1, game: { ...g, ...LIVE }, visit: true });
+  await page.reload();
+  await expect(bar).toBeVisible();
+  await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until its final has been up for After the final.");
+  // Not in My team, which has nothing to follow
+  await reset(request, { mode: 0, visit: true });
+  await page.reload();
+  await expect(bar).toBeHidden();
+});
+
 test("Follow this game shows what the panel has, turns off on an open page when the panel lets go, and a follow the panel ignored goes back off", async ({ page, request }) => {
   const sw = page.getByRole("switch", { name: "Follow this game" });
   const bar = page.locator("#followbar");

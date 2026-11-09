@@ -190,7 +190,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
         <div id="celebCtls">
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
-          <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small>The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back. Uses more data.</small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
+          <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small>The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.</small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
           <div class="ctl" id="watchStayRow"><label for="watchstay">Stay on a big play<small>How long the panel stays on the other game before it goes back.</small></label><select id="watchstay">
             <option value="30">30 s</option><option value="60">1 min</option><option value="90">90 s</option><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option>
           </select></div>
@@ -830,12 +830,16 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
   // like the others (.sw[data-set]). Not in My team, which follows one team
   // already, nor over Live games' team card or recent finals, a golf or
   // racing board, or a game that has ended and isn't followed already.
+  // While another game's big play has the board for a moment (S.visit), the
+  // board shows that game, but the switch follows the game the panel was
+  // showing, and the panel goes straight back to it.
   const renderFollow = (mode) => {
     const favMode = mode === "4" && (S.favs || []).some(refKey);
     const liveGame = isLive(mode) && !S.fallback && !S.recap;
     const g = game;
     const on = !!S.follow;
-    const up = !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
+    const up = !!S.visit
+      || !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
     // Firmware from before the switch leaves follow out.
     $("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
     $("#followbar").classList.toggle("on", on);
@@ -844,8 +848,10 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
     $("#followLg").textContent = on
       ? "The panel stays on this game " + until + ". Turn this off to go back to "
         + (favMode ? "your favorites." : "switching games.")
-      : "Keep this game on the panel " + until + ", instead of "
-        + (favMode ? "moving to another favorite." : "switching to another game.");
+      : S.visit
+        ? "The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel " + until + "."
+        : "Keep this game on the panel " + until + ", instead of "
+          + (favMode ? "moving to another favorite." : "switching to another game.");
   };
   const renderMode = () => {
     if (!S) return;

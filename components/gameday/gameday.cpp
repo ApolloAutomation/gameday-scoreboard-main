@@ -138,6 +138,9 @@ static const uint32_t IDLE_TICK = 1000;
 // A failed read waits SIDE_RETRY, or longer when ESPN asks.
 static const uint32_t SIDE_LIVE_RESCAN = 30 * MINUTE;
 static const uint32_t SIDE_RETRY = 5 * MINUTE;
+// Scores back after less than this (another game's big play had the board
+// for at most two stays, watch.h) keep their scan's own timing.
+static const uint32_t SIDE_AWAY_RESCAN = 2 * ::espn::kWatchStayMaxSeconds * 1000;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
@@ -1047,15 +1050,19 @@ void GamedayComponent::set_follow(bool on) {
   }
   bool fav = this->favorites_mode_();
   bool picked = fav ? this->fav_shown_ >= 0 : this->live_mode_() && !this->live_fallback_ && !this->recap_on_;
+  // While another game's big play has the board (watch.h), the mode's own
+  // game is the one to follow, and the board goes straight back to it.
+  const GameSnapshot &g = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
   if (!::espn::follow_start(this->follow_, ::espn::follow_mode_ok(this->prefs2_.mode, !this->fav_.empty()),
-                            picked && !this->demo_playing_(), this->game_,
-                            (int64_t) this->time_->timestamp_now())) {
+                            picked && !this->demo_playing_(), g, (int64_t) this->time_->timestamp_now())) {
     ESP_LOGW(TAG, "Follow this game: no game to follow in this mode, or it has ended");
     return;
   }
-  ESP_LOGI(TAG, "Follow this game: %s vs %s (event %s)", this->game_.team_abbr.c_str(), this->game_.opp_abbr.c_str(),
-           this->game_.event_id.c_str());
-  this->rebuild_state_(&this->last_fields_);
+  ESP_LOGI(TAG, "Follow this game: %s vs %s (event %s)", g.team_abbr.c_str(), g.opp_abbr.c_str(), g.event_id.c_str());
+  if (this->visit_.active)
+    this->end_visit_();  // emits the mode's board, with the page's state
+  else
+    this->rebuild_state_(&this->last_fields_);
 }
 
 // The final stays up for the mode's own time (follow_after_final_s), and a
@@ -1065,8 +1072,8 @@ bool GamedayComponent::following_() {
     return false;
   bool fav = this->favorites_mode_();
   int64_t after_final = ::espn::follow_after_final_s(fav, this->prefs4_.release_seconds);
-  if (::espn::follow_holds(this->follow_, this->game_, (int64_t) this->time_->timestamp_now(), after_final,
-                           this->stale_seconds_()))
+  if (::espn::follow_holds(this->follow_, ::espn::watch_mode_game(this->game_, this->visit_.saved.get()),
+                           (int64_t) this->time_->timestamp_now(), after_final, this->stale_seconds_()))
     return true;
   ESP_LOGI(TAG, "Follow this game: over, back to %s", fav ? "the favorites" : "switching games");
   this->rebuild_state_(&this->last_fields_);
@@ -1122,8 +1129,14 @@ bool GamedayComponent::bets_tick_() {
     const int64_t midnight = this->next_midnight_(now);
     ::espn::BetSource &src = this->bets_;
     ::espn::BetGame g;
-    if (this->bet_game_(this->game_, this->board_league_(), g))
-      ::espn::bets_observe(src, g, now, midnight);
+    // Another game's big play on the board (watch.h) only keeps the bets
+    // tied to that game already: the panel doesn't follow it.
+    if (this->bet_game_(this->game_, this->board_league_(), g)) {
+      if (this->visit_.active)
+        ::espn::bets_update(src, g, now, midnight);
+      else
+        ::espn::bets_observe(src, g, now, midnight);
+    }
     if (this->favorites_mode_())
       for (const auto &e : this->fav_)
         if (this->bet_game_(e.game, (uint8_t) e.team->league, g))
@@ -1158,24 +1171,7 @@ uint8_t GamedayComponent::board_league_() const {
 }
 
 bool GamedayComponent::bet_game_(const GameSnapshot &g, uint8_t league, ::espn::BetGame &out) const {
-  if (this->demo_playing_() || !g.valid || g.state == GameState::NOT_FOUND || ::espn::is_board_sport(g.sport) ||
-      ::espn::league_sport((League) league) != g.sport)
-    return false;
-  out = ::espn::BetGame{};
-  out.event = ::espn::bet_event_id(g.event_id);
-  if (out.event == 0)
-    return false;
-  out.league = league;
-  out.team_id = g.team_id;
-  out.opp_id = g.opp_id;
-  out.team_score = g.team_score;
-  out.opp_score = g.opp_score;
-  out.kickoff = g.kickoff_epoch;
-  out.phase = g.state == GameState::PRE  ? ::espn::BetPhase::PRE
-              : g.state == GameState::IN ? ::espn::BetPhase::LIVE
-              : g.completed              ? ::espn::BetPhase::FINAL
-                                         : ::espn::BetPhase::OFF;
-  return true;
+  return !this->demo_playing_() && ::espn::watch_bet_game(g, league, out);
 }
 
 const GameSnapshot *GamedayComponent::bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const {
@@ -1183,6 +1179,11 @@ const GameSnapshot *GamedayComponent::bet_snapshot_(const ::espn::Bet &b, ::espn
     return nullptr;
   if (this->bet_game_(this->game_, this->board_league_(), out) && out.event == b.event && out.league == b.league)
     return &this->game_;
+  // The mode's own game as it was when another game's big play took the board.
+  const GameSnapshot *saved = this->visit_.saved.get();
+  if (saved != nullptr && this->bet_game_(*saved, this->mode_league_(), out) && out.event == b.event &&
+      out.league == b.league)
+    return saved;
   if (this->favorites_mode_())
     for (const auto &e : this->fav_)
       if (this->bet_game_(e.game, (uint8_t) e.team->league, out) && out.event == b.event && out.league == b.league)
@@ -1869,10 +1870,14 @@ void GamedayComponent::idle_changed_(bool live_switch) {
 }
 
 // Busy keeps the mode's own board up: whatever the idle display is, the
-// panel goes back to a followed game by itself (idle.h, idle_busy).
+// panel goes back to a followed game by itself (idle.h, idle_busy). Another
+// game's big play on the board (watch.h) is a game that's on too: it shows
+// for its stay over the clock, the scores or Off or dim, at the night
+// brightness in the night hours, and the idle display has the panel back
+// after it.
 bool GamedayComponent::idle_busy_() const {
   ::espn::BusyInputs b;
-  b.hold = this->demo_playing_() || this->follow_.on;
+  b.hold = this->demo_playing_() || this->follow_.on || this->visit_.active;
   b.live_mode = this->live_mode_();
   b.recap = this->recap_on_;
   b.live_fallback = this->live_fallback_;
@@ -1995,10 +2000,15 @@ bool GamedayComponent::idle_update_() {
   if (side != this->side_on_) {
     this->side_on_ = side;
     // The rotation starts over from its first card, and today's scan is due:
-    // finals came in while it was away.
+    // finals came in while it was away. Back from a moment away (another
+    // game's big play on the board, watch.h), the scan keeps its own timing.
+    const uint32_t now = millis();
     this->recap_step_ = 0;
     this->recap_step_ms_ = 0;
-    this->side_scan_ms_ = 0;
+    if (!side)
+      this->side_off_ms_ = now | 1;
+    else if (this->side_off_ms_ == 0 || now - this->side_off_ms_ >= SIDE_AWAY_RESCAN)
+      this->side_scan_ms_ = 0;
     if (side)
       this->recap_cards_ = ::espn::recap_cards(this->recap_days_, this->recap_leagues_(),
                                                this->recap_next_kickoff_() != 0,
@@ -3866,6 +3876,11 @@ bool GamedayComponent::start_watch_job_(uint32_t board_due) {
   w.cycle = this->watch_cycle_;
   w.ctx = this->watch_ctx_();
   w.games = this->watch_;
+  // The games of that league the bets are tied to already: the read hands
+  // their new reads back (WatchJob::bets) for those bets alone.
+  for (const auto &b : this->bets_.blob.bets)
+    if (!::espn::bet_empty(b) && b.event != 0 && b.league == src.league)
+      w.bet_events.push_back(b.event);
   if (event) {
     ::espn::WatchGame &g = this->watch_[r.game];
     g.tried_cycle = this->watch_cycle_;
@@ -3914,6 +3929,18 @@ void GamedayComponent::run_watch_job_() {
 void GamedayComponent::apply_watch_job_(uint32_t now) {
   Job &j = this->job_;
   const ::espn::WatchJob &w = j.watch;
+  // A bet tied to a game the read took keeps its details and takes its
+  // result, as the panel doesn't follow that game; no bet ties to it.
+  if (!w.bets.empty() && this->clock_set_()) {
+    const int64_t tnow = (int64_t) this->time_->timestamp_now();
+    const int64_t midnight = this->next_midnight_(tnow);
+    for (const auto &b : w.bets)
+      ::espn::bets_update(this->bets_, b, tnow, midnight);
+    if (this->bets_.dirty) {
+      this->bets_tick_();  // saves them
+      this->rebuild_state_(&this->last_fields_);
+    }
+  }
   if (j.watch_key != this->watch_key_last_)
     return;  // what the board follows changed while the read ran
   const bool event = !w.event_id.empty();
@@ -5009,6 +5036,9 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["fallback"] = this->live_fallback_;
   doc["recap"] = this->recap_on_;
   doc["follow"] = this->follow_.on;  // Follow this game holds the board's game
+  // Another game's big play has the board for a moment (watch.h): Follow
+  // this game would follow the mode's own game, and go back to it.
+  doc["visit"] = this->visit_.active;
   // The idle display and the night hours (idle.h), and what they do now:
   // idle_view is what the panel shows in place of the mode's board ("" for
   // none), dark that it is off until a followed game starts.

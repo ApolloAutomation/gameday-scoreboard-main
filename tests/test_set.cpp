@@ -52,13 +52,15 @@ std::string keys(const std::vector<League> &leagues) {
 // mode has a game of its own on the panel to follow (not Live games'
 // fallback card or finals rotation, nor an empty board), and final that the
 // game has ended. bets are the manual bets by slot (bets.h), as entered.
+// visit: another game's big play has the board for a moment (watch.h), the
+// mode's own game being the one board and final describe.
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
   int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
-  bool watch{true}, watchmine{false};
+  bool watch{true}, watchmine{false}, visit{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
   int alerts{(1 << kAlertBits) - 1};
@@ -140,6 +142,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("board", s.board);
   flag("final", s.final);
   flag("follow", s.follow);
+  flag("visit", s.visit);
   flag("alertfav", s.alertfav);
   num("idle", s.idle);
   num("idledim", s.idledim);
@@ -187,14 +190,14 @@ void apply(Settings &s, const SetOp &op) {
   switch (op.kind) {
     case SetKind::TEAM:
       if (!(op.team == s.team))
-        s.follow = false;
+        s.follow = s.visit = false;  // reset_game_ drops the visit too
       s.team = op.team;
       if (op.team.id != 0)
         s.team_league = op.team.league;
       break;
     case SetKind::MODE:
       if (op.value != s.mode)
-        s.follow = false;
+        s.follow = s.visit = false;
       s.mode = op.value;
       break;
     case SetKind::ROTATE: s.rotate = op.value; break;
@@ -244,6 +247,8 @@ void apply(Settings &s, const SetOp &op) {
       }
       follow_start(p, follow_mode_ok((uint8_t) s.mode, any_favorite(s)), s.board, g, 0);
       s.follow = p.on;
+      if (s.follow)
+        s.visit = false;  // the board goes straight back to the game it follows (end_visit_)
       break;
     }
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
@@ -251,7 +256,11 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::STANDING: s.standing = op.value; break;
     case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // set_bet_
     case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
-    case SetKind::WATCH: s.watch = op.on; break;
+    case SetKind::WATCH:
+      s.watch = op.on;
+      if (!op.on)
+        s.visit = false;  // set_watch ends the visit
+      break;
     case SetKind::WATCHSTAY: s.watchstay = op.value; break;
     case SetKind::WATCHMINE: s.watchmine = op.on; break;
     case SetKind::PANELS: {
@@ -307,6 +316,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["beta"] = s.beta;
   doc["panels"] = s.panels;
   doc["follow"] = s.follow;
+  doc["visit"] = s.visit;
   doc["alerts"] = s.alerts;
   doc["alertfav"] = s.alertfav;
   doc["standing"] = s.standing;

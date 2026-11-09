@@ -18,14 +18,18 @@
     "bets lists the manual bets by slot as entered: slot, league, team id, type (spread, over,",
     "under or ml) and the line in half points (-7 is -3.5). The state document adds each bet's",
     "game and status, which the comparison leaves out. bet= into slot 0 takes the first empty",
-    "slot, what the device page sends, and with every slot in use changes nothing."
+    "slot, what the device page sends, and with every slot in use changes nothing.",
+    "visit is another game's big play on the board for a moment (watch.h). board and final then",
+    "describe the mode's own game, which follow=1 follows, ending the visit; watch=0 and a new team",
+    "or mode end it too."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
     "favs": ["", "", "", ""], "today": false, "live": [], "live_auto": true, "tz": 1, "tz_auto": true,
     "down": true, "count": true, "match": true, "play": true, "odds": true, "opp": true, "bootaddr": true,
     "autoupd": false, "beta": false, "panels": 1, "follow": false, "board": true, "final": false,
-    "alerts": 524287, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false, "standing": 0,
+    "alerts": 524287, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false, "visit": false,
+    "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "bets": []
   },
@@ -235,6 +239,12 @@
     {"name": "a stay is kept in tens of seconds", "set": [["watchstay", "95"]], "expect": {"watchstay": 90}},
     {"name": "a stay with no number is the shortest", "set": [["watchstay", "abc"]], "expect": {"watchstay": 30}},
     {"name": "a stay past int's range clamps down, not around", "set": [["watchstay", "99999999999"]], "expect": {"watchstay": 300}},
+    {"name": "follow during another game's big play follows the mode's game and goes back to it", "start": {"mode": 5, "visit": true}, "set": [["follow", "1"]], "expect": {"follow": true, "visit": false}},
+    {"name": "follow with nothing to follow leaves another game's big play up", "start": {"mode": 0, "visit": true}, "set": [["follow", "1"]], "expect": {"follow": false, "visit": true}},
+    {"name": "follow off leaves another game's big play up", "start": {"mode": 5, "visit": true}, "set": [["follow", "0"]], "expect": {"follow": false, "visit": true}},
+    {"name": "turning off big plays in other games ends the one on the board", "start": {"mode": 5, "visit": true}, "set": [["watch", "0"]], "expect": {"watch": false, "visit": false}},
+    {"name": "a new team ends another game's big play on the board", "start": {"visit": true}, "set": [["team", "mlb:15"]], "expect": {"visit": false, "team": "mlb:15"}},
+    {"name": "the big-play settings leave Follow this game alone", "start": {"mode": 5, "follow": true}, "set": [["watch", "1"], ["watchstay", "120"], ["watchmine", "1"]], "expect": {"follow": true, "watchstay": 120, "watchmine": true}},
 
     {"name": "no known key answers 400", "start": {"rotate": 5}, "set": [["bogus", "1"]], "status": 400, "expect": {"rotate": 5}},
     {"name": "unknown keys next to known ones are skipped", "set": [["bogus", "1"], ["rotate", "5"]], "expect": {"rotate": 5}},

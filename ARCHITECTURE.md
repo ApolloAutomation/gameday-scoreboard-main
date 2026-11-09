@@ -180,7 +180,11 @@ the board's game to the ticker, and the state document lists every bet.
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
 the board's gaps: `loop()` calls `start_watch_job_` while the next board poll
-is not due (in Favorite teams, `start_fav_job_` hands it the one-second ticks
+is not due, after the idle display's scores read (`start_side_job_`), which
+goes first when it is due and isn't fitted to the board's next read; each is
+bounded (a scan every half hour or at the next start, a read per source or
+game every cycle), so neither keeps the other from its reads (in Favorite
+teams, `start_fav_job_` hands the watcher the one-second ticks
 that read nothing, with the locked game's next poll or the next team read as
 the board's next read, `watch_fav_due`). It starts a read (a `Job` with
 `need_watch`) only when that read is further off than the read's last time
@@ -206,16 +210,31 @@ on), never on a game's first read or one more than two cycles old. A failed
 read waits for the next cycle without holding up the others, a game whose
 own read fails twice drops out (`watch_failed`), and a refusal (403, 429)
 holds the watcher at least 5 minutes and backs the board off as its own
-would (`watch_refused_`). A big play the board may take (`watch_may_switch`:
+would (`watch_refused_`). Like the scores' reads, it reads nothing while the
+board backs off, and nothing for a full retry after the loop gives up on a
+worker; a watcher read given up on counts as a failed one that took the
+whole wait (`WatchTimes::took`). A big play the board may take (`watch_may_switch`:
 not during its own splash, not from the panel's team's game from its start
 time on, `watch_live`, unless a favorite plays and "Switch from my team" is
-on, a chained one only during the first stay, and `switch_allowed_()` for a
-later pin to one game) starts a visit: `start_job_` polls that game, its
-first poll carries the splash, and after "Stay on a big play", or once the
-panel's team's game starts, `end_visit_` puts the mode's own board back and
-reads it at once, that first read checked for big plays against nothing
-(`board_prev_`). Neither the mode's game nor the visit's is watched. Home
-Assistant keeps the mode's game (`ha_game_`).
+on, a chained one only during the first stay, and `switch_allowed_()`,
+false while Follow this game holds) starts a visit: `start_job_` polls that
+game, its first poll carries the splash, and after "Stay on a big play", or
+once the panel's team's game starts, `end_visit_` puts the mode's own board
+back and reads it at once, that first read checked for big plays against
+nothing (`board_prev_`). Neither the mode's game nor the visit's is watched.
+Home Assistant keeps the mode's game (`ha_game_`), and the state document
+says `visit`. Follow this game pins the mode's own game, the visit's saved
+board (`watch_mode_game`), and ends a visit up then (`set_follow`, and
+`watch_visit_over` with `allowed` false); while it holds, `watching_()` is
+false, so nothing is read and the watched games start over after it. A
+visit is busy for the idle display (`idle_busy_`'s hold): it shows over the
+clock, the scores or Off or dim, at the night brightness in the night hours,
+and the scores keep their scan's timing when back within two stays
+(`side_off_ms_`). For bets, `bets_tick_` hands a visit's game to
+`bets_update`, not `bets_observe`, and a watcher read hands back the games
+the bets are tied to already (`WatchJob::bet_events`, `WatchJob::bets`):
+those bets keep their details and take a result, but no read ties a bet to
+a game or moves one.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery

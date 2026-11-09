@@ -493,9 +493,35 @@ struct WatchAlert {
   Splash splash;
 };
 
+// A game as the bets read it (bets.h, either side as "team"), from league;
+// false when it can't be a bet's game: no game, no event id a bet keeps, a
+// leaderboard, or a game of another sport than the league's.
+inline bool watch_bet_game(const GameSnapshot &g, uint8_t league, BetGame &out) {
+  if (!g.valid || g.state == GameState::NOT_FOUND || is_board_sport(g.sport) ||
+      league >= kLeagueCount || league_sport((League) league) != g.sport)
+    return false;
+  out = BetGame{};
+  out.event = bet_event_id(g.event_id);
+  if (out.event == 0)
+    return false;
+  out.league = league;
+  out.team_id = g.team_id;
+  out.opp_id = g.opp_id;
+  out.team_score = g.team_score;
+  out.opp_score = g.opp_score;
+  out.kickoff = g.kickoff_epoch;
+  out.phase = g.state == GameState::PRE  ? BetPhase::PRE
+              : g.state == GameState::IN ? BetPhase::LIVE
+              : g.completed              ? BetPhase::FINAL
+                                         : BetPhase::OFF;
+  return true;
+}
+
 // One read for the watcher, filled on the main loop and read on the fetch
 // task: what to read, the watched games' last reads (a copy), and what it
-// found.
+// found. bet_events are the games the bets are tied to already (bets.h):
+// the read hands back each one it takes, as bets, so those bets keep its
+// details and take its result, though it never ties a bet to a game.
 struct WatchJob {
   uint8_t league{0};
   uint32_t group{0};
@@ -504,9 +530,11 @@ struct WatchJob {
   uint32_t cycle{0};
   WatchCtx ctx;
   std::vector<WatchGame> games;
+  std::vector<uint32_t> bet_events;
   bool ok{false};
   uint32_t took_ms{0};
   std::vector<WatchGame> fresh;
+  std::vector<BetGame> bets;
   int64_t next_start{0};  // the earliest wanted game still to start, 0 none
   WatchAlert alert;
 };
@@ -564,6 +592,11 @@ inline void watch_take(WatchJob &job, GameSnapshot &cur) {
     job.alert.splash = big_play_splash(p, cur, true, job.ctx.wide);
   }
   watch_keep(job.fresh, g);
+  const uint32_t event = bet_event_id(cur.event_id);
+  BetGame b;
+  if (event != 0 && std::find(job.bet_events.begin(), job.bet_events.end(), event) != job.bet_events.end() &&
+      job.bets.size() < kBetSlots && watch_bet_game(cur, job.league, b))
+    job.bets.push_back(b);
 }
 
 // A day scoreboard (scan_url, team_day_url) for one read: each game
@@ -595,7 +628,7 @@ inline bool watch_live(const GameSnapshot &g, int64_t now_epoch) {
 
 // What decides a switch to a watched game's big play.
 struct WatchSwitch {
-  bool allowed{true};     // nothing holds the board on its game (a pin to one game)
+  bool allowed{true};     // nothing holds the board on its game (Follow this game, follow.h)
   bool splash{false};     // the board's own splash is up
   bool own_live{false};   // the mode's game is the panel's team, live (watch_live)
   bool alert_fav{false};  // the big play's game has the panel's team or a favorite
@@ -617,10 +650,18 @@ inline bool watch_may_switch(const WatchSwitch &s) {
 inline uint32_t watch_stay_ms(uint8_t tens) { return (tens != 0 ? tens : 6) * 10000u; }
 
 // Back to what the mode was showing: the board has been on the big play's
-// game for the stay, or the panel's team's game started meanwhile and that
-// big play may not hold the board from it (s, as for watch_may_switch).
+// game for the stay, the panel's team's game started meanwhile and that big
+// play may not hold the board from it, or Follow this game now holds the
+// mode's game (s, as for watch_may_switch), which then goes straight back up.
 inline bool watch_visit_over(uint32_t now, uint32_t since_ms, uint32_t stay_ms, const WatchSwitch &s) {
-  return now - since_ms >= stay_ms || (s.own_live && !(s.alert_fav && s.from_mine));
+  return !s.allowed || now - since_ms >= stay_ms || (s.own_live && !(s.alert_fav && s.from_mine));
+}
+
+// The game Follow this game pins (follow.h): the mode's own, which a visit
+// saved for the way back (saved, nullptr with no visit), never the big
+// play's game the board is on for a moment.
+inline const GameSnapshot &watch_mode_game(const GameSnapshot &board, const GameSnapshot *saved) {
+  return saved != nullptr ? *saved : board;
 }
 
 }  // namespace espn

@@ -52,7 +52,8 @@ struct IdleInputs {
   int night_end{kNightEndDefault};
   // A followed game is in progress, its final is still up for the mode's wait
   // after it (My team's half hour, Favorite teams' After the final), Favorite
-  // teams has taken over for a game, or Follow this game holds (idle_busy).
+  // teams has taken over for a game, Follow this game holds, or another
+  // game's big play has the board for a moment (idle_busy).
   bool busy{false};
   // The first board since boot or a change of team or mode is up. Until then
   // the boot screen and that board stay up, at the night brightness or dark
@@ -172,7 +173,7 @@ constexpr uint32_t kBoardFinalWaitMs = 30u * 60u * 1000u;
 
 // What the mode follows now, for idle_busy(): plain values from the component.
 struct BusyInputs {
-  bool hold{false};           // the demo's scripted game, or Follow this game
+  bool hold{false};           // the demo's scripted game, Follow this game, or another game's big play (watch.h)
   bool live_mode{false};      // Live games (or a football-only live mode)
   bool recap{false};          // Live games' finals rotation: no game followed
   bool live_fallback{false};  // Live games shows the team's card
@@ -198,7 +199,9 @@ struct BusyInputs {
 
 // Busy keeps the mode's own board up, whatever the idle display is: a
 // followed game in progress, its final for the mode's wait after it, a
-// favorite that took over, or Follow this game. A leaderboard is busy while a
+// favorite that took over, Follow this game, or another game's big play on
+// the board (hold: at the night brightness in the night hours, which busy
+// leaves on, and over Off or dim). A leaderboard is busy while a
 // round or session is on, not overnight between rounds, and for the wait
 // after its final.
 inline bool idle_busy(const BusyInputs &b) {

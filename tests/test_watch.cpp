@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "follow.h"
 #include "watch.h"
 
 using namespace espn;
@@ -572,6 +573,157 @@ void test_final_read() {
   WCHECK(games.empty());
 }
 
+// Follow this game (follow.h) holds the mode's own game: the watcher never
+// switches while it does, a visit up when it starts ends at once, so the
+// board goes straight back, and what it follows is the mode's game, which
+// the visit saved, never the big play's game on the board for a moment.
+void test_follow() {
+  GameSnapshot mode_game, visit_game;
+  for (GameSnapshot *g : {&mode_game, &visit_game}) {
+    g->valid = true;
+    g->sport = Sport::FOOTBALL;
+    g->state = GameState::IN;
+    g->kickoff_epoch = 1800000000;
+  }
+  mode_game.event_id = "401";
+  visit_game.event_id = "402";
+  const int64_t now = 1800003600;
+  WCHECK(&watch_mode_game(mode_game, nullptr) == &mode_game);  // no visit: the board's game
+  WCHECK(&watch_mode_game(visit_game, &mode_game) == &mode_game);
+  FollowPin pin;
+  WCHECK(follow_start(pin, true, true, watch_mode_game(visit_game, &mode_game), now));
+  WCHECK(pin.on && pin.event_id == "401");
+  // It holds against the mode's game, and would let go at once if it were
+  // held up against the big play's game on the board.
+  FollowPin against_visit = pin;
+  WCHECK(follow_holds(pin, watch_mode_game(visit_game, &mode_game), now + 60, 0, 0));
+  WCHECK(!follow_holds(against_visit, visit_game, now + 60, 0, 0) && !against_visit.on);
+
+  WatchSwitch s;
+  s.allowed = !pin.on;
+  WCHECK(!watch_may_switch(s));
+  WCHECK(watch_visit_over(1000, 990, 60000, s));  // well before the stay is over
+  s.alert_fav = s.from_mine = true;              // not even a favorite's with Switch from my team
+  WCHECK(!watch_may_switch(s));
+  WCHECK(watch_visit_over(1000, 990, 60000, s));
+  pin = FollowPin{};  // let go: big plays elsewhere switch again
+  s.allowed = !pin.on;
+  WCHECK(watch_may_switch(s));
+  WCHECK(!watch_visit_over(1000, 990, 60000, s));
+}
+
+// Bets (bets.h): a watcher's read hands back only the games the bets are
+// tied to already, those bets keep its details and take its result at the
+// final, and a bet with no game yet or on another game stays as it was.
+void test_bets() {
+  const std::string mlb = slurp("fixtures/day_mlb_20261012.json");
+  WatchJob plain = read_day(mlb, League::MLB, live_ctx());
+  WCHECK(plain.fresh.size() == 1 && plain.bets.empty());
+  if (plain.fresh.size() != 1)
+    return;
+  const WatchGame &w = plain.fresh[0];
+  const uint32_t event = bet_event_id(w.event_id);
+  WCHECK(event != 0);
+  auto read = [&](const std::string &json) {
+    WatchJob job;
+    job.league = (uint8_t) League::MLB;
+    job.cycle = 1;
+    job.ctx = live_ctx();
+    job.bet_events = {event + 1, event};
+    std::string input = json;
+    job.ok = watch_read_day(input, job);
+    return job;
+  };
+  WatchJob on = read(mlb);
+  WCHECK(on.bets.size() == 1);
+  if (on.bets.size() != 1)
+    return;
+  const BetGame live = on.bets[0];
+  WCHECK(live.event == event && live.league == (uint8_t) League::MLB && live.phase == BetPhase::LIVE);
+  WCHECK(live.team_id == w.away_id && live.opp_id == w.home_id && live.kickoff > 0);
+  WCHECK(live.team_score == w.team_score && live.opp_score == w.opp_score);
+
+  const int64_t now = live.kickoff + 3600, midnight = now + 6 * 3600;
+  Bet tied{};  // a moneyline on the away side, tied to this game already
+  tied.team_id = w.away_id;
+  tied.league = (uint8_t) League::MLB;
+  tied.type = (uint8_t) BetType::MONEYLINE;
+  tied.placed = (uint32_t) (live.kickoff - 600);
+  tied.event = event;
+  tied.opp_id = w.home_id;
+  tied.kickoff = (uint32_t) live.kickoff;
+  Bet waiting = tied;  // the same bet with no game yet
+  waiting.event = waiting.opp_id = waiting.kickoff = 0;
+  Bet later = tied;  // tied to the team's later game
+  later.event = event + 1;
+  later.kickoff = (uint32_t) (live.kickoff + 86400);
+  Bet b = tied;
+  WCHECK(!bet_update(b, live, now, midnight));  // nothing new while it's on
+  b = waiting;
+  WCHECK(!bet_update(b, live, now, midnight) && b.event == 0);  // never ties a bet
+  b = later;
+  WCHECK(!bet_update(b, live, now, midnight) && b.event == event + 1);  // nor moves one
+  b = waiting;
+  WCHECK(bet_observe(b, live, now, midnight) && b.event == event);  // as the board's own read would
+
+  const std::string over = edited(mlb, w.event_id, [](JsonObject ev) {
+    ev["status"]["type"]["state"] = "post";
+    ev["status"]["type"]["completed"] = true;
+  });
+  std::vector<WatchGame> games = plain.fresh;
+  WatchJob last;
+  last.league = (uint8_t) League::MLB;
+  last.cycle = 2;
+  last.ctx = live_ctx();
+  last.games = games;
+  last.bet_events = {event};
+  std::string input = over;
+  WCHECK(watch_read_day(input, last));
+  WCHECK(last.bets.size() == 1 && last.bets[0].phase == BetPhase::FINAL);
+  if (last.bets.size() != 1)
+    return;
+  b = tied;
+  WCHECK(bet_update(b, last.bets[0], now, midnight));
+  WCHECK(b.result != (uint8_t) BetResult::NONE && b.expires == (uint32_t) midnight);
+  b = waiting;
+  WCHECK(!bet_update(b, last.bets[0], now, midnight) && b.result == (uint8_t) BetResult::NONE);
+  ManualBets src;
+  src.blob.bets[0] = tied;
+  src.blob.bets[1] = waiting;
+  src.blob.bets[2] = later;
+  bets_update(src, last.bets[0], now, midnight);
+  WCHECK(src.dirty && src.blob.bets[0].result != (uint8_t) BetResult::NONE);
+  WCHECK(src.blob.bets[1].event == 0 && src.blob.bets[2].event == event + 1);
+  WCHECK(src.blob.bets[1].result == (uint8_t) BetResult::NONE && src.blob.bets[2].result == (uint8_t) BetResult::NONE);
+
+  // A game the read doesn't take (the board's own, here) hands back nothing.
+  WatchCtx board = live_ctx();
+  board.board_league = (uint8_t) League::MLB;
+  board.board_event = w.event_id;
+  WatchJob off;
+  off.league = (uint8_t) League::MLB;
+  off.cycle = 1;
+  off.ctx = board;
+  off.bet_events = {event};
+  input = mlb;
+  WCHECK(watch_read_day(input, off) && off.bets.empty());
+
+  // A leaderboard or a game with no event id a bet keeps is no bet's game.
+  GameSnapshot g;
+  g.valid = true;
+  g.state = GameState::POST;
+  g.sport = Sport::GOLF;
+  g.event_id = "401";
+  BetGame out;
+  WCHECK(!watch_bet_game(g, (uint8_t) League::PGA, out));
+  g.sport = Sport::BASEBALL;
+  g.event_id = "abc";
+  WCHECK(!watch_bet_game(g, (uint8_t) League::MLB, out));
+  g.event_id = "401";
+  WCHECK(!watch_bet_game(g, (uint8_t) League::NFL, out));  // another sport's league
+  WCHECK(watch_bet_game(g, (uint8_t) League::MLB, out) && out.phase == BetPhase::OFF);  // ended, not completed
+}
+
 // The panel's one fetch task, modeled in 50 ms steps for the scheduling
 // tests: the board's polls, and between them the watcher's reads as
 // start_watch_job_ starts them (watch_next with WatchTimes::fits, a new cycle
@@ -579,13 +731,18 @@ void test_final_read() {
 // In My team and Live games the board polls every poll_every after its last
 // poll; in Favorite teams (fav) a 1 s tick (FAV_TICK) polls the locked game
 // once that is due and otherwise gives the watcher the tick, fitting against
-// watch_fav_due.
+// watch_fav_due. With side_every set, the idle display's scores read too, as
+// start_side_job_ does from loop(): looked at once a second in the gaps
+// between the board's reads, ahead of the watcher, a read every side_every
+// that takes side_took and isn't fitted to the board's next read.
 struct FetchModel {
   std::vector<WatchSource> src;
   std::vector<WatchGame> games;
   WatchTimes times;
   bool fav = false;
   uint32_t poll_every = 10000, poll_took = 300;
+  uint32_t side_every = 0, side_took = 4000;
+  int side_reads = 0;
   // What one watcher read takes and whether it answers: a source's day
   // scoreboard (event id "") or one game.
   using Read = const std::string &;
@@ -602,7 +759,9 @@ struct FetchModel {
     uint32_t now = 100000, end = now + ms;
     uint32_t cycle = 0, cycle_ms = now - kWatchCycleMs, hold = 0, busy_until = 0, next_tick = now;
     uint32_t polled = 0, next_poll = now;  // Favorite teams' last poll, My team's next
-    bool idle = false, busy = false, job_poll = false, job_ok = false, job_event = false;
+    uint32_t side_check = now - 1000, side_last = 0;
+    side_reads = 0;
+    bool idle = false, busy = false, job_poll = false, job_ok = false, job_event = false, job_side = false;
     uint8_t job_league = 0;
     std::string job_event_id;
     for (; (int32_t) (now - end) < 0; now += 50) {
@@ -610,7 +769,9 @@ struct FetchModel {
         if ((int32_t) (now - busy_until) < 0)
           continue;
         busy = false;
-        if (job_poll) {
+        if (job_side) {
+          job_side = false;
+        } else if (job_poll) {
           polled = now;
           next_poll = now + poll_every;
         } else {
@@ -621,6 +782,17 @@ struct FetchModel {
         continue;  // the next loop looks again
       }
       const uint32_t due = fav ? watch_fav_due(now, true, polled, poll_every, now + 6 * 3600 * 1000u) : next_poll;
+      const bool gap = (int32_t) (now - (fav ? next_tick : due)) < 0;
+      if (side_every != 0 && gap && now - side_check >= 1000) {
+        side_check = now;
+        if (side_reads == 0 || now - side_last >= side_every) {
+          side_last = now;
+          side_reads++;
+          busy = job_side = true;
+          busy_until = now + side_took;
+          continue;
+        }
+      }
       if (fav && (int32_t) (now - next_tick) < 0)
         continue;
       if ((int32_t) (now - due) >= 0) {
@@ -922,6 +1094,40 @@ void test_board_moves() {
   WCHECK(src[0].wait_until == 0);
 }
 
+// My team with the scores as the idle display: the team's next game is a
+// card polled every 5 minutes while two favorites' games are on. The
+// scores' reads and the watcher's share the one fetch task without keeping
+// each other from their reads, and the board's poll waits at most for one
+// scores read, as it did before the watcher, never for a watcher read.
+void test_idle_scores() {
+  auto model = [](uint32_t side_every) {
+    FetchModel m;
+    m.poll_every = 5 * 60 * 1000;
+    m.side_every = side_every;
+    m.side_took = 4000;
+    WatchSource s = day_source(League::NFL);
+    s.by_event = true;
+    s.wait_until = 100000 + kWatchWaitMaxMs;  // its scoreboard already found the games
+    m.src = {s};
+    m.games = {game("1", (uint8_t) League::NFL, true, 7, 3, 2), game("2", (uint8_t) League::NFL, true, 0, 0, 1)};
+    m.run(2 * 3600 * 1000);
+    return m;
+  };
+  FetchModel alone = model(0);
+  WCHECK(alone.worst_late == 0 && alone.polls >= 24);
+  WCHECK(alone.game_reads["1"] >= 155 && alone.game_reads["2"] >= 155);  // 160 cycles in 2 hours
+  FetchModel shared = model(30 * 60 * 1000);  // the scores' scan every half hour, as with games on
+  WCHECK(shared.side_reads >= 4);
+  WCHECK(shared.game_reads["1"] >= 155 && shared.game_reads["2"] >= 155);
+  WCHECK(shared.polls >= 24 && shared.worst_late <= shared.side_took);
+  // Scores reading often (every minute, far more than they do) still leave
+  // the watcher every cycle, and the watcher leaves them every look.
+  FetchModel busy = model(60 * 1000);
+  WCHECK(busy.side_reads >= 115);
+  WCHECK(busy.game_reads["1"] >= 155 && busy.game_reads["2"] >= 155);
+  WCHECK(busy.worst_late <= busy.side_took);
+}
+
 }  // namespace
 
 int run_watch_tests(int &total_checks) {
@@ -934,6 +1140,8 @@ int run_watch_tests(int &total_checks) {
   test_merge();
   test_sources_and_reads();
   test_switch();
+  test_follow();
+  test_bets();
   test_final_read();
   test_favorites_tick();
   test_slow_scoreboard();
@@ -942,6 +1150,7 @@ int run_watch_tests(int &total_checks) {
   test_bounded();
   test_visit();
   test_board_moves();
+  test_idle_scores();
   total_checks += checks;
   return failures;
 }

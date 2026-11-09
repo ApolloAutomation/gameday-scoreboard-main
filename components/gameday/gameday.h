@@ -680,9 +680,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint8_t mode_league_() const;
   bool own_team_live_() const;  // the mode's game is the panel's team, live
   ::espn::WatchSwitch watch_switch_(bool alert_fav) const;  // for a big play in a game with a favorite or not
-  // The one hook for a pin to one game ("Follow one game"): false while the
-  // board is pinned, so no big play elsewhere takes it.
-  bool switch_allowed_() const { return true; }
+  // The one hook for a pin to one game: false while Follow this game holds
+  // the mode's game (follow.h), so no big play elsewhere takes the board, a
+  // visit up when the pin starts ends (watch_visit_over), and the watcher
+  // reads nothing (watching_).
+  bool switch_allowed_() const { return !this->follow_.on; }
   void start_visit_(const ::espn::WatchAlert &a, uint8_t league);
   void apply_visit_job_();
   void end_visit_();  // back to what the mode was showing
@@ -877,6 +879,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t side_rescan_ms_{0};
   uint32_t side_wait_since_{0};
   uint32_t side_wait_ms_{0};  // after a failed read, 0 = none
+  // millis() when the scores last gave way (a followed game, or another
+  // game's big play for a moment, watch.h), 0 never: back within a visit's
+  // longest time, they keep their scan's own timing.
+  uint32_t side_off_ms_{0};
   bool start_side_job_();
   void apply_side_job_();
   void reset_game_();
