@@ -102,6 +102,8 @@ Settings are grouped in cards. In the order the page shows them:
 
 :::note[Coming in the next release]
 **Matrix** also offers **Three wide**, **Four wide** and **Two rows of two**, and the page asks before it restarts the panel with a new layout. On two rows of two, **How the rows are mounted** appears under the pictures: **Bottom row upside down**, **All upright** or **Top row upside down**. Changing it restarts the panel too. With three or four panels, Bluetooth setup is off and the panel sets up through its hotspot. See [Panel sizes and layouts](/using/panel-sizes/).
+
+**Switch every** and the time next to **Alternate** are lists: **30 s**, then every minute from 1 to 30, showing what the panel has, 30 seconds included. They're one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
 :::
 
 :::note[Coming in the next release]

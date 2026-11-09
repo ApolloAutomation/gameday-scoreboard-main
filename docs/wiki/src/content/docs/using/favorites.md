@@ -39,6 +39,10 @@ A favorite's game takes the panel, or locks on, from a set time before kickoff u
 
 The minutes for **Alternate** are the same setting as **Switch every** in Live games, so changing one changes the other.
 
+:::note[Coming in the next release]
+**Alternate** can also switch every 30 seconds: pick **30 s** in the list next to it, ahead of 1 minute. As always, the panel reads the game it switches to from ESPN right away, so its score is fresh. When another favorite's big play takes the board for a while, the time away doesn't count, and the board comes back to the game it was showing for what was left of its turn. A favorite you jumped to with a numbered button on the remote still holds the panel while its game is on, however short the turns.
+:::
+
 Panels set up before Favorite teams could alternate keep **Stick with the higher team** until you change it.
 
 :::note[Coming in the next release]
