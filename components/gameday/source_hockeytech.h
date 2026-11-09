@@ -71,7 +71,8 @@ std::string ht_logo_url(League league, uint32_t team_id);
 int64_t ht_iso_epoch(const std::string &iso);
 // A day read's start: its local date ("2026-11-07") and time ("19:00:00") in
 // a North American zone ("America/Chicago"), with daylight saving time as
-// the US and Canada keep it. An unknown zone is Eastern.
+// the US and Canada keep it, and British Columbia, Alberta and Manitoba on
+// summer time all year from 1 November 2026. An unknown zone is Eastern.
 int64_t ht_local_epoch(const std::string &date, const std::string &time, const std::string &zone);
 
 // A game's state from the feed's status code (1 not started, 2 in progress,

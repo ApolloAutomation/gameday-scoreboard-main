@@ -183,18 +183,26 @@ Side day_side(JsonObjectConst g, bool home) {
   return s;
 }
 
-// North American zones a game can be in: the standard offset in minutes and
-// whether the zone keeps daylight saving time. Anything else is Eastern.
+// North American zones a game can be in: the standard offset in minutes,
+// whether the zone keeps daylight saving time, and whether it stopped
+// changing clocks on 1 November 2026. Anything else is Eastern.
 struct Zone {
   const char *city;
   int16_t minutes;
   bool dst;
+  bool fixed_2026;
 };
+// British Columbia, Alberta and Manitoba kept summer time from 2 AM on
+// 1 November 2026 (local, as if it were UTC): UTC-7, -6 and -5 all year, as
+// the feed's own offsets and tzdata 2026f have them. Their days before that
+// keep the old rule.
+const int64_t kFixedFrom2026 = 1793498400;
 const Zone kZones[] = {
-    {"St_Johns", -210, true},   {"Halifax", -240, true},     {"Moncton", -240, true},  {"Chicago", -360, true},
-    {"Winnipeg", -360, true},   {"Regina", -360, false},     {"Denver", -420, true},   {"Edmonton", -420, true},
-    {"Boise", -420, true},      {"Phoenix", -420, false},    {"Los_Angeles", -480, true}, {"Vancouver", -480, true},
-    {"Anchorage", -540, true},
+    {"St_Johns", -210, true, false},   {"Halifax", -240, true, false},     {"Moncton", -240, true, false},
+    {"Chicago", -360, true, false},    {"Winnipeg", -360, true, true},     {"Regina", -360, false, false},
+    {"Denver", -420, true, false},     {"Edmonton", -420, true, true},     {"Boise", -420, true, false},
+    {"Phoenix", -420, false, false},   {"Los_Angeles", -480, true, false}, {"Vancouver", -480, true, true},
+    {"Anchorage", -540, true, false},
 };
 
 // A local time (as if it were UTC) inside daylight saving time, as the US and
@@ -297,14 +305,15 @@ int64_t ht_local_epoch(const std::string &date, const std::string &time, const s
   size_t slash = zone.rfind('/');
   const std::string city = slash == std::string::npos ? zone : zone.substr(slash + 1);
   int minutes = -300;
-  bool dst = true;
+  bool dst = true, fixed = false;
   for (const Zone &z : kZones)
     if (city == z.city) {
       minutes = z.minutes;
       dst = z.dst;
+      fixed = z.fixed_2026 && local >= kFixedFrom2026;
       break;
     }
-  if (dst && in_dst(local))
+  if (fixed || (dst && in_dst(local)))
     minutes += 60;
   return local - (int64_t) minutes * 60;
 }

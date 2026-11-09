@@ -245,6 +245,9 @@ the scorebar and the day for four minutes and the game centre's clock for one
 | --- | --- |
 | `ht_team_ahl_syr.json` | Team read (`view=scorebar`, `team_id=324`, one game back and five ahead), Syracuse Crunch: 1029277 HFD @ SYR 11/7, Final OT 3-2, then five games to come from 1029294 LAV @ SYR on 11/11. Its counts are games, not days, around the league's own today |
 | `ht_team_echl_rc.json` | Team read, Rapid City Rush (70): 25606 RC @ IDH 11/7 postponed (status 8, the third postponed game in a row there), then five to come from 25626 TAH @ RC on 11/11 |
+| `ht_team_ahl_abb.json` | Team read, Abbotsford Canucks (440), recorded 02:37 UTC: 1029265 ONT @ ABB 11/7 final, then five to come. Abbotsford's home games are in `America/Vancouver` at `-07:00` ("PCT"), its road games in Los Angeles' zone at `-08:00`: British Columbia stayed on summer time from 1 November 2026 |
+| `ht_team_ahl_cgy.json` | Team read, Calgary Wranglers (444), recorded with it: road games at `-07:00` and `-08:00`, then two home games in `America/Edmonton` at `-06:00` ("MDT" all winter, Alberta the same) |
+| `ht_team_ahl_mb.json` | Team read, Manitoba Moose (321), recorded with it: 1029272 TOR @ MB 11/7 in `America/Winnipeg` at `-05:00` ("CDT", Manitoba the same), then road games in Chicago's and Toronto's zones |
 | `ht_game_ahl_pre.json` | Game read (`feed=gc&tab=clock`), 1029294 LAV @ SYR, not started (status 1, progress " 7:00 PM") |
 | `ht_game_ahl_final.json` | 1029271 CLE @ LAV, Final 4-2 |
 | `ht_game_ahl_final_ot.json` | 1029277 HFD @ SYR, Final OT 3-2, the clock at 2:01 left in the overtime |

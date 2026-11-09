@@ -250,10 +250,26 @@ void test_times() {
   HCHECK_EQ(ht_iso_epoch("2026-11-07T15:00:00-xx:00"), at("2026-11-07T15:00:00Z"));
   // A day read's local times, across the zones the two leagues play in
   HCHECK_EQ(ht_local_epoch("2026-11-07", "15:00:00", "America/Toronto"), at("2026-11-07T20:00:00Z"));
-  HCHECK_EQ(ht_local_epoch("2026-11-07", "18:00:00", "America/Winnipeg"), at("2026-11-08T00:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-07", "18:00:00", "America/Winnipeg"), at("2026-11-07T23:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "18:05:00", "America/Denver"), at("2026-11-08T01:05:00Z"));
-  HCHECK_EQ(ht_local_epoch("2026-11-07", "17:00:00", "America/Vancouver"), at("2026-11-08T01:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-07", "17:00:00", "America/Vancouver"), at("2026-11-08T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "19:00:00", "America/Phoenix"), at("2026-11-08T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-07", "18:00:00", "America/Los_Angeles"), at("2026-11-08T02:00:00Z"));
+  // British Columbia, Alberta and Manitoba keep summer time all year from
+  // 2 AM on 1 November 2026 (UTC-7, -6 and -5, the feed's own offsets); their
+  // days before that keep the old rule.
+  HCHECK_EQ(ht_local_epoch("2027-02-15", "14:00:00", "America/Winnipeg"), at("2027-02-15T19:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-03-04", "10:30:00", "America/Winnipeg"), at("2027-03-04T15:30:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-01-16", "19:00:00", "America/Edmonton"), at("2027-01-17T01:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-01-16", "19:00:00", "America/Vancouver"), at("2027-01-17T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-07-01", "19:00:00", "America/Vancouver"), at("2027-07-02T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", "America/Vancouver"), at("2026-01-11T03:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", "America/Edmonton"), at("2026-01-11T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", "America/Winnipeg"), at("2026-01-11T01:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-10-31", "19:00:00", "America/Vancouver"), at("2026-11-01T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-01", "01:30:00", "America/Vancouver"), at("2026-11-01T08:30:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-01", "03:00:00", "America/Vancouver"), at("2026-11-01T10:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2026-11-01", "03:00:00", "America/Los_Angeles"), at("2026-11-01T11:00:00Z"));
   // Daylight saving time: on from 2 AM on March's second Sunday (8 March
   // 2026), off from 2 AM on November's first (1 November 2026)
   HCHECK_EQ(ht_local_epoch("2026-03-07", "19:00:00", "America/New_York"), at("2026-03-08T00:00:00Z"));
@@ -261,7 +277,9 @@ void test_times() {
   HCHECK_EQ(ht_local_epoch("2026-03-08", "15:00:00", "America/New_York"), at("2026-03-08T19:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-10-31", "19:00:00", "America/Chicago"), at("2026-11-01T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-01", "15:00:00", "America/Chicago"), at("2026-11-01T21:00:00Z"));
-  HCHECK_EQ(ht_local_epoch("2027-03-13", "19:00:00", "America/Edmonton"), at("2027-03-14T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-03-13", "19:00:00", "America/Denver"), at("2027-03-14T02:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-03-14", "19:00:00", "America/Denver"), at("2027-03-15T01:00:00Z"));
+  HCHECK_EQ(ht_local_epoch("2027-03-13", "19:00:00", "America/Edmonton"), at("2027-03-14T01:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2027-03-14", "19:00:00", "America/Edmonton"), at("2027-03-15T01:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-07-01", "19:00:00", "America/Los_Angeles"), at("2026-07-02T02:00:00Z"));
   // Arizona and Saskatchewan keep standard time all year
@@ -273,8 +291,10 @@ void test_times() {
   HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", ""), at("2026-01-11T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("", "19:00:00", "America/Toronto"), (int64_t) 0);
   // Each recorded scorebar game's local date, time and zone agree with its
-  // start and offset.
-  for (const char *file : {"ht_team_ahl_syr.json", "ht_team_echl_rc.json"}) {
+  // start and offset: Abbotsford's home games in Vancouver's zone, Calgary's
+  // in Edmonton's and Manitoba's in Winnipeg's among them.
+  for (const char *file : {"ht_team_ahl_syr.json", "ht_team_echl_rc.json", "ht_team_ahl_abb.json",
+                           "ht_team_ahl_cgy.json", "ht_team_ahl_mb.json"}) {
     JsonDocument doc;
     deserializeJson(doc, slurp(file));
     int n = 0;
@@ -647,9 +667,13 @@ void test_day() {
     HCHECK_EQ(finals[0].away_record, std::string("6-7-0"));
     HCHECK_EQ(finals[0].kickoff_epoch, at("2026-11-07T20:00:00Z"));
     HCHECK_EQ(finals[1].detail, std::string("Final/OT"));
-    // ONT @ ABB in Abbotsford at 5 PM Pacific; CV @ TUC in Tucson at 7 PM
+    // TOR @ MB in Winnipeg at 6 PM (UTC-5 all year now); ONT @ ABB in
+    // Abbotsford at 5 PM (UTC-7, as the team read has it: 1029265 at
+    // 2026-11-07T17:00:00-07:00); CV @ TUC in Tucson at 7 PM
+    HCHECK_EQ(finals[7].away_abbr, std::string("TOR"));
+    HCHECK_EQ(finals[7].kickoff_epoch, at("2026-11-07T23:00:00Z"));
     HCHECK_EQ(finals[9].away_abbr, std::string("ONT"));
-    HCHECK_EQ(finals[9].kickoff_epoch, at("2026-11-08T01:00:00Z"));
+    HCHECK_EQ(finals[9].kickoff_epoch, at("2026-11-08T00:00:00Z"));
     HCHECK_EQ(finals[15].away_abbr, std::string("CV"));
     HCHECK_EQ(finals[15].kickoff_epoch, at("2026-11-08T02:00:00Z"));
     HCHECK_EQ(finals[15].detail, std::string("Final/OT"));
@@ -750,6 +774,21 @@ void test_day() {
   finals.clear();
   HCHECK(day_read(on, live, nullptr, &finals));
   HCHECK(finals.size() == 1 && finals[0].detail == "Final/SO");
+  // A morning game in Winnipeg (the AHL's only one on 2027-03-04, 10:30 at
+  // Manitoba, 15:30Z in the feed): the next start, and the Live games wait
+  // after a scan at 14:00Z that found nothing on, end at puck drop
+  JsonDocument mb;
+  deserializeJson(mb, slurp("ht_day_echl_20261110.json"));
+  mb["SiteKit"]["Gamesbydate"][0]["date_played"] = "2027-03-04";
+  mb["SiteKit"]["Gamesbydate"][0]["timezone"] = "America/Winnipeg";
+  mb["SiteKit"]["Gamesbydate"].remove(1);
+  on.clear();
+  serializeJson(mb, on);
+  pending.clear();
+  HCHECK(day_read(on, live, &next, nullptr, &pending));
+  HCHECK_EQ(next, at("2027-03-04T15:30:00Z"));
+  HCHECK(pending.size() == 1 && pending[0].kickoff_epoch == at("2027-03-04T15:30:00Z"));
+  HCHECK_EQ(no_live_rescan_ms(at("2027-03-04T14:00:00Z"), next, 2u * 60000u, 180u * 60000u), 90u * 60000u);
   // Not a day document
   HCHECK(!day_read("Invalid key.", live));
   HCHECK(!day_read("{\"SiteKit\":{\"Scorebar\":[]}}", live));
