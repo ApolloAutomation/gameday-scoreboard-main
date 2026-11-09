@@ -289,6 +289,7 @@
     {"name": "a team id is the league's own", "set": [["player", "nba,3918298,2,ALLEN"]], "expect": {"players": [{"l": "nba", "id": 3918298, "team": 2, "name": "ALLEN"}]}},
     {"name": "a golf tour is refused", "set": [["player", "pga,9478,1106,SCHEFFLER"]], "expect": {"players": []}},
     {"name": "a racing series is refused", "set": [["player", "f1,4665,2030,NORRIS"]], "expect": {"players": []}},
+    {"name": "a minor league team is refused: ESPN has no roster for it", "set": [["player", "milb,682928,234,CAMINERO"]], "expect": {"players": []}},
     {"name": "an unknown league is refused", "set": [["player", "xfl,3918298,2,ALLEN"]], "expect": {"players": []}},
     {"name": "a league in capitals is refused", "set": [["player", "NFL,3918298,2,ALLEN"]], "expect": {"players": []}},
     {"name": "an athlete id that is not a number is refused", "set": [["player", "nfl,abc,2,ALLEN"]], "expect": {"players": []}},

@@ -215,9 +215,12 @@ struct WatchCtx {
 };
 
 // Whether a game of these teams is one to watch, wherever the board is: 0
-// no, 1 yes, 2 yes, and the panel's team or a favorite plays.
+// no, 1 yes, 2 yes, and the panel's team or a favorite plays. Never a game of
+// a league not read from ESPN (minor league baseball): the watcher reads
+// ESPN's scoreboards and games only, and that league's host is backed off on
+// its own.
 inline int watch_wants_teams(const WatchCtx &c, uint8_t league, uint32_t away, uint32_t home) {
-  if ((c.mask & watch_sport_mask(league_sport((League) league))) == 0)
+  if ((c.mask & watch_sport_mask(league_sport((League) league))) == 0 || !from_espn((League) league))
     return 0;
   const bool fav = game_has_team(league, away, home, c.favs.data(), c.favs.size()) ||
                    (c.live && game_has_team(league, away, home, &c.team, 1));
@@ -338,12 +341,13 @@ struct WatchSource {
 // Live games: each league it follows. My team and Favorite teams: each
 // favorite's league, a college favorite's by its conference (Team::group).
 // Only leagues of a sport with a big play in mask (watch_sport_mask), so never
-// golf or racing.
+// golf or racing, and only ESPN's (from_espn): never minor league baseball,
+// which ESPN has no scoreboard for.
 inline std::vector<WatchSource> watch_sources(bool live, const std::vector<League> &leagues,
                                               const std::vector<const Team *> &favs, uint32_t mask) {
   std::vector<WatchSource> out;
   auto add = [&](League l, uint32_t group) {
-    if ((mask & watch_sport_mask(league_sport(l))) == 0)
+    if ((mask & watch_sport_mask(league_sport(l))) == 0 || !from_espn(l))
       return;
     for (const auto &s : out)
       if (s.league == (uint8_t) l && s.group == group)
@@ -504,15 +508,24 @@ struct WatchTimes {
   }
 };
 
+// A read due at (millis()) whose host waits left ms more from now (a minor
+// league team's MLB after a refusal or a failure; 0: no wait) runs once
+// that wait is over at the earliest.
+inline uint32_t watch_after_wait(uint32_t at, uint32_t now, uint32_t left) {
+  return left != 0 && (int32_t) (at - (now + left)) < 0 ? now + left : at;
+}
+
 // Favorite teams ticks every second (FAV_TICK) for its playlist and reads
 // ESPN on few of those ticks, so a watcher read there fits against its next
 // read instead (millis()): the locked game's next poll (polled at poll_ms,
-// every poll_every; not yet: now), or refresh_at, the next favorite's team
+// every poll_every; not yet: now; not before the wait of its host ends,
+// poll_left: watch_after_wait), or refresh_at, the next favorite's team
 // read, whichever comes first.
-inline uint32_t watch_fav_due(uint32_t now, bool locked, uint32_t poll_ms, uint32_t poll_every, uint32_t refresh_at) {
+inline uint32_t watch_fav_due(uint32_t now, bool locked, uint32_t poll_ms, uint32_t poll_every, uint32_t refresh_at,
+                              uint32_t poll_left = 0) {
   if (!locked)
     return refresh_at;
-  const uint32_t poll = poll_ms == 0 ? now : poll_ms + poll_every;
+  const uint32_t poll = watch_after_wait(poll_ms == 0 ? now : poll_ms + poll_every, now, poll_left);
   return (int32_t) (poll - refresh_at) < 0 ? poll : refresh_at;
 }
 

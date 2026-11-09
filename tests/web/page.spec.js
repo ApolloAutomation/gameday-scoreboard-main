@@ -2897,6 +2897,42 @@ test("the Favorite players card adds a player from a team's roster and removes o
   await expect(page.locator("#playerList .playerrow label")).toContainText("VALDES-SCA");
 });
 
+test("the Favorite players card leaves minor league teams out of its team chooser", async ({ page, request }) => {
+  const side = (id, abbr, teamName, score) => ({ team: { id, abbreviation: abbr, teamName }, score });
+  await page.route("https://statsapi.mlb.com/**", (route) => route.fulfill({
+    json: { dates: [{ games: [
+      { gamePk: 2, gameDate: "2026-07-04T23:05:00Z", status: { codedGameState: "I" },
+        teams: { away: side(235, "MEM", "Redbirds", 3), home: side(234, "DUR", "Bulls", 2) },
+        linescore: { currentInning: 7, inningState: "Bottom", scheduledInnings: 9 } },
+    ] }] },
+  }));
+  // The panel follows a minor league team: the chooser still opens on a tab
+  // whose teams have ESPN rosters.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" } });
+  await page.goto("/");
+  await page.locator("#playerTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "On now" })).toBeVisible();
+  // On now lists the minor league game, but neither side picks a roster.
+  await page.locator(".tabs button", { hasText: "On now" }).click();
+  await expect(page.locator("#tiles .game .side", { hasText: "Bulls" })).toBeDisabled();
+  await expect(page.locator("#tiles .game .side", { hasText: "Redbirds" })).toBeDisabled();
+  // Search across the tabs finds none of them either.
+  await page.locator(".tabs button", { hasText: "MLB" }).first().click();
+  for (const q of ["durham", "triple-a", "single-a"]) {
+    await page.locator("#q").fill(q);
+    await expect(page.locator("#tiles .none")).toHaveText("No team matches");
+  }
+  await page.getByRole("button", { name: "Close" }).click();
+  // Choosing the team still has them.
+  await page.locator("#pick").click();
+  await page.locator(".tabs button", { hasText: "MiLB" }).click();
+  await expect(page.locator("#tiles .tile")).toHaveCount(120);
+  await page.locator("#q").fill("durham");
+  await expect(page.locator("#tiles .tile .n")).toHaveText(["Durham Bulls"]);
+});
+
 test("the Favorite players card says when ESPN's roster can't be read, and tells two brothers apart", async ({ page, request }) => {
   await reset(request);
   let fail = true;

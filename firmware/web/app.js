@@ -72,6 +72,9 @@
   const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
   // Games and logos from MLB's own servers (minor league baseball)
   const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
+  // A league read from ESPN: the only rosters favorite players come from
+  // (set_request.h's parse_player refuses the others).
+  const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
   // "football", "baseball": the sport's situation switch and splashes
   const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
   // A pro league whose teams have a seed and a place from ESPN (the Standing
@@ -1411,7 +1414,8 @@
       const mkSide = (s) => {
         const t = teamById(g.league, s.id);
         const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
-        b.disabled = !t;
+        // A favorite player's team needs ESPN's roster: no minor league side.
+        b.disabled = !t || (pickPlayer && !fromEspn(t[0]));
         b.title = t ? "Follow the " + t[3] : "Not in the team list";
         const img = el("img");
         img.loading = "lazy";
@@ -1838,7 +1842,7 @@
     // one by its tab's name too.
     // A minor league team is found by its level too ("double-a").
     const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
-    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0]))
+    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1885,10 +1889,12 @@
     $(".sheet").setAttribute("aria-label", player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
     const cur = player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
     const team = fav || bet || player;
-    league = cur && !(team && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
+    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
+    league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf and racing can't be a favorite yet, take a bet or have favorite
-    // players: no Golf or Racing tab while picking one.
-    tabButtons.forEach((b) => { b.hidden = team && isBoard(b.dataset.lg); });
+    // players: no Golf or Racing tab while picking one. Favorite players come
+    // from ESPN's rosters: no MiLB tab while picking a player's team.
+    tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
     try {
       const list = await loadGames(false);
       if (list.some((g) => g.state === "in")) league = "now";

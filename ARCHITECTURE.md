@@ -386,7 +386,11 @@ scan leaves MiLB out while MLB's wait runs, and a failed MiLB scan read
 beside ESPN's that answered backs off MLB alone. The idle display's scores
 reads keep to the same wait: they leave MiLB out while it runs, and their
 own failed MiLB read counts in it (`mlb_side_result`). Its bytes count in the same
-"ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`.
+"ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`. The
+big-play watcher and favorite players stay ESPN's (`from_espn`):
+`watch_sources` and `watch_wants_teams` leave MiLB out, `parse_player` and
+`player_valid` refuse its teams, and Favorite Teams' watcher gap counts a
+favorite whose host waits as due when that wait ends (`watch_after_wait`).
 
 ## The device page and its routes
 

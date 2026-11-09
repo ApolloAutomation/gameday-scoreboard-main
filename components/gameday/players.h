@@ -63,10 +63,11 @@ static_assert(sizeof(PlayerBlob) == 160, "PlayerBlob is the saved blob: keep its
 inline bool player_empty(const FavPlayer &p) { return p.athlete == 0; }
 
 // What a slot read back from flash must be, or it is emptied: a league the
-// panel follows teams in, a team in its list, and a name the set request
-// would have kept.
+// panel follows teams in and reads from ESPN, a team in its list, and a name
+// the set request would have kept.
 inline bool player_valid(const FavPlayer &p) {
   if (p.athlete == 0 || p.league >= kLeagueCount || is_leaderboard((League) p.league) ||
+      !from_espn((League) p.league) ||
       !known_team(p.league, p.team_id) || memchr(p.name, 0, sizeof(p.name)) == nullptr)
     return false;
   const std::string n(p.name);

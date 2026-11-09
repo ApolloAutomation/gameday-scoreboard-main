@@ -328,16 +328,18 @@ inline bool split_fields(const std::string &v, std::string *f, size_t max, size_
 
 // player=<league>,<athlete id>,<team id>,<name>: "nfl,3918298,2,ALLEN". The
 // league one the panel follows teams in (not a golf tour or a racing
-// series), the team one in its list, the athlete's id ESPN's, the name what
-// clean_player_name keeps. playerdel=<league>,<athlete id> drops one.
-// Anything else, extra fields included, is refused.
+// series) and reads from ESPN, whose rosters the page picks players from
+// (not minor league baseball), the team one in its list, the athlete's id
+// ESPN's, the name what clean_player_name keeps. playerdel=<league>,<athlete
+// id> drops one. Anything else, extra fields included, is refused.
 inline bool parse_player(const std::string &v, bool del, SetOp &op) {
   std::string f[4];
   size_t n = 0;
   if (!split_fields(v, f, del ? 2 : 4, n) || n != (del ? 2u : 4u))
     return false;
   const LeagueInfo *info = league_by_key(f[0].c_str());
-  if (info == nullptr || is_board_sport(info->sport) || !parse_espn_id(f[1], op.athlete))
+  if (info == nullptr || is_board_sport(info->sport) || info->source != Source::ESPN ||
+      !parse_espn_id(f[1], op.athlete))
     return false;
   op.team.league = (uint8_t) info->league;
   if (del)

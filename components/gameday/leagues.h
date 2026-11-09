@@ -119,6 +119,9 @@ inline Source league_source(League league) {
 }
 // Minor league baseball: read from the MLB Stats API (source_mlbstats.h).
 inline bool is_mlb_stats(League league) { return league_source(league) == Source::MLB_STATS; }
+// Read from ESPN: the only source the big-play watcher reads (watch.h) and
+// the only one with the rosters favorite players come from (players.h).
+inline bool from_espn(League league) { return league_source(league) == Source::ESPN; }
 
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in
 // Live games (set_request.h).

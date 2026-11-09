@@ -893,16 +893,21 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   if (refresh == -1 && cup < 0) {
     this->schedule_next_(FAV_TICK);
     // Most ticks read nothing: the watcher's turn, up to the next read due.
+    // A favorite whose host waits (a minor league team's MLB) is read when
+    // that wait is over, so its overdue read never leaves the watcher no gap.
     uint32_t refresh_at = now + SCHEDULE_INTERVAL;
     for (const auto &e : this->fav_) {
       const bool missing = !e.sched.valid || e.stale;
-      const uint32_t at =
-          missing && e.fetched_ms == 0 ? now : e.fetched_ms + (missing ? RETRY_INTERVAL : SCHEDULE_INTERVAL);
+      const uint32_t at = ::espn::watch_after_wait(
+          missing && e.fetched_ms == 0 ? now : e.fetched_ms + (missing ? RETRY_INTERVAL : SCHEDULE_INTERVAL), now,
+          this->host_left_(e.team->league, now));
       if ((int32_t) (at - refresh_at) < 0)
         refresh_at = at;
     }
-    this->start_watch_job_(::espn::watch_fav_due(now, this->fav_locked_ && this->fav_shown_ >= 0, this->fav_poll_ms_,
-                                                 this->interval_for_phase_(), refresh_at));
+    const bool locked = this->fav_locked_ && this->fav_shown_ >= 0;
+    this->start_watch_job_(::espn::watch_fav_due(
+        now, locked, this->fav_poll_ms_, this->interval_for_phase_(), refresh_at,
+        locked ? this->host_left_(this->fav_[this->fav_shown_].team->league, now) : 0));
     return;
   }
   int index = cup >= 0 ? cup : refresh >= 0 ? refresh : this->fav_shown_;

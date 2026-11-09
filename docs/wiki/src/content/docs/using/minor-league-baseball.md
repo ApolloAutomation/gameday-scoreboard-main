@@ -72,6 +72,12 @@ The **On now** tab in the team picker lists today's minor league games too. Your
 - **Bets.** A minor league team can take a bet in the device page's **Bets** card, graded on the score from MLB. See [Bets](/using/bets/).
 - **Standing next to pro teams** leaves a minor league team its record, since MLB has no seed or place for it, and minor league teams have no rank.
 
+## Big plays and favorite players
+
+**Switch to big plays in other games** leaves minor league games out: the panel checks other games on ESPN only, so a run in another minor league game never switches the board. A minor league game on the board still gets its own splashes, and the panel can leave it for a big play in another league's game and come back, as with any game. While MLB fails or refuses the panel, the checks of ESPN's games go on. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+
+Minor league teams have no [favorite players](/using/favorite-players/), since the rosters come from ESPN. The Favorite players card's team chooser has no **MiLB** tab.
+
 ## Data use
 
 The **ESPN Data** sensor in Home Assistant and **Data used** on the device page count what the panel downloads from MLB as well as from ESPN. The device page's Diagnostics show **Last MLB read**, how the last read from MLB went and how long ago, once the panel has read minor league scores.

@@ -62,6 +62,9 @@ LEAGUES = LEAGUE_RE.findall(LEAGUES_H)
 # The golf tours and racing series: a team, but never a favorite or a Live
 # games league (set_request.h).
 BOARD = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(?:GOLF|RACING)', LEAGUES_H))
+# Leagues not read from ESPN (minor league baseball): no favorite players,
+# whose rosters come from ESPN (set_request.h's parse_player).
+NOT_ESPN = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Source::(?!ESPN\b)\w+', LEAGUES_H))
 TZ_TEXT = "\n".join(ln for ln in (REPO / "components/gameday/timezones.h").read_text(encoding="utf-8").splitlines()
                     if not ln.lstrip().startswith("//"))
 TZ_ROWS = TZ_RE.findall(TZ_TEXT)
@@ -381,7 +384,8 @@ def espn_id(v):
 def parse_player(v, delete):
     """parse_player() (set_request.h): {l, id, team, name} for player=, (league, id) for playerdel=, else None."""
     f = v.split(",")
-    if len(f) != (2 if delete else 4) or f[0] not in LEAGUES or f[0] in BOARD or espn_id(f[1]) is None:
+    if len(f) != (2 if delete else 4) or f[0] not in LEAGUES or f[0] in BOARD or f[0] in NOT_ESPN \
+            or espn_id(f[1]) is None:
         return None
     if delete:
         return (f[0], espn_id(f[1]))
