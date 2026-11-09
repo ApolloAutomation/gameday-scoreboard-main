@@ -357,3 +357,8 @@ button { font: inherit; color: inherit; }
 .betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
 .betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
 #betAdd { margin-top: 8px; }
+/* Favorite players: the board's stat lines, and the card's list and form */
+.playerline .bet { color: var(--text); white-space: normal; }
+.playerrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
+#playerPick { max-width: 60%; }
+#playerAdd { margin-top: 8px; }

@@ -2,7 +2,9 @@
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
 //   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...,
-//                                 bet=0,nfl,2,spread,-3.5 and betdel=1 for the Bets card)
+//                                 bet=0,nfl,2,spread,-3.5 and betdel=1 for the Bets card,
+//                                 player=nfl,3918298,2,ALLEN and playerdel=nfl,3918298 for
+//                                 the Favorite players card)
 //   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
@@ -124,6 +126,7 @@
       <div class="gone" id="gone" hidden></div>
       <div class="play" id="play"></div>
       <div class="betline" id="betline" hidden></div>
+      <div class="betline playerline" id="playerline" hidden></div>
       <div class="splash" id="splash"></div>
     </section>
 
@@ -221,6 +224,16 @@
         <div class="ctl"><label>Only today's games<small>The playlist skips favorites that aren't playing today.</small></label><button class="sw" data-set="today" aria-label="Only today's games"></button></div>
         <div id="favCtls"></div>
         <button class="btn" id="favAdd">Add a favorite</button>
+      </div>
+      <div class="card" id="playerCard" hidden>
+        <h2>Favorite players</h2>
+        <p class="hint">While a favorite player's game is on the panel and ESPN lists the player among its leaders, the ticker shows their stat line. When they score, the celebration names them. The panel reads nothing more from ESPN for it.</p>
+        <div id="playerList"></div>
+        <div class="sub">Add a player</div>
+        <div class="ctl"><label>Team</label><button class="btn" id="playerTeam">Pick a team</button></div>
+        <div class="ctl" id="playerPickRow" hidden><label for="playerPick">Player</label><select id="playerPick"></select></div>
+        <p class="betmsg" id="playerMsg" role="alert" hidden></p>
+        <button class="btn primary" id="playerAdd" hidden>Add player</button>
       </div>
       <div class="card">
         <h2>Remote</h2>
@@ -962,6 +975,9 @@
       ["Buzzer beater", "A basket in the last second of a period that ties the game or takes the lead."],
       ["Overtime", "When overtime starts."],
       ["Final", "When the game ends, unless your team won: then the victory splash."]]],
+    // Not a sport: shown whenever the firmware has favorite players.
+    ["players", "Favorite players", [
+      ["Scores", "Names a favorite player who scores, in place of the team's splash. Football, baseball, soccer and hockey; in basketball only a late lead change or a buzzer beater."]]],
   ];
   const alertSws = [];
   for (const [sport, name, kinds] of ALERTS) {
@@ -1075,7 +1091,7 @@
     const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
       .concat(S.live_auto ? [] : S.live || []).map((lg) => lgInfo(lg).path.split("/")[0]));
     document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
-      row.hidden = sports.size > 0 && !sports.has(row.dataset.sport);
+      row.hidden = row.dataset.sport === "players" ? S.players === undefined : sports.size > 0 && !sports.has(row.dataset.sport);
     });
     // Firmware from before big-play alerts has neither.
     $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
@@ -1305,7 +1321,7 @@
         b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
         b.onclick = () => {
           if (!t) return;
-          if (pickFav || pickBet) return choose(t);
+          if (pickFav || pickBet || pickPlayer) return choose(t);
           setGD({ team: keyOf(t) });
           toast("Now following the " + t[3]);
           closePicker();
@@ -1486,13 +1502,167 @@
   };
   renderBetForm();
 
+  // ---- favorite players -------------------------------------------------------------
+  // Picked from a team's roster, which the browser reads from ESPN (the panel
+  // never reads rosters). player=<league>,<athlete id>,<team id>,<name> adds
+  // one, or gives one already there a new name; playerdel=<league>,<athlete id>
+  // removes one (components/gameday/players.h). The name is what the panel
+  // shows: the last name in capitals, with the first initial when a teammate
+  // shares it, in at most 10 characters.
+  let playerTeam = "";   // the add form's team, "nfl:2"
+  let roster = [];       // that team's players: [{id, name, pos, jersey, panel}]
+  let rosterFor = "";    // the team the roster read was for
+  let playerDrawn = null;
+  const PANEL_NAME_MAX = 10;
+  // The letters the panel takes: capitals, digits, spaces and . ' -, accents dropped.
+  const panelLetters = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+    .replace(/[^A-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
+  const fitName = (v) => {
+    let n = panelLetters(v);
+    if (n.length > PANEL_NAME_MAX) n = n.replace(/ (JR\.?|SR\.?|II|III|IV|V)$/, "");
+    if (n.length > PANEL_NAME_MAX) n = n.slice(0, PANEL_NAME_MAX).replace(/[ .'-]+$/, "");
+    return n;
+  };
+  // ESPN's roster comes grouped by position ({athletes: [{position, items: [...]}]},
+  // football and baseball) or flat ({athletes: [...]}, the other sports).
+  const rosterAthletes = (j) => {
+    const out = [];
+    for (const a of (j && Array.isArray(j.athletes) ? j.athletes : [])) {
+      if (a && Array.isArray(a.items)) out.push(...a.items);
+      else if (a && a.id !== undefined) out.push(a);
+    }
+    return out.filter((a) => a && /^[0-9]{1,10}$/.test(String(a.id)) && Number(a.id) > 0 && Number(a.id) <= 4294967295);
+  };
+  const words = (v) => String(v || "").trim().split(/\s+/).filter(Boolean);
+  const lastOf = (a) => a.lastName || words(a.displayName || a.fullName).slice(-1)[0] || "";
+  const firstOf = (a) => a.firstName || words(a.displayName || a.fullName)[0] || "";
+  // Each player's name on the panel, in the roster's order.
+  const panelNames = (list) => {
+    const count = {};
+    for (const a of list) { const k = panelLetters(lastOf(a)); count[k] = (count[k] || 0) + 1; }
+    return list.map((a) => {
+      const first = panelLetters(firstOf(a));
+      return fitName(count[panelLetters(lastOf(a))] > 1 && first ? first[0] + ". " + lastOf(a) : lastOf(a));
+    });
+  };
+  const playerSay = (t) => {
+    $("#playerMsg").textContent = t;
+    $("#playerMsg").hidden = !t;
+  };
+  const loadRoster = async (key) => {
+    const t = teamByKey(key);
+    if (!t) return;
+    rosterFor = key;
+    roster = [];
+    renderPlayerForm();
+    playerSay("Reading the " + t[3] + " roster from ESPN\u2026");
+    let list = null;
+    try {
+      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      list = rosterAthletes(await r.json());
+    } catch (_) {
+      list = null;
+    }
+    if (rosterFor !== key) return;  // another team was picked meanwhile
+    if (!list || !list.length) {
+      playerSay(list ? "ESPN lists no players for the " + t[3] + " right now."
+        : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
+      renderPlayerForm();
+      return;
+    }
+    const names = panelNames(list);
+    roster = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
+      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
+      .filter((a) => a.panel)
+      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+    playerSay("");
+    renderPlayerForm();
+  };
+  const renderPlayerForm = () => {
+    const t = teamByKey(playerTeam);
+    $("#playerTeam").textContent = t ? t[3] : "Pick a team";
+    const sel = $("#playerPick");
+    const sig = rosterFor + ":" + roster.length;
+    if (sel.dataset.sig !== sig) {
+      sel.dataset.sig = sig;
+      sel.textContent = "";
+      for (const a of roster) {
+        const o = el("option", null, a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : ""));
+        o.value = String(a.id);
+        sel.appendChild(o);
+      }
+    }
+    $("#playerPickRow").hidden = $("#playerAdd").hidden = !roster.length;
+  };
+  // The board's line of stat lines, and the card's list.
+  const renderPlayers = () => {
+    const card = $("#playerCard");
+    // Firmware from before favorite players sends none.
+    card.hidden = !S || S.players === undefined;
+    const lines = (game && Array.isArray(game.pl) && game.s !== "NOT_FOUND" && game.pl) || [];
+    const line = $("#playerline");
+    line.textContent = "";
+    for (const text of lines) line.appendChild(el("span", "bet", text));
+    line.hidden = !lines.length;
+    if (card.hidden) return;
+    const list = S.players || [];
+    const sig = JSON.stringify(list);
+    if (sig === playerDrawn) return;
+    playerDrawn = sig;
+    const host = $("#playerList");
+    const focused = host.contains(document.activeElement);
+    host.textContent = "";
+    for (const pl of list) {
+      const row = el("div", "ctl playerrow");
+      const t = teamById(pl.l, pl.team);
+      const img = el("img");
+      img.alt = "";
+      img.loading = "lazy";
+      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
+      row.appendChild(img);
+      const name = el("label", null, pl.name);
+      name.appendChild(el("small", null, (t ? t[3] : lgInfo(pl.l).name)));
+      row.appendChild(name);
+      const x = el("button", "betdel", "\u2715");
+      x.title = "Remove " + pl.name;
+      x.setAttribute("aria-label", x.title);
+      x.onclick = () => setGD({ playerdel: pl.l + "," + pl.id }).then((ok) => ok && toast("Removed " + pl.name));
+      row.appendChild(x);
+      host.appendChild(row);
+    }
+    if (!list.length) host.appendChild(el("p", "hint", "No favorite players yet."));
+    if (focused && !host.contains(document.activeElement)) $("#playerTeam").focus();
+  };
+  $("#playerTeam").onclick = () => openPicker(false, false, true);
+  $("#playerAdd").onclick = () => {
+    if (!S) return;
+    const t = teamByKey(playerTeam);
+    const a = roster.find((x) => String(x.id) === $("#playerPick").value);
+    if (!t || !a) return playerSay("Pick the player first.");
+    const list = S.players || [];
+    const max = S.playermax || 8;
+    if (list.some((pl) => pl.l === t[0] && pl.id === a.id)) return playerSay(a.name + " is a favorite already.");
+    if (list.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
+    playerSay("");
+    setGD({ player: [t[0], a.id, t[1], a.panel].join(",") }).then((ok) => ok && toast("Added " + a.name));
+  };
+  renderPlayerForm();
+
   // ---- team chooser ------------------------------------------------------
-  // The picker sets My team, with pickFav adds a favorite, and with pickBet
-  // picks the team for a new bet.
+  // The picker sets My team, with pickFav adds a favorite, with pickBet
+  // picks the team for a new bet, and with pickPlayer the team whose roster
+  // the Favorite players card lists.
   let pickFav = false;
   let pickBet = false;
+  let pickPlayer = false;
   const choose = (t) => {
-    if (pickBet) {
+    if (pickPlayer) {
+      playerTeam = keyOf(t);
+      loadRoster(playerTeam);
+    } else if (pickBet) {
       betTeam = keyOf(t);
       renderBetForm();
     } else if (pickFav) addFav(t);
@@ -1514,7 +1684,7 @@
     // series). A tour or a series is never a favorite yet, and search finds
     // one by its tab's name too.
     const words = (t) => (isBoard(t[0]) ? lgInfo(t[0]).tab + " " : "") + t[3] + " " + t[2];
-    const list = TEAMS.filter((t) => !((pickFav || pickBet) && isBoard(t[0]))
+    const list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer) && isBoard(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1544,16 +1714,18 @@
   // A dialog: Tab stays inside it, and closing hands focus back to the
   // button that opened it.
   let pickerFrom = null;
-  const openPicker = async (fav, bet = false) => {
+  const openPicker = async (fav, bet = false, player = false) => {
     pickFav = fav;
     pickBet = bet;
+    pickPlayer = player;
     pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
-    const cur = bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
-    league = cur && !((fav || bet) && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
-    // Golf and racing can't be a favorite yet, or take a bet: no Golf or
-    // Racing tab while picking one.
-    tabButtons.forEach((b) => { b.hidden = (fav || bet) && isBoard(b.dataset.lg); });
+    $(".sheet").setAttribute("aria-label", player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+    const cur = player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
+    const team = fav || bet || player;
+    league = cur && !(team && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
+    // Golf and racing can't be a favorite yet, take a bet or have favorite
+    // players: no Golf or Racing tab while picking one.
+    tabButtons.forEach((b) => { b.hidden = team && isBoard(b.dataset.lg); });
     try {
       const list = await loadGames(false);
       if (list.some((g) => g.state === "in")) league = "now";
@@ -1780,6 +1952,7 @@
   const renderAll = () => {
     renderBoard();
     renderBets();
+    renderPlayers();
     renderUpNext();
     renderSplash();
     renderCurrentTeam();

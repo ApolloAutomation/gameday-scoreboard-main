@@ -776,7 +776,7 @@ test("ticker, celebration and startup switches post 0 and 1", async ({ page, req
 
 test("big-play switches post the alert mask, for the sports the panel follows", async ({ page, request }) => {
   const sw = (name) => page.getByRole("switch", { name, exact: true });
-  const ALL = 524287;  // every alert type on (kAlertBits in set_request.h)
+  const ALL = 1048575;  // every alert type on (kAlertBits in set_request.h)
   // A Cowboys panel with no favorites: football's switches only.
   await reset(request, { favs: [{}, {}, {}, {}] });
   await page.goto("/");
@@ -821,10 +821,15 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await page.reload();
   await expect(sw("Hockey: Goal")).toBeVisible();
   await expect(sw("Soccer: Goal")).toBeVisible();
-  await expect(page.locator("#alertCtls .ctl")).toHaveCount(19);
+  await expect(page.locator("#alertCtls .ctl")).toHaveCount(20);
   // Each sport's heading sits as far from the switch above it as the other cards' headings do.
   const heads = page.locator("#alertCtls .alertSport .sub");
-  await expect(heads).toHaveCount(5);
+  await expect(heads).toHaveCount(6);
+  // Favorite players' switch is the last bit, whatever the sports.
+  await expect(sw("Favorite players: Scores")).toBeChecked();
+  await sw("Favorite players: Scores").click();
+  await expectSet(request, { alerts: String(ALL - (1 << 19)) });
+  await expect(sw("Favorite players: Scores")).not.toBeChecked();
   for (const h of await heads.all()) await expect(h).toHaveCSS("margin-top", "14px");
 
   // Firmware from before alerts: no switches, no Favorite teams only.
@@ -2619,4 +2624,143 @@ test("firmware without bets has no Bets card", async ({ page, request }) => {
   await expect(page.locator("#gstate")).toHaveText("UPCOMING");
   await expect(page.locator("#betCard")).toBeHidden();
   await expect(page.locator("#betline")).toBeHidden();
+});
+
+// Favorite players (components/gameday/players.h): the card reads a team's
+// roster from ESPN in the browser, posts the player with the name the panel
+// shows, and the board lists their stat lines on its game.
+const BILLS_ROSTER = {
+  team: { id: "2", abbreviation: "BUF" },
+  athletes: [
+    { position: "offense", items: [
+      { id: "3918298", firstName: "Josh", lastName: "Allen", displayName: "Josh Allen", jersey: "17", position: { abbreviation: "QB" } },
+      { id: "4379399", firstName: "James", lastName: "Cook", displayName: "James Cook", jersey: "4", position: { abbreviation: "RB" } },
+      { id: "2576623", firstName: "Marquez", lastName: "Valdes-Scantling", displayName: "Marquez Valdes-Scantling", jersey: "11", position: { abbreviation: "WR" } },
+    ] },
+    { position: "specialTeam", items: [
+      { id: "3051392", firstName: "Tyler", lastName: "Bass", displayName: "Tyler Bass", jersey: "2", position: { abbreviation: "PK" } },
+    ] },
+  ],
+};
+// Flat, as ESPN sends some leagues' rosters, with two brothers.
+const DEVILS_ROSTER = {
+  athletes: [
+    { id: "4565222", firstName: "Jack", lastName: "Hughes", displayName: "Jack Hughes", jersey: "86", position: { abbreviation: "C" } },
+    { id: "4697389", firstName: "Luke", lastName: "Hughes", displayName: "Luke Hughes", jersey: "43", position: { abbreviation: "D" } },
+    { id: "3114758", firstName: "Nico", lastName: "Hischier", displayName: "Nico Hischier", jersey: "13", position: { abbreviation: "C" } },
+    { id: "x", displayName: "Not an id" },
+  ],
+};
+const ALLEN = { l: "nfl", id: 3918298, team: 2, name: "ALLEN" };
+const pickPlayerTeam = async (page, name) => {
+  await page.locator("#playerTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
+  // A golf tour or a racing series has no players to pick.
+  await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
+  await page.locator("#q").fill(name);
+  await page.locator("#tiles .tile", { hasText: name }).click();
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  await expect(page.locator("#playerTeam")).toHaveText(name);
+};
+
+test("the Favorite players card adds a player from a team's roster and removes one", async ({ page, request }) => {
+  await reset(request);
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster", (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await expect(page.locator("#playerCard")).toBeVisible();
+  await expect(page.locator("#playerList")).toHaveText("No favorite players yet.");
+  await expect(page.locator("#playerAdd")).toBeHidden();
+  await pickPlayerTeam(page, "Buffalo Bills");
+  // Grouped by position: every group's players, by last name.
+  await expect(page.locator("#playerPick option")).toHaveText([
+    "Josh Allen \u00b7 QB #17", "Tyler Bass \u00b7 PK #2", "James Cook \u00b7 RB #4", "Marquez Valdes-Scantling \u00b7 WR #11",
+  ]);
+  await page.locator("#playerPick").selectOption("3918298");
+  await page.locator("#playerAdd").click();
+  // The name the panel shows: the last name in capitals.
+  await expectSet(request, { player: "nfl,3918298,2,ALLEN" });
+  await expect(page.locator("#toast")).toHaveText("Added Josh Allen");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(1);
+  await expect(page.locator("#playerList .playerrow label")).toContainText("ALLEN");
+  await expect(page.locator("#playerList .playerrow small")).toHaveText("Buffalo Bills");
+  // Again: the page says so and posts nothing.
+  await page.locator("#playerAdd").click();
+  await expect(page.locator("#playerMsg")).toHaveText("Josh Allen is a favorite already.");
+  // A long name is cut to the panel's 10 characters.
+  await page.locator("#playerPick").selectOption("2576623");
+  await page.locator("#playerAdd").click();
+  await expectSet(request, { player: "nfl,2576623,2,VALDES-SCA" });
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["ALLEN", "VALDES-SCA"]);
+  await page.getByRole("button", { name: "Remove ALLEN" }).click();
+  await expectSet(request, { playerdel: "nfl,3918298" });
+  await expect(page.locator("#toast")).toHaveText("Removed ALLEN");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(1);
+  await expect(page.locator("#playerList .playerrow label")).toContainText("VALDES-SCA");
+});
+
+test("the Favorite players card says when ESPN's roster can't be read, and tells two brothers apart", async ({ page, request }) => {
+  await reset(request);
+  let fail = true;
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/11/roster",
+    (route) => (fail ? route.fulfill({ status: 500, body: "" }) : route.fulfill({ json: DEVILS_ROSTER })));
+  await page.goto("/");
+  await pickPlayerTeam(page, "New Jersey Devils");
+  await expect(page.locator("#playerMsg")).toHaveText(
+    "Couldn't read the New Jersey Devils roster from ESPN. Check this device's internet connection and try again.");
+  await expect(page.locator("#playerAdd")).toBeHidden();
+  fail = false;
+  await pickPlayerTeam(page, "New Jersey Devils");
+  await expect(page.locator("#playerMsg")).toBeHidden();
+  // Flat: each player once, the one without an id left out.
+  await expect(page.locator("#playerPick option")).toHaveCount(3);
+  await page.locator("#playerPick").selectOption("4697389");
+  await page.locator("#playerAdd").click();
+  // A teammate has the same last name: the initial says which.
+  await expectSet(request, { player: "nhl,4697389,11,L. HUGHES" });
+  await page.locator("#playerPick").selectOption("3114758");
+  await page.locator("#playerAdd").click();
+  await expectSet(request, { player: "nhl,3114758,11,HISCHIER" });
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(2);
+});
+
+test("a full Favorite players card says to remove one first", async ({ page, request }) => {
+  const eight = Array.from({ length: 8 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
+  await reset(request, { players: eight });
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster", (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(8);
+  await pickPlayerTeam(page, "Buffalo Bills");
+  await page.locator("#playerAdd").click();
+  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.player)).toEqual([]);
+});
+
+test("the board shows the favorite players' stat lines on its game", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  await reset(request, {
+    game: { ...g, ...LIVE, pl: ["PRESCOTT 18/24, 211 YDS, 1 TD", "LAMB 6 REC, 88 YDS"] },
+    players: [{ l: "nfl", id: 3059915, team: 6, name: "PRESCOTT" }, { l: "nfl", id: 4241389, team: 6, name: "LAMB" }],
+    status: "DAL 14 PHI 10 | 8:12 2nd | PRESCOTT 18/24, 211 YDS, 1 TD | LAMB 6 REC, 88 YDS",
+  });
+  await page.goto("/");
+  await expect(page.locator("#playerline .bet")).toHaveText(["PRESCOTT 18/24, 211 YDS, 1 TD", "LAMB 6 REC, 88 YDS"]);
+  await expect(page.locator("#ticker")).toContainText("LAMB 6 REC, 88 YDS");
+  // No line while ESPN names none of them.
+  await reset(request, { game: { ...g, ...LIVE }, players: [ALLEN] });
+  await page.reload();
+  await expect(page.locator("#gstate")).toHaveText("LIVE");
+  await expect(page.locator("#playerline")).toBeHidden();
+});
+
+test("firmware without favorite players has no card and no switch for them", async ({ page, request }) => {
+  await reset(request, { players: null, playermax: null, team: {}, favs: [{}, {}, {}, {}] });
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.getByRole("switch", { name: "Hockey: Goal", exact: true })).toBeVisible();
+  await expect(page.locator("#playerCard")).toBeHidden();
+  await expect(page.locator("#playerline")).toBeHidden();
+  await expect(page.getByRole("switch", { name: "Favorite players: Scores", exact: true })).toBeHidden();
 });
