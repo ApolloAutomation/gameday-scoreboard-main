@@ -78,6 +78,7 @@ If the layout doesn't match the panel, the picture looks wrong:
 
 :::note[Coming in the next release]
 - **The picture repeats across the panels, or some panels stay dark**: the count doesn't match. Pick the picture with as many panels as you have.
+- **The parts of a three or four wide board show in the wrong order**: put the panels in the reverse order. Seen from the front, the panel with the board goes at the right-hand end.
 - **Part of a two rows of two board is upside down**: the wiring choice doesn't match how the rows are mounted.
 
 | You picked | What you see | Pick instead |
@@ -88,6 +89,8 @@ If the layout doesn't match the panel, the picture looks wrong:
 | **All upright** | The top half upside down | **Top row upside down** |
 | **Top row upside down** | Both halves upside down | **Bottom row upside down** |
 | **Top row upside down** | The top half upside down | **All upright** |
+
+If the bottom half's left and right sides are swapped, or each bottom panel shows its own part upside down, the bottom row is wired the other way round and no choice fixes it. See [Panels and power](/diy/panels/#chain-two-64x64-panels) for where each panel goes.
 :::
 
 More fixes are in [Troubleshooting](/help/troubleshooting/).

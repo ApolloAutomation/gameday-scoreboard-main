@@ -55,13 +55,13 @@ If the two halves of the board show up in the wrong order, swap the two panels.
 :::
 
 :::note[Coming in the next release]
-**Three or four in a row** chain the same way: the board to the first panel's input, then each panel's output to the next panel's input.
+**Three or four in a row** chain the same way: the board to the first panel's input, then each panel's output to the next panel's input. Seen from the back, where the cables are, the panel with the board is the left-hand end and the chain runs to the right, so seen from the front it's the right-hand end. If the parts of the board show in the wrong order, put the panels in the reverse order.
 
-**Two rows of two** is one chain of four. Seen from the back, where the cables are: the panel with the board on it is top left, the second panel is top right, the third is under the second (bottom right) and the fourth is under the first (bottom left). Most builds turn the bottom row upside down, folded under the top row, so every cable stays short. Under **How the rows are mounted** on the device page, pick:
+**Two rows of two** is one chain of four. Where each panel goes depends on which row, if any, is upside down, so pick the build you have under **How the rows are mounted** on the device page. Seen from the back, where the cables are:
 
-- **Bottom row upside down** for the folded build. A new panel starts with this one.
-- **All upright** if every panel stands the right way up, with a longer cable from the second panel back to the third.
-- **Top row upside down** if the top row is the one you turned over.
+- **Bottom row upside down**, the folded build: the panel with the board is top left and the second is top right. The bottom row is turned upside down, folded under the top row, with the third panel under the second and the fourth under the first, so every cable stays short. A new panel starts with this choice.
+- **All upright**: every panel stands the right way up. The panel with the board is top left and the second is top right, then a longer cable runs from the second back across to the third, under the first. The fourth is under the second.
+- **Top row upside down**: the top row is the one turned over. The panel with the board is top right and the second is top left, with the third under the second and the fourth under the first. Seen from the front, the panel with the board is top left.
 
 If part of the board shows upside down, the choice doesn't match your wiring:
 
@@ -73,6 +73,8 @@ If part of the board shows upside down, the choice doesn't match your wiring:
 | **All upright** | The top half upside down | **Top row upside down** |
 | **Top row upside down** | Both halves upside down | **Bottom row upside down** |
 | **Top row upside down** | The top half upside down | **All upright** |
+
+If the bottom half's left and right sides are swapped with **All upright**, or each bottom panel shows its own part upside down with **Bottom row upside down**, every panel stands upright but the third sits under the second. The bottom row then runs the other way and no choice fixes it. Move the third panel under the first and the fourth under the second and keep **All upright**, or turn the bottom row upside down and pick **Bottom row upside down**.
 :::
 
 ## Change the layout
