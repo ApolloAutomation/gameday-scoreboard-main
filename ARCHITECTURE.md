@@ -74,8 +74,11 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   device page's `http://<ip>/` (`components/gameday/setup_qr.h`). `boot_view`
   sets it with `lv_qrcode_update`, only when the text changes.
 - `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
-  component sends, for 64 and 128 pixel wide layouts, with the splashes and
-  fireworks (which splashes get them: `splash_fireworks`, `alerts.h`).
+  component sends, for boards 64, 128, 192 and 256 pixels wide, with the
+  splashes and fireworks (which splashes get them: `splash_fireworks`,
+  `alerts.h`). A 2x2 (128x128) has the 128 wide board in its top half and the
+  time, the date and a bigger ticker in its bottom half; a splash covers all
+  of it (`components/gameday/board_layout.h`).
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.
@@ -93,7 +96,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `players.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `demo.cpp` is the scripted demo. `teams.h`, `team_colors.h` and
@@ -493,10 +496,10 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
-  the panel's lines), `test_bets.cpp` (manual bets), `test_watch.cpp` (the
-  big-play watcher: which games, big plays from day scoreboards, when a read
-  may run, when the board switches and goes back), `test_players.cpp`
-  (favorite players) and `test_networks.cpp`
+  the panel's lines on one to four panels), `test_bets.cpp` (manual bets),
+  `test_watch.cpp` (the big-play watcher: which games, big plays from day
+  scoreboards, when a read may run, when the board switches and goes back),
+  `test_players.cpp` (favorite players) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

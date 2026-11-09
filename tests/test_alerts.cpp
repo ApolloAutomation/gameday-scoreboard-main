@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "alerts.h"
+#include "board_layout.h"
 #include "panel_text.h"
 #include "splash_layout.h"
 
@@ -812,26 +813,33 @@ void test_words_fit() {
   g.team_color = "002a5c";
   g.opp_color = "004c54";
   // Every type, side and abbreviation length (ESPN's run from 2 to 5
-  // letters), on one panel (10 characters, 3 lines of spleen_12 from y 18)
-  // and two (16 characters, 3 lines of spleen_16 from y 16), as the panel
-  // gets it. A phrase put under the abbreviation stays there.
+  // letters), as the panel gets it, on every board: one panel (10
+  // characters, 3 lines of spleen_12 from y 18), two panels or a 2x2 (16
+  // characters, 3 lines of spleen_16 from y 16 of the board's 64 rows), and
+  // three or four in a row, where the words sized for two panels run in a
+  // label 192 or 256 px wide (24 or 32 characters; board_layout.h). A phrase
+  // put under the abbreviation stays there.
   for (int t = 1; t <= (int) Alert::SCORE; t++)
     for (AlertSide side : {AlertSide::TEAM, AlertSide::OPP, AlertSide::GAME})
       for (const char *abbr : {"NY", "DAL", "UTAH", "UMASS"})
         for (bool neutral : {false, true})
-          for (bool wide : {false, true})
+          for (int w : {64, 128, 192, 256})
             for (int points : {1, 4, 12}) {
+              const bool wide = w >= 128;  // GamedayComponent::wide_(): two panels or more
               g.team_abbr = g.opp_abbr = abbr;
               BigPlay p{(Alert) t, side, points};
               const std::string raw = big_play_splash(p, g, neutral, wide).text;
               const std::string text = panel_text(raw, true);
-              const Lines lines = layout(text, wide ? 16 : 10);
+              const Lines lines = layout(text, esphome::gameday::splash_chars(w));
               const bool own_line = raw.find('\n') != std::string::npos;
               const bool ok = !text.empty() && !lines.empty() && lines.size() <= 3 &&
                               (!own_line || lines[0] == abbr);
               ACHECK(ok);
               if (!ok)
-                printf("  type %d side %d abbr %s wide %d: \"%s\"\n", t, (int) side, abbr, (int) wide, text.c_str());
+                printf("  type %d side %d abbr %s width %d: \"%s\"\n", t, (int) side, abbr, w, text.c_str());
+              // Never more lines than on two panels.
+              if (w > 128)
+                ACHECK(lines.size() <= layout(text, 16).size());
             }
   ACHECK(big_play_splash(BigPlay{}, g, false, false).text.empty());
 }

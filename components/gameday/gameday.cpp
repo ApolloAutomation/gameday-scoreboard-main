@@ -4467,10 +4467,12 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
     f.opponent_record = ::espn::soccer_board_record(g.opp_record);
   }
   if (!standing.empty()) {
-    // In the record's place, in the room beside the clock while it shows;
-    // the record when none of it fits.
+    // In the record's place, in the room beside the clock while it shows
+    // (all of it on three or four panels, where the clock is far away); the
+    // record when none of it fits.
     const int clock_px = (int) f.clock_text.size() * ::espn::kClockCharPx;
-    std::string board = ::espn::board_standing(standing, ::espn::record_row_chars(clock_px));
+    std::string board =
+        ::espn::board_standing(standing, ::espn::record_row_chars(clock_px, this->board_px_()));
     if (!board.empty())
       f.team_record = std::move(board);
   }

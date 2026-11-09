@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "board_layout.h"
 #include "panel_text.h"
 #include "players.h"
 #include "splash_layout.h"
@@ -719,18 +720,28 @@ void test_fireworks() {
 }
 
 // Every word a favorite's splash can have, with every name length the panel
-// keeps, on one panel and two: the name on its own first line, three lines
-// at most, no word cut.
+// keeps, on every board: one to four panels in a row and the 2x2, whose
+// splash covers all four panels with its words in the middle 64 rows
+// (board_layout.h). The name on its own first line, three lines at most that
+// end inside those 64 rows, no word cut, and on three or four panels never
+// more lines than on two.
 void test_splash_fits() {
   using esphome::gameday::panel_text;
+  using esphome::gameday::splash_box;
+  using esphome::gameday::splash_chars;
+  using esphome::gameday::SplashBox;
   const char *words[] = {"TOUCHDOWN", "FIELD GOAL", "SAFETY", "SCORE", "RBI", "4 RBI", "HOME RUN",
                          "GRAND SLAM", "WALK-OFF", "GOAL", "PENALTY GOAL", "LEAD CHANGE", "BUZZER BEATER"};
+  struct Screen {
+    int w, h;
+  };
   GameSnapshot g;
   g.team_color = "002a5c";
   for (const char *word : words)
     for (size_t n = 1; n <= (size_t) kPlayerNameMax; n++)
-      for (bool wide : {false, true})
+      for (Screen sc : {Screen{64, 64}, Screen{128, 64}, Screen{192, 64}, Screen{256, 64}, Screen{128, 128}})
         for (const char *shape : {"A", "A-", "A ", "A."}) {
+          const bool wide = sc.w >= 128;  // GamedayComponent::wide_(): two panels or more
           std::string name(n, shape[0]);
           if (n >= 3 && shape[1] != 0)
             name[n / 2] = shape[1];
@@ -740,12 +751,17 @@ void test_splash_fits() {
           s.word = word;
           const std::string raw = player_splash(s, g, list.p, wide).text;
           const std::string text = panel_text(raw, true);
-          const auto lines = splash_test::layout(text, wide ? 16 : 10);
+          const auto lines = splash_test::layout(text, splash_chars(sc.w));
           const std::string kept = list.p[0].name;
-          const bool ok = !lines.empty() && lines.size() <= 3 && lines[0].compare(0, kept.size(), kept) == 0;
+          const SplashBox b = splash_box(sc.w, sc.h);
+          const int line_rows = wide ? 16 : 12;  // spleen_16 from two panels, spleen_12 on one
+          const bool ok = !lines.empty() && lines.size() <= 3 && lines[0].compare(0, kept.size(), kept) == 0 &&
+                          b.text_y + (int) lines.size() * line_rows <= b.band_y + esphome::gameday::kBoardRows;
           PCHECK(ok);
           if (!ok)
-            printf("  \"%s\" wide %d\n", text.c_str(), (int) wide);
+            printf("  \"%s\" on %dx%d\n", text.c_str(), sc.w, sc.h);
+          if (sc.w > 128)
+            PCHECK(lines.size() <= splash_test::layout(text, 16).size());
         }
   PlayerScore none;
   List any{make_player(NFL, 1, 2, "X")};

@@ -24,6 +24,7 @@
 #include "auto_update.h"
 #include "badge.h"
 #include "bets.h"
+#include "board_layout.h"
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"
@@ -546,8 +547,14 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // The splash for the game on the board, from the read before (prev_) to
   // this one (game_). neutral: the live modes, where nobody is "our" team.
   ::espn::Splash board_splash_(bool neutral) const;
-  // One panel or two: how wide a splash's words can run.
+  // A board two panels wide or more (a 2x2 too): its words, a splash's and a
+  // leaderboard's, are sized for 128 px, which fit three and four in a row too
+  // (board_layout.h, splash_chars).
   bool wide_() const { return this->panels_ != nullptr && this->panels_->cols() >= 2; }
+  // The board's width in pixels: 64 a panel in a row (a 2x2 is two wide).
+  int board_px_() const {
+    return this->panels_ != nullptr ? board_px(this->panels_->cols()) : ::espn::kBoardPx;
+  }
   // The idle display and the night hours (idle.h), in their own blob
   // (gameday_idle_v1). Its size is fixed: a blob that changes size fails to
   // load and resets every setting in it, so later settings take the spare
