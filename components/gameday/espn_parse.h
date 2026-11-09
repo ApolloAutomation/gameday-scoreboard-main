@@ -55,6 +55,9 @@ struct Baseball {
   std::string batter, pitcher;               // "A. Riley", while a half inning is on
   std::string team_probable, opp_probable;   // starting pitchers, pre-game
   std::string series;                        // "LAD lead series 2-1", postseason
+  // Innings scheduled: 9, or 7 for a minor league doubleheader's games (MLB
+  // Stats API; ESPN's reads leave the 9).
+  uint8_t innings{9};
 };
 
 // One goal from a soccer event's details. Names are plain ASCII (the panel
@@ -544,6 +547,11 @@ std::string day_label(const struct tm &kick_local, const struct tm &now_local);
 // needs the game's day uses noon Eastern instead: the same calendar day from
 // Hawaii to central Europe.
 inline int64_t tbd_day_epoch(int64_t placeholder) { return placeholder + 12 * 3600; }
+// Which of two games came later, as a start to compare: a game with no start
+// time goes after every game of its day that has one, the way a
+// doubleheader's game 2 (minor league baseball's always has none) follows
+// game 1.
+inline int64_t day_order(int64_t kickoff, bool time_tbd) { return time_tbd ? kickoff + 24 * 3600 - 1 : kickoff; }
 int64_t parse_iso8601_z(const std::string &s);
 // An HTTP Date header, "Sat, 17 Oct 2026 23:39:29 GMT" (the only form a
 // server may send), as a UTC epoch. 0 when it is anything else or outside

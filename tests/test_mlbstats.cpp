@@ -11,7 +11,11 @@
 #include <string>
 #include <vector>
 
+#include "alerts.h"
+#include "bets.h"
+#include "follow.h"
 #include "health.h"
+#include "idle.h"
 #include "offseason.h"
 #include "poll_timing.h"
 #include "recap.h"
@@ -873,6 +877,190 @@ void test_scan_backoff() {
   MCHECK(mixed.waiting(5000));
 }
 
+// The idle display's scores, read outside the mode: they leave minor league
+// baseball out while MLB's wait runs, and their own minor league read that
+// fails counts in it, alone or beside ESPN's leagues.
+void test_side_backoff() {
+  std::vector<League> leagues = {League::MLB, League::MILB, League::NHL};
+  MCHECK(drop_mlb_stats(leagues));
+  MCHECK_EQ(leagues.size(), (size_t) 2);
+  MCHECK(leagues[0] == League::MLB && leagues[1] == League::NHL);
+  MCHECK(!drop_mlb_stats(leagues));
+  std::vector<League> alone = {League::MILB};
+  MCHECK(drop_mlb_stats(alone));
+  MCHECK(alone.empty());  // start_side_job_ then waits for MLB, reading nothing
+
+  HostWait w;
+  // MLB refuses the scores' scan, beside ESPN's leagues or alone: its wait
+  // starts, with Retry-After, and grows with each refusal.
+  uint32_t ms = mlb_side_result(w, true, true, true, 30 * 60 * 1000, 0, 1000);
+  MCHECK(ms >= 30u * 60 * 1000);
+  MCHECK(w.waiting(1000 + 29 * 60 * 1000));
+  MCHECK_EQ((int) w.run.streak, 1);
+  w.end_wait();
+  MCHECK(mlb_side_result(w, true, true, false, 0, 0, 2000) > 0u);
+  MCHECK_EQ((int) w.run.streak, 2);
+  // A read that didn't ask MLB leaves it alone; an answer starts it over.
+  MCHECK_EQ(mlb_side_result(w, false, false, false, 0, 0, 3000), 0u);
+  MCHECK_EQ((int) w.run.streak, 2);
+  MCHECK_EQ(mlb_side_result(w, true, false, false, 0, 0, 3000), 0u);
+  MCHECK_EQ((int) w.run.streak, 0);
+  MCHECK(!w.waiting(3000));
+}
+
+// The features that came after minor league baseball, with a minor league
+// game: big-play splashes, Follow this game, bets, My team today, ranks and
+// the Standing setting.
+void test_merged_features() {
+  // Big plays. MLB's minor league scores don't say how a run scored: every
+  // run is RUN or SCORES, under the Runs switch, never a home run or a grand
+  // slam, which would need ESPN's play.
+  GameSnapshot top = game("mlbstats_game_top.json", kLicey);
+  GameSnapshot mid = game("mlbstats_game_middle.json", kLicey);
+  MCHECK(top.last_play.empty() && top.play_type.empty() && mid.play_points == 0);
+  const uint32_t runs = alert_bit(Alert::RUN);
+  const uint32_t homers = alert_bit(Alert::HOME_RUN) | alert_bit(Alert::GRAND_SLAM);
+  MCHECK_EQ(decide_splash(top, mid, true, false, runs).text, std::string("RUN!"));
+  MCHECK(decide_splash(top, mid, true, false, homers).text.empty());
+  MCHECK(decide_splash(top, mid, true, false, kAlertsAll & ~runs).text.empty());
+  // The same read twice, or a read with nothing new: no splash
+  MCHECK(decide_splash(mid, mid, true).text.empty());
+  MCHECK(decide_splash(top, top, true).text.empty());
+
+  // A walk-off: the home side goes ahead in the bottom of the last inning,
+  // the 9th, or the 7th in a doubleheader's 7-inning game, read live and at
+  // the final. The final's read after a live walk-off is the win, once.
+  MCHECK_EQ((int) game("mlbstats_game_final.json", kDurham).mlb.innings, 9);
+  {
+    std::string doc = slurp("mlbstats_game_bottom.json");
+    size_t at9 = doc.find("\"scheduledInnings\":9");
+    MCHECK(at9 != std::string::npos);
+    std::string seven = doc;
+    for (size_t p = 0; (p = seven.find("\"scheduledInnings\":9", p)) != std::string::npos;)
+      seven.replace(p + 19, 1, "7");
+    GameSnapshot g;
+    MCHECK(game_read(seven, kOriente, 0, g));
+    MCHECK_EQ((int) g.mlb.innings, 7);
+  }
+  GameSnapshot bot = game("mlbstats_game_bottom.json", kOriente);  // ORI at home, Bot 9th
+  MCHECK(bot.team_home && bot.mlb.half == Half::BOTTOM);
+  GameSnapshot tied = bot, ahead = bot, fin = bot;
+  tied.team_score = tied.opp_score = 2;
+  tied.period = ahead.period = fin.period = 7;
+  ahead.team_score = 3;
+  ahead.opp_score = 2;
+  fin.team_score = 3;
+  fin.opp_score = 2;
+  fin.state = GameState::POST;
+  fin.completed = true;
+  fin.team_winner = true;
+  for (GameSnapshot *g : {&tied, &ahead, &fin})
+    g->mlb.innings = 7;
+  MCHECK_EQ(decide_splash(tied, ahead, true).text, std::string("WALK-OFF!"));
+  MCHECK_EQ(decide_splash(tied, fin, true).text, std::string("WALK-OFF!"));
+  MCHECK_EQ(decide_splash(ahead, fin, true).text, std::string("ORI WINS!"));
+  // In a 9-inning game the 7th is no walk-off: a run, then the win.
+  for (GameSnapshot *g : {&tied, &ahead, &fin})
+    g->mlb.innings = 9;
+  MCHECK_EQ(decide_splash(tied, ahead, true).text, std::string("RUN!"));
+  MCHECK_EQ(decide_splash(tied, fin, true).text, std::string("ORI WINS!"));
+
+  // Follow this game: a minor league game Live games picked is held while
+  // it's on, and let go at its final (Live games keeps no final).
+  FollowPin pin;
+  const int64_t t0 = top.kickoff_epoch + 3600;
+  MCHECK(follow_start(pin, true, true, top, t0));
+  MCHECK_EQ(pin.event_id, top.event_id);
+  MCHECK(follow_holds(pin, mid, t0 + 600, follow_after_final_s(false, 1800), 0));
+  GameSnapshot done = mid;
+  done.state = GameState::POST;
+  done.completed = true;
+  MCHECK(!follow_holds(pin, done, t0 + 1200, follow_after_final_s(false, 1800), 0));
+  MCHECK(!pin.on);
+  // In Favorite teams the final stays up for After the final first.
+  MCHECK(follow_start(pin, true, true, top, t0));
+  MCHECK(follow_holds(pin, done, t0 + 1200, follow_after_final_s(true, 1800), 0));
+  MCHECK(!follow_holds(pin, done, t0 + 1200 + 1800, follow_after_final_s(true, 1800), 0));
+  MCHECK(!follow_start(pin, true, true, done, t0));  // a final can't be followed
+
+  // Bets: a minor league team takes a bet like any other (gamePk is the
+  // game's id), and it's graded on MLB's score.
+  Bet b{};
+  b.team_id = kDurham;
+  b.league = (uint8_t) League::MILB;
+  b.type = (uint8_t) BetType::MONEYLINE;
+  b.side = (uint8_t) BetSide::TEAM;
+  MCHECK(bet_valid(b));
+  MCHECK_EQ(std::string(bet_team_abbr(b.league, kDurham)), std::string("DUR"));
+  GameSnapshot dur = game("mlbstats_game_final.json", kDurham);  // MEM 12, DUR 2
+  BetGame g;
+  g.league = (uint8_t) League::MILB;
+  g.event = bet_event_id(dur.event_id);
+  MCHECK_EQ(g.event, 816688u);
+  g.team_id = dur.team_id;
+  g.opp_id = dur.opp_id;
+  g.team_score = dur.team_score;
+  g.opp_score = dur.opp_score;
+  g.kickoff = dur.kickoff_epoch;
+  g.phase = BetPhase::FINAL;
+  b.placed = (uint32_t) (dur.kickoff_epoch - 3600);
+  MCHECK(bet_observe(b, g, dur.kickoff_epoch + 4 * 3600, dur.kickoff_epoch + 12 * 3600));
+  MCHECK_EQ((int) b.result, (int) BetResult::LOST);
+  MCHECK_EQ(bet_ticker(b, bet_status(b, &g, dur.kickoff_epoch + 4 * 3600)), std::string("DUR ML LOST"));
+
+  // No ranks and no standing: the MLB Stats API has no poll and no seed, so
+  // Seed or Place leaves a minor league team its record.
+  MCHECK(dur.team_rank == 0 && dur.opp_rank == 0);
+  Schedule s;
+  const std::string apr10 = reopened("mlbstats_team_dur_202604.json", "2026-04-10T00:00:00Z");
+  MCHECK_EQ(team_read(apr10, kDurham, at("2026-04-10T15:00:00Z"), s), 1);
+  MCHECK(s.seed == 0 && s.place.empty());
+  MCHECK(standing_text(Standing::SEED, s.seed, s.place).empty());
+  MCHECK(standing_text(Standing::PLACE, s.seed, s.place).empty());
+  MCHECK_EQ(espn::detail::records_line(dur, standing_text(Standing::SEED, s.seed, s.place)),
+            std::string("DUR 53-64 | MEM 66-52"));
+
+  // My team today after a restart: the team read names today's final too.
+  // 4/10, game 1 over and game 2 (no start time) still to come: game 1.
+  Schedule last;
+  std::string doc = reopened("mlbstats_team_dur_202604.json", "2026-04-10T20:40:00Z");
+  MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-10T23:30:00Z"), s, nullptr, 0, &last), 1);
+  MCHECK_EQ(s.event_id, std::string("815849"));
+  MCHECK(last.valid);
+  MCHECK_EQ(last.event_id, std::string("815845"));
+  MCHECK(!last.time_tbd);
+  int64_t since = at("2026-04-10T04:00:00Z");  // midnight in New York
+  MCHECK(want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
+  // Nothing over yet that day: the last final is the day before's, not today's.
+  doc = reopened("mlbstats_team_dur_202604.json", "2026-04-10T00:00:00Z");
+  MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-10T15:00:00Z"), s, nullptr, 0, &last), 1);
+  MCHECK_EQ(last.event_id, std::string("815855"));
+  MCHECK(!want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
+  // 4/11's doubleheader, both over: game 2, though its placeholder start is
+  // midnight Eastern, before game 1's. It replaces game 1's final kept.
+  doc = reopened("mlbstats_team_dur_202604.json", "2026-04-12T00:00:00Z");
+  MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-12T02:00:00Z"), s, nullptr, 0, &last), 1);
+  MCHECK_EQ(s.event_id, std::string("815848"));  // 4/12's game next
+  MCHECK_EQ(last.event_id, std::string("815849"));
+  MCHECK(last.time_tbd);
+  MCHECK_EQ(last.kickoff_epoch, at("2026-04-11T05:00:00Z"));
+  since = at("2026-04-11T04:00:00Z");
+  const int64_t game1 = day_order(at("2026-04-11T19:05:00Z"), false);
+  MCHECK(want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), game1));
+  MCHECK(!want_today_final(since, true, game1, day_order(last.kickoff_epoch, last.time_tbd)));
+  // and My team today shows game 2's final over game 1's
+  LocalDay day{since, since + 86400};
+  std::vector<TodayGame> today(2);
+  today[0] = TodayGame{true, GameState::POST, at("2026-04-11T19:05:00Z"), false};
+  today[1] = TodayGame{true, GameState::POST, at("2026-04-11T05:00:00Z"), true};
+  MCHECK_EQ(today_pick(today, day), 1);
+  std::swap(today[0], today[1]);
+  MCHECK_EQ(today_pick(today, day), 0);
+  // Without the list of finals asked for, the read is as before.
+  MCHECK_EQ(team_read(doc, kDurham, at("2026-04-12T02:00:00Z"), s), 1);
+  MCHECK_EQ(s.event_id, std::string("815848"));
+}
+
 void test_health() {
   Health h{};
   h.start = Restart::RESTART;
@@ -916,6 +1104,8 @@ int run_mlbstats_tests(int &total_checks) {
   test_day();
   test_host_wait();
   test_scan_backoff();
+  test_side_backoff();
+  test_merged_features();
   test_health();
   total_checks += checks;
   return failures;

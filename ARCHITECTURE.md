@@ -357,7 +357,8 @@ reads in `source_mlbstats.cpp`, all on its schedule endpoint with a
 `fields=` list that cuts each document on the server and an ArduinoJson
 filter as well: the team read (`mlb_team_url`, yesterday to ten days ahead
 at all four levels, about 4 KB, which also gives the Up next list, so no
-look-ahead or game-on-now read), the far read when that lists nothing
+look-ahead or game-on-now read, and today's last final for My team today
+after a restart), the far read when that lists nothing
 (`mlb_far_url`, 11 to 240 days ahead at the team's level, ids and dates only,
 about 10 KB: next season's opener), the game poll (`mlb_game_url`, one game
 with its line score and probable pitchers, about 1.4 KB; the line score
@@ -371,15 +372,20 @@ are post and not completed, as ESPN has them, and a game the API lists on
 several dates (postponed, then played) is read at the entry nearest the
 kickoff the board picked. A game with no start time (game 2 of a
 doubleheader) sits at midnight Eastern like ESPN's TBD games, and
-`pre_poll_near` reads a baseball one every minute on its day. Logos are
+`pre_poll_near` reads a baseball one every minute on its day, and
+`day_order` puts it after game 1 for My team today. Logos are
 MLB's 64 px PNG spots (`mlb_logo_url`). There are no team colors, last play
-or home run flag in the feed. `open_` tells the hosts apart (`is_mlb_url`):
+or home run flag in the feed, so its big-play splashes (`alerts.h`) are runs
+and walk-offs, the latter from the 7th in a 7-inning game
+(`Baseball::innings`), and it has no rank, seed or place. `open_` tells the hosts apart (`is_mlb_url`):
 an MLB read's status, refusals and `Retry-After` go to the job's `mlb_*`
 fields, and a job that read only MLB backs off on `mlb_wait_`
 (`HostWait`, poll_timing.h), never ESPN's run, and the other way round.
 Favorite Teams skips a favorite whose host is waiting (`host_waiting_`), a
 scan leaves MiLB out while MLB's wait runs, and a failed MiLB scan read
-beside ESPN's that answered backs off MLB alone. Its bytes count in the same
+beside ESPN's that answered backs off MLB alone. The idle display's scores
+reads keep to the same wait: they leave MiLB out while it runs, and their
+own failed MiLB read counts in it (`mlb_side_result`). Its bytes count in the same
 "ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`.
 
 ## The device page and its routes

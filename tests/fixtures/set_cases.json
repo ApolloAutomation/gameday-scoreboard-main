@@ -216,6 +216,8 @@
     {"name": "an over on the game of a team", "set": [["bet", "4,nfl,2,over,47.5"]], "expect": {"bets": [{"slot": 4, "l": "nfl", "id": 2, "type": "over", "half": 95}]}},
     {"name": "an under with a whole number", "set": [["bet", "5,nba,2,under,221"]], "expect": {"bets": [{"slot": 5, "l": "nba", "id": 2, "type": "under", "half": 442}]}},
     {"name": "a moneyline has no line", "set": [["bet", "8,epl,359,ml,"]], "expect": {"bets": [{"slot": 8, "l": "epl", "id": 359, "type": "ml", "half": 0}]}},
+    {"name": "a minor league team takes a bet, by its MLB id", "set": [["bet", "0,milb,234,spread,-1.5"]], "expect": {"bets": [{"slot": 1, "l": "milb", "id": 234, "type": "spread", "half": -3}]}},
+    {"name": "a bet on a minor league id that isn't a team is refused", "set": [["bet", "0,milb,4,ml,"]], "expect": {"bets": []}},
     {"name": "a new bet in a used slot replaces it", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["bet", "1,nfl,15,ml,"]], "expect": {"bets": [{"slot": 1, "l": "nfl", "id": 15, "type": "ml", "half": 0}]}},
     {"name": "bets list in slot order", "start": {"bets": [{"slot": 6, "l": "nhl", "id": 25, "type": "ml", "half": 0}]}, "set": [["bet", "2,mlb,15,under,8.5"]], "expect": {"bets": [{"slot": 2, "l": "mlb", "id": 15, "type": "under", "half": 17}, {"slot": 6, "l": "nhl", "id": 25, "type": "ml", "half": 0}]}},
     {"name": "betdel empties a slot", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}, {"slot": 4, "l": "nfl", "id": 2, "type": "over", "half": 95}]}, "set": [["betdel", "1"]], "expect": {"bets": [{"slot": 4, "l": "nfl", "id": 2, "type": "over", "half": 95}]}},

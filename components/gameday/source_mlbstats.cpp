@@ -275,7 +275,7 @@ static Side read_side(JsonObjectConst g, const char *key) {
 }
 
 int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedule &out,
-                      std::vector<Upcoming> *upcoming, size_t max) {
+                      std::vector<Upcoming> *upcoming, size_t max, Schedule *last_final) {
   JsonArrayConst dates = root["dates"];
   if (dates.isNull())
     return -1;
@@ -284,10 +284,26 @@ int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedu
   bool found = false;
   if (upcoming != nullptr)
     upcoming->clear();
+  if (last_final != nullptr)
+    *last_final = Schedule{};
   for (JsonObjectConst d : dates) {
     for (JsonObjectConst g : d["games"].as<JsonArrayConst>()) {
       uint32_t pk = g["gamePk"] | 0u;
       MlbState st = mlb_state(text(g["status"], "codedGameState"));
+      if (pk != 0 && st == MlbState::FINAL && last_final != nullptr) {
+        // The latest final listed before the game the read stops at, a
+        // doubleheader's game 2 (no start time) after game 1.
+        bool tbd = false;
+        int64_t kick = game_start(g, tbd);
+        if (kick > 0 && listed_on(d, kick) &&
+            (!last_final->valid ||
+             day_order(kick, tbd) >= day_order(last_final->kickoff_epoch, last_final->time_tbd))) {
+          last_final->valid = true;
+          last_final->event_id = std::to_string(pk);
+          last_final->kickoff_epoch = kick;
+          last_final->time_tbd = tbd;
+        }
+      }
       if (pk == 0 || st == MlbState::FINAL || st == MlbState::OFF)
         continue;
       bool tbd = false;
@@ -452,6 +468,7 @@ bool mlb_game_from_doc(JsonObjectConst root, uint32_t our_id, int64_t near_epoch
   b.opp_errors = them.errors;
   b.team_probable = std::move(us.probable);
   b.opp_probable = std::move(them.probable);
+  b.innings = (uint8_t) scheduled_innings(g);  // 7 for a doubleheader's games: a walk-off can come in the 7th
   if (s.state == GameState::IN) {
     b.half = half_from_detail(s.short_detail);
     if (b.half == Half::TOP || b.half == Half::BOTTOM) {

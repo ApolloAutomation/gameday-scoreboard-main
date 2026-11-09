@@ -338,14 +338,16 @@ inline bool today_has(const TodayGame &g, const LocalDay &day) {
 
 // Which game My team today shows: the first one today that hasn't ended, so a
 // doubleheader's second game counts down once the first is over; else the
-// final of the last one today, up until local midnight; -1 for the clock.
+// final of the last one today, up until local midnight; -1 for the clock. A
+// game 2 with no start time (day_order) comes after game 1.
 inline int today_pick(const std::vector<TodayGame> &games, const LocalDay &day) {
+  auto order = [&games](int i) { return day_order(games[i].kickoff, games[i].tbd); };
   int pick = -1;
   for (size_t i = 0; i < games.size(); i++) {
     const TodayGame &g = games[i];
     if (!today_has(g, day) || g.state == GameState::POST || g.state == GameState::NOT_FOUND)
       continue;
-    if (pick < 0 || g.kickoff < games[pick].kickoff)
+    if (pick < 0 || order((int) i) < order(pick))
       pick = (int) i;
   }
   if (pick >= 0)
@@ -354,7 +356,7 @@ inline int today_pick(const std::vector<TodayGame> &games, const LocalDay &day) 
     const TodayGame &g = games[i];
     if (!today_has(g, day) || g.state != GameState::POST)
       continue;
-    if (pick < 0 || g.kickoff > games[pick].kickoff)
+    if (pick < 0 || order((int) i) > order(pick))
       pick = (int) i;
   }
   return pick;
@@ -364,7 +366,9 @@ inline int today_pick(const std::vector<TodayGame> &games, const LocalDay &day) 
 // final to the next game (MLB, the NBA, the WNBA, men's college basketball,
 // the NHL): that final is read too when it started today (since: the local
 // day's start, 0 when My team today isn't the idle display) and isn't the one
-// kept already (have: its start, 0 for none; a later one replaces it).
+// kept already (have: its start, as day_order gives it, 0 for none; a later
+// one replaces it). Minor league baseball's team read lists today's final
+// itself, which is read the same way.
 inline bool want_today_final(int64_t since, bool next_final, int64_t kickoff, int64_t have) {
   return since > 0 && next_final && kickoff >= since && kickoff > have;
 }

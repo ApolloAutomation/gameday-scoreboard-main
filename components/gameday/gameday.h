@@ -654,10 +654,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // display in My team or Favorite teams: it goes in between the mode's
     // reads and leaves their timing alone (start_side_job_).
     bool side{false};
-    // My team today: a team read whose look-ahead skips today's final reads
-    // that final into today_final too (idle.h, want_today_final). since is
-    // the local day's start, 0 when My team today isn't the idle display;
-    // have the start of the final kept already. Allocated only when read.
+    // My team today: a team read whose look-ahead skips today's final, or a
+    // minor league team read, which lists it, reads that final into
+    // today_final too (idle.h, want_today_final). since is the local day's
+    // start, 0 when My team today isn't the idle display; have the start of
+    // the final kept already (day_order). Allocated only when read.
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
@@ -773,9 +774,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Minor league baseball's reads from the MLB Stats API (source_mlbstats.h),
   // which the three above hand a MiLB team to (fetch_live_games_ reads its
   // day itself).
-  // With upcoming: only the coming days' read, for the Up next list.
+  // With upcoming: only the coming days' read, for the Up next list. With
+  // last_final: the coming days' read's latest final (parse_mlb_team).
   bool fetch_mlb_schedule_(const ::espn::Team *team, Schedule &out,
-                           std::vector<::espn::Upcoming> *upcoming = nullptr);
+                           std::vector<::espn::Upcoming> *upcoming = nullptr, Schedule *last_final = nullptr);
   bool fetch_mlb_game_(const Schedule &schedule, GameSnapshot &out);
   // epoch picks the day (now when 0); finals and pending, when given, also
   // get that day's finished games and the ones not started yet.
@@ -902,6 +904,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   GameSnapshot &side_card_() { return this->idle_snaps_[0]; }
   GameSnapshot &today_final_() { return this->idle_snaps_[1]; }
   const GameSnapshot &today_final_() const { return this->idle_snaps_[1]; }
+  // Job::today_have: when the kept final started (day_order), 0 for none.
+  int64_t today_have_() const {
+    const GameSnapshot &f = this->today_final_();
+    return f.valid ? ::espn::day_order(f.kickoff_epoch, f.time_tbd) : 0;
+  }
   void note_final_(const GameSnapshot &g);  // a followed game is final: My team today keeps it until midnight
   // The scores rotation as the idle display in My team or Favorite teams.
   // Its reads go in between the mode's own (start_side_job_ from loop()),

@@ -916,7 +916,7 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   j.schedule = e.sched;
   if (j.need_schedule) {
     j.today_since = this->today_since_();  // My team today: a favorite's final today
-    j.today_have = this->today_final_().valid ? this->today_final_().kickoff_epoch : 0;
+    j.today_have = this->today_have_();
   }
   size_t cups = ::espn::league_cup_count(e.team->league);
   if ((refresh >= 0 || cup >= 0) && cups > 0) {
@@ -2127,8 +2127,9 @@ void GamedayComponent::note_final_(const GameSnapshot &g) {
   if (!g.valid || g.state != GameState::POST || ::espn::is_board_sport(g.sport) || this->idle_snaps_.size() < 2)
     return;
   GameSnapshot &f = this->today_final_();
-  if (f.valid && f.event_id != g.event_id && f.kickoff_epoch > g.kickoff_epoch)
-    return;  // an older final the team endpoint still names
+  if (f.valid && f.event_id != g.event_id &&
+      ::espn::day_order(f.kickoff_epoch, f.time_tbd) > ::espn::day_order(g.kickoff_epoch, g.time_tbd))
+    return;  // an older final the team endpoint still names (game 1, with game 2's kept)
   f = g;
 }
 
@@ -2188,7 +2189,13 @@ bool GamedayComponent::start_side_job_() {
   j.scan_leagues = this->scan_leagues_();
   if (j.scan_leagues.empty())
     return false;
+  // MLB refused or failed: the scan goes on without minor league baseball
+  // until its wait ends (recap_job_ holds its days the same way).
+  if (this->mlb_wait_.waiting(now))
+    ::espn::drop_mlb_stats(j.scan_leagues);
   if (this->side_scan_ms_ == 0 || now - this->side_scan_ms_ >= this->side_rescan_ms_) {
+    if (j.scan_leagues.empty())
+      return false;  // only minor league baseball, which waits: the scan once the wait is over
     j.need_scan = true;
     j.want_finals = true;
     // Stamped now, so a scan that fails waits its turn like one that works.
@@ -2203,6 +2210,13 @@ bool GamedayComponent::start_side_job_() {
 void GamedayComponent::apply_side_job_() {
   Job &j = this->job_;
   const int64_t tnow = (int64_t) this->time_->timestamp_now();
+  // A minor league read here counts in MLB's own wait, which these reads
+  // keep to as well (start_side_job_, recap_job_).
+  const uint32_t mlb_ms =
+      ::espn::mlb_side_result(this->mlb_wait_, j.read_mlb, j.need_scan ? j.mlb_scan_failed : !j.recap_ok,
+                              j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), millis());
+  if (mlb_ms != 0)
+    ESP_LOGW(TAG, "Minor league scores for the idle display not read: next try in %us", (unsigned) (mlb_ms / 1000));
   bool ok;
   if (j.need_scan) {
     ok = j.scan_ok || !j.live.empty();
@@ -2987,7 +3001,7 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
 // ---- Minor league baseball (MLB Stats API, source_mlbstats.h) ----------------
 
 bool GamedayComponent::fetch_mlb_schedule_(const ::espn::Team *team, Schedule &out,
-                                           std::vector<::espn::Upcoming> *upcoming) {
+                                           std::vector<::espn::Upcoming> *upcoming, Schedule *last_final) {
   const int64_t now = (int64_t) this->time_->timestamp_now();
   Schedule s;
   // The coming days first; with nothing there, the next season's first game.
@@ -3001,7 +3015,7 @@ bool GamedayComponent::fetch_mlb_schedule_(const ::espn::Team *team, Schedule &o
     if (container == nullptr)
       return false;
     ContainerReader reader(container, this->espn_bytes_);
-    int r = ::espn::parse_mlb_team(reader, team->espn_id, now, s, upcoming, 4);
+    int r = ::espn::parse_mlb_team(reader, team->espn_id, now, s, upcoming, 4, pass == 0 ? last_final : nullptr);
     container->end();
     if (r < 0) {
       ESP_LOGW(TAG, "Schedule parse failed after %u bytes", (unsigned) reader.total());
@@ -3163,14 +3177,8 @@ void GamedayComponent::start_job_() {
     this->start_worker_();
     return;
   }
-  if (j.scan_leagues.size() > 1 && this->mlb_wait_.waiting(now)) {
-    // MLB refused or failed: the other leagues are scanned without it
-    for (size_t i = 0; i < j.scan_leagues.size(); i++)
-      if (::espn::is_mlb_stats(j.scan_leagues[i])) {
-        j.scan_leagues.erase(j.scan_leagues.begin() + i);
-        break;
-      }
-  }
+  if (j.scan_leagues.size() > 1 && this->mlb_wait_.waiting(now))
+    ::espn::drop_mlb_stats(j.scan_leagues);  // MLB refused or failed: the other leagues are scanned without it
   if (this->favorites_mode_()) {
     this->start_fav_job_(now);
     return;
@@ -3328,7 +3336,7 @@ void GamedayComponent::start_job_() {
     // A routine six-hour read must not cut a lingering final short.
     j.no_lookahead = this->post_since_ms_ != 0;
     j.today_since = this->today_since_();
-    j.today_have = this->today_final_().valid ? this->today_final_().kickoff_epoch : 0;
+    j.today_have = this->today_have_();
   }
   this->start_worker_();
 }
@@ -3419,9 +3427,21 @@ void GamedayComponent::run_job_() {
   }
   if (j.need_schedule) {
     Schedule s;
-    j.schedule_ok = this->fetch_schedule_(j.team, s);
+    // A minor league team read lists today's final too, which My team today
+    // keeps until midnight: after a restart or a change, it is read as well.
+    Schedule last_final;
+    j.schedule_ok = ::espn::is_mlb_stats(j.team->league) && j.today_since > 0
+                        ? this->fetch_mlb_schedule_(j.team, s, nullptr, &last_final)
+                        : this->fetch_schedule_(j.team, s);
     if (!j.schedule_ok)
       return;
+    if (last_final.valid &&
+        ::espn::want_today_final(j.today_since, true,
+                                 ::espn::day_order(last_final.kickoff_epoch, last_final.time_tbd), j.today_have)) {
+      j.today_final = std::make_unique<GameSnapshot>();
+      if (!this->fetch_mlb_game_(last_final, *j.today_final))
+        j.today_final.reset();
+    }
     j.schedule = s;
     ::espn::adopt_league(j.schedule, j.team->league);
     // ESPN can also still call a game live that the panel saw finish.

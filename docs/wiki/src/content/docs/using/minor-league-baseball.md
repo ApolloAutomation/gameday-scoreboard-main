@@ -41,7 +41,9 @@ A few things MLB's feed doesn't have:
 
 - **Team colors.** The abbreviations, the splashes and the off-season clock are white.
 - **The last play.** The ticker has the count, the outs, the pitcher and the batter, but no play.
-- **How a run scored.** Every run gets "RUN!" or "2 RUNS!", never the "HOME RUN" splash with fireworks.
+- **How a run scored.** Every run gets "RUN!" or "2 RUNS!", never the "HOME RUN" or "GRAND SLAM" splash with fireworks. In the Celebrations card every minor league run counts under **Runs**, so with **Runs** off a minor league game splashes no runs, and **Home run** and **Grand slam** make no difference there.
+
+A walk-off does get its splash, "WALK-OFF" with fireworks, under the **Walk-off** switch: the home team going ahead in the bottom of the 9th or later, or of the 7th in a doubleheader's 7-inning games. See [Baseball: MLB](/using/baseball/) for how it's told.
 
 ## The final
 
@@ -62,6 +64,13 @@ When the team's next game is more than 10 days away, the board shows the clock, 
 **Live games** has a **MiLB** button. It follows games at all four levels; you can't pick one level. When nothing is live and no team is picked, the finals rotation shows minor league finals with the other leagues' and the games still to come today. See [Modes](/using/modes/).
 
 The **On now** tab in the team picker lists today's minor league games too. Your browser reads them from MLB's stats service, the way it reads the other leagues from ESPN.
+
+## With the rest of the panel
+
+- **Follow this game** works for a minor league game in Live games and Favorite teams, the same as for any other game. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
+- **The idle display.** **Scores** includes minor league finals and games to come when a minor league team is your team or a favorite, or MiLB is one of your Live games leagues. While MLB fails or refuses the panel, those scores wait for it and the other leagues' go on. **My team today** shows a minor league team's game and keeps its final until midnight, after a restart too. In a doubleheader, game 2 shows as "Today TBD" with no countdown, and its final takes game 1's place. See [When nothing is on](/using/modes/#when-nothing-is-on-the-idle-display).
+- **Bets.** A minor league team can take a bet in the device page's **Bets** card, graded on the score from MLB. See [Bets](/using/bets/).
+- **Standing next to pro teams** leaves a minor league team its record, since MLB has no seed or place for it, and minor league teams have no rank.
 
 ## Data use
 

@@ -124,6 +124,24 @@ inline uint32_t mlb_scan_result(HostWait &w, bool read, bool failed, size_t leag
   return leagues > 1 ? w.fail(refused, retry_after_ms, rnd, now) : 0;
 }
 
+// The idle display's scores, read outside the mode (gameday.cpp's side
+// reads): their minor league read keeps to the MLB Stats API's wait too.
+// While it runs they leave minor league baseball out (start_side_job_), and
+// a minor league read of theirs that failed or was refused counts in it,
+// beside ESPN's leagues or alone, since no backoff of the mode's counts it.
+// An answer starts the run over. Returns the wait a failure started, 0 when
+// none did.
+inline uint32_t mlb_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
+                                uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return w.fail(refused, retry_after_ms, rnd, now);
+}
+
 // A game not started yet is read every minute in its last hour and every 15
 // before. One with no start time yet sits at midnight Eastern of its day
 // (tbd_day_epoch): baseball's is game 2 of a doubleheader, which starts

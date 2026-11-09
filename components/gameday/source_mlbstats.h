@@ -35,6 +35,17 @@ inline bool is_mlb_url(const std::string &url) {
   return url.compare(0, strlen(kMlbStatsRoot), kMlbStatsRoot) == 0;
 }
 
+// A scan's leagues while the MLB Stats API's wait runs: minor league baseball
+// left out, the others read as usual. True when it was there.
+inline bool drop_mlb_stats(std::vector<League> &leagues) {
+  for (size_t i = 0; i < leagues.size(); i++)
+    if (is_mlb_stats(leagues[i])) {
+      leagues.erase(leagues.begin() + i);
+      return true;
+    }
+  return false;
+}
+
 // Team::group for a minor league team: its level's MLB Stats sport id.
 static const uint32_t kMilbTripleA = 11, kMilbDoubleA = 12, kMilbHighA = 13, kMilbSingleA = 14;
 // "Triple-A", "Double-A", "High-A", "Single-A"; "" for anything else.
@@ -71,7 +82,7 @@ void fill_mlb_team_filter(JsonDocument &f);
 void fill_mlb_game_filter(JsonDocument &f);
 void fill_mlb_day_filter(JsonDocument &f);
 int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedule &out,
-                      std::vector<Upcoming> *upcoming, size_t max);
+                      std::vector<Upcoming> *upcoming, size_t max, Schedule *last_final = nullptr);
 bool mlb_game_from_doc(JsonObjectConst root, uint32_t our_id, int64_t near_epoch, GameSnapshot &out);
 bool mlb_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t *next_kickoff,
                       std::vector<Final> *finals, std::vector<Pending> *pending);
@@ -85,10 +96,13 @@ bool mlb_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t 
 // A postponed game is listed again on its new date with the same id; only
 // the entry that isn't over counts. An entry whose start is days away from
 // the date it is listed under (a placeholder MLB never played) is skipped.
-// Out is valid with 0 or 1.
+// Out is valid with 0 or 1. With last_final, also the team's latest game
+// played to the end before the one in out (event_id, kickoff_epoch and
+// time_tbd; not valid with none): My team today keeps it until midnight
+// after a restart (gameday.cpp's team read).
 template<typename TInput>
 int parse_mlb_team(TInput &input, uint32_t our_id, int64_t now, Schedule &out,
-                   std::vector<Upcoming> *upcoming = nullptr, size_t max = 0) {
+                   std::vector<Upcoming> *upcoming = nullptr, size_t max = 0, Schedule *last_final = nullptr) {
   JsonDocument filter(detail::json_allocator());
   detail::fill_mlb_team_filter(filter);
   JsonDocument doc(detail::json_allocator());
@@ -96,7 +110,7 @@ int parse_mlb_team(TInput &input, uint32_t our_id, int64_t now, Schedule &out,
                                               DeserializationOption::NestingLimit(20));
   if (err)
     return -1;
-  return detail::mlb_team_from_doc(doc.as<JsonObjectConst>(), our_id, now, out, upcoming, max);
+  return detail::mlb_team_from_doc(doc.as<JsonObjectConst>(), our_id, now, out, upcoming, max, last_final);
 }
 
 // The game read, as a baseball GameSnapshot around our_id. The API lists a
