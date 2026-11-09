@@ -560,6 +560,12 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await page.reload();
   await expect(page.locator("#standingRow")).toBeVisible();
   await expect(sel).toHaveAccessibleDescription(/minor league teams always their record/);
+  // AHL and ECHL teams have none from HockeyTech either.
+  await reset(request, { team: { l: "ahl", id: 324, abbr: "SYR", name: "Syracuse Crunch" },
+    favs: [{ l: "echl", id: 70, abbr: "RC", name: "Rapid City Rush" }, { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
   // Nothing followed yet: shown.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
   await page.reload();
@@ -846,6 +852,21 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await page.reload();
   await expect(sw("Baseball: Grand slam")).toBeVisible();
   await expect(sw("Hockey: Goal")).toBeHidden();
+
+  // An AHL team alone, or the ECHL as the one Live games league, is hockey:
+  // its one switch, no situation switch, and the hint covering their games.
+  await reset(request, { team: { l: "ahl", id: 324, abbr: "SYR", name: "Syracuse Crunch" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(sw("Hockey: Goal")).toBeVisible();
+  await expect(sw("Baseball: Runs")).toBeHidden();
+  await expect(sw("Football: Touchdown")).toBeHidden();
+  await expect(sw("Count and at-bat")).toBeHidden();
+  await expect(page.locator("#alertCtls .alertSport:visible .sub")).toHaveText(["Hockey", "Favorite players"]);
+  await expect(page.locator("#alertCtls .alertSport:visible").first()).toContainText("AHL and ECHL games too");
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}], live_auto: false, live: ["echl"] });
+  await page.reload();
+  await expect(sw("Hockey: Goal")).toBeVisible();
+  await expect(sw("Soccer: Goal")).toBeHidden();
 
   // Nothing picked: every sport's.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
@@ -2663,6 +2684,31 @@ test("the Bets card takes a bet on a minor league team, found by its level too",
   await expectSet(request, { bet: "0,milb,234,ml," });
   await expect(page.locator("#toast")).toHaveText("Added DUR ML");
   await expect(page.locator("#betList .betrow label")).toContainText("DUR ML");
+});
+
+test("the Bets card takes a bet on an AHL or ECHL team, from its tab", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await page.locator(".tabs button", { hasText: /^AHL$/ }).click();
+  await page.locator("#tiles .tile", { hasText: "Syracuse Crunch" }).click();
+  await expect(page.locator("#betTeam")).toHaveText("Syracuse Crunch");
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,ahl,324,ml," });
+  await expect(page.locator("#toast")).toHaveText("Added SYR ML");
+  await expect(page.locator("#betList .betrow label")).toContainText("SYR ML");
+  // An ECHL total, found by search from any tab
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("rapid city");
+  await expect(page.locator("#tiles .tile")).toHaveCount(1);
+  await page.locator("#tiles .tile", { hasText: "Rapid City Rush" }).click();
+  await page.locator("#betType").selectOption("over");
+  await page.locator("#betLine").fill("6.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,echl,70,over,6.5" });
+  await expect(page.locator("#betList .betrow label")).toContainText(["SYR ML", "OVER 6.5"]);
 });
 
 test("the Bets card says what's wrong with a bet before posting it", async ({ page, request }) => {

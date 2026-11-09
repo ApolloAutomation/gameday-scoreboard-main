@@ -52,6 +52,8 @@ A few things HockeyTech's feed doesn't have:
 - **The last play.** The ticker shows the records during intermissions, but no plays.
 - **Power plays**, as with the NHL.
 
+Every goal splashes the same way, yours and, with **Opponent scores too** on, the other side's, under the hockey **Goal** switch in the Celebrations card, as an NHL goal does. HockeyTech doesn't say which came on a power play or into an empty net either. The winning goal in a shootout splashes like any other. See [Celebrations](/using/device-page/#celebrations).
+
 ## The final
 
 The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks says your abbreviation and "WINS". The final stays up for half an hour in My team, then the panel looks up the next game. **Refresh scores** during that half hour reads the final again and keeps it up.
@@ -61,6 +63,18 @@ A postponed, canceled or suspended game shows "Postponed", "Canceled" or "Suspen
 ## Between seasons
 
 When HockeyTech lists no game for the team, or its next game is more than 10 days away, the board shows the clock, with the next game under it once HockeyTech has the new season's schedule. The panel checks for it every 6 hours. See [When your team has no game coming](/using/modes/#when-your-team-has-no-game-coming).
+
+## Standing, ranks and bets
+
+**Standing next to pro teams** leaves an AHL or ECHL team its record, since HockeyTech has no playoff seed or division place for it, and AHL and ECHL teams have no poll rank. The setting is hidden while your panel follows only AHL, ECHL, minor league baseball or college teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+
+AHL and ECHL teams can take a bet. The Bets card's team chooser has the **AHL** and **ECHL** tabs, and search finds them, but their games aren't in its **On now** tab. The panel grades the bet on HockeyTech's score. See [Bets](/using/bets/).
+
+## Follow this game and the idle display
+
+**Follow this game** holds an AHL or ECHL game in Live games and Favorite teams like any other game. See [Favorite teams](/using/favorites/).
+
+With **My team today** as the idle display, an AHL or ECHL team's game shows on the day it plays, and its final stays up until midnight, after a restart too. **Scores** includes AHL and ECHL finals and games still to come when their leagues are among yours. While HockeyTech fails or refuses the panel, they wait for it and the other leagues' scores go on. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
 
 ## Live games and On now
 

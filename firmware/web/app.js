@@ -1031,7 +1031,7 @@
       ["Home run", "MLB games."],
       ["Grand slam", "A home run that scores four, in MLB games."],
       ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game. In a minor league doubleheader's 7-inning game, the 7th."]]],
-    ["hockey", "Hockey", [["Goal", "Every goal the same way: ESPN doesn't say which came on a power play or into an empty net."]]],
+    ["hockey", "Hockey", [["Goal", "Every goal the same way, AHL and ECHL games too: neither ESPN nor HockeyTech says which came on a power play or into an empty net."]]],
     ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
     ["basketball", "Basketball", [
       ["Lead change", "The team that was behind goes ahead, in the last 2 minutes or in overtime."],
