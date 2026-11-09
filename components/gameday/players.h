@@ -195,7 +195,7 @@ struct PlayerScore {
   std::string word;
   AlertSide side{AlertSide::TEAM};
   Alert type{Alert::NONE};  // the play, for its points (splash_points)
-  int points{0};            // what the side gained
+  int points{0};            // what the play in word scored (own_points)
 };
 
 namespace detail {
@@ -359,18 +359,26 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
       out.slot = i;
   if (out.slot < 0)
     return none;
+  // The points shown come from where the words do (own_points), so the two
+  // never disagree: "FIELD GOAL" with "+3" when a touchdown came in the same
+  // read, "2 RBI" with "+2" after an earlier run.
   if (cur.sport == Sport::FOOTBALL) {
     // The play's own points say what it was, not the score: a field goal
-    // and a touchdown can come in one read.
+    // and a touchdown can come in one read. A touchdown with ESPN's college
+    // try after it keeps the two's points, as the team's splash has them.
     const int pts = cur.play_points;
     out.word = alert_word(is_try || pts == 6 ? Alert::TOUCHDOWN
                           : pts == 3         ? Alert::FIELD_GOAL
                           : pts == 2         ? Alert::SAFETY  // a 2-point conversion is a try
                                              : p.type);
+    if (!is_try && (pts == 6 || pts == 3 || pts == 2))
+      out.points = own_points(p.points, pts);
   } else if (p.type == Alert::RUN) {
     out.word = cur.play_points == 1 ? std::string("RBI") : std::to_string(cur.play_points) + " RBI";
+    out.points = own_points(p.points, cur.play_points);
   } else {
     out.word = alert_word(p.type);  // HOME RUN, GRAND SLAM, WALK-OFF, LEAD CHANGE, BUZZER BEATER
+    out.points = homer_points(p, cur);
   }
   return out;
 }

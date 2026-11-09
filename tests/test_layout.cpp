@@ -201,6 +201,15 @@ void test_splash_sides() {
   LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 1).points, "+1 RUN");
   LCHECK_EQ(play(Alert::GRAND_SLAM, AlertSide::OPP, 4).points, "+4 RUNS");
   LCHECK_EQ(play(Alert::WALK_OFF, AlertSide::TEAM, 1).points, "+1 RUN");
+  // A home run's own runs, not an earlier run's in the same read; a grand slam's 4
+  g.play_points = 2;
+  LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 3).points, "+2 RUNS");
+  LCHECK_EQ(play(Alert::GRAND_SLAM, AlertSide::TEAM, 5).points, "+4 RUNS");
+  LCHECK_EQ(play(Alert::WALK_OFF, AlertSide::TEAM, 3).points, "+3 RUNS");  // the walk-off is the inning's
+  LCHECK_EQ(play(Alert::RUN, AlertSide::TEAM, 3).points, "+3");            // "3 RUNS!": the score's
+  g.play_points = 3;  // more than the side gained: the gain
+  LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 2).points, "+2 RUNS");
+  g.play_points = 0;
   s = play(Alert::RUN, AlertSide::TEAM, 2);
   LCHECK_EQ(s.text, "2 RUNS!");
   LCHECK_EQ(s.points, "+2");

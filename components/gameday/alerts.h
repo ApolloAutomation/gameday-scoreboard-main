@@ -305,6 +305,22 @@ inline std::string splash_points(Alert a, int points) {
   }
 }
 
+// The points a splash shows when its words are one play's own, not the
+// score's (a home run, a grand slam, a favorite player's play, players.h):
+// that play's, play, when the side gained at least that much between the
+// reads, else the gain. A read can hold an earlier score too, which those
+// words don't count: a grand slam is "+4 RUNS" even when a run came in
+// before it.
+inline int own_points(int gain, int play) { return play > 0 && play <= gain ? play : gain; }
+
+// A home run's or a grand slam's runs (own_points), from the play of g that
+// is the home run: a grand slam's are 4.
+inline int homer_points(const BigPlay &p, const GameSnapshot &g) {
+  return p.type == Alert::GRAND_SLAM ? own_points(p.points, 4)
+         : p.type == Alert::HOME_RUN ? own_points(p.points, g.play_points)
+                                     : p.points;
+}
+
 // The splash for a big play, its words fit to the panel: 10 characters a line
 // on one panel, 16 on two, and never more than three lines. Our side's say
 // the play with "!" ("TOUCHDOWN!", "2 RUNS!"); the other side's, and both
@@ -313,7 +329,8 @@ inline std::string splash_points(Alert a, int points) {
 // they won't fit beside it. A red card always names the side that got it, on
 // card red; overtime and the final say only that. The panel shows the
 // side's logo with them, both for overtime and the final, and a score's
-// points (splash_points).
+// points (splash_points), a home run's its own runs (homer_points). g is the
+// read the play is in.
 inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neutral, bool wide) {
   if (p.type == Alert::NONE)
     return Splash{};
@@ -328,7 +345,7 @@ inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neut
   if (p.side == AlertSide::GAME)
     return Splash{word, color, "", true, 0, ""};
   const std::string &abbr = opp ? g.opp_abbr : g.team_abbr;
-  const std::string points = splash_points(p.type, p.points);
+  const std::string points = splash_points(p.type, homer_points(p, g));
   if (ours)
     return Splash{word + "!", color, abbr, false, 0, points};
   // LVGL breaks a line at a space or after a hyphen, so a phrase that won't
