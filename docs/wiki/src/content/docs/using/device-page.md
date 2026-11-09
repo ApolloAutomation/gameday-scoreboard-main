@@ -18,7 +18,7 @@ While a golf tour is your team, the board shows its tournament's leaderboard in 
 While a racing series is your team, the board shows the order of the session on track or the latest one: the session, then up to 10 rows with the place, the name, the car number and the gap. Before and between sessions it shows the next session and when it starts, and after the race the next race weekend. See [Racing](/using/racing/).
 
 :::note[Coming in the next release]
-A **Follow this game** switch sits under the board while the panel shows a game Live games picked, or a favorite's game in Favorite teams, that hasn't ended. It doesn't show over your team's card or recent finals while Live games has nothing live. Turn it on to keep that game on the panel instead of moving on, and the switch reads **Following this game**. The panel goes back to switching games once the game ends, or to your favorites once its final has been up for **After the final**, or when you turn the switch off. A restart turns it off, since the panel doesn't save it. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
+A **Follow this game** switch shows in the Quick settings card under the board while the panel shows a game Live games picked, or a favorite's game in Favorite teams, that hasn't ended. It doesn't show over your team's card or recent finals while Live games has nothing live. Turn it on to keep that game on the panel instead of moving on, and the switch reads **Following this game**. The panel goes back to switching games once the game ends, or to your favorites once its final has been up for **After the final**, or when you turn the switch off. A restart turns it off, since the panel doesn't save it. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
 
 While the panel follows a game it doesn't switch to big plays in other games, or check those games at all. When the board is on another game's big play for a moment, the switch still shows, and the line under it says so: turning it on takes the panel straight back to the game it was showing and follows that one, not the other game. If that game has ended in the meantime, the switch doesn't show, since there's nothing left to follow. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 :::
@@ -71,8 +71,22 @@ The same chooser adds favorites: **Add a favorite** in the Favorites card opens 
 
 Settings are grouped in cards. In the order the page shows them:
 
+:::note[Coming in the next release]
+The page puts what you change most at the top, and folds the rest away:
+
+1. **Quick settings**, right under the board: **Panel on**, **Brightness**, **Follow this game** while there's a game to follow, the **Idle display**, and on three or four panels in a row or two rows of two, what the second area **Shows**.
+2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
+3. The cards: **Panel**, **Favorites**, **Favorite players** and **Bets**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
+
+Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside. **Panel** starts open. **Favorites**, **Favorite players** and **Bets** start open when they hold anything, with how many beside the name, like **3 of 16**, and folded while they're empty.
+
+The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
+:::
+
 | Setting | What it does |
 | --- | --- |
+| **Panel on** | Turns the panel's lights on or off. |
+| **Brightness** | Panel brightness, 1 to 255. |
 | **My team**, **Live games**, **Favorite teams** | What the panel follows. See [Show: My team, Favorite teams, Live games](/using/modes/). |
 | **Change team** | Opens the team chooser. Shown in My team. |
 | Leagues (Live games) | The leagues Live games picks from. Until you pick, it follows the leagues of your team and favorites. **Back to automatic** goes back to that. |
@@ -80,22 +94,20 @@ Settings are grouped in cards. In the order the page shows them:
 | **Take over** (Favorite teams) | How many minutes before kickoff a favorite's game takes the panel, 5 to 120. Starts at 15. |
 | **After the final** (Favorite teams) | How long a favorite's final stays up before the playlist moves on, 30 seconds to 60 minutes. Starts at 30 seconds. |
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them every set number of minutes. |
+| **Ticker speed** | How fast the ticker scrolls, 1 to 10. |
+| **Showing** | The Scoreboard page or the Clock page. |
+| **Only today's games** | The Favorite teams playlist skips favorites that aren't playing today. |
+| Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
 | Ticker: **Down and distance** | Football: the down, yards to go and where the ball is. |
 | Ticker: **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
 | Ticker: **Match stats** | Soccer: goals, cards, possession and shots. |
 | Ticker: **Last play** | ESPN's latest play in every sport. In soccer, the latest goal or card. |
 | Ticker: **Pre-game odds and TV** | The line, over/under and TV channel before the start, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it. Racing: the TV channel. |
 | **Opponent scores too** | Splashes for the other side's scores. Your team's always show. See [Celebrations](#celebrations). |
-| **Panel on** | Turns the panel's lights on or off. |
-| **Brightness** | Panel brightness, 1 to 255. |
-| **Ticker speed** | How fast the ticker scrolls, 1 to 10. |
-| **Showing** | The Scoreboard page or the Clock page. |
-| **Only today's games** | The Favorite teams playlist skips favorites that aren't playing today. |
-| Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
 | **Discovery**, **Unpair remote** | Pairs and unpairs a WizMote remote. See [WizMote remote](/using/remote/). |
-| Matrix | Click the picture that matches your panel: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). The panel restarts with the new layout. See [Panel sizes and layouts](/using/panel-sizes/). |
 | Timezone | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
 | **Show how to connect when the panel starts** | After it joins Wi-Fi, the panel shows a QR code that opens this page, at the panel's IP address, then the page address: for about 18 seconds on a panel with a team, and on a new panel for 45 seconds or until you pick a team. Turn it off and a panel with a team goes straight to the scoreboard. A new panel still shows the QR code, without the address. |
+| Matrix | Click the picture that matches your panel: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). The panel restarts with the new layout. See [Panel sizes and layouts](/using/panel-sizes/). |
 | **Install updates automatically** | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
 | **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
@@ -117,7 +129,7 @@ The Panel card adds **Standing next to pro teams**: **Record** (where a new pane
 
 The Panel card also has **Clock size** and **Text size**, each **Normal** (where a panel starts) or **Large**: bigger digits for the clock, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
 
-It also has a **When nothing is on** part under **Showing**:
+**Idle display** and **Dim to** are in the Quick settings card under the board, and **Night hours** with its times comes last in the Panel card:
 
 | Setting | What it does |
 | --- | --- |
@@ -127,11 +139,11 @@ It also has a **When nothing is on** part under **Showing**:
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
 
-Under them a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
+Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 :::
 
 :::note[Coming in the next release]
-On two rows of two, and three or four panels in a row, the Panel card has a part for the second area above **When nothing is on**, titled for where it is: **Bottom half**, **Right two panels** or **Right panel**. One or two panels don't show it.
+On two rows of two, and three or four panels in a row, the Quick settings card has a part for the second area under **Idle display**, titled for where it is: **Bottom half**, **Right two panels** or **Right panel**. One or two panels don't show it.
 
 | Setting | What it does |
 | --- | --- |
@@ -199,6 +211,10 @@ The Device card has the buttons and the details about the panel itself.
 
 Under them: the **Firmware** box, the **Install updates automatically** and **Follow beta** switches, the Wi-Fi networks list, and the panel's **Address** and **Name**. The **Diagnostics** section comes last.
 
+:::note[Coming in the next release]
+The Device card starts folded: tap **Device** to open it. **Refresh scores** and **Check for updates** stay at the top, and **Reboot**, **Reset Wi-Fi** and **Factory reset** sit together at the very bottom, under **Restart and reset**, after **Diagnostics**. Each of them asks you to confirm first.
+:::
+
 ### Diagnostics
 
 **Diagnostics** helps you, or support, work out why a panel misbehaves.
@@ -238,5 +254,5 @@ See [Firmware updates](/using/updates/#beta-versions).
 ## The Bets card
 
 :::note[Coming in the next release]
-The **Bets** card comes last on the page and stays folded until you tap **Bets**; the number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
+The **Bets** card comes after the Favorite players card. It starts open while it holds a bet and folded while it's empty; tap **Bets** to open or fold it. The number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
 :::

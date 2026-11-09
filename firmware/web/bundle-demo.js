@@ -175,19 +175,38 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
       <div class="splash" id="splash"></div>
     </section>
 
-    <div class="teambar followbar" id="followbar" hidden>
-      <div class="cur"><div><div class="name" id="followName">Follow this game</div><div class="lg" id="followLg"></div></div></div>
-      <button class="sw" data-set="follow" aria-label="Follow this game"></button>
-    </div>
-
     <div class="teambar guardbar" id="guard" role="status" hidden>
       <div class="cur"><div><div class="name" id="guardName"></div><div class="lg" id="guardText"></div></div></div>
       <button class="btn" id="guardClear" hidden>Clear</button>
     </div>
 
-    <section class="upnext" id="upnext" hidden>
-      <div class="uh">Up next</div>
-      <div class="ul" id="upnextList"></div>
+    <section class="card quick" id="quick" aria-labelledby="quickTitle">
+      <h2 id="quickTitle">Quick settings</h2>
+      <div class="qcols">
+        <div class="qcol">
+          <div id="quickCtls"></div>
+          <div class="ctl followbar" id="followbar" hidden>
+            <label><span id="followName">Follow this game</span><small id="followLg"></small></label>
+            <button class="sw" data-set="follow" aria-label="Follow this game"></button>
+          </div>
+        </div>
+        <div class="qcol">
+          <div id="idleCtls" hidden>
+            <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
+              <option value="0">Next game</option><option value="1">Clock</option><option value="2">Scores</option>
+              <option value="3">My team today</option><option value="4">Off or dim</option>
+            </select></div>
+            <div class="ctl" id="idleDimRow" hidden><label for="idledim">Dim to<small>0 turns the screen off. Power stays on.</small></label><input type="range" id="idledim" min="0" max="255" step="1"><span class="val" id="idledimVal" aria-hidden="true"></span></div>
+            <p class="hint" id="idleNow" role="status"></p>
+          </div>
+          <div id="splitCtls" hidden>
+            <div class="sub" id="splitTitle">Second area</div>
+            <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
+            <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
+            <p class="hint" id="splitNow" role="status"></p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <div class="modes" id="modes" role="group" aria-label="Mode">
@@ -217,9 +236,66 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
       </div>
     </div>
 
+    <section class="upnext" id="upnext" hidden>
+      <div class="uh">Up next</div>
+      <div class="ul" id="upnextList"></div>
+    </section>
+
     <div class="grid">
-      <div class="card">
-        <h2>Ticker</h2>
+      <div class="col">
+      <details class="card" id="panelCard" open>
+        <summary><h2>Panel</h2><span class="peek">Ticker speed, sizes, night hours</span></summary>
+        <div id="panelCtls"></div>
+        <div id="sizeCtls" hidden>
+          <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The time when the panel shows a clock: the off-season clock, the idle display's Clock and the second area's Clock and date. Large has bigger digits.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
+          <div class="ctl"><label for="textsize">Text size<small id="textsizeHelp">The ticker along the bottom of the board, and of the second area's game. Large has bigger letters. A golf or racing leaderboard keeps the small ones, and the ticker under the second area's clock is big at either size.</small></label><select id="textsize" aria-label="Text size" aria-describedby="textsizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
+        </div>
+        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div id="nightCtls" hidden>
+          <div class="ctl"><label>Night hours<small>Dims the panel overnight and shows the idle display, with the clock in place of the scores or the next game. A game you follow still shows.</small></label><button class="sw" data-set="night" aria-label="Night hours"></button></div>
+          <div id="nightRows" hidden>
+            <div class="ctl"><label for="nightstart">From</label><input type="time" id="nightstart" step="60"></div>
+            <div class="ctl"><label for="nightend">To</label><input type="time" id="nightend" step="60"></div>
+            <div class="ctl"><label for="nightbri">Night brightness<small>A Brightness change during the night hours lasts until they end.</small></label><input type="range" id="nightbri" min="1" max="255" step="1"><span class="val" id="nightbriVal" aria-hidden="true"></span></div>
+          </div>
+        </div>
+      </details>
+      <details class="card" id="favCard">
+        <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
+        <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
+        <div class="ctl"><label>Only today's games<small>The playlist skips favorites that aren't playing today.</small></label><button class="sw" data-set="today" aria-label="Only today's games"></button></div>
+        <div id="favCtls"></div>
+        <button class="btn" id="favAdd">Add a favorite</button>
+      </details>
+      <details class="card" id="playerCard" hidden>
+        <summary><h2>Favorite players</h2><span class="peek sum" id="playerSum"></span></summary>
+        <p class="hint">While a favorite player's game is on the panel and ESPN lists the player among its leaders, the ticker shows their stat line. When they score, the celebration names them. The panel reads nothing more from ESPN for it.</p>
+        <div id="playerList"></div>
+        <div class="sub">Add a player</div>
+        <div class="ctl"><label>Team</label><button class="btn" id="playerTeam">Pick a team</button></div>
+        <div class="ctl" id="playerPickRow" hidden><label for="playerPick">Player</label><select id="playerPick"></select></div>
+        <p class="betmsg" id="playerMsg" role="alert" hidden></p>
+        <button class="btn primary" id="playerAdd" hidden>Add player</button>
+      </details>
+      <details class="card betcard" id="betCard" hidden>
+        <summary><h2>Bets</h2><span class="peek sum" id="betSum"></span></summary>
+        <p class="hint">Bets you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering during the game, and the result after the final until midnight. The panel follows bets only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
+        <div id="betList"></div>
+        <div class="sub">Add a bet</div>
+        <div class="ctl"><label>Team<small>For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
+        <div class="ctl"><label for="betType">Bet</label><select id="betType">
+          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
+        </select></div>
+        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
+          <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
+          <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
+        <p class="betmsg" id="betMsg" role="alert" hidden></p>
+        <button class="btn primary" id="betAdd">Add bet</button>
+      </details>
+      </div>
+      <div class="col">
+      <details class="card" id="tickerCard">
+        <summary><h2>Ticker</h2><span class="peek">Game situation, last play, odds</span></summary>
         <p class="hint">What scrolls along the bottom of the panel during a game.</p>
         <div id="tickerCtls">
           <div class="ctl" data-sport="football"><label>Down and distance<small>Football: the down, yards to go and where the ball is.</small></label><button class="sw" data-set="down" aria-label="Down and distance"></button></div>
@@ -228,9 +304,9 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
           <div class="ctl"><label>Last play<small>ESPN's latest play in every sport. In soccer, the latest goal or card.</small></label><button class="sw" data-set="play" aria-label="Last play"></button></div>
           <div class="ctl"><label>Pre-game odds and TV<small>The line, over/under and TV channel before the start, in every league, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it. Racing: the TV channel.</small></label><button class="sw" data-set="odds" aria-label="Pre-game odds and TV"></button></div>
         </div>
-      </div>
-      <div class="card">
-        <h2>Celebrations</h2>
+      </details>
+      <details class="card" id="celebCard">
+        <summary><h2>Celebrations</h2><span class="peek">Splashes and big plays</span></summary>
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
@@ -242,64 +318,25 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
           <div class="ctl" id="watchMineRow"><label>Switch from my team<small>Your team's live game gives way only to a favorite's big play, and only with this on.</small></label><button class="sw" data-set="watchmine" aria-label="Switch from my team"></button></div>
           <div id="alertCtls"></div>
         </div>
-      </div>
-      <div class="card">
-        <h2>Panel</h2>
-        <div id="panelCtls"></div>
-        <div id="sizeCtls" hidden>
-          <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The time when the panel shows a clock: the off-season clock, the idle display's Clock and the second area's Clock and date. Large has bigger digits.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
-          <div class="ctl"><label for="textsize">Text size<small id="textsizeHelp">The ticker along the bottom of the board, and of the second area's game. Large has bigger letters. A golf or racing leaderboard keeps the small ones, and the ticker under the second area's clock is big at either size.</small></label><select id="textsize" aria-label="Text size" aria-describedby="textsizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
-        </div>
-        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
-        <div id="splitCtls" hidden>
-          <div class="sub" id="splitTitle">Second area</div>
-          <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
-          <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
-          <p class="hint" id="splitNow" role="status"></p>
-        </div>
-        <div id="idleCtls" hidden>
-          <div class="sub">When nothing is on</div>
-          <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
-            <option value="0">Next game</option><option value="1">Clock</option><option value="2">Scores</option>
-            <option value="3">My team today</option><option value="4">Off or dim</option>
-          </select></div>
-          <div class="ctl" id="idleDimRow" hidden><label for="idledim">Dim to<small>0 turns the screen off. Power stays on.</small></label><input type="range" id="idledim" min="0" max="255" step="1"><span class="val" id="idledimVal" aria-hidden="true"></span></div>
-          <div class="ctl"><label>Night hours<small>Dims the panel overnight and shows the idle display, with the clock in place of the scores or the next game. A game you follow still shows.</small></label><button class="sw" data-set="night" aria-label="Night hours"></button></div>
-          <div id="nightRows" hidden>
-            <div class="ctl"><label for="nightstart">From</label><input type="time" id="nightstart" step="60"></div>
-            <div class="ctl"><label for="nightend">To</label><input type="time" id="nightend" step="60"></div>
-            <div class="ctl"><label for="nightbri">Night brightness<small>A Brightness change during the night hours lasts until they end.</small></label><input type="range" id="nightbri" min="1" max="255" step="1"><span class="val" id="nightbriVal" aria-hidden="true"></span></div>
-          </div>
-          <p class="hint" id="idleNow" role="status"></p>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Favorites</h2>
-        <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
-        <div class="ctl"><label>Only today's games<small>The playlist skips favorites that aren't playing today.</small></label><button class="sw" data-set="today" aria-label="Only today's games"></button></div>
-        <div id="favCtls"></div>
-        <button class="btn" id="favAdd">Add a favorite</button>
-      </div>
-      <div class="card" id="playerCard" hidden>
-        <h2>Favorite players</h2>
-        <p class="hint">While a favorite player's game is on the panel and ESPN lists the player among its leaders, the ticker shows their stat line. When they score, the celebration names them. The panel reads nothing more from ESPN for it.</p>
-        <div id="playerList"></div>
-        <div class="sub">Add a player</div>
-        <div class="ctl"><label>Team</label><button class="btn" id="playerTeam">Pick a team</button></div>
-        <div class="ctl" id="playerPickRow" hidden><label for="playerPick">Player</label><select id="playerPick"></select></div>
-        <p class="betmsg" id="playerMsg" role="alert" hidden></p>
-        <button class="btn primary" id="playerAdd" hidden>Add player</button>
-      </div>
-      <div class="card">
-        <h2>Remote</h2>
+      </details>
+      <details class="card" id="remoteCard">
+        <summary><h2>Remote</h2><span class="peek">WizMote pairing</span></summary>
         <p class="hint">Pair a WizMote: turn on discovery, then press any button on the remote.</p>
         <div class="ctl"><label>Status</label><span class="val" id="wizStatus" style="min-width:0;text-align:left"></span></div>
         <div id="remoteCtls"></div>
         <div class="actions" id="remoteActions" style="margin-top:8px"></div>
-      </div>
-      <div class="card">
-        <h2>Setup</h2>
+      </details>
+      <details class="card" id="setupCard">
+        <summary><h2>Setup</h2><span class="peek">Timezone, startup, matrix</span></summary>
         <p class="hint">Things you set once.</p>
+        <div class="sub">Time</div>
+        <div class="tzline" id="tzline">Timezone not known yet</div>
+        <div class="ctl" id="tzpick" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
+        <div class="sub">Startup</div>
+        <div class="ctl">
+          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 18 seconds, or until you pick a team on a new panel. Then the IP address and .local name lead the ticker for 30 seconds. During a live game the scoreboard comes straight up, with the address in the ticker. Turn it off to go straight to the scoreboard once a team is picked. Hold the boot button any time to show the address again.</small></label>
+          <button class="sw" data-set="bootaddr" aria-label="Show how to connect when the panel starts"></button>
+        </div>
         <div class="sub">Matrix</div>
         <p class="hint">Click the picture that matches yours. The panel restarts with the new layout.</p>
         <div class="panels" id="panels">
@@ -337,17 +374,9 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
           </select>
         </div>
         <p class="hint">With three or four panels, set up Wi-Fi through the panel's hotspot: Bluetooth setup is off to leave memory for the panels. Use a 5 V supply rated for all of them.</p>
-        <div class="sub">Time</div>
-        <div class="tzline" id="tzline">Timezone not known yet</div>
-        <div class="ctl" id="tzpick" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
-        <div class="sub">Startup</div>
-        <div class="ctl">
-          <label>Show how to connect when the panel starts<small>After it joins Wi-Fi: a QR code that opens this page, then the page address, for about 18 seconds, or until you pick a team on a new panel. Then the IP address and .local name lead the ticker for 30 seconds. During a live game the scoreboard comes straight up, with the address in the ticker. Turn it off to go straight to the scoreboard once a team is picked. Hold the boot button any time to show the address again.</small></label>
-          <button class="sw" data-set="bootaddr" aria-label="Show how to connect when the panel starts"></button>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Device</h2>
+      </details>
+      <details class="card" id="deviceCard">
+        <summary><h2>Device</h2><span class="peek">Updates, Wi-Fi, diagnostics</span></summary>
         <div class="actions" id="actions"></div>
         <div class="fw" id="fw" hidden>
           <div class="fwline"><span id="fwText">Firmware</span><button class="btn primary" id="fwInstall" hidden>Install</button></div>
@@ -396,22 +425,10 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         </div>
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
         <div class="ctl"><label>Data used<small>Scores and logos from ESPN, MLB and HockeyTech since the panel started</small></label><span class="val" id="espnData"></span></div>
-      </div>
-      <details class="card betcard" id="betCard" hidden>
-        <summary><h2>Bets</h2><span class="val" id="betSum"></span></summary>
-        <p class="hint">Bets you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering during the game, and the result after the final until midnight. The panel follows bets only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
-        <div id="betList"></div>
-        <div class="sub">Add a bet</div>
-        <div class="ctl"><label>Team<small>For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
-        <div class="ctl"><label for="betType">Bet</label><select id="betType">
-          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
-        </select></div>
-        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
-          <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
-          <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
-        <p class="betmsg" id="betMsg" role="alert" hidden></p>
-        <button class="btn primary" id="betAdd">Add bet</button>
+        <div class="sub">Restart and reset</div>
+        <div class="actions" id="dangerActions"></div>
       </details>
+      </div>
     </div>
 
     <p class="foot">
@@ -432,6 +449,37 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     </div>
   </div>
   <div class="toast" id="toast" role="status"></div>`;
+
+  // ---- cards that fold ---------------------------------------------------
+  // Ticker, Celebrations, Remote, Setup and Device start folded, Panel open,
+  // and Favorites, Favorite players and Bets open when they hold anything.
+  // The cards the viewer opens or folds stay so in this browser, when it has
+  // storage. localStorage "gd.expand" = "1" opens every card (the page tests).
+  let folds = {};
+  let expandAll = false;
+  try {
+    const v = JSON.parse(localStorage.getItem("gd.cards"));
+    if (v && typeof v === "object") folds = v;
+    expandAll = localStorage.getItem("gd.expand") === "1";
+  } catch (_) {}
+  const folded = (id) => (expandAll ? true : folds[id]);
+  document.querySelectorAll("details.card").forEach((d) => {
+    if (typeof folded(d.id) === "boolean") d.open = folded(d.id);
+    // A click, Enter or Space on the name, before the card turns over
+    d.firstElementChild.addEventListener("click", () => {
+      folds[d.id] = !d.open;
+      try { localStorage.setItem("gd.cards", JSON.stringify(folds)); } catch (_) {}
+    });
+  });
+  // From the panel's first state document only: a card filled or emptied
+  // later stays as it is.
+  let foldsSet = false;
+  const renderFolds = () => {
+    if (!S || foldsSet) return;
+    foldsSet = true;
+    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets };
+    for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
+  };
 
   // ---- helpers ---------------------------------------------------------
   let toastTimer;
@@ -879,7 +927,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     const auto = liveAuto();
     // With nothing live the device shows the saved team's card, or with no
     // team a rotation of recent finals, and keeps scanning.
-    // Follow this game (the bar under the board) holds the game up.
+    // Follow this game (in Quick settings) holds the game up.
     $("#liveName").textContent = S.fallback ? "No live game right now, showing your team until one starts"
       : S.recap ? "No live game right now, showing recent finals"
         : S.follow ? "Staying on the game you follow"
@@ -977,7 +1025,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     renderFollow(mode);
   };
 
-  // ---- the idle display and the night hours (Panel card) -------------------
+  // ---- the idle display (Quick settings) and the night hours (Panel card) ----
   // What the panel shows when no game it follows is on, and overnight. The
   // device keeps the settings (idle, idledim, night, nightstart, nightend,
   // nightbri); each control posts its own key, held until the panel has it.
@@ -1003,7 +1051,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   });
   const renderIdle = () => {
     // Firmware from before the setting leaves idle out.
-    $("#idleCtls").hidden = !S || S.idle === undefined;
+    $("#idleCtls").hidden = $("#nightCtls").hidden = !S || S.idle === undefined;
     if ($("#idleCtls").hidden) return;
     const show = Number(S.idle) || 0;
     if (document.activeElement !== idleSelect) idleSelect.value = String(show);
@@ -1027,7 +1075,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         : S.night_now ? "In the night hours." : "";
   };
 
-  // ---- the second area (Panel card) -----------------------------------------
+  // ---- the second area (Quick settings) -------------------------------------
   // Split mode (components/gameday/split.h): on two rows of two the bottom
   // half, on four wide the right two panels, on three wide the right panel.
   // One or two panels have none, and firmware without it sends no split.
@@ -1229,6 +1277,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     } else {
       $("#favAdd").hidden = favKeys.length >= favMax();
     }
+    $("#favSum").textContent = favKeys.length ? favKeys.length + " of " + favMax() : "";
     // A situation switch for each sport the panel follows (team, favorites,
     // Live games leagues picked by hand), all of them before anything is
     // picked. The automatic Live list is no help here: it never comes back
@@ -1336,8 +1385,8 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
 
   // ---- controls --------------------------------------------------------
   const controlDefs = [
-    { name: "Power", into: "#panelCtls", label: "Panel on" },
-    { name: "Brightness", into: "#panelCtls", label: "Brightness" },
+    { name: "Power", into: "#quickCtls", label: "Panel on" },
+    { name: "Brightness", into: "#quickCtls", label: "Brightness" },
     { name: "Scroll Speed", into: "#panelCtls", label: "Ticker speed" },
     { name: "Select Page", into: "#panelCtls", label: "Showing" },
     { name: "WizMote Auto-Discovery", into: "#remoteCtls", label: "Discovery" },
@@ -1346,10 +1395,10 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     { name: "Check for Updates", into: "#actions", label: "Check for updates" },
     // restart: "" waits for the panel to come back; otherwise the panel
     // restarts into setup and this says why.
-    { name: "Reboot", into: "#actions", label: "Reboot", danger: true, restart: "" },
-    { name: "Reset Wi-Fi", into: "#actions", label: "Reset Wi-Fi", danger: true,
+    { name: "Reboot", into: "#dangerActions", label: "Reboot", danger: true, restart: "" },
+    { name: "Reset Wi-Fi", into: "#dangerActions", label: "Reset Wi-Fi", danger: true,
       restart: "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept, and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows." },
-    { name: "Factory Reset", into: "#actions", label: "Factory reset", danger: true,
+    { name: "Factory Reset", into: "#dangerActions", label: "Factory reset", danger: true,
       restart: "The panel is restarting into setup with everything erased, so this page won't reconnect." },
   ];
   const built = {};
@@ -1863,6 +1912,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     if (card.hidden) return;
     settlePlayers();
     const list = S.players || [];
+    $("#playerSum").textContent = list.length ? list.length + " of " + (S.playermax || 8) : "";
     const sig = JSON.stringify(list);
     if (sig === playerDrawn) return;
     playerDrawn = sig;
@@ -2254,6 +2304,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     renderData();
     renderHealth();
     renderWifi();
+    renderFolds();
   };
 
   const renderData = () => {

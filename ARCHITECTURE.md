@@ -509,7 +509,10 @@ confirms it, and uses entity endpoints only for what Home Assistant also
 has (Brightness, Power, the update entity). In the browser it reads today's
 games and logos from ESPN (minor league baseball's from the MLB Stats API
 and MLB's image server, AHL and ECHL logos from HockeyTech's logo server, but
-not their games) and release notes from GitHub.
+not their games) and release notes from GitHub. The cards under the mode bar
+are `<details>` elements; which ones a viewer opened is kept in that
+browser's localStorage (`gd.cards`) and nowhere else, and `gd.expand` set to
+`1` opens them all, which the Playwright tests do.
 `tests/fixtures/set_cases.json` is the shared table of settings cases that
 the host tests, the page's mock and the fuzzer all use.
 

@@ -7,6 +7,10 @@ sidebar:
 
 The Panel card on the device page holds the settings for the screen itself: **Panel on**, **Brightness**, **Ticker speed** and **Showing**. The Game Day app and Home Assistant have the same settings.
 
+:::note[Coming in the next release]
+**Panel on** and **Brightness** move to the Quick settings card at the top of the device page, right under the board. **Ticker speed** and **Showing** stay in the Panel card. See [Settings](/using/device-page/#settings).
+:::
+
 ## Brightness
 
 **Brightness** runs from 1 (dimmest) to 255 (brightest). A new panel starts at 128. The panel keeps your setting through restarts. It can run dimmer than your setting when it's too warm or its power supply is too weak; see [Heat and power protection](#heat-and-power-protection).

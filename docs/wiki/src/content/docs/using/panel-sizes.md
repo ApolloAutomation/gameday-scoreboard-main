@@ -68,7 +68,7 @@ Two rows of two, and three or four panels in a row, can show something else besi
 | Four wide | The right two panels seen from the front, 128x64 | **Nothing: the board fills the row** |
 | Three wide | The right panel seen from the front, 64x64, laid out like one 64x64 panel | **Nothing: the board fills the row** |
 
-One or two panels have no second area, and the device page doesn't offer one. With any choice but **Nothing**, the board takes the left two panels and is laid out as on one 128x64 panel. Pick the choice under **Shows** in the Panel card on the device page; it takes effect at once, with no restart. See [The device page](/using/device-page/#settings).
+One or two panels have no second area, and the device page doesn't offer one. With any choice but **Nothing**, the board takes the left two panels and is laid out as on one 128x64 panel. Pick the choice under **Shows** in the Quick settings card on the device page; it takes effect at once, with no restart. See [The device page](/using/device-page/#settings).
 
 | Choice | What it shows |
 | --- | --- |
@@ -112,7 +112,7 @@ The logo is the one the panel already has for the board. If it hasn't downloaded
 Your team and settings stay as they were. A [factory reset](/using/buttons-and-resets/) puts the layout back to the one the firmware starts on: 128x64 for the Game Day Scoreboard and the two-panel DIY build, 64x64 for the one-panel DIY build.
 
 :::note[Coming in the next release]
-The page asks before it restarts the panel, and says **Restarting as** and the size once you agree. For **Two rows of two**, a **How the rows are mounted** choice appears under the pictures once the panel is back: **Bottom row upside down** (folded under, where a new panel starts), **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-two-64x64-panels) for the wiring.
+The Setup card starts folded: tap **Setup** to open it. **Matrix** comes after **Time** and **Startup** in it. The page asks before it restarts the panel, and says **Restarting as** and the size once you agree. For **Two rows of two**, a **How the rows are mounted** choice appears under the pictures once the panel is back: **Bottom row upside down** (folded under, where a new panel starts), **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-two-64x64-panels) for the wiring.
 :::
 
 ## Wrong size?
