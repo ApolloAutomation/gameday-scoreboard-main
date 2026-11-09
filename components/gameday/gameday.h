@@ -721,10 +721,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // play's game), with its own generation (a2_gen_) and failures; it goes
     // in a gap between the board's reads, which keep their timing.
     uint8_t a2{0};
-    // A gap read's look-ahead stops at this (millis(), 0 none), so the
-    // board's next read never waits for it; game_skipped: it stopped before
-    // the game read.
+    // A gap read's later requests (a day scoreboard, the game) each start
+    // only when its expected time (watch.h, WatchTimes) fits before this,
+    // the board's next read (millis(), 0 none), so the board never waits for
+    // it; game_skipped: it stopped before the game read.
     uint32_t deadline_ms{0};
+    uint32_t event_ms{0}, day_ms{0};
+    bool fits(bool day) const;
     bool game_skipped{false};
     uint32_t took_ms{0};  // how long the worker took, for WatchTimes
   };

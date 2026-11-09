@@ -228,9 +228,44 @@ inline std::string rot_rgb(const uint8_t (&c)[3]) {
   return buf;
 }
 
+// "1st", "2nd", ... "11th"; past reg, "OT", "2OT".
+inline std::string rot_period(int p, int reg) {
+  if (p > reg)
+    return p - reg == 1 ? "OT" : std::to_string(p - reg) + "OT";
+  const int t = p % 100;
+  const char *suf = t >= 11 && t <= 13 ? "th" : p % 10 == 1 ? "st" : p % 10 == 2 ? "nd" : p % 10 == 3 ? "rd" : "th";
+  return std::to_string(p) + suf;
+}
+
+// The watcher keeps the clock, the period and baseball's half inning, not
+// ESPN's status: what a card's clock row (clock_text) reads them by. A
+// stopped clock is halftime in football and basketball's middle period, else
+// the end of the period.
+inline void rot_status(GameSnapshot &g, const WatchGame &w) {
+  if (w.state != GameState::IN || w.period == 0)
+    return;
+  bool zero = w.clock[0] != '\0';
+  for (const char *c = w.clock; *c != '\0'; c++)
+    zero = zero && (*c < '1' || *c > '9');
+  const Sport sport = league_sport((League) w.league);
+  if (sport == Sport::BASKETBALL) {
+    g.nba.phase = zero                  ? (w.period * 2 == w.regulation ? Phase::HALFTIME : Phase::END_PERIOD)
+                  : w.clock[0] != '\0' ? Phase::PLAY
+                                        : Phase::OTHER;
+  } else if (sport == Sport::BASEBALL && w.half != Half::NONE) {
+    static const char *const kHalf[] = {"", "Top ", "Mid ", "Bot ", "End "};
+    g.short_detail = kHalf[(int) w.half] + rot_period(w.period, 99);
+  } else if (sport == Sport::FOOTBALL || sport == Sport::HOCKEY) {
+    const int reg = sport == Sport::FOOTBALL ? 4 : 3;
+    g.short_detail = !zero                                       ? std::string(w.clock)
+                     : sport == Sport::FOOTBALL && w.period == 2 ? std::string("Halftime")
+                                                                 : "End of " + rot_period(w.period, reg);
+  }
+}
+
 // A rotation card from a watched game's last read: logos, abbreviations with
-// a college rank, scores, the period and clock, and baseball's outs and
-// runners. The away side is "team", as in the live modes.
+// a college rank, scores, the period and clock (rot_status), and baseball's
+// outs and runners. The away side is "team", as in the live modes.
 inline GameSnapshot rot_card(const WatchGame &w) {
   GameSnapshot g = watch_prev(w, league_sport((League) w.league));
   // watch_prev's stand-ins for what the big play check reads
@@ -238,6 +273,7 @@ inline GameSnapshot rot_card(const WatchGame &w) {
   g.play_type.clear();
   g.play_id.clear();
   g.soc.goals.clear();
+  rot_status(g, w);
   g.team_id = w.away_id;
   g.opp_id = w.home_id;
   g.team_abbr = w.away_abbr;

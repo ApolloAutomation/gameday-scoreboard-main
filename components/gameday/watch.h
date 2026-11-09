@@ -196,6 +196,20 @@ inline BigPlay watch_detect(const WatchGame &prev, GameSnapshot cur, uint32_t ma
   return detect_big_play(p, cur, mask & ~alert_bit(Alert::FINAL), true);
 }
 
+// That big play's splash, as the watcher's own read shows it (watch_take).
+inline Splash watch_splash(const WatchGame &prev, const GameSnapshot &cur, uint32_t mask, bool wide) {
+  return big_play_splash(watch_detect(prev, cur, mask), cur, true, wide);
+}
+
+// Another read of a watched game (the second area's, split.h) stands as the
+// watcher's last, cycle its own now: the watcher's next read never finds a
+// play that read already splashed.
+inline void watch_sync(WatchGame &w, const GameSnapshot &cur, uint32_t cycle) {
+  watch_store(w, cur);
+  w.read_cycle = w.tried_cycle = cycle;
+  w.fails = 0;
+}
+
 // The alert types the watcher can switch for in a sport: none for golf and
 // racing, and never basketball's FINAL.
 inline uint32_t watch_sport_mask(Sport s) {

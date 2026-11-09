@@ -1990,7 +1990,8 @@ void GamedayComponent::idle_changed_(bool live_switch) {
   if (live_switch && this->live_mode_() && (this->live_fallback_ || this->recap_on_)) {
     this->live_fallback_ = false;
     this->recap_on_ = false;
-    this->recap_cards_.clear();
+    if (!this->a2_scores_)
+      this->recap_cards_.clear();  // the second area's scores keep theirs (recap_tick_)
     this->recap_step_ms_ = 0;
     this->live_none_ = false;
     this->live_started_ms_ = 0;
@@ -3692,7 +3693,7 @@ void GamedayComponent::run_job_() {
       int64_t now = (int64_t) this->time_->timestamp_now();
       j.lookahead = 2;
       for (int d = 0; d < LOOKAHEAD_DAYS; d++) {
-        if (j.deadline_ms != 0 && (int32_t) (millis() - j.deadline_ms) >= 0) {
+        if (!j.fits(true)) {
           j.lookahead = -1;  // tried again later, so the board's next read keeps its time
           break;
         }
@@ -3714,7 +3715,7 @@ void GamedayComponent::run_job_() {
           break;
         }
       }
-    } else if (j.deadline_ms == 0 || (int32_t) (millis() - j.deadline_ms) < 0) {
+    } else if (j.fits(true)) {
       this->take_game_on_now_(j.team, j.schedule, j.done_event);
     }
     if (!j.comps.empty()) {
@@ -3736,12 +3737,19 @@ void GamedayComponent::run_job_() {
     this->logos_.prefetch(::espn::team_logo_url(league, j.team->espn_id, j.team->abbr));
     if (j.schedule.opp_id != 0)
       this->logos_.prefetch(::espn::team_logo_url(league, j.schedule.opp_id, j.schedule.opp_abbr.c_str()));
-    if (j.deadline_ms != 0 && (int32_t) (millis() - j.deadline_ms) >= 0) {
+    if (!j.fits(false)) {
       j.game_skipped = true;  // its own read in the next gap
       return;
     }
   }
   j.game_ok = this->fetch_game_(j.team, j.schedule, j.game);
+}
+
+// A gap read's next request starts only when its expected time fits before
+// the board's next read; a read with no deadline always does.
+bool GamedayComponent::Job::fits(bool day) const {
+  return this->deadline_ms == 0 ||
+         ::espn::watch_read_fits(millis(), this->deadline_ms, day ? this->day_ms : this->event_ms);
 }
 
 // Main loop: fold the worker's result into the component state and render.
@@ -3905,7 +3913,10 @@ void GamedayComponent::apply_job_() {
     this->live_none_ = false;
     this->live_fallback_ = false;
     this->recap_on_ = false;
-    this->recap_cards_.clear();
+    // The second area's scores keep the cards this scan made, on their own
+    // timing (recap_tick_).
+    if (!this->a2_scores_)
+      this->recap_cards_.clear();
     this->recap_step_ms_ = 0;
     this->schedule_ = Schedule{};
     this->schedule_.valid = true;
@@ -4044,7 +4055,8 @@ void GamedayComponent::run_cup_job_() {
   if (j.cup_ok) {
     ::espn::adopt_league(s, j.team->league);
     ::espn::adopt_comp(s, slug);
-    this->take_game_on_now_(j.team, s, j.done_event, slug);
+    if (j.fits(true))
+      this->take_game_on_now_(j.team, s, j.done_event, slug);
     j.comps[j.comp] = s;
     ::espn::league_standing(j.comps);  // the cup's table isn't the league's
   }
@@ -4057,6 +4069,10 @@ void GamedayComponent::run_cup_job_() {
     return;
   if (next.event_id.empty()) {
     j.no_event = true;
+    return;
+  }
+  if (!j.fits(false)) {
+    j.game_skipped = true;  // the second area's: its game in the next gap
     return;
   }
   j.polled = true;
@@ -4704,12 +4720,16 @@ void GamedayComponent::a2_reset_() {
   this->a2_poll_ms_ = 0;
 }
 
+// Its own game (the one its schedule names, else the one read for it) is
+// the one the mode follows on the main board; another game of the main
+// team's next opponent isn't.
 bool GamedayComponent::a2_team_main_() const {
-  if (this->a2_team_.empty() || !this->game_.valid)
+  if (this->a2_team_.empty())
     return false;
-  const ::espn::Team *t = this->a2_team_[0].team;
-  return this->board_league_() == (uint8_t) t->league &&
-         (this->game_.team_id == t->espn_id || this->game_.opp_id == t->espn_id);
+  const FavEntry &e = this->a2_team_[0];
+  const std::string &event = e.sched.valid && !e.sched.event_id.empty() ? e.sched.event_id : e.game.event_id;
+  const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
+  return !event.empty() && mg.valid && mg.event_id == event && this->mode_league_() == (uint8_t) e.team->league;
 }
 
 // The team's game on now, or its final seen coming in and up for the
@@ -5083,8 +5103,7 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
     this->start_worker_();
     return this->busy_ ? 1 : 0;
   }
-  if (this->a2_show_() != ::espn::SplitShow::TEAM || this->a2_team_.empty() || this->a2_team_main_() ||
-      this->demo_playing_())
+  if (this->a2_show_() != ::espn::SplitShow::TEAM || this->a2_team_.empty() || this->demo_playing_())
     return 0;
   FavEntry &e = this->a2_team_[0];
   const uint8_t league = (uint8_t) e.team->league;
@@ -5104,19 +5123,24 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
   const uint32_t age = now - e.fetched_ms;
   const bool refresh = (missing && (e.fetched_ms == 0 || age >= RETRY_INTERVAL)) || (!missing && age >= SCHEDULE_INTERVAL);
   bool poll = false;
-  if (!refresh && !missing && !e.sched.event_id.empty()) {
+  // Its game on the main board is read there; its schedule still is here.
+  if (!refresh && !missing && !e.sched.event_id.empty() && !this->a2_team_main_()) {
     const int64_t tnow = (int64_t) this->time_->timestamp_now();
     const GameSnapshot &g = e.game;
     const uint32_t every = ::espn::a2_poll_ms(g.valid ? g.state : GameState::PRE, g.kickoff_epoch - tnow,
                                               g.time_tbd, this->game_.valid && this->game_.state == GameState::IN);
     poll = this->a2_poll_ms_ == 0 || now - this->a2_poll_ms_ >= every;
   }
-  if (!refresh && !poll)
+  // Soccer: with nothing else due, one cup's team read at a time after each
+  // refresh, as a favorite's.
+  const bool cup = !refresh && !poll && !missing && e.comp_next > 0 && e.comp_next < (int) e.comps.size();
+  if (!refresh && !poll && !cup)
     return 0;
-  // A refresh reads the team and then the game; its look-ahead stops at the
-  // deadline below.
+  // A refresh or a cup's read reads the team and then the game; a day
+  // scoreboard or the game after it waits for the next gap when it doesn't
+  // fit (Job::fits).
   const uint32_t one = ::espn::watch_expect_ms(this->watch_times_.ms[::espn::WatchTimes::kind(league, true)], true);
-  if (!::espn::watch_read_fits(now, due, refresh ? 2 * one + ::espn::kWatchMarginMs : one))
+  if (!::espn::watch_read_fits(now, due, poll ? one : 2 * one + ::espn::kWatchMarginMs))
     return -1;
   this->new_job_();
   j.generation = this->a2_gen_;
@@ -5127,8 +5151,10 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
   j.our_id = e.team->espn_id;
   j.schedule = e.sched;
   j.need_schedule = refresh;
-  j.deadline_ms = due - ::espn::kWatchMarginMs;
-  if (refresh) {
+  j.deadline_ms = due;
+  j.event_ms = one;
+  j.day_ms = ::espn::watch_expect_ms(this->watch_times_.ms[::espn::WatchTimes::kind(league, false)], false);
+  if (refresh || cup) {
     const size_t cups = ::espn::league_cup_count(e.team->league);
     if (cups > 0) {
       j.comps = e.comps;
@@ -5136,6 +5162,11 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
     }
     if (e.game.valid && e.game.state == GameState::POST)
       j.done_event = e.game.event_id;
+  }
+  if (cup) {
+    j.comp = e.comp_next;
+    j.need_game = e.game.event_id.empty() || e.game.event_id != e.sched.event_id;
+  } else if (refresh) {
     e.fetched_ms = now | 1;
   } else {
     this->a2_poll_ms_ = now | 1;
@@ -5206,10 +5237,21 @@ void GamedayComponent::apply_a2_job_() {
     this->jump_.fails = 0;
     GameSnapshot prev = std::move(this->jump_game_());
     ::espn::carry_football(prev, j.game);
-    // Later reads splash as a live game's do, both sides counting.
-    const Splash splash =
-        ::espn::visit_splash(false, this->jump_.splash, prev, j.game, this->alerts_on(), this->a2_wide_(),
-                             this->jump_.league, this->players_.players);
+    // Later reads splash as a live game's do, both sides counting; the first
+    // what came since the watcher's read. Each read then stands as the
+    // watcher's, so the watcher never splashes a play again (watch_sync).
+    ::espn::WatchGame *seen = nullptr;
+    for (auto &w : this->watch_)
+      if (::espn::watch_same(w, this->jump_.league, this->jump_.event_id))
+        seen = &w;
+    Splash splash;
+    if (prev.valid)
+      splash = ::espn::visit_splash(false, this->jump_.splash, prev, j.game, this->alerts_on(), this->a2_wide_(),
+                                    this->jump_.league, this->players_.players);
+    else if (seen != nullptr)
+      splash = ::espn::watch_splash(*seen, j.game, this->alerts_on(), this->a2_wide_());
+    if (seen != nullptr)
+      ::espn::watch_sync(*seen, j.game, this->watch_cycle_);
     this->jump_game_() = std::move(j.game);
     this->emit_a2_(splash);
     return;
@@ -5227,8 +5269,10 @@ void GamedayComponent::apply_a2_job_() {
     e.sched = j.schedule;
     ::espn::adopt_league(e.sched, e.team->league);
     e.stale = false;
-    if (!j.comps.empty())
+    if (!j.comps.empty()) {
       e.comps = j.comps;
+      e.comp_next = 1;
+    }
     if (j.no_event) {
       ESP_LOGI(TAG, "Second area: no upcoming game for %s", e.team->abbr);
       this->a2_none_ = true;
@@ -5247,6 +5291,25 @@ void GamedayComponent::apply_a2_job_() {
       this->a2_poll_ms_ = 0;  // its game in the next gap
       return;
     }
+  } else if (j.comp > 0) {
+    // A cup's read: its pick is the team's game now (run_cup_job_).
+    e.comps = j.comps;
+    e.comp_next = j.comp + 1 < (int) j.comps.size() ? j.comp + 1 : -1;
+    e.sched = j.schedule;
+    if (!j.polled) {
+      if (::espn::cup_read_backs_off(j.cup_ok, false, false, j.throttled))
+        this->a2_failed_(j);
+      if (j.no_event) {
+        this->a2_none_ = true;
+        e.game = GameSnapshot{};
+        this->a2_final_ms_ = 0;
+      }
+      if (j.game_skipped)
+        this->a2_poll_ms_ = 0;  // its game in the next gap
+      this->emit_a2_({});
+      return;
+    }
+    this->a2_none_ = false;
   } else {
     this->watch_times_.took(league, true, j.took_ms, j.game_ok);
   }
@@ -6080,8 +6143,15 @@ void GamedayComponent::recap_rebuild_() {
 }
 
 void GamedayComponent::recap_tick_() {
-  if (this->recap_cards_.size() < 2 || this->recap_step_ms_ == 0)
+  if (this->recap_cards_.size() < 2)
     return;
+  if (this->recap_step_ms_ == 0) {
+    // Only the second area shows them: whatever stopped the board's timing
+    // (the idle display giving way, a game picked), its cards keep turning.
+    if (this->a2_scores_ && !this->recap_on_ && !this->side_on_)
+      this->recap_show_();
+    return;
+  }
   const ::espn::RecapCard &c = this->recap_cards_[this->recap_step_];
   if (millis() - this->recap_step_ms_ < ::espn::recap_card_ms(c.kind))
     return;

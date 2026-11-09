@@ -189,6 +189,46 @@ void test_rotation() {
   PCHECK(c.play_id.empty() && c.down_distance.empty() && c.soc.goals.empty());
 }
 
+// A rotation card's clock row reads as the board's does for that sport: the
+// watcher keeps no ESPN status, so the card stands one in (rot_status).
+std::string rot_clock(uint8_t league, uint8_t period, const char *clock, Half half = Half::NONE, uint8_t reg = 4) {
+  WatchGame w = game("9", league, GameState::IN);
+  w.period = period;
+  w.regulation = reg;
+  w.half = half;
+  snprintf(w.clock, sizeof(w.clock), "%s", clock);
+  return clock_text(rot_card(w));
+}
+
+void test_rot_clock() {
+  const uint8_t nfl = (uint8_t) League::NFL, ncaa = (uint8_t) League::NCAA, nba = (uint8_t) League::NBA,
+                wnba = (uint8_t) League::WNBA, mcbb = (uint8_t) League::MCBB, nhl = (uint8_t) League::NHL,
+                mlb = (uint8_t) League::MLB, epl = (uint8_t) League::EPL, mls = (uint8_t) League::MLS;
+  PCHECK(rot_clock(nfl, 3, "5:36") == "5:36 3rd");
+  PCHECK(rot_clock(ncaa, 1, "12:00") == "12:00 1st");
+  PCHECK(rot_clock(nfl, 5, "8:12") == "8:12 OT");
+  PCHECK(rot_clock(nfl, 2, "0:00") == "Halftime");
+  PCHECK(rot_clock(nfl, 3, "0:00") == "End of 3rd");
+  PCHECK(rot_clock(nba, 4, "1:04") == "1:04 4th");
+  PCHECK(rot_clock(nba, 4, "45.3") == "45.3 4th");
+  PCHECK(rot_clock(wnba, 2, "0.0") == "Halftime");
+  PCHECK(rot_clock(nba, 3, "0.0") == "End 3rd");
+  PCHECK(rot_clock(nba, 5, "2:10") == "2:10 OT");
+  PCHECK(rot_clock(mcbb, 2, "12:34", Half::NONE, 2) == "12:34 2nd");
+  PCHECK(rot_clock(mcbb, 1, "0:00", Half::NONE, 2) == "Halftime");
+  PCHECK(rot_clock(nhl, 2, "10:00") == "10:00 2nd");
+  PCHECK(rot_clock(nhl, 4, "3:10") == "3:10 OT");
+  PCHECK(rot_clock(nhl, 1, "0:00") == "End of 1st");
+  PCHECK(rot_clock(mlb, 5, "", Half::TOP) == "Top 5th");
+  PCHECK(rot_clock(mlb, 7, "", Half::MID) == "Mid 7th");
+  PCHECK(rot_clock(mlb, 11, "", Half::BOTTOM) == "Bot 11th");
+  PCHECK(rot_clock(mlb, 2, "", Half::END) == "End 2nd");
+  PCHECK(rot_clock(epl, 1, "67'") == "67'");
+  PCHECK(rot_clock(mls, 2, "90'+3'") == "90'+3'");
+  PCHECK(rot_period(1, 4) == "1st" && rot_period(12, 99) == "12th" && rot_period(21, 99) == "21st");
+  PCHECK(rot_period(6, 4) == "2OT");
+}
+
 GameSnapshot hockey(const char *event, uint32_t away, uint32_t home, int as, int hs) {
   GameSnapshot g;
   g.valid = true;
@@ -278,6 +318,34 @@ void test_watch_all() {
   PCHECK(watch_wants_teams(c, (uint8_t) League::MILB, 234, 260) == 0);
   PCHECK(watch_wants_teams(c, (uint8_t) League::AHL, 324, 330) == 0);
   PCHECK(watch_wants_teams(c, (uint8_t) League::ECHL, 70, 74) == 0);
+
+  // A big play has the second area on 501. Its first read splashes the goal
+  // since the watcher's read; each read then stands as the watcher's, so the
+  // watcher's next read finds no goal the area already splashed.
+  WatchGame seen = game("501", nhl, GameState::IN, "BOSTO", "NYR");
+  seen.away_id = 1;
+  seen.home_id = 13;
+  watch_store(seen, hockey("501", 1, 13, 0, 0));
+  const uint32_t mask = alert_bit(Alert::HOCKEY_GOAL);
+  PCHECK(!watch_splash(seen, goal, mask, true).text.empty());
+  watch_sync(seen, goal, 9);
+  PCHECK(seen.team_score == 1 && seen.read_cycle == 9 && seen.tried_cycle == 9);
+  PCHECK(watch_splash(seen, goal, mask, true).text.empty());
+  PCHECK(std::string(seen.away_abbr) == "BOSTO");  // the card keeps its teams
+  job.games = {seen};
+  job.fresh.clear();
+  job.alert = WatchAlert{};
+  job.cycle = 10;
+  job.ctx = WatchCtx{};
+  job.ctx.all = true;
+  job.ctx.read_mask = kAlertsAll;
+  job.ctx.mask = mask;
+  watch_take(job, goal);
+  PCHECK(job.fresh.size() == 1 && !job.alert.valid);
+  GameSnapshot two = hockey("501", 1, 13, 2, 0);
+  job.fresh.clear();
+  watch_take(job, two);
+  PCHECK(job.alert.valid);
 }
 
 void test_watch_sources_team() {
@@ -361,6 +429,7 @@ int run_split_tests(int &total_checks) {
   test_scores_step();
   test_a2_poll();
   test_rotation();
+  test_rot_clock();
   test_watch_all();
   test_watch_sources_team();
   test_area2_busy();
