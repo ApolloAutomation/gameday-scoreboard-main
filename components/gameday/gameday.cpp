@@ -361,6 +361,12 @@ void GamedayComponent::setup() {
     this->idle_prefs_.night_start = ::espn::kNightStartDefault;
     this->idle_prefs_.night_end = ::espn::kNightEndDefault;
   }
+  // Manual bets (bets.h): a blob of their own, so no other setting moves.
+  // A panel that has none, or whose blob doesn't load, starts with none.
+  this->bets_pref_ = global_preferences->make_preference<::espn::BetBlob>(fnv1_hash("gameday_bets_v1"));
+  if (!this->bets_pref_.load(&this->bets_.blob))
+    this->bets_.blob = ::espn::BetBlob{};
+  this->bets_.loaded();
 #ifdef GAMEDAY_BETA_CHANNEL
   // Before the update entity's first check, which waits for the main loop.
   this->beta_pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("gameday_beta_v1"));
@@ -990,6 +996,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
     e.final_epoch = tnow;
   this->note_final_(e.game);
   this->mark_good_poll_();
+  this->bets_tick_();  // a bet on this favorite's game
   bool switched = this->fav_choose_(tnow);
   if (!switched && shown) {
     // Same game on the board: render the new poll with its splash.
@@ -1047,6 +1054,154 @@ bool GamedayComponent::following_() {
   return false;
 }
 
+// ---- Manual bets -----------------------------------------------------------------
+
+// bet=: the bet as typed, with no game yet, into the first empty slot (slot
+// 0, what the device page sends, so two pages never pick the same one) or
+// into the slot named. A game on the board or a favorite's card takes it at once.
+void GamedayComponent::set_bet_(uint8_t slot, ::espn::Bet b) {
+  b.placed = this->clock_set_() ? (uint32_t) this->time_->timestamp_now() : 0;
+  uint8_t at = ::espn::bet_put(this->bets_.blob.bets, slot, b);
+  if (at == 0) {
+    ESP_LOGW(TAG, "Bet %s %s ignored: all %d bet slots are in use", ::espn::league_key((League) b.league),
+             ::espn::bet_label(b).c_str(), ::espn::kBetSlots);
+    return;
+  }
+  this->bets_.changed();
+  ESP_LOGI(TAG, "Bet %u: %s %s", (unsigned) at, ::espn::league_key((League) b.league),
+           ::espn::bet_label(b).c_str());
+  this->bets_tick_();
+  if (this->game_.valid)
+    this->emit_({});  // the ticker gets it now
+  else
+    this->rebuild_state_(&this->last_fields_);
+}
+
+void GamedayComponent::remove_bet_(uint8_t slot) {
+  if (slot < 1 || slot > ::espn::kBetSlots || ::espn::bet_empty(this->bets_.at(slot - 1)))
+    return;
+  ESP_LOGI(TAG, "Bet %u removed", (unsigned) slot);
+  this->bets_.at(slot - 1) = ::espn::Bet{};
+  this->bets_.changed();
+  this->bets_tick_();
+  if (this->game_.valid)
+    this->emit_({});
+  else
+    this->rebuild_state_(&this->last_fields_);
+}
+
+// The games the panel holds are the board's and, in Favorite teams, each
+// favorite's card: the bets on them take their game or result. Then the done
+// bets go, and a change is saved.
+bool GamedayComponent::bets_tick_() {
+  bool any = false;
+  for (const auto &b : this->bets_.blob.bets)
+    any = any || !::espn::bet_empty(b);
+  bool gone = false;
+  if (any && this->clock_set_()) {
+    const int64_t now = (int64_t) this->time_->timestamp_now();
+    const int64_t midnight = this->next_midnight_(now);
+    ::espn::BetSource &src = this->bets_;
+    ::espn::BetGame g;
+    if (this->bet_game_(this->game_, this->board_league_(), g))
+      ::espn::bets_observe(src, g, now, midnight);
+    if (this->favorites_mode_())
+      for (const auto &e : this->fav_)
+        if (this->bet_game_(e.game, (uint8_t) e.team->league, g))
+          ::espn::bets_observe(src, g, now, midnight);
+    gone = ::espn::bets_expire(src, now);
+    if (gone)
+      ESP_LOGI(TAG, "Bets: dropped the ones that are done");
+  }
+  if (this->bets_.dirty) {
+    this->bets_.dirty = false;
+    this->bets_pref_.save(&this->bets_.blob);
+  }
+  return gone;
+}
+
+uint8_t GamedayComponent::board_league_() const {
+  uint8_t league = this->live_mode_() && this->schedule_.valid ? this->schedule_.league : this->prefs_.league;
+  if (this->favorites_mode_() && this->fav_shown_ >= 0)
+    league = (uint8_t) this->fav_[this->fav_shown_].team->league;
+  if (this->recap_on_ && this->recap_step_ < this->recap_cards_.size() &&
+      (this->recap_cards_[this->recap_step_].kind == ::espn::RecapKind::FINAL ||
+       this->recap_cards_[this->recap_step_].kind == ::espn::RecapKind::LATER))
+    league = this->recap_days_[this->recap_cards_[this->recap_step_].day].league;
+#ifdef GAMEDAY_DEMO
+  if (this->demo_playing_())
+    league = this->demo_league_();
+#endif
+  return league;
+}
+
+bool GamedayComponent::bet_game_(const GameSnapshot &g, uint8_t league, ::espn::BetGame &out) const {
+  if (this->demo_playing_() || !g.valid || g.state == GameState::NOT_FOUND || ::espn::is_board_sport(g.sport) ||
+      ::espn::league_sport((League) league) != g.sport)
+    return false;
+  out = ::espn::BetGame{};
+  out.event = ::espn::bet_event_id(g.event_id);
+  if (out.event == 0)
+    return false;
+  out.league = league;
+  out.team_id = g.team_id;
+  out.opp_id = g.opp_id;
+  out.team_score = g.team_score;
+  out.opp_score = g.opp_score;
+  out.kickoff = g.kickoff_epoch;
+  out.phase = g.state == GameState::PRE  ? ::espn::BetPhase::PRE
+              : g.state == GameState::IN ? ::espn::BetPhase::LIVE
+              : g.completed              ? ::espn::BetPhase::FINAL
+                                         : ::espn::BetPhase::OFF;
+  return true;
+}
+
+const GameSnapshot *GamedayComponent::bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const {
+  if (b.event == 0)
+    return nullptr;
+  if (this->bet_game_(this->game_, this->board_league_(), out) && out.event == b.event && out.league == b.league)
+    return &this->game_;
+  if (this->favorites_mode_())
+    for (const auto &e : this->fav_)
+      if (this->bet_game_(e.game, (uint8_t) e.team->league, out) && out.event == b.event && out.league == b.league)
+        return &e.game;
+  return nullptr;
+}
+
+void GamedayComponent::bets_ticker_(std::string &out) const {
+  ::espn::BetGame g;
+  if (!this->clock_set_() || !this->bet_game_(this->game_, this->board_league_(), g))
+    return;
+  const int64_t now = (int64_t) this->time_->timestamp_now();
+  for (const auto &b : this->bets_.blob.bets) {
+    if (::espn::bet_empty(b) || b.event != g.event || b.league != g.league)
+      continue;
+    if (!out.empty())
+      out += " | ";
+    out += ::espn::bet_ticker(b, ::espn::bet_status(b, &g, now));
+  }
+}
+
+// The next local midnight in the panel's time zone. ESPHome converts with its
+// own rules, so not mktime, which knows no zone here.
+int64_t GamedayComponent::next_midnight_(int64_t now) const {
+  ESPTime t = ESPTime::from_epoch_local((time_t) now);
+  t.hour = 0;
+  t.minute = 0;
+  t.second = 0;
+  if (t.day_of_month >= days_in_month(t.month, t.year)) {
+    t.day_of_month = 1;
+    if (++t.month > 12) {
+      t.month = 1;
+      t.year++;
+    }
+  } else {
+    t.day_of_month++;
+  }
+  t.recalc_timestamp_local();
+  return (int64_t) t.timestamp > now ? (int64_t) t.timestamp : now + 24 * 3600;
+}
+
 uint32_t GamedayComponent::our_id_() const {
   if (this->job_.fav_index >= 0)
     return this->job_.our_id;
@@ -1094,6 +1249,9 @@ void GamedayComponent::loop() {
       this->boot_clock_noted_ = true;
       ::espn::boot_log_clock(boot_log, (int64_t) this->time_->now().timestamp - esp_timer_get_time() / 1000000);
     }
+    // A graded bet goes at local midnight (bets.h).
+    if (this->bets_tick_())
+      this->rebuild_state_(&this->last_fields_);
   }
 #ifdef GAMEDAY_UPDATE_MIRROR
   this->mirror_tick_();
@@ -3491,6 +3649,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   // A game that started or ended takes the panel back, or lets it go, now
   // (and the demo build's scripted game counts as one).
   this->idle_update_();
+  this->bets_tick_();  // a bet on the new board's game takes it, or its result
   const GameSnapshot &g = this->game_;
   UpdateFields f;
   this->game_fields_(g, splash, f);
@@ -3818,6 +3977,9 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
+  // The bets on the mode's own game (bets.h), not on an idle display card.
+  if (&g == &this->game_)
+    this->bets_ticker_(f.status_text);
 }
 
 // A board with different logos from the one up now waits for them, so it goes
@@ -4410,18 +4572,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   std::string why = this->no_game_why_();
   if (!why.empty())
     game["why"] = why;
-  uint8_t league = this->live_mode_() && this->schedule_.valid ? this->schedule_.league : this->prefs_.league;
-  if (this->favorites_mode_() && this->fav_shown_ >= 0)
-    league = (uint8_t) this->fav_[this->fav_shown_].team->league;
-  if (this->recap_on_ && this->recap_step_ < this->recap_cards_.size() &&
-      (this->recap_cards_[this->recap_step_].kind == ::espn::RecapKind::FINAL ||
-       this->recap_cards_[this->recap_step_].kind == ::espn::RecapKind::LATER))
-    league = this->recap_days_[this->recap_cards_[this->recap_step_].day].league;
-#ifdef GAMEDAY_DEMO
-  if (this->demo_playing_())
-    league = this->demo_league_();
-#endif
-  game["l"] = ::espn::league_key((League) league);
+  game["l"] = ::espn::league_key((League) this->board_league_());
   game["ta"] = g.team_abbr;
   game["ti"] = g.team_id;
   game["ts"] = g.team_score;
@@ -4589,6 +4740,46 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["neutral"] = u.neutral;
     o["tv"] = u.tv;
   }
+  // Manual bets (bets.h), each with its game and where it stands. ev, kick
+  // and oa once the bet has a game; ts and os, its team's score first, while
+  // the panel holds the game or after the final.
+  JsonArray bets = doc["bets"].to<JsonArray>();
+  const int64_t tnow = this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0;
+  for (uint8_t i = 0; i < ::espn::kBetSlots; i++) {
+    const ::espn::Bet &b = this->bets_.blob.bets[i];
+    if (::espn::bet_empty(b))
+      continue;
+    JsonObject o = bets.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["l"] = ::espn::league_key((League) b.league);
+    o["id"] = b.team_id;
+    o["abbr"] = ::espn::bet_team_abbr(b.league, b.team_id);
+    o["type"] = ::espn::bet_type_key(b);
+    o["half"] = b.line;
+    o["text"] = ::espn::bet_label(b);
+    ::espn::BetGame bg;
+    const GameSnapshot *gs = this->bet_snapshot_(b, bg);
+    o["st"] = ::espn::bet_status_key(::espn::bet_status(b, gs != nullptr ? &bg : nullptr, tnow));
+    if (b.event == 0)
+      continue;
+    o["ev"] = std::to_string(b.event);
+    o["kick"] = b.kickoff;
+    if (gs != nullptr) {
+      o["oa"] = gs->team_id == b.team_id ? gs->opp_abbr : gs->team_abbr;
+    } else {
+      o["oa"] = ::espn::bet_team_abbr(b.league, b.opp_id);
+    }
+    if (gs != nullptr && gs->state != GameState::PRE) {
+      int us = 0, them = 0;
+      ::espn::bet_score(b, bg, us, them);
+      o["ts"] = us;
+      o["os"] = them;
+    } else if (b.result != (uint8_t) ::espn::BetResult::NONE) {
+      o["ts"] = b.team_score;
+      o["os"] = b.opp_score;
+    }
+  }
+  doc["betmax"] = ::espn::kBetSlots;
   std::string out;
   serializeJson(doc, out);
   std::lock_guard<std::mutex> lock(this->state_mutex_);
@@ -4996,6 +5187,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::NIGHT_BRI:
         this->set_night_bri(op.value);
+        break;
+      case ::espn::SetKind::BET:
+        this->set_bet_(op.slot, op.bet);
+        break;
+      case ::espn::SetKind::BET_DEL:
+        this->remove_bet_(op.slot);
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)

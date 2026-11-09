@@ -29,7 +29,7 @@ Started by playwright.config.js. Run by hand with `python mock_device.py 8765`
 and open http://127.0.0.1:8765/.
 
 The set keys, their limits and the Live auto pick come from
-components/gameday/set_request.h. `python mock_device.py --selftest` runs
+components/gameday/set_request.h, and the bet limits from bets.h. `python mock_device.py --selftest` runs
 tests/fixtures/set_cases.json, the table the firmware's host tests also
 check, through apply_set, so the mock can't drift from the panel.
 """
@@ -71,7 +71,8 @@ SET_H = (REPO / "components/gameday/set_request.h").read_text(encoding="utf-8")
 SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kSetKeys\[\] = \{(.*?)\};", SET_H, re.S).group(1)))
 LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w+) = (\d+);",
                                              SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
-                                             + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8"))}
+                                             + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
 # PanelLayout refuses a count past this (gameday-common.yaml).
 MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8"),
@@ -105,6 +106,8 @@ INITIAL = {
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
     "espn_kb": 412, "espn_reads": 23,
+    # Manual bets (components/gameday/bets.h), filled slots only, and how many fit.
+    "bets": [], "betmax": LIMITS["kBetSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
                "heap_kb": 143.2, "block_kb": 40.0, "psram_kb": 4100.5, "rssi": -58, "espn": 200,
@@ -239,6 +242,80 @@ def let_go():
     STATE["follow"] = False
 
 
+def bet_line(v, spread):
+    """parse_bet_line() (bets.h): whole or half points into half points, else None."""
+    m = re.fullmatch(r"([+-]?)(\d{1,4})(?:\.([05]))?" if spread else r"()(\d{1,4})(?:\.([05]))?", v, re.ASCII)
+    if not m:
+        return None
+    half = int(m.group(2)) * 2 + (1 if m.group(3) == "5" else 0)
+    half = -half if m.group(1) == "-" else half
+    if spread:
+        return half if abs(half) <= LIMITS["kBetMaxSpreadHalf"] else None
+    return half if 1 <= half <= LIMITS["kBetMaxTotalHalf"] else None
+
+
+def parse_bet(v):
+    """parse_bet() (set_request.h): (slot, league, team id, type, half) or None. Slot 0 is the first empty one."""
+    f = v.split(",")
+    if len(f) != 5 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kBetSlots"]):
+        return None
+    lg, tid, kind, line = f[1], f[2], f[3], f[4]
+    if lg not in LEAGUES or lg in BOARD or not re.fullmatch(r"\d{1,10}", tid, re.ASCII) or (lg, int(tid)) not in TEAMS:
+        return None
+    if kind == "ml":
+        half = 0 if line == "" else None
+    elif kind in ("spread", "over", "under"):
+        half = bet_line(line, kind == "spread")
+    else:
+        half = None
+    return None if half is None else (int(f[0]), lg, int(tid), kind, half)
+
+
+def bet_points(half, sign):
+    """bet_points() (bets.h): "3.5", "+7"."""
+    out = "+" if sign and half > 0 else "-" if half < 0 else ""
+    return out + str(abs(half) // 2) + (".5" if abs(half) % 2 else "")
+
+
+def bet_doc(slot, lg, tid, kind, half):
+    """One "bets" entry of rebuild_state_(), for a bet with no game yet."""
+    abbr = TEAMS[(lg, tid)][0]
+    text = (kind.upper() + " " + bet_points(half, False) if kind in ("over", "under")
+            else abbr + " ML" if kind == "ml" else abbr + " " + ("PK" if half == 0 else bet_points(half, True)))
+    return {"slot": slot, "l": lg, "id": tid, "abbr": abbr, "type": kind, "half": half, "text": text, "st": "waiting"}
+
+
+def bet_on_board(b):
+    """bets_tick_(): a bet on the board's game takes it, and where it stands."""
+    g = STATE.get("game") or {}
+    if g.get("l") != b["l"] or b["id"] not in (g.get("ti"), g.get("oi")) or g.get("s") not in ("PRE", "IN", "POST"):
+        return b
+    ours = b["id"] == g.get("ti")
+    us, them = (g.get("ts", 0), g.get("os", 0)) if ours else (g.get("os", 0), g.get("ts", 0))
+    b.update({"ev": str(g.get("id", "")), "kick": g.get("kick", 0), "oa": g.get("oa") if ours else g.get("ta")})
+    if g["s"] == "PRE":
+        b["st"] = "pre"
+        return b
+    m = (2 * (us - them) + b["half"] if b["type"] == "spread" else us - them if b["type"] == "ml"
+         else (2 * (us + them) - b["half"]) * (-1 if b["type"] == "under" else 1))
+    words = ("covering", "not_covering", "level") if g["s"] == "IN" else ("won", "lost", "push")
+    b.update({"st": words[0] if m > 0 else words[1] if m < 0 else words[2], "ts": us, "os": them})
+    return b
+
+
+def put_bet(slot, doc):
+    """The slot's entry, or none: the list stays in slot order. bet_put() (bets.h): with a doc, slot 0 is the
+    first empty slot, and with every slot in use nothing changes."""
+    if slot == 0 and doc:
+        used = {b["slot"] for b in STATE.get("bets", [])}
+        slot = next((s for s in range(1, LIMITS["kBetSlots"] + 1) if s not in used), 0)
+        if not slot:
+            return
+        doc["slot"] = slot
+    keep = [b for b in STATE.get("bets", []) if b["slot"] != slot]
+    STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
+
+
 def apply_set(kv):
     """GamedayComponent::apply_set_ through set_request.h's parse_set."""
     for k, v in kv:
@@ -311,6 +388,13 @@ def apply_set(kv):
             # all (which atoi would read as every switch off) is refused.
             if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
                 STATE["alerts"] = atoi(v)
+        elif k == "betdel":
+            if len(v) == 1 and "1" <= v <= str(LIMITS["kBetSlots"]):
+                put_bet(int(v), None)
+        elif k == "bet":
+            bet = parse_bet(v)
+            if bet:
+                put_bet(bet[0], bet_on_board(bet_doc(*bet)))
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)
@@ -344,6 +428,9 @@ def selftest():
             return f'{value["l"]}:{value["id"]}' if value else ""
         if key == "favs":
             return [compact("team", t) for t in value]
+        if key == "bets":
+            # The bet as entered; its game and status are the firmware's.
+            return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
         return value
 
     bad = 0
@@ -358,6 +445,7 @@ def selftest():
             start["game"] = {**INITIAL["game"], "s": "POST"}
         if not start.pop("board", True):
             start["game"] = {"s": "NOT_FOUND"}
+        start["bets"] = [bet_doc(b["slot"], b["l"], b["id"], b["type"], b["half"]) for b in start.get("bets", [])]
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league

@@ -14,7 +14,7 @@ all: build/test_parse build/test_networks
 	./build/test_parse
 	./build/test_networks
 
-TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp
+TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp
 SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp
 
 build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h)

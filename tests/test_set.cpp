@@ -51,7 +51,7 @@ std::string keys(const std::vector<League> &leagues) {
 // follow is the Follow this game pin, kept in memory only; board says the
 // mode has a game of its own on the panel to follow (not Live games'
 // fallback card or finals rotation, nor an empty board), and final that the
-// game has ended.
+// game has ended. bets are the manual bets by slot (bets.h), as entered.
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
@@ -65,6 +65,7 @@ struct Settings {
   int idle{0}, idledim{0}, nightstart{kNightStartDefault}, nightend{kNightEndDefault},
       nightbri{kNightBrightnessDefault};
   bool night{false};
+  Bet bets[kBetSlots]{};
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 2;
@@ -145,6 +146,24 @@ void load(Settings &s, JsonObjectConst o) {
     s.nightstart = parse_hhmm(o["nightstart"].as<const char *>());
   if (o["nightend"].is<const char *>())
     s.nightend = parse_hhmm(o["nightend"].as<const char *>());
+  // bets: the state document's slot, l, id, type and half of each bet.
+  if (o["bets"].is<JsonArrayConst>()) {
+    for (auto &b : s.bets)
+      b = Bet{};
+    for (JsonObjectConst j : o["bets"].as<JsonArrayConst>()) {
+      std::string type = j["type"] | "";
+      std::string value = std::to_string(j["slot"] | 0) + "," + (j["l"] | "") + "," +
+                          std::to_string(j["id"] | 0u) + "," + type + ",";
+      if (type != "ml")
+        value += bet_points(j["half"] | 0, type == "spread");
+      uint8_t slot = 0;
+      Bet b{};
+      if (parse_bet(value, slot, b) && slot >= 1)
+        s.bets[slot - 1] = b;
+      else
+        printf("FAIL set_cases.json: a start bet doesn't parse: %s\n", value.c_str());
+    }
+  }
 }
 
 bool any_favorite(const Settings &s) {
@@ -225,6 +244,8 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
     case SetKind::ALERTFAV: s.alertfav = op.on; break;
     case SetKind::STANDING: s.standing = op.value; break;
+    case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // set_bet_
+    case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
     case SetKind::PANELS: {
       // apply_set_ hands PanelLayout::set_cols a byte.
       const uint8_t cols = (uint8_t) op.value;
@@ -287,6 +308,19 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["nightstart"] = clock_hhmm(s.nightstart);
   doc["nightend"] = clock_hhmm(s.nightend);
   doc["nightbri"] = s.nightbri;
+  // The bet's own keys of each "bets" entry, filled slots in slot order.
+  JsonArray bets = doc["bets"].to<JsonArray>();
+  for (int i = 0; i < kBetSlots; i++) {
+    const Bet &b = s.bets[i];
+    if (bet_empty(b))
+      continue;
+    JsonObject o = bets.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["l"] = league_key((League) b.league);
+    o["id"] = b.team_id;
+    o["type"] = bet_type_key(b);
+    o["half"] = b.line;
+  }
 }
 
 void test_fixture_cases() {
@@ -408,10 +442,21 @@ void test_parse_set() {
          "nightbri never goes dark");
   SCHECK(parse_set("nightbri", "999", op, kFavMax) && op.value == kNightBriMax, "nightbri clamps down");
 
+  int del_at = -1, bet_at = -1, at = 0;
+  for (const char *key : kSetKeys) {
+    if (std::string(key) == "betdel")
+      del_at = at;
+    if (std::string(key) == "bet")
+      bet_at = at;
+    at++;
+  }
+  SCHECK(del_at >= 0 && del_at < bet_at, "betdel empties a slot before bet fills it");
+
   // Every key handle_set_ forwards decodes to something.
   for (const char *key : kSetKeys) {
     bool known = parse_set(key, "1", op, kFavMax) || parse_set(key, "nfl:6", op, kFavMax) ||
-                 parse_set(key, "", op, kFavMax) || parse_set(key, "07:00", op, kFavMax);
+                 parse_set(key, "", op, kFavMax) || parse_set(key, "07:00", op, kFavMax) ||
+                 parse_set(key, "1,nfl,6,ml,", op, kFavMax);
     SCHECK(known, "kSetKeys has %s but parse_set refuses every value", key);
   }
 }

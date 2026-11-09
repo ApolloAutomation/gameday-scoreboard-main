@@ -21,6 +21,10 @@ While a racing series is your team, the board shows the order of the session on 
 A **Follow this game** switch sits under the board while the panel shows a game Live games picked, or a favorite's game in Favorite teams, that hasn't ended. It doesn't show over your team's card or recent finals while Live games has nothing live. Turn it on to keep that game on the panel instead of moving on, and the switch reads **Following this game**. The panel goes back to switching games once the game ends, or to your favorites once its final has been up for **After the final**, or when you turn the switch off. A restart turns it off, since the panel doesn't save it. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
 :::
 
+:::note[Coming in the next release]
+Under the board, a tag for each bet you typed into the **Bets** card that's on the game on the board: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. See [Bets](/using/bets/).
+:::
+
 When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**, or, with nothing on the schedule, **No upcoming event for this tour** for a golf tour and **No upcoming race for this series** for a racing series. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 
 Three warnings can appear on the board:
@@ -50,6 +54,10 @@ Tap **Change team** to open the team chooser. It has a search box and a **Close*
 The first tab, **On now**, lists today's games in every league except golf and racing, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
 
 The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. The **Golf** and **Racing** tabs are hidden there, since a tour or a series can't be a favorite yet. See [Favorite teams](/using/favorites/).
+
+:::note[Coming in the next release]
+**Pick a team** in the Bets card opens the chooser too, to pick the team for a new bet. The **Golf** and **Racing** tabs are hidden there as well.
+:::
 
 ## Settings
 
@@ -172,3 +180,9 @@ With **Follow beta** on, the Firmware box and **Check for updates** show the lat
 - Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the next release comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
 
 See [Firmware updates](/using/updates/#beta-versions).
+
+## The Bets card
+
+:::note[Coming in the next release]
+The **Bets** card comes last on the page and stays folded until you tap **Bets**; the number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
+:::

@@ -1,7 +1,8 @@
 // Game Day Scoreboard device page.
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
-//   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
+//   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...,
+//                                 bet=0,nfl,2,spread,-3.5 and betdel=1 for the Bets card)
 //   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
@@ -122,6 +123,7 @@
       <div class="ticker" id="ticker">Waiting for the device</div>
       <div class="gone" id="gone" hidden></div>
       <div class="play" id="play"></div>
+      <div class="betline" id="betline" hidden></div>
       <div class="splash" id="splash"></div>
     </section>
 
@@ -296,6 +298,21 @@
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
         <div class="ctl"><label>ESPN data<small>Scores and logos since the panel started</small></label><span class="val" id="espnData"></span></div>
       </div>
+      <details class="card betcard" id="betCard" hidden>
+        <summary><h2>Bets</h2><span class="val" id="betSum"></span></summary>
+        <p class="hint">Bets you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering during the game, and the result after the final until midnight. The panel follows bets only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
+        <div id="betList"></div>
+        <div class="sub">Add a bet</div>
+        <div class="ctl"><label>Team<small>For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
+        <div class="ctl"><label for="betType">Bet</label><select id="betType">
+          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
+        </select></div>
+        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
+          <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
+          <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
+        <p class="betmsg" id="betMsg" role="alert" hidden></p>
+        <button class="btn primary" id="betAdd">Add bet</button>
+      </details>
     </div>
 
     <p class="foot">
@@ -1264,7 +1281,7 @@
         b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
         b.onclick = () => {
           if (!t) return;
-          if (pickFav) return choose(t);
+          if (pickFav || pickBet) return choose(t);
           setGD({ team: keyOf(t) });
           toast("Now following the " + t[3]);
           closePicker();
@@ -1281,11 +1298,180 @@
     }
   };
 
+  // ---- bets ----------------------------------------------------------------------
+  // Typed in by hand: the panel never connects to a sportsbook. The firmware
+  // ties each bet to a game it reads, grades it at the final and drops it at
+  // midnight (components/gameday/bets.h). A new bet posts slot 0, which the
+  // firmware puts in its first empty slot, so two pages adding at once never
+  // pick the same one (bet=0,<league>,<team id>,<type>,<line>); betdel=<slot>
+  // removes one.
+  let betTeam = "";      // the add form's team, "nfl:2"
+  let betSign = "";      // the spread's sign from the minus and plus buttons, "" until one is tapped
+  let betDrawn = null;   // the list as last drawn
+  let betPending = [];   // bets posted that the panel doesn't list yet: { l, id, type, half, at }
+  const sameBet = (a, b) => a.l === b.l && a.id === b.id && a.type === b.type && a.half === b.half;
+  const BET_WORDS = { covering: "COVERING", not_covering: "NOT COVERING", level: "PUSH", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
+  const betTone = (st) => (st === "covering" || st === "won" ? "good" : st === "not_covering" || st === "lost" ? "bad" : BET_WORDS[st] ? "even" : "");
+  const betPoints = (half, sign) => (sign && half > 0 ? "+" : half < 0 ? "-" : "") + Math.floor(Math.abs(half) / 2) + (Math.abs(half) % 2 ? ".5" : "");
+  // The line as typed, in half points, or what's wrong with it.
+  // A comma works as the decimal point ("3,5"), as a phone set to a comma
+  // locale types it.
+  const betHalf = (raw, spread) => {
+    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+    if (spread && /^(pk|pick|pickem|pick'em)$/i.test(v)) return 0;
+    if (!v) return spread ? "Type the spread, like 3.5." : "Type the total, like 47.5.";
+    if (!spread && /^[+-]/.test(v)) return "A total has no + or -. Type it like 47.5.";
+    const m = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(v);
+    if (!m) return "That isn't a number. Type it like " + (spread ? "3.5." : "47.5.");
+    const frac = (m[3] || "").replace(/0+$/, "");
+    if (frac && frac !== "5") return "Lines go in whole or half points, like 3 or 3.5.";
+    const half = (Number(m[2]) * 2 + (frac ? 1 : 0)) * (m[1] === "-" ? -1 : 1);
+    if (spread && Math.abs(half) > 199) return "The panel takes spreads up to 99.5.";
+    if (!spread && !half) return "A total is more than 0.";
+    if (half > 1999) return "The panel takes totals up to 999.5.";
+    return half;
+  };
+  // The bet's game and where it stands, under its name.
+  const betGame = (b) => {
+    if (!b.ev) return "Starts when the panel shows a " + b.abbr + " game";
+    const vs = b.abbr + " vs " + (b.oa || "?") + " \u00b7 ";
+    const score = b.ts + "-" + b.os;
+    if (b.st === "pre") return vs + (b.kick * 1000 > Date.now() ? kickLabel(b.kick) : "Waiting for the start");
+    if (b.st === "unread") return vs + "Started, not on the panel right now";
+    if (b.st === "void") return vs + "Postponed or canceled";
+    if (b.st === "won" || b.st === "lost" || b.st === "push") return vs + "Final " + score;
+    return vs + score;
+  };
+  const betChip = (b, text) => el("span", "bet " + betTone(b.st), text);
+  const renderBets = () => {
+    const card = $("#betCard");
+    // Firmware from before bets sends none.
+    card.hidden = !S || S.bets === undefined;
+    const list = (S && S.bets) || [];
+    // The board: the bets on its game.
+    const on = game && game.id && game.s !== "NOT_FOUND" ? list.filter((b) => b.ev === String(game.id)) : [];
+    const line = $("#betline");
+    line.textContent = "";
+    for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
+    line.hidden = !on.length;
+    if (card.hidden) return;
+    $("#betSum").textContent = list.length ? list.length + " of " + (S.betmax || 8) : "";
+    const sig = JSON.stringify(list);
+    if (sig === betDrawn) return;
+    betDrawn = sig;
+    const host = $("#betList");
+    const focused = host.contains(document.activeElement);
+    host.textContent = "";
+    for (const b of list) {
+      const row = el("div", "ctl betrow");
+      const img = el("img");
+      img.alt = "";
+      img.loading = "lazy";
+      const src = logoUrl(b.l, b.id, b.abbr);
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
+      row.appendChild(img);
+      const name = el("label", null, b.text);
+      name.appendChild(el("small", null, betGame(b)));
+      row.appendChild(name);
+      if (BET_WORDS[b.st]) row.appendChild(betChip(b, BET_WORDS[b.st]));
+      const x = el("button", "betdel", "\u2715");
+      x.title = "Remove " + b.text;
+      x.setAttribute("aria-label", x.title);
+      x.onclick = () => setGD({ betdel: b.slot }).then((ok) => ok && toast("Removed " + b.text));
+      row.appendChild(x);
+      host.appendChild(row);
+    }
+    if (!list.length) host.appendChild(el("p", "hint", "No bets yet."));
+    if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
+  };
+  // The sign typed at the start of the line, "" for none.
+  const typedSign = (v) => {
+    const m = /^\s*([+\-\u2212])/.exec(v);
+    return m ? (m[1] === "+" ? "+" : "-") : "";
+  };
+  const signButtons = Array.from(document.querySelectorAll("#betSign button"));
+  const renderBetForm = () => {
+    const t = teamByKey(betTeam);
+    $("#betTeam").textContent = t ? t[3] : "Pick a team";
+    const type = $("#betType").value;
+    $("#betLineRow").hidden = type === "ml";
+    $("#betSign").hidden = type !== "spread";
+    signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
+    $("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
+      : "Total points in the game, like 47.5";
+    $("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
+  };
+  const betSay = (t) => {
+    $("#betMsg").textContent = t;
+    $("#betMsg").hidden = !t;
+  };
+  $("#betTeam").onclick = () => openPicker(false, true);
+  $("#betType").onchange = () => { betSay(""); renderBetForm(); };
+  $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
+  // A sign typed in the line lights its button; a button tapped with a sign
+  // already typed changes that sign.
+  $("#betLine").oninput = () => {
+    const s = typedSign($("#betLine").value);
+    if (s && s !== betSign) { betSign = s; renderBetForm(); }
+  };
+  signButtons.forEach((b) => {
+    b.onclick = () => {
+      betSign = b.dataset.sign;
+      const f = $("#betLine");
+      if (typedSign(f.value)) f.value = betSign + f.value.replace(/^\s*[+\-\u2212]\s*/, "");
+      betSay("");
+      renderBetForm();
+      f.focus();
+    };
+  });
+  $("#betAdd").onclick = () => {
+    if (!S) return;
+    const t = teamByKey(betTeam);
+    if (!t) return betSay("Pick the team first.");
+    const type = $("#betType").value;
+    let raw = $("#betLine").value;
+    if (type === "spread" && !typedSign(raw) && betSign && /^\s*\d/.test(raw)) raw = betSign + raw.trim();
+    const half = type === "ml" ? 0 : betHalf(raw, type === "spread");
+    if (typeof half === "string") {
+      betSay(half);
+      $("#betLine").focus();
+      return;
+    }
+    // An unsigned spread is never taken as one side: the owner says which.
+    if (type === "spread" && half !== 0 && !typedSign(raw)) return betSay("Tap \u2212 if the team is the favorite or + if it's the underdog.");
+    const list = S.bets || [];
+    // A bet posted a moment ago counts too, until the panel lists it: a
+    // double tap doesn't add it twice.
+    betPending = betPending.filter((p) => Date.now() - p.at < 5000 && !list.some((b) => sameBet(b, p)));
+    const want = { l: t[0], id: t[1], type, half };
+    if (list.concat(betPending).some((b) => sameBet(b, want))) return betSay("You have that bet already.");
+    const max = S.betmax || 8;
+    if (list.length + betPending.length >= max) return betSay("All " + max + " bets are in use. Remove one first.");
+    betSay("");
+    const mine = { ...want, at: Date.now() };
+    betPending.push(mine);
+    const value = type === "ml" ? "" : betPoints(half, type === "spread");
+    setGD({ bet: [0, t[0], t[1], type, value].join(",") }).then((ok) => {
+      if (!ok) betPending = betPending.filter((p) => p !== mine);
+      else toast("Added " + (type === "ml" ? t[2] + " ML" : type === "spread" ? t[2] + " " + (half ? value : "PK") : type.toUpperCase() + " " + value));
+    });
+    $("#betLine").value = "";
+    betSign = "";
+    renderBetForm();
+  };
+  renderBetForm();
+
   // ---- team chooser ------------------------------------------------------
-  // The picker sets My team, or with pickFav adds a favorite.
+  // The picker sets My team, with pickFav adds a favorite, and with pickBet
+  // picks the team for a new bet.
   let pickFav = false;
+  let pickBet = false;
   const choose = (t) => {
-    if (pickFav) addFav(t);
+    if (pickBet) {
+      betTeam = keyOf(t);
+      renderBetForm();
+    } else if (pickFav) addFav(t);
     else {
       setGD({ team: keyOf(t) });
       toast("Now following the " + t[3]);
@@ -1304,7 +1490,7 @@
     // series). A tour or a series is never a favorite yet, and search finds
     // one by its tab's name too.
     const words = (t) => (isBoard(t[0]) ? lgInfo(t[0]).tab + " " : "") + t[3] + " " + t[2];
-    const list = TEAMS.filter((t) => !(pickFav && isBoard(t[0]))
+    const list = TEAMS.filter((t) => !((pickFav || pickBet) && isBoard(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1334,15 +1520,16 @@
   // A dialog: Tab stays inside it, and closing hands focus back to the
   // button that opened it.
   let pickerFrom = null;
-  const openPicker = async (fav) => {
+  const openPicker = async (fav, bet = false) => {
     pickFav = fav;
+    pickBet = bet;
     pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", fav ? "Add a favorite" : "Choose a team");
-    const cur = S ? teamByKey(refKey(S.team)) : null;
-    league = cur && !(fav && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
-    // Golf and racing can't be a favorite yet: no Golf or Racing tab while
-    // adding one.
-    tabButtons.forEach((b) => { b.hidden = fav && isBoard(b.dataset.lg); });
+    $(".sheet").setAttribute("aria-label", bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+    const cur = bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
+    league = cur && !((fav || bet) && isBoard(cur[0])) ? tabKey(cur[0]) : "nfl";
+    // Golf and racing can't be a favorite yet, or take a bet: no Golf or
+    // Racing tab while picking one.
+    tabButtons.forEach((b) => { b.hidden = (fav || bet) && isBoard(b.dataset.lg); });
     try {
       const list = await loadGames(false);
       if (list.some((g) => g.state === "in")) league = "now";
@@ -1568,6 +1755,7 @@
 
   const renderAll = () => {
     renderBoard();
+    renderBets();
     renderUpNext();
     renderSplash();
     renderCurrentTeam();

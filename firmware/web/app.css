@@ -96,7 +96,7 @@ button { font: inherit; color: inherit; }
 /* The panel isn't answering, or is restarting: what's left on the board is old */
 .gone { margin-top: 10px; font-size: 13px; color: var(--gold); }
 .board.dim .row, .board.dim .state, .board.dim .stale, .board.dim .gname, .board.dim .msg,
-.board.dim .ticker, .board.dim .play { opacity: .35; filter: grayscale(1); }
+.board.dim .ticker, .board.dim .play, .board.dim .betline { opacity: .35; filter: grayscale(1); }
 .board .msg { text-align: center; color: var(--muted); padding: 22px 0 8px; }
 /* Golf: a tour's leaderboard in place of the two teams */
 .golf { margin-top: 26px; }
@@ -333,3 +333,27 @@ button { font: inherit; color: inherit; }
 /* Follow this game: the bar under the board, outlined while the panel holds the game */
 .followbar.on { border-color: var(--accent); }
 .linkbtn { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--accent); font-size: 12px; cursor: pointer; }
+
+/* Bets: a chip per bet on the board's game, and the card's list and form */
+.betline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.bet { font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.bet.good { color: var(--green); border-color: var(--green); }
+.bet.bad { color: var(--red); border-color: var(--red); }
+.bet.even { color: var(--gold); border-color: var(--gold); }
+.betcard summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+#betSum { margin-left: auto; color: var(--muted); font-size: 12px; }
+.betcard summary::-webkit-details-marker { display: none; }
+.betcard summary h2 { margin: 0; }
+.betcard summary::after { content: "\25B8"; color: var(--muted); }
+.betcard[open] summary::after { content: "\25BE"; }
+.betcard[open] summary { margin-bottom: 8px; }
+.betcard .ctl input { width: 90px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 14px; text-align: center; }
+.betrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
+.betdel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 9px; padding: 0; flex: none; }
+.betmsg { color: var(--gold); font-size: 13px; margin: 6px 0; }
+/* The spread's minus and plus, next to the points */
+.betlinebox { display: flex; align-items: center; gap: 6px; flex: none; }
+.betsign { display: flex; gap: 4px; }
+.betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
+.betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
+#betAdd { margin-top: 8px; }
