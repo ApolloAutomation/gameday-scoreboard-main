@@ -180,6 +180,9 @@ struct BusyInputs {
   bool favorites{false};      // Favorite teams with favorites set
   bool fav_locked{false};     // a favorite took the panel (Take over, its game, After the final)
   bool fav_live{false};       // a favorite's game is in progress
+  // Live games picked a game its scan saw in progress and hasn't read it yet:
+  // the board waits for that read, which a short Switch every comes to often.
+  bool picked{false};
   // The game on the board: My team's, Live games' pick or its team card.
   bool valid{false};
   GameState state{GameState::NOT_FOUND};
@@ -210,8 +213,10 @@ inline bool idle_busy(const BusyInputs &b) {
   if (b.live_mode && b.recap)
     return false;
   if (b.live_mode && !b.live_fallback)
-    // A game Live games picked, until its next look moves on after the final.
-    return b.valid && (b.state == GameState::IN || b.state == GameState::POST);
+    // A game Live games picked, until its next look moves on after the final,
+    // and from the pick on: the scan saw it in progress, so the idle display
+    // doesn't come up between two games while the next one is read.
+    return b.picked || (b.valid && (b.state == GameState::IN || b.state == GameState::POST));
   if (b.favorites)
     return b.fav_locked || b.fav_live;
   if (!b.valid)

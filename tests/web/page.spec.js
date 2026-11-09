@@ -316,10 +316,21 @@ test("mode pills post the mode and swap the settings bar", async ({ page, reques
   await expect(page.locator("#livebar")).toBeVisible();
   await expect(page.locator("#teambar")).toBeHidden();
 
-  await page.locator("#rotate").fill("45");
-  await page.locator("#rotate").press("Enter");
-  await expectSet(request, { rotate: "30" }); // the page clamps to 1..30
+  // Switch every: 30 seconds, then every whole minute to 30, posted in seconds.
+  await expect(page.locator("#rotate")).toHaveValue("60");
+  const choices = await page.locator("#rotate option").allTextContents();
+  expect(choices.slice(0, 3)).toEqual(["30 s", "1 min", "2 min"]);
+  expect(choices).toHaveLength(31);
+  expect(choices[30]).toBe("30 min");
+  await page.locator("#rotate").selectOption("30");
+  await expectSet(request, { rotatesec: "30" });
   await expect(page.locator("#rotate")).toHaveValue("30");
+  // The panel has it, in seconds and, for pages from before, as 1 minute.
+  await expect.poll(async () => (await deviceState(request)).rotatesec).toBe(30);
+  expect((await deviceState(request)).rotate).toBe(1);
+  await page.locator("#rotate").selectOption("1800");
+  await expectSet(request, { rotatesec: "1800" });
+  await expect.poll(async () => (await deviceState(request)).rotate).toBe(30);
 
   await page.locator('#modes button[data-mode="0"]').click();
   await expectSet(request, { mode: "0" });
@@ -353,9 +364,28 @@ test("favorite teams mode shows each favorite and posts its settings", async ({ 
   await page.locator("#collide").selectOption("1");
   await expectSet(request, { collide: "1" });
   await expect(page.locator("#favrotate")).toBeVisible();
-  await page.locator("#favrotate").fill("5");
-  await page.locator("#favrotate").press("Enter");
-  await expectSet(request, { rotate: "5" });
+  await page.locator("#favrotate").selectOption("300");
+  await expectSet(request, { rotatesec: "300" });
+  await page.locator("#favrotate").selectOption("30");
+  await expectSet(request, { rotatesec: "30" });
+  await expect(page.locator("#favrotate")).toHaveValue("30");
+});
+
+test("Switch every and Alternate every show the panel's setting, 30 seconds too", async ({ page, request }) => {
+  await reset(request, { mode: 5, rotate: 1, rotatesec: 30, collide: 1 });
+  await page.goto("/");
+  await expect(page.locator("#rotate")).toHaveValue("30");
+  await expect(page.locator("#rotate option:checked")).toHaveText("30 s");
+  await expect(page.locator("#favrotate")).toHaveValue("30");
+  // A minute setting from the panel.
+  await reset(request, { mode: 5, rotate: 7 });
+  await page.reload();
+  await expect(page.locator("#rotate")).toHaveValue("420");
+  await expect(page.locator("#rotate option:checked")).toHaveText("7 min");
+  // Firmware from before 30 seconds sends only the minutes.
+  await reset(request, { mode: 5, rotate: 12, rotatesec: null });
+  await page.reload();
+  await expect(page.locator("#rotate")).toHaveValue("720");
 });
 
 test("the team picker searches the team list and posts the team", async ({ page, request }) => {

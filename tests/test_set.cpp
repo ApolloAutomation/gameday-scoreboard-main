@@ -59,7 +59,8 @@ std::string keys(const std::vector<League> &leagues) {
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
-  int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
+  // rotatesec: Switch every in seconds (startup.h), what set_rotate_seconds keeps.
+  int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
   bool watch{true}, watchmine{false}, visit{false};
@@ -121,7 +122,10 @@ void load(Settings &s, JsonObjectConst o) {
       v = o[k].as<bool>();
   };
   num("mode", s.mode);
-  num("rotate", s.rotate);
+  // A start in minutes means that many minutes; rotatesec beside it wins.
+  if (o["rotate"].is<int>())
+    s.rotatesec = o["rotate"].as<int>() * 60;
+  num("rotatesec", s.rotatesec);
   num("lockon", s.lockon);
   num("release", s.release);
   num("tz", s.tz);
@@ -221,7 +225,7 @@ void apply(Settings &s, const SetOp &op) {
         s.follow = s.visit = false;
       s.mode = op.value;
       break;
-    case SetKind::ROTATE: s.rotate = op.value; break;
+    case SetKind::ROTATE: s.rotatesec = op.value; break;
     case SetKind::LOCKON: s.lockon = op.value; break;
     case SetKind::RELEASE: s.release = op.value; break;
     case SetKind::COLLIDE: s.collide = op.on; break;
@@ -311,7 +315,8 @@ void apply(Settings &s, const SetOp &op) {
 void state_doc(const Settings &s, JsonDocument &doc) {
   doc["team"] = team_str(s.team);
   doc["mode"] = s.mode;
-  doc["rotate"] = s.rotate;
+  doc["rotate"] = rotate_minutes_of(s.rotatesec);
+  doc["rotatesec"] = s.rotatesec;
   doc["lockon"] = s.lockon;
   doc["release"] = s.release;
   doc["collide"] = s.collide ? 1 : 0;
@@ -449,8 +454,25 @@ void test_parse_set() {
              op.refused.size() == 1 && op.refused[0] == "f1:2030",
          "favs refuses a racing series and logs it");
 
-  SCHECK(parse_set("rotate", "-5", op, kFavMax) && op.value == kRotateMinMinutes, "rotate -5");
-  SCHECK(parse_set("rotate", "999", op, kFavMax) && op.value == kRotateMaxMinutes, "rotate 999");
+  // ROTATE carries seconds, from rotate's minutes or rotatesec's seconds.
+  SCHECK(parse_set("rotate", "-5", op, kFavMax) && op.kind == SetKind::ROTATE && op.value == kRotateMinMinutes * 60,
+         "rotate -5");
+  SCHECK(parse_set("rotate", "999", op, kFavMax) && op.value == kRotateMaxMinutes * 60, "rotate 999");
+  SCHECK(parse_set("rotate", "0", op, kFavMax) && op.value == 60, "rotate 0 is a minute, never 30 seconds");
+  SCHECK(parse_set("rotatesec", "30", op, kFavMax) && op.kind == SetKind::ROTATE && op.value == kRotateHalfSeconds,
+         "rotatesec 30");
+  SCHECK(parse_set("rotatesec", "abc", op, kFavMax) && op.value == kRotateHalfSeconds, "rotatesec text is 30 seconds");
+  SCHECK(parse_set("rotatesec", "90", op, kFavMax) && op.value == 60, "rotatesec 90 rounds down");
+  SCHECK(parse_set("rotatesec", "1800", op, kFavMax) && op.value == 1800, "rotatesec 1800");
+  SCHECK(parse_set("rotatesec", "1801", op, kFavMax) && op.value == 1800, "rotatesec 1801");
+  int rotate_at = -1, rotatesec_at = -1;
+  for (int i = 0; i < (int) (sizeof(kSetKeys) / sizeof(kSetKeys[0])); i++) {
+    if (std::string(kSetKeys[i]) == "rotate")
+      rotate_at = i;
+    if (std::string(kSetKeys[i]) == "rotatesec")
+      rotatesec_at = i;
+  }
+  SCHECK(rotate_at >= 0 && rotate_at < rotatesec_at, "rotatesec applies after rotate");
   SCHECK(parse_set("lockon", "", op, kFavMax) && op.value == kLockonMinMinutes, "lockon empty");
   SCHECK(parse_set("release", "100000", op, kFavMax) && op.value == kReleaseMaxSeconds, "release 100000");
   SCHECK(parse_set("mode", "0", op, kFavMax) && op.value == 0, "mode 0");
@@ -470,8 +492,17 @@ void test_parse_set() {
   SCHECK(parse_set("wiring", "2", op, kFavMax) && op.value == panel_layouts::WIRING_TOP_FLIPPED, "wiring 2");
   SCHECK(!parse_set("wiring", "3", op, kFavMax), "wiring past the last");
   SCHECK(!parse_set("wiring", "-1", op, kFavMax), "wiring -1");
-  SCHECK(std::string(kSetKeys[15]) == "wiring" && std::string(kSetKeys[14]) == "panels",
-         "wiring applies right after panels");
+  {
+    // By name: keys added earlier in the list (rotatesec) move both along.
+    int panels_at = -1, wiring_at = -1;
+    for (int i = 0; i < (int) (sizeof(kSetKeys) / sizeof(kSetKeys[0])); i++) {
+      if (std::string(kSetKeys[i]) == "panels")
+        panels_at = i;
+      if (std::string(kSetKeys[i]) == "wiring")
+        wiring_at = i;
+    }
+    SCHECK(panels_at >= 0 && wiring_at == panels_at + 1, "wiring applies right after panels");
+  }
 
   // The arrangements PanelLayout drives with gameday-common.yaml's limits.
   SCHECK(panel_layouts::layout_ok(1, 1, 4, 2) && panel_layouts::layout_ok(4, 1, 4, 2), "one to four wide");
@@ -585,8 +616,17 @@ void test_set_limits() {
   SCHECK(parse_set("lockon", "120", op, kFavMax) && op.value == 120, "lockon 120");
   SCHECK(parse_set("release", "30", op, kFavMax) && op.value == 30, "release 30");
   SCHECK(parse_set("release", "3600", op, kFavMax) && op.value == 3600, "release 3600");
-  SCHECK(parse_set("rotate", "1", op, kFavMax) && op.value == 1, "rotate 1");
-  SCHECK(parse_set("rotate", "30", op, kFavMax) && op.value == 30, "rotate 30");
+  SCHECK(parse_set("rotate", "1", op, kFavMax) && op.value == 60, "rotate 1");
+  SCHECK(parse_set("rotate", "30", op, kFavMax) && op.value == 1800, "rotate 30");
+  SCHECK(parse_set("rotatesec", "30", op, kFavMax) && op.value == 30, "rotatesec 30");
+  SCHECK(parse_set("rotatesec", "60", op, kFavMax) && op.value == 60, "rotatesec 60");
+  // Every value parse_set gives the setting is one the firmware can save and show.
+  for (int v : {INT_MIN, -1, 0, 29, 30, 31, 59, 60, 61, 119, 120, 1799, 1800, 1801, INT_MAX}) {
+    SCHECK(parse_set("rotatesec", std::to_string(v), op, kFavMax) && rotate_seconds_valid(op.value),
+           "rotatesec %d is saved as %d", v, op.value);
+    SCHECK(parse_set("rotate", std::to_string(v), op, kFavMax) && rotate_seconds_valid(op.value) && op.value >= 60,
+           "rotate %d is saved as %d", v, op.value);
+  }
   // Numbers read like atoi: leading spaces skipped, trailing text ignored.
   SCHECK(parse_set("mode", " 3", op, kFavMax) && op.value == 3, "mode with a leading space");
   SCHECK(parse_set("mode", "4x", op, kFavMax) && op.value == 4, "mode with trailing text");

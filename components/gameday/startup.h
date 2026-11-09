@@ -11,11 +11,20 @@
 
 namespace espn {
 
-// The "Switch every" setting, in minutes. A saved value outside the range is
-// treated as corrupt at boot and replaced with the default.
+// "Switch every" in Live games and "Alternate every" in Favorite teams, one
+// setting: 30 seconds, or whole minutes from 1 to 30. It is saved as minutes
+// (Prefs2; a saved value outside the range is treated as corrupt at boot and
+// replaced with the default) plus a flag for 30 seconds (Prefs8), which counts
+// only next to 1 minute, the minute it is saved with. Firmware from before
+// 30 seconds reads such a panel as 1 minute and never touches the flag: any
+// other minute set there wins after an update to this firmware, but 1 minute
+// set there (left as it shows, or picked again) saves the same Prefs2 or
+// nothing at all, which can't be told from 30 seconds, so the update brings
+// 30 seconds back.
 static const int kRotateMinMinutes = 1;
 static const int kRotateMaxMinutes = 30;
 static const int kRotateDefaultMinutes = 1;
+static const int kRotateHalfSeconds = 30;
 
 inline bool rotate_minutes_valid(int minutes) {
   return minutes >= kRotateMinMinutes && minutes <= kRotateMaxMinutes;
@@ -27,6 +36,54 @@ inline int clamp_rotate_minutes(int minutes) {
   if (minutes > kRotateMaxMinutes)
     return kRotateMaxMinutes;
   return minutes;
+}
+
+// The setting in seconds: 30, or 60 to 1800 in whole minutes.
+inline bool rotate_seconds_valid(int seconds) {
+  return seconds == kRotateHalfSeconds || (seconds % 60 == 0 && rotate_minutes_valid(seconds / 60));
+}
+
+// Any number of seconds to the setting: under a minute is 30 seconds, a
+// minute or more is whole minutes, rounded down, at most 30.
+inline int clamp_rotate_seconds(int seconds) {
+  return seconds < 60 ? kRotateHalfSeconds : clamp_rotate_minutes(seconds / 60) * 60;
+}
+
+// The minutes saved for a setting, which are also the state's "rotate" for
+// device pages and apps from before 30 seconds: 30 seconds is 1 minute there.
+inline int rotate_minutes_of(int seconds) {
+  const int s = clamp_rotate_seconds(seconds);
+  return s < 60 ? kRotateMinMinutes : s / 60;
+}
+
+// The setting from what is saved: the minutes and the 30 second flag.
+inline int rotate_saved_seconds(int minutes, bool half) {
+  return half && minutes == kRotateMinMinutes ? kRotateHalfSeconds : clamp_rotate_minutes(minutes) * 60;
+}
+
+// A Live games turn is over once its clock, started_ms, has run the setting
+// (Favorite teams times its own in pick_favorite, favorites.h). 0 is a clock
+// that hasn't started.
+inline bool rotate_turn_over(uint32_t now_ms, uint32_t started_ms, int seconds) {
+  return started_ms != 0 && now_ms - started_ms >= (uint32_t) seconds * 1000u;
+}
+
+// The turn's clock once another game's big play (watch.h) gives the board
+// back after away_ms: the time away doesn't count, so the game comes back
+// for what was left of its turn. A turn that was over before stays over.
+inline uint32_t rotate_turn_resume(uint32_t started_ms, uint32_t now_ms, uint32_t away_ms) {
+  if (started_ms == 0)
+    return 0;
+  const uint32_t ran = now_ms - started_ms;
+  const uint32_t out = started_ms + (away_ms < ran ? away_ms : ran);
+  return out == 0 ? 1 : out;
+}
+
+// The same for Favorite teams, whose clock is the epoch second the card went up.
+inline int64_t rotate_since_resume(int64_t since, int64_t now, int64_t away_s) {
+  if (away_s <= 0)
+    return since;
+  return since + away_s < now ? since + away_s : (since < now ? now : since);
 }
 
 // The team endpoint's answer for the saved team, kept in flash so a boot can

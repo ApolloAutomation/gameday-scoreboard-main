@@ -107,7 +107,9 @@ def team(lg, tid):
 INITIAL = {
     "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2, "rows": 1, "wiring": 0,
     "team": team("nfl", 6),
-    "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
+    # Switch every and Alternate every (startup.h): rotate in whole minutes, as
+    # pages from before 30 seconds read it, and rotatesec in seconds.
+    "mode": 0, "rotate": 1, "rotatesec": 60, "lockon": 15, "release": 30, "collide": 0,
     "favs": [team("nfl", 6), team("nfl", 34), team("ncaa", 145), {}],
     "favmax": FAV_MAX, "today": False, "live": ["nfl", "ncaa"], "live_auto": True,
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
@@ -197,6 +199,11 @@ def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
+    # rotate and rotatesec are one setting: an override of either sets both.
+    if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
+        STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
+    if isinstance(overrides.get("rotatesec"), int) and "rotate" not in overrides:
+        STATE["rotate"] = rotate_minutes_of(overrides["rotatesec"])
     # A null override drops the key, like firmware that doesn't send it.
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
@@ -214,6 +221,24 @@ def atoi(v):
 
 def clamp(v, lo, hi):
     return min(LIMITS[hi], max(LIMITS[lo], v))
+
+
+def clamp_rotate_seconds(v):
+    """clamp_rotate_seconds() (startup.h): under a minute is 30 s, else whole minutes, rounded down, at most 30."""
+    if v < 60:
+        return LIMITS["kRotateHalfSeconds"]
+    return clamp(v // 60, "kRotateMinMinutes", "kRotateMaxMinutes") * 60
+
+
+def rotate_minutes_of(seconds):
+    """rotate_minutes_of() (startup.h): the state's "rotate", 1 for 30 s."""
+    return max(LIMITS["kRotateMinMinutes"], clamp_rotate_seconds(seconds) // 60)
+
+
+def set_rotate(seconds):
+    """set_rotate_seconds(): one setting, in both of the state's keys."""
+    STATE["rotatesec"] = seconds
+    STATE["rotate"] = rotate_minutes_of(seconds)
 
 
 def parse_team_ref(v):
@@ -444,7 +469,10 @@ def apply_set(kv):
                     end_visit()
                 STATE["mode"] = atoi(v)
         elif k == "rotate":
-            STATE["rotate"] = clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes")
+            # Whole minutes; 0 and below are 1 minute, never 30 s.
+            set_rotate(clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes") * 60)
+        elif k == "rotatesec":
+            set_rotate(clamp_rotate_seconds(atoi(v)))
         elif k == "lockon":
             STATE["lockon"] = clamp(atoi(v), "kLockonMinMinutes", "kLockonMaxMinutes")
         elif k == "release":

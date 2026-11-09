@@ -1,5 +1,7 @@
 // Host tests for the ESPN parser and game logic. Build with `make` in tests/.
+#include <climits>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -1759,6 +1761,18 @@ static void test_favorites() {
   CHECK_EQ(c.index, 1);
   c = pick_favorite(two, T + 600, r, 1, T + 300, -1);
   CHECK_EQ(c.index, 0);
+  // every 30 seconds, the shortest Alternate every
+  r.rotate_s = espn::rotate_saved_seconds(1, true);
+  c = pick_favorite(two, T + 29, r, 0, T, -1);
+  CHECK_EQ(c.index, 0);
+  c = pick_favorite(two, T + 30, r, 0, T, -1);
+  CHECK_EQ(c.index, 1);
+  c = pick_favorite(two, T + 60, r, 1, T + 30, -1);
+  CHECK_EQ(c.index, 0);
+  // a pinned locked game holds past 30 seconds too
+  c = pick_favorite(two, T + 300, r, 1, T, 1);
+  CHECK_EQ(c.index, 1);
+  r.rotate_s = 5 * 60;
   // alternate with the shown entry not locked jumps to a locked one at once
   c = pick_favorite(two, T + 1, r, 2, T, -1);
   CHECK_EQ(c.index, 0);
@@ -2188,6 +2202,96 @@ static void test_rotate_minutes() {
   CHECK(espn::clamp_rotate_minutes(-5) == 1);
   CHECK(espn::clamp_rotate_minutes(1) == 1);
   CHECK(espn::clamp_rotate_minutes(45) == 30);
+}
+
+// Switch every's 30 seconds: what the set request's seconds come to, what is
+// saved for them (the minutes, and the flag that counts only next to 1
+// minute), and what the state document shows pages from before.
+static void test_rotate_seconds() {
+  CHECK(espn::rotate_seconds_valid(30));
+  CHECK(espn::rotate_seconds_valid(60));
+  CHECK(espn::rotate_seconds_valid(1800));
+  CHECK(!espn::rotate_seconds_valid(0));
+  CHECK(!espn::rotate_seconds_valid(45));
+  CHECK(!espn::rotate_seconds_valid(90));
+  CHECK(!espn::rotate_seconds_valid(1860));
+  CHECK_EQ(espn::clamp_rotate_seconds(INT_MIN), 30);
+  CHECK_EQ(espn::clamp_rotate_seconds(0), 30);
+  CHECK_EQ(espn::clamp_rotate_seconds(30), 30);
+  CHECK_EQ(espn::clamp_rotate_seconds(59), 30);
+  CHECK_EQ(espn::clamp_rotate_seconds(60), 60);
+  CHECK_EQ(espn::clamp_rotate_seconds(119), 60);
+  CHECK_EQ(espn::clamp_rotate_seconds(1800), 1800);
+  CHECK_EQ(espn::clamp_rotate_seconds(INT_MAX), 1800);
+  for (int s = -100; s < 4000; s++)
+    CHECK(espn::rotate_seconds_valid(espn::clamp_rotate_seconds(s)));
+
+  // Saved: the minutes stay 1 to 30, as older firmware checks them at boot.
+  CHECK_EQ(espn::rotate_minutes_of(30), 1);
+  CHECK_EQ(espn::rotate_minutes_of(60), 1);
+  CHECK_EQ(espn::rotate_minutes_of(600), 10);
+  CHECK_EQ(espn::rotate_minutes_of(1800), 30);
+  for (int s = 30; s <= 1800; s = s == 30 ? 60 : s + 60) {
+    const int m = espn::rotate_minutes_of(s);
+    CHECK(espn::rotate_minutes_valid(m));
+    CHECK_EQ(espn::rotate_saved_seconds(m, s < 60), s);  // what is saved reads back the same
+  }
+  // The flag counts only next to 1 minute: any other minute set on older
+  // firmware, which leaves it set, is still minutes, and every panel from
+  // before reads as it was. 1 minute set there can't be told from 30 seconds.
+  CHECK_EQ(espn::rotate_saved_seconds(1, true), 30);
+  CHECK_EQ(espn::rotate_saved_seconds(1, false), 60);
+  CHECK_EQ(espn::rotate_saved_seconds(10, true), 600);
+  CHECK_EQ(espn::rotate_saved_seconds(30, false), 1800);
+  for (int m = espn::kRotateMinMinutes; m <= espn::kRotateMaxMinutes; m++)
+    CHECK_EQ(espn::rotate_saved_seconds(m, false), m * 60);
+
+  // A turn is over once its clock has run the setting; 0 hasn't started.
+  CHECK(!espn::rotate_turn_over(5000, 0, 30));
+  CHECK(!espn::rotate_turn_over(30999, 1000, 30));
+  CHECK(espn::rotate_turn_over(31000, 1000, 30));
+  CHECK(espn::rotate_turn_over(1000 + 1800 * 1000u, 1000, 1800));
+  CHECK(!espn::rotate_turn_over(999 + 1800 * 1000u, 1000, 1800));
+  CHECK(espn::rotate_turn_over(25000, UINT32_MAX - 4999, 30));  // across the millis() wrap
+  CHECK(!espn::rotate_turn_over(24999, UINT32_MAX - 4999, 30));
+}
+
+// Another game's big play (watch.h) has the board for a while: the game the
+// board goes back to gets what was left of its turn, not a turn already used
+// up by the stay.
+static void test_rotate_turn_resume() {
+  // 30 s turns, a 60 s stay starting 20 s in: 10 s left on the way back.
+  uint32_t t = espn::rotate_turn_resume(1000, 81000, 60000);
+  CHECK_EQ(t, 61000u);
+  CHECK(!espn::rotate_turn_over(81000, t, 30));
+  CHECK(!espn::rotate_turn_over(90999, t, 30));
+  CHECK(espn::rotate_turn_over(91000, t, 30));
+  // A turn that was over before the stay is still over after it.
+  t = espn::rotate_turn_resume(1000, 96000, 60000);
+  CHECK(espn::rotate_turn_over(96000, t, 30));
+  // Never moves past now, and a clock that hasn't started stays that way.
+  CHECK_EQ(espn::rotate_turn_resume(1000, 5000, 60000), 5000u);
+  CHECK_EQ(espn::rotate_turn_resume(0, 5000, 1000), 0u);
+  CHECK_EQ(espn::rotate_turn_resume(1000, 5000, 0), 1000u);
+  // Across the millis() wrap, and never the 0 that means no clock.
+  CHECK_EQ(espn::rotate_turn_resume(UINT32_MAX - 999, 20000, 10000), 9000u);
+  CHECK_EQ(espn::rotate_turn_resume(UINT32_MAX, 10, 1), 1u);
+
+  // Favorite teams' clock, in epoch seconds.
+  const int64_t T = 1000000;
+  CHECK_EQ(espn::rotate_since_resume(T, T + 80, 60), T + 60);
+  CHECK_EQ(espn::rotate_since_resume(T, T + 50, 60), T + 50);
+  CHECK_EQ(espn::rotate_since_resume(T, T + 80, 0), T);
+  CHECK_EQ(espn::rotate_since_resume(T, T + 80, -5), T);
+  // Alternating every 30 s, a 60 s stay from 20 s in: the favorite keeps 10 s.
+  FavRules r;
+  r.alternate = true;
+  r.rotate_s = 30;
+  std::vector<FavGame> two = {fav(GameState::IN, T - 600), fav(GameState::IN, T - 600)};
+  const int64_t since = espn::rotate_since_resume(T, T + 80, 60);
+  CHECK_EQ(pick_favorite(two, T + 80, r, 0, since, -1).index, 0);
+  CHECK_EQ(pick_favorite(two, T + 89, r, 0, since, -1).index, 0);
+  CHECK_EQ(pick_favorite(two, T + 90, r, 0, since, -1).index, 1);
 }
 
 // The root "id" of a recorded single-event document, so the event id check
@@ -8433,6 +8537,23 @@ static void test_idle_busy() {
   CHECK(idle_busy(live));
   live.state = GameState::PRE;
   CHECK(!idle_busy(live));
+  // A game the scan picked, before its first read lands: its board was
+  // cleared for that read, and the scan saw it in progress, so the clock or
+  // Off or dim doesn't come up at each Switch every.
+  BusyInputs picked = live;
+  picked.valid = false;
+  picked.state = GameState::NOT_FOUND;
+  CHECK(!idle_busy(picked));
+  picked.picked = true;
+  CHECK(idle_busy(picked));
+  picked.recap = true;  // the finals rotation follows no game
+  CHECK(!idle_busy(picked));
+  picked.recap = false;
+  picked.live_fallback = true;  // the team's card goes by its own game
+  CHECK(!idle_busy(picked));
+  picked.live_fallback = false;
+  picked.live_mode = false;  // only Live games picks
+  CHECK(!idle_busy(picked));
   live.recap = true;
   live.state = GameState::IN;
   CHECK(!idle_busy(live));
@@ -8850,6 +8971,8 @@ int main() {
   test_team_cache_edges();
   test_boot_hold();
   test_rotate_minutes();
+  test_rotate_seconds();
+  test_rotate_turn_resume();
   test_mlb_urls();
   test_team_placeholder();
   test_mlb_team();

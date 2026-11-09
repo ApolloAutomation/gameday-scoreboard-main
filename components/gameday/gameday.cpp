@@ -647,12 +647,22 @@ void GamedayComponent::select_mode(const std::string &option) {
   ESP_LOGW(TAG, "Unknown mode '%s'", option.c_str());
 }
 
-void GamedayComponent::set_rotate_minutes(int minutes) {
-  minutes = ::espn::clamp_rotate_minutes(minutes);
-  if (minutes == this->prefs2_.rotate_minutes)
+void GamedayComponent::set_rotate_seconds(int seconds) {
+  seconds = ::espn::clamp_rotate_seconds(seconds);
+  if (seconds == this->rotate_seconds())
     return;
-  this->prefs2_.rotate_minutes = (uint8_t) minutes;
-  this->pref2_.save(&this->prefs2_);
+  // The minutes in Prefs2 as always, and 30 seconds as a flag in Prefs8 next
+  // to 1 minute (startup.h). Each blob is saved only when it changes.
+  const uint8_t minutes = (uint8_t) ::espn::rotate_minutes_of(seconds);
+  const uint8_t half = seconds < 60 ? 1 : 0;
+  if (minutes != this->prefs2_.rotate_minutes) {
+    this->prefs2_.rotate_minutes = minutes;
+    this->pref2_.save(&this->prefs2_);
+  }
+  if (half != this->prefs8_.rotate_half) {
+    this->prefs8_.rotate_half = half;
+    this->pref8_.save(&this->prefs8_);
+  }
   this->rebuild_state_(&this->last_fields_);
 }
 
@@ -757,7 +767,7 @@ void GamedayComponent::rebuild_favorites_(bool keep_cards) {
   r.lockon_s = (int64_t) this->prefs4_.lockon_minutes * 60;
   r.release_s = this->prefs4_.release_seconds;
   r.alternate = this->prefs4_.collide == 1;
-  r.rotate_s = (int64_t) this->prefs2_.rotate_minutes * 60;
+  r.rotate_s = this->rotate_seconds();
   r.dwell_s = 10;
   r.today_only = this->today_only();
   if (this->time_ != nullptr) {
@@ -1963,6 +1973,8 @@ bool GamedayComponent::idle_busy_() const {
   b.live_mode = this->live_mode_();
   b.recap = this->recap_on_;
   b.live_fallback = this->live_fallback_;
+  // The pick's board was cleared for its first read (apply_job_).
+  b.picked = this->live_unread_ && this->schedule_.valid;
   b.favorites = this->favorites_mode_();
   b.fav_locked = this->fav_locked_;
   for (const auto &e : this->fav_)
@@ -2591,6 +2603,7 @@ void GamedayComponent::reset_game_() {
   this->linger_backoff_ms_ = 0;
   this->live_away_id_ = 0;
   this->live_started_ms_ = 0;
+  this->live_unread_ = false;
   this->live_none_ = false;
   this->live_rescan_ms_ = NO_LIVE_RESCAN;
   this->live_fallback_ = false;
@@ -3350,8 +3363,7 @@ void GamedayComponent::start_job_() {
       } else {
         // Follow this game: no switch and no rescan while the pin holds.
         bool held = this->following_();
-        bool rotate = !held && this->live_started_ms_ != 0 &&
-                      (now - this->live_started_ms_) >= (uint32_t) this->prefs2_.rotate_minutes * MINUTE;
+        bool rotate = !held && ::espn::rotate_turn_over(now, this->live_started_ms_, this->rotate_seconds());
         bool ended = !held && this->game_.valid && this->game_.state != GameState::IN;
         j.need_scan = !this->schedule_.valid || rotate || ended || this->live_none_;
       }
@@ -3822,6 +3834,7 @@ void GamedayComponent::apply_job_() {
     this->schedule_fetched_ms_ = now == 0 ? 1 : now;  // 0 reads as "never fetched"
     this->live_away_id_ = g.away_id;
     this->live_started_ms_ = now == 0 ? 1 : now;
+    this->live_unread_ = true;  // its first read restarts the clock (apply_job_)
     if (this->game_.event_id != g.event_id || this->game_.team_id != g.away_id) {
       // The same game picked again, seen from the same side, keeps its last
       // poll (carry_football reads it)
@@ -3913,6 +3926,12 @@ void GamedayComponent::apply_job_() {
   this->prev_ = this->board_prev_(j.game);
   this->game_ = j.game;
   this->mark_good_poll_();
+  if (this->live_unread_ && this->live_mode_() && !this->live_fallback_) {
+    // The picked game's first read: its turn (Switch every) starts now, not
+    // at the pick, so a 30 second turn isn't spent on a slow read.
+    this->live_unread_ = false;
+    this->live_started_ms_ = now == 0 ? 1 : now;
+  }
   if (this->upcoming_after_poll_) {
     this->upcoming_after_poll_ = false;
     this->upcoming_due_ = true;
@@ -4447,6 +4466,17 @@ void GamedayComponent::end_visit_() {
   ESP_LOGI(TAG, "Back to the board's own game");
   if (this->visit_.saved)
     this->game_ = std::move(*this->visit_.saved);
+  // The time away doesn't count against the turn of the game the board goes
+  // back to (Switch every in Live games, Alternate every and the playlist in
+  // Favorite teams): it comes back for what was left of its turn, instead of
+  // giving way at once to the next game when the stay outlasted the turn.
+  const uint32_t now = millis();
+  const uint32_t away = now - this->visit_.first_ms;
+  if (this->live_mode_() && !this->live_fallback_ && !this->recap_on_)
+    this->live_started_ms_ = ::espn::rotate_turn_resume(this->live_started_ms_, now, away);
+  if (this->favorites_mode_() && this->fav_shown_ >= 0 && this->time_ != nullptr)
+    this->fav_shown_since_ = ::espn::rotate_since_resume(this->fav_shown_since_,
+                                                         (int64_t) this->time_->timestamp_now(), away / 1000);
   this->drop_visit_();
   this->prev_ = GameSnapshot{};
   this->visit_back_ = true;  // that read splashes only a final reached meanwhile (board_prev_)
@@ -5384,7 +5414,10 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   JsonObject team = doc["team"].to<JsonObject>();
   put_team(team, this->prefs_.league, this->prefs_.team_id);
   doc["mode"] = this->prefs2_.mode;
-  doc["rotate"] = this->prefs2_.rotate_minutes;
+  // Switch every: "rotate" in whole minutes for pages and apps from before
+  // 30 seconds (1 for 30 seconds), "rotatesec" in seconds (set_request.h).
+  doc["rotate"] = ::espn::rotate_minutes_of(this->rotate_seconds());
+  doc["rotatesec"] = this->rotate_seconds();
   doc["lockon"] = this->prefs4_.lockon_minutes;
   doc["release"] = this->prefs4_.release_seconds;
   doc["collide"] = this->prefs4_.collide;
@@ -6031,7 +6064,7 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         this->select_mode(MODE_OPTIONS[op.value]);
         break;
       case ::espn::SetKind::ROTATE:
-        this->set_rotate_minutes(op.value);
+        this->set_rotate_seconds(op.value);
         break;
       case ::espn::SetKind::LOCKON:
         this->set_lockon_minutes(op.value);

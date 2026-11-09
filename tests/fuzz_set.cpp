@@ -53,7 +53,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         require(op.value >= 0 && (size_t) op.value < kTimezoneCount, "the zone is past kTimezones", k, v);
         break;
       case SetKind::ROTATE:
-        require(rotate_minutes_valid(op.value), "the rotation is out of range", k, v);
+        require(rotate_seconds_valid(op.value), "the rotation is out of range", k, v);
         break;
       case SetKind::LOCKON:
         require(op.value >= kLockonMinMinutes && op.value <= kLockonMaxMinutes, "lock-on is out of range", k, v);

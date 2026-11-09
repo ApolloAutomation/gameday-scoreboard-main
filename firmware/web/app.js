@@ -127,6 +127,12 @@
   let restart = "";      // what the board says while a reboot or reset runs
   let stopped = false;   // reset into setup: the panel won't be back on this network
 
+  // Switch every (Live games) and Alternate every (Favorite teams) are one
+  // setting on the panel: 30 seconds, or whole minutes up to 30. Each option's
+  // value is in seconds, what rotatesec posts (set_request.h).
+  const ROTATE_OPTIONS = '<option value="30">30 s</option>'
+    + Array.from({ length: 30 }, (_, i) => '<option value="' + (i + 1) * 60 + '">' + (i + 1) + " min</option>").join("");
+
   // ---- DOM -------------------------------------------------------------
   document.body.innerHTML = `
   <div class="wrap">
@@ -190,7 +196,7 @@
     </div>
     <div class="teambar livebar" id="livebar" hidden>
       <div class="cur"><div><div class="name" id="liveName">Following a random game in progress</div><div class="lg" id="liveLg">Moves on when it ends, or after Switch every. Leagues:</div><div class="chips" id="liveChips" role="group" aria-label="Leagues"></div><button class="linkbtn" id="liveAuto" hidden>Back to automatic</button></div></div>
-      <div class="stepper"><label for="rotate">Switch every</label><input type="number" id="rotate" min="1" max="30" step="1"><span>min</span></div>
+      <div class="stepper"><label for="rotate">Switch every</label><select id="rotate">${ROTATE_OPTIONS}</select></div>
     </div>
     <div class="teambar favbar" id="favbar" hidden>
       <div class="cur"><div><div class="name" id="favName">Cycling through your favorites</div><div class="lg">A favorite's game takes the panel near kickoff. When two overlap, the slot order or Alternate below decides.</div></div></div>
@@ -202,7 +208,7 @@
         </select></div>
         <div class="stepper"><label for="collide">Two games at once</label><select id="collide">
           <option value="0">Stick with the higher team</option><option value="1">Alternate</option>
-        </select><input type="number" id="favrotate" min="1" max="30" step="1" aria-label="Alternate every, in minutes" hidden><span id="favrotateUnit" hidden>min</span></div>
+        </select><select id="favrotate" aria-label="Alternate every" hidden>${ROTATE_OPTIONS}</select></div>
       </div>
     </div>
 
@@ -459,7 +465,7 @@
   const held = {};       // key -> {v: the value as the state document has it, ack: when the post was answered}
   const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
   const stateForm = {
-    mode: Number, rotate: Number, lockon: Number, release: Number, collide: Number, standing: Number,
+    mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
@@ -810,12 +816,9 @@
       toast(b.textContent);
     };
   });
-  const rotateInput = $("#rotate");
-  rotateInput.onchange = () => {
-    const v = Math.min(30, Math.max(1, Number(rotateInput.value) || 1));
-    rotateInput.value = v;
-    setGD({ rotate: v });
-  };
+  // Switch every, posted in seconds: 30, or whole minutes.
+  const rotateSelect = $("#rotate");
+  rotateSelect.onchange = () => setGD({ rotatesec: rotateSelect.value });
   // Favorite teams mode settings (mode 4).
   const lockonInput = $("#lockon");
   lockonInput.onchange = () => {
@@ -829,21 +832,16 @@
   const staySelect = $("#watchstay");
   staySelect.onchange = () => setGD({ watchstay: staySelect.value });
   const collideSelect = $("#collide");
+  // Alternate every: the same setting as Switch every.
   const favRotate = $("#favrotate");
   const showFavRotate = () => {
-    const alt = collideSelect.value === "1";
-    favRotate.hidden = !alt;
-    $("#favrotateUnit").hidden = !alt;
+    favRotate.hidden = collideSelect.value !== "1";
   };
   collideSelect.onchange = () => {
     showFavRotate();
     setGD({ collide: collideSelect.value });
   };
-  favRotate.onchange = () => {
-    const v = Math.min(30, Math.max(1, Number(favRotate.value) || 1));
-    favRotate.value = v;
-    setGD({ rotate: v });
-  };
+  favRotate.onchange = () => setGD({ rotatesec: favRotate.value });
   // Leagues Live mode follows. An old football live mode reads as its leagues.
   const liveKeys = () => {
     const m = String(S.mode || 0);
@@ -937,8 +935,10 @@
     $("#teambar").hidden = live || favs;
     $("#livebar").hidden = !live;
     $("#favbar").hidden = !favs;
-    if (document.activeElement !== rotateInput) rotateInput.value = S.rotate;
-    if (document.activeElement !== favRotate) favRotate.value = S.rotate;
+    // The setting in seconds; firmware from before 30 seconds sends only the minutes.
+    const rotateSec = String(S.rotatesec || (S.rotate || 1) * 60);
+    if (document.activeElement !== rotateSelect) rotateSelect.value = rotateSec;
+    if (document.activeElement !== favRotate) favRotate.value = rotateSec;
     if (document.activeElement !== lockonInput) lockonInput.value = S.lockon || 15;
     if (document.activeElement !== releaseSelect) releaseSelect.value = String(S.release || 30);
     if (document.activeElement !== collideSelect) {
