@@ -60,6 +60,8 @@ A bet on a team the panel isn't showing waits until a game of that team comes on
 
 A tie is a push for every kind of bet: a spread or total exactly on the line, or a moneyline game that ends level.
 
+While the [idle display](/using/modes/#when-nothing-is-on-the-idle-display) shows something in place of the game, like the clock before the start or once the final has been up for its usual time, the panel's ticker has no bets. The device page's ticker, its board and the Bets card keep showing them.
+
 **The device page's board.** Under the board, a tag for each bet on the game: gray before the start, green while it's covering or after it won, red while it isn't or after it lost, and gold for a push or a game called off.
 
 **The Bets card.** Every bet with its game and where it stands: the kickoff before the start, the score during the game (your team's score first), and the final score with the result. **Started, not on the panel right now** means the game is on but the panel isn't showing it, so it can't say how the bet is doing.
