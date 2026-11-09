@@ -80,6 +80,10 @@ Settings are grouped in cards. In the order the page shows them:
 | **Follow beta** | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+With **Show how to connect when the panel starts** on, the panel's IP address and `.local` name also lead the ticker for 30 seconds once the QR code and the address go. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready and the address is in the ticker only.
+:::
+
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
 ### Celebrations

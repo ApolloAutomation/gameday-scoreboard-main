@@ -14,9 +14,9 @@
 #     panel's own open hotspot, "Game Day 2f6a70", named in on_boot. The
 #     iPhone and Android cameras both offer to join it, and the phone then
 #     offers ESPHome's captive portal (192.168.4.1) to pick the home
-#     network. It only shows once the hotspot is really up, so it never
-#     points at a network that is not there yet; until then the lines are
-#     text only.
+#     network (components/gameday/hotspot.h sends every page there). It
+#     only shows once the hotspot is really up, so it never points at a
+#     network that is not there yet; until then the lines are text only.
 #   - On Wi-Fi the code opens the panel's own device page by IP address,
 #     http://192.168.1.50/, not by its .local name, which many Android phones
 #     can't open.
@@ -67,15 +67,19 @@
 # Wi-Fi, with or without a team. A fresh panel keeps it up for 45 seconds, or
 # until a team is picked. A panel that already has a team gets one run of
 # turns, 18 seconds, and then its board. The address turn is what "Show
-# address at boot" on the device page controls, since it is how someone who
+# how to connect" on the device page controls, since it is how someone who
 # set the panel up through the hotspot finds it again; with the setting off
 # a fresh panel shows only the QR, and a panel with a team skips the screen
-# and goes straight to its board. Coming back to the same network after a
-# drop is not a new join and shows nothing: whoever set the panel up has
-# already found its page. A boot button hold always shows the full address
-# and IP, full width, with no QR, for 20 seconds. Off Wi-Fi the overlay never
-# hides, so the button cannot blank a panel that is in setup or has lost its
-# network.
+# and goes straight to its board. With the setting on, the address then
+# leads the ticker for 30 seconds once the screen goes (boot_join_ticker,
+# the gameday component's show_join_address). A game being played on a
+# panel with a team doesn't wait for the 18 seconds: the screen goes as soon
+# as that board is up and the address is in the ticker only. Coming back to
+# the same network after a drop is not a new join and shows nothing:
+# whoever set the panel up has already found its page. A boot button hold
+# always shows the full address and IP, full width, with no QR, for 20
+# seconds. Off Wi-Fi the overlay never hides, so the button cannot blank a
+# panel that is in setup or has lost its network.
 # A panel with no team picked brings the QR back over the board for 13 s
 # every 3 minutes (boot_team_qr_turn) until one is.
 #
@@ -169,6 +173,12 @@ globals:
   # Whether this join shows the QR code for the device page (see
   # boot_refresh). Decided once per join, when boot_ip_shown_ms is still 0.
   - id: boot_join_qr
+    type: bool
+    initial_value: 'false'
+  # Whether the ticker takes up the address once this join's screen goes
+  # (boot_hide): a new join with "Show how to connect" on, the joins whose
+  # screen gives the address. Decided with boot_join_qr, used once.
+  - id: boot_join_ticker
     type: bool
     initial_value: 'false'
 
@@ -386,6 +396,7 @@ script:
               const bool same = !id(boot_joined_ssid).empty() && ssid == id(boot_joined_ssid);
               id(boot_joined_ssid) = ssid;
               id(boot_join_qr) = !id(gameday_ctl).setup_done() || (!same && id(gameday_ctl).show_boot_address());
+              id(boot_join_ticker) = !same && id(gameday_ctl).show_boot_address();
               ESP_LOGI("boot", "On Wi-Fi (%s): %s", same ? "same network" : "new join",
                        id(boot_join_qr) ? "showing the QR code for the device page" : "straight to the board");
             }
@@ -463,6 +474,19 @@ script:
             if (id(boot_hold_since_ms) != 0 && !via_button && !id(boot_show_address).is_running() &&
                 !id(gameday_ctl).boot_hold(id(boot_hold_since_ms)))
               id(boot_hide).execute();
+            // A game being played on a panel that already has a team: this
+            // join's QR and address give way to the board as soon as it is
+            // up, and the address goes in the ticker (boot_hide starts it).
+            // A new panel keeps its screen: that is how its first team gets
+            // picked. The button's address and the sign-in screen stay too.
+            else if (id(boot_join_qr) && id(gameday_ctl).setup_done() && !via_button &&
+                     !id(boot_show_address).is_running() && !id(boot_team_qr_on) && !id(gameday_ctl).captive() &&
+                     id(gameday_ctl).board_ready() && id(gameday_ctl).board_live()) {
+              ESP_LOGI("boot", "A game is live: the board now, with the address in the ticker");
+              id(boot_join_qr) = false;
+              id(boot_hide_later).stop();
+              id(boot_hide).execute();
+            }
           } else if (lost) {
             // Tested before the setup branch below on purpose. The fallback AP
             // starts 90 seconds into any outage, so that branch would otherwise
@@ -623,7 +647,14 @@ script:
                                   id: boot_overlay
                                   hidden: false
                             else:
-                              - lambda: 'id(boot_hold_since_ms) = 0;'
+                              - lambda: |-
+                                  id(boot_hold_since_ms) = 0;
+                                  // This join's screen gave the address: the ticker carries it
+                                  // on for a while over the board (setup_qr.h, kJoinTickerMs).
+                                  if (id(boot_join_ticker)) {
+                                    id(boot_join_ticker) = false;
+                                    id(gameday_ctl).show_join_address();
+                                  }
                               - component.suspend: boot_check
                               - component.suspend: boot_anim
                               - script.execute:

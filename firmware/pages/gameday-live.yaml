@@ -297,6 +297,7 @@ script:
       next_line: string
       board: bool
       board_card: bool
+      join_line: bool
     then:
       - lambda: |-
           // A side with no team yet (just after a team change) shows no logo.
@@ -406,7 +407,9 @@ script:
           // Toggle between the game layout, a leaderboard and the "no game"
           // layout
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          if (clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
+          const bool no_game =
+              clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "";
+          if (no_game) {
             // The component's words for this screen (the finals rotation's
             // headers and next kickoff, "No live games", a golf event's name
             // and dates), else the default.
@@ -429,9 +432,20 @@ script:
             lv_obj_add_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
           // The off-season clock and a leaderboard's card take the message's
           // place, and the leaderboard the game's: each borrows the ticker
-          // from the hidden game layout so it keeps running under it.
-          lv_obj_t *ticker_parent = (clock_card || board_card) ? id(tt_no_game_container)
-                                    : board ? id(gd_board_container) : id(tt_game_container);
+          // from the hidden game layout so it keeps running under it. So does
+          // a message while the address after a join leads the ticker
+          // (components/gameday/setup_qr.h, ticker_host).
+          lv_obj_t *ticker_parent = id(tt_game_container);
+          switch (gameday::ticker_host(no_game, clock_card || board_card, board, join_line)) {
+            case gameday::TickerHost::NO_GAME:
+              ticker_parent = id(tt_no_game_container);
+              break;
+            case gameday::TickerHost::BOARD:
+              ticker_parent = id(gd_board_container);
+              break;
+            case gameday::TickerHost::GAME:
+              break;
+          }
           if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
             lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
           if (clock_card) {

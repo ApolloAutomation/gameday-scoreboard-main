@@ -58,6 +58,10 @@ These show on the board or in the ticker.
 | **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. A canceled or postponed golf tournament or race shows its name and **Canceled** or **Postponed**. | Nothing. |
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
 
+:::note[Coming in the next release]
+**IP 192.168.1.50 | gameday-2f6a70.local** at the start of the ticker: the panel just joined Wi-Fi, and these are its IP address and `.local` name. It goes after 30 seconds. It also runs under a message that fills the board, like **Getting ready** or **Can't reach ESPN**, which otherwise has no ticker. To open the device page, open either one in a browser on the same Wi-Fi; use the IP address if your phone won't open the `.local` one.
+:::
+
 With a golf tour or a racing series as your team, a tournament or a race weekend before it starts shows its name and its days, or for a race weekend the next session, in place of a matchup. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 A panel with no team picked also brings the QR code that opens its device page back over the board for 13 seconds every 3 minutes, until you pick one.

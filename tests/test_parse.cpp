@@ -18,6 +18,7 @@
 #include "follow.h"
 #include "guard.h"
 #include "health.h"
+#include "hotspot.h"
 #include "logo_lru.h"
 #include "offseason.h"
 #include "panel_text.h"
@@ -799,6 +800,91 @@ static void test_setup_qr() {
   CHECK_EQ(device_page_qr("192.168.100.200").size(), (size_t) 22);
   // A typical home address stays within version 2 at error correction Q (20 bytes).
   CHECK(device_page_qr("192.168.29.10").size() <= 20);
+}
+
+// The ticker's address line after a join: the IP first, then the .local
+// name, for 30 seconds from when it started, across the millis() wrap.
+static void test_join_ticker() {
+  using esphome::gameday::join_ticker_on;
+  using esphome::gameday::join_ticker_text;
+  using esphome::gameday::kJoinTickerMs;
+  CHECK_EQ(join_ticker_text("192.168.1.23", "gameday-2f6a70"),
+           std::string("IP 192.168.1.23 | gameday-2f6a70.local | "));
+  CHECK_EQ(join_ticker_text("192.168.1.23", ""), std::string("IP 192.168.1.23 | "));
+  // No address, off Wi-Fi: nothing, not "IP  | "
+  CHECK_EQ(join_ticker_text("", "gameday-2f6a70"), std::string(""));
+
+  CHECK_EQ(kJoinTickerMs, (uint32_t) 30000);
+  CHECK(!join_ticker_on(0, 5000));  // never started
+  CHECK(join_ticker_on(1000, 1000));
+  CHECK(join_ticker_on(1000, 30999));
+  CHECK(!join_ticker_on(1000, 31000));
+  CHECK(!join_ticker_on(1000, 90000));
+  // Started just before millis() wrapped
+  CHECK(join_ticker_on(0xFFFFF000u, 0x00001000u));
+  CHECK(!join_ticker_on(0xFFFFF000u, 0x00008000u));
+}
+
+// Where the scoreboard page runs the ticker. A message ("Can't reach ESPN",
+// "Getting ready", "Looking for a live game", a finals header) hides it, but
+// not while the address line after a join leads it, or the address would
+// time out unseen on exactly the screens where an owner needs it.
+static void test_ticker_host() {
+  using esphome::gameday::ticker_host;
+  using esphome::gameday::TickerHost;
+  // ticker_host(no_game_screen, card, board, join_line)
+  // A game: under the score, address line or not.
+  CHECK(ticker_host(false, false, false, false) == TickerHost::GAME);
+  CHECK(ticker_host(false, false, false, true) == TickerHost::GAME);
+  // A leaderboard: under its rows.
+  CHECK(ticker_host(false, false, true, false) == TickerHost::BOARD);
+  CHECK(ticker_host(false, false, true, true) == TickerHost::BOARD);
+  // The off-season clock or a leaderboard's card: under it.
+  CHECK(ticker_host(true, true, false, false) == TickerHost::NO_GAME);
+  CHECK(ticker_host(true, true, false, true) == TickerHost::NO_GAME);
+  // A message: stays hidden with the game layout as before...
+  CHECK(ticker_host(true, false, false, false) == TickerHost::GAME);
+  // ...and runs under the message while the address line leads it.
+  CHECK(ticker_host(true, false, false, true) == TickerHost::NO_GAME);
+}
+
+// Who answers on the panel's setup hotspot (hotspot.h). While the portal is
+// up and the panel is off Wi-Fi, every OS's check for internet and every
+// page gets the setup page, the panel's own /gameday/ routes still answer,
+// and POSTs go where they always did. On Wi-Fi, or with no hotspot,
+// nothing changes, so the device page stays where it is.
+static void test_hotspot_route() {
+  using esphome::gameday::hotspot_route;
+  using esphome::gameday::HotspotRoute;
+  using esphome::gameday::panel_route;
+  // Android, Samsung and other Android makers, iPhone and Mac (old and new),
+  // Windows (old and new), Firefox, Linux, and the address typed by hand or
+  // handed out by the hotspot's DHCP (/)
+  const char *const probes[] = {"/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
+                                "/connecttest.txt", "/ncsi.txt", "/redirect", "/canonical.html", "/success.txt",
+                                "/check_network_status.txt", "/", "/config.json", "/wifisave"};
+  for (const char *p : probes) {
+    CHECK(hotspot_route(true, false, true, p) == HotspotRoute::SETUP_PAGE);
+    // On Wi-Fi the hotspot is going: the device page and the rest as usual
+    CHECK(hotspot_route(true, true, true, p) == HotspotRoute::USUAL);
+    // No hotspot
+    CHECK(hotspot_route(false, false, true, p) == HotspotRoute::USUAL);
+  }
+  // The device page's own files are the setup page too while off Wi-Fi
+  CHECK(hotspot_route(true, false, true, "/0.js") == HotspotRoute::SETUP_PAGE);
+  // The panel's own routes, for a bench script on the hotspot
+  CHECK(hotspot_route(true, false, true, "/gameday/state") == HotspotRoute::PANEL);
+  CHECK(hotspot_route(true, false, true, "/gameday/crash") == HotspotRoute::PANEL);
+  CHECK(hotspot_route(true, true, true, "/gameday/state") == HotspotRoute::USUAL);
+  // Not a GET: a setting, an update upload
+  CHECK(hotspot_route(true, false, false, "/gameday/set") == HotspotRoute::USUAL);
+  CHECK(hotspot_route(true, false, false, "/update") == HotspotRoute::USUAL);
+  CHECK(hotspot_route(true, false, false, "/wifisave") == HotspotRoute::USUAL);
+
+  CHECK(panel_route("/gameday/state"));
+  CHECK(!panel_route("/gameday"));
+  CHECK(!panel_route("/gamedays/x"));
+  CHECK(!panel_route(""));
 }
 
 // Where a portal's redirect points. A relative link stays on whoever
@@ -7627,6 +7713,9 @@ int main() {
   test_captive_redirect_host();
   test_ticker_speed();
   test_setup_qr();
+  test_join_ticker();
+  test_ticker_host();
+  test_hotspot_route();
   test_ha_status_text();
   test_short_game_name();
   test_kickoff_label();

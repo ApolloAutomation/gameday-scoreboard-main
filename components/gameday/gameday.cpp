@@ -30,6 +30,9 @@
 #ifdef USE_GAMEDAY_CRASH_REPORT
 #include "esphome/components/crash_report/crash_report.h"
 #endif
+#ifdef USE_CAPTIVE_PORTAL
+#include "esphome/components/captive_portal/captive_portal.h"
+#endif
 #ifdef USE_WIFI
 #include "esphome/components/wifi/wifi_component.h"
 #include <esp_event.h>
@@ -1064,6 +1067,25 @@ void GamedayComponent::loop() {
 #endif
   this->captive_tick_();
   this->wifi_tick_();
+  // The address line after a join has run its time: take it off the ticker.
+  if (this->join_addr_ms_ != 0 && !join_ticker_on(this->join_addr_ms_, millis())) {
+    this->join_addr_ms_ = 0;
+    if (this->join_addr_shown_)
+      this->emit_({});
+  }
+#ifdef USE_CAPTIVE_PORTAL
+  // The hotspot's DNS server answers one lookup per pass of the main loop,
+  // and a phone that has just joined sends a burst of them, its check for
+  // internet among them. Lookups that queue past the socket's few slots are
+  // dropped and only asked again seconds later, which can be long enough for
+  // the phone to decide the hotspot has no internet rather than a setup
+  // page. Answer a few more per pass while the hotspot is up; each call
+  // returns at once when nothing is waiting.
+  auto *portal = captive_portal::global_captive_portal;
+  if (portal != nullptr && portal->is_active())
+    for (int i = 0; i < 7; i++)
+      portal->loop();
+#endif
 #ifdef GAMEDAY_DEMO
   // While the scripted game plays, nothing new is fetched. A fetch already
   // running still finishes below, and is discarded as belonging to before.
@@ -1254,6 +1276,12 @@ bool GamedayComponent::mark_setup_done_() {
   this->save_prefs_();
   this->fire_action_("team_picked");  // the setup screen listens for this
   return true;
+}
+
+void GamedayComponent::show_join_address() {
+  this->join_addr_ms_ = millis() == 0 ? 1 : millis();
+  ESP_LOGI(TAG, "The ticker starts with the panel's address for %u s", (unsigned) (kJoinTickerMs / 1000));
+  this->emit_({});
 }
 
 void GamedayComponent::apply_team_(const ::espn::Team &t) {
@@ -1621,20 +1649,31 @@ void GamedayComponent::update_state_changed_() {
 #endif
 }
 
-// A game the panel follows is in progress: the one on the board, which
-// covers My team and the live modes, or any favorite's in Favorite teams.
-bool GamedayComponent::followed_game_live_() const {
+// The game on the board is being played.
+bool GamedayComponent::board_live() const {
+  if (!this->game_.valid)
+    return false;
   // A golf event is IN all week, overnight breaks included: only a round
   // being played counts, so the nights between rounds can still update. A
   // race weekend is the same: only a session on track, and not a race
   // stopped overnight.
-  if (this->game_.valid && this->game_.sport == ::espn::Sport::GOLF)
+  if (this->game_.sport == ::espn::Sport::GOLF)
     return this->game_.golf.phase == ::espn::GolfPhase::LIVE;
-  if (this->game_.valid && this->game_.sport == ::espn::Sport::RACING)
+  if (this->game_.sport == ::espn::Sport::RACING)
     return ::espn::racing_on_track(this->game_,
                                    this->time_ != nullptr ? (int64_t) this->time_->timestamp_now() : 0);
-  if (this->game_.valid && this->game_.state == GameState::IN)
+  return this->game_.state == GameState::IN;
+}
+
+// A game the panel follows is in progress: the one on the board, which
+// covers My team and the live modes, or any favorite's in Favorite teams.
+bool GamedayComponent::followed_game_live_() const {
+  if (this->board_live())
     return true;
+  // Golf and racing are never favorites, so a tour or series between
+  // sessions has nothing more to look at here.
+  if (this->game_.valid && ::espn::is_board_sport(this->game_.sport))
+    return false;
   if (this->favorites_mode_())
     for (const auto &e : this->fav_)
       if (e.game.valid && e.game.state == GameState::IN)
@@ -3148,6 +3187,21 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
       f.ha_status_text = pick + f.ha_status_text;
     }
   }
+  // For a while after the panel joins Wi-Fi, its address leads the ticker
+  // (setup_qr.h), unless the line above already gives the IP. Only on the
+  // panel and the page's copy of it: Home Assistant has the IP entity, and
+  // its Game Status would log the line coming and going.
+  this->join_addr_shown_ = false;
+  if (join_ticker_on(this->join_addr_ms_, millis()) && this->flag_(FLAG_SETUP) && !this->demo_playing_()) {
+    const std::string line = join_ticker_text(page_ip(), this->hostname());
+    if (!line.empty()) {
+      f.status_text = line + f.status_text;
+      // Under a message too ("Can't reach ESPN"), which hides the ticker
+      // otherwise (ticker_host).
+      f.join_line = true;
+      this->join_addr_shown_ = true;
+    }
+  }
 
   if (!f.splash_text.empty())
     ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
@@ -3956,6 +4010,44 @@ std::string GamedayComponent::wifi_json_() {
 bool GamedayComponent::canHandle(AsyncWebServerRequest *request) const {
   char buf[AsyncWebServerRequest::URL_BUF_SIZE];
   return request->url_to(buf).starts_with("/gameday/");
+}
+
+void GamedayComponent::set_web_server_base(web_server_base::WebServerBase *base) {
+  this->base_ = base;
+  // The web server takes handlers in the order they are added, and this runs
+  // before any component's setup: ahead of the device page (web_server, at
+  // setup) and the captive portal (when the hotspot first starts).
+  if (base != nullptr)
+    base->add_handler(&this->hotspot_handler_);
+}
+
+// ---- The setup hotspot (hotspot.h) -------------------------------------------
+
+bool GamedayComponent::HotspotHandler::canHandle(AsyncWebServerRequest *request) const {
+#ifdef USE_CAPTIVE_PORTAL
+  auto *portal = captive_portal::global_captive_portal;
+  if (portal == nullptr || !portal->is_active())
+    return false;
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  return hotspot_route(true, network::is_connected(), request->method() == HTTP_GET, request->url_to(buf).str()) !=
+         HotspotRoute::USUAL;
+#else
+  return false;
+#endif
+}
+
+// Only for what canHandle took: a GET on the hotspot while off Wi-Fi.
+void GamedayComponent::HotspotHandler::handleRequest(AsyncWebServerRequest *request) {
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  if (panel_route(request->url_to(buf).str())) {
+    this->parent_->handleRequest(request);
+    return;
+  }
+#ifdef USE_CAPTIVE_PORTAL
+  // The setup page, from the portal's own handler: for every OS's check for
+  // internet too, which is what makes the phone offer it.
+  captive_portal::global_captive_portal->handleRequest(request);
+#endif
 }
 
 void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
