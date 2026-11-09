@@ -43,6 +43,8 @@ Baskets still don't splash, but four moments do, each with its own switch in the
 - **FINAL**: when the game ends and your team didn't win. A win still gets the victory splash, and in Live games every final does.
 
 The other side's lead changes and buzzer beaters put its abbreviation first, like "MIN LEAD CHANGE", and need **Opponent scores too**. See [Celebrations](/using/device-page/#celebrations).
+
+Each of these shows a logo with its words: a lead change or a buzzer beater the logo of the team that scored, a buzzer beater with the points, like **+3**, and overtime and the final both teams' logos. The logo says whose play it was, so the other side's splash leaves its abbreviation out. The victory splash shows the winner's logo with "WINS". See [Splashes](/using/panel-sizes/#splashes).
 :::
 
 :::note[Coming in the next release]

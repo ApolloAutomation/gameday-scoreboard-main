@@ -41,7 +41,7 @@ A few things MLB's feed doesn't have:
 
 - **Team colors.** The abbreviations, the splashes and the off-season clock are white.
 - **The last play.** The ticker has the count, the outs, the pitcher and the batter, but no play.
-- **How a run scored.** Every run gets "RUN!" or "2 RUNS!", never the "HOME RUN" or "GRAND SLAM" splash with fireworks. In the Celebrations card every minor league run counts under **Runs**, so with **Runs** off a minor league game splashes no runs, and **Home run** and **Grand slam** make no difference there.
+- **How a run scored.** Every run gets "RUN!" or "2 RUNS!", with the team's logo and the runs' number, like **+2** ([Splashes](/using/panel-sizes/#splashes)), never the "HOME RUN" or "GRAND SLAM" splash with fireworks. In the Celebrations card every minor league run counts under **Runs**, so with **Runs** off a minor league game splashes no runs, and **Home run** and **Grand slam** make no difference there.
 
 A walk-off does get its splash, "WALK-OFF" with fireworks, under the **Walk-off** switch: the home team going ahead in the bottom of the 9th or later, or of the 7th in a doubleheader's 7-inning games. See [Baseball: MLB](/using/baseball/) for how it's told.
 

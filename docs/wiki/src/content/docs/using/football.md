@@ -67,6 +67,10 @@ The other side's scores show the same way in their color with their abbreviation
 The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN.
 
 :::note[Coming in the next release]
+Each splash shows the logo of the team that scored, with the points it gained: **+6** for a touchdown, **+7** for a touchdown and its extra point in one update, **+3** for a field goal, **+1** for an extra point and **+2** for a 2-point conversion or a safety. The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN. An interception or a fumble recovery shows the logo of the team that took the ball, with no points, and the victory splash shows the winner's logo with "WINS". The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.
+:::
+
+:::note[Coming in the next release]
 Two points say which they were. A play ESPN calls a safety says "SAFETY", and so do two points in the middle of a drive, when the panel last saw a team with the ball and a down to play. Two points after a touchdown say "2-PT" for the conversion, and so do two points the panel can't tell apart, since a conversion is far more common than a safety.
 
 Two big plays that aren't scores get a splash too, when ESPN's last play is one:

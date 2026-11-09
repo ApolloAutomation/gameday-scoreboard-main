@@ -88,6 +88,12 @@ The second area's ticker, on two rows of two or three or four panels in a row, n
 
 For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).
 
+## Text size
+
+:::note[Coming in the next release]
+**Text size** in the Panel card on the device page sets the ticker's letters: **Normal**, where a panel starts, or **Large**, half again as tall. With **Large** the ticker sits three rows higher, and the row above it moves up a little to make room: down and distance, the count, the bases and the outs, a goal or a series on a 128x64 board or wider, and the scores on a single 64x64 panel. A game's ticker in the [second area](/using/panel-sizes/#the-second-area) grows the same way. A golf or racing leaderboard keeps the small letters, since its sixth row leaves no room, and the second area's ticker under its clock is in big letters at either size. **Too warm, dimming** and **Check power supply** cover the bigger ticker the same way. A change shows at once, with no restart. **Clock size**, next to it, sets the clock; see [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
+:::
+
 ## Ticker speed
 
 **Ticker speed** in the Panel card sets how fast the ticker scrolls, from 1 (slowest) to 10 (fastest). 1 moves 8 pixels a second, about one and a half letters, and 10 moves 32, about six letters. Each step is the same amount faster than the one below it, so every setting stays readable. A new panel starts at 5, about three letters a second. The speed stays the same whatever the length of the line, so a long last play scrolls at the same pace as a short one.
