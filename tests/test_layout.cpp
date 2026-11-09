@@ -398,20 +398,27 @@ void test_large_text() {
     LCHECK(n.ticker_y + font_desc_bottom(n.ticker_font) < kBoardRows);
     const int ticker_ink = g.ticker_y + font_ink_top(g.ticker_font);
     if (g.wide) {
-      // The situation row's letters, the pips and the bases end above the ticker's.
+      // The situation row's letters end above the ticker's, the pips and
+      // the bases above its line, whose first row "|" and "/" ink.
       LCHECK(g.down.y + font_desc_bottom(BoardFont::S8) < ticker_ink);
-      LCHECK(g.pip_y + 3 <= ticker_ink && g.base_y[0] + g.base_px <= ticker_ink);
+      for (const GameGeom &x : {n, g})
+        LCHECK(x.pip_y + 3 <= x.ticker_y && x.base_y[0] + x.base_px <= x.ticker_y);
       LCHECK(g.down.y > g.rec[0].y + font_ink_bottom(BoardFont::S8));  // still under the records
       LCHECK(g.pip_y > g.rec[0].y + font_ink_bottom(BoardFont::S8));
       LCHECK(g.count.y == g.down.y && g.outs.y == g.down.y);
       LCHECK(g.down.y == n.down.y - 3 && g.pip_y == n.pip_y - 2 && g.score[0].y == n.score[0].y);
-      LCHECK(g.base_y[1] == n.base_y[1] - 2 && g.base_y[1] > g.clock.y + font_ink_bottom(BoardFont::S12));
+      LCHECK(g.base_y[1] == n.base_y[1] - 3 && g.base_y[1] > g.clock.y + font_ink_bottom(BoardFont::S12));
     } else {
       // The scores, the possession line under them, the bases and the outs
       const int score_ink = g.score[0].y + font_ink_bottom(BoardFont::S12);
-      LCHECK(g.score[0].y + g.score_poss_dy > score_ink && g.score[0].y + g.score_poss_dy + 2 <= ticker_ink);
+      LCHECK(g.score[0].y + g.score_poss_dy > score_ink);
       LCHECK(n.score[0].y + n.score_poss_dy == n.score[0].y + font_rows(BoardFont::S12));  // as before
-      LCHECK(g.base_y[0] + g.base_px <= ticker_ink && g.out_y + 2 <= ticker_ink);
+      // The possession line, the bases and the out dots above the ticker's line
+      for (const GameGeom &x : {n, g}) {
+        LCHECK(x.score[0].y + x.score_poss_dy + 2 <= x.ticker_y);
+        LCHECK(x.base_y[0] + x.base_px <= x.ticker_y && x.out_y + 2 <= x.ticker_y);
+        LCHECK(x.base_y[0] + x.base_px < x.out_y);
+      }
       LCHECK(g.score[0].y > g.abbr[0].y + font_ink_bottom(BoardFont::S8));
     }
   }

@@ -193,10 +193,12 @@ inline std::string clock_ampm(const std::string &time) {
 // which stay hidden and keep no place here (zero). A badge takes its logo's
 // place. Index 0 is the team's side, on the left; 1 the opponent's.
 // Large text makes the ticker spleen_12, its 12-row line (the tails of y, p
-// and q on the last) four rows higher, so on a wide board the situation
-// row's letters (down and distance, the count, the outs) move up three rows
-// and the pips and the bases two, and on one panel the scores move up one,
-// the possession line under them closer, to keep clear of it.
+// and q on the last) four rows higher. What sits over it moves up to keep
+// clear of it: the situation row's letters (down and distance, the count,
+// the outs) three rows and the pips two on a wide board, and on one panel
+// the scores two, the possession line under them closer. Shapes end above
+// the ticker's line, whose first row its "|" and "/" ink: the bases three
+// rows higher, one panel's out dots one.
 
 struct Spot {
   int16_t x, y, w;
@@ -231,8 +233,8 @@ inline GameGeom game_geom(int w, bool large_text = false) {
   const int half = w / 2;  // also the diamond's middle
   // On a wide board, with Large text: the situation row's letters, whose
   // tails (spleen_8's last row) end above the ticker's capitals, and the
-  // pips and the bases, which end above them too
-  const int lift = large_text ? 3 : 0, shape_lift = large_text ? 2 : 0;
+  // bases, above its line; the pips end well above it
+  const int lift = large_text ? 3 : 0, pip_lift = large_text ? 2 : 0;
   g.wide = wide;
   g.ticker_font = large_text ? BoardFont::S12 : BoardFont::S8;
   g.ticker_y = (int16_t) (kBoardRows - font_rows(g.ticker_font));
@@ -261,14 +263,14 @@ inline GameGeom game_geom(int w, bool large_text = false) {
       g.pip_x[i] = (int16_t) (18 - 9 + i * 7);
       g.pip_x[3 + i] = (int16_t) (w - 18 - 9 + i * 7);
     }
-    g.pip_y = (int16_t) (48 - shape_lift);
+    g.pip_y = (int16_t) (48 - pip_lift);
     g.base_px = 4;
     g.base_x[0] = (int16_t) (half + 3);
     g.base_x[1] = (int16_t) (half - 2);
     g.base_x[2] = (int16_t) (half - 7);
-    g.base_y[0] = (int16_t) (51 - shape_lift);
-    g.base_y[1] = (int16_t) (47 - shape_lift);
-    g.base_y[2] = (int16_t) (51 - shape_lift);
+    g.base_y[0] = (int16_t) (51 - lift);
+    g.base_y[1] = (int16_t) (47 - lift);
+    g.base_y[2] = (int16_t) (51 - lift);
     g.count = {32, (int16_t) (48 - lift), (int16_t) (half - 9 - 32)};
     g.outs = {(int16_t) (half + 9), (int16_t) (48 - lift), 28};  // "2 OUT" is 25 px in spleen_8
   } else {
@@ -280,7 +282,7 @@ inline GameGeom game_geom(int w, bool large_text = false) {
     g.clock_font = BoardFont::S8;
     g.abbr[0] = {0, 33, (int16_t) half};
     g.abbr[1] = {(int16_t) half, 33, (int16_t) half};
-    const int16_t sy = large_text ? 41 : 42;
+    const int16_t sy = large_text ? 40 : 42;
     g.score[0] = {0, sy, (int16_t) half};
     g.score[1] = {(int16_t) half, sy, (int16_t) half};
     g.score_poss_dy = large_text ? 10 : 12;
@@ -294,7 +296,7 @@ inline GameGeom game_geom(int w, bool large_text = false) {
     g.base_y[2] = (int16_t) (sy + 5);
     for (int i = 0; i < 3; i++)
       g.out_x[i] = (int16_t) (half - 5 + i * 4);
-    g.out_y = 51;
+    g.out_y = (int16_t) (large_text ? 50 : 51);
   }
   return g;
 }
