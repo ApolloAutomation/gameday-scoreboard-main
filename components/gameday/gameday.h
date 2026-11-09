@@ -33,6 +33,7 @@
 #include "hotspot.h"
 #include "idle.h"
 #include "offseason.h"
+#include "players.h"
 #include "recap.h"
 #include "poll_timing.h"
 #include "set_request.h"
@@ -640,6 +641,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
+    // The favorite players when the job was made (players.h): a game read
+    // keeps their leader lines and plays while one is in its league.
+    ::espn::PlayerBlob players{};
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -1074,6 +1078,17 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
   // The bets on the board's game, added to its ticker line.
   void bets_ticker_(std::string &out) const;
+  // Favorite players (players.h), entered on the device page and kept in
+  // their own blob (gameday_players_v1). Each one's stat line goes in the
+  // board's ticker while ESPN names them a leader of its game, and their score
+  // takes the place of the team's splash.
+  ESPPreferenceObject players_pref_;
+  ::espn::PlayerBlob players_{};
+  void set_player_(const ::espn::SetOp &op);
+  void remove_player_(uint8_t league, uint32_t athlete);
+  void players_changed_();
+  // The favorites' stat lines on the board's game, "ALLEN 21/34, 241 YDS".
+  std::vector<std::string> player_lines_(const GameSnapshot &g) const;
   int64_t next_midnight_(int64_t now) const;
   void start_fav_job_(uint32_t now);
   void apply_fav_job_(uint32_t now);

@@ -27,6 +27,10 @@ While the panel follows a game it doesn't switch to big plays in other games, or
 Under the board, a tag for each bet you typed into the **Bets** card that's on the game on the board: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. See [Bets](/using/bets/).
 :::
 
+:::note[Coming in the next release]
+While the game on the board is live, a tag under the board for each of your favorite players that ESPN lists among its leaders, with their stat line, like **ALLEN 21/34, 241 YDS, 2 TD**: the same line the panel's ticker shows. See [Favorite players](/using/favorite-players/).
+:::
+
 When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**, or, with nothing on the schedule, **No upcoming event for this tour** for a golf tour and **No upcoming race for this series** for a racing series. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 
 Three warnings can appear on the board:
@@ -59,6 +63,8 @@ The same chooser adds favorites: **Add a favorite** in the Favorites card opens 
 
 :::note[Coming in the next release]
 **Pick a team** in the Bets card opens the chooser too, to pick the team for a new bet. The **Golf** and **Racing** tabs are hidden there as well.
+
+**Pick a team** in the Favorite players card opens it to pick the team whose roster to choose a player from, without the **Golf** and **Racing** tabs too.
 :::
 
 ## Settings
@@ -130,10 +136,13 @@ The Celebrations card has a switch for each kind of splash, grouped by sport. Li
 | Hockey | Goal |
 | Soccer | Goal, Penalty goal, Red card |
 | Basketball | Lead change, Buzzer beater, Overtime, Final |
+| Favorite players | Scores |
 
 They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/).
 
 **Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
+
+**Favorite players: Scores** shows whatever sports you follow, and names a favorite player who scores in place of the team's splash for that play. It works on its own, whatever the sport's switches and **Opponent scores too** say. See [Favorite players](/using/favorite-players/#the-celebration).
 
 **Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game, as before.
 
@@ -153,6 +162,12 @@ A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel
 ### Timezone
 
 The Time line in the Setup card names the panel's timezone. While it follows your browser, opening the page from a browser in another zone moves the panel to that zone. Tap **choose manually** to pick one from the list instead; the page then leaves it alone until you tap **follow this browser**. The list covers the US zones (Eastern, Central, Mountain, Arizona, Pacific, Alaska and Hawaii), Canada Atlantic and Newfoundland, Mexico City, UK and Ireland, Central Europe, Australia Eastern and UTC. A new panel starts on US Central.
+
+## The Favorite players card
+
+:::note[Coming in the next release]
+The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
+:::
 
 ## The Device card
 

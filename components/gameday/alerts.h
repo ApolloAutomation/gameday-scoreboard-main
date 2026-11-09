@@ -28,7 +28,8 @@ enum class Alert : uint8_t {
   HOCKEY_GOAL,                                                                  // hockey
   SOCCER_GOAL, PENALTY_GOAL, RED_CARD,                                          // soccer
   LEAD_CHANGE, BUZZER_BEATER, OVERTIME, FINAL,                                  // basketball
-  SCORE,  // football points that are none of the above (two scores between reads): TOUCHDOWN's switch
+  PLAYER,  // a favorite player scored (players.h); never one of detect_big_play's
+  SCORE,   // football points that are none of the above (two scores between reads): TOUCHDOWN's switch
 };
 static_assert((int) Alert::SCORE == kAlertBits + 1, "one switch per alert type (set_request.h)");
 constexpr uint32_t kAlertsAll = (1u << kAlertBits) - 1;
@@ -257,6 +258,24 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
   return none;
 }
 
+// The splash's words for a play of type a, before any side or "!":
+// "TOUCHDOWN", "HOME RUN", "GOAL". A favorite player's splash
+// (players.h) uses them too. RUN's depend on the runs, so it has none here.
+inline const char *alert_word(Alert a) {
+  // In Alert order, a sport a line.
+  static const char *const kWords[] = {
+      "",
+      "TOUCHDOWN", "FIELD GOAL", "EXTRA POINT", "2-PT", "SAFETY", "INTERCEPTION", "FUMBLE RECOVERY",
+      "", "HOME RUN", "GRAND SLAM", "WALK-OFF",
+      "GOAL",
+      "GOAL", "PENALTY GOAL", "RED CARD",
+      "LEAD CHANGE", "BUZZER BEATER", "OVERTIME", "FINAL",
+      "SCORE",  // PLAYER: players.h makes that splash; this only keeps the table whole
+      "SCORE"};
+  static_assert(sizeof(kWords) / sizeof(kWords[0]) == (size_t) Alert::SCORE + 1, "a word per alert type");
+  return (size_t) a <= (size_t) Alert::SCORE ? kWords[(int) a] : "";
+}
+
 // The splash for a big play, its words fit to the panel: 10 characters a line
 // on one panel, 16 on two, and never more than three lines. Our side's say
 // the play with "!" ("TOUCHDOWN!", "2 RUNS!"); the other side's, and both
@@ -265,22 +284,12 @@ inline BigPlay detect_big_play(const GameSnapshot &prev, const GameSnapshot &cur
 // they won't fit beside it. A red card always names the side that got it, on
 // card red; overtime and the final say only that.
 inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neutral, bool wide) {
-  // In Alert order, a sport a line. RUN's words depend on the runs.
-  static const char *const kWords[] = {
-      "",
-      "TOUCHDOWN", "FIELD GOAL", "EXTRA POINT", "2-PT", "SAFETY", "INTERCEPTION", "FUMBLE RECOVERY",
-      "", "HOME RUN", "GRAND SLAM", "WALK-OFF",
-      "GOAL",
-      "GOAL", "PENALTY GOAL", "RED CARD",
-      "LEAD CHANGE", "BUZZER BEATER", "OVERTIME", "FINAL",
-      "SCORE"};
-  static_assert(sizeof(kWords) / sizeof(kWords[0]) == (size_t) Alert::SCORE + 1, "a word per alert type");
   if (p.type == Alert::NONE)
     return Splash{};
   const bool opp = p.side == AlertSide::OPP;
   const bool ours = !opp && !neutral && p.type != Alert::RED_CARD;
   const uint32_t color = p.type == Alert::RED_CARD ? 0xCC0000 : parse_color(opp ? g.opp_color : g.team_color);
-  std::string word = kWords[(int) p.type];
+  std::string word = alert_word(p.type);
   if (p.type == Alert::INTERCEPTION && !wide)
     word = "INTER-CEPTION";  // breaks after the hyphen on one panel
   if (p.type == Alert::RUN)
@@ -295,10 +304,24 @@ inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neut
   // "\n" reaches the label (panel_text keeps it for the splash). The words
   // this firmware splashed before alerts keep LVGL's own breaks.
   const bool older = p.type <= Alert::EXTRA_POINT || p.type == Alert::RUN || p.type == Alert::HOME_RUN ||
-                     p.type == Alert::HOCKEY_GOAL || p.type == Alert::SOCCER_GOAL || p.type == Alert::SCORE;
+                     p.type == Alert::HOCKEY_GOAL || p.type == Alert::SOCCER_GOAL || p.type == Alert::SCORE ||
+                     p.type == Alert::PLAYER;
   const bool own_line = !older && word.find_first_of(" -") != std::string::npos &&
                         abbr.size() + 1 + word.size() > (wide ? 16u : 10u);
   return Splash{abbr + (own_line ? "\n" : " ") + word, color};
+}
+
+// The splashes the panel draws as fireworks on black, the text in the team's
+// color (gameday-live.yaml); the rest are a solid flash. Touchdowns, home
+// runs, grand slams, walk-offs, buzzer beaters, hockey and soccer goals and
+// the win ("DAL WINS!", "SCHEFFLER WINS!"). A favorite player's splash puts
+// their name before the play's words (players.h), and a name holds no "!",
+// so "WINSTON 2-PT" isn't a win: it gets the same flash as the team's.
+inline bool splash_fireworks(const std::string &text, Sport sport) {
+  for (const char *w : {"TOUCHDOWN", "WINS!", "HOME RUN", "GRAND SLAM", "WALK-OFF", "BUZZER"})
+    if (text.find(w) != std::string::npos)
+      return true;
+  return (sport == Sport::HOCKEY || sport == Sport::SOCCER) && text.find("GOAL") != std::string::npos;
 }
 
 }  // namespace espn

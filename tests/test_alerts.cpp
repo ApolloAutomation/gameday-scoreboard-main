@@ -13,6 +13,7 @@
 
 #include "alerts.h"
 #include "panel_text.h"
+#include "splash_layout.h"
 
 using namespace espn;
 
@@ -765,8 +766,13 @@ void test_detect() {
   ACHECK(p.type == Alert::NONE);
   // The bits: one per switch, SCORE sharing the touchdown's.
   ACHECK(alert_bit(Alert::TOUCHDOWN) == 1 && alert_bit(Alert::FINAL) == 1u << 18);
+  ACHECK(alert_bit(Alert::PLAYER) == 1u << 19);  // a favorite player's score (players.h)
   ACHECK(alert_bit(Alert::SCORE) == alert_bit(Alert::TOUCHDOWN) && alert_bit(Alert::NONE) == 0);
-  ACHECK(kAlertsAll == 0x7FFFF);
+  ACHECK(kAlertsAll == 0xFFFFF);
+  // A panel's saved mask holds the types turned off, so one from before the
+  // Favorite player type has it on.
+  const uint32_t saved_off = alert_bit(Alert::SAFETY);
+  ACHECK((kAlertsAll & ~saved_off & alert_bit(Alert::PLAYER)) != 0);
   // ESPN's basketball clocks, and documents that send something else.
   using espn::detail::clock_tenths;
   ACHECK(clock_tenths("8:27") == 5070 && clock_tenths("12.3") == 123 && clock_tenths("0.0") == 0);
@@ -785,56 +791,8 @@ void test_favorites_only() {
   ACHECK(!game_has_team((uint8_t) League::NFL, 21, 6, teams, 0));
 }
 
-// How LVGL lays a splash out: a line break at "\n", else at a space or after
-// a hyphen once the next word won't fit. The lines, or none when a word is
-// longer than a line (it would be cut in the middle).
-std::vector<std::string> layout(const std::string &text, size_t width) {
-  std::vector<std::string> out;
-  size_t start = 0;
-  while (start <= text.size()) {
-    size_t nl = text.find('\n', start);
-    std::string seg = text.substr(start, nl == std::string::npos ? std::string::npos : nl - start);
-    start = nl == std::string::npos ? text.size() + 1 : nl + 1;
-    std::vector<std::string> words;  // each with the hyphen it ends with
-    std::string w;
-    for (char c : seg) {
-      if (c == ' ') {
-        if (!w.empty())
-          words.push_back(w);
-        w.clear();
-      } else {
-        w += c;
-        if (c == '-') {
-          words.push_back(w);
-          w.clear();
-        }
-      }
-    }
-    if (!w.empty())
-      words.push_back(w);
-    std::string line;
-    for (size_t i = 0; i < words.size(); i++) {
-      if (words[i].size() > width)
-        return {};
-      const bool joined = i > 0 && words[i - 1].back() == '-';
-      const std::string sep = line.empty() || joined ? "" : " ";
-      if (line.size() + sep.size() + words[i].size() > width) {
-        out.push_back(line);
-        line = words[i];
-      } else {
-        line += sep + words[i];
-      }
-    }
-    out.push_back(line);
-  }
-  return out;
-}
-
-bool fits(const std::string &text, size_t width, size_t max_lines) {
-  const std::vector<std::string> lines = layout(text, width);
-  return !lines.empty() && lines.size() <= max_lines;
-}
-
+using splash_test::fits;
+using splash_test::layout;
 using Lines = std::vector<std::string>;
 
 void test_words_fit() {

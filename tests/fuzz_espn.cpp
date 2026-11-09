@@ -16,6 +16,7 @@
 #include "espn_parse.h"
 #include "logo_lru.h"
 #include "panel_text.h"
+#include "players.h"
 #include "poll_timing.h"
 #include "recap.h"
 #include "startup.h"
@@ -139,6 +140,22 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   }
   if (g.sport == Sport::BASKETBALL)
     n += basketball_series(g).size();
+  return n;
+}
+
+// Favorite players (players.h) in every league of the sport, with ids from
+// the fixtures: what a read with them keeps, their stat lines and who
+// scored, from the read before to this one.
+size_t players(const GameSnapshot &prev, const GameSnapshot &g, uint8_t league) {
+  static const uint32_t kIds[] = {4870883, 5079684, 4917849, 4396909, 4431671, 280555, 3918298, 199680};
+  FavPlayer list[kPlayerSlots]{};
+  for (int i = 0; i < kPlayerSlots; i++)
+    list[i] = make_player(league, kIds[i], i % 2 ? g.team_id : g.opp_id, i % 2 ? "B. TKACHUK" : "CONNOR");
+  size_t n = 0;
+  for (const auto &line : player_lines(g, league, list))
+    n += esphome::gameday::panel_text(line).size();
+  for (bool wide : {false, true})
+    n += board_splash_with_players(prev, g, true, false, kAlertsAll, wide, league, list).text.size();
   return n;
 }
 
@@ -515,6 +532,21 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + render(prev, e, now);
       // The same game a poll later: what a splash compares.
       sink = sink + render(e, e, now);
+      // Read again with favorite players in each of the sport's leagues.
+      for (const auto &l : kLeagues) {
+        if (l.sport != sport)
+          continue;
+        FavPlayer list[kPlayerSlots]{};
+        list[0] = make_player((uint8_t) l.league, 4917849, p.team_id, "MESA JR.");
+        list[1] = make_player((uint8_t) l.league, 4396909, p.team_id, "NESMITH");
+        const PlayerWatch w = player_watch(list, (uint8_t) l.league);
+        GameSnapshot f;
+        ChunkReader r5(data, size, chunk);
+        if (parse_event(r5, sport, p.team_id, f, p.event_id, &w)) {
+          sink = sink + players(prev, f, (uint8_t) l.league) + players(e, f, (uint8_t) l.league);
+          sink = sink + render(e, f, now);
+        }
+      }
       prev = e;
     }
   }

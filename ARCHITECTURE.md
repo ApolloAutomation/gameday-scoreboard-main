@@ -71,7 +71,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   sets it with `lv_qrcode_update`, only when the text changes.
 - `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
   component sends, for 64 and 128 pixel wide layouts, with the splashes and
-  fireworks.
+  fireworks (which splashes get them: `splash_fireworks`, `alerts.h`).
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.
@@ -89,7 +89,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `demo.cpp` is the scripted demo. `teams.h`, `team_colors.h` and
@@ -245,6 +245,38 @@ and the scores keep their scan's timing when back within two stays
 the bets are tied to already (`WatchJob::bet_events`, `WatchJob::bets`):
 those bets keep their details and take a result, but no read ties a bet to
 a game or moves one.
+
+**Favorite players.** The owner picks up to eight players on the device
+page, from a team roster the browser reads from ESPN (`player=`,
+`playerdel=`); the panel never reads rosters. `players.h` keeps them in
+their own blob (`PlayerBlob`, `gameday_players_v1`). A game read
+(`fetch_game_`) passes `parse_event` a `PlayerWatch`, the favorites' ids
+in that game's league from the job's copy of the list. With none, the
+filter and the parse are as before; with any, the read also keeps the
+last play's id, points and athletes, ESPN's leaders (football's for the
+game, basketball's per team, baseball's both) for the favorites only, and
+soccer goals' scorers (`fill_player_filter`, `players_from_event`).
+`emit_` adds `player_lines` (a favorite's leader line while the board's
+game is live) to the ticker before the bets, and the state document has
+them as `game.pl`. `board_splash_` goes through
+`board_splash_with_players`: with the Favorite player alert bit on,
+`player_scored` credits a favorite on the play that scored between two
+live reads (by id in football, baseball and basketball, never on a
+football try, whose athletes are the touchdown's, and in basketball only
+for a late lead change or a buzzer beater; by goal in soccer; by an
+unambiguous name in the goal's words in hockey) and its splash takes the
+team's place. The page folds a player's name with the firmware's own
+`ascii_fold` table (`build_web.py` copies it into the bundle), so a hockey
+name matches the goal's words. During a visit (watch.h) the board's game is
+the visit's: its poll reads with the visit's league's favorites, the
+stat lines take `board_league_()` (the visit's), and `apply_visit_job_`
+splashes through `visit_splash`, the watcher's splash on the first poll
+and `board_splash_with_players` after it, so the play that brought the
+board there splashes once and never with a name. The watcher's own reads
+pass no `PlayerWatch`, so a favorite player never starts a visit, and
+`watching_()` counts neither the final's bit nor the Favorite player bit
+as a big play switched on. `watch_back_prev` leaves a favorite's score
+from while the board was away unsplashed, as it does the team's.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -457,7 +489,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
   the panel's lines), `test_bets.cpp` (manual bets), `test_watch.cpp` (the
   big-play watcher: which games, big plays from day scoreboards, when a read
-  may run, when the board switches and goes back) and `test_networks.cpp`
+  may run, when the board switches and goes back), `test_players.cpp`
+  (favorite players) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

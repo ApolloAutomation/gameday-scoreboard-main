@@ -30,4 +30,6 @@ You control the panel from its **device page**, a web page the panel serves itse
 
 :::note[Coming in the next release]
 [Bets](/using/bets/): type in bets you've placed, and the ticker says whether each one is covering.
+
+[Favorite players](/using/favorite-players/): up to eight players, with their stat line in the ticker and their name on the celebration when they score.
 :::

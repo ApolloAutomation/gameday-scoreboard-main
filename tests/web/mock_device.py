@@ -6,7 +6,8 @@ the entities the page builds controls from, and the gameday component's
 routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
-  POST /gameday/set      only the keys in SET_KEYS; 400 when none match
+  POST /gameday/set      only the keys in SET_KEYS; 400 when none match (player= and
+                         playerdel= keep the favorite players in their slots, as players.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
@@ -113,6 +114,8 @@ INITIAL = {
     "espn_kb": 412, "espn_reads": 23,
     # Manual bets (components/gameday/bets.h), filled slots only, and how many fit.
     "bets": [], "betmax": LIMITS["kBetSlots"],
+    # Favorite players (components/gameday/players.h), filled slots in slot order, and how many fit.
+    "players": [], "playermax": LIMITS["kPlayerSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
                "heap_kb": 143.2, "block_kb": 40.0, "psram_kb": 4100.5, "rssi": -58, "espn": 200,
@@ -170,6 +173,9 @@ WIFI = {"list": copy.deepcopy(WIFI_INITIAL)}
 # The saved team's league byte, which outlives a cleared team and counts in
 # Live auto. A fresh panel's is NFL.
 TEAM_LEAGUE = ["nfl"]
+# The favorite players by slot (players.h's blob), None for an empty one. The
+# state document lists the filled ones in slot order.
+PLAYER_SLOTS = [None] * LIMITS["kPlayerSlots"]
 
 
 def reset_state(overrides):
@@ -180,6 +186,8 @@ def reset_state(overrides):
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
+    players = STATE.get("players") or []
+    PLAYER_SLOTS[:] = [players[i] if i < len(players) else None for i in range(LIMITS["kPlayerSlots"])]
 
 
 # The firmware's C library reads ASCII digits and spaces only; Python's \d and
@@ -227,6 +235,8 @@ def state_doc():
     """rebuild_state_() works the auto leagues out each time from the team and favorites."""
     if STATE.get("live_auto"):
         STATE["live"] = live_auto_leagues()
+    if "players" in STATE:
+        STATE["players"] = [p for p in PLAYER_SLOTS if p]
     return STATE
 
 
@@ -331,6 +341,63 @@ def put_bet(slot, doc):
     STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
 
 
+def clean_player_name(v):
+    """clean_player_name() (set_request.h): capitals, digits, spaces and . ' - only, spaces at either end
+    dropped and a run inside made one, cut to kPlayerNameMax and a cut never left ending in a space or
+    . ' -; "" refuses it, as does a name with no letter or digit left."""
+    out = ""
+    for ch in v:
+        if "a" <= ch <= "z":
+            ch = chr(ord(ch) - 32)
+        if not ("A" <= ch <= "Z" or "0" <= ch <= "9" or ch in " .'-"):
+            return ""
+        if ch != " " or (out and out[-1] != " "):
+            out += ch
+    out = out.rstrip(" ")
+    if len(out) > LIMITS["kPlayerNameMax"]:
+        out = out[:LIMITS["kPlayerNameMax"]].rstrip(" .'-")
+    return out if re.search(r"[A-Z0-9]", out) else ""
+
+
+def espn_id(v):
+    """parse_espn_id() (set_request.h): 1 to 10 ASCII digits, not 0, under 2^32; else None."""
+    if not re.fullmatch(r"[0-9]{1,10}", v, re.ASCII) or not 0 < int(v) <= 0xFFFFFFFF:
+        return None
+    return int(v)
+
+
+def parse_player(v, delete):
+    """parse_player() (set_request.h): {l, id, team, name} for player=, (league, id) for playerdel=, else None."""
+    f = v.split(",")
+    if len(f) != (2 if delete else 4) or f[0] not in LEAGUES or f[0] in BOARD or espn_id(f[1]) is None:
+        return None
+    if delete:
+        return (f[0], espn_id(f[1]))
+    team_id = espn_id(f[2])
+    name = clean_player_name(f[3])
+    if team_id is None or (f[0], team_id) not in TEAMS or not name:
+        return None
+    return {"l": f[0], "id": espn_id(f[1]), "team": team_id, "name": name}
+
+
+def put_player(doc):
+    """player_put() (players.h): the same league and id keeps its slot, anyone else the first empty one,
+    and with every slot in use nothing changes."""
+    for i, p in enumerate(PLAYER_SLOTS):
+        if p and (p["l"], p["id"]) == (doc["l"], doc["id"]):
+            PLAYER_SLOTS[i] = doc
+            return
+    if None in PLAYER_SLOTS:
+        PLAYER_SLOTS[PLAYER_SLOTS.index(None)] = doc
+
+
+def drop_player(lg, pid):
+    """player_drop() (players.h)."""
+    for i, p in enumerate(PLAYER_SLOTS):
+        if p and (p["l"], p["id"]) == (lg, pid):
+            PLAYER_SLOTS[i] = None
+
+
 def apply_set(kv):
     """GamedayComponent::apply_set_ through set_request.h's parse_set."""
     for k, v in kv:
@@ -421,6 +488,14 @@ def apply_set(kv):
         elif k == "watchstay":
             # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
             STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
+        elif k == "playerdel":
+            ref = parse_player(v, True)
+            if ref:
+                drop_player(*ref)
+        elif k == "player":
+            doc = parse_player(v, False)
+            if doc:
+                put_player(doc)
         elif k == "panels":
             if 1 <= atoi(v) <= MAX_COLS:
                 STATE["panels"] = atoi(v)

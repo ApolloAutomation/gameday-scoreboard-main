@@ -22,6 +22,10 @@ A golf tour's ticker has the tournament's days and course before it, the round a
 Bets you typed into the device page's **Bets** card go at the end of the ticker of their game while it's on the board: the bet before the start, like **BET BUF -3.5**, then **BUF -3.5 COVERING**, **NOT COVERING** or **PUSH** during the game, and **WON**, **LOST** or **PUSH** after the final until midnight. The panel never connects to a sportsbook. See [Bets](/using/bets/).
 :::
 
+:::note[Coming in the next release]
+During the game, a stat line for each of your favorite players that ESPN lists among the game's leaders, like **ALLEN 21/34, 241 YDS, 2 TD** or **EDWARDS 19 PTS, 7 AST**, after the game's own parts and before your bets. A player has a line only while they lead a category, and football, basketball and baseball are the sports that have leaders. See [Favorite players](/using/favorite-players/#the-stat-line).
+:::
+
 ## Ranks and standings
 
 :::note[Coming in the next release]
