@@ -38,7 +38,9 @@ The firmware also drives three or four 64x64 panels in a row (192x64 or 256x64),
 | --- | --- | --- |
 | Three 64x64 panels side by side | Three wide | The wide board spread across 192 pixels |
 | Four 64x64 panels side by side | Four wide | The wide board spread across 256 pixels |
-| Four 64x64 panels in two rows of two | Two rows of two | The 128x64 board on top, the time, the date and a bigger ticker underneath |
+| Four 64x64 panels in two rows of two | Two rows of two | The 128x64 board on top, the second area underneath: the time, the date and a bigger ticker to start with |
+
+Two rows of two, and three or four in a row, can show something else beside the board: today's scores, a second team's game, other live games or the clock. See [The second area](/using/panel-sizes/#the-second-area).
 
 With three or four panels:
 

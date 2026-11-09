@@ -40,9 +40,9 @@ A ranked college team's rank goes in front of its record under the logo, like "#
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
 :::note[Coming in the next release]
-**Three or four wide (192x64, 256x64).** The wide layout spreads across the whole width: the logos at the far ends, the abbreviations and big scores between them, the game clock and the situation row in the middle, and the ticker along the whole bottom. A golf or racing leaderboard sits in the middle. The game clock is far from the records under the logos, so a rank or a standing there always has its 7 characters. A splash's words are centered across the whole width, and a touchdown's or a win's fireworks go off in the middle behind them. On the start-up screen, the words take everything to the right of the QR code.
+**Three or four wide (192x64, 256x64).** The wide layout spreads across the whole width: the logos at the far ends, the abbreviations and big scores between them, the game clock and the situation row in the middle, and the ticker along the whole bottom. A golf or racing leaderboard sits in the middle. The game clock is far from the records under the logos, so a rank or a standing there always has its 7 characters. A splash's words are centered across the whole width, and a touchdown's or a win's fireworks go off in the middle behind them. On the start-up screen, the words take everything to the right of the QR code. With a [second area](#the-second-area) picked, the board takes the left two panels, seen from the front, and is laid out as on one 128x64 panel.
 
-**Two rows of two (128x128).** The top half is the 128x64 board, the same as on one 128x64 panel except for the ticker, which moves to the bottom half. The bottom half shows the time and the date, and under them the ticker in bigger letters, with your [favorite players](/using/favorite-players/)' stat lines and your bets in it as on any board. The heat and power line, **Too warm, dimming** or **Check power supply**, goes along the bottom edge under the ticker. Under the off-season clock or the idle display's clock, which already show the time, the bottom half leaves the time out: it shows the ticker, with the date above it when the clock has your next game under the time instead of the date. A splash covers all four panels, with its words and fireworks across the middle, a favorite player's celebration and a [big play in another game](/using/modes/#big-plays-in-other-games) too. The start-up and setup screens sit in the middle of the four panels.
+**Two rows of two (128x128).** The top half is the 128x64 board, the same as on one 128x64 panel, its ticker along its bottom with your [favorite players](/using/favorite-players/)' stat lines and your bets in it as on any board. The bottom half is the [second area](#the-second-area), which starts on **Clock and date**: the time and the date, and under them its own ticker in bigger letters with your next games. The heat and power line, **Too warm, dimming** or **Check power supply**, goes along the bottom edge. Under the off-season clock or the idle display's clock, which already show the time, the bottom half leaves the time out: it shows its ticker, with the date above it when the clock has your next game under the time instead of the date. The board's splashes, a favorite player's celebration and a [big play in another game](/using/modes/#big-plays-in-other-games) cover the top half, with fireworks behind the words. The start-up and setup screens sit in the middle of the four panels.
 :::
 
 ### Single: 64x64
@@ -56,6 +56,35 @@ Before and after the game, a ranked college team's rank goes in front of its abb
 :::
 
 The off-season clock shows the date under the time, and the next game goes in the ticker. On the start-up screen, the QR code and the words take turns.
+
+## The second area
+
+:::note[Coming in the next release]
+Two rows of two, and three or four panels in a row, can show something else beside the board, with a ticker of its own, so the two never show the same line.
+
+| Arrangement | The second area | Starts on |
+| --- | --- | --- |
+| Two rows of two | The bottom half, 128x64 | **Clock and date** |
+| Four wide | The right two panels seen from the front, 128x64 | **Nothing: the board fills the row** |
+| Three wide | The right panel seen from the front, 64x64, laid out like one 64x64 panel | **Nothing: the board fills the row** |
+
+One or two panels have no second area, and the device page doesn't offer one. With any choice but **Nothing**, the board takes the left two panels and is laid out as on one 128x64 panel. Pick the choice under **Shows** in the Panel card on the device page; it takes effect at once, with no restart. See [The device page](/using/device-page/#settings).
+
+| Choice | What it shows |
+| --- | --- |
+| **Clock and date** | The time and the date, and in its ticker your next games, leaving out the game on the board. While the board shows its own clock, the second area shows the date and its ticker, never a second clock. |
+| **Today's scores** | Recent final scores and the games still to come today for your team's and your favorites' leagues, or the leagues you picked for Live games, as the idle display's **Scores** shows them. When the board shows the scores too, the two run half a loop apart. |
+| **A second team's game** | Another team, picked from the same chooser as a favorite: its next game with the start time in its ticker, its live game with its own celebrations in the second area only (the other side's too with **Opponent scores too** on), and its final for the usual wait, then its next game. It can't be your own team, a golf tour or a racing series, and it doesn't need to be a favorite. When its game is the one on the board, the second area shows the clock and says so. Until you pick a team, the clock, with a line asking for one. |
+| **Rotating live games** | The other live games in the leagues you follow, each for about 8 seconds, with the other games' scores in its ticker. Your team's game on the board is never one of them. With **Switch to big plays in other games** on, a big play in one of them shows in the second area for the **Stay on a big play** time, with its celebration there, then the rotation goes on; the board never leaves its own game for one while this choice is on. With nothing else live it shows today's scores, or the clock when there are none. |
+
+- **The board keeps its own.** What the second area shows never changes what the board shows, its ticker or its celebrations. The panel reads what the second area needs between the board's own reads, and only when it fits before the board's next one, so a live game on the board is never read late for it.
+- **Data.** **Clock and date** reads nothing more. **Today's scores** reads each league's games about every half hour while games are on, and at the next start time otherwise; while the board's game is live, a college league's whole day, which is large, waits until it ends. **A second team's game** reads its game every 10 seconds while it's on, or every 15 while the board's game is live too, about 2 to 7 MB an hour, and every minute or every 15 minutes before it starts. **Rotating live games** reads the other games about every 45 seconds: in Live games the same reads **Switch to big plays in other games** makes, and in My team and Favorite teams about 0.7 to 1.6 MB an hour for each game, up to eight.
+- **Night hours and Off or dim.** In the night hours **Today's scores** and the rotation give way to the clock, while a second team's game that's on and a big play still show. The idle display decides what the board shows. **Off or dim** keeps the whole panel dark or dim, unless the second team's game is on or its final is still up, or a big play has the second area. See [Night hours](/using/brightness-and-clock/#night-hours).
+- **Follow this game** holds the board on its game; the rotation keeps turning and big plays still show in the second area.
+- **Bets and favorite players.** A bet on the second area's game, and your favorite players' stat lines in it, go in its ticker.
+- **Minor league teams.** A [minor league baseball](/using/minor-league-baseball/), [AHL or ECHL](/using/minor-league-hockey/) team can be the second team. Its games come from MLB or HockeyTech, as on the board, and while that service fails or refuses the panel the second area waits it out on its own while the board and the rest go on. **Rotating live games** leaves minor league baseball, AHL and ECHL games out, since it checks other games on ESPN only. **Today's scores** includes their leagues when you follow them, as the idle display's **Scores** does.
+- If the second area's reads keep failing, its ticker says **not updating** until one comes through. Home Assistant's Game Status and Last Play stay on the board's game.
+:::
 
 ## Changing the layout
 

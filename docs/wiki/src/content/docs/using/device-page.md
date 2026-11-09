@@ -128,6 +128,17 @@ The Panel card also has a **When nothing is on** part under **Showing**:
 Under them a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 :::
 
+:::note[Coming in the next release]
+On two rows of two, and three or four panels in a row, the Panel card has a part for the second area above **When nothing is on**, titled for where it is: **Bottom half**, **Right two panels** or **Right panel**. One or two panels don't show it.
+
+| Setting | What it does |
+| --- | --- |
+| **Shows** | **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date**, and on three and four wide **Nothing: the board fills the row**, where those start. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
+| **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
+
+A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game** or **No other live games: showing the clock**. See [The second area](/using/panel-sizes/#the-second-area).
+:::
+
 ### Celebrations
 
 The panel fills the screen with a splash when someone scores, in the scoring team's color. Your team's always show. **Opponent scores too** turns the other side's on or off in football, baseball, hockey and soccer. Basketball only celebrates the win, so the switch makes no difference there.
@@ -160,7 +171,7 @@ Three more controls under it are for big plays in other games:
 | **Stay on a big play** | How long the board stays on the other game before going back: 30 seconds, 1 minute, 90 seconds, 2, 3 or 5 minutes. | 1 minute |
 | **Switch from my team** | Lets a favorite's big play take the board from your team's live game. Off, your team's game is never left from its start time on, and a golf tour's or a racing series' leaderboard isn't left while a round or a session is on. | Off |
 
-See [Big plays in other games](/using/modes/#big-plays-in-other-games) for which games are watched and how much data it takes.
+See [Big plays in other games](/using/modes/#big-plays-in-other-games) for which games are watched and how much data it takes. With the second area on **Rotating live games**, the line under **Switch to big plays in other games** says big plays show in the second area, and **Switch from my team** is hidden, since the board stays on its game.
 
 A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel, so the longer ones take two or three lines, like "PHI" over "FUMBLE RECOVERY".
 :::

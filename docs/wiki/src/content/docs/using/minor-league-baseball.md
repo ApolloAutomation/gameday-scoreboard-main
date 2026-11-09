@@ -71,6 +71,7 @@ The **On now** tab in the team picker lists today's minor league games too. Your
 - **The idle display.** **Scores** includes minor league finals and games to come when a minor league team is your team or a favorite, or MiLB is one of your Live games leagues. While MLB fails or refuses the panel, those scores wait for it and the other leagues' go on. **My team today** shows a minor league team's game and keeps its final until midnight, after a restart too. In a doubleheader, game 2 shows as "Today TBD" with no countdown, and its final takes game 1's place. See [When nothing is on](/using/modes/#when-nothing-is-on-the-idle-display).
 - **Bets.** A minor league team can take a bet in the device page's **Bets** card, graded on the score from MLB. See [Bets](/using/bets/).
 - **Standing next to pro teams** leaves a minor league team its record, since MLB has no seed or place for it, and minor league teams have no rank.
+- **The second area.** On two rows of two, or three or four panels in a row, a minor league team can be the [second area](/using/panel-sizes/#the-second-area)'s second team, read from MLB like the board's and waiting out MLB's failures on its own. **Rotating live games** there leaves minor league games out, as **Switch to big plays in other games** does.
 
 ## Big plays and favorite players
 

@@ -81,7 +81,9 @@ The ticker also says when something needs your attention:
 :::note[Coming in the next release]
 **IP** and the panel's IP address, then its `.local` name, like **IP 192.168.1.50 | gameday-2f6a70.local**: the panel just joined Wi-Fi. The line leads the ticker for 30 seconds once the QR code and the address go, or straight away when a game is live, with **Show how to connect when the panel starts** on. Open either address in a browser on the same Wi-Fi to get to the device page. Home Assistant's Game Status leaves it out.
 
-On two rows of two, the ticker runs once, in bigger letters in the bottom half, and the **Too warm, dimming** or **Check power supply** line goes along the bottom edge under it instead of covering it.
+On two rows of two, the board's ticker runs along the bottom of the top half, and the bottom half, the [second area](/using/panel-sizes/#the-second-area), has a ticker of its own, in bigger letters under its clock. The **Too warm, dimming** or **Check power supply** line goes along the bottom edge.
+
+The second area's ticker, on two rows of two or three or four panels in a row, never repeats the board's: under its clock, your next games, leaving out the game on the board; under today's scores, its own card's line; under a second team's game, that game's line with its bets and your favorite players' stat lines; under the rotation, the other live games' scores. It says **not updating** when its own reads keep failing, and asks for a team on the device page while **A second team's game** has none.
 :::
 
 For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).

@@ -55,6 +55,8 @@ If the panel can't get the game from ESPN for half an hour, or ESPN still shows 
 While the panel follows a game, it doesn't switch to big plays in other games and doesn't check those games, so it uses no data on them. If the board is on another game's big play when you turn the switch on, the panel goes straight back to the game it was showing and follows that one. See [Big plays in other games](#big-plays-in-other-games).
 
 Turn on **Favorite teams only** in the Celebrations card and only games with your team or one of your favorites get big-play splashes, like touchdowns, goals and lead changes. The victory splash still shows for every game. See [Celebrations](/using/device-page/#celebrations).
+
+With the [second area](/using/panel-sizes/#the-second-area) showing **A second team's game**, Live games picks another game than that team's when one is on, since that team has its own area.
 :::
 
 ### Choosing the leagues
@@ -139,6 +141,8 @@ The panel checks each watched game about every 45 seconds, in the gaps between i
 - In Live games it reads each league's whole day of games at once: about 250 KB each time on an NFL Sunday, up to about 20 MB an hour, and about as much on a full day of baseball. A league with nothing else on is checked again at its next start, or when a game that's on leaves the board.
 - College games, which come in much larger days, and your favorites' games in My team and Favorite teams are read one at a time, 10 to 20 KB each, about 1 to 1.5 MB an hour per game. The panel looks for a favorite's game at its start time, and every few hours otherwise.
 - In Live games, a college game that starts after the panel last looked for live games is watched from its next look, after **Switch every** or when the game on the board ends.
+
+With the [second area](/using/panel-sizes/#the-second-area) on **Rotating live games**, a big play in another game shows there instead: the second area switches to that game for the stay, with the splash in the second area only, and the board never leaves its own game. **Switch to big plays in other games** then decides only whether the second area switches; the other games are checked either way, to rotate them, in My team and Favorite teams every live game in your team's and favorites' leagues, up to eight. **Follow this game** holds the board only: the rotation keeps checking and turning, and big plays still show in the second area. With any other choice, the second area's team's game is left out of the games watched.
 
 A check every 45 seconds sees less than the board's every 10, so a big play in another game is told mostly by the score. The sport pages say what that means for each: [football](/using/football/), [baseball](/using/baseball/), [basketball](/using/basketball/), [hockey](/using/hockey/) and [soccer](/using/soccer/).
 :::
