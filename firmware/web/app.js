@@ -46,13 +46,14 @@
   // for a golf tour, "racing" for a racing series), followed like a team but
   // never a favorite, a Live games league or in On now; source: "mlb" for a
   // league whose games and logos come from MLB, not ESPN (minor league
-  // baseball), as on the panel. scripts/build_web.py checks prefix, path,
-  // logo and byId against leagues.h and stops the build when they differ.
+  // baseball), as on the panel, with sport its sport, which ESPN's path
+  // gives for the others. scripts/build_web.py checks prefix, path, logo and
+  // byId against leagues.h and stops the build when they differ.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
     ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
     mlb: { prefix: "MLB", tab: "MLB", name: "MLB", path: "baseball/mlb", logo: "mlb", byId: false, scan: "" },
-    milb: { prefix: "MiLB", tab: "MiLB", name: "Minor league baseball", path: "mlbstats/milb", logo: "milb", byId: true, scan: "", source: "mlb" },
+    milb: { prefix: "MiLB", tab: "MiLB", name: "Minor league baseball", path: "mlbstats/milb", logo: "milb", byId: true, scan: "", source: "mlb", sport: "baseball" },
     mls: { prefix: "MLS", tab: "MLS", name: "MLS", path: "soccer/usa.1", logo: "soccer", byId: true, scan: "" },
     epl: { prefix: "EPL", tab: "EPL", name: "Premier League", path: "soccer/eng.1", logo: "soccer", byId: true, scan: "" },
     nba: { prefix: "NBA", tab: "NBA", name: "NBA", path: "basketball/nba", logo: "nba", byId: false, scan: "" },
@@ -69,13 +70,16 @@
   // A golf tour or a racing series: its board is a leaderboard
   const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
   const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
-  // A pro league: its teams have a seed and a place (the Standing setting); a
-  // college league's have a rank instead.
-  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college;
-  // "#5 OSU": a college team's rank (1-25) before its abbreviation
-  const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
   // Games and logos from MLB's own servers (minor league baseball)
   const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
+  // "football", "baseball": the sport's situation switch and splashes
+  const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
+  // A pro league whose teams have a seed and a place from ESPN (the Standing
+  // setting). A college league's have a rank instead, and minor league teams
+  // neither: MLB lists no seed or place for them.
+  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !isMlb(lg);
+  // "#5 OSU": a college team's rank (1-25) before its abbreviation
+  const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
   // A minor league team's level: the fifth field of its TEAMS row (its MLB
   // Stats sport id, teams.h's group).
   const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
@@ -212,7 +216,7 @@
       <div class="card">
         <h2>Panel</h2>
         <div id="panelCtls"></div>
-        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="idleCtls" hidden>
           <div class="sub">When nothing is on</div>
           <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
@@ -1003,9 +1007,10 @@
       ["Interception"],
       ["Fumble recovery", "Only a fumble the other team recovers."]]],
     ["baseball", "Baseball", [
-      ["Runs", "Runs that aren't a home run."], ["Home run"],
-      ["Grand slam", "A home run that scores four."],
-      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game."]]],
+      ["Runs", "Runs that aren't a home run, and every minor league run: MLB doesn't say how those scored."],
+      ["Home run", "MLB games."],
+      ["Grand slam", "A home run that scores four, in MLB games."],
+      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game. In a minor league doubleheader's 7-inning game, the 7th."]]],
     ["hockey", "Hockey", [["Goal", "Every goal the same way: ESPN doesn't say which came on a power play or into an empty net."]]],
     ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
     ["basketball", "Basketball", [
@@ -1127,7 +1132,7 @@
     // empty (NFL on a new panel). Hockey and basketball have no situation
     // line, so no switch.
     const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
-      .concat(S.live_auto ? [] : S.live || []).map((lg) => lgInfo(lg).path.split("/")[0]));
+      .concat(S.live_auto ? [] : S.live || []).map(sportOf));
     document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
       row.hidden = row.dataset.sport === "players" ? S.players === undefined : sports.size > 0 && !sports.has(row.dataset.sport);
     });

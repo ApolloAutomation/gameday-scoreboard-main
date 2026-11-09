@@ -111,7 +111,7 @@ With **Show how to connect when the panel starts** on, the panel's IP address an
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
 :::note[Coming in the next release]
-The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. It's hidden while your panel follows only college teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+The Panel card adds **Standing next to pro teams**: **Record** (where a new panel starts), **Seed** or **Place**. It sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it. It's hidden while your panel follows only college teams, minor league teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 The Panel card also has a **When nothing is on** part under **Showing**:
 
@@ -142,7 +142,7 @@ The Celebrations card has a switch for each kind of splash, grouped by sport. Li
 | Basketball | Lead change, Buzzer beater, Overtime, Final |
 | Favorite players | Scores |
 
-They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/).
+They all start on. The sport pages say what each one shows: [football](/using/football/), [baseball](/using/baseball/), [hockey](/using/hockey/), [soccer](/using/soccer/) and [basketball](/using/basketball/). A minor league team counts as baseball here. Its games get **Runs** and **Walk-off** only, since MLB's minor league scores don't say how a run scored.
 
 **Opponent scores too** still decides whether the other side's scores and big plays splash, in basketball too now. A red card, overtime and the final show either way.
 

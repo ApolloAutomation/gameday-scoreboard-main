@@ -549,6 +549,17 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await page.reload();
   await expect(page.locator("#hostname")).not.toBeEmpty();
   await expect(page.locator("#standingRow")).toBeHidden();
+  // Minor league teams have no seed or place from MLB: only their record.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#standingRow")).toBeHidden();
+  // With a pro team as a favorite, back, and saying what a minor league team shows.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" },
+    favs: [{ l: "nfl", id: 6, abbr: "DAL", name: "Dallas Cowboys" }, {}, {}, {}] });
+  await page.reload();
+  await expect(page.locator("#standingRow")).toBeVisible();
+  await expect(sel).toHaveAccessibleDescription(/minor league teams always their record/);
   // Nothing followed yet: shown.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
   await page.reload();
@@ -816,6 +827,25 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await sw("Basketball: Final").click();
   await expectSet(request, { alerts: String(ALL) });
   await expect(sw("Basketball: Final")).toBeChecked();
+
+  // A minor league team alone is baseball too: its switches and the count,
+  // with the hints saying what a minor league game gets.
+  await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
+  await page.reload();
+  await expect(sw("Baseball: Runs")).toBeVisible();
+  await expect(sw("Baseball: Walk-off")).toBeChecked();
+  await expect(sw("Football: Touchdown")).toBeHidden();
+  await expect(sw("Soccer: Goal")).toBeHidden();
+  await expect(sw("Count and at-bat")).toBeVisible();
+  await expect(sw("Down and distance")).toBeHidden();
+  // Favorite players' switch shows whatever the sports.
+  await expect(page.locator("#alertCtls .alertSport:visible .sub")).toHaveText(["Baseball", "Favorite players"]);
+  await expect(page.locator("#alertCtls .alertSport:visible").first()).toContainText("every minor league run");
+  // Picked by hand as the one Live games league, with no team, the same.
+  await reset(request, { team: {}, favs: [{}, {}, {}, {}], live_auto: false, live: ["milb"] });
+  await page.reload();
+  await expect(sw("Baseball: Grand slam")).toBeVisible();
+  await expect(sw("Hockey: Goal")).toBeHidden();
 
   // Nothing picked: every sport's.
   await reset(request, { team: {}, favs: [{}, {}, {}, {}] });
@@ -2567,6 +2597,23 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expectSet(request, { bet: "0,nfl,6,over,47.5" });
   expect((await deviceState(request)).bets.map((b) => b.slot)).toEqual([1, 2]);
   await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5", "OVER 47.5"]);
+});
+
+test("the Bets card takes a bet on a minor league team, found by its level too", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeVisible();
+  await page.locator("#q").fill("triple-a durham");
+  await expect(page.locator("#tiles .tile")).toHaveCount(1);
+  await page.locator("#tiles .tile", { hasText: "Durham Bulls" }).click();
+  await expect(page.locator("#betTeam")).toHaveText("Durham Bulls");
+  await page.locator("#betType").selectOption("ml");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { bet: "0,milb,234,ml," });
+  await expect(page.locator("#toast")).toHaveText("Added DUR ML");
+  await expect(page.locator("#betList .betrow label")).toContainText("DUR ML");
 });
 
 test("the Bets card says what's wrong with a bet before posting it", async ({ page, request }) => {
