@@ -33,6 +33,10 @@ At kickoff the board switches to the live scoreboard:
 - **The ticker** with the down, distance and where the ball is, like "3rd & 4 at FIU 31", and the last play. Turn either off in the Ticker card on the device page. See [The ticker](/using/ticker/).
 
 :::note[Coming in the next release]
+When the team with the ball is inside the 20, the ticker says "RED ZONE" before the down and distance. ESPN also marks extra-point tries and the moments after a score as the red zone, and the panel leaves those out, along with halftime.
+:::
+
+:::note[Coming in the next release]
 When ESPN leaves a team's count out, which it does between some plays, the timeout pips keep the last count from the same half instead of dropping to zero. They start at three before kickoff and when the second half begins, including while ESPN still sends the first half's counts before the half's first play. They stay hidden when the panel can't know the count, like when ESPN leaves a count out in overtime, right after a restart mid-game, and on the final scores in Live games.
 :::
 

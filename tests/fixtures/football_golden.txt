@@ -1094,12 +1094,12 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   odds= ou= tv=ACC Network venue=Wallace Wade Stadium
   clock_text=0:09 2nd
   status[0,1,8,9,16,17,24,25]=0:09 - 2nd
-  status[2,10,18,26]=3rd & Goal at TULN 10
-  status[3,11,19,27]=3rd & Goal at TULN 10 | 0:09 - 2nd
+  status[2,10,18,26]=RED ZONE | 3rd & Goal at TULN 10
+  status[3,11,19,27]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd
   status[4,12,20,28]=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
   status[5,13,21,29]=0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
-  status[6,14,22,30]=3rd & Goal at TULN 10 | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
-  status[7,15,23,31]=3rd & Goal at TULN 10 | 0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
+  status[6,14,22,30]=RED ZONE | 3rd & Goal at TULN 10 | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
+  status[7,15,23,31]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
  event 401858209 team 2655 ok=1
   valid=1 state=IN event=401858209 kick=1788636600 completed=0
   detail=0:09 - 2nd clock=0:09 period=2
@@ -1110,12 +1110,12 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   odds= ou= tv=ACC Network venue=Wallace Wade Stadium
   clock_text=0:09 2nd
   status[0,1,8,9,16,17,24,25]=0:09 - 2nd
-  status[2,10,18,26]=3rd & Goal at TULN 10
-  status[3,11,19,27]=3rd & Goal at TULN 10 | 0:09 - 2nd
+  status[2,10,18,26]=RED ZONE | 3rd & Goal at TULN 10
+  status[3,11,19,27]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd
   status[4,12,20,28]=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
   status[5,13,21,29]=0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
-  status[6,14,22,30]=3rd & Goal at TULN 10 | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
-  status[7,15,23,31]=3rd & Goal at TULN 10 | 0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
+  status[6,14,22,30]=RED ZONE | 3rd & Goal at TULN 10 | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
+  status[7,15,23,31]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd | (00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
  event 401862694 team 2429 ok=1
   valid=1 state=IN event=401862694 kick=1788636600 completed=0
   detail=Halftime clock=0:00 period=2

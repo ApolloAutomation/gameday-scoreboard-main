@@ -1521,6 +1521,33 @@ static void test_end_of_half_in_progress() {
   CHECK(status_text(s, all, "").find("2nd & 15") == std::string::npos);
 }
 
+// ESPN flags the red zone on extra-point tries and after scores too.
+static void test_red_zone() {
+  std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
+  GameSnapshot duke;
+  CHECK(parse_scoreboard_str(json, "401858209", 150, duke));
+  CHECK(duke.is_red_zone);
+  CHECK(in_red_zone(duke));  // 3rd & Goal with the ball
+  TickerOptions all;
+  CHECK(status_text(duke, all, "").find("RED ZONE | 3rd & Goal") != std::string::npos);
+  TickerOptions no_down;
+  no_down.down_distance = false;
+  CHECK(status_text(duke, no_down, "").find("RED ZONE") == std::string::npos);
+  GameSnapshot tenn, app;
+  CHECK(parse_scoreboard_str(json, "401856666", 2633, tenn));
+  CHECK(parse_scoreboard_str(json, "401866627", 2026, app));
+  CHECK(tenn.is_red_zone);
+  CHECK(!in_red_zone(tenn));  // no down, no possession: a try or a kickoff
+  CHECK(!in_red_zone(app));
+  CHECK(status_text(tenn, all, "").find("RED ZONE") == std::string::npos);
+  GameSnapshot half = duke;
+  half.status_name = "STATUS_HALFTIME";
+  CHECK(!in_red_zone(half));  // ESPN keeps it through halftime
+  GameSnapshot pre = duke;
+  pre.state = GameState::PRE;
+  CHECK(!in_red_zone(pre));
+}
+
 // The recorded STATUS_HALFTIME game keeps the punt's "1st & 10" in situation.
 static void test_halftime_fixture() {
   std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
@@ -7432,6 +7459,7 @@ int main() {
   test_end_of_half_in_progress();
   test_break_timelines();
   test_break_edges();
+  test_red_zone();
   test_color();
   test_favorites();
   test_favorites_shrunk();
