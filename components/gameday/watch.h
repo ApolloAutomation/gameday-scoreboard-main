@@ -515,6 +515,17 @@ inline uint32_t watch_after_wait(uint32_t at, uint32_t now, uint32_t left) {
   return left != 0 && (int32_t) (at - (now + left)) < 0 ? now + left : at;
 }
 
+// ESPN refused a watcher read or a visit's poll: whether the board's next
+// read waits out ESPN's backoff as well (board_league: mode_league_()). Not
+// in Favorite teams, which waits it out favorite by favorite
+// (start_fav_job_), nor in My team for a team whose games come from another
+// host (a minor league team's MLB): none of its reads go to ESPN, so it
+// keeps updating. Live games' next read can be a scan of ESPN's leagues
+// whatever its game, so it waits.
+inline bool watch_refusal_holds_board(bool favorites, bool live, uint8_t board_league) {
+  return !favorites && (live || from_espn((League) board_league));
+}
+
 // Favorite teams ticks every second (FAV_TICK) for its playlist and reads
 // ESPN on few of those ticks, so a watcher read there fits against its next
 // read instead (millis()): the locked game's next poll (polled at poll_ms,

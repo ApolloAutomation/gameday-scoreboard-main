@@ -4311,11 +4311,13 @@ void GamedayComponent::end_visit_() {
 
 // ESPN refused a watcher read or a visit's poll: the board goes back to the
 // mode's game and waits as after a refusal of its own (start_fav_job_ waits
-// it out in Favorite teams).
+// it out in Favorite teams), unless none of its reads go to ESPN
+// (watch_refusal_holds_board).
 void GamedayComponent::watch_refused_(uint32_t now) {
   this->end_visit_();
   const uint32_t ms = this->back_off_();
-  if (!this->favorites_mode_() && (int32_t) (this->next_fetch_ms_ - (now + ms)) < 0)
+  if (::espn::watch_refusal_holds_board(this->favorites_mode_(), this->live_mode_(), this->mode_league_()) &&
+      (int32_t) (this->next_fetch_ms_ - (now + ms)) < 0)
     this->schedule_next_(ms);
 }
 

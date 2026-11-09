@@ -74,7 +74,7 @@ The **On now** tab in the team picker lists today's minor league games too. Your
 
 ## Big plays and favorite players
 
-**Switch to big plays in other games** leaves minor league games out: the panel checks other games on ESPN only, so a run in another minor league game never switches the board. A minor league game on the board still gets its own splashes, and the panel can leave it for a big play in another league's game and come back, as with any game. While MLB fails or refuses the panel, the checks of ESPN's games go on. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+**Switch to big plays in other games** leaves minor league games out: the panel checks other games on ESPN only, so a run in another minor league game never switches the board. A minor league game on the board still gets its own splashes, and the panel can leave it for a big play in another league's game and come back, as with any game. While MLB fails or refuses the panel, the checks of ESPN's games go on, and if ESPN refuses those checks, your minor league team's game keeps updating from MLB in My team. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 Minor league teams have no [favorite players](/using/favorite-players/), since the rosters come from ESPN. The Favorite players card's team chooser has no **MiLB** tab.
 

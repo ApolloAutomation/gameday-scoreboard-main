@@ -389,8 +389,10 @@ own failed MiLB read counts in it (`mlb_side_result`). Its bytes count in the sa
 "ESPN Data" figure, and the health block adds `mlb` and `mlb_ago`. The
 big-play watcher and favorite players stay ESPN's (`from_espn`):
 `watch_sources` and `watch_wants_teams` leave MiLB out, `parse_player` and
-`player_valid` refuse its teams, and Favorite Teams' watcher gap counts a
-favorite whose host waits as due when that wait ends (`watch_after_wait`).
+`player_valid` refuse its teams, Favorite Teams' watcher gap counts a
+favorite whose host waits as due when that wait ends (`watch_after_wait`),
+and ESPN refusing a watcher read holds My team's board only when its team
+is ESPN's (`watch_refusal_holds_board`).
 
 ## The device page and its routes
 

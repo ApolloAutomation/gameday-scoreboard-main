@@ -911,6 +911,12 @@ void test_favorites_tick() {
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 60000) == 65000);
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 30000, 60000) == 30000);  // a team read before the wait ends
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 1000) == 11000);  // a wait over before the poll is due
+  // ESPN refusing a check holds the board's next read only when that read
+  // may go to ESPN.
+  WCHECK(watch_refusal_holds_board(false, false, (uint8_t) League::NFL));    // My team, from ESPN
+  WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::MILB));  // My team, from MLB
+  WCHECK(watch_refusal_holds_board(false, true, (uint8_t) League::MILB));    // Live games: its scans read ESPN
+  WCHECK(!watch_refusal_holds_board(true, false, (uint8_t) League::NFL));    // Favorite teams waits its own way
   WCHECK(watch_after_wait(1000, 5000, 0) == 1000);    // no wait: overdue stays overdue
   WCHECK(watch_after_wait(1000, 5000, 3000) == 8000);
   WCHECK(watch_after_wait(9000, 5000, 3000) == 9000);
