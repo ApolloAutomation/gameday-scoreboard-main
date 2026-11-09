@@ -395,7 +395,8 @@ draws the team's badge (`badge.h`) in the logo's place. The four fetch
 functions hand an AHL or ECHL team or league to three reads: the team read
 (`ht_team_url`, the `scorebar` view for one team, whose day counts are
 games around the league's today: one back and five ahead, about 11 KB, with
-both records and the Up next list), the game poll (`ht_game_url`, the game
+both records, the Up next list and today's last final for My team today
+after a restart), the game poll (`ht_game_url`, the game
 centre's `clock` tab, about 1.9 KB, which the feed's server caches a minute
 where the scorebar's is four; `ht_fill_from_schedule` adds the records and
 a TBD placeholder it lacks) and the day scan (`ht_day_url`, the
@@ -405,8 +406,12 @@ about 105 KB; its start times are local, turned to UTC by
 9 are not started, in progress, final (3 unofficial), postponed and
 suspended; the clock at zero in a period, or the words, mark an
 intermission, and a shootout leaves the period at OT, so the words and the
-scoring's `SO` key mark it. The feed refuses requests that carry another
-site's Origin, so the device page's On now leaves both leagues out.
+scoring's `SO` key mark it, and the goal count takes the deciding goal at
+the end. There are no team colors, plays, power plays, ranks, seeds or
+places in the feed, so a goal from the score is its one big-play splash
+(`alerts.h`) and the Standing setting leaves its teams their record. The
+feed refuses requests that carry another site's Origin, so the device
+page's On now leaves both leagues out.
 
 Each host other than ESPN keeps its own accounting. `open_` tells the
 hosts apart (`is_mlb_url`, `is_ht_url`): a read's status, refusals and

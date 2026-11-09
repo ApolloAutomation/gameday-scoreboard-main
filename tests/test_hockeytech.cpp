@@ -12,7 +12,11 @@
 #include <string>
 #include <vector>
 
+#include "alerts.h"
+#include "bets.h"
+#include "follow.h"
 #include "health.h"
+#include "idle.h"
 #include "poll_timing.h"
 #include "recap.h"
 #include "set_request.h"
@@ -815,6 +819,171 @@ void test_scan_backoff() {
   HCHECK_EQ((int) w.run.streak, 0);
 }
 
+// The idle display's scores, read outside the mode: they leave both of
+// HockeyTech's leagues out while its wait runs, and their own failed read
+// from it counts in that wait, alone or beside the other hosts' leagues.
+void test_side_backoff() {
+  std::vector<League> leagues = {League::NHL, League::AHL, League::MILB, League::ECHL};
+  HCHECK(drop_source(leagues, Source::HOCKEYTECH));
+  HCHECK_EQ(leagues.size(), (size_t) 2);
+  HCHECK(leagues[0] == League::NHL && leagues[1] == League::MILB);
+  HCHECK(!drop_source(leagues, Source::HOCKEYTECH));
+  // MLB's wait leaves HockeyTech's leagues alone, and the other way round
+  std::vector<League> both = {League::AHL, League::MILB};
+  HCHECK(drop_source(both, Source::MLB_STATS));
+  HCHECK(both.size() == 1 && both[0] == League::AHL);
+  std::vector<League> alone = {League::ECHL, League::AHL};
+  HCHECK(drop_source(alone, Source::HOCKEYTECH));
+  HCHECK(alone.empty());  // start_side_job_ then waits for HockeyTech, reading nothing
+
+  HostWait w;
+  HCHECK(host_side_result(w, true, true, true, 10 * 60 * 1000, 0, 1000) >= 10u * 60 * 1000);
+  HCHECK_EQ((int) w.run.streak, 1);
+  HCHECK(w.waiting(2000));
+  HCHECK_EQ(host_side_result(w, false, false, false, 0, 0, 3000), 0u);  // not asked
+  HCHECK_EQ((int) w.run.streak, 1);
+  HCHECK_EQ(host_side_result(w, true, false, false, 0, 0, 3000), 0u);  // answered
+  HCHECK_EQ((int) w.run.streak, 0);
+  HCHECK(!w.waiting(3000));
+}
+
+// The features that came after minor league hockey was built, with an AHL or
+// ECHL game: big-play splashes, Follow this game, bets, My team today, ranks
+// and the Standing setting.
+void test_merged_features() {
+  // Big plays: HockeyTech's scores say only that a goal went in, so every
+  // goal is GOAL under hockey's one switch, as with the NHL.
+  const std::string base = live_clock("ht_game_ahl_final_ot.json", "2", "00:12:00");
+  GameSnapshot a, b;
+  HCHECK(game_read(with_score(base, 1, 1), League::AHL, kSyracuse, a));
+  HCHECK(game_read(with_score(base, 1, 2), League::AHL, kSyracuse, b));
+  HCHECK(a.last_play.empty() && b.play_type.empty());
+  const uint32_t goal = alert_bit(Alert::HOCKEY_GOAL);
+  HCHECK_EQ(decide_splash(a, b, true, false, goal).text, std::string("GOAL!"));
+  HCHECK(decide_splash(a, b, true, false, kAlertsAll & ~goal).text.empty());
+  // The same read twice, or a read with nothing new: no splash
+  HCHECK(decide_splash(b, b, true).text.empty());
+  HCHECK(decide_splash(a, a, true).text.empty());
+  // Two goals between reads are one splash; Live games names the side
+  HCHECK(game_read(with_score(base, 3, 1), League::AHL, kSyracuse, b));
+  HCHECK_EQ(decide_splash(a, b, true, true).text, std::string("HFD GOAL"));
+  // A shootout: the feed adds the deciding goal to the winner's score, so it
+  // splashes like any other goal when a read catches it before the final,
+  // and the final after it is the win, once. Read straight from the
+  // shootout, the final is the win alone.
+  GameSnapshot so, so_won, fin;
+  const std::string shootout = live_clock("ht_game_echl_final_so.json", "5", "00:00:00", "", "SO");
+  HCHECK(game_read(with_score(shootout, 4, 4), League::ECHL, kBloomington, so));
+  HCHECK(game_read(with_score(shootout, 5, 4), League::ECHL, kBloomington, so_won));
+  HCHECK(game_read(slurp("ht_game_echl_final_so.json"), League::ECHL, kBloomington, fin));
+  HCHECK_EQ(fin.team_score, 5);
+  HCHECK_EQ(decide_splash(so, so_won, true).text, std::string("GOAL!"));
+  HCHECK_EQ(decide_splash(so_won, fin, true).text, std::string("BLM WINS!"));
+  HCHECK_EQ(decide_splash(so, fin, true).text, std::string("BLM WINS!"));
+
+  // Follow this game: an AHL game Live games picked is held while it's on,
+  // and let go at its final (Live games keeps no final); in Favorite teams
+  // the final stays up for After the final first.
+  FollowPin pin;
+  const int64_t t0 = a.kickoff_epoch + 3600;
+  HCHECK(!a.event_id.empty());
+  HCHECK(follow_start(pin, true, true, a, t0));
+  HCHECK_EQ(pin.event_id, std::string("1029277"));
+  HCHECK(follow_holds(pin, b, t0 + 600, follow_after_final_s(false, 1800), 0));
+  GameSnapshot done = game("ht_game_ahl_final_ot.json", League::AHL, kSyracuse);
+  HCHECK(done.state == GameState::POST && done.event_id == a.event_id);
+  HCHECK(!follow_holds(pin, done, t0 + 1200, follow_after_final_s(false, 1800), 0));
+  HCHECK(!pin.on);
+  HCHECK(follow_start(pin, true, true, a, t0));
+  HCHECK(follow_holds(pin, done, t0 + 1200, follow_after_final_s(true, 1800), 0));
+  HCHECK(!follow_holds(pin, done, t0 + 1200 + 1800, follow_after_final_s(true, 1800), 0));
+  HCHECK(!follow_start(pin, true, true, done, t0));  // a final can't be followed
+  // A game HockeyTech stops answering for lets go after half an hour
+  HCHECK(follow_start(pin, true, true, a, t0));
+  HCHECK(!follow_holds(pin, a, t0 + kFollowUnreadSeconds, 0, kFollowUnreadSeconds));
+
+  // Bets: an AHL or ECHL team takes a bet like any other (HockeyTech's game
+  // id is the game's), graded on HockeyTech's score.
+  Bet bet{};
+  bet.team_id = kLaval;
+  bet.league = (uint8_t) League::AHL;
+  bet.type = (uint8_t) BetType::MONEYLINE;
+  bet.side = (uint8_t) BetSide::TEAM;
+  HCHECK(bet_valid(bet));
+  HCHECK_EQ(std::string(bet_team_abbr(bet.league, kLaval)), std::string("LAV"));
+  Bet other = bet;
+  other.league = (uint8_t) League::ECHL;
+  other.team_id = kRapidCity;
+  HCHECK(bet_valid(other));
+  other.league = (uint8_t) League::AHL;  // Rapid City is no AHL team
+  HCHECK(!bet_valid(other));
+  GameSnapshot lav = game("ht_game_ahl_final.json", League::AHL, kLaval);  // CLE 2, LAV 4
+  BetGame g;
+  g.league = (uint8_t) League::AHL;
+  g.event = bet_event_id(lav.event_id);
+  HCHECK_EQ(g.event, 1029271u);
+  g.team_id = lav.team_id;
+  g.opp_id = lav.opp_id;
+  g.team_score = lav.team_score;
+  g.opp_score = lav.opp_score;
+  g.kickoff = lav.kickoff_epoch;
+  g.phase = BetPhase::FINAL;
+  bet.placed = (uint32_t) (lav.kickoff_epoch - 3600);
+  HCHECK(bet_observe(bet, g, lav.kickoff_epoch + 4 * 3600, lav.kickoff_epoch + 12 * 3600));
+  HCHECK_EQ((int) bet.result, (int) BetResult::WON);
+  HCHECK_EQ(bet_ticker(bet, bet_status(bet, &g, lav.kickoff_epoch + 4 * 3600)), std::string("LAV ML WON"));
+
+  // No ranks and no standing: HockeyTech has no poll and no seed, so Seed or
+  // Place leaves an AHL or ECHL team its record.
+  HCHECK(lav.team_rank == 0 && lav.opp_rank == 0);
+  Schedule s;
+  const int64_t evening = at("2026-11-08T01:00:00Z");  // 8 PM in Syracuse on 11/7
+  HCHECK_EQ(team_read(slurp("ht_team_ahl_syr.json"), kSyracuse, evening, s), 1);
+  HCHECK(s.seed == 0 && s.place.empty());
+  HCHECK(standing_text(Standing::SEED, s.seed, s.place).empty());
+  HCHECK(standing_text(Standing::PLACE, s.seed, s.place).empty());
+
+  // My team today after a restart: the team read names today's final too,
+  // with the records the scorebar has now, which the game's clock lacks.
+  Schedule last;
+  std::string syr = slurp("ht_team_ahl_syr.json");
+  HCHECK_EQ(parse_ht_team(syr, kSyracuse, evening, s, nullptr, 0, &last), 1);
+  HCHECK_EQ(s.event_id, std::string("1029294"));  // the next game, as before
+  HCHECK(last.valid);
+  HCHECK_EQ(last.event_id, std::string("1029277"));
+  HCHECK_EQ(last.kickoff_epoch, at("2026-11-07T22:00:00Z"));
+  HCHECK(!last.time_tbd);
+  HCHECK_EQ(last.opp_id, kHartford);
+  HCHECK_EQ(last.team_record, std::string("5-5-2"));
+  HCHECK(!last.opp_record.empty());
+  const int64_t since = at("2026-11-07T05:00:00Z");  // midnight in Syracuse
+  HCHECK(want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
+  // kept already: not read again
+  HCHECK(!want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd),
+                           day_order(last.kickoff_epoch, last.time_tbd)));
+  // the next day it's yesterday's
+  HCHECK(!want_today_final(since + 86400, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
+  GameSnapshot today = game("ht_game_ahl_final_ot.json", League::AHL, kSyracuse);
+  ht_fill_from_schedule(today, last);
+  HCHECK_EQ(today.team_record, std::string("5-5-2"));
+  HCHECK_EQ(today.opp_record, last.opp_record);
+  HCHECK_EQ(espn::detail::records_line(today, standing_text(Standing::SEED, s.seed, s.place)),
+            "SYR 5-5-2 | HFD " + last.opp_record);
+  LocalDay day{since, since + 86400};
+  std::vector<TodayGame> games = {TodayGame{true, GameState::POST, today.kickoff_epoch, false}};
+  HCHECK_EQ(today_pick(games, day), 0);
+  // A postponed game is no final to keep: Rapid City has none
+  std::string rc = slurp("ht_team_echl_rc.json");
+  HCHECK_EQ(parse_ht_team(rc, kRapidCity, evening, s, nullptr, 0, &last), 1);
+  HCHECK(!last.valid);
+  // With the list of finals not asked for, or the Up next list, the read is as before
+  HCHECK_EQ(team_read(syr, kSyracuse, evening, s), 1);
+  HCHECK_EQ(s.event_id, std::string("1029294"));
+  std::vector<Upcoming> up;
+  HCHECK_EQ(parse_ht_team(syr, kSyracuse, evening, s, &up, 4, &last), 1);
+  HCHECK(up.size() == 4 && last.event_id == "1029277");
+}
+
 void test_health() {
   Health h{};
   h.start = Restart::RESTART;
@@ -873,6 +1042,8 @@ int run_hockeytech_tests(int &total_checks) {
   test_game_live();
   test_day();
   test_scan_backoff();
+  test_side_backoff();
+  test_merged_features();
   test_health();
   total_checks += checks;
   return failures;

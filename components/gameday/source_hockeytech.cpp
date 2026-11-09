@@ -385,7 +385,7 @@ void fill_ht_day_filter(JsonDocument &f) {
 }
 
 int ht_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedule &out,
-                     std::vector<Upcoming> *upcoming, size_t max) {
+                     std::vector<Upcoming> *upcoming, size_t max, Schedule *last_final) {
   JsonArrayConst games = root["SiteKit"]["Scorebar"];
   if (games.isNull())
     return -1;
@@ -394,9 +394,32 @@ int ht_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedul
   bool found = false;
   if (upcoming != nullptr)
     upcoming->clear();
+  if (last_final != nullptr)
+    *last_final = Schedule{};
   for (JsonObjectConst g : games) {
     const std::string id = text(g, "ID");
     HtState st = ht_state(text(g, "GameStatus"), text(g, "GameStatusStringLong"));
+    if (!id.empty() && st == HtState::FINAL && last_final != nullptr && !found) {
+      // The latest final listed before the game the read stops at, with the
+      // records the scorebar has now, which count it.
+      bool tbd = false;
+      int64_t kick = bar_start(g, tbd);
+      if (kick > 0 && (!last_final->valid || day_order(kick, tbd) >= day_order(last_final->kickoff_epoch,
+                                                                                last_final->time_tbd))) {
+        Side away = bar_side(g, false), home = bar_side(g, true);
+        bool at_home = our_id != 0 && home.id == our_id;
+        Schedule f;
+        f.valid = true;
+        f.event_id = id;
+        f.kickoff_epoch = kick;
+        f.time_tbd = tbd;
+        f.opp_id = (at_home ? away : home).id;
+        f.opp_abbr = (at_home ? away : home).abbr;
+        f.team_record = (at_home ? home : away).record;
+        f.opp_record = (at_home ? away : home).record;
+        *last_final = std::move(f);
+      }
+    }
     if (id.empty() || st == HtState::FINAL || st == HtState::OFF)
       continue;
     bool tbd = false;

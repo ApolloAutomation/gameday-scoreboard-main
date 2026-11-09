@@ -3116,7 +3116,7 @@ bool GamedayComponent::fetch_mlb_game_(const Schedule &schedule, GameSnapshot &o
 // ---- Minor league hockey (HockeyTech, source_hockeytech.h) -------------------
 
 bool GamedayComponent::fetch_ht_schedule_(const ::espn::Team *team, Schedule &out,
-                                          std::vector<::espn::Upcoming> *upcoming) {
+                                          std::vector<::espn::Upcoming> *upcoming, Schedule *last_final) {
   std::string url = ::espn::ht_team_url(team->league, team->espn_id);
   ESP_LOGD(TAG, "Fetching schedule: %s", url.c_str());
   auto container = this->open_(url);
@@ -3125,7 +3125,8 @@ bool GamedayComponent::fetch_ht_schedule_(const ::espn::Team *team, Schedule &ou
   ContainerReader reader(container, this->espn_bytes_);
   Schedule s;
   // The Up next list: the game on the board and the three after it.
-  int r = ::espn::parse_ht_team(reader, team->espn_id, (int64_t) this->time_->timestamp_now(), s, upcoming, 4);
+  int r = ::espn::parse_ht_team(reader, team->espn_id, (int64_t) this->time_->timestamp_now(), s, upcoming, 4,
+                                last_final);
   container->end();
   if (r < 0) {
     ESP_LOGW(TAG, "Schedule parse failed after %u bytes", (unsigned) reader.total());
@@ -3569,19 +3570,25 @@ void GamedayComponent::run_job_() {
   }
   if (j.need_schedule) {
     Schedule s;
-    // A minor league team read lists today's final too, which My team today
-    // keeps until midnight: after a restart or a change, it is read as well.
+    // A minor league baseball, AHL or ECHL team read lists today's final
+    // too, which My team today keeps until midnight: after a restart or a
+    // change, it is read as well.
     Schedule last_final;
-    j.schedule_ok = ::espn::is_mlb_stats(j.team->league) && j.today_since > 0
-                        ? this->fetch_mlb_schedule_(j.team, s, nullptr, &last_final)
-                        : this->fetch_schedule_(j.team, s);
+    const bool mlb = ::espn::is_mlb_stats(j.team->league), ht = ::espn::is_hockeytech(j.team->league);
+    if (j.today_since > 0 && mlb)
+      j.schedule_ok = this->fetch_mlb_schedule_(j.team, s, nullptr, &last_final);
+    else if (j.today_since > 0 && ht)
+      j.schedule_ok = this->fetch_ht_schedule_(j.team, s, nullptr, &last_final);
+    else
+      j.schedule_ok = this->fetch_schedule_(j.team, s);
     if (!j.schedule_ok)
       return;
     if (last_final.valid &&
         ::espn::want_today_final(j.today_since, true,
                                  ::espn::day_order(last_final.kickoff_epoch, last_final.time_tbd), j.today_have)) {
       j.today_final = std::make_unique<GameSnapshot>();
-      if (!this->fetch_mlb_game_(last_final, *j.today_final))
+      if (!(mlb ? this->fetch_mlb_game_(last_final, *j.today_final)
+                : this->fetch_ht_game_(j.team->league, last_final, *j.today_final)))
         j.today_final.reset();
     }
     j.schedule = s;

@@ -86,7 +86,7 @@ void fill_ht_team_filter(JsonDocument &f);
 void fill_ht_game_filter(JsonDocument &f);
 void fill_ht_day_filter(JsonDocument &f);
 int ht_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedule &out,
-                     std::vector<Upcoming> *upcoming, size_t max);
+                     std::vector<Upcoming> *upcoming, size_t max, Schedule *last_final = nullptr);
 bool ht_game_from_doc(JsonObjectConst root, League league, uint32_t our_id, GameSnapshot &out);
 bool ht_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t *next_kickoff,
                      std::vector<Final> *finals, std::vector<Pending> *pending);
@@ -96,10 +96,14 @@ bool ht_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t *
 // started and not left over from a past day) in out.event_id, kickoff_epoch,
 // time_tbd, the opponent and both records. 0: none listed (between seasons).
 // -1: not a scorebar. With upcoming, also the games not started yet in date
-// order, up to max, for the Up next list. Out is valid with 0 or 1.
+// order, up to max, for the Up next list. Out is valid with 0 or 1. With
+// last_final, also the team's latest game played to the end before the one
+// in out (event_id, kickoff_epoch, time_tbd, the opponent and both records;
+// not valid with none): My team today keeps it until midnight after a
+// restart (gameday.cpp's team read).
 template<typename TInput>
 int parse_ht_team(TInput &input, uint32_t our_id, int64_t now, Schedule &out,
-                  std::vector<Upcoming> *upcoming = nullptr, size_t max = 0) {
+                  std::vector<Upcoming> *upcoming = nullptr, size_t max = 0, Schedule *last_final = nullptr) {
   JsonDocument filter(detail::json_allocator());
   detail::fill_ht_team_filter(filter);
   JsonDocument doc(detail::json_allocator());
@@ -107,7 +111,7 @@ int parse_ht_team(TInput &input, uint32_t our_id, int64_t now, Schedule &out,
                                               DeserializationOption::NestingLimit(20));
   if (err)
     return -1;
-  return detail::ht_team_from_doc(doc.as<JsonObjectConst>(), our_id, now, out, upcoming, max);
+  return detail::ht_team_from_doc(doc.as<JsonObjectConst>(), our_id, now, out, upcoming, max, last_final);
 }
 
 // The game read, as a hockey GameSnapshot around our_id: the period, the

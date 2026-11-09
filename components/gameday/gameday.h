@@ -667,10 +667,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     // reads and leaves their timing alone (start_side_job_).
     bool side{false};
     // My team today: a team read whose look-ahead skips today's final, or a
-    // minor league team read, which lists it, reads that final into
-    // today_final too (idle.h, want_today_final). since is the local day's
-    // start, 0 when My team today isn't the idle display; have the start of
-    // the final kept already (day_order). Allocated only when read.
+    // minor league baseball, AHL or ECHL team read, which lists it, reads
+    // that final into today_final too (idle.h, want_today_final). since is
+    // the local day's start, 0 when My team today isn't the idle display;
+    // have the start of the final kept already (day_order). Allocated only
+    // when read.
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
@@ -792,10 +793,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
                            std::vector<::espn::Upcoming> *upcoming = nullptr, Schedule *last_final = nullptr);
   bool fetch_mlb_game_(const Schedule &schedule, GameSnapshot &out);
   // The AHL's and the ECHL's reads from HockeyTech (source_hockeytech.h), the
-  // same way: the team read (with upcoming, for the Up next list) and the
-  // game's clock.
+  // same way: the team read (with upcoming, for the Up next list; with
+  // last_final, its latest final, parse_ht_team) and the game's clock.
   bool fetch_ht_schedule_(const ::espn::Team *team, Schedule &out,
-                          std::vector<::espn::Upcoming> *upcoming = nullptr);
+                          std::vector<::espn::Upcoming> *upcoming = nullptr, Schedule *last_final = nullptr);
   bool fetch_ht_game_(League league, const Schedule &schedule, GameSnapshot &out);
   // epoch picks the day (now when 0); finals and pending, when given, also
   // get that day's finished games and the ones not started yet.
