@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "idle.h"
 #include "leagues.h"
 #include "startup.h"
 #include "teams.h"
@@ -25,7 +26,8 @@ constexpr const char *kSetKeys[] = {"follow",  "team",   "mode",    "rotate", "f
                                     "fav3",    "fav4",   "tz",      "tzauto", "down",     "play",
                                     "odds",    "opp",    "panels",  "bootaddr", "lockon", "release",
                                     "collide", "favs",   "today",   "live",   "autoupd",  "count",
-                                    "match",   "beta",   "alerts",  "alertfav", "standing"};
+                                    "match",   "beta",   "alerts",  "alertfav", "standing", "idle",
+                                    "idledim", "night",  "nightstart", "nightend", "nightbri"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -53,6 +55,18 @@ inline int clamp_lockon_minutes(int minutes) {
 
 inline int clamp_release_seconds(int seconds) {
   return seconds < kReleaseMinSeconds ? kReleaseMinSeconds : seconds > kReleaseMaxSeconds ? kReleaseMaxSeconds : seconds;
+}
+
+// The idle display's dim level (0 dark) and the night brightness, out of 255.
+constexpr int kIdleDimMin = 0;
+constexpr int kIdleDimMax = 255;
+constexpr int kNightBriMin = 1;
+constexpr int kNightBriMax = 255;
+
+inline int clamp_idle_dim(int level) { return level < kIdleDimMin ? kIdleDimMin : level > kIdleDimMax ? kIdleDimMax : level; }
+
+inline int clamp_night_bri(int level) {
+  return level < kNightBriMin ? kNightBriMin : level > kNightBriMax ? kNightBriMax : level;
 }
 
 // A number read the way atoi reads one ("12abc" is 12, "abc" and "" are 0),
@@ -111,8 +125,10 @@ inline uint16_t live_mask_from_keys(const std::string &keys) {
 // saved team's league and each favorite's. team_league is the league byte
 // the panel keeps, which stays after the team is cleared. Golf and racing are
 // never scanned: a tour or a series followed as the team adds nothing. NFL
-// when nothing is left.
-inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, const std::vector<uint8_t> &fav_leagues) {
+// when nothing is left, unless nfl_default is false: the idle display's
+// scores then have no league and show the clock instead.
+inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, const std::vector<uint8_t> &fav_leagues,
+                                        bool nfl_default = true) {
   if (mask == 0) {
     if (team_league < 16 && !is_leaderboard((League) team_league))
       mask |= (uint16_t) (1u << team_league);
@@ -124,7 +140,7 @@ inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, cons
   for (const auto &l : kLeagues)
     if (!is_board_sport(l.sport) && (mask & (1u << (uint8_t) l.league)))
       out.push_back(l.league);
-  if (out.empty())
+  if (out.empty() && nfl_default)
     out.push_back(League::NFL);
   return out;
 }
@@ -132,8 +148,10 @@ inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, cons
 // The leagues a mode's scan reads, in the order it reads them, and so the
 // leagues its finals rotation covers. live is Live games' own list
 // (live_leagues above). Live anything is also the no-team default. A mode
-// that follows a team scans none.
-inline std::vector<League> scan_leagues(uint8_t mode, const std::vector<League> &live) {
+// that follows a team scans none, unless the idle display shows the scores
+// rotation (idle_scores, idle.h): then live, which for those modes is the
+// leagues of the team and favorites, or Live games' own list.
+inline std::vector<League> scan_leagues(uint8_t mode, const std::vector<League> &live, bool idle_scores = false) {
   switch ((Mode) mode) {
     case Mode::LIVE_NFL:
       return {League::NFL};
@@ -143,6 +161,9 @@ inline std::vector<League> scan_leagues(uint8_t mode, const std::vector<League> 
       return {League::NFL, League::NCAA};
     case Mode::LIVE:
       return live;
+    case Mode::MY_TEAM:
+    case Mode::FAVORITES:
+      return idle_scores ? live : std::vector<League>{};
     default:
       return {};
   }
@@ -183,6 +204,12 @@ enum class SetKind : uint8_t {
   ALERTS,    // mask, the alert types switched on
   ALERTFAV,  // on, alerts only for games with the team or a favorite
   STANDING,  // value, espn::Standing
+  IDLE,         // value, idle.h's IdleShow
+  IDLE_DIM,     // value, 0 (dark) to 255
+  NIGHT,        // on: the night hours apply
+  NIGHT_START,  // value, minutes after local midnight
+  NIGHT_END,    // value, minutes after local midnight
+  NIGHT_BRI,    // value, 1 to 255
 };
 
 struct TeamRef {
@@ -334,6 +361,29 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::FOLLOW);
   if (k == "alertfav")
     return on(SetKind::ALERTFAV);
+  if (k == "idle") {
+    op.kind = SetKind::IDLE;
+    op.value = read_int(v);
+    return op.value >= 0 && op.value < kIdleCount;
+  }
+  if (k == "idledim") {
+    op.kind = SetKind::IDLE_DIM;
+    op.value = clamp_idle_dim(read_int(v));
+    return true;
+  }
+  if (k == "night")
+    return on(SetKind::NIGHT);
+  if (k == "nightstart" || k == "nightend") {
+    // "22:00", 24-hour: anything else is refused, not read as some other time.
+    op.kind = k == "nightstart" ? SetKind::NIGHT_START : SetKind::NIGHT_END;
+    op.value = parse_hhmm(v);
+    return op.value >= 0;
+  }
+  if (k == "nightbri") {
+    op.kind = SetKind::NIGHT_BRI;
+    op.value = clamp_night_bri(read_int(v));
+    return true;
+  }
   return false;
 }
 

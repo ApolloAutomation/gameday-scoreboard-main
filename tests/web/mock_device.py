@@ -70,7 +70,8 @@ TZS = [name for name, _posix, _iana in TZ_ROWS]
 SET_H = (REPO / "components/gameday/set_request.h").read_text(encoding="utf-8")
 SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kSetKeys\[\] = \{(.*?)\};", SET_H, re.S).group(1)))
 LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w+) = (\d+);",
-                                             SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8"))}
+                                             SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8"))}
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
 # PanelLayout refuses a count past this (gameday-common.yaml).
 MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8"),
@@ -98,6 +99,11 @@ INITIAL = {
     # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
+    # The idle display and the night hours (components/gameday/idle.h), and
+    # what they do now: idle_view "" (the mode's board), "clock", "scores" or
+    # "today"; night_now inside the night hours; dark while Off has it dark.
+    "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
+    "idle_view": "", "night_now": False, "dark": False,
     "espn_kb": 412, "espn_reads": 23,
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
@@ -187,6 +193,14 @@ def parse_team_ref(v):
     m = re.match(r"\s*\+?\d+", tid, re.ASCII)
     ref = (lg, int(m.group())) if colon and lg in LEAGUES and m else None
     return ref if ref in TEAMS else None
+
+
+def parse_hhmm(v):
+    """idle.h's parse_hhmm(): "22:00" or "7:05" to minutes after midnight, -1 for anything else."""
+    m = re.fullmatch(r"([0-9]{1,2}):([0-9]{2})", v)
+    if not m or int(m[1]) > 23 or int(m[2]) > 59:
+        return -1
+    return int(m[1]) * 60 + int(m[2])
 
 
 def timezone_index(v):
@@ -303,6 +317,19 @@ def apply_set(kv):
         elif k == "standing":
             if 0 <= atoi(v) < LIMITS["kStandingCount"]:
                 STATE["standing"] = atoi(v)
+        elif k == "idle":
+            if 0 <= atoi(v) < LIMITS["kIdleCount"]:
+                STATE["idle"] = atoi(v)
+        elif k == "idledim":
+            STATE["idledim"] = clamp(atoi(v), "kIdleDimMin", "kIdleDimMax")
+        elif k == "night":
+            STATE["night"] = v == "1"
+        elif k in ("nightstart", "nightend"):
+            minute = parse_hhmm(v)
+            if minute >= 0:
+                STATE[k] = "%02d:%02d" % divmod(minute, 60)
+        elif k == "nightbri":
+            STATE["nightbri"] = clamp(atoi(v), "kNightBriMin", "kNightBriMax")
 
 
 def selftest():

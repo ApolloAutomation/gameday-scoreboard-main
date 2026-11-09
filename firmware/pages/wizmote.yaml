@@ -49,7 +49,9 @@ script:
       - if:
           # Brighter on a panel that is off means turn it on. The first press
           # brings back the brightness it was set to; stepping up as well
-          # would jump straight past it.
+          # would jump straight past it. While the idle display's Off or dim
+          # has the panel dark or dimmed it does nothing: the step wouldn't
+          # show, and the saved level would creep up unseen.
           condition:
             lambda: 'return button == 9;'
           then:
@@ -60,21 +62,24 @@ script:
                   - switch.turn_on: power
                 else:
                   - lambda: |-
+                      if (id(gameday_ctl).idle_dimmed((uint8_t) id(brightness).state))
+                        return;
                       float current = id(brightness).state;
                       float step = std::max((float) ${WIZMOTE_BRIGHTNESS_MIN_STEP}, 255.0f * ${WIZMOTE_BRIGHTNESS_STEP} / 100.0f);
                       auto call = id(brightness).make_call();
                       call.set_value(std::min(255.0f, current + step));
                       call.perform();
       - if:
-          # Dimmer does nothing on a panel that is off. Otherwise mashing it in
+          # Dimmer does nothing on a panel that is off, or that the idle
+          # display's Off or dim has dark or dimmed. Otherwise mashing it in
           # the dark walks the saved level down to 1, and the next power on
-          # comes back as good as invisible.
+          # (or game) comes back as good as invisible.
           condition:
             lambda: 'return button == 8;'
           then:
             - if:
                 condition:
-                  switch.is_on: power
+                  lambda: 'return id(power).state && !id(gameday_ctl).idle_dimmed((uint8_t) id(brightness).state);'
                 then:
                   - lambda: |-
                       float current = id(brightness).state;

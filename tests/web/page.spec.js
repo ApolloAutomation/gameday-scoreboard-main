@@ -849,7 +849,9 @@ test("a screen reader gets each control's name, role and state", async ({ page, 
   await expect(page.getByRole("switch", { name: "Last play" })).toBeChecked();
   // The entity controls built from the event stream
   await expect(page.getByRole("switch", { name: "Panel on" })).toBeChecked();
-  await expect(page.getByRole("slider", { name: "Brightness" })).toHaveValue("128");
+  await expect(page.getByRole("slider", { name: "Brightness", exact: true })).toHaveValue("128");
+  await expect(page.getByRole("combobox", { name: /^Idle display/ })).toHaveValue("0");
+  await expect(page.getByRole("switch", { name: "Night hours" })).not.toBeChecked();
   await expect(page.getByRole("slider", { name: "Ticker speed" })).toHaveValue("5");
   await expect(page.getByRole("combobox", { name: "Showing" })).toHaveValue("Scoreboard");
 
@@ -2194,4 +2196,104 @@ test("a reset the panel never got doesn't claim it's resetting", async ({ page, 
   await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
   await expect(page.locator("#gone")).toBeHidden();
   await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+});
+
+test("the idle display posts its choice, shows the dim level for Off or dim, and the night hours post their times", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const idle = page.getByRole("combobox", { name: /^Idle display/ });
+  await expect(page.locator("#idleCtls")).toBeVisible();
+  await expect(idle).toHaveValue("0");
+  await expect(page.locator("#idleHint")).toContainText("your team's next game");
+  await expect(page.locator("#idleDimRow")).toBeHidden();
+  await expect(page.locator("#nightRows")).toBeHidden();
+
+  await idle.selectOption("3");
+  await expectSet(request, { idle: "3" });
+  await expect(page.locator("#idleHint")).toContainText("countdown");
+  await idle.selectOption("4");
+  await expectSet(request, { idle: "4" });
+  await expect(page.locator("#idleDimRow")).toBeVisible();
+  const dim = page.getByRole("slider", { name: /^Dim to/ });
+  await expect(dim).toHaveValue("0");
+  await dim.fill("30");
+  await expectSet(request, { idledim: "30" });
+  await expect(page.locator("#idledimVal")).toHaveText("30");
+
+  const night = page.getByRole("switch", { name: "Night hours" });
+  await night.click();
+  await expectSet(request, { night: "1" });
+  await expect(night).toBeChecked();
+  await expect(page.locator("#nightRows")).toBeVisible();
+  await expect(page.locator("#nightstart")).toHaveValue("22:00");
+  await expect(page.locator("#nightend")).toHaveValue("07:00");
+  await page.locator("#nightstart").fill("23:15");
+  await expectSet(request, { nightstart: "23:15" });
+  await page.locator("#nightend").fill("06:30");
+  await expectSet(request, { nightend: "06:30" });
+  const nightBri = page.getByRole("slider", { name: /^Night brightness/ });
+  await expect(nightBri).toHaveValue("20");
+  await nightBri.fill("45");
+  await expectSet(request, { nightbri: "45" });
+
+  // The panel kept every one, and a reload shows them.
+  const st = await deviceState(request);
+  expect([st.idle, st.idledim, st.night, st.nightstart, st.nightend, st.nightbri]).toEqual([4, 30, true, "23:15", "06:30", 45]);
+  await page.reload();
+  await expect(idle).toHaveValue("4");
+  await expect(page.locator("#nightstart")).toHaveValue("23:15");
+  await expect(page.locator("#nightend")).toHaveValue("06:30");
+  await expect(page.locator("#nightbriVal")).toHaveText("45");
+  await night.click();
+  await expectSet(request, { night: "0" });
+  await expect(page.locator("#nightRows")).toBeHidden();
+});
+
+test("the idle display keeps each tap through a slow re-read", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const idle = page.getByRole("combobox", { name: /^Idle display/ });
+  await expect(idle).toHaveValue("0");
+  await slowReads(page, 1000);
+  await idle.selectOption("2");
+  await sleep(600);
+  await page.getByRole("switch", { name: "Night hours" }).click();
+  await expect(idle).toHaveValue("2");
+  await expect(page.locator("#nightRows")).toBeVisible();
+  await Promise.all([
+    staysAs(page.locator("#idleHint"),
+      ["Recent final scores and the games still to come today, for your team's and your favorites' leagues."], 2500),
+    staysAs(page.locator('.sw.on[data-set="night"]'), [""], 2500),
+  ]);
+  expect(await sets(request)).toEqual([{ idle: "2" }, { night: "1" }]);
+});
+
+test("the idle display says what the panel shows now, and hides on firmware without it", async ({ page, request }) => {
+  await reset(request, { idle: 1, idle_view: "clock", night: true, night_now: true });
+  await page.goto("/");
+  await expect(page.locator("#idleNow")).toHaveText("Showing the clock, in the night hours, until a game you follow starts.");
+  await reset(request, { idle: 4, idle_view: "clock", dark: true });
+  await page.reload();
+  await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a game you follow starts.");
+  await expect(page.locator("#idleDimRow")).toBeVisible();
+  await reset(request, { idle: 2, idle_view: "" });
+  await page.reload();
+  await expect(page.locator("#idleCtls")).toBeVisible();
+  await expect(page.locator("#idleNow")).toBeHidden();
+
+  await reset(request, { idle: null, idledim: null, night: null, nightstart: null, nightend: null, nightbri: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#idleCtls")).toBeHidden();
+});
+
+test("a night time cleared in its field isn't posted", async ({ page, request }) => {
+  await reset(request, { night: true });
+  await page.goto("/");
+  await expect(page.locator("#nightRows")).toBeVisible();
+  await page.locator("#nightstart").fill("");
+  await sleep(500);
+  expect(await sets(request)).toEqual([]);
+  await page.locator("#nightstart").fill("21:45");
+  await expectSet(request, { nightstart: "21:45" });
 });

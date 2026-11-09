@@ -36,7 +36,8 @@ script:
           then:
             - hub75.set_brightness:
                 id: matrix
-                brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state);'
+                # Outside QC, the idle display's and the night hours' level too
+                brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state, !id(qc_active));'
       - lambda: |-
           const uint8_t mark = id(gameday_ctl).guard_mark();
           const int W = lv_disp_get_hor_res(lv_disp_get_default());

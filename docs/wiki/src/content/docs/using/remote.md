@@ -30,6 +30,10 @@ The panel pairs with one remote at a time. Pairing another one replaces the firs
 
 The brightness buttons move the same **Brightness** setting as the device page and the app.
 
+:::note[Coming in the next release]
+While the **Idle display** setting **Off or dim** has the panel dark or dimmed, the brighter and dimmer buttons do nothing, and **ON** doesn't light it. **NIGHT** still sets the Brightness to the night level. See [Brightness, panel on and off, and the clock](/using/brightness-and-clock/#turning-the-panel-off-and-on).
+:::
+
 ## The numbered buttons
 
 Buttons 1 to 4 are the first four teams in your favorites list, in order. The device page marks them in the Favorites card. Each button also turns on a panel that is off.

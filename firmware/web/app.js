@@ -192,6 +192,21 @@
         <h2>Panel</h2>
         <div id="panelCtls"></div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
+        <div id="idleCtls" hidden>
+          <div class="sub">When nothing is on</div>
+          <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
+            <option value="0">Next game</option><option value="1">Clock</option><option value="2">Scores</option>
+            <option value="3">My team today</option><option value="4">Off or dim</option>
+          </select></div>
+          <div class="ctl" id="idleDimRow" hidden><label for="idledim">Dim to<small>0 turns the screen off. Power stays on.</small></label><input type="range" id="idledim" min="0" max="255" step="1"><span class="val" id="idledimVal" aria-hidden="true"></span></div>
+          <div class="ctl"><label>Night hours<small>Dims the panel overnight and shows the idle display, with the clock in place of the scores or the next game. A game you follow still shows.</small></label><button class="sw" data-set="night" aria-label="Night hours"></button></div>
+          <div id="nightRows" hidden>
+            <div class="ctl"><label for="nightstart">From</label><input type="time" id="nightstart" step="60"></div>
+            <div class="ctl"><label for="nightend">To</label><input type="time" id="nightend" step="60"></div>
+            <div class="ctl"><label for="nightbri">Night brightness<small>A Brightness change during the night hours lasts until they end.</small></label><input type="range" id="nightbri" min="1" max="255" step="1"><span class="val" id="nightbriVal" aria-hidden="true"></span></div>
+          </div>
+          <p class="hint" id="idleNow" role="status"></p>
+        </div>
       </div>
       <div class="card">
         <h2>Favorites</h2>
@@ -354,6 +369,8 @@
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
     alerts: Number, alertfav: (v) => v === "1",
+    idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
+    nightstart: String, nightend: String,
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -831,6 +848,56 @@
             : "Cycling through your favorites";
     }
     renderFollow(mode);
+  };
+
+  // ---- the idle display and the night hours (Panel card) -------------------
+  // What the panel shows when no game it follows is on, and overnight. The
+  // device keeps the settings (idle, idledim, night, nightstart, nightend,
+  // nightbri); each control posts its own key, held until the panel has it.
+  const IDLE_HINTS = [
+    "What each mode shows anyway: your team's next game, your favorites, or recent scores.",
+    "The time in your team's colors, and its next game on a wide panel.",
+    "Recent final scores and the games still to come today, for your team's and your favorites' leagues.",
+    "On game day the matchup with a countdown to the start, then the final until midnight. Other days, the clock.",
+    "The panel goes dark, or as dim as you set below, without turning it off.",
+  ];
+  const idleSelect = $("#idle");
+  idleSelect.onchange = () => setGD({ idle: idleSelect.value });
+  const idleDim = $("#idledim");
+  idleDim.oninput = () => ($("#idledimVal").textContent = idleDim.value);
+  idleDim.onchange = () => setGD({ idledim: idleDim.value });
+  const nightBri = $("#nightbri");
+  nightBri.oninput = () => ($("#nightbriVal").textContent = nightBri.value);
+  nightBri.onchange = () => setGD({ nightbri: nightBri.value });
+  // A time field gives "" while it is being cleared: nothing to post then.
+  ["nightstart", "nightend"].forEach((key) => {
+    const input = $("#" + key);
+    input.onchange = () => { if (/^\d\d:\d\d$/.test(input.value)) setGD({ [key]: input.value }); };
+  });
+  const renderIdle = () => {
+    // Firmware from before the setting leaves idle out.
+    $("#idleCtls").hidden = !S || S.idle === undefined;
+    if ($("#idleCtls").hidden) return;
+    const show = Number(S.idle) || 0;
+    if (document.activeElement !== idleSelect) idleSelect.value = String(show);
+    $("#idleHint").textContent = IDLE_HINTS[show] || "";
+    $("#idleDimRow").hidden = show !== 4;
+    if (document.activeElement !== idleDim) {
+      idleDim.value = S.idledim || 0;
+      $("#idledimVal").textContent = String(S.idledim || 0);
+    }
+    $("#nightRows").hidden = !S.night;
+    for (const key of ["nightstart", "nightend"])
+      if (document.activeElement !== $("#" + key)) $("#" + key).value = S[key] || "";
+    if (document.activeElement !== nightBri) {
+      nightBri.value = S.nightbri || 1;
+      $("#nightbriVal").textContent = String(S.nightbri || 1);
+    }
+    // What the panel does about it now
+    const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
+    $("#idleNow").textContent = S.dark ? "The panel is dark until a game you follow starts."
+      : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
+        : S.night_now ? "In the night hours." : "";
   };
 
   // ---- toggles and favorites (static controls on the state document) --------
@@ -1506,6 +1573,7 @@
     renderCurrentTeam();
     renderMode();
     renderSettings();
+    renderIdle();
     renderPanels();
     renderTime();
     if (S && S.name) $("#hostname").textContent = S.name + ".local";

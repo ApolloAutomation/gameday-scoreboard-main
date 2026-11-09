@@ -570,6 +570,18 @@ gameday:
           lambda: 'return x == "guard";'
         then:
           - script.execute: gd_guard
+    # The idle display or the night hours changed the brightness the panel
+    # should have (components/gameday/idle.h): dark, the dim level, the night
+    # brightness or the owner's again. Power and the saved Brightness stay as
+    # they are. Coming back from 0 needs the repaint; QC keeps its own.
+    - if:
+        condition:
+          lambda: 'return x == "dim" && id(power).state && !id(qc_active);'
+        then:
+          - hub75.set_brightness:
+              id: matrix
+              brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state);'
+          - script.execute: gd_repaint
     # No time server answered, so the clock came from ESPN's Date header.
     - if:
         condition:
@@ -771,13 +783,16 @@ number:
     initial_value: 128
     on_value:
       then:
+        # In the night hours a change by the owner (the page, Home Assistant,
+        # the remote's buttons and NIGHT) wins over the night brightness.
+        - lambda: 'id(gameday_ctl).note_brightness();'
         - if:
             condition:
               switch.is_on: power
             then:
               - hub75.set_brightness:
                   id: matrix
-                  brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) x);'
+                  brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) x, !id(qc_active));'
   - platform: template
     name: "Scroll Speed"
     id: shared_scroll_speed
