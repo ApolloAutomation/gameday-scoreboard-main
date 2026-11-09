@@ -63,6 +63,24 @@ esp32:
       # The first time request waits a random 0 to 5 s by default, all of it
       # boot screen. One panel at a time doesn't need that much spread.
       CONFIG_LWIP_SNTP_MAXIMUM_STARTUP_DELAY: "1000"
+      # Wi-Fi's speed-ups that keep its code in internal RAM. Off, that code
+      # runs from PSRAM like the rest and about 18 KB more internal RAM is
+      # free: four panels' DMA buffers take 144 KB of it, and with these on
+      # a 2x2 on Wi-Fi had too little left to read ESPN. A scoreboard reads a
+      # few hundred KB a minute at most, far below where they matter.
+      CONFIG_ESP_WIFI_IRAM_OPT: n
+      CONFIG_ESP_WIFI_RX_IRAM_OPT: n
+      # malloc() still takes internal RAM first for anything up to 16 KB, as
+      # before, but falls back to PSRAM when internal RAM has no piece that
+      # big, where it used to fail and the panel crashed. With four panels a
+      # Saturday's college scoreboard (50 finals, a 13 KB list) could find
+      # internal RAM in pieces too small. Bigger blocks go to PSRAM first.
+      # Nothing is held back for DMA (the reserve's default 32 KB): the four
+      # panels' 131 KB DMA buffer needs that RAM in one piece at boot.
+      CONFIG_SPIRAM_USE_MALLOC: y
+      CONFIG_SPIRAM_USE_CAPS_ALLOC: n
+      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "16384"
+      CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "0"
 
 esphome:
   name: "${name}"

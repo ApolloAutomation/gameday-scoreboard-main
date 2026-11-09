@@ -13,6 +13,7 @@
 
 #include "logo_lru.h"
 #include "panel_text.h"
+#include "psram_tasks.h"
 #include "timezones.h"
 #include "timezones_parsed.h"
 
@@ -1315,6 +1316,8 @@ void GamedayComponent::dump_config() {
 void GamedayComponent::on_shutdown() { ::espn::boot_log_planned(boot_log); }
 
 void GamedayComponent::loop() {
+  // Frees the fetch, logo and Wi-Fi check tasks that have finished.
+  PsramTasks::reap();
   if (this->logos_.loop())
     this->fire_action_("logo_ready");  // gameday-common.yaml redraws the logos
   if (this->logo_held_ && this->logo_hold_done_())
@@ -2701,7 +2704,7 @@ void GamedayComponent::probe_task_(void *arg) {
            redirect ? ::espn::detail::url_host(h.location).c_str() : "");
   self->probe_result_ = (uint8_t) r;
   self->probe_done_ = true;
-  vTaskDelete(nullptr);
+  PsramTasks::park();
 }
 
 void GamedayComponent::start_probe_() {
@@ -2711,7 +2714,7 @@ void GamedayComponent::start_probe_() {
   this->probe_done_ = false;
   this->probe_running_ = true;
   // Plain HTTP and a 256 byte read, no TLS: a small stack is plenty.
-  if (xTaskCreate(&GamedayComponent::probe_task_, "gameday_probe", 6144, this, 1, nullptr) != pdPASS) {
+  if (!PsramTasks::start(&GamedayComponent::probe_task_, "gameday_probe", 6144, this)) {
     ESP_LOGW(TAG, "Could not start the Wi-Fi check (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->probe_running_ = false;
@@ -3234,8 +3237,9 @@ void GamedayComponent::start_worker_() {
   this->job_done_ = false;
   this->busy_ = true;
   this->busy_since_ms_ = millis() == 0 ? 1 : millis();
-  // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom.
-  if (xTaskCreate(&GamedayComponent::worker_, "gameday_fetch", 16384, this, 1, nullptr) != pdPASS) {
+  // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom. In
+  // PSRAM (psram_tasks.h), freed by loop() once the task has parked.
+  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this)) {
     ESP_LOGW(TAG, "Could not start the fetch task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->busy_ = false;
@@ -3251,7 +3255,7 @@ void GamedayComponent::worker_(void *arg) {
   // was writing into belongs to a later cycle by now.
   if (self->worker_seq_ == mine)
     self->job_done_ = true;
-  vTaskDelete(nullptr);
+  PsramTasks::park();
 }
 
 // Worker task: network and parsing only, no display or entity access.
