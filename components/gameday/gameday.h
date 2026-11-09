@@ -782,7 +782,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // (midnight Eastern, read at noon) and a race weekend's (real times).
   std::string golf_dates_(int64_t start, int64_t end) const;
   std::string racing_dates_(int64_t start, int64_t end) const;
-  bool fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out);
+  // read: an AHL or ECHL team's list is its team read, whose schedule (with
+  // the records the game read lacks) goes here too when it isn't null.
+  bool fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out, Schedule *read = nullptr);
   bool fetch_game_(const ::espn::Team *team, const Schedule &schedule, GameSnapshot &out);
   // Minor league baseball's reads from the MLB Stats API (source_mlbstats.h),
   // which the three above hand a MiLB team to (fetch_live_games_ reads its

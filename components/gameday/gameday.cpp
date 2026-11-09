@@ -2956,14 +2956,15 @@ void GamedayComponent::take_game_on_now_(const ::espn::Team *team, Schedule &s, 
   }
 }
 
-bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out) {
+bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::espn::Upcoming> &out,
+                                       Schedule *read) {
   if (::espn::is_mlb_stats(team->league)) {
     Schedule s;
     return this->fetch_mlb_schedule_(team, s, &out);
   }
   if (::espn::is_hockeytech(team->league)) {
     Schedule s;
-    return this->fetch_ht_schedule_(team, s, &out);
+    return this->fetch_ht_schedule_(team, read != nullptr ? *read : s, &out);
   }
   const ::espn::LeagueInfo *info = ::espn::league_info(team->league);
   if (info != nullptr && !info->season_list) {
@@ -3561,7 +3562,11 @@ void GamedayComponent::run_job_() {
     return;  // the main loop picks a game, then the next cycle polls it
   }
   if (j.need_upcoming) {
-    j.upcoming_ok = this->fetch_upcoming_(j.team, j.upcoming);
+    // An AHL or ECHL team's records come back in j.schedule (apply_job_).
+    Schedule read;
+    j.upcoming_ok = this->fetch_upcoming_(j.team, j.upcoming, &read);
+    if (j.upcoming_ok && read.valid)
+      j.schedule = std::move(read);
     return;
   }
   if (j.comp > 0) {
@@ -3810,6 +3815,8 @@ void GamedayComponent::apply_job_() {
     this->schedule_.event_id = g.event_id;
     this->schedule_.group = g.group;
     this->schedule_.league = g.league;
+    if (::espn::is_hockeytech((League) g.league))
+      ::espn::ht_live_records(this->schedule_, g);  // HockeyTech's game read has no records
     this->schedule_.kickoff_epoch = (int64_t) this->time_->timestamp_now();
     this->schedule_fetched_ms_ = now == 0 ? 1 : now;  // 0 reads as "never fetched"
     this->live_away_id_ = g.away_id;
@@ -3826,8 +3833,16 @@ void GamedayComponent::apply_job_() {
   }
   if (j.need_upcoming) {
     this->upcoming_due_ = false;
-    if (j.upcoming_ok)
+    if (j.upcoming_ok) {
       this->upcoming_ = j.upcoming;
+      // An AHL or ECHL team's records, which HockeyTech's game read never
+      // has and a schedule from the boot cache doesn't keep: the board has
+      // them now, not at the six-hour team read.
+      if (j.team != nullptr && ::espn::is_hockeytech(j.team->league) &&
+          ::espn::ht_take_records(this->schedule_, j.schedule) && this->game_.valid &&
+          this->game_.event_id == this->schedule_.event_id)
+        ::espn::ht_fill_from_schedule(this->game_, this->schedule_);
+    }
     this->rebuild_state_(&this->last_fields_);
     // The list is optional and waits for the next schedule read, but a
     // refusal still holds back the game poll that would come next.

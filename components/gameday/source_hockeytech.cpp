@@ -331,6 +331,19 @@ void ht_fill_from_schedule(GameSnapshot &g, const Schedule &s) {
     g.opp_record = s.opp_record;
 }
 
+bool ht_take_records(Schedule &into, const Schedule &read) {
+  if (!read.valid || read.event_id.empty() || read.event_id != into.event_id)
+    return false;
+  if (!read.team_record.empty())
+    into.team_record = read.team_record;
+  if (read.opp_id != 0) {
+    into.opp_id = read.opp_id;
+    into.opp_abbr = read.opp_abbr;
+    into.opp_record = read.opp_record;
+  }
+  return true;
+}
+
 HtState ht_state(const std::string &code, const std::string &words, bool started) {
   switch (atoi(code.c_str())) {
     case 1:
@@ -606,6 +619,8 @@ bool ht_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t *
         lg.home_id = home.id;
         lg.away_abbr = std::move(away.abbr);
         lg.home_abbr = std::move(home.abbr);
+        lg.away_record = std::move(away.record);
+        lg.home_record = std::move(home.record);
         out.push_back(std::move(lg));
         break;
       }

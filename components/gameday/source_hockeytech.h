@@ -137,6 +137,19 @@ bool parse_ht_game(TInput &input, League league, uint32_t our_id, GameSnapshot &
 // the opponent's when it is the same opponent.
 void ht_fill_from_schedule(GameSnapshot &g, const Schedule &s);
 
+// Live games' pick of an AHL or ECHL game: the day read's records, the away
+// side as ours the way the board is drawn, for ht_fill_from_schedule.
+inline void ht_live_records(Schedule &s, const LiveGame &g) {
+  s.opp_id = g.home_id;
+  s.team_record = g.away_record;
+  s.opp_record = g.home_record;
+}
+
+// A team read's records for the game the board already has: the Up next
+// read's, for a schedule from the boot cache, which keeps none. True when it
+// is that game.
+bool ht_take_records(Schedule &into, const Schedule &read);
+
 // The day read, the same way parse_live_games reads an ESPN scoreboard: the
 // games in progress, the earliest start still to come, and with finals and
 // pending the games played to the end (the first kRecapCap) and the

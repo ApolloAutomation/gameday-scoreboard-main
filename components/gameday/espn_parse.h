@@ -339,6 +339,8 @@ struct LiveGame {
   uint32_t away_id{0};      // shown on the left, like a broadcast
   uint32_t home_id{0};      // for its logo, fetched as soon as the game is picked
   std::string away_abbr, home_abbr;
+  // HockeyTech's day read only (the AHL, the ECHL): its game read has none
+  std::string away_record, home_record;
 };
 
 // One game of a day's scoreboard before it is read in full: enough for the

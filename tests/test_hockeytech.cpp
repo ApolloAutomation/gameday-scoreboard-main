@@ -21,6 +21,7 @@
 #include "recap.h"
 #include "set_request.h"
 #include "source_hockeytech.h"
+#include "startup.h"
 
 using namespace espn;
 
@@ -647,6 +648,73 @@ void test_game_live() {
   HCHECK_EQ(decide_splash(lav, fin, true, false).text, std::string("LAV WINS!"));
 }
 
+// The records HockeyTech's game read doesn't have. Live games takes them from
+// the day read it picked the game from, and My team after a restart (the
+// boot cache keeps none) from the Up next read, not six hours later.
+void test_records() {
+  JsonDocument doc;
+  deserializeJson(doc, slurp("ht_day_echl_20261110.json"));
+  doc["SiteKit"]["Gamesbydate"][0]["status"] = "2";
+  doc["SiteKit"]["Gamesbydate"][0]["started"] = "1";
+  std::string on;
+  serializeJson(doc, on);
+  std::vector<LiveGame> live;
+  HCHECK(day_read(on, live));
+  HCHECK_EQ(live.size(), (size_t) 1);
+  if (!live.empty()) {
+    // ORL @ GVL in progress: 2-5-1 and 7-1-2
+    HCHECK_EQ(live[0].away_record, std::string("2-5-1"));
+    HCHECK_EQ(live[0].home_record, std::string("7-1-2"));
+  }
+  // Live games picks LAV @ SYR, the away side as ours
+  LiveGame lg;
+  lg.event_id = "1029294";
+  lg.away_id = kLaval;
+  lg.home_id = kSyracuse;
+  lg.away_record = "10-3-1";
+  lg.home_record = "5-5-2";
+  Schedule picked;
+  picked.valid = true;
+  picked.event_id = lg.event_id;
+  ht_live_records(picked, lg);
+  GameSnapshot g = game("ht_game_ahl_pre.json", League::AHL, kLaval);
+  HCHECK(g.team_record.empty() && g.opp_record.empty());
+  ht_fill_from_schedule(g, picked);
+  HCHECK_EQ(g.team_record, std::string("10-3-1"));
+  HCHECK_EQ(g.opp_record, std::string("5-5-2"));
+
+  // My team: Syracuse's team read, saved to the boot cache and loaded back
+  const int64_t now = at("2026-11-09T01:30:00Z");
+  Schedule read;
+  std::vector<Upcoming> up;
+  HCHECK_EQ(team_read(slurp("ht_team_ahl_syr.json"), kSyracuse, now, read, &up, 4), 1);
+  TeamCache c{};
+  HCHECK(team_cache_save(read, League::AHL, kSyracuse, now, c));
+  Schedule cached;
+  HCHECK(team_cache_load(c, League::AHL, kSyracuse, now + 60, cached));
+  HCHECK_EQ(cached.event_id, std::string("1029294"));
+  HCHECK(cached.team_record.empty() && cached.opp_record.empty() && cached.opp_id == 0);
+  GameSnapshot h = game("ht_game_ahl_pre.json", League::AHL, kSyracuse);
+  ht_fill_from_schedule(h, cached);
+  HCHECK(h.team_record.empty() && h.opp_record.empty());
+  // The Up next read is the team read again: its records for the same game
+  HCHECK(ht_take_records(cached, read));
+  HCHECK_EQ(cached.team_record, std::string("5-5-2"));
+  HCHECK_EQ(cached.opp_record, std::string("10-3-1"));
+  HCHECK_EQ(cached.opp_id, kLaval);
+  HCHECK_EQ(cached.opp_abbr, std::string("LAV"));
+  ht_fill_from_schedule(h, cached);
+  HCHECK_EQ(h.team_record, std::string("5-5-2"));
+  HCHECK_EQ(h.opp_record, std::string("10-3-1"));
+  // A read that names another game leaves the board's alone
+  Schedule other = read;
+  other.event_id = "1029300";
+  other.team_record = "6-5-2";
+  HCHECK(!ht_take_records(cached, other));
+  HCHECK_EQ(cached.team_record, std::string("5-5-2"));
+  HCHECK(!ht_take_records(cached, Schedule{}));
+}
+
 void test_day() {
   // The AHL's Saturday: sixteen finals, four in overtime
   std::vector<LiveGame> live;
@@ -1041,6 +1109,7 @@ int run_hockeytech_tests(int &total_checks) {
   test_game_pre();
   test_game_live();
   test_day();
+  test_records();
   test_scan_backoff();
   test_side_backoff();
   test_merged_features();
