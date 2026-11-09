@@ -799,6 +799,7 @@ bool GamedayComponent::fav_choose_(int64_t now_epoch) {
   this->fav_shown_since_ = now_epoch;
   this->fav_poll_ms_ = 0;
   this->prev_ = GameSnapshot{};
+  this->visit_back_ = false;
   this->game_ = c.index >= 0 ? this->fav_[c.index].game : GameSnapshot{};
   this->post_since_ms_ = 0;
   this->misses_ = 0;
@@ -874,6 +875,17 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   }
   if ((refresh == -1 && cup < 0) || this->backing_off_()) {
     this->schedule_next_(FAV_TICK);
+    // Most ticks read nothing: the watcher's turn, up to the next read due.
+    uint32_t refresh_at = now + SCHEDULE_INTERVAL;
+    for (const auto &e : this->fav_) {
+      const bool missing = !e.sched.valid || e.stale;
+      const uint32_t at =
+          missing && e.fetched_ms == 0 ? now : e.fetched_ms + (missing ? RETRY_INTERVAL : SCHEDULE_INTERVAL);
+      if ((int32_t) (at - refresh_at) < 0)
+        refresh_at = at;
+    }
+    this->start_watch_job_(::espn::watch_fav_due(now, this->fav_locked_ && this->fav_shown_ >= 0, this->fav_poll_ms_,
+                                                 this->interval_for_phase_(), refresh_at));
     return;
   }
   int index = cup >= 0 ? cup : refresh >= 0 ? refresh : this->fav_shown_;
@@ -1007,7 +1019,7 @@ void GamedayComponent::apply_fav_job_(uint32_t now) {
   bool switched = this->fav_choose_(tnow);
   if (!switched && shown) {
     // Same game on the board: render the new poll with its splash.
-    this->prev_ = this->game_;
+    this->prev_ = this->board_prev_();
     this->game_ = e.game;
     this->emit_(this->board_splash_(false));
   } else if (!switched) {
@@ -1332,17 +1344,29 @@ void GamedayComponent::loop() {
         this->worker_seq_++;  // a late finisher must not signal job_done_
         // Wait a full retry before starting another worker rather than
         // stacking a second one on top of a task that may still be alive:
-        // the mode's reads, and the idle display's that go in between them
-        // (start_side_job_), which otherwise start within a second.
+        // the mode's reads, and the idle display's and the big-play
+        // watcher's that go in between them (start_side_job_,
+        // start_watch_job_), which otherwise start within a second.
         const uint32_t now = millis();
         this->worker_gave_up_ms_ = now == 0 ? 1 : now;
-        if (this->job_.side) {
+        this->watch_hold_until_ = (now + RETRY_INTERVAL) | 1;
+        if (this->job_.need_watch) {
+          // A watcher read that hung counts as a failed one that took the
+          // whole wait, so that kind of read is expected slow from now on.
+          const ::espn::WatchJob &w = this->job_.watch;
+          this->watch_times_.took(w.league, !w.event_id.empty(), deadline, false);
+          if (!w.event_id.empty())
+            ::espn::watch_failed(this->watch_, w.league, w.event_id);
+        }
+        if (this->job_.side || this->job_.need_watch) {
           // The scores' read waits like one that failed, and the mode's next
           // read keeps its time unless that comes sooner than the retry.
-          this->side_wait_since_ = now;
-          this->side_wait_ms_ = SIDE_RETRY;
-          if (this->job_.need_scan)
-            this->side_scan_ms_ = 0;  // the scan again, once the wait is over
+          if (this->job_.side) {
+            this->side_wait_since_ = now;
+            this->side_wait_ms_ = SIDE_RETRY;
+            if (this->job_.need_scan)
+              this->side_scan_ms_ = 0;  // the scan again, once the wait is over
+          }
           if ((int32_t) (this->next_fetch_ms_ - (now + RETRY_INTERVAL)) < 0)
             this->schedule_next_(RETRY_INTERVAL);
         } else {
@@ -1357,14 +1381,16 @@ void GamedayComponent::loop() {
     this->apply_job_();
     return;
   }
-  if (this->visit_.active && ::espn::watch_visit_over(millis(), this->visit_.since_ms, this->watch_stay_ms()))
+  if (this->visit_.active && ::espn::watch_visit_over(millis(), this->visit_.since_ms, this->watch_stay_ms(),
+                                                      this->watch_switch_(this->visit_.fav)))
     this->end_visit_();
   if ((int32_t) (millis() - this->next_fetch_ms_) < 0) {
     // In the gaps between the mode's own reads, the idle display's scores
     // read theirs, so the mode's timing stays as it was, and the big-play
-    // watcher reads other games when one fits.
-    if (!this->start_side_job_())
-      this->start_watch_job_();
+    // watcher reads other games when one fits before the board's next read.
+    // Favorite teams hands the watcher its idle ticks instead (start_fav_job_).
+    if (!this->start_side_job_() && (!this->favorites_mode_() || this->visit_.active))
+      this->start_watch_job_(this->next_fetch_ms_);
     return;
   }
   if (this->worker_gave_up_ms_ != 0) {
@@ -1595,8 +1621,10 @@ void GamedayComponent::refresh_now() {
   // Read the team endpoint again, do not just re-poll the game already on
   // the board: the owner presses this when the board looks wrong, and a
   // moved, postponed or finished game only shows up in that read. A big play
-  // from another game gives the board back first.
+  // from another game gives the board back first, and the watched games
+  // start over, a read under way dropped.
   this->end_visit_();
+  this->watch_reset_();
   this->force_schedule_ = true;
   this->end_backoff_wait_();
   this->schedule_next_(0);
@@ -3495,7 +3523,7 @@ void GamedayComponent::apply_job_() {
   }
   this->cache_unconfirmed_ = false;
   ::espn::carry_football(this->game_, j.game);
-  this->prev_ = this->game_;
+  this->prev_ = this->board_prev_();
   this->game_ = j.game;
   this->mark_good_poll_();
   if (this->upcoming_after_poll_) {
@@ -3571,7 +3599,9 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
     this->drop_team_placeholder_();
     this->emit_({});
   } else if (j.polled) {
-    this->prev_ = moved ? GameSnapshot{} : this->game_;
+    this->prev_ = this->board_prev_();
+    if (moved)
+      this->prev_ = GameSnapshot{};
     ::espn::carry_football(this->prev_, j.game);
     this->game_ = j.game;
     this->mark_good_poll_();
@@ -3666,7 +3696,7 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
   for (auto &r : j.game.golf.rows)
     r.set_tee(r.tee_epoch > 0 ? ::espn::golf_tee_label(ESPTime::from_epoch_local((time_t) r.tee_epoch).to_c_tm())
                               : std::string());
-  this->prev_ = std::move(this->game_);
+  this->prev_ = this->board_prev_();
   this->game_ = std::move(j.game);  // leaves job_ without the rows
   this->no_game_confirmed_ = false;
   // The idle display's wait after the final (idle.h, idle_busy)
@@ -3685,11 +3715,13 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
 
 // ---- The big-play watcher (watch.h) ----------------------------------------
 
-// Nor while nothing could switch the board: pinned to its game, or on the
-// panel's team's live game without "Switch from my team".
+// Nor while nothing could switch the board: no big play switched on, pinned
+// to its game, or on the panel's team's live game without "Switch from my
+// team".
 bool GamedayComponent::watching_() const {
   if (!this->watch_on() || this->demo_playing_() || !this->board_ready_ || this->backing_off_() ||
-      !this->switch_allowed_() || (this->own_team_live_() && !this->watch_from_mine()))
+      (this->alerts_on() & ~::espn::alert_bit(::espn::Alert::FINAL)) == 0 || !this->switch_allowed_() ||
+      (this->own_team_live_() && !this->watch_from_mine()))
     return false;
   if (this->live_mode_())
     return !this->recap_on_ && !this->live_fallback_ && this->schedule_.valid;
@@ -3704,6 +3736,7 @@ uint32_t GamedayComponent::watch_key_() const {
   mix(this->prefs_.league);
   mix(this->prefs_.team_id);
   mix(this->alerts_favorites_only());
+  mix(this->alerts_on());
   for (const auto &e : this->fav_) {
     mix((uint32_t) e.team->league);
     mix(e.team->espn_id);
@@ -3712,7 +3745,7 @@ uint32_t GamedayComponent::watch_key_() const {
 }
 
 void GamedayComponent::watch_reset_() {
-  this->watch_.clear();
+  std::vector<::espn::WatchGame>().swap(this->watch_);  // its memory too, while nothing is watched
   this->watch_src_.clear();
   this->watch_key_last_ = 0;
   this->watch_cycle_ms_ = millis() - ::espn::kWatchCycleMs;  // a new cycle at the next look
@@ -3728,7 +3761,7 @@ void GamedayComponent::watch_sync_() {
   for (const auto &e : this->fav_)
     favs.push_back(e.team);
   this->watch_.clear();
-  this->watch_src_ = ::espn::watch_sources(this->live_mode_(), this->scan_leagues_(), favs);
+  this->watch_src_ = ::espn::watch_sources(this->live_mode_(), this->scan_leagues_(), favs, this->alerts_on());
   this->watch_key_last_ = key;
 }
 
@@ -3743,11 +3776,14 @@ uint8_t GamedayComponent::mode_league_() const {
   return t != nullptr ? (uint8_t) t->league : 0;
 }
 
+// During a visit the mode's game is the one it saved, read before the visit:
+// from its start time on it counts as live (watch_live), so a kickoff during
+// a visit ends it.
 bool GamedayComponent::own_team_live_() const {
   const GameSnapshot &g = this->visit_.saved ? *this->visit_.saved : this->game_;
   const uint32_t id = this->prefs_.team_id;
-  return id != 0 && g.valid && g.state == GameState::IN && this->mode_league_() == this->prefs_.league &&
-         (g.team_id == id || g.opp_id == id);
+  return id != 0 && this->mode_league_() == this->prefs_.league && (g.team_id == id || g.opp_id == id) &&
+         ::espn::watch_live(g, (int64_t) this->time_->timestamp_now());
 }
 
 ::espn::WatchCtx GamedayComponent::watch_ctx_() const {
@@ -3757,18 +3793,34 @@ bool GamedayComponent::own_team_live_() const {
   c.team = {this->prefs_.league, this->prefs_.team_id};
   for (const auto &e : this->fav_)
     c.favs.emplace_back((uint8_t) e.team->league, e.team->espn_id);
-  c.board_league = this->board_league_();
-  c.board_event = this->visit_.active ? this->visit_.sched.event_id
-                  : this->game_.valid ? this->game_.event_id
-                                      : this->schedule_.event_id;
+  // Neither the mode's game (as a visit saved it) nor a visit's is watched.
+  const GameSnapshot &g = this->visit_.saved ? *this->visit_.saved : this->game_;
+  c.board_league = this->mode_league_();
+  c.board_event = g.valid ? g.event_id : this->schedule_.event_id;
+  if (this->visit_.active) {
+    c.visit_league = this->visit_.sched.league;
+    c.visit_event = this->visit_.sched.event_id;
+  }
   c.mask = this->alerts_on();
   c.wide = this->wide_();
   return c;
 }
 
-// Main loop, between the board's polls: the watcher's next read this cycle,
-// when one is due and fits before the board's next poll.
-bool GamedayComponent::start_watch_job_() {
+::espn::WatchSwitch GamedayComponent::watch_switch_(bool alert_fav) const {
+  const uint32_t now = millis();
+  ::espn::WatchSwitch s;
+  s.allowed = this->switch_allowed_();
+  s.splash = this->splash_ms_ != 0 && now - this->splash_ms_ < ::espn::kWatchSplashMs;
+  s.own_live = this->own_team_live_();
+  s.alert_fav = alert_fav;
+  s.from_mine = this->watch_from_mine();
+  s.away_long = this->visit_.active && now - this->visit_.first_ms >= this->watch_stay_ms();
+  return s;
+}
+
+// Main loop, between the board's polls (board_due: its next read, millis()):
+// the watcher's next read this cycle, when one is due and fits before it.
+bool GamedayComponent::start_watch_job_(uint32_t board_due) {
   if (!network::is_connected() || !this->clock_set_() || !this->selects_published_ || !this->watching_()) {
     // Last reads from before a pause are no reads to compare with.
     if (this->watch_key_last_ != 0)
@@ -3787,22 +3839,24 @@ bool GamedayComponent::start_watch_job_() {
     this->watch_cycle_ms_ = now;
     this->watch_idle_ = false;
     this->watch_sync_();
+    ::espn::watch_board_moved(this->watch_src_, this->watch_board_, this->watch_ctx_());
+    this->watch_times_.cycle();
   }
   if (this->watch_idle_)
     return false;
-  const ::espn::WatchRead r = ::espn::watch_next(this->watch_src_, this->watch_, this->watch_cycle_, now);
+  const ::espn::WatchRead r = ::espn::watch_next(
+      this->watch_src_, this->watch_, this->watch_cycle_, now,
+      [&](const ::espn::WatchSource &s, bool event) { return this->watch_times_.fits(now, board_due, s.league, event); });
   if (r.source < 0) {
-    this->watch_idle_ = true;  // until the next cycle
+    if (r.waiting)
+      this->watch_hold_until_ = (now + 250) | 1;  // look again in a moment, not every loop
+    else
+      this->watch_idle_ = true;  // until the next cycle
     return false;
   }
   ::espn::WatchSource &src = this->watch_src_[r.source];
   const bool event = r.game >= 0;
-  if (!::espn::watch_read_fits(now, this->next_fetch_ms_,
-                               ::espn::watch_expect_ms(this->watch_ms_[event ? ::espn::kLeagueCount : src.league],
-                                                       event))) {
-    this->watch_hold_until_ = (now + 250) | 1;  // look again in a moment, not every loop
-    return false;
-  }
+  this->watch_times_.started(src.league, event);
   Job &j = this->new_job_();
   j.need_watch = true;
   j.watch_key = this->watch_key_last_;
@@ -3814,7 +3868,7 @@ bool GamedayComponent::start_watch_job_() {
   w.games = this->watch_;
   if (event) {
     ::espn::WatchGame &g = this->watch_[r.game];
-    g.read_cycle = this->watch_cycle_;
+    g.tried_cycle = this->watch_cycle_;
     w.event_id = g.event_id;
     w.away_id = g.away_id;
   } else {
@@ -3838,8 +3892,10 @@ void GamedayComponent::run_watch_job_() {
                                               : ::espn::scan_url(league, now);
   ESP_LOGD(TAG, "Watching: %s", url.c_str());
   auto container = this->open_(url);
-  if (container == nullptr)
+  if (container == nullptr) {
+    w.took_ms = millis() - start;  // a refusal or a timeout is timed too (WatchTimes::took)
     return;
+  }
   ContainerReader reader(container, this->espn_bytes_);
   if (!w.event_id.empty()) {
     GameSnapshot g;
@@ -3860,14 +3916,20 @@ void GamedayComponent::apply_watch_job_(uint32_t now) {
   const ::espn::WatchJob &w = j.watch;
   if (j.watch_key != this->watch_key_last_)
     return;  // what the board follows changed while the read ran
+  const bool event = !w.event_id.empty();
+  this->watch_times_.took(w.league, event, w.took_ms, w.ok);
   if (!w.ok) {
-    // ESPN refused or didn't answer: the watcher waits, and the board's own
-    // reads go on as before.
-    this->watch_hold_until_ = (now + (j.throttled ? std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE) : MINUTE)) | 1;
+    // ESPN didn't answer: that read waits for the next cycle and the others
+    // go on, and a game whose own reads fail twice drops out. A refusal
+    // holds the watcher, and the board waits as after a refusal of its own.
+    if (event)
+      ::espn::watch_failed(this->watch_, w.league, w.event_id);
+    if (j.throttled) {
+      this->watch_hold_until_ = (now + std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE)) | 1;
+      this->watch_refused_(now);
+    }
     return;
   }
-  const bool event = !w.event_id.empty();
-  this->watch_ms_[event ? ::espn::kLeagueCount : w.league] = (uint16_t) std::min<uint32_t>(w.took_ms, 60000);
   ::espn::WatchScope scope;
   scope.kind = event ? ::espn::WatchScope::GAME : ::espn::WatchScope::SOURCE;
   scope.league = w.league;
@@ -3880,13 +3942,8 @@ void GamedayComponent::apply_watch_job_(uint32_t now) {
                                               w.next_start);
   if (!w.alert.valid)
     return;
-  ::espn::WatchSwitch s;
-  s.allowed = this->switch_allowed_();
-  s.splash = this->splash_ms_ != 0 && now - this->splash_ms_ < ::espn::kWatchSplashMs;
-  s.own_live = this->own_team_live_();
-  s.alert_fav = w.alert.fav;
-  s.from_mine = this->watch_from_mine();
-  if (::espn::watch_may_switch(s))
+  // Asked again now: the switch may have been turned off while the read ran.
+  if (this->watching_() && ::espn::watch_may_switch(this->watch_switch_(w.alert.fav)))
     this->start_visit_(w.alert, w.league);
   else
     ESP_LOGI(TAG, "Big play in %s @ %s: the board stays on its game", w.alert.away_abbr.c_str(),
@@ -3912,7 +3969,7 @@ void GamedayComponent::watch_feed_(const std::vector<::espn::LiveGame> &live) {
     g.away_id = l.away_id;
     g.home_id = l.home_id;
     g.fav = wants == 2;
-    fresh.push_back(g);
+    ::espn::watch_keep(fresh, g);
   }
   ::espn::watch_merge(this->watch_, fresh, ::espn::WatchScope{});
 }
@@ -3920,9 +3977,12 @@ void GamedayComponent::watch_feed_(const std::vector<::espn::LiveGame> &live) {
 void GamedayComponent::start_visit_(const ::espn::WatchAlert &a, uint8_t league) {
   ESP_LOGI(TAG, "Big play in %s @ %s: showing it for %u s", a.away_abbr.c_str(), a.home_abbr.c_str(),
            (unsigned) (this->watch_stay_ms() / 1000));
-  if (!this->visit_.active)
+  if (!this->visit_.active) {
     this->visit_.saved.reset(new GameSnapshot(this->game_));  // the mode's board, for the way back
+    this->visit_.first_ms = millis();
+  }
   this->visit_.active = true;
+  this->visit_.fav = a.fav;
   this->visit_.first = true;
   this->visit_.fails = 0;
   this->visit_.since_ms = millis();
@@ -3946,8 +4006,10 @@ void GamedayComponent::apply_visit_job_() {
     return;
   }
   if (!j.game_ok) {
-    // A second miss in a row gives the board back.
-    if (++this->visit_.fails >= 2)
+    // A refusal, or a second miss in a row, gives the board back.
+    if (j.throttled)
+      this->watch_refused_(millis());
+    else if (++this->visit_.fails >= 2)
       this->end_visit_();
     else
       this->schedule_next_(IN_INTERVAL);
@@ -3976,8 +4038,29 @@ void GamedayComponent::end_visit_() {
     this->game_ = std::move(*this->visit_.saved);
   this->drop_visit_();
   this->prev_ = GameSnapshot{};
+  this->visit_back_ = true;  // that read checks for big plays against nothing (board_prev_)
   this->emit_({});
   this->schedule_next_(0);  // the mode's own read, now
+}
+
+// ESPN refused a watcher read or a visit's poll: the board goes back to the
+// mode's game and waits as after a refusal of its own (start_fav_job_ waits
+// it out in Favorite teams).
+void GamedayComponent::watch_refused_(uint32_t now) {
+  this->end_visit_();
+  const uint32_t ms = this->back_off_();
+  if (!this->favorites_mode_() && (int32_t) (this->next_fetch_ms_ - (now + ms)) < 0)
+    this->schedule_next_(ms);
+}
+
+// The board's last read as the next poll's read before, moved out; none for
+// the first poll after a visit, whose board is from before it (end_visit_).
+GameSnapshot GamedayComponent::board_prev_() {
+  if (this->visit_back_) {
+    this->visit_back_ = false;
+    return GameSnapshot{};
+  }
+  return std::move(this->game_);
 }
 
 std::string GamedayComponent::no_game_why_() const {

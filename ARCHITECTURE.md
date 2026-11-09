@@ -180,25 +180,41 @@ the board's game to the ticker, and the state document lists every bet.
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
 the board's gaps: `loop()` calls `start_watch_job_` while the next board poll
-is not due, and it starts a read (a `Job` with `need_watch`) only when that
-poll is further off than the read's last time plus a second
-(`watch_read_fits`), so the board's 10 s poll never waits. Every 45 s
-(`kWatchCycleMs`) each source is read once: in Live games a pro league's day
-scoreboard (`scan_url`), and one game at a time (`event_url`) for a college
-league, whose games come from the board's own scan (`watch_feed_`), and for
-the favorites in My team and Favorite teams, found by their league's or
-college conference's day scoreboard at their next start. Up to 8 games are
-kept (`WatchGame`, about 70 bytes each, in internal RAM; the documents are
-PSRAM's), favorites and close games first (`watch_rank`). The fetch task
-runs `detect_big_play` on each game against its last read (`watch_detect`,
-which rebuilds the read before from the `WatchGame` and tells a home run from
-the score and the bases when the last play has moved on), never on a game's
-first read or one more than two cycles old. A big play the board may take
-(`watch_may_switch`: not during its own splash, not from the panel's team's
-live game unless a favorite plays and "Switch from my team" is on, and
-`switch_allowed_()` for a later pin to one game) starts a visit: `start_job_`
-polls that game, its first poll carries the splash, and after "Stay on a big
-play" `end_visit_` puts the mode's own board back and reads it at once. Home
+is not due (in Favorite teams, `start_fav_job_` hands it the one-second ticks
+that read nothing, with the locked game's next poll or the next team read as
+the board's next read, `watch_fav_due`). It starts a read (a `Job` with
+`need_watch`) only when that read is further off than the read's last time
+plus a second (`WatchTimes`, timed per league's day scoreboard and for a game
+on its own, a failed read's time kept when longer), so the board's 10 s poll
+waits only when ESPN is slower than last time. `watch_next` skips a read
+that doesn't fit for the next one that does, and a kind no gap took all
+cycle is expected an eighth quicker the next, so a slow scoreboard is timed
+again instead of never read. Every 45 s (`kWatchCycleMs`) each source is
+read once: in Live games a pro league's day scoreboard (`scan_url`), and one
+game at a time (`event_url`) for a college league, whose games come from the
+board's own scan (`watch_feed_`), and for the favorites in My team and
+Favorite teams, found by their league's or college conference's day
+scoreboard at their next start, or when the board's game changes
+(`watch_board_moved`). Only sports with a big play switched on are read
+(`watch_sport_mask`). Up to 8 games are kept (`WatchGame`, 72 bytes each, in
+internal RAM; the documents are PSRAM's), favorites and close games first
+(`watch_rank`, `watch_keep`, which never lets a list grow past 8). The fetch
+task runs `detect_big_play` on each game against its last good read
+(`watch_detect`, which rebuilds the read before from the `WatchGame` and
+tells a home run from the score and the bases when the last play has moved
+on), never on a game's first read or one more than two cycles old. A failed
+read waits for the next cycle without holding up the others, a game whose
+own read fails twice drops out (`watch_failed`), and a refusal (403, 429)
+holds the watcher at least 5 minutes and backs the board off as its own
+would (`watch_refused_`). A big play the board may take (`watch_may_switch`:
+not during its own splash, not from the panel's team's game from its start
+time on, `watch_live`, unless a favorite plays and "Switch from my team" is
+on, a chained one only during the first stay, and `switch_allowed_()` for a
+later pin to one game) starts a visit: `start_job_` polls that game, its
+first poll carries the splash, and after "Stay on a big play", or once the
+panel's team's game starts, `end_visit_` puts the mode's own board back and
+reads it at once, that first read checked for big plays against nothing
+(`board_prev_`). Neither the mode's game nor the visit's is watched. Home
 Assistant keeps the mode's game (`ha_game_`).
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a

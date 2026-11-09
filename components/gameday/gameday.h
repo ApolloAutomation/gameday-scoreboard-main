@@ -664,7 +664,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // board follows something it can leave for a while: a live game in Live
   // games, or anything in My team and Favorite teams with favorites set.
   bool watching_() const;
-  bool start_watch_job_();  // true when a read started
+  // A read when one fits before board_due, the board's next read (millis()).
+  // True when one started.
+  bool start_watch_job_(uint32_t board_due);
   void run_watch_job_();
   void apply_watch_job_(uint32_t now);
   // Live games: the college games its scan found, read one by one.
@@ -677,12 +679,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // board's: the big play's during a visit).
   uint8_t mode_league_() const;
   bool own_team_live_() const;  // the mode's game is the panel's team, live
+  ::espn::WatchSwitch watch_switch_(bool alert_fav) const;  // for a big play in a game with a favorite or not
   // The one hook for a pin to one game ("Follow one game"): false while the
   // board is pinned, so no big play elsewhere takes it.
   bool switch_allowed_() const { return true; }
   void start_visit_(const ::espn::WatchAlert &a, uint8_t league);
   void apply_visit_job_();
   void end_visit_();  // back to what the mode was showing
+  void watch_refused_(uint32_t now);  // ESPN refused a watcher read or a visit's poll
+  GameSnapshot board_prev_();         // game_ as a poll's read before
+  bool visit_back_{false};  // the next poll of the mode's game is its first after a visit
   // No visit any more, with no way back: what the board follows changed.
   void drop_visit_() {
     this->visit_.active = false;
@@ -693,18 +699,21 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t watch_cycle_{0};
   uint32_t watch_cycle_ms_{0};
   uint32_t watch_key_last_{0};
-  uint32_t watch_hold_until_{0};  // millis(): a read failed, so none before this; 0 none
+  // millis(): no read before this (a moment, a refusal, a worker given up on); 0 none
+  uint32_t watch_hold_until_{0};
   bool watch_idle_{false};        // this cycle's reads are done
-  // The last read's time per league (its day scoreboard), the last element
-  // one game's on its own; 0 untimed.
-  uint16_t watch_ms_[::espn::kLeagueCount + 1]{};
+  uint32_t watch_board_{0};       // what it kept off at the last cycle (watch_board_moved)
+  ::espn::WatchTimes watch_times_;
   uint32_t splash_ms_{0};  // millis() of the last splash sent to the panel, 0 none
-  // The board on a big play's game: since when, that game, the splash its
-  // first poll puts up, and the mode's own board for the way back.
+  // The board on a big play's game: since the first switch and the last,
+  // that game (with a favorite or not), the splash its first poll puts up,
+  // and the mode's own board for the way back.
   struct Visit {
     bool active{false};
     bool first{false};
+    bool fav{false};
     uint8_t fails{0};
+    uint32_t first_ms{0};
     uint32_t since_ms{0};
     uint32_t away_id{0};
     Schedule sched;
