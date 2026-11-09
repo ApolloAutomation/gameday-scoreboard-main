@@ -30,8 +30,8 @@ the same ground for people; this file is the short version.
   firmware never installs anything unless the owner turns on "Install
   updates automatically".
 - `components/gameday`: ESPN fetching, parsing and game logic (C++).
-- `components/panel_layout`: the one-panel or two-panel layout, applied at
-  boot from a saved preference.
+- `components/panel_layout`: the panel layout (one to four panels wide, or
+  a 2x2 and its wiring), applied at boot from a saved preference.
 - `components/saved_networks`: the up-to-five Wi-Fi networks the panel
   remembers (ESPHome keeps one), handed to the Wi-Fi component at boot.
 - `firmware/pages`: the LVGL pages drawn on the panel.

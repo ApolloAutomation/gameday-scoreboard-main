@@ -1,7 +1,11 @@
 # Game Day Scoreboard page (LVGL). Adapted from hub75-studio's Team Tracker
 # Live page (MIT, Stuart Parmenter). One file for every panel arrangement: on
-# a 64-wide display it stacks logos over scores; at 128 wide and up it spreads
-# logos to the edges with big scores, records, and timeout pips in the middle.
+# a 64-wide display it stacks logos over scores; at 128 wide and up (three and
+# four panels in a row too) it spreads logos to the edges with big scores,
+# records, and timeout pips in the middle. A 2x2 (128x128) draws the 128x64
+# board in its top half, without its ticker, and the time, the date and the
+# ticker in a bigger font in its bottom half (gd_lower); a splash covers all
+# four panels (components/gameday/board_layout.h).
 # The gameday component feeds it through the gd_update script; logos come
 # from its logo cache through gd_show_logos in gameday-common.yaml.
 
@@ -18,12 +22,16 @@ esphome:
             id(shared_scroll_speed).add_on_state_callback([](float sp) {
               id(tt_ticker_timing).execute();
               // Restart the scroll so the new speed shows straight away.
-              lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_CLIP);
-              lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_SCROLL_CIRCULAR);
+              for (lv_obj_t *l : {id(tt_game_status_lbl), id(gd_lower_ticker_lbl)}) {
+                lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
+                lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
+              }
             });
 
 # Fireworks (lvgl-canvas-fx) on a canvas behind the splash text. The canvas
-# is allocated at the widest layout and simply clips on a single panel.
+# is allocated at 128x64 and simply clips on a single panel; on three or four
+# panels in a row it sits in the middle, behind the text, and on a 2x2 in the
+# middle rows (components/gameday/board_layout.h, splash_box).
 lvgl_canvas_fx:
   - id: tt_fx
     effect: fireworks
@@ -37,20 +45,22 @@ script:
   # fixed time, so the time follows the line's width in pixels, and every line
   # moves at the same pace whatever its length. Run when the line or the
   # setting changes.
+  # The 2x2's bigger ticker (gd_lower_ticker_lbl) gets the same treatment.
   - id: tt_ticker_timing
     then:
       - lambda: |-
-          lv_obj_t *l = id(tt_game_status_lbl);
-          const char *t = lv_label_get_text(l);
-          const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
-          lv_point_t sz;
-          lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-          const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
           const float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
-          const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
-          // Only when it changes: setting the style restarts the scroll.
-          if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
-            lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+          for (lv_obj_t *l : {id(tt_game_status_lbl), id(gd_lower_ticker_lbl)}) {
+            const char *t = lv_label_get_text(l);
+            const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+            lv_point_t sz;
+            lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
+            const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
+            // Only when it changes: setting the style restarts the scroll.
+            if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
+              lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+          }
 
   - id: tt_hide_splash
     mode: restart
@@ -65,13 +75,38 @@ script:
       - lambda: |-
           // Measure the display and lay the scoreboard out to fit it.
           // Everything is positioned here rather than in the widget config so
-          // one page file serves 64x64, 128x64, and wider chains alike.
+          // one page file serves 64x64, 128x64, wider chains (192 and 256
+          // wide) and the 2x2 alike. The board is always the top 64 rows.
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const int H = lv_disp_get_ver_res(lv_disp_get_default());
           const bool wide = W >= 128;
+          // The 2x2's bottom half: the time and date, and the ticker in
+          // spleen_16, which gd_update and gd_clock_tick fill. The ticker
+          // runs there only, not along the board's bottom as well
+          // (gameday::board_ticker).
+          if (gameday::board_ticker(H))
+            lv_obj_clear_flag(id(tt_game_status_lbl), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_add_flag(id(tt_game_status_lbl), LV_OBJ_FLAG_HIDDEN);
+          if (H >= 128) {
+            lv_obj_set_pos(id(gd_lower), 0, 64);
+            lv_obj_set_size(id(gd_lower), W, H - 64);
+            for (lv_obj_t *l : {id(gd_lower_time_lbl), id(gd_lower_date_lbl), id(gd_lower_ticker_lbl)})
+              lv_obj_set_width(l, W);
+            lv_obj_clear_flag(id(gd_lower), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(gd_lower), LV_OBJ_FLAG_HIDDEN);
+          }
+          // A splash covers the whole screen, a 2x2's bottom half too, with
+          // its words and fireworks in the board's 64 rows (the middle ones
+          // of a 2x2) and the 128 wide fireworks canvas in the middle of a
+          // wider board (gameday::splash_box).
+          const gameday::SplashBox sb = gameday::splash_box(W, H);
+          lv_obj_set_pos(id(tt_fx_canvas), sb.fx_x, sb.band_y);
           lv_obj_set_size(id(tt_game_container), W, 64);
           lv_obj_set_size(id(tt_no_game_container), W, 64);
           lv_obj_set_size(id(gd_board_container), W, 64);
-          lv_obj_set_size(id(tt_splash), W, 64);
+          lv_obj_set_size(id(tt_splash), W, sb.height);
           lv_obj_set_width(id(tt_splash_lbl), W);
           lv_obj_set_width(id(tt_no_game_msg_lbl), W);
           // Centered both ways, so a message that wraps to three lines on a
@@ -135,7 +170,7 @@ script:
             }
             lv_obj_set_pos(id(tt_game_status_lbl), 0, 56);
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_16), 0);
-            lv_obj_set_pos(id(tt_splash_lbl), 0, 16);
+            lv_obj_set_pos(id(tt_splash_lbl), 0, sb.text_y);
           } else {
             // Single panel: logos side by side, everything stacked beneath
             lv_obj_set_pos(id(gd_team_logo_img), 0, 0);
@@ -168,7 +203,7 @@ script:
             }
             lv_obj_set_pos(id(tt_game_status_lbl), 0, 56);
             lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
-            lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
+            lv_obj_set_pos(id(tt_splash_lbl), 0, sb.text_y);
           }
           // The leaderboard (golf, racing): a status row and six rows of
           // place, name, value (golf's score to par, racing's car number) and
@@ -199,6 +234,8 @@ script:
               lv_obj_set_width(id(gd_board_status_lbl), W);
               lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
             }
+            // The rows are 128 wide: in the middle of a wider board.
+            const int bx = W > 128 ? (W - 128) / 2 : 0;
             for (int i = 0; i < 6; i++) {
               // Each row's look is set here, once, rather than per label in
               // the widget list: 24 labels' worth of setup code.
@@ -214,13 +251,13 @@ script:
                   lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
               }
               const int y = 8 + 8 * i;
-              lv_obj_set_pos(gpos[i], wide ? 2 : 0, y);
+              lv_obj_set_pos(gpos[i], bx + (wide ? 2 : 0), y);
               lv_obj_set_width(gpos[i], 10);
-              lv_obj_set_pos(gname[i], wide ? 16 : 12, y);
+              lv_obj_set_pos(gname[i], bx + (wide ? 16 : 12), y);
               lv_obj_set_width(gname[i], wide ? 55 : 35);
-              lv_obj_set_pos(gvalue[i], wide ? 74 : 49, y);
+              lv_obj_set_pos(gvalue[i], bx + (wide ? 74 : 49), y);
               lv_obj_set_width(gvalue[i], 15);
-              lv_obj_set_pos(gdetail[i], 94, y);
+              lv_obj_set_pos(gdetail[i], bx + 94, y);
               lv_obj_set_width(gdetail[i], 30);
               if (wide)
                 lv_obj_clear_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
@@ -339,16 +376,17 @@ script:
           // in front where it fits the label in its font (espn::rank_label;
           // the Spleen fonts are fixed width): before the abbreviation on one
           // panel, before and after the game (the clock has that row during
-          // play), and before the record under the logo on two, kept a pixel
-          // clear of the clock between the records while it shows
-          // (espn::record_row_chars).
+          // play), and before the record under the logo on two or more, kept
+          // a pixel clear of the clock between the records while it shows
+          // (espn::record_row_chars), the idle display's countdown to a game
+          // too (always clear on three or four panels).
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
           const bool wide = W >= 128;
           auto char_px = [](lv_obj_t *lbl) {
             return (int) lv_font_get_glyph_width(lv_obj_get_style_text_font(lbl, LV_PART_MAIN), '0', 0);
           };
-          const int clock_px =
-              game_state == "IN" ? (int) clock_text.size() * char_px(id(tt_clock_lbl)) : 0;
+          const bool clock_up = (game_state == "IN" || game_state == "PRE") && !clock_text.empty();
+          const int clock_px = clock_up ? (int) clock_text.size() * char_px(id(tt_clock_lbl)) : 0;
           auto put = [&](lv_obj_t *lbl, int rank, const std::string &text, bool row) {
             const int cw = char_px(lbl);
             const int w = (int) lv_obj_get_style_width(lbl, LV_PART_MAIN);
@@ -366,6 +404,7 @@ script:
           const char *cur = lv_label_get_text(id(tt_game_status_lbl));
           if (cur == nullptr || status_text != cur) {
             lv_label_set_text(id(tt_game_status_lbl), status_text.c_str());
+            lv_label_set_text(id(gd_lower_ticker_lbl), status_text.c_str());
             id(tt_ticker_timing).execute();
           }
       - lambda: |-
@@ -464,10 +503,26 @@ script:
           }
           if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
             lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
+          // The clock card (the off-season clock, the idle display's clock)
+          // has the date under its time on one panel or with no next game,
+          // else the next game.
+          const bool card_date = W < 128 || next_line.empty();
+          // The 2x2's bottom half (gameday::lower_half): under the clock
+          // card, which has the time already, no time, and the date only
+          // when the card has the next game in its place.
+          const gameday::LowerHalf lower = gameday::lower_half(clock_card, card_date);
+          auto shown = [](lv_obj_t *o, bool on) {
+            if (on) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
+          shown(id(gd_lower_time_lbl), lower.time);
+          shown(id(gd_lower_date_lbl), lower.date);
+          lv_obj_set_y(id(gd_lower_date_lbl), lower.date_y);
+          lv_obj_set_y(id(gd_lower_ticker_lbl), lower.ticker_y);
           if (clock_card) {
             lv_obj_add_flag(id(tt_no_game_msg_lbl), LV_OBJ_FLAG_HIDDEN);
             lv_obj_set_style_text_color(id(gd_clock_time_lbl), lv_color_hex((uint32_t) team_color), 0);
-            id(gd_clock_date) = W < 128 || next_line.empty();
+            id(gd_clock_date) = card_date;
             if (!id(gd_clock_date)) {
               const char *cur = lv_label_get_text(id(gd_clock_sub_lbl));
               if (cur == nullptr || next_line != cur)
@@ -672,10 +727,13 @@ script:
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
   # changes, so once a minute.
+  # The 2x2's bottom half has the time and date too.
   - id: gd_clock_tick
     then:
       - lambda: |-
-          if (lv_obj_has_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN))
+          const bool card = !lv_obj_has_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN);
+          const bool lower = !lv_obj_has_flag(id(gd_lower), LV_OBJ_FLAG_HIDDEN);
+          if (!card && !lower)
             return;
           ESPTime now = id(ha_time).now();
           if (!now.is_valid())
@@ -686,9 +744,17 @@ script:
             if (cur == nullptr || text != cur)
               lv_label_set_text(lbl, text.c_str());
           };
-          put(id(gd_clock_time_lbl), ::espn::clock_time_text(t));
+          const std::string time_text = ::espn::clock_time_text(t);
+          const std::string date_text = ::espn::clock_date_text(t);
+          if (lower) {
+            put(id(gd_lower_time_lbl), time_text);
+            put(id(gd_lower_date_lbl), date_text);
+          }
+          if (!card)
+            return;
+          put(id(gd_clock_time_lbl), time_text);
           if (id(gd_clock_date))
-            put(id(gd_clock_sub_lbl), ::espn::clock_date_text(t));
+            put(id(gd_clock_sub_lbl), date_text);
 
 interval:
   - interval: 1s
@@ -1143,7 +1209,54 @@ lvgl:
                   id: gd_board_detail6
                   text: ""
 
-        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
+        # The 2x2's bottom half (128x64 under the board): the time, the date
+        # and the ticker in spleen_16, the ticker ending above the heat and
+        # power warning's bottom line (pages/guard.yaml). Placed and shown by
+        # tt_apply_layout, the time and date by gd_clock_tick, the ticker by
+        # gd_update, which also picks which show (gameday::lower_half). Listed
+        # before the splash, which covers all four panels.
+        - obj:
+            id: gd_lower
+            scrollbar_mode: "OFF"
+            x: 0
+            y: 64
+            width: 128
+            height: 64
+            hidden: true
+            widgets:
+              - label:
+                  id: gd_lower_time_lbl
+                  x: 0
+                  y: 5
+                  width: 128
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_16
+                  text: ""
+                  styles: ["tt_st_score_text"]
+              - label:
+                  id: gd_lower_date_lbl
+                  x: 0
+                  y: 23
+                  width: 128
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_12
+                  text_color: 0xB0B8C4
+                  text: ""
+              - label:
+                  id: gd_lower_ticker_lbl
+                  x: 0
+                  y: 39
+                  width: 128
+                  text_align: CENTER
+                  long_mode: SCROLL_CIRCULAR
+                  text_font: spleen_16
+                  text: ""
+                  styles: ["tt_st_status_text"]
+
+        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores.
+        # Sized and placed by tt_apply_layout (gameday::splash_box).
         - obj:
             id: tt_splash
             scrollbar_mode: "OFF"

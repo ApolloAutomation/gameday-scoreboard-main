@@ -101,6 +101,10 @@ Settings are grouped in cards. In the order the page shows them:
 | Wi-Fi networks | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
 :::note[Coming in the next release]
+**Matrix** also offers **Three wide**, **Four wide** and **Two rows of two**, and the page asks before it restarts the panel with a new layout. On two rows of two, **How the rows are mounted** appears under the pictures: **Bottom row upside down**, **All upright** or **Top row upside down**. Changing it restarts the panel too. With three or four panels, Bluetooth setup is off and the panel sets up through its hotspot. See [Panel sizes and layouts](/using/panel-sizes/).
+:::
+
+:::note[Coming in the next release]
 With **Show how to connect when the panel starts** on, the panel's IP address and `.local` name also lead the ticker for 30 seconds once the QR code and the address go. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready and the address is in the ticker only.
 :::
 

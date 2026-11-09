@@ -10,6 +10,7 @@
 #include "alerts.h"
 #include "auto_update.h"
 #include "badge.h"
+#include "board_layout.h"
 #include "captive.h"
 #include "demo.h"
 #include "espn_parse.h"
@@ -4083,6 +4084,149 @@ static void test_record_row() {
   CHECK_EQ(rank_label(msst.team_rank, msst.team_record, running), std::string("#16 4-1"));
   // Before and after the game, no clock: 7.
   CHECK_EQ(rank_label(msst.opp_rank, msst.opp_record, record_row_chars(0)), std::string("#22 4-2"));
+
+  // Three and four panels in a row (192 and 256 px): the rows stay 36 px at
+  // the board's edges and the clock's label runs from x 32 to 32 px short of
+  // the right edge, so every clock the panel sends (up to 10 characters, "End
+  // of 2nd" or a countdown) is far from both rows and they keep all 7
+  // characters. A 2x2's board is the 128 px one.
+  using esphome::gameday::board_px;
+  CHECK_EQ(board_px(1), 64);
+  CHECK_EQ(board_px(2), kBoardPx);
+  CHECK_EQ(board_px(3), 192);
+  CHECK_EQ(board_px(4), 256);
+  for (int w : {kBoardPx, board_px(3), board_px(4)}) {
+    const int label_px = w - 64;
+    for (int chars = 1; chars <= 10; chars++) {
+      const int clock_px = chars * kClockCharPx;
+      const int t = (int) record_row_chars(clock_px, w) * kRecordCharPx;
+      const int clock_left = 32 + (label_px - clock_px) / 2, clock_right = clock_left + clock_px;
+      const int left_end = (kRecordRowPx - t) / 2 + t;
+      const int right_start = w - kRecordRowPx + (kRecordRowPx - t) / 2;
+      CHECK(left_end < clock_left);
+      CHECK(right_start > clock_right);
+      if (w > kBoardPx)
+        CHECK_EQ(record_row_chars(clock_px, w), (size_t) 7);
+    }
+  }
+  CHECK_EQ(rank_label(msst.team_rank, msst.team_record, record_row_chars(10 * kClockCharPx, board_px(3))),
+           std::string("#16 4-1"));
+  // A pro team's place keeps its group beside "End of 2nd" there.
+  CHECK_EQ(board_standing("1st NFCE", record_row_chars(10 * kClockCharPx, board_px(4))), std::string("1stNFCE"));
+  CHECK_EQ(board_standing("1st NFCE", record_row_chars(10 * kClockCharPx, board_px(2))), std::string("1st"));
+  // The idle display's countdown to a game sits where the clock does: "in
+  // 23h 59m" is 10 characters, so on 128 px a ranked record keeps clear of
+  // it the same way.
+  CHECK_EQ(countdown_text(23 * 3600 + 59 * 60).size(), (size_t) 10);
+  CHECK_EQ(record_row_chars((int) countdown_text(23 * 3600 + 59 * 60).size() * kClockCharPx), (size_t) 6);
+
+  // The clock row the record rows are sized beside (board_clock_text): the
+  // game clock during play, and My team today's countdown before a kickoff
+  // that has a time. A pro team's place under its logo keeps clear of the
+  // countdown like a rank: "1st NFCE" beside "in 11h 20m" is "1st" on 128
+  // px, all seven characters on three or four panels.
+  const int64_t now = 1794000000;
+  GameSnapshot today = live(0, 0, GameState::PRE);
+  today.kickoff_epoch = now + 11 * 3600 + 20 * 60;
+  CHECK_EQ(board_clock_text(today, true, now), std::string("in 11h 20m"));
+  CHECK_EQ(board_clock_text(today, false, now), std::string(""));  // the mode's own board: the kickoff
+  auto standing_beside = [](const GameSnapshot &g, int64_t at, int w) {
+    return board_standing("1st NFCE", record_row_chars((int) board_clock_text(g, true, at).size() * kClockCharPx, w));
+  };
+  CHECK_EQ(standing_beside(today, now, kBoardPx), std::string("1st"));
+  CHECK_EQ(standing_beside(today, now, board_px(3)), std::string("1stNFCE"));
+  CHECK_EQ(standing_beside(today, now, board_px(4)), std::string("1stNFCE"));
+  CHECK_EQ(board_standing("Seed 10", record_row_chars(10 * kClockCharPx)), std::string("Seed10"));
+  // A shorter countdown leaves the seven: "in 9h 5m" is 8 characters.
+  CHECK_EQ(standing_beside(today, today.kickoff_epoch - (9 * 3600 + 5 * 60), kBoardPx), std::string("1stNFCE"));
+  // No countdown without a kickoff time, or without the time of day.
+  GameSnapshot tbd = today;
+  tbd.time_tbd = true;
+  CHECK_EQ(board_clock_text(tbd, true, now), std::string(""));
+  CHECK_EQ(board_clock_text(today, true, 0), std::string(""));
+  CHECK_EQ(standing_beside(tbd, now, kBoardPx), std::string("1stNFCE"));
+  // During play the game clock, countdown or not; nothing after the final.
+  GameSnapshot on = live(7, 3);
+  on.sport = Sport::FOOTBALL;
+  on.short_detail = "End of 2nd";
+  CHECK_EQ(board_clock_text(on, true, now), clock_text(on));
+  CHECK_EQ(board_clock_text(on, false, now), clock_text(on));
+  CHECK_EQ(board_clock_text(live(7, 3, GameState::POST), true, now), std::string(""));
+}
+
+// The parts of the scoreboard page that change with the arrangement
+// (board_layout.h): a splash over the whole screen with its words and
+// fireworks in 64 rows, and what a 2x2's bottom half shows.
+static void test_board_layout() {
+  using namespace esphome::gameday;
+  struct Screen {
+    int w, h;
+  };
+  // One to four panels in a row, and the 2x2.
+  for (Screen sc : {Screen{64, 64}, Screen{128, 64}, Screen{192, 64}, Screen{256, 64}, Screen{128, 128}}) {
+    const SplashBox b = splash_box(sc.w, sc.h);
+    CHECK_EQ(b.height, sc.h);  // the whole screen, a 2x2's bottom half too
+    CHECK(b.band_y >= 0 && b.band_y + kBoardRows <= sc.h);
+    CHECK_EQ(b.band_y * 2 + kBoardRows, sc.h);  // the middle rows
+    // The 128 px fireworks canvas in the middle, clipped on one panel.
+    if (sc.w >= kFxPx) {
+      CHECK_EQ(b.fx_x * 2 + kFxPx, sc.w);
+    } else {
+      CHECK_EQ(b.fx_x, 0);
+    }
+    // Three lines of the words' font end inside the 64 rows: spleen_16 on a
+    // wide board, spleen_12 on one panel.
+    const int line = sc.w >= 128 ? 16 : 12;
+    CHECK(b.text_y >= b.band_y && b.text_y + 3 * line <= b.band_y + kBoardRows);
+  }
+  // On a board of 64 rows nothing moves: as it was before the 2x2.
+  CHECK_EQ(splash_box(128, 64).text_y, 16);
+  CHECK_EQ(splash_box(64, 64).text_y, 18);
+  CHECK_EQ(splash_box(256, 64).fx_x, 64);
+  CHECK_EQ(splash_box(128, 128).text_y, 48);
+  CHECK_EQ(splash_chars(64), (size_t) 10);
+  CHECK_EQ(splash_chars(128), (size_t) 16);
+  CHECK_EQ(splash_chars(192), (size_t) 24);
+  CHECK_EQ(splash_chars(256), (size_t) 32);
+
+  // The heat and power warning's 9 rows along the bottom of the screen:
+  // over the ticker on one row of panels, as before, and on a 2x2 along its
+  // bottom edge. The board's own ticker shows on one row of panels only; a
+  // 2x2 has it once, in its bottom half.
+  CHECK_EQ(guard_line_y(kBoardRows), 55);
+  CHECK_EQ(guard_line_y(2 * kBoardRows), 119);
+  CHECK(board_ticker(kBoardRows));
+  CHECK(!board_ticker(2 * kBoardRows));
+
+  // A 2x2's bottom half. With the board up: the time, the date and the
+  // ticker, the ticker ending above the warning's line.
+  const LowerHalf board = lower_half(false, false);
+  CHECK(board.time && board.date);
+  CHECK_EQ(board.date_y, 23);
+  CHECK_EQ(board.ticker_y, 39);
+  CHECK(lower_half(false, true).time);  // card_date only counts under the clock card
+  // Under the clock card no time twice, and the date only when the card has
+  // the next game in its place.
+  for (bool card_date : {false, true}) {
+    const LowerHalf l = lower_half(true, card_date);
+    CHECK(!l.time);
+    CHECK_EQ(l.date, !card_date);
+  }
+  // Nothing overlaps, everything ends inside the 64 rows, and what shows is
+  // centered there.
+  for (bool card : {false, true})
+    for (bool card_date : {false, true}) {
+      const LowerHalf l = lower_half(card, card_date);
+      const int top = l.time ? kLowerTimeY : l.date ? l.date_y : l.ticker_y;
+      CHECK(!l.time || kLowerTimeY + kLowerTimeRows <= l.date_y);
+      CHECK(!l.date || l.date_y + kLowerDateRows <= l.ticker_y);
+      CHECK(l.ticker_y + kLowerTickerRows <= kBoardRows);
+      // The warning's line, on the screen's bottom rows, never cuts the
+      // ticker's letters off.
+      CHECK(kBoardRows + l.ticker_y + kLowerTickerRows <= guard_line_y(2 * kBoardRows));
+      if (card)
+        CHECK_EQ(top + (l.ticker_y + kLowerTickerRows), kBoardRows);
+    }
 }
 
 // Home Assistant's line: no per-play parts, so it only moves on state and score.
@@ -8740,6 +8884,7 @@ int main() {
   test_rank_width();
   test_standings();
   test_record_row();
+  test_board_layout();
   test_badge();
   test_badge_thresholds();
   test_demo();

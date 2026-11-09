@@ -264,7 +264,31 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
             <span>One 128x64 panel</span>
             <small>or two 64x64 side by side</small>
           </button>
+          <button class="panelpick" data-cols="3" aria-label="Three 64x64 panels side by side">
+            <svg viewBox="0 0 96 48" aria-hidden="true"><rect x="5" y="11" width="26" height="26" rx="2"/><rect x="35" y="11" width="26" height="26" rx="2"/><rect x="65" y="11" width="26" height="26" rx="2"/></svg>
+            <span>Three wide</span>
+            <small>three 64x64 side by side</small>
+          </button>
+          <button class="panelpick" data-cols="4" aria-label="Four 64x64 panels side by side">
+            <svg viewBox="0 0 96 48" aria-hidden="true"><rect x="2" y="14" width="20" height="20" rx="2"/><rect x="26" y="14" width="20" height="20" rx="2"/><rect x="50" y="14" width="20" height="20" rx="2"/><rect x="74" y="14" width="20" height="20" rx="2"/></svg>
+            <span>Four wide</span>
+            <small>four 64x64 side by side</small>
+          </button>
+          <button class="panelpick" data-cols="2x2" aria-label="Four 64x64 panels in two rows of two">
+            <svg viewBox="0 0 96 48" aria-hidden="true"><rect x="27" y="2" width="20" height="20" rx="2"/><rect x="49" y="2" width="20" height="20" rx="2"/><rect x="27" y="26" width="20" height="20" rx="2"/><rect x="49" y="26" width="20" height="20" rx="2"/></svg>
+            <span>Two rows of two</span>
+            <small>four 64x64, 128x128</small>
+          </button>
         </div>
+        <div class="ctl" id="wiringRow" hidden>
+          <label for="wiringSel">How the rows are mounted<small>The panel with the controller and the one it feeds are the top row. If part of the board shows upside down, try another choice.</small></label>
+          <select id="wiringSel">
+            <option value="0">Bottom row upside down</option>
+            <option value="2">Top row upside down</option>
+            <option value="1">All upright</option>
+          </select>
+        </div>
+        <p class="hint">With three or four panels, set up Wi-Fi through the panel's hotspot: Bluetooth setup is off to leave memory for the panels. Use a 5 V supply rated for all of them.</p>
         <div class="sub">Time</div>
         <div class="tzline" id="tzline">Timezone not known yet</div>
         <div class="ctl" id="tzpick" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
@@ -1137,27 +1161,56 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   };
 
   // ---- panel picker ------------------------------------------------------------
-  // Picking a layout restarts the device; the page waits it out.
+  // Picking a layout restarts the device, after a confirm; the page waits it
+  // out. panels is the count wide, rows 2 for the 2x2 (older firmware sends
+  // neither rows nor wiring), and wiring how the 2x2's rows are mounted.
+  const PANEL_SIZES = { 1: "64x64", 2: "128x64", 3: "192x64", 4: "256x64", "2x2": "128x128" };
+  const restartAs = (as) => {
+    toast(as);
+    waitForReboot("", as + ". This page reconnects when the panel is back.");
+    toBoard();
+  };
   const renderPanels = () => {
     if (!S || !S.panels) return;
-    const cur = String(S.panels);
-    document.querySelectorAll("#panels .panelpick").forEach((b) => {
+    const cur = (S.rows || 1) > 1 ? S.panels + "x" + S.rows : String(S.panels);
+    const picks = document.querySelectorAll("#panels .panelpick");
+    const sel = $("#wiringSel");
+    picks.forEach((b) => {
       setOn(b, b.dataset.cols === cur, "aria-pressed");
       b.onclick = async () => {
         if (b.dataset.cols === cur) return;
-        const picks = document.querySelectorAll("#panels .panelpick");
+        const size = PANEL_SIZES[b.dataset.cols];
+        if (!confirm("Restart the panel as " + size + "?")) return;
         picks.forEach((x) => (x.disabled = true));
+        // The 2x2 keeps the wiring saved last; it can be changed once it's back.
+        const params = { panels: b.dataset.cols };
+        if (b.dataset.cols === "2x2") params.wiring = String(S.wiring || 0);
         // Only a layout the panel took restarts it; a failed post has said so.
-        if (!(await setGD({ panels: b.dataset.cols }))) {
+        if (!(await setGD(params))) {
           picks.forEach((x) => (x.disabled = false));
           return;
         }
-        const as = "Restarting as " + (b.dataset.cols === "2" ? "128x64" : "64x64");
-        toast(as);
-        waitForReboot("", as + ". This page reconnects when the panel is back.");
-        toBoard();
+        restartAs("Restarting as " + size);
       };
     });
+    // The wiring matters on the 2x2 only, and changing it restarts that.
+    $("#wiringRow").hidden = cur !== "2x2" || S.wiring === undefined;
+    if (document.activeElement !== sel) sel.value = String(S.wiring || 0);
+    sel.onchange = async () => {
+      const was = String(S.wiring || 0);
+      if (!confirm("Restart the panel with the new wiring?")) {
+        sel.value = was;
+        return;
+      }
+      sel.disabled = true;
+      const ok = await setGD({ wiring: sel.value });
+      sel.disabled = false;
+      if (!ok) {
+        sel.value = was;
+        return;
+      }
+      restartAs("Restarting with the new wiring");
+    };
   };
 
   // ---- controls --------------------------------------------------------

@@ -32,7 +32,7 @@ If a player moves to another team, remove them and add them again from the new t
 
 ## The stat line
 
-While a favorite player's game is on the board and live, the ticker adds the player's line from ESPN's game leaders, like **ALLEN 21/34, 241 YDS, 2 TD**, after the game's own parts and before your [bets](/using/bets/). The device page shows the same lines as tags under its board. Each player has a line only while ESPN lists them among the leaders, so a player who isn't leading anything has none, and a line can come and go during the game.
+While a favorite player's game is on the board and live, the ticker adds the player's line from ESPN's game leaders, like **ALLEN 21/34, 241 YDS, 2 TD**, after the game's own parts and before your [bets](/using/bets/). On two rows of two they run in the bottom half's ticker, the only one there. The device page shows the same lines as tags under its board. Each player has a line only while ESPN lists them among the leaders, so a player who isn't leading anything has none, and a line can come and go during the game.
 
 What ESPN lists as leaders depends on the sport:
 
@@ -61,7 +61,7 @@ The panel compares each read of the game with the one before, so a score shows w
 
 A play that ends the game, like a walk-off or a buzzer beater that wins it, names the player only when a read catches it while ESPN still has the game on. Once ESPN posts the final, it no longer lists the last play, so a game-ending play read only at the final gets the team's splash.
 
-On one panel the name and the play take two or three lines, like **ALLEN** over **TOUCHDOWN**. On a 128x64 display they share a line when they fit.
+On one panel the name and the play take two or three lines, like **ALLEN** over **TOUCHDOWN**. On a 128x64 display they share a line when they fit, and on three or four panels in a row or two rows of two they're laid out the same way, centered across the whole width. On two rows of two the celebration covers all four panels, with the name and the play across the middle.
 
 ### Its switch
 

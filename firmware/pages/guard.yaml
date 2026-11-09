@@ -68,6 +68,10 @@ script:
           const lv_color_t color = lv_color_hex(mark == 2 ? 0xFF2020 : 0xFF8000);
           lv_obj_set_width(id(gd_guard_line), W);
           lv_obj_set_width(id(gd_guard_lbl), W);
+          // The bottom line of the screen, over the ticker on one row of
+          // panels and under the bottom half's ticker on a 2x2
+          // (gameday::guard_line_y, lower_half).
+          lv_obj_set_y(id(gd_guard_line), gameday::guard_line_y(lv_disp_get_ver_res(lv_disp_get_default())));
           lv_obj_set_style_text_color(id(gd_guard_lbl), color, 0);
           lv_label_set_text(id(gd_guard_lbl), mark == 2 ? "Check power supply" : "Too warm, dimming");
       - while:

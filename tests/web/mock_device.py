@@ -75,9 +75,21 @@ LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w
                                              + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
-# PanelLayout refuses a count past this (gameday-common.yaml).
-MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8"),
-                         re.M)[1])
+# PanelLayout drives one row up to max_cols panels wide, or the 2x2 when
+# max_rows is 2 and max_cols at least 4 (gameday-common.yaml,
+# components/panel_layout/layouts.h).
+COMMON = (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8")
+MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", COMMON, re.M)[1])
+MAX_ROWS = int(re.search(r"^\s*max_rows: (\d+)", COMMON, re.M)[1])
+LAYOUTS_H = (REPO / "components/panel_layout/layouts.h").read_text(encoding="utf-8")
+WIRING_COUNT = int(re.search(r"kWiringCount = (\d+);", LAYOUTS_H)[1])
+
+
+def layout_ok(cols, rows):
+    """panel_layouts::layout_ok() with the build's limits."""
+    if rows == 1:
+        return 1 <= cols <= MAX_COLS
+    return rows == 2 and rows <= MAX_ROWS and cols == 2 and cols * rows <= MAX_COLS
 FIXTURE = REPO / "tests/fixtures/set_cases.json"
 
 
@@ -90,7 +102,7 @@ def team(lg, tid):
 
 
 INITIAL = {
-    "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2,
+    "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2, "rows": 1, "wiring": 0,
     "team": team("nfl", 6),
     "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
     "favs": [team("nfl", 6), team("nfl", 34), team("ncaa", 145), {}],
@@ -497,8 +509,14 @@ def apply_set(kv):
             if doc:
                 put_player(doc)
         elif k == "panels":
-            if 1 <= atoi(v) <= MAX_COLS:
-                STATE["panels"] = atoi(v)
+            # "3" or wide by high, "2x2"; each a byte in PanelLayout.
+            cols, x, high = v.partition("x")
+            cols, rows = atoi(cols), atoi(high) if x else 1
+            if 1 <= cols <= 255 and 1 <= rows <= 255 and layout_ok(cols, rows):
+                STATE["panels"], STATE["rows"] = cols, rows
+        elif k == "wiring":
+            if 0 <= atoi(v) < WIRING_COUNT:
+                STATE["wiring"] = atoi(v)
         elif k == "standing":
             if 0 <= atoi(v) < LIMITS["kStandingCount"]:
                 STATE["standing"] = atoi(v)

@@ -47,8 +47,9 @@ std::string keys(const std::vector<League> &leagues) {
 }
 
 // What the firmware keeps for the settings a set request reaches, and what
-// apply_set_'s setters store. PanelLayout's 1 to max_cols check (2 in
-// gameday-common.yaml) is the one refusal outside set_request.h.
+// apply_set_'s setters store. PanelLayout's check of the arrangement
+// (panel_layouts::layout_ok with gameday-common.yaml's max_cols 4 and
+// max_rows 2) is the one refusal outside set_request.h.
 // follow is the Follow this game pin, kept in memory only; board says the
 // mode has a game of its own on the panel to follow (not Live games'
 // fallback card or finals rotation, nor an empty board), and final that the
@@ -58,7 +59,7 @@ std::string keys(const std::vector<League> &leagues) {
 struct Settings {
   TeamRef team;
   uint8_t team_league{0};
-  int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, standing{0};
+  int mode{0}, rotate{1}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
   bool watch{true}, watchmine{false}, visit{false};
@@ -74,7 +75,8 @@ struct Settings {
   FavPlayer players[kPlayerSlots]{};
 };
 constexpr int kFavMax = 16;
-constexpr int kMaxCols = 2;
+constexpr int kMaxCols = 4;
+constexpr int kMaxRows = 2;
 
 TeamRef team_ref(const char *s) {
   TeamRef t;
@@ -124,6 +126,8 @@ void load(Settings &s, JsonObjectConst o) {
   num("release", s.release);
   num("tz", s.tz);
   num("panels", s.panels);
+  num("rows", s.rows);
+  num("wiring", s.wiring);
   num("alerts", s.alerts);
   num("standing", s.standing);
   num("watchstay", s.watchstay);
@@ -285,12 +289,15 @@ void apply(Settings &s, const SetOp &op) {
       break;
     case SetKind::PLAYER_DEL: player_drop(s.players, op.team.league, op.athlete); break;
     case SetKind::PANELS: {
-      // apply_set_ hands PanelLayout::set_cols a byte.
-      const uint8_t cols = (uint8_t) op.value;
-      if (cols >= 1 && cols <= kMaxCols)
+      // apply_set_ hands PanelLayout::set_layout a byte each.
+      const uint8_t cols = (uint8_t) op.value, rows = (uint8_t) op.rows;
+      if (panel_layouts::layout_ok(cols, rows, kMaxCols, kMaxRows)) {
         s.panels = cols;
+        s.rows = rows;
+      }
       break;
     }
+    case SetKind::WIRING: s.wiring = op.value; break;
     case SetKind::IDLE: s.idle = op.value; break;
     case SetKind::IDLE_DIM: s.idledim = op.value; break;
     case SetKind::NIGHT: s.night = op.on; break;
@@ -336,6 +343,8 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["autoupd"] = s.autoupd;
   doc["beta"] = s.beta;
   doc["panels"] = s.panels;
+  doc["rows"] = s.rows;
+  doc["wiring"] = s.wiring;
   doc["follow"] = s.follow;
   doc["visit"] = s.visit;
   doc["alerts"] = s.alerts;
@@ -447,10 +456,35 @@ void test_parse_set() {
   SCHECK(parse_set("mode", "0", op, kFavMax) && op.value == 0, "mode 0");
   SCHECK(parse_set("mode", "5", op, kFavMax) && op.value == 5, "mode 5");
   SCHECK(!parse_set("mode", "6", op, kFavMax), "mode 6");
-  SCHECK(parse_set("panels", "7", op, kFavMax) && op.value == 7, "panels passes the count through");
+  SCHECK(parse_set("panels", "7", op, kFavMax) && op.value == 7 && op.rows == 1, "panels passes the count through");
   SCHECK(!parse_set("panels", "257", op, kFavMax), "panels 257 would wrap to 1 in PanelLayout's byte");
   SCHECK(!parse_set("panels", "-254", op, kFavMax), "panels -254 would wrap to 2 in PanelLayout's byte");
   SCHECK(!parse_set("panels", "0", op, kFavMax), "panels 0");
+  SCHECK(parse_set("panels", "2x2", op, kFavMax) && op.value == 2 && op.rows == 2, "panels 2x2");
+  SCHECK(parse_set("panels", "3x7", op, kFavMax) && op.value == 3 && op.rows == 7, "panels passes wide by high through");
+  SCHECK(!parse_set("panels", "2x0", op, kFavMax), "panels with no rows");
+  SCHECK(!parse_set("panels", "2x", op, kFavMax), "panels with nothing after the x");
+  SCHECK(!parse_set("panels", "2x257", op, kFavMax), "panels rows 257 would wrap in PanelLayout's byte");
+  SCHECK(!parse_set("panels", "x2", op, kFavMax), "panels with nothing before the x");
+  SCHECK(parse_set("wiring", "0", op, kFavMax) && op.kind == SetKind::WIRING && op.value == 0, "wiring 0");
+  SCHECK(parse_set("wiring", "2", op, kFavMax) && op.value == panel_layouts::WIRING_TOP_FLIPPED, "wiring 2");
+  SCHECK(!parse_set("wiring", "3", op, kFavMax), "wiring past the last");
+  SCHECK(!parse_set("wiring", "-1", op, kFavMax), "wiring -1");
+  SCHECK(std::string(kSetKeys[15]) == "wiring" && std::string(kSetKeys[14]) == "panels",
+         "wiring applies right after panels");
+
+  // The arrangements PanelLayout drives with gameday-common.yaml's limits.
+  SCHECK(panel_layouts::layout_ok(1, 1, 4, 2) && panel_layouts::layout_ok(4, 1, 4, 2), "one to four wide");
+  SCHECK(!panel_layouts::layout_ok(5, 1, 4, 2) && !panel_layouts::layout_ok(0, 1, 4, 2), "five wide, none wide");
+  SCHECK(panel_layouts::layout_ok(2, 2, 4, 2), "the 2x2");
+  SCHECK(!panel_layouts::layout_ok(2, 2, 4, 1), "no 2x2 on a build with one row");
+  SCHECK(!panel_layouts::layout_ok(2, 2, 3, 2), "no 2x2 on a build that chains three");
+  SCHECK(!panel_layouts::layout_ok(1, 2, 4, 2) && !panel_layouts::layout_ok(3, 2, 4, 2), "only the 2x2 has two rows");
+  SCHECK(!panel_layouts::layout_ok(2, 3, 8, 3), "no third row");
+  SCHECK(panel_layouts::bluetooth_ok(1, 1) && panel_layouts::bluetooth_ok(2, 1), "Bluetooth with one or two panels");
+  SCHECK(!panel_layouts::bluetooth_ok(3, 1) && !panel_layouts::bluetooth_ok(4, 1) &&
+             !panel_layouts::bluetooth_ok(2, 2),
+         "no Bluetooth with three or four");
   SCHECK(parse_set("tz", "America/Chicago", op, kFavMax) && op.value == 1, "tz IANA");
   SCHECK(!parse_set("tz", "-1", op, kFavMax), "tz -1");
   SCHECK(parse_set("down", "1", op, kFavMax) && op.on, "down 1");

@@ -17,7 +17,7 @@ all: build/test_parse build/test_networks
 TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp
 SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp
 
-build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h)
+build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h) ../components/panel_layout/layouts.h
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $@ $(LDFLAGS)
 
@@ -77,7 +77,7 @@ build/fuzz_espn: fuzz_espn.cpp $(FUZZ_DEPS) $(PARSER_SRCS) $(wildcard ../compone
 	@mkdir -p build
 	$(FUZZ_CXX) $(FUZZ_CXXFLAGS) $(FUZZ_ENGINE) fuzz_espn.cpp $(PARSER_SRCS) -o $@
 
-build/fuzz_set: fuzz_set.cpp $(FUZZ_DEPS) $(wildcard ../components/gameday/*.h)
+build/fuzz_set: fuzz_set.cpp $(FUZZ_DEPS) $(wildcard ../components/gameday/*.h) ../components/panel_layout/layouts.h
 	@mkdir -p build
 	$(FUZZ_CXX) $(FUZZ_CXXFLAGS) $(FUZZ_ENGINE) fuzz_set.cpp -o $@
 

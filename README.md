@@ -27,7 +27,7 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
 - Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
-- Adapts to one 64x64 panel (logos side by side, stacked scores) or one 128x64 panel or two 64x64 side by side (logos at the edges, big scores, records and pips in the middle); one firmware, the count is a setting
+- Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting
 
 ## Hardware
 
@@ -35,7 +35,7 @@ Building your own? [Runs on your own panel](https://apolloautomation.github.io/g
 
 - The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6), or any ESP32-S3 HUB75 controller on the [MoonHub75](https://github.com/MoonModules/Hardware/tree/main/MOONHUB75) pinout, with 16MB flash, octal PSRAM, and a button on GPIO0 (build `gameday.yaml`). The M-1 Rev6 uses the MoonHub75 pinout, microphone and button pins; the M-1 Rev4 uses other pins and needs its own build
 - The scoreboard75 controller board (build `gameday-scoreboard75.yaml`)
-- One 64x64 HUB75 panel, or a 128x64 display: one 128x64 panel or two 64x64 side by side (one firmware; pick the size on the device page)
+- One 64x64 HUB75 panel, a 128x64 display (one 128x64 panel or two 64x64 side by side), three or four 64x64 side by side, or four in two rows of two (one firmware; pick the layout on the device page). With three or four panels Wi-Fi setup is through the hotspot only, and the supply has to be rated for all of them
 
 The MoonHub75 pinout, which the M-1 Rev6 shares, under the names ESPHome uses (that board's README calls the upper half R0/G0/B0):
 
@@ -68,7 +68,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
 | Favorites | Up to 16 teams in priority order. "Only today's games" keeps the playlist to the favorites playing today. The first four are the numbered buttons on a WizMote remote |
 | Remote | Pair a WizMote: turn discovery on, press any button on the remote. ON/OFF, brightness and NIGHT buttons control the panel |
-| Panels | One 64x64 panel, or one 128x64 panel or two 64x64 side by side. Changing it restarts the device |
+| Panels | One 64x64 panel, one 128x64 panel or two 64x64 side by side, three or four wide, or two rows of two (with how the rows are mounted). Changing it restarts the device after a confirm |
 | Firmware / Check for updates | The device checks this project's releases every 6 hours; an Install button appears on the page when a newer version exists and updates over WiFi |
 | Install updates automatically | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows |
 | Brightness, Panel on, Ticker speed, Showing | Panel brightness, panel on or off, ticker speed, scoreboard or clock page |

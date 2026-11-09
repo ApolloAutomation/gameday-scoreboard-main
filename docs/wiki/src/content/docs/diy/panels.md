@@ -31,12 +31,50 @@ Pixel pitch isn't part of these settings, so a 64x64 panel is driven the same wa
 
 One firmware drives both layouts. You pick the layout in the [DIY installer](/diy/install/) before you install, and you can change it later on the device page. See [Panel sizes](/using/panel-sizes/).
 
+:::note[Coming in the next release]
+The firmware also drives three or four 64x64 panels in a row (192x64 or 256x64), and four in two rows of two (128x128). Install the one-panel build, then pick **Three wide**, **Four wide** or **Two rows of two** on the device page.
+
+| You have | Pick | What the board shows |
+| --- | --- | --- |
+| Three 64x64 panels side by side | Three wide | The wide board spread across 192 pixels |
+| Four 64x64 panels side by side | Four wide | The wide board spread across 256 pixels |
+| Four 64x64 panels in two rows of two | Two rows of two | The 128x64 board on top, the time, the date and a bigger ticker underneath |
+
+With three or four panels:
+
+- **Wi-Fi setup is through the hotspot only.** Bluetooth setup, which the Game Day app uses, stays off to leave the panels the memory they need. Scan the setup screen's QR code with your phone's camera to join the panel's hotspot. See [Set up your panel](/get-started/setup/).
+- **Size the power supply for all the panels together.** Four panels at full brightness draw about four times what one does.
+:::
+
 ## Chain two 64x64 panels
 
 The firmware drives two panels as one chain. Wire the board to the input of the first panel, then run a ribbon cable from that panel's output to the input of the second. Set them side by side in one row, 128 pixels wide and 64 tall.
 
 :::tip
 If the two halves of the board show up in the wrong order, swap the two panels.
+:::
+
+:::note[Coming in the next release]
+**Three or four in a row** chain the same way: the board to the first panel's input, then each panel's output to the next panel's input. Seen from the back, where the cables are, the panel with the board is the left-hand end and the chain runs to the right, so seen from the front it's the right-hand end. If the parts of the board show in the wrong order, put the panels in the reverse order.
+
+**Two rows of two** is one chain of four. Where each panel goes depends on which row, if any, is upside down, so pick the build you have under **How the rows are mounted** on the device page. Seen from the back, where the cables are:
+
+- **Bottom row upside down**, the folded build: the panel with the board is top left and the second is top right. The bottom row is turned upside down, folded under the top row, with the third panel under the second and the fourth under the first, so every cable stays short. A new panel starts with this choice.
+- **All upright**: every panel stands the right way up. The panel with the board is top left and the second is top right, then a longer cable runs from the second back across to the third, under the first. The fourth is under the second.
+- **Top row upside down**: the top row is the one turned over. The panel with the board is top right and the second is top left, with the third under the second and the fourth under the first. Seen from the front, the panel with the board is top left.
+
+If part of the board shows upside down, the choice doesn't match your wiring:
+
+| You picked | What you see | Pick instead |
+| --- | --- | --- |
+| **Bottom row upside down** | The bottom half upside down | **All upright** |
+| **Bottom row upside down** | Both halves upside down | **Top row upside down** |
+| **All upright** | The bottom half upside down | **Bottom row upside down** |
+| **All upright** | The top half upside down | **Top row upside down** |
+| **Top row upside down** | Both halves upside down | **Bottom row upside down** |
+| **Top row upside down** | The top half upside down | **All upright** |
+
+If the bottom half's left and right sides are swapped with **All upright**, or each bottom panel shows its own part upside down with **Bottom row upside down**, every panel stands upright but the third sits under the second. The bottom row then runs the other way and no choice fixes it. Move the third panel under the first and the fourth under the second and keep **All upright**, or turn the bottom row upside down and pick **Bottom row upside down**.
 :::
 
 ## Change the layout
@@ -48,6 +86,10 @@ In the Setup card on the device page, click the picture that matches your panels
 ## Power
 
 Power the panels from a 5 V supply rated for them. The panel's listing gives the current it draws at full brightness; size the supply for the panel maker's rating, and add up both panels if you chain two.
+
+:::note[Coming in the next release]
+With three or four panels, add up all of them. A supply that is fine for one or two can sag with four at full brightness, and the panel then holds its brightness down as described below.
+:::
 
 A new install starts at about half brightness (128 of 255). Change it with the Brightness setting on the device page.
 

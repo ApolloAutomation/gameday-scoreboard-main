@@ -13,6 +13,7 @@
 
 #include "logo_lru.h"
 #include "panel_text.h"
+#include "psram_tasks.h"
 #include "timezones.h"
 #include "timezones_parsed.h"
 
@@ -1315,6 +1316,8 @@ void GamedayComponent::dump_config() {
 void GamedayComponent::on_shutdown() { ::espn::boot_log_planned(boot_log); }
 
 void GamedayComponent::loop() {
+  // Frees the fetch, logo and Wi-Fi check tasks that have finished.
+  PsramTasks::reap();
   if (this->logos_.loop())
     this->fire_action_("logo_ready");  // gameday-common.yaml redraws the logos
   if (this->logo_held_ && this->logo_hold_done_())
@@ -2701,7 +2704,7 @@ void GamedayComponent::probe_task_(void *arg) {
            redirect ? ::espn::detail::url_host(h.location).c_str() : "");
   self->probe_result_ = (uint8_t) r;
   self->probe_done_ = true;
-  vTaskDelete(nullptr);
+  PsramTasks::park();
 }
 
 void GamedayComponent::start_probe_() {
@@ -2711,7 +2714,7 @@ void GamedayComponent::start_probe_() {
   this->probe_done_ = false;
   this->probe_running_ = true;
   // Plain HTTP and a 256 byte read, no TLS: a small stack is plenty.
-  if (xTaskCreate(&GamedayComponent::probe_task_, "gameday_probe", 6144, this, 1, nullptr) != pdPASS) {
+  if (!PsramTasks::start(&GamedayComponent::probe_task_, "gameday_probe", 6144, this)) {
     ESP_LOGW(TAG, "Could not start the Wi-Fi check (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->probe_running_ = false;
@@ -3234,8 +3237,9 @@ void GamedayComponent::start_worker_() {
   this->job_done_ = false;
   this->busy_ = true;
   this->busy_since_ms_ = millis() == 0 ? 1 : millis();
-  // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom.
-  if (xTaskCreate(&GamedayComponent::worker_, "gameday_fetch", 16384, this, 1, nullptr) != pdPASS) {
+  // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom. In
+  // PSRAM (psram_tasks.h), freed by loop() once the task has parked.
+  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this)) {
     ESP_LOGW(TAG, "Could not start the fetch task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->busy_ = false;
@@ -3251,7 +3255,7 @@ void GamedayComponent::worker_(void *arg) {
   // was writing into belongs to a later cycle by now.
   if (self->worker_seq_ == mine)
     self->job_done_ = true;
-  vTaskDelete(nullptr);
+  PsramTasks::park();
 }
 
 // Worker task: network and parsing only, no display or entity access.
@@ -4386,13 +4390,11 @@ void GamedayComponent::idle_fields_(UpdateFields &f) {
   if (v == ::espn::IdleView::TODAY) {
     const GameSnapshot *t = this->today_game_();
     if (t != nullptr) {
-      this->game_fields_(*t, {}, out);
+      // The countdown in the clock's place (game_fields_), the kickoff and
+      // the records in the ticker (a single panel has no room for the
+      // records).
+      this->game_fields_(*t, {}, out, true);
       if (t->state == GameState::PRE) {
-        // The countdown in the clock's place, the kickoff and the records in
-        // the ticker (a single panel has no room for the records).
-        if (!t->time_tbd)
-          out.clock_text =
-              ::espn::countdown_text(t->kickoff_epoch - (int64_t) this->time_->timestamp_now());
         // "#5 TEX 7-1 | OKLA 6-2": each side's college poll rank when it has one
         std::string rec = ::espn::detail::records_line(*t, std::string());
         if (!rec.empty())
@@ -4415,7 +4417,8 @@ void GamedayComponent::idle_fields_(UpdateFields &f) {
 
 // One game's fields for the board: the scoreboard, its ticker and kickoff,
 // and a leaderboard's columns.
-void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f) {
+void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f,
+                                    bool countdown) {
   // The followed pro team's seed or place, for the ticker and the board: the
   // mode's own game only, not an idle display card.
   const std::string standing = &g == &this->game_ ? this->standing_text_() : std::string();
@@ -4436,12 +4439,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   f.team_rank = g.team_rank;
   f.opponent_rank = g.opp_rank;
   f.last_play = g.last_play;
-  if (g.valid && g.state == GameState::IN) {
-    f.clock_text = ::espn::clock_text(g);
-    if (!brk) {
-      f.down_distance = g.short_down_distance;
-      f.is_red_zone = ::espn::in_red_zone(g);
-    }
+  // The clock row, the game clock or My team today's countdown, before the
+  // record rows beside it are sized below.
+  const int64_t now = countdown && this->time_ != nullptr ? (int64_t) this->time_->timestamp_now() : 0;
+  f.clock_text = ::espn::board_clock_text(g, countdown, now);
+  if (g.valid && g.state == GameState::IN && !brk) {
+    f.down_distance = g.short_down_distance;
+    f.is_red_zone = ::espn::in_red_zone(g);
   }
   f.sport = (uint8_t) g.sport;
   if (g.valid && g.state == GameState::IN && g.sport == ::espn::Sport::BASEBALL) {
@@ -4463,10 +4467,12 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
     f.opponent_record = ::espn::soccer_board_record(g.opp_record);
   }
   if (!standing.empty()) {
-    // In the record's place, in the room beside the clock while it shows;
-    // the record when none of it fits.
+    // In the record's place, in the room beside the clock while it shows, My
+    // team today's countdown too (all of it on three or four panels, where
+    // the clock is far away); the record when none of it fits.
     const int clock_px = (int) f.clock_text.size() * ::espn::kClockCharPx;
-    std::string board = ::espn::board_standing(standing, ::espn::record_row_chars(clock_px));
+    std::string board =
+        ::espn::board_standing(standing, ::espn::record_row_chars(clock_px, this->board_px_()));
     if (!board.empty())
       f.team_record = std::move(board);
   }
@@ -5043,7 +5049,10 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["name"] = this->hostname();
   doc["version"] = App.get_comment();
   doc["setup"] = this->flag_(FLAG_SETUP);
+  // Panels wide, rows of them (2 for the 2x2) and the 2x2's wiring.
   doc["panels"] = this->panels_ != nullptr ? this->panels_->cols() : 0;
+  doc["rows"] = this->panels_ != nullptr ? this->panels_->rows() : 1;
+  doc["wiring"] = this->panels_ != nullptr ? this->panels_->wiring() : 0;
   JsonObject team = doc["team"].to<JsonObject>();
   put_team(team, this->prefs_.league, this->prefs_.team_id);
   doc["mode"] = this->prefs2_.mode;
@@ -5804,7 +5813,13 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::PANELS:
         if (this->panels_ != nullptr)
-          this->panels_->set_cols((uint8_t) op.value);
+          this->panels_->set_layout((uint8_t) op.value, (uint8_t) op.rows);
+        break;
+      case ::espn::SetKind::WIRING:
+        // Off a 2x2 the wiring is only saved, with no restart, so the page
+        // needs the new state.
+        if (this->panels_ != nullptr && this->panels_->set_wiring((uint8_t) op.value))
+          dirty = true;
         break;
     }
   }

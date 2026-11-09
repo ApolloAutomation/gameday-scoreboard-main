@@ -23,9 +23,11 @@
 #
 # On a 128 px chain the code sits on the left half and the lines move to the
 # right half, so nothing has to take turns with it; with no code up the
-# lines use the whole width. On a single 64 px panel there is no room for
-# both, so the code takes turns with the lines. See boot_qr_box below for
-# the sizing and boot_qr_cycle for the timing.
+# lines use the whole width. On three or four panels in a row the lines take
+# everything right of the code, in the wide fonts. On a single 64 px panel
+# there is no room for both, so the code takes turns with the lines. A 2x2
+# shows the 128 px screen in the middle of its 128 rows. See boot_qr_box
+# below for the sizing and boot_qr_cycle for the timing.
 #
 #   connected   64:  page QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
 #               128: page QR + Scan to / pick your / team, the address taking
@@ -183,19 +185,23 @@ globals:
     initial_value: 'false'
 
 script:
-  # Positions and fonts. side true puts the lines in the right half of a
-  # 128 px chain, beside the QR, with the single panel fonts; false uses the
-  # whole width. side is ignored on a 64 px panel.
+  # Positions and fonts. side true puts the lines right of the QR on a chain
+  # of 128 px or more: the single panel fonts in the right half of a 128 px
+  # chain, the wide ones on three or four panels. false uses the whole width.
+  # side is ignored on a 64 px panel. On a 2x2 (or anything taller than 64)
+  # the whole screen sits in the middle rows.
   - id: boot_layout
     parameters:
       side: bool
     then:
       - lambda: |-
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const int H = lv_disp_get_ver_res(lv_disp_get_default());
           const bool col = side && W >= 128;
-          const bool wide = W >= 128 && !col;
           const int x0 = col ? 64 : 0;
-          const int cw = col ? 64 : W;
+          const int cw = W - x0;
+          const bool wide = cw >= 128;
+          const int y0 = H > 64 ? (H - 64) / 2 : 0;
           lv_obj_t *lines[4] = {id(boot_la), id(boot_lb), id(boot_lc), id(boot_ld)};
           for (auto *l : lines) {
             lv_obj_set_width(l, cw - 4);
@@ -204,25 +210,26 @@ script:
           lv_obj_set_width(id(boot_title), cw);
           lv_obj_set_width(id(boot_rule), cw - 8);
           lv_obj_set_width(id(boot_bar), cw - 16);
-          lv_obj_set_pos(id(boot_bar), x0 + 8, wide ? 60 : 59);
+          lv_obj_set_pos(id(boot_bar), x0 + 8, y0 + (wide ? 60 : 59));
+          lv_obj_set_pos(id(boot_qr_box), 0, y0);
           if (wide) {
             lv_obj_set_style_text_font(id(boot_title), id(spleen_16), 0);
-            lv_obj_set_pos(id(boot_title), x0, 2);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, 19);
+            lv_obj_set_pos(id(boot_title), x0, y0 + 2);
+            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 19);
             lv_obj_set_style_text_font(id(boot_lb), id(spleen_12), 0);
-            lv_obj_set_y(id(boot_la), 22);
-            lv_obj_set_y(id(boot_lb), 31);
-            lv_obj_set_y(id(boot_lc), 44);
-            lv_obj_set_y(id(boot_ld), 53);
+            lv_obj_set_y(id(boot_la), y0 + 22);
+            lv_obj_set_y(id(boot_lb), y0 + 31);
+            lv_obj_set_y(id(boot_lc), y0 + 44);
+            lv_obj_set_y(id(boot_ld), y0 + 53);
           } else {
             lv_obj_set_style_text_font(id(boot_title), id(spleen_12), 0);
-            lv_obj_set_pos(id(boot_title), x0, 1);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, 14);
+            lv_obj_set_pos(id(boot_title), x0, y0 + 1);
+            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 14);
             lv_obj_set_style_text_font(id(boot_lb), id(spleen_8), 0);
-            lv_obj_set_y(id(boot_la), 16);
-            lv_obj_set_y(id(boot_lb), 26);
-            lv_obj_set_y(id(boot_lc), 36);
-            lv_obj_set_y(id(boot_ld), 46);
+            lv_obj_set_y(id(boot_la), y0 + 16);
+            lv_obj_set_y(id(boot_lb), y0 + 26);
+            lv_obj_set_y(id(boot_lc), y0 + 36);
+            lv_obj_set_y(id(boot_ld), y0 + 46);
           }
 
   # Pick the layout (see boot_layout) and show the QR code holding qr, or
@@ -1047,8 +1054,9 @@ lvgl:
             # device page on it (components/gameday/setup_qr.h). boot_view
             # sets its text, with lv_qrcode_update, and shows and hides it.
             # Always the left 64 px: the whole screen of a single panel,
-            # taking turns with the lines, or the left half of a 128 px chain
-            # with the lines beside it. Listed last so it draws over the
+            # taking turns with the lines, or the left end of a longer chain
+            # with the lines beside it (in the middle rows of a 2x2, from
+            # boot_layout). Listed last so it draws over the
             # lines and bar, and the black box keeps them out from under the
             # code. No text here: it stays hidden until boot_view gives it
             # one.

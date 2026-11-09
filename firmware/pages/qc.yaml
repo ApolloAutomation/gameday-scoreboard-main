@@ -2,7 +2,8 @@
 # whatever else is up, and runs round and round:
 #
 #   red, green, blue, white   2 s each, the whole panel lit
-#   row walk                  one white line down all 64 rows, 40 ms a row
+#   row walk                  one white line down every row (64, or 128 on a
+#                             2x2), 40 ms a row
 #   readout                   6 s: firmware version, PSRAM size, the
 #                             strongest Wi-Fi network's RSSI (from a scan, no
 #                             join needed), panel size, and the button test
@@ -164,7 +165,7 @@ interval:
             if (in_step >= 2000) id(qc_show).execute(step + 1);
           } else if (step == 4) {
             const uint32_t row = in_step / 40;
-            if (row >= 64) id(qc_show).execute(5);
+            if (row >= (uint32_t) lv_disp_get_ver_res(lv_disp_get_default())) id(qc_show).execute(5);
             else lv_obj_set_y(id(qc_row), (int32_t) row);
           } else {
             static uint32_t read_ms = 0;

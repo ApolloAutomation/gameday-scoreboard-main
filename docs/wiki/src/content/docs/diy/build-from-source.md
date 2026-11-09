@@ -24,7 +24,7 @@ Build from the YAML when your board has its own pins, when you want to change so
 The components in `components/` are:
 
 - `gameday`: ESPN fetching, parsing and game logic, in C++.
-- `panel_layout`: the one-panel or two-panel layout, applied at boot from a saved choice, so one binary serves both layouts.
+- `panel_layout`: the panel layout (one to four panels wide, or a 2x2 and how its rows are mounted), applied at boot from a saved choice, so one binary serves every layout.
 - `improv_ble`: Bluetooth Wi-Fi setup for the Game Day app.
 - `saved_networks`: the up to five Wi-Fi networks the panel remembers.
 - `crash_report`: keeps a record of the last crash, freeze or power dip restart in flash, with the log and backtrace of a crash or freeze, for `/gameday/crash`.
