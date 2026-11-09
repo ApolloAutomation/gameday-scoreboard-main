@@ -2848,11 +2848,23 @@ test("a double tap on Add player posts the player once", async ({ page, request 
 
 test("a player the panel didn't keep is never shown as added", async ({ page, request }) => {
   await reset(request, { players: SEVEN });
+  // Another page takes the last slot; this one still lists seven. Until it
+  // posts its own player, the reads it gets are from before that post, so a
+  // start-up read that lands late doesn't show it the eighth first.
+  let stale = null;
+  await page.route("**/gameday/state*", async (route) => {
+    const res = await route.fetch();
+    await route.fulfill(stale ? { json: stale } : { response: res });
+  });
+  await page.route("**/gameday/set*", async (route) => {
+    stale = null;
+    await route.continue();
+  });
   await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
   await page.goto("/");
   await expect(page.locator("#playerList .playerrow label")).toHaveCount(7);
   await pickPlayerTeam(page, "Buffalo Bills");
-  // Another page takes the last slot; this one still lists seven.
+  stale = await deviceState(request);
   await request.post("/gameday/set?player=" + encodeURIComponent("nfl,4379399,2,COOK"));
   await page.locator("#playerPick").selectOption("3918298");
   await page.locator("#playerAdd").click();
