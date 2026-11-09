@@ -29,6 +29,10 @@
       "heap": 3000,
       "json": 18447
     },
+    "poll_hockeytech_game": {
+      "heap": 1056,
+      "json": 6996
+    },
     "poll_milb_game": {
       "heap": 1264,
       "json": 9038
@@ -81,6 +85,10 @@
       "heap": 1600,
       "json": 17922
     },
+    "scan_hockeytech_day": {
+      "heap": 5824,
+      "json": 21177
+    },
     "scan_milb_day": {
       "heap": 13568,
       "json": 61507
@@ -124,6 +132,10 @@
     "team_far_milb": {
       "heap": 1024,
       "json": 27437
+    },
+    "team_hockeytech": {
+      "heap": 1744,
+      "json": 11922
     },
     "team_milb": {
       "heap": 1744,

@@ -1,5 +1,6 @@
 #include "espn_parse.h"
 #include "alerts.h"
+#include "source_hockeytech.h"
 #include "source_mlbstats.h"
 
 #include <atomic>
@@ -219,6 +220,8 @@ std::string team_logo_url(League league, uint32_t espn_id, const char *abbr) {
     return "";  // a golf tour's or a racing series' board has no logo
   if (l->source == Source::MLB_STATS)
     return mlb_logo_url(espn_id);  // the same URL the game read gives the team
+  if (l->source == Source::HOCKEYTECH)
+    return ht_logo_url(league, espn_id);  // likewise; "" for a team drawn as a badge
   std::string file = l->logo_by_id ? std::to_string(espn_id) : a;
   bool scoreboard = league == League::NFL || league == League::MLB || league == League::NBA || league == League::NHL;
   return dark_logo(std::string("https://a.espncdn.com/i/teamlogos/") + l->logo_dir +
@@ -537,7 +540,9 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
   if (live_mode)
     return "";
   if (!no_game_confirmed && misses > 0)
-    return source == Source::MLB_STATS ? "Can't reach MLB" : "Can't reach ESPN";
+    return source == Source::MLB_STATS    ? "Can't reach MLB"
+           : source == Source::HOCKEYTECH ? "Can't reach HockeyTech"
+                                          : "Can't reach ESPN";
   return "";
 }
 

@@ -868,7 +868,7 @@ void test_scan_backoff() {
   HostWait w;
   uint32_t now = 1000, last = 0;
   for (int scan = 1; scan <= 5; scan++) {
-    MCHECK_EQ(mlb_scan_result(w, true, true, 1, true, 0, 0, now), 0u);
+    MCHECK_EQ(host_scan_result(w, true, true, false, true, 0, 0, now), 0u);
     MCHECK_EQ((int) w.run.streak, scan - 1);
     uint32_t ms = w.fail(true, 0, 0, now);  // back_off_
     MCHECK_EQ((int) w.run.streak, scan);
@@ -879,29 +879,29 @@ void test_scan_backoff() {
   MCHECK(last >= 60u * 60 * 1000 / 2);  // half the hour cap at least, with the jitter
   // The same after ordinary failures (a timeout, a 5xx)
   HostWait plain;
-  MCHECK_EQ(mlb_scan_result(plain, true, true, 1, false, 0, 0, 0), 0u);
+  MCHECK_EQ(host_scan_result(plain, true, true, false, false, 0, 0, 0), 0u);
   plain.fail(false, 0, 0, 0);
-  MCHECK_EQ(mlb_scan_result(plain, true, true, 1, false, 0, 0, 0), 0u);
+  MCHECK_EQ(host_scan_result(plain, true, true, false, false, 0, 0, 0), 0u);
   plain.fail(false, 0, 0, 0);
   MCHECK_EQ((int) plain.run.streak, 2);
   // An answer starts the run over
-  MCHECK_EQ(mlb_scan_result(w, true, false, 1, false, 0, 0, now), 0u);
+  MCHECK_EQ(host_scan_result(w, true, false, false, false, 0, 0, now), 0u);
   MCHECK_EQ((int) w.run.streak, 0);
   MCHECK(!w.waiting(now));
   // Beside ESPN's leagues the scan goes on with them, so MLB's failure is
   // counted here, and back_off_ (if the scan failed too) is ESPN's.
   HostWait mixed;
-  uint32_t ms = mlb_scan_result(mixed, true, true, 3, true, 20 * 60 * 1000, 0, 5000);
+  uint32_t ms = host_scan_result(mixed, true, true, true, true, 20 * 60 * 1000, 0, 5000);
   MCHECK(ms >= 20u * 60 * 1000);
   MCHECK_EQ((int) mixed.run.streak, 1);
   MCHECK(mixed.waiting(5000));
-  MCHECK(mlb_scan_result(mixed, true, true, 3, true, 0, 0, 5000) > 0u);
+  MCHECK(host_scan_result(mixed, true, true, true, true, 0, 0, 5000) > 0u);
   MCHECK_EQ((int) mixed.run.streak, 2);
-  MCHECK_EQ(mlb_scan_result(mixed, true, false, 3, false, 0, 0, 5000), 0u);
+  MCHECK_EQ(host_scan_result(mixed, true, false, true, false, 0, 0, 5000), 0u);
   MCHECK_EQ((int) mixed.run.streak, 0);
   // A scan that didn't ask MLB (it was waiting) leaves the run as it is.
   mixed.fail(true, 0, 0, 5000);
-  MCHECK_EQ(mlb_scan_result(mixed, false, false, 2, false, 0, 0, 5000), 0u);
+  MCHECK_EQ(host_scan_result(mixed, false, false, true, false, 0, 0, 5000), 0u);
   MCHECK_EQ((int) mixed.run.streak, 1);
   MCHECK(mixed.waiting(5000));
 }
@@ -911,28 +911,28 @@ void test_scan_backoff() {
 // fails counts in it, alone or beside ESPN's leagues.
 void test_side_backoff() {
   std::vector<League> leagues = {League::MLB, League::MILB, League::NHL};
-  MCHECK(drop_mlb_stats(leagues));
+  MCHECK(drop_source(leagues, Source::MLB_STATS));
   MCHECK_EQ(leagues.size(), (size_t) 2);
   MCHECK(leagues[0] == League::MLB && leagues[1] == League::NHL);
-  MCHECK(!drop_mlb_stats(leagues));
+  MCHECK(!drop_source(leagues, Source::MLB_STATS));
   std::vector<League> alone = {League::MILB};
-  MCHECK(drop_mlb_stats(alone));
+  MCHECK(drop_source(alone, Source::MLB_STATS));
   MCHECK(alone.empty());  // start_side_job_ then waits for MLB, reading nothing
 
   HostWait w;
   // MLB refuses the scores' scan, beside ESPN's leagues or alone: its wait
   // starts, with Retry-After, and grows with each refusal.
-  uint32_t ms = mlb_side_result(w, true, true, true, 30 * 60 * 1000, 0, 1000);
+  uint32_t ms = host_side_result(w, true, true, true, 30 * 60 * 1000, 0, 1000);
   MCHECK(ms >= 30u * 60 * 1000);
   MCHECK(w.waiting(1000 + 29 * 60 * 1000));
   MCHECK_EQ((int) w.run.streak, 1);
   w.end_wait();
-  MCHECK(mlb_side_result(w, true, true, false, 0, 0, 2000) > 0u);
+  MCHECK(host_side_result(w, true, true, false, 0, 0, 2000) > 0u);
   MCHECK_EQ((int) w.run.streak, 2);
   // A read that didn't ask MLB leaves it alone; an answer starts it over.
-  MCHECK_EQ(mlb_side_result(w, false, false, false, 0, 0, 3000), 0u);
+  MCHECK_EQ(host_side_result(w, false, false, false, 0, 0, 3000), 0u);
   MCHECK_EQ((int) w.run.streak, 2);
-  MCHECK_EQ(mlb_side_result(w, true, false, false, 0, 0, 3000), 0u);
+  MCHECK_EQ(host_side_result(w, true, false, false, 0, 0, 3000), 0u);
   MCHECK_EQ((int) w.run.streak, 0);
   MCHECK(!w.waiting(3000));
 }

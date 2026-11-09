@@ -28,6 +28,13 @@ Stats API's team list for Triple-A, Double-A, High-A and Single-A, with the
 MLB Stats team id as the id and the level's sport id (11 to 14) as the group;
 see milb_teams(). --season picks the season (default: this year, or next
 year from October, once the next season's teams are listed).
+
+The AHL and the ECHL are not on ESPN either: their teams come from
+HockeyTech's feed, the leagues' own stats service, with HockeyTech's team id
+as the id, and the feed's site key and client code from the substitutions in
+firmware/gameday-common.yaml. Their group says which logo file the panel
+asks for; see hockeytech_teams(). --season picks the season id there
+(default: the newest regular season).
 """
 
 import argparse
@@ -35,6 +42,7 @@ import datetime
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -64,10 +72,19 @@ FBS_GROUPS = {
 COMPONENT = Path(__file__).resolve().parent.parent / "components" / "gameday"
 OUT = COMPONENT / "teams.h"
 LEAGUES_H = COMPONENT / "leagues.h"
+COMMON_YAML = Path(__file__).resolve().parent.parent / "firmware" / "gameday-common.yaml"
+HOCKEYTECH = "https://lscluster.hockeytech.com/feed/index.php?feed=modulekit"
+HOCKEYTECH_LOGOS = "https://assets.leaguestat.com"
+# The group bit for a team with no logo small enough for the panel
+# (source_hockeytech.h's kHtNoSmallLogo): it draws the team's badge. The
+# panel's logo cache takes up to 128 KB (logo_cache.cpp's MAX_BODY); a logo
+# near that is left out too, so a slightly larger copy later can't break it.
+HT_NO_SMALL_LOGO = 1 << 16
+HT_LOGO_MAX = 120 * 1024
 
 # Fewest teams a fresh list may have before the run is treated as a bad read.
 MIN_TEAMS = {"NFL": 32, "NCAA": 120, "MLB": 30, "NBA": 30, "NHL": 32, "WNBA": 13, "MLS": 29, "EPL": 20, "MCBB": 350,
-             "PGA": 1, "LPGA": 1, "F1": 1, "NASCAR": 1, "MILB": 120}
+             "PGA": 1, "LPGA": 1, "F1": 1, "NASCAR": 1, "MILB": 120, "AHL": 30, "ECHL": 25}
 
 # A golf tour is followed like a team: one row, ESPN's league id as the id.
 # ESPN calls the LPGA "Ladies Pro Golf Association"; the panel says "LPGA Tour".
@@ -187,6 +204,61 @@ def milb_season(asked):
     return today.year
 
 
+def hockeytech_feed(lg):
+    """The league's site key and client code, from the substitutions the
+    firmware uses (hockeytech_ahl_key, hockeytech_ahl_client)."""
+    text = COMMON_YAML.read_text(encoding="utf-8")
+    found = {}
+    for part in ("key", "client"):
+        m = re.search(rf'^\s*hockeytech_{lg.lower()}_{part}:\s*"([^"]+)"', text, re.M)
+        if not m:
+            sys.exit(f"gameday-common.yaml has no hockeytech_{lg.lower()}_{part}")
+        found[part] = m.group(1)
+    return found["key"], found["client"]
+
+
+def small_logo_size(url):
+    """Bytes in a logo file, 0 when the server has none."""
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "curl/8.0 gameday-scoreboard"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return int(r.headers.get("Content-Length") or 0)
+    except urllib.error.HTTPError as ex:
+        if ex.code == 404:
+            return 0
+        raise
+
+
+def hockeytech_teams(lg, season):
+    """Every team in the league's season (the newest regular season unless
+    one is asked for), from HockeyTech's feed (the panel reads their games
+    there too, source_hockeytech.cpp). The group is the season the team's
+    logo file is named for (402_94.png: 94; 0 for 440.png), plus
+    HT_NO_SMALL_LOGO when the 50 px copy the panel asks for is missing or
+    too large; the panel draws that team's badge."""
+    key, client = hockeytech_feed(lg)
+    feed = f"{HOCKEYTECH}&key={key}&client_code={client}&fmt=json&lang=en"
+    if not season:
+        seasons = get(f"{feed}&view=seasons")["SiteKit"]["Seasons"]
+        regular = [x for x in seasons if x.get("playoff") == "0" and x.get("career") == "1"]
+        if not regular:
+            sys.exit(f"{lg}: no regular season listed")
+        season = int(regular[0]["season_id"])
+    print(f"{lg}: season {season}")
+    teams = []
+    for t in get(f"{feed}&view=teamsbyseason&season_id={season}")["SiteKit"]["Teamsbyseason"]:
+        tid = int(t["id"])
+        file = (t.get("team_logo_url") or "").rsplit("/", 1)[-1]
+        m = re.fullmatch(rf"{tid}(?:_(\d+))?\.png", file)
+        group = int(m.group(1)) if m and m.group(1) else 0
+        size = small_logo_size(f"{HOCKEYTECH_LOGOS}/{client}/logos/50x50/{file or f'{tid}.png'}")
+        if not m or size == 0 or size > HT_LOGO_MAX:
+            print(f"{lg}: {t['name']} has no logo small enough ({size} bytes): the panel draws its badge")
+            group |= HT_NO_SMALL_LOGO
+        teams.append((lg, tid, t["code"], t["name"], group))
+    return teams
+
+
 def cstr(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -213,7 +285,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--league", action="append", default=[], help="league to rebuild, e.g. mlb (repeatable)")
     ap.add_argument("--rewrite", action="store_true", help="rebuild nothing, only re-emit the header")
-    ap.add_argument("--season", type=int, default=0, help="MILB: the season whose teams to list")
+    ap.add_argument("--season", type=int, default=0,
+                    help="MILB: the season whose teams to list; AHL, ECHL: the season id")
     args = ap.parse_args()
     table = league_table()
     paths = dict(table)
@@ -240,6 +313,8 @@ def main():
             season = milb_season(args.season)
             print(f"MILB: season {season}")
             fresh = milb_teams(season)
+        elif paths[lg].startswith("hockeytech/"):
+            fresh = hockeytech_teams(lg, args.season)
         else:
             fresh = pro_teams(lg, paths[lg])
         print(f"{lg}: {len(fresh)} teams")
@@ -264,11 +339,15 @@ def main():
         "  const char *name;",
         "  // college: the conference group id for the scoreboard; minor league",
         "  // baseball: the level's MLB Stats sport id (11 Triple-A to 14 Single-A);",
+        "  // the AHL and the ECHL: the season their logo file is named for, plus",
+        "  // kHtNoSmallLogo when the panel draws their badge (source_hockeytech.h);",
         "  // 0 otherwise",
         "  uint32_t group;",
         "};",
         "",
-        "constexpr Team kTeams[] = {",
+        "// inline: one copy in the firmware, however many files read it (each",
+        "// would otherwise keep its own, about 17 KB of flash).",
+        "inline constexpr Team kTeams[] = {",
     ]
     for lg, _path in table:
         for league, tid, abbr, name, group in by_league.get(lg, []):

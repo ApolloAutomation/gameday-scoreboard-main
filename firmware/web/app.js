@@ -46,9 +46,11 @@
   // for a golf tour, "racing" for a racing series), followed like a team but
   // never a favorite, a Live games league or in On now; source: "mlb" for a
   // league whose games and logos come from MLB, not ESPN (minor league
-  // baseball), as on the panel, with sport its sport, which ESPN's path
-  // gives for the others. scripts/build_web.py checks prefix, path, logo and
-  // byId against leagues.h and stops the build when they differ.
+  // baseball), and "hockeytech" for one whose come from HockeyTech (the AHL
+  // and the ECHL; logo is its folder on HockeyTech's logo server), as on the
+  // panel, with sport its sport, which ESPN's path gives for the others.
+  // scripts/build_web.py checks prefix, path, logo and byId against leagues.h
+  // and stops the build when they differ.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
     ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
@@ -60,6 +62,8 @@
     wnba: { prefix: "WNBA", tab: "WNBA", name: "WNBA", path: "basketball/wnba", logo: "wnba", byId: false, scan: "" },
     mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&", college: true },
     nhl: { prefix: "NHL", tab: "NHL", name: "NHL", path: "hockey/nhl", logo: "nhl", byId: false, scan: "" },
+    ahl: { prefix: "AHL", tab: "AHL", name: "AHL", path: "hockeytech/ahl", logo: "ahl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
+    echl: { prefix: "ECHL", tab: "ECHL", name: "ECHL", path: "hockeytech/echl", logo: "echl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
     pga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/pga", logo: "leagues", byId: false, file: "pgatour", scan: "", board: "golf" },
     lpga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/lpga", logo: "leagues", byId: false, file: "lpga", scan: "", board: "golf" },
     f1: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/f1", logo: "leagues", byId: false, file: "f1", scan: "", board: "racing" },
@@ -75,18 +79,22 @@
   // A league read from ESPN: the only rosters favorite players come from
   // (set_request.h's parse_player refuses the others).
   const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
+  // Games and logos from HockeyTech (the AHL and the ECHL). Its feed answers
+  // the panel but not a browser on another site, so these leagues aren't in
+  // On now.
+  const isHt = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "hockeytech");
   // "football", "baseball": the sport's situation switch and splashes
   const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
   // A pro league whose teams have a seed and a place from ESPN (the Standing
   // setting). A college league's have a rank instead, and minor league teams
-  // neither: MLB lists no seed or place for them.
-  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !isMlb(lg);
+  // neither: MLB and HockeyTech list no seed or place for them.
+  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !LEAGUES[lg].source;
   // "#5 OSU": a college team's rank (1-25) before its abbreviation
   const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
-  // A minor league team's level: the fifth field of its TEAMS row (its MLB
-  // Stats sport id, teams.h's group).
+  // A minor league baseball team's level: the fifth field of its TEAMS row
+  // (its MLB Stats sport id, teams.h's group).
   const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
-  const levelOf = (t) => (t && LEVELS[t[4]]) || "";
+  const levelOf = (t) => (t && isMlb(t[0]) && LEVELS[t[4]]) || "";
   // The picker tab a league is on: the first league with the same tab text.
   const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
   // "" for a league with no logo: its image stays hidden.
@@ -94,6 +102,14 @@
     const l = lgInfo(league);
     if (l.file === "") return "";
     if (l.source === "mlb") return `https://midfield.mlbstatic.com/v1/team/${id}/spots/64`;
+    if (l.source === "hockeytech") {
+      // An AHL or ECHL team's fifth field (teams.h's group): the season its
+      // logo file is named for, plus 65536 when the panel draws its badge
+      // instead, having no small copy; the page shows the full-size one.
+      const t = TEAMS.find((x) => x[0] === league && x[1] === id);
+      const g = (t && t[4]) || 0;
+      return `https://assets.leaguestat.com/${l.logo}/logos/${g & 0x10000 ? "" : "50x50/"}${id}${g & 0xffff ? "_" + (g & 0xffff) : ""}.png`;
+    }
     return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.file || (l.byId ? id : String(abbr).toLowerCase())}.png`;
   };
   const keyOf = (t) => t[0] + ":" + t[1];
@@ -345,6 +361,7 @@
           <div class="ctl" id="hPowerRow" hidden><label>Power dips<small>Brownout restarts since the panel was made</small></label><span class="val" id="hPower"></span></div>
           <div class="ctl"><label>Last ESPN read</label><span class="val" id="hEspn"></span></div>
           <div class="ctl" id="hMlbRow" hidden><label>Last MLB read<small>Minor league baseball</small></label><span class="val" id="hMlb"></span></div>
+          <div class="ctl" id="hHtRow" hidden><label>Last HockeyTech read<small>AHL and ECHL</small></label><span class="val" id="hHt"></span></div>
           <div class="ctl"><label>Firmware</label><span class="val" id="hFw"></span></div>
         </div>
         <div class="ctl"><label>Signal</label><span class="val" id="rssi"></span></div>
@@ -357,7 +374,7 @@
           <div class="ctl"><label>Wi-Fi drops<small id="wifiLast"></small></label><span class="val" id="wifiDrops"></span></div>
         </div>
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
-        <div class="ctl"><label>Data used<small>Scores and logos from ESPN and MLB since the panel started</small></label><span class="val" id="espnData"></span></div>
+        <div class="ctl"><label>Data used<small>Scores and logos from ESPN, MLB and HockeyTech since the panel started</small></label><span class="val" id="espnData"></span></div>
       </div>
       <details class="card betcard" id="betCard" hidden>
         <summary><h2>Bets</h2><span class="val" id="betSum"></span></summary>
@@ -379,7 +396,7 @@
     <p class="foot">
       <span id="ver"></span><span>·</span>
       <a href="https://github.com/${REPO}" target="_blank" rel="noopener">gameday-scoreboard</a>
-      <span>·</span><span>scores from ESPN and MLB</span>
+      <span>·</span><span>scores from ESPN, MLB and HockeyTech</span>
     </p>
   </div>
 
@@ -1353,7 +1370,7 @@
     const d = easternDate();
     // Golf's and racing's scoreboards have no home and away (golf's is
     // hundreds of kilobytes): not On now.
-    const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg))
+    const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && !isHt(lg))
       .map((lg) => [lg, isMlb(lg) ? MLB_DAY + d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6)
         : `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
     const out = [];
@@ -2182,6 +2199,9 @@
     // Only once the panel has read minor league scores from MLB
     $("#hMlbRow").hidden = h.mlb == null;
     if (h.mlb != null) $("#hMlb").textContent = answer(h.mlb, h.mlb_ago);
+    // and AHL or ECHL scores from HockeyTech
+    $("#hHtRow").hidden = h.ht == null;
+    if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
     const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
     // The build time comes in Unix seconds; shown in the browser's own time
     const b = h.built ? new Date(h.built * 1000) : null;

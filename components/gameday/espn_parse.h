@@ -25,6 +25,7 @@ struct Schedule {
   uint32_t group{0};
   std::string team_color;
   std::string team_record;
+  std::string opp_record;  // the team read's, where it has one (the AHL and the ECHL)
   const char *comp_slug{nullptr};  // a kCups slug when the game is in that cup, nullptr for the league
   bool next_final{false};          // the team endpoint's next event is already over (ESPN lags)
   // The other side of event_id, so its logo can download early. 0 when the
@@ -515,7 +516,8 @@ inline bool is_college(League league) { return league == League::NCAA || league 
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
 // ESPN has never said this team has no game ("Can't reach MLB" for a team
-// whose games come from the MLB Stats API, source). Empty for the default, and in
+// whose games come from the MLB Stats API, "Can't reach HockeyTech" for an
+// AHL or ECHL team: source). Empty for the default, and in
 // a live mode, which has its own words. captive (captive.h: the Wi-Fi answered
 // with a sign-in page and ESPN has not answered since) wins over all of it,
 // live modes included, since nothing can be read until it ends.

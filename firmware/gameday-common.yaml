@@ -39,6 +39,16 @@ substitutions:
   # commit so a release always builds the same thing.
   hub75_studio_ref: "2c121972321cc1e3c2c87d9647fd3beb9a5e2271"
 
+  # The AHL's and the ECHL's games come from HockeyTech's feed
+  # (lscluster.hockeytech.com), which wants each league's public site key and
+  # client code: the ones theahl.com and echl.com send. If a league changes
+  # its key, a bench build can take the new one with -s hockeytech_ahl_key
+  # <key> before a release carries it.
+  hockeytech_ahl_key: "50c2cd9b5e18e390"
+  hockeytech_ahl_client: "ahl"
+  hockeytech_echl_key: "2c2b89ea7345cae8"
+  hockeytech_echl_client: "echl"
+
 # The controller package (included by each board's top-level file, e.g.
 # gameday.yaml) already sets board/framework/psram; this only
 # adds sdkconfig options, which ESPHome merges into that package's esp32:
@@ -597,6 +607,14 @@ gameday:
     update_id: gd_firmware_update
     stable: ${update_source}
     beta: ${beta_update_source}
+  # The AHL's and the ECHL's feeds (substitutions above)
+  hockeytech:
+    ahl:
+      key: ${hockeytech_ahl_key}
+      client_code: ${hockeytech_ahl_client}
+    echl:
+      key: ${hockeytech_echl_key}
+      client_code: ${hockeytech_echl_client}
   on_action:
     - if:
         condition:

@@ -6,20 +6,23 @@
 
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace espn {
 
 // Saved in prefs and the boot cache: append, never renumber.
 enum class League : uint8_t { NFL = 0, NCAA = 1, NBA = 2, NHL = 3, MLB = 4, WNBA = 5, MLS = 6, EPL = 7, MCBB = 8,
-                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12, MILB = 13 };
+                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12, MILB = 13, AHL = 14, ECHL = 15 };
 
 enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5,
                              RACING = 6 };
 
-// Where a league's games come from: ESPN's site API, or for minor league
-// baseball the MLB Stats API (source_mlbstats.h). Each source is read, counted
-// and backed off on its own (GamedayComponent::open_).
-enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1 };
+// Where a league's games come from: ESPN's site API, for minor league
+// baseball the MLB Stats API (source_mlbstats.h), and for the AHL and the ECHL
+// HockeyTech's feed (source_hockeytech.h). Each source is read, counted and
+// backed off on its own (GamedayComponent::open_).
+enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1, HOCKEYTECH = 2 };
+static const size_t kSourceCount = 3;
 
 struct LeagueInfo {
   League league;
@@ -35,7 +38,8 @@ struct LeagueInfo {
   Source source{Source::ESPN};
 };
 
-constexpr LeagueInfo kLeagues[] = {
+// inline: one copy in the firmware, not one per file that reads it.
+inline constexpr LeagueInfo kLeagues[] = {
     {League::NFL, "nfl", "football/nfl", "NFL", "nfl", Sport::FOOTBALL, true, true, false, 30},
     {League::NCAA, "ncaa", "football/college-football", "NCAAF", "ncaa", Sport::FOOTBALL, true, true, true, 30},
     // A regular-season team schedule is ~2.7 MB, so no Up next list. Game 2
@@ -71,9 +75,18 @@ constexpr LeagueInfo kLeagues[] = {
     // it and no look-ahead is needed; logos are by team id. Short linger for
     // doubleheaders, as MLB's.
     {League::MILB, "milb", "mlbstats/milb", "MiLB", "milb", Sport::BASEBALL, true, true, true, 10, Source::MLB_STATS},
+    // Minor league hockey from HockeyTech's feed (source_hockeytech.h), not
+    // ESPN: path is not ESPN's, and logo_dir is the league's folder on
+    // HockeyTech's logo server. The team read lists the team's next games, so
+    // Up next comes with it; logos are by team id.
+    {League::AHL, "ahl", "hockeytech/ahl", "AHL", "ahl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
+    {League::ECHL, "echl", "hockeytech/echl", "ECHL", "echl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
 };
 
 constexpr size_t kLeagueCount = sizeof(kLeagues) / sizeof(kLeagues[0]);
+// Live games' saved list and the finals rotation's are a bit per league in
+// 16 bits (Prefs7::live_mask, recap_bit): every value is spoken for.
+static_assert(kLeagueCount <= 16, "League bitmasks are 16 bits");
 
 // Arrays indexed by League are kLeagueCount long: each row's value is below
 // it and no two rows share one.
@@ -122,6 +135,17 @@ inline bool is_mlb_stats(League league) { return league_source(league) == Source
 // Read from ESPN: the only source the big-play watcher reads (watch.h) and
 // the only one with the rosters favorite players come from (players.h).
 inline bool from_espn(League league) { return league_source(league) == Source::ESPN; }
+// The AHL and the ECHL: read from HockeyTech's feed (source_hockeytech.h).
+inline bool is_hockeytech(League league) { return league_source(league) == Source::HOCKEYTECH; }
+// A scan's leagues while one host's wait runs: that host's leagues left out
+// (both of HockeyTech's), the others read as usual. True when any was there.
+inline bool drop_source(std::vector<League> &leagues, Source source) {
+  const size_t before = leagues.size();
+  for (size_t i = leagues.size(); i-- > 0;)
+    if (league_source(leagues[i]) == source)
+      leagues.erase(leagues.begin() + i);
+  return leagues.size() != before;
+}
 
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in
 // Live games (set_request.h).

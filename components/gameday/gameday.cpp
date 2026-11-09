@@ -7,6 +7,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
+#include <algorithm>
 #include <cstring>
 #include <strings.h>
 #include <vector>
@@ -73,6 +74,8 @@ bool boot_was_planned() { return ::espn::boot_log_valid(boot_log) && boot_log.pl
 
 // curl's, which ESPN's edge accepts (poll_timing.h).
 static const char *const USER_AGENT = ::espn::kUserAgent;
+// The hosts in the log, by Source.
+static const char *const HOST_NAMES[::espn::kSourceCount] = {"ESPN", "MLB", "HockeyTech"};
 
 static const uint32_t MINUTE = 60 * 1000;
 static const uint32_t SCHEDULE_INTERVAL = 6 * 60 * MINUTE;
@@ -2194,13 +2197,15 @@ bool GamedayComponent::start_side_job_() {
   j.scan_leagues = this->scan_leagues_();
   if (j.scan_leagues.empty())
     return false;
-  // MLB refused or failed: the scan goes on without minor league baseball
-  // until its wait ends (recap_job_ holds its days the same way).
-  if (this->mlb_wait_.waiting(now))
-    ::espn::drop_mlb_stats(j.scan_leagues);
+  // MLB or HockeyTech refused or failed: the scan goes on without that
+  // host's leagues until its wait ends (recap_job_ holds their days the same
+  // way).
+  for (size_t i = 1; i < ::espn::kSourceCount; i++)
+    if (this->host_wait_[i].waiting(now))
+      ::espn::drop_source(j.scan_leagues, (::espn::Source) i);
   if (this->side_scan_ms_ == 0 || now - this->side_scan_ms_ >= this->side_rescan_ms_) {
     if (j.scan_leagues.empty())
-      return false;  // only minor league baseball, which waits: the scan once the wait is over
+      return false;  // only leagues whose host waits: the scan once the wait is over
     j.need_scan = true;
     j.want_finals = true;
     // Stamped now, so a scan that fails waits its turn like one that works.
@@ -2215,13 +2220,15 @@ bool GamedayComponent::start_side_job_() {
 void GamedayComponent::apply_side_job_() {
   Job &j = this->job_;
   const int64_t tnow = (int64_t) this->time_->timestamp_now();
-  // A minor league read here counts in MLB's own wait, which these reads
-  // keep to as well (start_side_job_, recap_job_).
-  const uint32_t mlb_ms =
-      ::espn::mlb_side_result(this->mlb_wait_, j.read_mlb, j.need_scan ? j.mlb_scan_failed : !j.recap_ok,
-                              j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), millis());
-  if (mlb_ms != 0)
-    ESP_LOGW(TAG, "Minor league scores for the idle display not read: next try in %us", (unsigned) (mlb_ms / 1000));
+  // A read here from MLB or HockeyTech counts in that host's own wait, which
+  // these reads keep to as well (start_side_job_, recap_job_).
+  for (size_t i = 1; i < ::espn::kSourceCount; i++) {
+    const Job::HostJob &h = j.host[i];
+    const uint32_t ms = ::espn::host_side_result(this->host_wait_[i], h.read, j.need_scan ? h.scan_failed : !j.recap_ok,
+                                                 h.throttled, h.retry_after_ms, random_uint32(), millis());
+    if (ms != 0)
+      ESP_LOGW(TAG, "%s scores for the idle display not read: next try in %us", HOST_NAMES[i], (unsigned) (ms / 1000));
+  }
   bool ok;
   if (j.need_scan) {
     ok = j.scan_ok || !j.live.empty();
@@ -2649,14 +2656,19 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
       {"User-Agent", USER_AGENT},
       {"Accept", "application/json"},
   };
-  // Minor league baseball's reads go to the MLB Stats API: its answers and
-  // refusals are kept apart from ESPN's.
-  const bool mlb = ::espn::is_mlb_url(url);
-  (mlb ? this->job_.read_mlb : this->job_.read_espn) = true;
+  // Minor league baseball's reads go to the MLB Stats API and the AHL's and
+  // the ECHL's to HockeyTech: each host's answers and refusals are kept
+  // apart from ESPN's.
+  const ::espn::Source src = ::espn::is_mlb_url(url)  ? ::espn::Source::MLB_STATS
+                             : ::espn::is_ht_url(url) ? ::espn::Source::HOCKEYTECH
+                                                      : ::espn::Source::ESPN;
+  const bool espn = src == ::espn::Source::ESPN;
+  Job::HostJob &side = this->job_.host[(size_t) src];
+  (espn ? this->job_.read_espn : side.read) = true;
   this->espn_requests_++;
   auto container = this->http_->get(url, headers, {"retry-after"});
-  (mlb ? this->mlb_status_ : this->espn_status_) = container == nullptr ? 0 : container->status_code;
-  (mlb ? this->mlb_answer_ms_ : this->espn_answer_ms_) = millis() == 0 ? 1 : millis();
+  (espn ? this->espn_status_ : this->host_status_[(size_t) src]) = container == nullptr ? 0 : container->status_code;
+  (espn ? this->espn_answer_ms_ : this->host_answer_ms_[(size_t) src]) = millis() == 0 ? 1 : millis();
   if (container == nullptr) {
     ESP_LOGW(TAG, "Request failed: %s", url.c_str());
     return nullptr;
@@ -2665,9 +2677,9 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
     ESP_LOGW(TAG, "HTTP %d for %s", container->status_code, url.c_str());
     if (::espn::is_throttle_status(container->status_code)) {
       // Worker task: the job is this task's until it reports done.
-      (mlb ? this->job_.mlb_throttled : this->job_.throttled) = true;
+      (espn ? this->job_.throttled : side.throttled) = true;
       uint32_t ra = ::espn::parse_retry_after_ms(container->get_response_header("retry-after"));
-      uint32_t &most = mlb ? this->job_.mlb_retry_after_ms : this->job_.retry_after_ms;
+      uint32_t &most = espn ? this->job_.retry_after_ms : side.retry_after_ms;
       if (ra > most)
         most = ra;
     }
@@ -2779,8 +2791,9 @@ void GamedayComponent::captive_tick_() {
       if (this->clock_set_() && this->fail_run_.streak == 0 && !this->captive_) {
         // Nothing says ESPN is out of reach yet (a DNS block page can look
         // like a portal to the probe): ask ESPN now and say so only if that
-        // read fails too. With no clock nothing can be read to check. MLB
-        // failing alone says nothing here: a sign-in page blocks ESPN too.
+        // read fails too. With no clock nothing can be read to check. MLB or
+        // HockeyTech failing alone says nothing here: a sign-in page blocks
+        // ESPN too.
         ESP_LOGI(TAG, "Wi-Fi check saw a sign-in page: reading ESPN now to check");
         this->captive_suspect_ = true;
         this->suspect_fails_mark_ = this->read_fails_;
@@ -2815,24 +2828,49 @@ void GamedayComponent::captive_tick_() {
   // A sign-in network usually blocks the time server too, and with no clock
   // nothing is read from ESPN, so a clock still unset 30 s after joining
   // counts as reads failing.
-  const bool failing = this->fail_run_.streak > 0 || this->mlb_wait_.run.streak > 0 ||
+  const bool failing = this->fail_run_.streak > 0 || this->other_host_failing_() ||
                        (!this->clock_set_() && now - this->probe_join_ms_ >= 30000);
   if (::espn::probe_due(this->probe_join_done_, this->captive_, failing, now - this->probe_ms_))
     this->start_probe_();
 }
 
+// A scan that reads leagues from more than one host: a failure at one of the
+// others is that host's own backoff (host_scan_result), not the scan's.
+static bool scan_mixed(const std::vector<League> &leagues) {
+  for (League l : leagues)
+    if (::espn::league_source(l) != ::espn::league_source(leagues[0]))
+      return true;
+  return false;
+}
+
 uint32_t GamedayComponent::back_off_() {
   this->read_fails_++;
-  if (this->job_mlb_only_()) {
-    uint32_t ms = this->mlb_wait_.fail(this->job_.mlb_throttled, this->job_.mlb_retry_after_ms, random_uint32(),
-                                       millis());
-    ESP_LOGW(TAG, "%u failed MLB read(s) in a row%s: next try in %us", (unsigned) this->mlb_wait_.run.streak,
-             this->mlb_wait_.run.throttled ? ", MLB is refusing" : "", (unsigned) (ms / 1000));
+  const ::espn::Source host = this->job_host_();
+  if (host != ::espn::Source::ESPN) {
+    ::espn::HostWait &w = this->host_wait_[(size_t) host];
+    const Job::HostJob &h = this->job_.host[(size_t) host];
+    uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+    ESP_LOGW(TAG, "%u failed %s read(s) in a row%s: next try in %us", (unsigned) w.run.streak,
+             HOST_NAMES[(size_t) host], w.run.throttled ? ", refused" : "", (unsigned) (ms / 1000));
     // Live games' fallback card: the rescan for a live game never waits for
-    // MLB (interval_for_phase_). The card waits out the rest (start_job_).
+    // that host (interval_for_phase_). The card waits out the rest
+    // (start_job_).
     if (this->live_fallback_ && !this->job_.need_scan && ms > this->rescan_left_())
       ms = this->rescan_left_();
     return ms;
+  }
+  if (!this->job_.read_espn) {
+    // A scan of two other hosts' leagues (MiLB beside the AHL) that both
+    // failed: each counted its own (host_scan_result), and the next try
+    // waits for the first of them to end. ESPN wasn't asked.
+    uint32_t first = 0;
+    for (size_t i = 1; i < ::espn::kSourceCount; i++) {
+      uint32_t w = this->host_wait_[i].wait_ms;
+      if (this->job_.host[i].read && w != 0 && (first == 0 || w < first))
+        first = w;
+    }
+    if (first != 0)
+      return first;
   }
   uint32_t ms = this->fail_run_.fail(this->job_.throttled, this->job_.retry_after_ms, random_uint32());
   ESP_LOGW(TAG, "%u failed read(s) in a row%s: next try in %us", (unsigned) this->fail_run_.streak,
@@ -2845,6 +2883,8 @@ uint32_t GamedayComponent::back_off_() {
 bool GamedayComponent::fetch_schedule_(const ::espn::Team *team, Schedule &out, const char *comp_slug) {
   if (::espn::is_mlb_stats(team->league))
     return this->fetch_mlb_schedule_(team, out);
+  if (::espn::is_hockeytech(team->league))
+    return this->fetch_ht_schedule_(team, out);
   std::string url = comp_slug != nullptr ? ::espn::team_url(team->league, team->espn_id, comp_slug)
                                          : ::espn::team_url(team->league, team->espn_id);
   ESP_LOGD(TAG, "Fetching schedule: %s", url.c_str());
@@ -2896,8 +2936,9 @@ int GamedayComponent::fetch_team_day_(const ::espn::Team *team, uint32_t group, 
 // own day after midnight Eastern.
 void GamedayComponent::take_game_on_now_(const ::espn::Team *team, Schedule &s, const std::string &done_event,
                                          const char *comp_slug) {
-  // Minor league baseball's team read lists today's games itself.
-  if (::espn::is_mlb_stats(team->league))
+  // Minor league baseball's and hockey's team reads list today's games
+  // themselves.
+  if (::espn::league_source(team->league) != ::espn::Source::ESPN)
     return;
   int64_t now = (int64_t) this->time_->timestamp_now();
   if (!s.event_id.empty() && s.kickoff_epoch <= now)
@@ -2919,6 +2960,10 @@ bool GamedayComponent::fetch_upcoming_(const ::espn::Team *team, std::vector<::e
   if (::espn::is_mlb_stats(team->league)) {
     Schedule s;
     return this->fetch_mlb_schedule_(team, s, &out);
+  }
+  if (::espn::is_hockeytech(team->league)) {
+    Schedule s;
+    return this->fetch_ht_schedule_(team, s, &out);
   }
   const ::espn::LeagueInfo *info = ::espn::league_info(team->league);
   if (info != nullptr && !info->season_list) {
@@ -2942,9 +2987,13 @@ bool GamedayComponent::fetch_live_games_(League league, std::vector<::espn::Live
                                          std::vector<::espn::Final> *finals, std::vector<::espn::Pending> *pending,
                                          int64_t epoch) {
   const int64_t day = epoch != 0 ? epoch : (int64_t) this->time_->timestamp_now();
-  // Minor league baseball's day comes from the MLB Stats API
-  const bool mlb = ::espn::is_mlb_stats(league);
-  std::string url = mlb ? ::espn::mlb_day_url(day) : ::espn::scan_url(league, day);
+  // Minor league baseball's day comes from the MLB Stats API, the AHL's and
+  // the ECHL's from HockeyTech
+  const ::espn::Source src = ::espn::league_source(league);
+  const bool mlb = src == ::espn::Source::MLB_STATS, ht = src == ::espn::Source::HOCKEYTECH;
+  std::string url = mlb  ? ::espn::mlb_day_url(day)
+                    : ht ? ::espn::ht_day_url(league, day)
+                         : ::espn::scan_url(league, day);
   ESP_LOGD(TAG, "Scanning for live games: %s", url.c_str());
   auto container = this->open_(url);
   if (container == nullptr)
@@ -2954,8 +3003,9 @@ bool GamedayComponent::fetch_live_games_(League league, std::vector<::espn::Live
   size_t finals_before = finals != nullptr ? finals->size() : 0;
   size_t pending_before = pending != nullptr ? pending->size() : 0;
   int64_t next = 0;
-  bool ok = mlb ? ::espn::parse_mlb_day(reader, out, &next, finals, pending)
-                : ::espn::parse_live_games(reader, out, &next, finals, pending);
+  bool ok = mlb  ? ::espn::parse_mlb_day(reader, out, &next, finals, pending)
+            : ht ? ::espn::parse_ht_day(reader, out, &next, finals, pending)
+                 : ::espn::parse_live_games(reader, out, &next, finals, pending);
   for (size_t i = before; i < out.size(); i++)
     out[i].league = (uint8_t) league;
   if (finals != nullptr)
@@ -2980,6 +3030,8 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   // the day's scoreboard it sits in, up to 750 KB for college football.
   if (::espn::is_mlb_stats(league))
     return this->fetch_mlb_game_(schedule, out);
+  if (::espn::is_hockeytech(league))
+    return this->fetch_ht_game_(league, schedule, out);
   const ::espn::LeagueInfo *info = ::espn::league_info(league);
   bool per_event = info != nullptr && info->per_event;
   std::string url = per_event ? ::espn::event_url(league, schedule.event_id, schedule.comp_slug)
@@ -3055,6 +3107,52 @@ bool GamedayComponent::fetch_mlb_game_(const Schedule &schedule, GameSnapshot &o
     ESP_LOGW(TAG, "Game %s not parsed (%u bytes)", schedule.event_id.c_str(), (unsigned) reader.total());
     return false;
   }
+  ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
+           g.team_score, g.opp_abbr.c_str(), g.opp_score, g.short_detail.c_str(), (unsigned) reader.total());
+  out = std::move(g);
+  return true;
+}
+
+// ---- Minor league hockey (HockeyTech, source_hockeytech.h) -------------------
+
+bool GamedayComponent::fetch_ht_schedule_(const ::espn::Team *team, Schedule &out,
+                                          std::vector<::espn::Upcoming> *upcoming) {
+  std::string url = ::espn::ht_team_url(team->league, team->espn_id);
+  ESP_LOGD(TAG, "Fetching schedule: %s", url.c_str());
+  auto container = this->open_(url);
+  if (container == nullptr)
+    return false;
+  ContainerReader reader(container, this->espn_bytes_);
+  Schedule s;
+  // The Up next list: the game on the board and the three after it.
+  int r = ::espn::parse_ht_team(reader, team->espn_id, (int64_t) this->time_->timestamp_now(), s, upcoming, 4);
+  container->end();
+  if (r < 0) {
+    ESP_LOGW(TAG, "Schedule parse failed after %u bytes", (unsigned) reader.total());
+    return false;
+  }
+  ESP_LOGI(TAG, "Schedule: game %s kickoff %lld, %u upcoming (%u bytes)", r > 0 ? s.event_id.c_str() : "none",
+           (long long) s.kickoff_epoch, (unsigned) (upcoming != nullptr ? upcoming->size() : 0),
+           (unsigned) reader.total());
+  out = std::move(s);
+  return true;
+}
+
+bool GamedayComponent::fetch_ht_game_(League league, const Schedule &schedule, GameSnapshot &out) {
+  std::string url = ::espn::ht_game_url(league, schedule.event_id);
+  ESP_LOGD(TAG, "Fetching game: %s", url.c_str());
+  auto container = this->open_(url);
+  if (container == nullptr)
+    return false;
+  ContainerReader reader(container, this->espn_bytes_);
+  GameSnapshot g;
+  bool ok = ::espn::parse_ht_game(reader, league, this->our_id_(), g);
+  container->end();
+  if (!ok) {
+    ESP_LOGW(TAG, "Game %s not parsed (%u bytes)", schedule.event_id.c_str(), (unsigned) reader.total());
+    return false;
+  }
+  ::espn::ht_fill_from_schedule(g, schedule);
   ESP_LOGI(TAG, "Game: %s %s %d - %s %d [%s] (%u bytes)", ::espn::state_name(g.state), g.team_abbr.c_str(),
            g.team_score, g.opp_abbr.c_str(), g.opp_score, g.short_detail.c_str(), (unsigned) reader.total());
   out = std::move(g);
@@ -3186,8 +3284,16 @@ void GamedayComponent::start_job_() {
     this->start_worker_();
     return;
   }
-  if (j.scan_leagues.size() > 1 && this->mlb_wait_.waiting(now))
-    ::espn::drop_mlb_stats(j.scan_leagues);  // MLB refused or failed: the other leagues are scanned without it
+  {
+    // A host other than ESPN refused or failed: while leagues from another
+    // host are left, they are scanned without its own.
+    auto held = [this, now](League l) {
+      ::espn::Source s = ::espn::league_source(l);
+      return s != ::espn::Source::ESPN && this->host_wait_[(size_t) s].waiting(now);
+    };
+    if (std::any_of(j.scan_leagues.begin(), j.scan_leagues.end(), [&held](League l) { return !held(l); }))
+      j.scan_leagues.erase(std::remove_if(j.scan_leagues.begin(), j.scan_leagues.end(), held), j.scan_leagues.end());
+  }
   if (this->favorites_mode_()) {
     this->start_fav_job_(now);
     return;
@@ -3430,15 +3536,22 @@ void GamedayComponent::run_job_() {
     std::vector<::espn::Final> *finals = j.want_finals ? &j.finals : nullptr;
     std::vector<::espn::Pending> *pending = j.want_finals ? &j.pending : nullptr;
     j.scan_ok = true;
+    const bool mixed = scan_mixed(j.scan_leagues);
+    bool answered = false;
     for (League l : j.scan_leagues) {
       bool ok = this->fetch_live_games_(l, j.live, j.next_kickoff, finals, pending);
-      if (::espn::is_mlb_stats(l)) {
-        j.mlb_scan_failed = !ok;
-        if (j.scan_leagues.size() > 1)
-          continue;  // MLB's own backoff (mlb_scan_result), not the scan's
+      answered = answered || ok;
+      ::espn::Source src = ::espn::league_source(l);
+      if (src != ::espn::Source::ESPN) {
+        Job::HostJob &h = j.host[(size_t) src];
+        h.scan_failed = h.scan_failed || !ok;
+        if (mixed)
+          continue;  // that host's own backoff (host_scan_result), not the scan's
       }
       j.scan_ok = ok && j.scan_ok;
     }
+    // Nothing answered at all: the scan failed, whichever hosts it asked.
+    j.scan_ok = j.scan_ok && answered;
     return;  // the main loop picks a game, then the next cycle polls it
   }
   if (j.need_upcoming) {
@@ -3567,12 +3680,16 @@ void GamedayComponent::apply_job_() {
     return;
   }
   if (j.need_scan) {
-    // Scanned alone, a failed minor league read is the scan's failure below,
-    // which back_off_ counts against MLB.
-    uint32_t mlb_ms = ::espn::mlb_scan_result(this->mlb_wait_, j.read_mlb, j.mlb_scan_failed, j.scan_leagues.size(),
-                                              j.mlb_throttled, j.mlb_retry_after_ms, random_uint32(), now);
-    if (mlb_ms != 0)
-      ESP_LOGW(TAG, "Minor league scan failed: next try in %us", (unsigned) (mlb_ms / 1000));
+    // With only one host's leagues, a failed read is the scan's failure
+    // below, which back_off_ counts against that host.
+    const bool mixed = scan_mixed(j.scan_leagues);
+    for (size_t i = 1; i < ::espn::kSourceCount; i++) {
+      const Job::HostJob &h = j.host[i];
+      uint32_t ms = ::espn::host_scan_result(this->host_wait_[i], h.read, h.scan_failed, mixed, h.throttled,
+                                             h.retry_after_ms, random_uint32(), now);
+      if (ms != 0)
+        ESP_LOGW(TAG, "%s scan failed: next try in %us", HOST_NAMES[i], (unsigned) (ms / 1000));
+    }
     if (this->following_()) {
       // follow=1 came in while this scan ran: the followed game stays up.
       this->schedule_next_(this->interval_for_phase_());
@@ -4647,6 +4764,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
     f.situation = ::espn::basketball_series(g);
   f.team_color = ::espn::parse_color(g.team_color);
   f.opponent_color = ::espn::parse_color(g.opp_color);
+  if (g.valid && g.sport == ::espn::Sport::HOCKEY) {
+    // An AHL or ECHL team whose logo is too large for the panel has none to
+    // fetch (source_hockeytech.h): its abbreviation badge takes the logo's
+    // place. Every NHL team has one.
+    f.team_badge = !g.team_abbr.empty() && g.team_logo.empty();
+    f.opponent_badge = !g.opp_abbr.empty() && g.opp_logo.empty();
+  }
 #ifdef GAMEDAY_DEMO
   this->demo_badges_(f);
 #endif
@@ -4883,8 +5007,12 @@ std::string GamedayComponent::racing_dates_(int64_t start, int64_t end) const {
 bool GamedayComponent::recap_job_(Job &j, int64_t tnow) {
   const uint8_t done = ::espn::kRecapMaxDays + 1;
   const uint16_t leagues = this->recap_leagues_();
-  // MLB refused or failed: its days wait, the other leagues' don't.
-  auto held = [this](uint8_t i) { return ::espn::is_mlb_stats((League) i) && this->mlb_wait_.waiting(millis()); };
+  // A host other than ESPN refused or failed: its leagues' days wait, the
+  // others' don't.
+  auto held = [this](uint8_t i) {
+    ::espn::Source s = ::espn::league_source((League) i);
+    return s != ::espn::Source::ESPN && this->host_wait_[(size_t) s].waiting(millis());
+  };
   for (uint8_t i = 0; i < ::espn::kLeagueCount; i++) {
     if (!(leagues & ::espn::recap_bit(i)) || held(i))
       continue;
@@ -4941,7 +5069,7 @@ void GamedayComponent::apply_recap_job_() {
     // wait (recap_job_ holds it) while the other leagues' days and the scan
     // for a live game go on (start_job_).
     const uint32_t ms = this->back_off_();
-    this->schedule_next_(this->job_mlb_only_() ? 0 : ms);
+    this->schedule_next_(this->job_host_() != ::espn::Source::ESPN ? 0 : ms);
     return;
   }
   this->clear_backoff_();
@@ -5584,9 +5712,12 @@ std::string GamedayComponent::health_json_() {
   const uint32_t at = this->espn_answer_ms_.load();
   h.espn_status = this->espn_status_.load();
   h.espn_ago = at == 0 ? -1 : (int64_t) ((millis() - at) / 1000);
-  const uint32_t mlb_at = this->mlb_answer_ms_.load();
-  h.mlb_status = this->mlb_status_.load();
+  const size_t mlb = (size_t) ::espn::Source::MLB_STATS, ht = (size_t) ::espn::Source::HOCKEYTECH;
+  const uint32_t mlb_at = this->host_answer_ms_[mlb].load(), ht_at = this->host_answer_ms_[ht].load();
+  h.mlb_status = this->host_status_[mlb].load();
   h.mlb_ago = mlb_at == 0 ? -1 : (int64_t) ((millis() - mlb_at) / 1000);
+  h.ht_status = this->host_status_[ht].load();
+  h.ht_ago = ht_at == 0 ? -1 : (int64_t) ((millis() - ht_at) / 1000);
 #ifdef ESPHOME_PROJECT_VERSION
   h.version = ESPHOME_PROJECT_VERSION;
 #else

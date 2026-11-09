@@ -140,6 +140,8 @@
     {"name": "auto leaves golf out beside a favorite", "start": {"team": "pga:1106", "team_league": "pga", "favs": ["mlb:15", "", "", ""]}, "set": [["live", ""]],
      "expect": {"live": ["mlb"], "live_auto": true}},
     {"name": "live leaves racing out", "set": [["live", "f1,nascar,nhl"]], "expect": {"live": ["nhl"], "live_auto": false}},
+    {"name": "live takes the AHL and the ECHL, the mask's last two leagues", "set": [["live", "echl,nhl,ahl"]], "expect": {"live": ["nhl", "ahl", "echl"], "live_auto": false}},
+    {"name": "auto adds an ECHL team's league", "start": {"team": "echl:70", "team_league": "echl", "favs": ["ahl:324", "", "", ""]}, "set": [["live", ""]], "expect": {"live": ["ahl", "echl"], "live_auto": true}},
     {"name": "auto leaves a racing team's league out", "start": {"team": "f1:2030", "team_league": "f1"}, "set": [["live", ""]], "expect": {"live": ["nfl"], "live_auto": true}},
 
     {"name": "two panels", "set": [["panels", "2"]], "expect": {"panels": 2, "rows": 1}},

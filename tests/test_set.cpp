@@ -633,7 +633,8 @@ void test_live_leagues() {
   uint16_t mlb_nba = (uint16_t) ((1u << (uint8_t) League::MLB) | (1u << (uint8_t) League::NBA));
   SCHECK(keys(live_leagues(mlb_nba, (uint8_t) League::NFL, {(uint8_t) League::NHL})) == "mlb,nba",
          "an explicit mask ignores team and favorites");
-  SCHECK(keys(live_leagues(1u << 15, (uint8_t) League::MLB, none)) == "nfl", "a mask of unknown leagues is NFL");
+  // Every bit of the 16-bit mask is a league now, the last the ECHL's
+  SCHECK(keys(live_leagues(1u << 15, (uint8_t) League::MLB, none)) == "echl", "the mask's last bit is the ECHL");
   SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, none)) == "nfl", "auto skips a golf team");
   SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, {(uint8_t) League::LPGA, (uint8_t) League::NHL})) == "nhl",
          "auto skips golf");

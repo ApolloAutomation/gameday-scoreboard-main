@@ -35,17 +35,6 @@ inline bool is_mlb_url(const std::string &url) {
   return url.compare(0, strlen(kMlbStatsRoot), kMlbStatsRoot) == 0;
 }
 
-// A scan's leagues while the MLB Stats API's wait runs: minor league baseball
-// left out, the others read as usual. True when it was there.
-inline bool drop_mlb_stats(std::vector<League> &leagues) {
-  for (size_t i = 0; i < leagues.size(); i++)
-    if (is_mlb_stats(leagues[i])) {
-      leagues.erase(leagues.begin() + i);
-      return true;
-    }
-  return false;
-}
-
 // Team::group for a minor league team: its level's MLB Stats sport id.
 static const uint32_t kMilbTripleA = 11, kMilbDoubleA = 12, kMilbHighA = 13, kMilbSingleA = 14;
 // "Triple-A", "Double-A", "High-A", "Single-A"; "" for anything else.
