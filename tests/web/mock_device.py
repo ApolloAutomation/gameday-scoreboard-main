@@ -343,18 +343,20 @@ def put_bet(slot, doc):
 
 def clean_player_name(v):
     """clean_player_name() (set_request.h): capitals, digits, spaces and . ' - only, spaces at either end
-    dropped, cut to kPlayerNameMax and a cut never left ending in a space or . ' -; "" refuses it."""
-    v = v.strip(" ")
+    dropped and a run inside made one, cut to kPlayerNameMax and a cut never left ending in a space or
+    . ' -; "" refuses it, as does a name with no letter or digit left."""
     out = ""
     for ch in v:
         if "a" <= ch <= "z":
             ch = chr(ord(ch) - 32)
         if not ("A" <= ch <= "Z" or "0" <= ch <= "9" or ch in " .'-"):
             return ""
-        out += ch
+        if ch != " " or (out and out[-1] != " "):
+            out += ch
+    out = out.rstrip(" ")
     if len(out) > LIMITS["kPlayerNameMax"]:
         out = out[:LIMITS["kPlayerNameMax"]].rstrip(" .'-")
-    return out
+    return out if re.search(r"[A-Z0-9]", out) else ""
 
 
 def espn_id(v):

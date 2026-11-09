@@ -9,6 +9,8 @@
 // What ESPN gives differs by sport, and so does what can splash:
 // - Football and baseball: the last play's athletes and its points, at each
 //   read. A favorite in a play that scored, between two reads, splashes.
+//   Never on a football try: ESPN's college try is a play of its own made
+//   from the touchdown's, which lists the touchdown's scorer, not the kicker.
 // - Basketball: the last play is only the latest at each read (10 s apart),
 //   so most baskets are never seen. Only a late lead change or a buzzer
 //   beater (alerts.h) credited to the favorite splashes.
@@ -17,6 +19,9 @@
 //   Goal (10) Snap Shot, assists: ..."). The scorer's name is matched with
 //   the favorites on the scoring team, and splashes only when exactly one
 //   matches.
+// Only while the game is on: ESPN's final document has no last play, so a
+// play that ends the game names its scorer only when a read catches it
+// before the final.
 // ESPN's leaders: football's for the whole game (passing, rushing,
 // receiving), basketball's per team (points, rebounds, assists, a summary
 // line), baseball's both. Hockey and soccer have none, so no stat line.
@@ -209,22 +214,61 @@ inline std::string nhl_scorer(const std::string &text) {
   return out;
 }
 
-// name, the panel's name for a favorite ("TKACHUK", or "B. TKACHUK" when a
-// teammate shares the last name), is the scorer: the scorer's name ends with
-// it as whole words, and an initial is the first name's.
-inline bool nhl_name_is(const std::string &scorer, const std::string &name) {
-  std::string last = name;
-  char initial = 0;
-  if (name.size() > 3 && name[1] == '.' && name[2] == ' ') {
-    initial = name[0];
-    last = name.substr(3);
+// last is the end of the scorer's name as whole words. A last name the page
+// cut to fit (cut) may instead stop inside the scorer's last word, the rest
+// of it letters, hyphens or apostrophes: "NUGENT-HOP" is RYAN NUGENT-HOPKINS.
+inline bool name_ends(const std::string &scorer, const std::string &last, bool cut) {
+  if (last.empty())
+    return false;
+  for (size_t at = scorer.find(last); at != std::string::npos; at = scorer.find(last, at + 1)) {
+    if (at != 0 && scorer[at - 1] != ' ')
+      continue;
+    size_t end = at + last.size();
+    if (cut)
+      while (end < scorer.size() && ((scorer[end] >= 'A' && scorer[end] <= 'Z') || scorer[end] == '-' || scorer[end] == '\''))
+        end++;
+    if (end == scorer.size())
+      return true;
   }
-  if (last.empty() || scorer.size() < last.size() || scorer.compare(scorer.size() - last.size(), last.size(), last) != 0)
+  return false;
+}
+
+// name, the panel's name for a favorite ("TKACHUK", "B. TKACHUK" when a
+// teammate shares the last name, "JE. SMITH" when the initial does too), is
+// the scorer: the scorer's name ends with it as whole words, and the letters
+// before the dot start the first name. A name of kPlayerNameMax characters,
+// or one or two less (the page drops a space or a hyphen it cut at), may
+// have been cut short: "MARCHESSAU", "E. PETTERS".
+inline bool nhl_name_is(const std::string &scorer, const std::string &name) {
+  const bool cut = name.size() + 2 >= (size_t) kPlayerNameMax;
+  if (name_ends(scorer, name, cut))
+    return true;
+  // "ST. IVANY" is a last name too, tried above.
+  const size_t dot = name.find(". ");
+  if (dot == std::string::npos || dot == 0 || dot > 3)
     return false;
-  const size_t before = scorer.size() - last.size();
-  if (before != 0 && scorer[before - 1] != ' ')
-    return false;
-  return initial == 0 || scorer[0] == initial;
+  for (size_t i = 0; i < dot; i++)
+    if (name[i] < 'A' || name[i] > 'Z')
+      return false;
+  return scorer.compare(0, dot, name, 0, dot) == 0 && name_ends(scorer, name.substr(dot + 2), cut);
+}
+
+// ESPN's college try: a play of its own with an id below zero, made from the
+// touchdown's play, whose athletes it lists (the touchdown's scorer, never
+// the kicker).
+inline bool espn_made_try(const GameSnapshot &s) { return !s.play_id.empty() && s.play_id[0] == '-'; }
+
+// The last play is the try after a touchdown: ESPN's college try, a play
+// ESPN calls an extra point or a conversion, or one worth 1 point or 2 that
+// is no safety. The NFL's touchdown play has its try in it instead ("...
+// TOUCHDOWN. T.Bass extra point is GOOD"), its type the touchdown's.
+inline bool football_try(const GameSnapshot &s, bool safety) {
+  if (espn_made_try(s) || s.play_points == 1 || (s.play_points == 2 && !safety))
+    return true;
+  for (const char *w : {"extra point", "conversion", "two point", "two-point", "2pt"})
+    if (has_word(s.play_type, w))
+      return true;
+  return false;
 }
 
 // The athlete is in the play for team: the team ESPN lists them on there,
@@ -239,12 +283,15 @@ inline bool credited(const GameSnapshot &cur, const FavPlayer &p, uint32_t team)
 }  // namespace detail
 
 // The favorite in league who scored between two reads of one game, the
-// board's game read in league. Only plays while the game is on, and at the
-// final only the play that ended it (a walk-off, a buzzer beater), as
-// detect_big_play sees them with every switch on and both sides counting:
-// the favorite's own switches are the Favorite player one, not the team's.
+// board's game read in league. Only plays while the game is on (ESPN's final
+// document has no last play to credit), as detect_big_play sees them with
+// every switch on and both sides counting: the favorite's own switches are
+// the Favorite player one, not the team's.
 // Football and baseball: they are one of the last play's athletes, on the side
-// that scored, the play is new and ESPN gives it points. Basketball: the
+// that scored, the play is new and ESPN gives it points. Never a football try
+// (an extra point, a 2-point conversion), whose athletes are the
+// touchdown's: when the touchdown and ESPN's college try came between the
+// reads, the touchdown is the try's athletes'. Basketball: the
 // same, for a late lead change or a buzzer beater only. Soccer: the newest
 // goal is theirs, not an own goal. Hockey: the scorer's name is theirs and no
 // other favorite's on that team, in words new since the read before.
@@ -253,11 +300,10 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
   PlayerScore none;
   if (league_sport((League) league) != cur.sport)
     return none;
+  if (prev.state != GameState::IN || cur.state != GameState::IN)
+    return none;
   const BigPlay p = detect_big_play(prev, cur, kAlertsAll, true);
   if (p.type == Alert::NONE || p.side == AlertSide::GAME)
-    return none;
-  const bool live = prev.state == GameState::IN && cur.state == GameState::IN;
-  if (!live && p.type != Alert::WALK_OFF && p.type != Alert::BUZZER_BEATER)
     return none;
   const uint32_t team = p.side == AlertSide::TEAM ? cur.team_id : cur.opp_id;
   PlayerScore out;
@@ -291,7 +337,15 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
   }
   if (cur.sport != Sport::FOOTBALL && cur.sport != Sport::BASEBALL && cur.sport != Sport::BASKETBALL)
     return none;
-  if (cur.play_points <= 0 || !detail::new_play(prev, cur))
+  if (!detail::new_play(prev, cur))
+    return none;
+  // A try is never its athletes' own. Only ESPN's college try, which lists
+  // the touchdown's, names them, for a touchdown in the same read: the side
+  // gained 6 to 8 (a missed try, a kick, a conversion).
+  const bool is_try = cur.sport == Sport::FOOTBALL && detail::football_try(cur, p.type == Alert::SAFETY);
+  if (is_try && !(detail::espn_made_try(cur) && p.points >= 6 && p.points <= 8))
+    return none;
+  if (!is_try && cur.play_points <= 0)
     return none;
   if (cur.sport == Sport::BASKETBALL && p.type != Alert::LEAD_CHANGE && p.type != Alert::BUZZER_BEATER)
     return none;
@@ -301,14 +355,13 @@ inline PlayerScore player_scored(const GameSnapshot &prev, const GameSnapshot &c
   if (out.slot < 0)
     return none;
   if (cur.sport == Sport::FOOTBALL) {
-    // The play's own points say what it was: a touchdown can be followed
-    // by its try within one read.
+    // The play's own points say what it was, not the score: a field goal
+    // and a touchdown can come in one read.
     const int pts = cur.play_points;
-    out.word = alert_word(pts == 6   ? Alert::TOUCHDOWN
-                          : pts == 3 ? Alert::FIELD_GOAL
-                          : pts == 1 ? Alert::EXTRA_POINT
-                          : pts == 2 ? (p.type == Alert::SAFETY ? Alert::SAFETY : Alert::TWO_POINT)
-                                     : p.type);
+    out.word = alert_word(is_try || pts == 6 ? Alert::TOUCHDOWN
+                          : pts == 3         ? Alert::FIELD_GOAL
+                          : pts == 2         ? Alert::SAFETY  // a 2-point conversion is a try
+                                             : p.type);
   } else if (p.type == Alert::RUN) {
     out.word = cur.play_points == 1 ? std::string("RBI") : std::to_string(cur.play_points) + " RBI";
   } else {

@@ -311,4 +311,17 @@ inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neut
   return Splash{abbr + (own_line ? "\n" : " ") + word, color};
 }
 
+// The splashes the panel draws as fireworks on black, the text in the team's
+// color (gameday-live.yaml); the rest are a solid flash. Touchdowns, home
+// runs, grand slams, walk-offs, buzzer beaters, hockey and soccer goals and
+// the win ("DAL WINS!", "SCHEFFLER WINS!"). A favorite player's splash puts
+// their name before the play's words (players.h), and a name holds no "!",
+// so "WINSTON 2-PT" isn't a win: it gets the same flash as the team's.
+inline bool splash_fireworks(const std::string &text, Sport sport) {
+  for (const char *w : {"TOUCHDOWN", "WINS!", "HOME RUN", "GRAND SLAM", "WALK-OFF", "BUZZER"})
+    if (text.find(w) != std::string::npos)
+      return true;
+  return (sport == Sport::HOCKEY || sport == Sport::SOCCER) && text.find("GOAL") != std::string::npos;
+}
+
 }  // namespace espn

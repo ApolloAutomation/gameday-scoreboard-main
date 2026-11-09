@@ -259,31 +259,33 @@ struct SetOp {
 
 // The panel's name for a favorite player, from what the page sends: capital
 // letters, digits, spaces and . ' - only (lower case is raised), spaces at
-// either end dropped, cut to kPlayerNameMax characters, and a cut never
-// left ending in a space or . ' -. "" when a character is anything else or
-// nothing is left, which refuses the request. "Allen" is "ALLEN",
-// "J. Hughes" "J. HUGHES", "St. Brown" "ST. BROWN".
+// either end dropped and a run of them inside made one, cut to
+// kPlayerNameMax characters, and a cut never left ending in a space or
+// . ' -. "" when a character is anything else, or no letter or digit is
+// left, which refuses the request. "Allen" is "ALLEN", "J. Hughes"
+// "J. HUGHES", "St. Brown" "ST. BROWN".
 inline std::string clean_player_name(const std::string &v) {
-  size_t a = 0, b = v.size();
-  while (a < b && v[a] == ' ')
-    a++;
-  while (b > a && v[b - 1] == ' ')
-    b--;
+  auto alnum = [](char c) { return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); };
   std::string out;
-  for (size_t i = a; i < b; i++) {
-    char c = v[i];
+  for (char c : v) {
     if (c >= 'a' && c <= 'z')
       c = (char) (c - 'a' + 'A');
-    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' || c == '.' || c == '\'' || c == '-'))
+    if (!alnum(c) && c != ' ' && c != '.' && c != '\'' && c != '-')
       return "";
-    out += c;
+    if (c != ' ' || (!out.empty() && out.back() != ' '))
+      out += c;
   }
+  while (!out.empty() && out.back() == ' ')
+    out.pop_back();
   if (out.size() > (size_t) kPlayerNameMax) {
     out.resize(kPlayerNameMax);
     while (!out.empty() && (out.back() == ' ' || out.back() == '.' || out.back() == '\'' || out.back() == '-'))
       out.pop_back();
   }
-  return out;
+  for (char c : out)
+    if (alnum(c))
+      return out;
+  return "";
 }
 
 // An ESPN id as the page sends it: 1 to 10 digits, nothing else, not 0 and
