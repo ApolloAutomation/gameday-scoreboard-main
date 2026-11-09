@@ -21,7 +21,7 @@ The two are kept apart. If MLB's service is slow, down or refuses the panel, the
 
 Tap **Change team** on the device page and open the **MiLB** tab. The teams are under a heading for each level, Triple-A first, and each tile says its level. Search finds a team by its name, its city or its level, like "double-a". See [Pick your team](/get-started/pick-your-team/).
 
-Home Assistant's **Team** list leaves minor league teams out, since 120 more would make the list too long for one entity. Pick them on the device page. Once you do, Home Assistant's Game Status and Last Play follow the game like any other.
+Home Assistant's **Team** list leaves minor league teams out, since 120 more would make the list too long for one entity. Pick them on the device page. Once you do, Home Assistant's **Game Status** follows the game like any other. **Last Play** stays empty for a minor league team, since the panel gets no plays from MLB (below).
 
 Minor league teams can be [favorites](/using/favorites/) too, mixed with teams from any other league.
 
