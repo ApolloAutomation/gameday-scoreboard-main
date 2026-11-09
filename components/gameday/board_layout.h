@@ -44,9 +44,11 @@ inline int font_ink_bottom(BoardFont f) {
   static const int8_t k[] = {6, 8, 11, 18, 25};
   return k[(int) f];
 }
-// The last row any of its characters inks (a descender's, a comma's).
+// The last row any of its characters inks (a descender's, a comma's): the
+// tail of y, p or q (and of ç, ý and ÿ) on spleen_12's last row. spleen_24
+// and spleen_32 have no letter with a tail among their few.
 inline int font_desc_bottom(BoardFont f) {
-  static const int8_t k[] = {7, 10, 14, 23, 25};
+  static const int8_t k[] = {7, 11, 14, 18, 25};
   return k[(int) f];
 }
 
@@ -91,11 +93,13 @@ inline SplashBox splash_box(int w, int h) {
 
 // The heat and power warning (pages/guard.yaml): a line kGuardRows high
 // along the bottom of a screen h rows high, kGuardRowsLarge with Large text,
-// whose ticker sits higher (game_geom). On one row of panels it covers the
-// ticker; on a 2x2 it sits under the bottom half's ticker.
-static const int kGuardRows = 9, kGuardRowsLarge = 11;
+// whose ticker's line is 12 rows (game_geom). On one row of panels it covers
+// the ticker; on a 2x2 it sits under the bottom half's ticker. Its words
+// (spleen_8) sit in the middle of the line: guard_label_y rows down.
+static const int kGuardRows = 9, kGuardRowsLarge = 12;
 inline int guard_rows(bool large_text) { return large_text ? kGuardRowsLarge : kGuardRows; }
 inline int guard_line_y(int h, bool large_text = false) { return h - guard_rows(large_text); }
+inline int guard_label_y(bool large_text) { return (guard_rows(large_text) - kGuardRows + 1) / 2; }
 
 // The board's own ticker, along its bottom 8 rows, shows when the board is
 // the whole screen's height: one row of panels, or the top half of a 2x2
@@ -113,8 +117,8 @@ inline bool board_ticker(int h) { return h <= kBoardRows; }
 // A Large clock is spleen_24, "12:45 PM" from 128 wide; on one panel (64
 // wide) the digits alone, with the AM or PM under them in spleen_8. The
 // ticker is spleen_16 at either text size, already the panel's biggest with
-// every letter; with Large text it ends two rows higher, above the warning's
-// taller line.
+// every letter; with Large text it ends three rows higher, above the
+// warning's taller line.
 static const int kLowerTimeY = 5, kLowerTimeRows = 16, kLowerDateRows = 12, kLowerTickerRows = 16;
 struct LowerHalf {
   bool time;
@@ -188,9 +192,11 @@ inline std::string clock_ampm(const std::string &time) {
 // them; a single panel has no room for records, pips or the situation row,
 // which stay hidden and keep no place here (zero). A badge takes its logo's
 // place. Index 0 is the team's side, on the left; 1 the opponent's.
-// Large text makes the ticker spleen_12, three rows higher, so the
-// situation row moves up two rows on a wide board and the scores one on one
-// panel, the possession line under them closer, to keep clear of it.
+// Large text makes the ticker spleen_12, its 12-row line (the tails of y, p
+// and q on the last) four rows higher, so on a wide board the situation
+// row's letters (down and distance, the count, the outs) move up three rows
+// and the pips and the bases two, and on one panel the scores move up one,
+// the possession line under them closer, to keep clear of it.
 
 struct Spot {
   int16_t x, y, w;
@@ -223,10 +229,13 @@ inline GameGeom game_geom(int w, bool large_text = false) {
   GameGeom g{};
   const bool wide = w >= 128;
   const int half = w / 2;  // also the diamond's middle
-  const int lift = large_text ? 2 : 0;  // the situation row, on a wide board
+  // On a wide board, with Large text: the situation row's letters, whose
+  // tails (spleen_8's last row) end above the ticker's capitals, and the
+  // pips and the bases, which end above them too
+  const int lift = large_text ? 3 : 0, shape_lift = large_text ? 2 : 0;
   g.wide = wide;
   g.ticker_font = large_text ? BoardFont::S12 : BoardFont::S8;
-  g.ticker_y = (int16_t) (kBoardRows - (large_text ? 11 : 8));
+  g.ticker_y = (int16_t) (kBoardRows - font_rows(g.ticker_font));
   g.msg_font = g.sub_font = wide ? BoardFont::S12 : BoardFont::S8;
   g.clock_time_y = wide ? 6 : 14;
   g.clock_sub_y = wide ? 26 : 34;
@@ -252,14 +261,14 @@ inline GameGeom game_geom(int w, bool large_text = false) {
       g.pip_x[i] = (int16_t) (18 - 9 + i * 7);
       g.pip_x[3 + i] = (int16_t) (w - 18 - 9 + i * 7);
     }
-    g.pip_y = (int16_t) (48 - lift);
+    g.pip_y = (int16_t) (48 - shape_lift);
     g.base_px = 4;
     g.base_x[0] = (int16_t) (half + 3);
     g.base_x[1] = (int16_t) (half - 2);
     g.base_x[2] = (int16_t) (half - 7);
-    g.base_y[0] = (int16_t) (51 - lift);
-    g.base_y[1] = (int16_t) (47 - lift);
-    g.base_y[2] = (int16_t) (51 - lift);
+    g.base_y[0] = (int16_t) (51 - shape_lift);
+    g.base_y[1] = (int16_t) (47 - shape_lift);
+    g.base_y[2] = (int16_t) (51 - shape_lift);
     g.count = {32, (int16_t) (48 - lift), (int16_t) (half - 9 - 32)};
     g.outs = {(int16_t) (half + 9), (int16_t) (48 - lift), 28};  // "2 OUT" is 25 px in spleen_8
   } else {

@@ -374,17 +374,19 @@ void test_splash_places() {
   LCHECK(L.tile_x[0] == (128 - kSplashTile) / 2);
 }
 
-// Large text: the ticker in spleen_12, three rows higher, and the rows over
-// it moved up to keep clear of it; a leaderboard keeps its own ticker.
+// Large text: the ticker in spleen_12, its whole 12-row line on the board,
+// and the rows over it moved up to keep clear of it; a leaderboard keeps its
+// own ticker.
 void test_large_text() {
   using esphome::gameday::game_geom;
   using esphome::gameday::GameGeom;
   for (int w : {64, 128, 192, 256}) {
     const GameGeom n = game_geom(w), g = game_geom(w, true);
     LCHECK(n.ticker_font == BoardFont::S8 && n.ticker_y == 56);
-    LCHECK(g.ticker_font == BoardFont::S12 && g.ticker_y == 53);
-    // The ticker's whole line on the board, its descenders too
+    LCHECK(g.ticker_font == BoardFont::S12 && g.ticker_y == 52);
+    // The ticker's whole line on the board, the tails of y, p and q too
     LCHECK(g.ticker_y + font_desc_bottom(g.ticker_font) < kBoardRows);
+    LCHECK(n.ticker_y + font_desc_bottom(n.ticker_font) < kBoardRows);
     const int ticker_ink = g.ticker_y + font_ink_top(g.ticker_font);
     if (g.wide) {
       // The situation row's letters, the pips and the bases end above the ticker's.
@@ -392,7 +394,9 @@ void test_large_text() {
       LCHECK(g.pip_y + 3 <= ticker_ink && g.base_y[0] + g.base_px <= ticker_ink);
       LCHECK(g.down.y > g.rec[0].y + font_ink_bottom(BoardFont::S8));  // still under the records
       LCHECK(g.pip_y > g.rec[0].y + font_ink_bottom(BoardFont::S8));
-      LCHECK(g.down.y == n.down.y - 2 && g.score[0].y == n.score[0].y);
+      LCHECK(g.count.y == g.down.y && g.outs.y == g.down.y);
+      LCHECK(g.down.y == n.down.y - 3 && g.pip_y == n.pip_y - 2 && g.score[0].y == n.score[0].y);
+      LCHECK(g.base_y[1] == n.base_y[1] - 2 && g.base_y[1] > g.clock.y + font_ink_bottom(BoardFont::S12));
     } else {
       // The scores, the possession line under them, the bases and the outs
       const int score_ink = g.score[0].y + font_ink_bottom(BoardFont::S12);
@@ -402,9 +406,18 @@ void test_large_text() {
       LCHECK(g.score[0].y > g.abbr[0].y + font_ink_bottom(BoardFont::S8));
     }
   }
-  // The warning's line covers the bigger ticker on one row of panels.
+  // The warning's line covers the bigger ticker on one row of panels, its
+  // words (spleen_8) in the middle of it.
+  using esphome::gameday::guard_label_y;
+  using esphome::gameday::guard_rows;
   LCHECK(esphome::gameday::guard_line_y(kBoardRows, true) <= game_geom(128, true).ticker_y);
   LCHECK(esphome::gameday::guard_line_y(kBoardRows) == 55);
+  LCHECK(guard_label_y(false) == 0);
+  for (bool large : {false, true}) {
+    const int above = guard_label_y(large) + font_ink_top(BoardFont::S8);
+    const int below = guard_rows(large) - 1 - (guard_label_y(large) + font_ink_bottom(BoardFont::S8));
+    LCHECK(below - above >= 0 && below - above <= 1);
+  }
 }
 
 // The clock card's time at each size: it fits the board, and nothing under
@@ -490,7 +503,7 @@ void test_lower_sizes() {
   // Normal on both is the layout as before.
   const LowerHalf n = lower_half(false, false, 64, Sizes{});
   LCHECK(n.time_font == BoardFont::S16 && n.time_y == 5 && n.date_y == 23 && n.ticker_y == 39 && !n.ampm);
-  LCHECK(lower_half(false, false, 128, Sizes{false, true}).ticker_y == 37);
+  LCHECK(lower_half(false, false, 128, Sizes{false, true}).ticker_y == 36);
 }
 
 }  // namespace
