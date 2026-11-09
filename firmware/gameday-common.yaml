@@ -713,63 +713,36 @@ gameday:
     - text_sensor.template.publish:
         id: gd_last_play_sensor
         state: !lambda 'return x.ha_last_play;'
-    # The board gets the text through panel_text() so a character the fonts
-    # lack never draws as a box; Home Assistant keeps the original above.
-    - script.execute:
-        id: gd_update
-        game_state: !lambda 'return x.game_state;'
-        team_abbr: !lambda 'return gameday::panel_text(x.team_abbr);'
-        team_score: !lambda 'return x.team_score;'
-        opponent_abbr: !lambda 'return gameday::panel_text(x.opponent_abbr);'
-        opponent_score: !lambda 'return x.opponent_score;'
-        status_text: !lambda 'return gameday::panel_text(x.status_text);'
-        clock_text: !lambda 'return gameday::panel_text(x.clock_text);'
-        down_distance: !lambda 'return gameday::panel_text(x.down_distance);'
-        is_red_zone: !lambda 'return x.is_red_zone;'
-        team_color: !lambda 'return (int) x.team_color;'
-        opponent_color: !lambda 'return (int) x.opponent_color;'
-        team_badge: !lambda 'return x.team_badge;'
-        opponent_badge: !lambda 'return x.opponent_badge;'
-        team_ring: !lambda 'return (int) x.team_ring;'
-        opponent_ring: !lambda 'return (int) x.opponent_ring;'
-        possession: !lambda 'return x.possession;'
-        team_timeouts: !lambda 'return x.team_timeouts;'
-        opponent_timeouts: !lambda 'return x.opponent_timeouts;'
-        team_record: !lambda 'return gameday::panel_text(x.team_record);'
-        opponent_record: !lambda 'return gameday::panel_text(x.opponent_record);'
-        team_rank: !lambda 'return (int) x.team_rank;'
-        opponent_rank: !lambda 'return (int) x.opponent_rank;'
-        # A big play's splash can be two lines ("PHI" over "FUMBLE RECOVERY").
-        splash_text: !lambda 'return gameday::panel_text(x.splash_text, true);'
-        splash_color: !lambda 'return (int) x.splash_color;'
-        sport: !lambda 'return (int) x.sport;'
-        situation: !lambda 'return x.situation;'
-        outs: !lambda 'return x.outs;'
-        bases: !lambda 'return (int) x.bases;'
-        highlight: !lambda 'return x.highlight;'
-        team_marks: !lambda 'return x.team_marks;'
-        opp_marks: !lambda 'return x.opp_marks;'
-        message: !lambda 'return gameday::panel_text(x.message);'
-        clock_card: !lambda 'return x.clock;'
-        # Built from panel_text() pieces with a line break that panel_text()
-        # would turn into a space, so it goes to the board as it is.
-        next_line: !lambda 'return x.next_line;'
-        # A leaderboard sport (golf, sport 5; racing, 6): its leaderboard, or
-        # its card (the event's name and dates or next session in next_line)
-        # when there is no leaderboard to show.
-        board: !lambda 'return x.board;'
-        board_card: !lambda 'return x.board_card;'
-        # The address line after a join leads the ticker: a message shows
-        # the ticker under it too (setup_qr.h, ticker_host).
-        join_line: !lambda 'return x.join_line;'
-    # The leaderboard's rows, read from the component (board_fields), so the
-    # columns aren't copied into script arguments. A script with no delay
-    # runs to its end here: the rows change in the same frame as the layout.
-    - script.execute: gd_board
+    # The board renderer (components/gameday/board_view.h) draws the update
+    # into the scoreboard page (pages/gameday-live.yaml), its text through
+    # panel_text() so a character the fonts lack never draws as a box; Home
+    # Assistant keeps the original above. The page's scripts do the rest: the
+    # ticker's scroll time, the clock card's time, the splash's fireworks and
+    # its end, the leaderboard's rows (gd_board reads them from the update in
+    # progress, board_fields) and the logos.
     - lambda: |-
+        if (gameday::board_view() == nullptr)
+          id(tt_bind_view).execute();
+        if (gameday::BoardView *v = gameday::board_view()) {
+          const gameday::DrawResult r = gameday::board_draw(*v, x);
+          if (r.ticker_changed)
+            id(tt_ticker_timing).execute();
+          if (r.clock_card) {
+            id(gd_clock_date) = r.clock_date;
+            id(gd_clock_tick).execute();
+          }
+          if (r.splash) {
+            if (r.big_splash)
+              id(tt_fx).resume();
+            else
+              id(tt_fx).pause();
+            id(tt_hide_splash).execute();
+          }
+        }
+        id(gd_board).execute();
         id(gd_team_logo_url) = x.team_logo;
         id(gd_opp_logo_url) = x.opponent_logo;
-    - script.execute: gd_show_logos
+        id(gd_show_logos).execute();
 
 lvgl_page_manager:
   sort: by_order

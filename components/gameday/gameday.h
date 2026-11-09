@@ -80,7 +80,7 @@ struct UpdateFields {
   std::string team_record;  // or the followed pro team's seed or place (the Standing setting)
   std::string opponent_record;
   // A college team's rank, 0 unranked. The board puts "#5" before the
-  // abbreviation or the record where it fits (pages/gameday-live.yaml).
+  // abbreviation or the record where it fits (board_view.cpp).
   uint8_t team_rank{0};
   uint8_t opponent_rank{0};
   std::string splash_text;

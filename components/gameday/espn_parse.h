@@ -498,7 +498,7 @@ std::string place_short(const std::string &summary);
 // What the Standing setting puts in a pro team's record's place: "Seed 4", the
 // place, or "" (its record) for Record or when ESPN gave neither.
 std::string standing_text(Standing kind, uint8_t seed, const std::string &place);
-// The record row under each logo on two panels (pages/gameday-live.yaml): a
+// The record row under each logo on two panels (board_layout.h, game_geom): a
 // label 36 px wide at the board's edge, its text centered, in spleen_8 (5 px
 // a character). While the game is on, the clock sits between the two rows,
 // centered on the 128 px board, in spleen_12 (6 px a character).
