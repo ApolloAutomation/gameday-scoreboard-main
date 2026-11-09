@@ -18,13 +18,15 @@ Pick the players you follow, from any team in the football, baseball, basketball
 3. Your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player.
 4. Tap **Add player**.
 
-The card lists your players with their team. To take one off, tap the remove button (✕) next to them.
+The card says **Added** once the panel has the player, and lists your players with their team. To take one off, tap the remove button (✕) next to them.
 
-If the roster can't be read, the card says **Couldn't read the** team's **roster from ESPN** and asks you to check the internet connection of the phone or computer you're using: the roster comes straight from ESPN to your browser, not through the panel. The card also says so when a player is a favorite already, or when all eight are in use: **All 8 players are in use. Remove one first.**
+If the roster can't be read, the card says **Couldn't read the** team's **roster from ESPN** and asks you to check the internet connection of the phone or computer you're using: the roster comes straight from ESPN to your browser, not through the panel. The card also says so when a player is a favorite already, or when all eight are in use: **All 8 players are in use. Remove one first.** That includes a player added from another phone or computer a moment before, which the card may not have listed yet.
 
 ### The name on the panel
 
-The panel shows a player's last name in capitals, like **ALLEN**. When a teammate has the same last name, the first initial comes first, like **J. HUGHES** and **L. HUGHES**. A name is at most 10 letters, one line of a single 64x64 panel's celebration, so a longer one is cut short (**VALDES-SCA**), and accents are left off.
+The panel shows a player's last name in capitals, like **ALLEN**. When a teammate has the same last name, the first initial comes first, like **J. HUGHES** and **L. HUGHES**, and when the initial is the same too, the first two or three letters of the first name, like **JE. SMITH** and **JA. SMITH**. Two teammates with the same first and last name get the same name on the panel, and the card lists them the same way.
+
+A name is at most 10 letters, one line of a single 64x64 panel's celebration, so a longer one is cut short (**VALDES-SCA**). Letters the panel's font doesn't have become the nearest plain ones: accents come off, **Ø** is **O** and **Æ** is **AE**, so Martin Ødegaard is **ODEGAARD**.
 
 If a player moves to another team, remove them and add them again from the new team's roster.
 
@@ -45,17 +47,19 @@ A long line is cut after its last part that fits. There's no stat line before th
 
 ## The celebration
 
-When a favorite player scores in the game on the board, the celebration says their name and the play, in place of the team's splash for that play, never as well. It gets the same colors and fireworks the team's splash would.
+When a favorite player scores in the game on the board, the celebration says their name and the play, in place of the team's splash for that play, never as well. It gets the same colors and fireworks the team's splash would, whatever the player's name.
 
 | Sport | What names the player |
 | --- | --- |
-| Football | A touchdown, field goal, extra point, 2-point conversion or safety on a play ESPN credits to the player: **ALLEN TOUCHDOWN**, **BASS FIELD GOAL**. A touchdown pass is the receiver's. |
-| Baseball | A home run (**JUDGE HOME RUN**), a grand slam, or runs on the player's hit (**JUDGE 2 RBI**), and a walk-off that ends the game. |
+| Football | A touchdown, field goal or safety on a play ESPN credits to the player: **ALLEN TOUCHDOWN**, **BASS FIELD GOAL**. A touchdown pass is the receiver's. The try after a touchdown, an extra point or a 2-point conversion, never names a player, because ESPN credits it to the player who scored the touchdown, not the kicker: the team's **EXTRA POINT** or **2-PT** shows. When the touchdown and its try come between two reads, the touchdown names its scorer. |
+| Baseball | A home run (**JUDGE HOME RUN**), a grand slam, runs on the player's hit (**JUDGE 2 RBI**), or a walk-off (**JUDGE WALK-OFF**). |
 | Soccer | A goal, or a penalty goal (**SAKA PENALTY GOAL**). Never an own goal. |
-| Hockey | A goal. ESPN doesn't say which player scored, only the play's words, like "Kyle Connor Goal", so the panel looks for the player's name there, among your favorites on the team that scored. It names a player only when exactly one of them matches. The initial helps: **J. HUGHES** and **L. HUGHES** are told apart, but two favorites on one team with the same name and initial are not, and then the team's splash shows. |
-| Basketball | Only a late lead change (the last 2 minutes or overtime) or a buzzer beater, on the player's basket: **EDWARDS BUZZER BEATER**. Each time the panel reads the game, about every 10 seconds, ESPN gives only the latest play, so most baskets are never seen, and an ordinary basket doesn't celebrate. |
+| Hockey | A goal. ESPN doesn't say which player scored, only the play's words, like "Kyle Connor Goal", so the panel looks for the player's name there, among your favorites on the team that scored. It names a player only when exactly one of them matches. The initial helps: **J. HUGHES** and **L. HUGHES** are told apart, and a name cut short still matches (**NUGENT-HOP** is Ryan Nugent-Hopkins). Two favorites on one team with the same name and initial are not told apart, and then the team's splash shows. A teammate with your favorite's first and last name, who isn't a favorite, is named as your favorite: the words are the same. |
+| Basketball | Only a late lead change (the last 2 minutes or overtime) or a buzzer beater, on the player's basket: **EDWARDS BUZZER BEATER**. Each time the panel reads the game, about every 10 seconds, ESPN gives only the latest play, so most baskets are never seen, and an ordinary basket doesn't celebrate. A buzzer beater names the player only when a read catches the basket as ESPN's latest play, before ESPN adds the end of the period; often it has, and then the team's splash shows. |
 
-The panel compares each read of the game with the one before, so a score shows when the play that scored is the latest one ESPN lists at that read. If two plays come between reads, like a touchdown and the extra point, only the latest counts, and when ESPN posts the score before the play, the team's splash shows.
+The panel compares each read of the game with the one before, so a score shows when the play that scored is the latest one ESPN lists at that read. If two plays come between reads, only the latest counts (a touchdown and its try are the exception above), and when ESPN posts the score before the play, the team's splash shows.
+
+A play that ends the game, like a walk-off or a buzzer beater that wins it, names the player only when a read catches it while ESPN still has the game on. Once ESPN posts the final, it no longer lists the last play, so a game-ending play read only at the final gets the team's splash.
 
 On one panel the name and the play take two or three lines, like **ALLEN** over **TOUCHDOWN**. On a 128x64 display they share a line when they fit.
 

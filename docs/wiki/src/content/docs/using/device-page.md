@@ -166,7 +166,7 @@ The Time line in the Setup card names the panel's timezone. While it follows you
 ## The Favorite players card
 
 :::note[Coming in the next release]
-The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name, in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
+The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
 :::
 
 ## The Device card
