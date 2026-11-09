@@ -17,10 +17,7 @@ enum class League : uint8_t { NFL = 0, NCAA = 1, NBA = 2, NHL = 3, MLB = 4, WNBA
 enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5,
                              RACING = 6 };
 
-// Where a league's games come from: ESPN's site API, for minor league
-// baseball the MLB Stats API (source_mlbstats.h), and for the AHL and the ECHL
-// HockeyTech's feed (source_hockeytech.h). Each source is read, counted and
-// backed off on its own (GamedayComponent::open_).
+// Each source is read and backed off on its own.
 enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1, HOCKEYTECH = 2 };
 static const size_t kSourceCount = 3;
 
@@ -38,7 +35,7 @@ struct LeagueInfo {
   Source source{Source::ESPN};
 };
 
-// inline: one copy in the firmware, not one per file that reads it.
+// inline: one copy in flash, not one per file.
 inline constexpr LeagueInfo kLeagues[] = {
     {League::NFL, "nfl", "football/nfl", "NFL", "nfl", Sport::FOOTBALL, true, true, false, 30},
     {League::NCAA, "ncaa", "football/college-football", "NCAAF", "ncaa", Sport::FOOTBALL, true, true, true, 30},
@@ -68,24 +65,15 @@ inline constexpr LeagueInfo kLeagues[] = {
     // scoreboard header and the season calendar.
     {League::F1, "f1", "racing/f1", "Racing", "leagues", Sport::RACING, false, false, false, 0},
     {League::NASCAR, "nascar", "racing/nascar-premier", "Racing", "leagues", Sport::RACING, false, false, false, 0},
-    // Minor league baseball, all four levels (Team::group is the level's MLB
-    // Stats sport id, 11 Triple-A to 14 Single-A), from the MLB Stats API, not
-    // ESPN: path and logo_dir are not ESPN's and nothing builds an ESPN URL
-    // from them. The team read lists the next ten days, so Up next comes with
-    // it and no look-ahead is needed; logos are by team id. Short linger for
-    // doubleheaders, as MLB's.
+    // MLB Stats API; path and logo_dir aren't ESPN's.
     {League::MILB, "milb", "mlbstats/milb", "MiLB", "milb", Sport::BASEBALL, true, true, true, 10, Source::MLB_STATS},
-    // Minor league hockey from HockeyTech's feed (source_hockeytech.h), not
-    // ESPN: path is not ESPN's, and logo_dir is the league's folder on
-    // HockeyTech's logo server. The team read lists the team's next games, so
-    // Up next comes with it; logos are by team id.
+    // HockeyTech feed; logo_dir is its logo server folder.
     {League::AHL, "ahl", "hockeytech/ahl", "AHL", "ahl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
     {League::ECHL, "echl", "hockeytech/echl", "ECHL", "echl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
 };
 
 constexpr size_t kLeagueCount = sizeof(kLeagues) / sizeof(kLeagues[0]);
-// Live games' saved list and the finals rotation's are a bit per league in
-// 16 bits (Prefs7::live_mask, recap_bit): every value is spoken for.
+// Full: live_mask and recap_bit are 16-bit masks.
 static_assert(kLeagueCount <= 16, "League bitmasks are 16 bits");
 
 // Arrays indexed by League are kLeagueCount long: each row's value is below
@@ -130,15 +118,11 @@ inline Source league_source(League league) {
   const LeagueInfo *l = league_info(league);
   return l != nullptr ? l->source : Source::ESPN;
 }
-// Minor league baseball: read from the MLB Stats API (source_mlbstats.h).
 inline bool is_mlb_stats(League league) { return league_source(league) == Source::MLB_STATS; }
-// Read from ESPN: the only source the big-play watcher reads (watch.h) and
-// the only one with the rosters favorite players come from (players.h).
+// Only ESPN feeds the big-play watcher and player rosters.
 inline bool from_espn(League league) { return league_source(league) == Source::ESPN; }
-// The AHL and the ECHL: read from HockeyTech's feed (source_hockeytech.h).
 inline bool is_hockeytech(League league) { return league_source(league) == Source::HOCKEYTECH; }
-// A scan's leagues while one host's wait runs: that host's leagues left out
-// (both of HockeyTech's), the others read as usual. True when any was there.
+// Skips a backed-off host's leagues; true if any dropped.
 inline bool drop_source(std::vector<League> &leagues, Source source) {
   const size_t before = leagues.size();
   for (size_t i = leagues.size(); i-- > 0;)

@@ -1,9 +1,4 @@
-// Minor league hockey, the AHL and the ECHL, from HockeyTech's feed
-// (components/gameday/source_hockeytech.h): the URLs, the times, every parse
-// against the recorded documents in fixtures/ht_*.json, and how the results
-// go through the shared hockey text, splashes, Live games and the finals
-// rotation. No game was on while the documents were recorded, so the live
-// states are the recorded ones with the feed's live fields set (live_clock).
+// AHL and ECHL via HockeyTech; live states are edited recordings.
 #include <ArduinoJson.h>
 
 #include <cstdio>
@@ -61,8 +56,7 @@ std::string slurp(const std::string &name) {
 
 int64_t at(const char *iso) { return parse_iso8601_z(iso); }
 
-// The parsers take their input by reference (the firmware's is a streaming
-// reader): these hand them a copy of a document.
+// Parsers take a reference; hand them a copy.
 int team_read(std::string json, uint32_t our_id, int64_t now, Schedule &out, std::vector<Upcoming> *up = nullptr,
               size_t max = 0) {
   return parse_ht_team(json, our_id, now, out, up, max);
@@ -79,7 +73,7 @@ bool day_read(std::string json, std::vector<LiveGame> &out, int64_t *next = null
 const char *const kAhlKey = "50c2cd9b5e18e390";
 const char *const kEchlKey = "2c2b89ea7345cae8";
 
-// Recorded documents (fixtures/README.md). Teams by HockeyTech id.
+// Teams by HockeyTech id, not ESPN's.
 const uint32_t kSyracuse = 324, kHartford = 307, kLaval = 415, kCleveland = 373, kToronto = 335, kUtica = 390;
 const uint32_t kRochester = 323, kHamilton = 457;
 const uint32_t kRapidCity = 70, kIdaho = 11, kTahoe = 106, kIndy = 65, kCincinnati = 5, kFortWayne = 60;
@@ -92,8 +86,7 @@ GameSnapshot game(const std::string &file, League league, uint32_t our_id) {
   return g;
 }
 
-// A recorded game centre clock with its live fields set: what the feed sends
-// during play (status 2, the period, the clock left in it, the words).
+// Recorded clock with live fields set, as during play.
 std::string live_clock(const std::string &file, const char *period, const char *clock, const char *progress = "",
                        const char *period_name = nullptr, const char *season = nullptr) {
   JsonDocument doc;
@@ -115,7 +108,6 @@ std::string live_clock(const std::string &file, const char *period, const char *
   return out;
 }
 
-// The same clock with the score set.
 std::string with_score(const std::string &json, int away, int home) {
   JsonDocument doc;
   deserializeJson(doc, json);
@@ -126,7 +118,6 @@ std::string with_score(const std::string &json, int away, int home) {
   return out;
 }
 
-// A recorded scorebar with one game's fields set.
 std::string edited_bar(const std::string &file, const char *id, const char *key, const char *value) {
   JsonDocument doc;
   deserializeJson(doc, slurp(file));
@@ -139,7 +130,7 @@ std::string edited_bar(const std::string &file, const char *id, const char *key,
 }
 
 void test_urls() {
-  // Until the YAML sets them, a league's reads carry no key (and fail).
+  // Without YAML-set keys, reads carry no key and fail.
   HCHECK(ht_team_url(League::AHL, kSyracuse).find("&key=&client_code=&") != std::string::npos);
   HCHECK_EQ(ht_logo_url(League::AHL, kSyracuse), std::string());
   ht_set_feed(League::AHL, kAhlKey, "ahl");
@@ -147,7 +138,6 @@ void test_urls() {
   ht_set_feed(League::NHL, "x", "nhl");  // not a HockeyTech league: ignored
   HCHECK_EQ(std::string(ht_client(League::AHL)), std::string("ahl"));
   HCHECK_EQ(std::string(ht_client(League::NHL)), std::string(""));
-  // The same reads as the recorded team, game and day documents.
   HCHECK_EQ(ht_team_url(League::AHL, kSyracuse),
             std::string("https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=scorebar"
                         "&key=50c2cd9b5e18e390&client_code=ahl&team_id=324&numberofdaysback=1&numberofdaysahead=5"
@@ -158,8 +148,7 @@ void test_urls() {
   HCHECK_EQ(ht_day_url(League::AHL, at("2026-11-07T23:00:00Z")),
             std::string("https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=gamesbydate"
                         "&key=50c2cd9b5e18e390&client_code=ahl&fetch_date=2026-11-07&fmt=json&lang=en"));
-  // The day turns over at 4 AM Eastern (9 AM UTC), like the ESPN scans: a
-  // West Coast game after midnight Eastern is still the day it started.
+  // Day turns at 4 AM Eastern, like ESPN scans.
   HCHECK(ht_day_url(League::ECHL, at("2026-11-08T08:59:00Z")).find("fetch_date=2026-11-07&") != std::string::npos);
   HCHECK(ht_day_url(League::ECHL, at("2026-11-08T09:00:00Z")).find("fetch_date=2026-11-08&") != std::string::npos);
   HCHECK(ht_day_url(League::ECHL, at("2027-01-01T03:00:00Z")).find("fetch_date=2026-12-31&") != std::string::npos);
@@ -170,21 +159,19 @@ void test_urls() {
   HCHECK(!is_ht_url("https://statsapi.mlb.com/api/v1/schedule"));
   HCHECK(!is_ht_url("https://assets.leaguestat.com/ahl/logos/50x50/324.png"));
 
-  // Logos: the 50 px copy, named for its season when the team's file is
+  // 50 px logos; some files carry a season suffix.
   HCHECK_EQ(ht_logo_url(League::AHL, kSyracuse), std::string("https://assets.leaguestat.com/ahl/logos/50x50/324.png"));
   HCHECK_EQ(ht_logo_url(League::AHL, kCleveland),
             std::string("https://assets.leaguestat.com/ahl/logos/50x50/373_94.png"));
   HCHECK_EQ(ht_logo_url(League::ECHL, kRapidCity),
             std::string("https://assets.leaguestat.com/echl/logos/50x50/70.png"));
-  // A team with no copy small enough for the logo cache gets none: the panel
-  // draws its badge (Hamilton's 50 px file is 500 px and 137 KB; Greenville
-  // has none).
+  // Oversized (Hamilton) or missing (Greenville) logos draw a badge.
   HCHECK_EQ(ht_logo_url(League::AHL, kHamilton), std::string());
   HCHECK_EQ(ht_logo_url(League::ECHL, kGreenville), std::string());
   // A team not in teams.h still gets the plain file
   HCHECK_EQ(ht_logo_url(League::ECHL, 9999), std::string("https://assets.leaguestat.com/echl/logos/50x50/9999.png"));
   HCHECK_EQ(ht_logo_url(League::ECHL, 0), std::string());
-  // The team table and a game read give the same URL, so the cache keeps one.
+  // Team table and game read share one URL for caching.
   HCHECK_EQ(team_logo_url(League::AHL, kCleveland, "CLE"), ht_logo_url(League::AHL, kCleveland));
   HCHECK_EQ(team_logo_url(League::ECHL, kGreenville, "GVL"), std::string());
 }
@@ -202,7 +189,6 @@ void test_league() {
     HCHECK(is_hockeytech(lg));
     HCHECK(!is_mlb_stats(lg));
     HCHECK(!is_leaderboard(lg));
-    // The day a scan reads turns over at 4 AM Eastern, as the NHL's
     HCHECK_EQ(scan_day_shift(lg), scan_day_shift(League::NHL));
   }
   HCHECK(!is_hockeytech(League::NHL));
@@ -210,7 +196,7 @@ void test_league() {
   HCHECK(league_by_key("echl") != nullptr && league_by_key("echl")->league == League::ECHL);
   HCHECK_EQ(std::string(recap_league_word((uint8_t) League::AHL)), std::string("AHL"));
   HCHECK_EQ(std::string(recap_league_word((uint8_t) League::ECHL)), std::string("ECHL"));
-  // The last two values the 16-bit league masks have room for.
+  // The last two values 16-bit league masks fit.
   HCHECK_EQ((int) League::AHL, 14);
   HCHECK_EQ((int) League::ECHL, 15);
   HCHECK_EQ(kLeagueCount, (size_t) 16);
@@ -219,17 +205,15 @@ void test_league() {
   HCHECK_EQ(live_mask_from_keys("ahl,echl,nhl"), (uint16_t) ((1u << 14) | (1u << 15) | (1u << 3)));
   std::vector<League> live = live_leagues((1u << 15) | (1u << 14), 0, {});
   HCHECK(live.size() == 2 && live[0] == League::AHL && live[1] == League::ECHL);
-  // Auto: the saved team's league and each favorite's
   live = live_leagues(0, (uint8_t) League::ECHL, {(uint8_t) League::AHL});
   HCHECK(live.size() == 2 && live[0] == League::AHL && live[1] == League::ECHL);
-  // A team like any other: picked, a favorite
   SetOp op;
   HCHECK(parse_set("team", "ahl:324", op, 16));
   HCHECK(op.team.league == (uint8_t) League::AHL && op.team.id == kSyracuse);
   HCHECK(parse_set("favs", "echl:70,ahl:324,nhl:6", op, 16));
   HCHECK_EQ(op.teams.size(), (size_t) 3);
   HCHECK(!parse_set("team", "echl:324", op, 16));  // Syracuse is in the AHL
-  // Every team: a code, and a group that is a logo season (or the badge bit)
+  // Each team's group is its logo season or badge bit.
   int ahl = 0, echl = 0;
   for (const auto &t : kTeams) {
     if (t.league != League::AHL && t.league != League::ECHL)
@@ -253,16 +237,14 @@ void test_times() {
   HCHECK_EQ(ht_iso_epoch("2026-11-07T15:00:00"), at("2026-11-07T15:00:00Z"));
   HCHECK_EQ(ht_iso_epoch(""), (int64_t) 0);
   HCHECK_EQ(ht_iso_epoch("2026-11-07T15:00:00-xx:00"), at("2026-11-07T15:00:00Z"));
-  // A day read's local times, across the zones the two leagues play in
+  // Day reads give local times across the leagues' zones.
   HCHECK_EQ(ht_local_epoch("2026-11-07", "15:00:00", "America/Toronto"), at("2026-11-07T20:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "18:00:00", "America/Winnipeg"), at("2026-11-07T23:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "18:05:00", "America/Denver"), at("2026-11-08T01:05:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "17:00:00", "America/Vancouver"), at("2026-11-08T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "19:00:00", "America/Phoenix"), at("2026-11-08T02:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-07", "18:00:00", "America/Los_Angeles"), at("2026-11-08T02:00:00Z"));
-  // British Columbia, Alberta and Manitoba keep summer time all year from
-  // 2 AM on 1 November 2026 (UTC-7, -6 and -5, the feed's own offsets); their
-  // days before that keep the old rule.
+  // BC, Alberta, Manitoba keep summer time from 1 Nov 2026.
   HCHECK_EQ(ht_local_epoch("2027-02-15", "14:00:00", "America/Winnipeg"), at("2027-02-15T19:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2027-03-04", "10:30:00", "America/Winnipeg"), at("2027-03-04T15:30:00Z"));
   HCHECK_EQ(ht_local_epoch("2027-01-16", "19:00:00", "America/Edmonton"), at("2027-01-17T01:00:00Z"));
@@ -275,8 +257,7 @@ void test_times() {
   HCHECK_EQ(ht_local_epoch("2026-11-01", "01:30:00", "America/Vancouver"), at("2026-11-01T08:30:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-01", "03:00:00", "America/Vancouver"), at("2026-11-01T10:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-11-01", "03:00:00", "America/Los_Angeles"), at("2026-11-01T11:00:00Z"));
-  // Daylight saving time: on from 2 AM on March's second Sunday (8 March
-  // 2026), off from 2 AM on November's first (1 November 2026)
+  // US DST: second Sunday of March to first of November.
   HCHECK_EQ(ht_local_epoch("2026-03-07", "19:00:00", "America/New_York"), at("2026-03-08T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-03-08", "01:59:00", "America/New_York"), at("2026-03-08T06:59:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-03-08", "15:00:00", "America/New_York"), at("2026-03-08T19:00:00Z"));
@@ -290,14 +271,12 @@ void test_times() {
   // Arizona and Saskatchewan keep standard time all year
   HCHECK_EQ(ht_local_epoch("2026-04-10", "19:00:00", "America/Phoenix"), at("2026-04-11T02:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-04-10", "19:00:00", "America/Regina"), at("2026-04-11T01:00:00Z"));
-  // Newfoundland is half an hour off; an unknown zone is Eastern
+  // Newfoundland is a half hour off; unknown is Eastern.
   HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", "America/St_Johns"), at("2026-01-10T22:30:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", "America/Indiana/Indianapolis"), at("2026-01-11T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("2026-01-10", "19:00:00", ""), at("2026-01-11T00:00:00Z"));
   HCHECK_EQ(ht_local_epoch("", "19:00:00", "America/Toronto"), (int64_t) 0);
-  // Each recorded scorebar game's local date, time and zone agree with its
-  // start and offset: Abbotsford's home games in Vancouver's zone, Calgary's
-  // in Edmonton's and Manitoba's in Winnipeg's among them.
+  // Every recorded game's local time matches its feed offset.
   for (const char *file : {"ht_team_ahl_syr.json", "ht_team_echl_rc.json", "ht_team_ahl_abb.json",
                            "ht_team_ahl_cgy.json", "ht_team_ahl_mb.json"}) {
     JsonDocument doc;
@@ -319,7 +298,7 @@ void test_states() {
   HCHECK(ht_state("4", "Final OT") == HtState::FINAL);
   HCHECK(ht_state("8", "Postponed") == HtState::OFF);
   HCHECK(ht_state("9", "Suspended") == HtState::OFF);
-  // Any other code goes by the words, then by whether the game started
+  // Other codes go by the words, then by start.
   HCHECK(ht_state("", "Final SO") == HtState::FINAL);
   HCHECK(ht_state("7", "Cancelled") == HtState::OFF);
   HCHECK(ht_state("6", "Game Suspended") == HtState::OFF);
@@ -330,7 +309,7 @@ void test_states() {
 
 void test_team() {
   const int64_t now = at("2026-11-09T01:30:00Z");  // Sunday evening, as recorded
-  // Syracuse: the 11/7 overtime loss to Hartford, then five games to come.
+  // Syracuse: 11/7 OT loss to Hartford, five to come.
   Schedule s;
   std::vector<Upcoming> up;
   HCHECK_EQ(team_read(slurp("ht_team_ahl_syr.json"), kSyracuse, now, s, &up, 4), 1);
@@ -350,7 +329,7 @@ void test_team() {
     HCHECK_EQ(up[1].opp_id, kToronto);
     HCHECK_EQ(up[1].opp_name, std::string("Marlies"));
     HCHECK_EQ(up[2].opp_id, kUtica);
-    HCHECK(!up[2].home);  // at Utica
+    HCHECK(!up[2].home);  // the game at Utica
     HCHECK_EQ(up[2].kickoff_epoch, at("2026-11-14T23:00:00Z"));
     HCHECK_EQ(up[3].opp_id, kRochester);
     HCHECK(up[3].tv.empty());
@@ -359,9 +338,7 @@ void test_team() {
   Schedule s2;
   HCHECK_EQ(team_read(slurp("ht_team_ahl_syr.json"), kSyracuse, now, s2), 1);
   HCHECK_EQ(s2.event_id, std::string("1029294"));
-  // So a read in the half hour the 11/7 final lingers (the six-hour read or
-  // Refresh Now) would put LAV @ SYR, four days away, up in its place: in My
-  // team the read waits for the linger to end and the final is polled.
+  // A read during the final's linger would skip ahead.
   const uint32_t linger = 30u * 60000u, final_ms = 5u * 3600000u;
   HCHECK(team_read_waits(Source::HOCKEYTECH, final_ms, final_ms + 10u * 60000u, linger));
   HCHECK(!team_read_waits(Source::HOCKEYTECH, final_ms, final_ms + linger, linger));
@@ -371,7 +348,7 @@ void test_team() {
   HCHECK_EQ(s.opp_id, kHartford);
   HCHECK_EQ(s.team_record, std::string("5-5-2"));
   HCHECK_EQ(up.size(), (size_t) 4);  // not started: the next four
-  // A game left over as not started a day after its start is passed over
+  // A game still unstarted a day later is skipped.
   HCHECK_EQ(team_read(edited_bar("ht_team_ahl_syr.json", "1029277", "GameStatus", "1"), kSyracuse, now, s), 1);
   HCHECK_EQ(s.event_id, std::string("1029294"));
   // The morning of the 11/7 game, it is the one
@@ -379,14 +356,13 @@ void test_team() {
                       at("2026-11-07T14:00:00Z"), s),
             1);
   HCHECK_EQ(s.event_id, std::string("1029277"));
-  // A game with no time yet sits at midnight Eastern of its day, like ESPN's
+  // TBD games sit at midnight Eastern, like ESPN's.
   HCHECK_EQ(team_read(edited_bar("ht_team_ahl_syr.json", "1029294", "TimeTbd", "1"), kSyracuse, now, s, &up, 4), 1);
   HCHECK(s.time_tbd);
   HCHECK_EQ(s.kickoff_epoch, at("2026-11-11T05:00:00Z"));
   HCHECK(!up.empty() && up[0].time_tbd);
 
-  // Rapid City: three games at Idaho postponed (the last listed), then five
-  // to come, the first at home to Tahoe.
+  // Rapid City: three postponed at Idaho, five to come.
   HCHECK_EQ(team_read(slurp("ht_team_echl_rc.json"), kRapidCity, now, s, &up, 4), 1);
   HCHECK_EQ(s.event_id, std::string("25626"));
   HCHECK_EQ(s.kickoff_epoch, at("2026-11-12T02:05:00Z"));
@@ -438,14 +414,13 @@ void test_game_final() {
   HCHECK_EQ(c.team_abbr, std::string("CLE"));
   HCHECK_EQ(c.team_score, 2);
   HCHECK(!c.team_winner);
-  // Not our game, and not a clock
   GameSnapshot x;
   HCHECK(!game_read(slurp("ht_game_ahl_final.json"), League::AHL, kSyracuse, x));
   HCHECK(!game_read(slurp("ht_game_ahl_final.json"), League::AHL, 0, x));
   HCHECK(!game_read("Invalid key.", League::AHL, kLaval, x));
   HCHECK(!game_read("{\"GC\":{\"Parameters\":{}}}", League::AHL, kLaval, x));
 
-  // HFD @ SYR, 3-2 in overtime; the ECHL's CIN @ IND, the same in its words
+  // OT finals: HFD @ SYR 3-2, ECHL's CIN @ IND.
   g = game("ht_game_ahl_final_ot.json", League::AHL, kSyracuse);
   HCHECK_EQ(g.short_detail, std::string("Final/OT"));
   HCHECK_EQ(g.period, 4);
@@ -454,14 +429,14 @@ void test_game_final() {
   HCHECK_EQ(g.short_detail, std::string("Final/OT"));
   HCHECK_EQ(g.opp_id, kCincinnati);
   HCHECK_EQ(g.venue, std::string("Fishers Event Center"));
-  // BLM @ FW, 5-4 in a shootout: the game centre leaves the period at OT
+  // Shootout final: the game centre leaves the period at OT.
   g = game("ht_game_echl_final_so.json", League::ECHL, kBloomington);
   HCHECK_EQ(g.short_detail, std::string("Final/SO"));
   HCHECK_EQ(g.period, 5);
   HCHECK(g.team_winner);
   HCHECK_EQ(g.team_score, 5);
   HCHECK_EQ(g.opp_id, kFortWayne);
-  // With the records the team read gave, the ticker carries them
+  // Ticker records come from the team read.
   Schedule s;
   s.event_id = "25591";
   s.team_record = "7-2-1";
@@ -472,7 +447,7 @@ void test_game_final() {
 }
 
 void test_game_postponed() {
-  // RC @ IDH, postponed: ESPN's post state with no result and no splash
+  // Postponed maps to post state, no result or splash.
   GameSnapshot g = game("ht_game_echl_postponed.json", League::ECHL, kRapidCity);
   HCHECK(g.state == GameState::POST);
   HCHECK(!g.completed);
@@ -509,7 +484,7 @@ void test_game_pre() {
   HCHECK_EQ(g.team_score, 0);
   TickerOptions o;
   HCHECK_EQ(status_text(g, o, "Wed 7:00 PM"), std::string("Wed 7:00 PM | Upstate Medical University Arena"));
-  // The team read's records and a game with no time yet
+  // Team read records, and a game with no time.
   Schedule s;
   s.event_id = "1029294";
   s.kickoff_epoch = at("2026-11-11T05:00:00Z");
@@ -522,8 +497,7 @@ void test_game_pre() {
   HCHECK_EQ(g.kickoff_epoch, at("2026-11-11T05:00:00Z"));
   HCHECK_EQ(g.team_record, std::string("5-5-2"));
   HCHECK_EQ(g.opp_record, std::string("10-3-1"));
-  // Another opponent's record isn't this one's; the game id fills in only
-  // when the clock gave none
+  // Records must match the opponent; ids fill only gaps.
   GameSnapshot h = game("ht_game_ahl_pre.json", League::AHL, kSyracuse);
   s.opp_id = kToronto;
   s.event_id = "1";
@@ -531,7 +505,7 @@ void test_game_pre() {
   HCHECK(h.opp_record.empty());
   HCHECK(!h.time_tbd);
   HCHECK_EQ(h.event_id, std::string("1029294"));
-  // A team drawn as a badge has no logo to fetch
+  // A badge team has no logo to fetch
   std::string ham = slurp("ht_game_ahl_pre.json");
   ham.replace(ham.find("\"team_id\":\"415\""), 15, "\"team_id\":\"457\"");
   HCHECK(game_read(ham, League::AHL, kSyracuse, h));
@@ -568,7 +542,7 @@ void test_game_live() {
   HCHECK_EQ(g.status_name, std::string("STATUS_END_PERIOD"));
   HCHECK(!clock_running(g));
   HCHECK_EQ(clock_text(g), std::string("End of 1st"));
-  // The ticker shows the records then, once the team read gave them
+  // The ticker shows records during intermissions.
   Schedule s;
   s.team_record = "5-5-2";
   s.opp_id = kHartford;
@@ -581,9 +555,7 @@ void test_game_live() {
   HCHECK_EQ(clock_text(g), std::string("End of 2nd"));
   HCHECK(game_read(live_clock("ht_game_ahl_final_ot.json", "3", "00:00:00", "End of 3rd"), League::AHL, kSyracuse, g));
   HCHECK_EQ(clock_text(g), std::string("End of 3rd"));
-  // The puck dropped and the clock isn't set yet (the pre-game clock is
-  // zero, and no shot or goal in the period): the period alone, not an
-  // intermission. The same as a later period starts.
+  // Puck dropped, clock unset: the period, not an intermission.
   HCHECK(game_read(live_clock("ht_game_ahl_pre.json", "1", "00:00:00", "In Progress"), League::AHL, kSyracuse, g));
   HCHECK(g.state == GameState::IN);
   HCHECK_EQ(g.short_detail, std::string("1st"));
@@ -592,7 +564,7 @@ void test_game_live() {
   HCHECK_EQ(g.status_name, std::string("STATUS_IN_PROGRESS"));
   HCHECK(game_read(live_clock("ht_game_ahl_pre.json", "2", "00:00:00"), League::AHL, kSyracuse, g));
   HCHECK_EQ(clock_text(g), std::string("2nd"));
-  // A goal in the period is enough to call it played
+  // A goal in the period means it's played.
   {
     JsonDocument doc;
     deserializeJson(doc, live_clock("ht_game_ahl_pre.json", "2", "00:00:00"));
@@ -602,7 +574,6 @@ void test_game_live() {
     HCHECK(game_read(j, League::AHL, kSyracuse, g));
     HCHECK_EQ(clock_text(g), std::string("End of 2nd"));
   }
-  // Overtime
   HCHECK(game_read(live_clock("ht_game_echl_final_ot.json", "4", "00:03:10", "", "1st OT"), League::ECHL, kIndy, g));
   HCHECK_EQ(clock_text(g), std::string("3:10 OT"));
   HCHECK_EQ(g.short_detail, std::string("3:10 - OT"));
@@ -616,7 +587,7 @@ void test_game_live() {
   HCHECK_EQ(clock_text(g), std::string("SO"));
   HCHECK(game_read(live_clock("ht_game_echl_final_so.json", "4", "00:00:00", "", "SO"), League::ECHL, kFortWayne, g));
   HCHECK_EQ(clock_text(g), std::string("SO"));
-  // The playoffs have no shootout: a fifth period is the second overtime
+  // Playoffs have no shootout: period 5 is 2nd OT.
   const char *playoffs = "2027 Calder Cup Playoffs";
   HCHECK(game_read(live_clock("ht_game_ahl_final_ot.json", "5", "00:10:00", "", "2nd OT", playoffs), League::AHL,
                    kSyracuse, g));
@@ -627,7 +598,7 @@ void test_game_live() {
   pf.replace(pf.find("2026-27 Regular Season"), 22, "2027 Calder Cup Playoffs");
   HCHECK(game_read(pf, League::AHL, kSyracuse, g));
   HCHECK_EQ(g.short_detail, std::string("Final/2OT"));
-  // A code the feed hasn't used, with the game started: in progress
+  // An unknown code after the start means in progress.
   std::string odd = live_clock("ht_game_ahl_final_ot.json", "1", "00:05:00");
   odd.replace(odd.find("\"status\":\"2\""), 12, "\"status\":\"5\"");
   HCHECK(game_read(odd, League::AHL, kSyracuse, g));
@@ -648,9 +619,7 @@ void test_game_live() {
   HCHECK_EQ(decide_splash(lav, fin, true, false).text, std::string("LAV WINS!"));
 }
 
-// The records HockeyTech's game read doesn't have. Live games takes them from
-// the day read it picked the game from, and My team after a restart (the
-// boot cache keeps none) from the Up next read, not six hours later.
+// HockeyTech's game read lacks records; take them elsewhere.
 void test_records() {
   JsonDocument doc;
   deserializeJson(doc, slurp("ht_day_echl_20261110.json"));
@@ -666,7 +635,7 @@ void test_records() {
     HCHECK_EQ(live[0].away_record, std::string("2-5-1"));
     HCHECK_EQ(live[0].home_record, std::string("7-1-2"));
   }
-  // Live games picks LAV @ SYR, the away side as ours
+  // Live games picks LAV @ SYR, away side as ours.
   LiveGame lg;
   lg.event_id = "1029294";
   lg.away_id = kLaval;
@@ -683,7 +652,7 @@ void test_records() {
   HCHECK_EQ(g.team_record, std::string("10-3-1"));
   HCHECK_EQ(g.opp_record, std::string("5-5-2"));
 
-  // My team: Syracuse's team read, saved to the boot cache and loaded back
+  // My team: the team read round-trips the boot cache.
   const int64_t now = at("2026-11-09T01:30:00Z");
   Schedule read;
   std::vector<Upcoming> up;
@@ -697,7 +666,7 @@ void test_records() {
   GameSnapshot h = game("ht_game_ahl_pre.json", League::AHL, kSyracuse);
   ht_fill_from_schedule(h, cached);
   HCHECK(h.team_record.empty() && h.opp_record.empty());
-  // The Up next read is the team read again: its records for the same game
+  // Up next rereads the team, refreshing the same game's records.
   HCHECK(ht_take_records(cached, read));
   HCHECK_EQ(cached.team_record, std::string("5-5-2"));
   HCHECK_EQ(cached.opp_record, std::string("10-3-1"));
@@ -745,9 +714,7 @@ void test_day() {
     HCHECK_EQ(finals[0].away_record, std::string("6-7-0"));
     HCHECK_EQ(finals[0].kickoff_epoch, at("2026-11-07T20:00:00Z"));
     HCHECK_EQ(finals[1].detail, std::string("Final/OT"));
-    // TOR @ MB in Winnipeg at 6 PM (UTC-5 all year now); ONT @ ABB in
-    // Abbotsford at 5 PM (UTC-7, as the team read has it: 1029265 at
-    // 2026-11-07T17:00:00-07:00); CV @ TUC in Tucson at 7 PM
+    // Winnipeg is UTC-5 all year now; Abbotsford UTC-7.
     HCHECK_EQ(finals[7].away_abbr, std::string("TOR"));
     HCHECK_EQ(finals[7].kickoff_epoch, at("2026-11-07T23:00:00Z"));
     HCHECK_EQ(finals[9].away_abbr, std::string("ONT"));
@@ -782,8 +749,7 @@ void test_day() {
       HCHECK_EQ(days[0].finals.size(), (size_t) 16);
   }
 
-  // The ECHL's: thirteen finals, three in overtime, Rapid City at Idaho
-  // postponed
+  // ECHL: thirteen finals, three in OT, one postponed.
   finals.clear();
   live.clear();
   HCHECK(day_read(slurp("ht_day_echl_20261107.json"), live, &next, &finals, &pending));
@@ -818,8 +784,7 @@ void test_day() {
     HCHECK(card.opp_logo.empty());  // Greenville: its badge
     HCHECK_EQ(card.team_logo, ht_logo_url(League::ECHL, kOrlando));
   }
-  // The same day with the first game under way: one live, the next start
-  // the other
+  // First game under way: one live, one next start.
   JsonDocument doc;
   deserializeJson(doc, slurp("ht_day_echl_20261110.json"));
   doc["SiteKit"]["Gamesbydate"][0]["status"] = "2";
@@ -838,7 +803,7 @@ void test_day() {
   }
   HCHECK_EQ(pending.size(), (size_t) 1);
   HCHECK_EQ(next, at("2026-11-10T23:30:00Z"));
-  // A game with no time yet is no kickoff to wait for
+  // A TBD game is no kickoff to wait for.
   doc["SiteKit"]["Gamesbydate"][1]["time_tbd"] = "1";
   serializeJson(doc, on);
   HCHECK(day_read(on, live, &next));
@@ -852,9 +817,7 @@ void test_day() {
   finals.clear();
   HCHECK(day_read(on, live, nullptr, &finals));
   HCHECK(finals.size() == 1 && finals[0].detail == "Final/SO");
-  // A morning game in Winnipeg (the AHL's only one on 2027-03-04, 10:30 at
-  // Manitoba, 15:30Z in the feed): the next start, and the Live games wait
-  // after a scan at 14:00Z that found nothing on, end at puck drop
+  // Winnipeg morning game: Live wait ends at puck drop.
   JsonDocument mb;
   deserializeJson(mb, slurp("ht_day_echl_20261110.json"));
   mb["SiteKit"]["Gamesbydate"][0]["date_played"] = "2027-03-04";
@@ -873,9 +836,7 @@ void test_day() {
 }
 
 void test_scan_backoff() {
-  // HockeyTech's leagues alone in a scan (the AHL and the ECHL): one host,
-  // so a failure is the scan's own, which back_off_ counts once against
-  // HockeyTech.
+  // HockeyTech-only scans: back_off_ counts the failure once.
   HostWait w;
   HCHECK_EQ(host_scan_result(w, true, true, false, true, 0, 0, 1000), 0u);
   HCHECK_EQ((int) w.run.streak, 0);
@@ -887,16 +848,14 @@ void test_scan_backoff() {
   HCHECK_EQ((int) w.run.streak, 0);
 }
 
-// The idle display's scores, read outside the mode: they leave both of
-// HockeyTech's leagues out while its wait runs, and their own failed read
-// from it counts in that wait, alone or beside the other hosts' leagues.
+// Idle scores skip HockeyTech leagues while its wait runs.
 void test_side_backoff() {
   std::vector<League> leagues = {League::NHL, League::AHL, League::MILB, League::ECHL};
   HCHECK(drop_source(leagues, Source::HOCKEYTECH));
   HCHECK_EQ(leagues.size(), (size_t) 2);
   HCHECK(leagues[0] == League::NHL && leagues[1] == League::MILB);
   HCHECK(!drop_source(leagues, Source::HOCKEYTECH));
-  // MLB's wait leaves HockeyTech's leagues alone, and the other way round
+  // MLB's and HockeyTech's waits are independent.
   std::vector<League> both = {League::AHL, League::MILB};
   HCHECK(drop_source(both, Source::MLB_STATS));
   HCHECK(both.size() == 1 && both[0] == League::AHL);
@@ -908,19 +867,16 @@ void test_side_backoff() {
   HCHECK(host_side_result(w, true, true, true, 10 * 60 * 1000, 0, 1000) >= 10u * 60 * 1000);
   HCHECK_EQ((int) w.run.streak, 1);
   HCHECK(w.waiting(2000));
-  HCHECK_EQ(host_side_result(w, false, false, false, 0, 0, 3000), 0u);  // not asked
+  HCHECK_EQ(host_side_result(w, false, false, false, 0, 0, 3000), 0u);  // HockeyTech not asked
   HCHECK_EQ((int) w.run.streak, 1);
-  HCHECK_EQ(host_side_result(w, true, false, false, 0, 0, 3000), 0u);  // answered
+  HCHECK_EQ(host_side_result(w, true, false, false, 0, 0, 3000), 0u);  // an answer clears it
   HCHECK_EQ((int) w.run.streak, 0);
   HCHECK(!w.waiting(3000));
 }
 
-// The features that came after minor league hockey was built, with an AHL or
-// ECHL game: big-play splashes, Follow this game, bets, My team today, ranks
-// and the Standing setting.
+// Newer features (big plays, Follow, bets) with AHL/ECHL.
 void test_merged_features() {
-  // Big plays: HockeyTech's scores say only that a goal went in, so every
-  // goal is GOAL under hockey's one switch, as with the NHL.
+  // HockeyTech only says a goal went in: plain GOAL.
   const std::string base = live_clock("ht_game_ahl_final_ot.json", "2", "00:12:00");
   GameSnapshot a, b;
   HCHECK(game_read(with_score(base, 1, 1), League::AHL, kSyracuse, a));
@@ -929,16 +885,12 @@ void test_merged_features() {
   const uint32_t goal = alert_bit(Alert::HOCKEY_GOAL);
   HCHECK_EQ(decide_splash(a, b, true, false, goal).text, std::string("GOAL!"));
   HCHECK(decide_splash(a, b, true, false, kAlertsAll & ~goal).text.empty());
-  // The same read twice, or a read with nothing new: no splash
   HCHECK(decide_splash(b, b, true).text.empty());
   HCHECK(decide_splash(a, a, true).text.empty());
-  // Two goals between reads are one splash; Live games names the side
+  // Two goals between reads make one splash.
   HCHECK(game_read(with_score(base, 3, 1), League::AHL, kSyracuse, b));
   HCHECK_EQ(decide_splash(a, b, true, true).text, std::string("HFD GOAL"));
-  // A shootout: the feed adds the deciding goal to the winner's score, so it
-  // splashes like any other goal when a read catches it before the final,
-  // and the final after it is the win, once. Read straight from the
-  // shootout, the final is the win alone.
+  // The feed adds the shootout winner to the score.
   GameSnapshot so, so_won, fin;
   const std::string shootout = live_clock("ht_game_echl_final_so.json", "5", "00:00:00", "", "SO");
   HCHECK(game_read(with_score(shootout, 4, 4), League::ECHL, kBloomington, so));
@@ -949,9 +901,7 @@ void test_merged_features() {
   HCHECK_EQ(decide_splash(so_won, fin, true).text, std::string("BLM WINS!"));
   HCHECK_EQ(decide_splash(so, fin, true).text, std::string("BLM WINS!"));
 
-  // Follow this game: an AHL game Live games picked is held while it's on,
-  // and let go at its final (Live games keeps no final); in Favorite teams
-  // the final stays up for After the final first.
+  // Follow holds an AHL game until its final.
   FollowPin pin;
   const int64_t t0 = a.kickoff_epoch + 3600;
   HCHECK(!a.event_id.empty());
@@ -966,12 +916,11 @@ void test_merged_features() {
   HCHECK(follow_holds(pin, done, t0 + 1200, follow_after_final_s(true, 1800), 0));
   HCHECK(!follow_holds(pin, done, t0 + 1200 + 1800, follow_after_final_s(true, 1800), 0));
   HCHECK(!follow_start(pin, true, true, done, t0));  // a final can't be followed
-  // A game HockeyTech stops answering for lets go after half an hour
+  // Follow lets go after 30 unanswered minutes.
   HCHECK(follow_start(pin, true, true, a, t0));
   HCHECK(!follow_holds(pin, a, t0 + kFollowUnreadSeconds, 0, kFollowUnreadSeconds));
 
-  // Bets: an AHL or ECHL team takes a bet like any other (HockeyTech's game
-  // id is the game's), graded on HockeyTech's score.
+  // Bets key on HockeyTech's game id and score.
   Bet bet{};
   bet.team_id = kLaval;
   bet.league = (uint8_t) League::AHL;
@@ -1001,8 +950,7 @@ void test_merged_features() {
   HCHECK_EQ((int) bet.result, (int) BetResult::WON);
   HCHECK_EQ(bet_ticker(bet, bet_status(bet, &g, lav.kickoff_epoch + 4 * 3600)), std::string("LAV ML WON"));
 
-  // No ranks and no standing: HockeyTech has no poll and no seed, so Seed or
-  // Place leaves an AHL or ECHL team its record.
+  // HockeyTech has no polls or seeds: record stays.
   HCHECK(lav.team_rank == 0 && lav.opp_rank == 0);
   Schedule s;
   const int64_t evening = at("2026-11-08T01:00:00Z");  // 8 PM in Syracuse on 11/7
@@ -1011,8 +959,7 @@ void test_merged_features() {
   HCHECK(standing_text(Standing::SEED, s.seed, s.place).empty());
   HCHECK(standing_text(Standing::PLACE, s.seed, s.place).empty());
 
-  // My team today after a restart: the team read names today's final too,
-  // with the records the scorebar has now, which the game's clock lacks.
+  // After a restart the team read names today's final.
   Schedule last;
   std::string syr = slurp("ht_team_ahl_syr.json");
   HCHECK_EQ(parse_ht_team(syr, kSyracuse, evening, s, nullptr, 0, &last), 1);
@@ -1040,11 +987,11 @@ void test_merged_features() {
   LocalDay day{since, since + 86400};
   std::vector<TodayGame> games = {TodayGame{true, GameState::POST, today.kickoff_epoch, false}};
   HCHECK_EQ(today_pick(games, day), 0);
-  // A postponed game is no final to keep: Rapid City has none
+  // Postponed games are no final to keep.
   std::string rc = slurp("ht_team_echl_rc.json");
   HCHECK_EQ(parse_ht_team(rc, kRapidCity, evening, s, nullptr, 0, &last), 1);
   HCHECK(!last.valid);
-  // With the list of finals not asked for, or the Up next list, the read is as before
+  // Without finals or Up next lists, the read is unchanged.
   HCHECK_EQ(team_read(syr, kSyracuse, evening, s), 1);
   HCHECK_EQ(s.event_id, std::string("1029294"));
   std::vector<Upcoming> up;
@@ -1072,7 +1019,7 @@ void test_health() {
   HCHECK_EQ(doc["ht"].as<int>(), 403);
   HCHECK_EQ(doc["ht_ago"].as<int>(), 12);
   HCHECK(doc["mlb"].isNull());
-  // All three hosts, with the longest numbers and a fault: it still fits
+  // Worst case of all three hosts fits kHealthJsonSize.
   h.mlb_status = 200;
   h.mlb_ago = 4000000000LL;
   h.espn_ago = 4000000000LL;

@@ -1,5 +1,4 @@
-// How the panel lays a splash out, for the tests that check a splash's words
-// fit it (test_alerts.cpp, test_players.cpp).
+// Splash line layout for the word-fit tests.
 #pragma once
 
 #include <string>
@@ -7,9 +6,7 @@
 
 namespace splash_test {
 
-// How LVGL lays a splash out: a line break at "\n", else at a space or after
-// a hyphen once the next word won't fit. The lines, or none when a word is
-// longer than a line (it would be cut in the middle).
+// Mirrors LVGL wrapping; empty when a word overflows.
 inline std::vector<std::string> layout(const std::string &text, size_t width) {
   std::vector<std::string> out;
   size_t start = 0;

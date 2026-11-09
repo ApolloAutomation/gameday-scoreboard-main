@@ -214,7 +214,7 @@ struct Health {
   const char *version;  // the release, "2026.10.0"
   int64_t built;        // the build's compile time, Unix seconds
   const char *channel;  // stable, beta, bar or none
-  int mlb_status{0};    // the same for the MLB Stats API (minor league baseball)
+  int mlb_status{0};    // the same, for the MLB Stats API
   int64_t mlb_ago{-1};  // -1 before its first read: no key
   int ht_status{0};     // and for HockeyTech (the AHL and the ECHL)
   int64_t ht_ago{-1};
@@ -225,8 +225,8 @@ struct Health {
 static const size_t kHealthJsonSize = 448;
 
 // The "health" object in /gameday/state. Optional keys are left out rather
-// than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read,
-// mlb before a minor league baseball read, ht before an AHL or ECHL read.
+// than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read.
+// Likewise mlb and ht before their first read.
 // Returns what snprintf does; the strings are the firmware's own, no quotes.
 inline int health_json(char *buf, size_t size, const Health &h) {
   char fault[64] = "";

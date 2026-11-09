@@ -145,8 +145,7 @@ void LogoCache::start_task_() {
   if (this->task_running_)
     return;
   this->task_running_ = true;
-  // Same stack as the ESPN worker: the TLS handshake needs it. In PSRAM
-  // (psram_tasks.h), and the main loop frees it once the task has parked.
+  // 16 KB: the TLS handshake needs it.
   if (!PsramTasks::start(&LogoCache::task_, "gameday_logo", 16384, this)) {
     ESP_LOGW(TAG, "Could not start the logo task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));

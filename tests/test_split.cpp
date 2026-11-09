@@ -1,8 +1,3 @@
-// Split mode (components/gameday/split.h): where the second area goes on
-// each arrangement, what it shows under the owner's choice and the night
-// hours, the rotation of other live games and the watcher's part in it
-// (watch.h), the scores rotation's card for it, its team's polls, and Off or
-// dim lifted for it (idle.h).
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -39,7 +34,7 @@ void test_split_area() {
   PCHECK(split_at(1, 1) == SplitAt::NONE && split_at(2, 1) == SplitAt::NONE);
   PCHECK(split_at(3, 1) == SplitAt::RIGHT1 && split_at(4, 1) == SplitAt::RIGHT2 && split_at(2, 2) == SplitAt::BOTTOM);
   PCHECK(std::string(split_at_key(SplitAt::BOTTOM)) == "bottom" && std::string(split_at_key(SplitAt::NONE)).empty());
-  // Three and four wide: Off stretches the board across the row.
+  // Three and four wide: Off stretches the board.
   PCHECK(!split_area(3, 1, 0).on && split_area(3, 1, 0).main_w == 192);
   PCHECK(!split_area(4, 1, 0).on && split_area(4, 1, 0).main_w == 256);
   for (int show = 1; show < kSplitCount; show++) {
@@ -48,7 +43,7 @@ void test_split_area() {
     const SplitArea r2 = split_area(4, 1, (uint8_t) show);
     PCHECK(r2.on && r2.main_w == 128 && r2.x == 128 && r2.y == 0 && r2.w == 128 && r2.h == 64);
   }
-  // Two rows of two: always the bottom half, Off as the clock.
+  // Two rows of two: bottom half, Off as clock.
   for (int show = 0; show < kSplitCount; show++) {
     const SplitArea b = split_area(2, 2, (uint8_t) show);
     PCHECK(b.on && b.main_w == 128 && b.x == 0 && b.y == 64 && b.w == 128 && b.h == 64);
@@ -56,7 +51,7 @@ void test_split_area() {
   PCHECK(split_effective(0, SplitAt::BOTTOM) == SplitShow::CLOCK);
   PCHECK(split_effective(0, SplitAt::RIGHT2) == SplitShow::OFF);
   PCHECK(split_effective(3, SplitAt::RIGHT1) == SplitShow::SCORES);
-  // A byte that makes no sense is Off, the clock on two rows of two.
+  // A junk byte is Off, or the clock on 2x2.
   PCHECK(split_effective(9, SplitAt::RIGHT2) == SplitShow::OFF);
   PCHECK(split_effective(9, SplitAt::BOTTOM) == SplitShow::CLOCK);
 }
@@ -90,7 +85,7 @@ void test_area_view() {
   in.team_main = true;  // its game is the main board's
   PCHECK(area_view(in) == AreaView::CLOCK);
   in.team_main = false;
-  in.night = true;  // its next game gives way at night, its game on doesn't
+  in.night = true;  // at night only its game on still shows
   PCHECK(area_view(in) == AreaView::CLOCK);
   in.team_on = true;
   PCHECK(area_view(in) == AreaView::TEAM);
@@ -143,7 +138,7 @@ void test_rotation() {
   const uint8_t nhl = (uint8_t) League::NHL, nba = (uint8_t) League::NBA;
   std::vector<WatchGame> games = {game("1", nhl, GameState::IN), game("2", nhl, GameState::NOT_FOUND),
                                   game("3", nba, GameState::IN), game("4", nhl, GameState::IN)};
-  // In list order from the start, skipping a game not read yet.
+  // List order, skipping a game not read yet.
   PCHECK(rot_pick(games, 0, "", 0, "") == 0);
   PCHECK(rot_pick(games, nhl, "1", 0, "") == 2);
   PCHECK(rot_pick(games, nba, "3", 0, "") == 3);
@@ -159,7 +154,7 @@ void test_rotation() {
   PCHECK(rot_pick(one, 0, "", nhl, "7") == -1);
   PCHECK(rot_count({}, 0, "") == 0);
 
-  // The ticker: the other live games, not the card's nor the main board's.
+  // Ticker skips the card's game and the main board's.
   games[0].team_score = 3;
   games[0].opp_score = 2;
   watch_teams(games[0], "BOS", "NYR");
@@ -189,8 +184,6 @@ void test_rotation() {
   PCHECK(c.play_id.empty() && c.down_distance.empty() && c.soc.goals.empty());
 }
 
-// A rotation card's clock row reads as the board's does for that sport: the
-// watcher keeps no ESPN status, so the card stands one in (rot_status).
 std::string rot_clock(uint8_t league, uint8_t period, const char *clock, Half half = Half::NONE, uint8_t reg = 4) {
   WatchGame w = game("9", league, GameState::IN);
   w.period = period;
@@ -255,7 +248,7 @@ void test_watch_all() {
   WatchJob job;
   job.league = nhl;
   job.cycle = 5;
-  job.ctx.live = false;  // My team
+  job.ctx.live = false;  // My team mode
   job.ctx.all = true;    // the second area rotates every live game
   job.ctx.read_mask = kAlertsAll;
   job.ctx.mask = 0;  // every alert switch off
@@ -266,7 +259,7 @@ void test_watch_all() {
   const WatchGame &w = job.fresh[0];
   PCHECK(std::string(w.away_abbr) == "BOSTO" && std::string(w.home_abbr) == "NYR");  // cut to 5, still ended
   PCHECK(w.away_rgb[0] == 0xFF && w.away_rgb[1] == 0xB8 && w.away_rgb[2] == 0x1C && w.home_rank == 7);
-  // The next read has a goal: kept, but no alert with every switch off.
+  // A goal: kept, but no alert with switches off.
   job.games = job.fresh;
   job.fresh.clear();
   job.cycle = 6;
@@ -278,7 +271,7 @@ void test_watch_all() {
   job.ctx.mask = alert_bit(Alert::HOCKEY_GOAL);
   watch_take(job, goal);
   PCHECK(job.alert.valid && job.alert.event_id == "501");
-  // Favorite teams only: kept, no alert for a game with no favorite in it.
+  // Favorites only: kept, but no alert without a favorite.
   job.fresh.clear();
   job.alert = WatchAlert{};
   job.ctx.fav_only = true;
@@ -289,7 +282,7 @@ void test_watch_all() {
   job.ctx.favs.emplace_back(nhl, 1);
   watch_take(job, goal);
   PCHECK(job.fresh.size() == 1 && job.fresh[0].fav && job.alert.valid && job.alert.fav);
-  // Never the main board's game, nor the second area's team's.
+  // Never the main board's or second area team's game.
   job.fresh.clear();
   job.alert = WatchAlert{};
   job.ctx.board_league = nhl;
@@ -301,7 +294,7 @@ void test_watch_all() {
   job.ctx.a2_event = "501";
   watch_take(job, goal);
   PCHECK(job.fresh.empty() && !job.alert.valid);
-  // Without all, My team watches only the favorites' games, as before.
+  // Without all, My team watches only favorites' games.
   WatchCtx c;
   c.mask = kAlertsAll;
   PCHECK(watch_wants_teams(c, nhl, 1, 13) == 0);
@@ -312,16 +305,13 @@ void test_watch_all() {
   PCHECK(watch_wants_teams(c, nhl, 1, 13) == 2);
   // Golf and racing are never watched.
   PCHECK(watch_wants_teams(c, (uint8_t) League::PGA, 1, 2) == 0);
-  // Nor minor league baseball, the AHL or the ECHL, which ESPN doesn't have:
-  // the rotation reads ESPN only, even with the panel's team in one of them.
+  // Nor non-ESPN leagues: the rotation reads ESPN only.
   c.team = {(uint8_t) League::MILB, 234};
   PCHECK(watch_wants_teams(c, (uint8_t) League::MILB, 234, 260) == 0);
   PCHECK(watch_wants_teams(c, (uint8_t) League::AHL, 324, 330) == 0);
   PCHECK(watch_wants_teams(c, (uint8_t) League::ECHL, 70, 74) == 0);
 
-  // A big play has the second area on 501. Its first read splashes the goal
-  // since the watcher's read; each read then stands as the watcher's, so the
-  // watcher's next read finds no goal the area already splashed.
+  // The watcher must not resplash a goal the area showed.
   WatchGame seen = game("501", nhl, GameState::IN, "BOSTO", "NYR");
   seen.away_id = 1;
   seen.home_id = 13;
@@ -349,8 +339,7 @@ void test_watch_all() {
 }
 
 void test_watch_sources_team() {
-  // The rotation in My team adds the team's league: a pro league as a whole,
-  // a college team by its conference, each once.
+  // College adds its conference, pro its whole league, once.
   const Team *nyr = nullptr, *ala = nullptr;
   for (size_t i = 0; i < kTeamCount; i++) {
     if (kTeams[i].league == League::NHL && kTeams[i].espn_id == 13)
@@ -363,8 +352,7 @@ void test_watch_sources_team() {
   PCHECK(src.size() == 2);
   PCHECK(src[0].league == (uint8_t) League::NHL && src[0].group == 0 && src[0].by_event && !src[0].fed);
   PCHECK(src[1].league == (uint8_t) League::NCAA && src[1].group == ala->group && src[1].by_event);
-  // A minor league team (MLB's or HockeyTech's) adds no source: the rotation
-  // never asks ESPN for their scoreboards.
+  // Minor league teams add no ESPN scoreboard.
   const Team *dur = nullptr, *syr = nullptr;
   for (size_t i = 0; i < kTeamCount; i++) {
     if (kTeams[i].league == League::MILB && kTeams[i].espn_id == 234)
@@ -391,8 +379,7 @@ void test_area2_busy() {
 }
 
 void test_recap_one_league() {
-  // A scan of one league keeps the others' games to come and shares the
-  // later-today cap with them.
+  // A one-league scan shares the later-today cap.
   const int64_t now = 1762700000;  // a Sunday afternoon
   std::vector<RecapDay> days;
   std::vector<Pending> nba, nhl;
@@ -416,8 +403,7 @@ void test_recap_one_league() {
   kept_nba = kept_nhl = 0;
   for (const auto &d : days)
     (d.league == (uint8_t) League::NBA ? kept_nba : kept_nhl) += d.later.size();
-  // The NBA's games stay until its own next scan; the NHL gets its even
-  // share of the cap, counting the NBA's, not the whole cap.
+  // The NHL gets an even share, not the whole cap.
   PCHECK(kept_nba == 6 && kept_nhl == kRecapLaterCap / 2);
 }
 

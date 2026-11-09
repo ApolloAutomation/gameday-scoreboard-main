@@ -59,11 +59,9 @@ class LogoCache {
   // a failed logo is not on its way.
   bool waiting(const std::string &url);
   // The two URLs about to be shown. They and the two before them are never
-  // dropped, so nothing LVGL may still point at is freed. pin_a2 does the
-  // same for the second area's two (split.h).
+  // dropped, so nothing LVGL may still point at is freed.
   void pin(const std::string &team, const std::string &opponent) { this->pin_at_(0, team, opponent); }
   void pin_a2(const std::string &team, const std::string &opponent) { this->pin_at_(4, team, opponent); }
-  // A download is under way (or about to start).
   bool busy() const { return this->task_running_; }
   // Decodes finished downloads and retries failed logos that are on screen.
   // True when at least one logo became ready.
@@ -104,7 +102,7 @@ class LogoCache {
   // Guards entries_ and every Entry's state and body.
   SemaphoreHandle_t lock_{nullptr};
   std::vector<std::unique_ptr<Entry>> entries_;
-  std::string pinned_[8];  // the board's current pair, the pair before, then the second area's two pairs
+  std::string pinned_[8];  // board pair, previous pair, then second area's two
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
   std::atomic<bool> downloaded_{false};

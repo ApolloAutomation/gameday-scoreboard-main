@@ -44,7 +44,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_DEFAULT_COLS, default=1): cv.int_range(min=1, max=8),
             # The longest chain the build drives, in panels.
             cv.Optional(CONF_MAX_COLS, default=2): cv.int_range(min=1, max=8),
-            # 2 also allows the 2x2 (which needs max_cols of at least 4).
+            # 2 allows the 2x2, which needs max_cols >= 4.
             cv.Optional(CONF_MAX_ROWS, default=1): cv.int_range(min=1, max=2),
         }
     ).extend(cv.COMPONENT_SCHEMA),

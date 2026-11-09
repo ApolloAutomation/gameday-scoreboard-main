@@ -1,8 +1,6 @@
 # Game Day Scoreboard for a HUB75 matrix on the MoonHub75 pinout, which the
 # Apollo Automation M-1 LED Matrix (Rev6) shares. One firmware
-# for one to four 64x64 panels side by side or four in two rows of two: the
-# layout is picked on the device page and applied at boot
-# (components/panel_layout).
+# for 1-4 panels or a 2x2, chosen on device page.
 substitutions:
   variant: "moonhub75"
 

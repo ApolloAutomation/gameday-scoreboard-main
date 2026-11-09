@@ -1,7 +1,4 @@
-// The big-play watcher (components/gameday/watch.h): which games it watches,
-// what a read of one says against the last (real day scoreboards from
-// fixtures/ with the score or the play moved on), when a read may run, and
-// when the board switches and goes back.
+// Big-play watcher (watch.h) against real ESPN day scoreboards.
 #include <ArduinoJson.h>
 
 #include <cstdio>
@@ -48,7 +45,6 @@ std::string slurp(const char *path) {
   return ss.str();
 }
 
-// A day scoreboard with one event changed by edit.
 std::string edited(const std::string &json, const char *event_id, const std::function<void(JsonObject)> &edit) {
   JsonDocument doc;
   deserializeJson(doc, json, DeserializationOption::NestingLimit(40));
@@ -66,7 +62,6 @@ void set_score(JsonObject ev, const char *home_away, int score) {
       c["score"] = std::to_string(score);
 }
 
-// Live games, every game watched.
 WatchCtx live_ctx() {
   WatchCtx c;
   c.live = true;
@@ -74,8 +69,7 @@ WatchCtx live_ctx() {
   return c;
 }
 
-// One read of a day scoreboard the way the fetch task does it, against the
-// watched games' last reads (games). The job keeps what it found.
+// Mirrors the fetch task's read of a day scoreboard.
 WatchJob read_day(const std::string &json, League league, const WatchCtx &ctx,
                   const std::vector<WatchGame> &games = {}, uint32_t group = 0, uint32_t cycle = 1) {
   WatchJob job;
@@ -112,7 +106,6 @@ void test_day_reads() {
     WCHECK(!cit->fav && cit->group == 0 && cit->read_cycle == 1);
     WCHECK(cit->play != 0);  // ESPN's play id, hashed
   }
-  // The game on the board is never watched.
   WatchCtx board = live_ctx();
   board.board_league = (uint8_t) League::NCAA;
   board.board_event = "401856725";
@@ -121,7 +114,7 @@ void test_day_reads() {
   board.board_league = (uint8_t) League::NFL;
   WCHECK(read_day(ncaa, League::NCAA, board).fresh.size() == 3);
 
-  // The visitors score a touchdown: CIT's, either side counting.
+  // Either side's touchdown counts, here the visitors'.
   const std::string td = edited(ncaa, "401856725", [](JsonObject ev) { set_score(ev, "away", 7); });
   WatchJob next = read_day(td, League::NCAA, live_ctx(), job.fresh, 0, 2);
   WCHECK(next.alert.valid);
@@ -130,25 +123,21 @@ void test_day_reads() {
   WCHECK_EQ(next.alert.away_abbr, "CIT");
   WCHECK_EQ(next.alert.splash.text, "CIT TOUCHDOWN");
   WCHECK(next.fresh.size() == 3);
-  // A last read from three cycles back is too old to compare: the read only
-  // starts over.
+  // Three cycles back is too stale to compare.
   WatchJob late = read_day(td, League::NCAA, live_ctx(), job.fresh, 0, 4);
   WCHECK(!late.alert.valid && late.fresh.size() == 3 && find(late.fresh, "401856725")->read_cycle == 4);
   WCHECK(read_day(td, League::NCAA, live_ctx(), job.fresh, 0, 3).alert.valid);
-  // The home side's field goal.
   const std::string fg = edited(ncaa, "401856725", [](JsonObject ev) { set_score(ev, "home", 17); });
   WCHECK_EQ(read_day(fg, League::NCAA, live_ctx(), job.fresh).alert.splash.text, "TA&M FIELD GOAL");
-  // With its switch off, nothing.
   WatchCtx no_fg = live_ctx();
   no_fg.mask &= ~alert_bit(Alert::FIELD_GOAL);
   WCHECK(!read_day(fg, League::NCAA, no_fg, job.fresh).alert.valid);
-  // Nothing changed: nothing.
   WCHECK(!read_day(ncaa, League::NCAA, live_ctx(), job.fresh).alert.valid);
 }
 
 void test_favorites() {
   const std::string ncaa = slurp("fixtures/day_ncaa_20261017.json");
-  // My team and Favorite teams: only the favorites' games. Texas A&M (245) is one.
+  // Only favorites' games; Texas A&M (245) is one.
   WatchCtx fav;
   fav.mask = kAlertsAll;
   fav.favs = {{(uint8_t) League::NCAA, 245}};
@@ -157,18 +146,17 @@ void test_favorites() {
   // The panel's own team counts only in Live games.
   WatchCtx mine;
   mine.mask = kAlertsAll;
-  mine.team = {(uint8_t) League::NCAA, 251};  // Texas
+  mine.team = {(uint8_t) League::NCAA, 251};  // team 251 is Texas
   WCHECK(read_day(ncaa, League::NCAA, mine).fresh.empty());
   mine.live = true;
   mine.fav_only = true;
   WatchJob only = read_day(ncaa, League::NCAA, mine);
   WCHECK(only.fresh.size() == 1 && only.fresh[0].fav);
-  WCHECK_EQ(only.fresh[0].event_id, "401856724");  // FLA @ TEX
+  WCHECK_EQ(only.fresh[0].event_id, "401856724");  // the FLA @ TEX game
   // Favorite teams only off: every game, Texas's first.
   mine.fav_only = false;
   WCHECK(read_day(ncaa, League::NCAA, mine).fresh.size() == 3);
 
-  // watch_wants on its own.
   WatchCtx c;
   c.mask = kAlertsAll;
   c.favs = {{(uint8_t) League::NBA, 11}};
@@ -182,8 +170,7 @@ void test_favorites() {
   c.fav_only = true;
   WCHECK(watch_wants(c, (uint8_t) League::NBA, "1", 4, 5) == 0);
   WCHECK(watch_wants(c, (uint8_t) League::NBA, "1", 11, 5) == 2);
-  // A sport with none of its big plays switched on isn't watched: basketball
-  // with only the final, which never switches the board.
+  // A final alone never switches, so basketball isn't watched.
   c.mask = alert_bit(Alert::FINAL) | alert_bit(Alert::HOCKEY_GOAL);
   WCHECK(watch_wants(c, (uint8_t) League::NBA, "1", 11, 5) == 0);
   WCHECK(watch_wants(c, (uint8_t) League::NHL, "1", 4, 5) == 0);  // not a favorite, Favorite teams only on
@@ -192,8 +179,7 @@ void test_favorites() {
 }
 
 void test_baseball() {
-  // LAD @ MIL, Bot 3rd, MIL 3-2, runners on first and second, two out. The
-  // day scoreboard's last play is already the next batter's.
+  // LAD @ MIL, Bot 3rd, 3-2, two on, two out.
   const std::string mlb = slurp("fixtures/day_mlb_20261012.json");
   WatchJob first = read_day(mlb, League::MLB, live_ctx());
   WCHECK(first.fresh.size() == 1);
@@ -201,14 +187,14 @@ void test_baseball() {
     return;
   const WatchGame &g = first.fresh[0];
   WCHECK(g.half == Half::BOTTOM && g.outs == 2 && g.bases == (Baseball::FIRST | Baseball::SECOND));
-  // Three runs and the bases empty with the same outs: a home run.
+  // Three runs, bases empty, same outs: a homer.
   const std::string homer = edited(mlb, "401908031", [](JsonObject ev) {
     set_score(ev, "home", 6);
     ev["competitions"][0]["situation"]["onFirst"] = false;
     ev["competitions"][0]["situation"]["onSecond"] = false;
   });
   WCHECK_EQ(read_day(homer, League::MLB, live_ctx(), first.fresh).alert.splash.text, "MIL HOME RUN");
-  // With the bases loaded before, four runs are a grand slam.
+  // Four runs with the bases loaded: a grand slam.
   const std::string loaded = edited(mlb, "401908031", [](JsonObject ev) {
     ev["competitions"][0]["situation"]["onThird"] = true;
   });
@@ -227,7 +213,7 @@ void test_baseball() {
     ev["competitions"][0]["situation"]["onFirst"] = false;
   });
   WCHECK_EQ(read_day(two, League::MLB, live_ctx(), first.fresh).alert.splash.text, "MIL 2 RUNS");
-  // A third out between the reads: the bases empty, but no home run told.
+  // A third out empties bases too: no homer.
   const std::string third_out = edited(mlb, "401908031", [](JsonObject ev) {
     set_score(ev, "home", 6);
     ev["competitions"][0]["situation"]["onFirst"] = false;
@@ -236,7 +222,6 @@ void test_baseball() {
   });
   WCHECK_EQ(read_day(third_out, League::MLB, live_ctx(), first.fresh).alert.splash.text, "MIL 3 RUNS");
 
-  // watch_homer by hand: a solo shot, and the side batting in the top half.
   WatchGame prev;
   prev.state = GameState::IN;
   prev.period = 5;
@@ -262,7 +247,7 @@ void test_baseball() {
 }
 
 void test_soccer() {
-  // CRU @ BRA, 25', BRA 2-0 (a goal and an own goal).
+  // CRU @ BRA, 25', 2-0 including an own goal.
   const std::string bra = slurp("fixtures/day_bra_20261012.json");
   WatchJob first = read_day(bra, League::MLS, live_ctx());
   WCHECK(first.fresh.size() == 1);
@@ -300,8 +285,7 @@ void test_soccer() {
 }
 
 void test_turnover_needs_play_ids() {
-  // BC @ CIN, ESPN's last play an interception, id 401856777515. Cincinnati
-  // (2132) is a favorite, so its game is among the 8 a read keeps of the 18 on.
+  // Favorite CIN (2132) stays among 8 kept of 18.
   const std::string sb = slurp("fixtures/scoreboard_ncaa_live.json");
   const std::string before = edited(sb, "401856777", [](JsonObject ev) {
     JsonObject lp = ev["competitions"][0]["situation"]["lastPlay"];
@@ -319,10 +303,9 @@ void test_turnover_needs_play_ids() {
   WatchJob next = read_day(sb, League::NCAA, cin, first.fresh);
   WCHECK_EQ(next.alert.splash.text, "CIN\nINTER-CEPTION");  // the home side picked it off
   WCHECK(next.alert.fav);
-  // The same play read twice is not new.
   WatchJob again = read_day(sb, League::NCAA, cin, next.fresh);
   WCHECK(!again.alert.valid);
-  // Without ids a turnover can't be told new: none.
+  // Without ids a turnover can't be told new.
   auto no_id = [](JsonObject ev) { ev["competitions"][0]["situation"]["lastPlay"].as<JsonObject>().remove("id"); };
   WatchJob plain = read_day(edited(before, "401856777", no_id), League::NCAA, cin);
   WCHECK(!read_day(edited(sb, "401856777", no_id), League::NCAA, cin, plain.fresh).alert.valid);
@@ -351,14 +334,12 @@ void test_detect() {
   watch_store(prev, basketball(98, 100, 4, "1:30"));
   WCHECK(watch_detect(prev, basketball(102, 100, 4, "1:10"), kAlertsAll).type == Alert::LEAD_CHANGE);
   WCHECK(watch_detect(prev, basketball(102, 100, 5, "5:00"), kAlertsAll).type == Alert::OVERTIME);
-  // A final doesn't switch: the game is over.
   watch_store(prev, basketball(98, 100, 4, "0:40"));
   WCHECK(watch_detect(prev, basketball(98, 101, 4, "0.0", GameState::POST), kAlertsAll).type == Alert::NONE);
-  // Not read yet: nothing.
   WatchGame unread;
   WCHECK(watch_detect(unread, basketball(102, 100, 4, "1:10"), kAlertsAll).type == Alert::NONE);
 
-  // The read before rebuilt: what detect_big_play needs from it.
+  // watch_prev keeps only what detect_big_play needs.
   GameSnapshot fb;
   fb.valid = true;
   fb.event_id = "5";
@@ -380,7 +361,7 @@ void test_detect() {
   WCHECK(p.play_id == std::to_string(watch_hash("123")) && p.last_play.empty());
   WCHECK(p.play_type == "touchdown");  // the try after it can't be a safety
   WCHECK(watch_hash("") == 0 && watch_hash("123") != 0 && watch_hash("123") != watch_hash("124"));
-  // Two points right after a touchdown are a conversion, not a safety.
+  // Two points after a touchdown: conversion, not safety.
   GameSnapshot two = fb;
   two.state = GameState::IN;
   two.team_score = 23;
@@ -415,20 +396,18 @@ void test_merge() {
   source.league = nfl;
   watch_merge(games, fresh, source);
   WCHECK(games.size() == kWatchMax);
-  // The favorite first, however far behind, then a score or less in the 4th,
-  // then a tie in the 1st, then a score early, then the blowouts.
+  // Favorite, close late, tied early, early score, then blowouts.
   const char *order[] = {"3", "2", "5", "9", "4", "6", "7", "8"};
   for (size_t i = 0; i < kWatchMax && i < games.size(); i++)
     WCHECK_EQ(games[i].event_id, order[i]);
-  WCHECK(find(games, "10") == nullptr);  // over
+  WCHECK(find(games, "10") == nullptr);  // game 10 already ended
   WCHECK(find(games, "1") == nullptr);   // the biggest blowout goes first
-  // A game the next scoreboard read no longer lists drops out, other leagues' stay.
+  // Unlisted games drop out; other leagues' games stay.
   games.push_back(game("50", nhl, false, 1, 1, 3));
   watch_merge(games, std::vector<WatchGame>{game("2", nfl, false, 24, 20, 4)}, source);
   WCHECK(games.size() == 2);
   WCHECK(find(games, "50") != nullptr && find(games, "2") != nullptr && find(games, "2")->team_score == 24);
-  // A game's own read speaks for that game only: a read that no longer
-  // takes it (now on the board) drops it, the other stays.
+  // A single-game read drops only its own game.
   WatchScope one;
   one.kind = WatchScope::GAME;
   one.league = nhl;
@@ -436,15 +415,14 @@ void test_merge() {
   std::vector<WatchGame> both = games;
   watch_merge(both, {}, one);
   WCHECK(both.size() == 1 && find(both, "2") != nullptr);
-  // It ends and drops out.
   watch_merge(games, std::vector<WatchGame>{game("50", nhl, false, 2, 1, 3, GameState::POST)}, one);
   WCHECK(games.size() == 1 && find(games, "50") == nullptr);
-  // The board's scan only adds: none of the old ones drop out.
+  // The board's scan only adds, never drops.
   watch_merge(games, std::vector<WatchGame>{game("60", (uint8_t) League::NCAA, false, 0, 0, 0, GameState::NOT_FOUND)},
               WatchScope{});
   WCHECK(games.size() == 2 && find(games, "2") != nullptr && find(games, "60") != nullptr);
   games.pop_back();
-  // A game not read yet sits between the close games and the blowouts.
+  // Unread games rank between close games and blowouts.
   WCHECK(watch_rank(game("u", nfl, false, 0, 0, 0, GameState::NOT_FOUND)) > watch_rank(game("c", nfl, false, 20, 17, 2)));
   WCHECK(watch_rank(game("u", nfl, false, 0, 0, 0, GameState::NOT_FOUND)) < watch_rank(game("b", nfl, false, 42, 0, 4)));
   // Basketball's scores are threes, baseball's runs.
@@ -460,18 +438,17 @@ const Team *team(League league, uint32_t id) {
 }
 
 void test_sources_and_reads() {
-  // Live games: a scoreboard per pro league, college fed by the board's scan.
+  // Live: one scoreboard per pro league; college fed by scan.
   std::vector<WatchSource> live =
       watch_sources(true, {League::NFL, League::NCAA, League::NHL, League::PGA}, {}, kAlertsAll);
   WCHECK(live.size() == 3);
-  // None for a sport with no big play switched on: hockey's goal off.
   WCHECK(watch_sources(true, {League::NFL, League::NCAA, League::NHL}, {}, kAlertsAll & ~alert_bit(Alert::HOCKEY_GOAL))
              .size() == 2);
   WCHECK(watch_sources(true, {League::NBA}, {}, alert_bit(Alert::FINAL)).empty());
   WCHECK(watch_sources(true, {League::NBA}, {}, 0).empty());
   WCHECK(live[0].league == (uint8_t) League::NFL && !live[0].by_event && !live[0].fed);
   WCHECK(live[1].league == (uint8_t) League::NCAA && live[1].by_event && live[1].fed);
-  // Favorites: by event, a college one by its conference, each once.
+  // Favorites by event; college by conference, each once.
   const Team *dal = team(League::NFL, 6), *phi = team(League::NFL, 21), *tex = team(League::NCAA, 251),
              *tamu = team(League::NCAA, 245);
   WCHECK(dal && phi && tex && tamu);
@@ -479,9 +456,7 @@ void test_sources_and_reads() {
   WCHECK(fav.size() == 2);
   WCHECK(fav[0].league == (uint8_t) League::NFL && fav[0].group == 0 && fav[0].by_event && !fav[0].fed);
   WCHECK(fav[1].league == (uint8_t) League::NCAA && fav[1].group == tex->group && fav[1].group != 0);
-  // Minor league baseball comes from MLB, not ESPN: never a source, in Live
-  // games or as a favorite, and none of its games is wanted, even the
-  // panel's team's.
+  // Minor league comes from MLB, never an ESPN source.
   const Team *dur = team(League::MILB, 234);
   WCHECK(dur != nullptr);
   const std::vector<WatchSource> with_milb = watch_sources(true, {League::MLB, League::MILB}, {}, kAlertsAll);
@@ -489,7 +464,7 @@ void test_sources_and_reads() {
   WCHECK(watch_sources(true, {League::MILB}, {}, kAlertsAll).empty());
   WCHECK(watch_sources(false, {}, {dur}, kAlertsAll).empty());
   WCHECK(watch_sources(false, {}, {dur, dal}, kAlertsAll).size() == 1);
-  // The AHL and the ECHL come from HockeyTech: the same.
+  // AHL and ECHL come from HockeyTech: same.
   const Team *syr = team(League::AHL, 324), *adk = team(League::ECHL, 74);
   WCHECK(syr != nullptr && adk != nullptr);
   const std::vector<WatchSource> with_ht =
@@ -511,7 +486,7 @@ void test_sources_and_reads() {
     WCHECK(watch_wants_teams(c, (uint8_t) League::ECHL, 74, 66) == 0);
   }
 
-  // A cycle: the first source's scoreboard, then its games one by one.
+  // A cycle: scoreboard first, then its games singly.
   const uint32_t now = 100000;
   std::vector<WatchGame> games;
   WatchRead r = watch_next(fav, games, 1, now);
@@ -525,7 +500,7 @@ void test_sources_and_reads() {
   fav[1].wait_until = watch_wait_until(fav[1], false, now, 1800000000, 1800000000 + 600);
   WCHECK(fav[1].wait_until == now + 600000);  // the next start, 10 minutes on
   WCHECK(watch_next(fav, games, 1, now).source == -1);
-  // Next cycle: a game found on the first source is read on its own.
+  // Next cycle reads the found game on its own.
   WatchGame g = game("401", (uint8_t) League::NFL, true, 7, 3, 2);
   g.read_cycle = g.tried_cycle = 1;
   games.push_back(g);
@@ -534,15 +509,14 @@ void test_sources_and_reads() {
   games[0].tried_cycle = 2;
   WCHECK(watch_next(fav, games, 2, now + 45000).source == -1);  // both scoreboards wait
   WCHECK(!watch_next(fav, games, 2, now + 45000).waiting);
-  // The conference's next start is here: its scoreboard, last read a cycle
-  // before the game, goes first, then the game again.
+  // Conference start due: its scoreboard first, then the game.
   r = watch_next(fav, games, 3, now + 600000);
   WCHECK(r.source == 1 && r.game == -1);
   fav[1].read_cycle = 3;
   r = watch_next(fav, games, 3, now + 600000);
   WCHECK(r.source == 0 && r.game == 0);
 
-  // Live games: the scoreboard every cycle while a game is on, a fed source never.
+  // Live: scoreboard every cycle while on; fed sources never.
   WCHECK(watch_wait_until(live[0], true, now, 1800000000, 0) == 0);
   WCHECK(watch_wait_until(live[0], false, now, 1800000000, 1800000000 + 30) == now + kWatchWaitMinMs);
   live[0].read_cycle = 1;
@@ -587,7 +561,7 @@ void test_switch() {
   WCHECK(clamp_watch_stay_seconds(0) == 30 && clamp_watch_stay_seconds(95) == 90 && clamp_watch_stay_seconds(301) == 300);
 }
 
-// A game that just ended is still read once, for a walk-off or a buzzer beater.
+// Ended games are read once more for walk-offs.
 void test_final_read() {
   const std::string mlb = slurp("fixtures/day_mlb_20261012.json");
   WatchJob first = read_day(mlb, League::MLB, live_ctx());
@@ -607,10 +581,7 @@ void test_final_read() {
   WCHECK(games.empty());
 }
 
-// Follow this game (follow.h) holds the mode's own game: the watcher never
-// switches while it does, a visit up when it starts ends at once, so the
-// board goes straight back, and what it follows is the mode's game, which
-// the visit saved, never the big play's game on the board for a moment.
+// Follow pins the mode's game, never the visit's.
 void test_follow() {
   GameSnapshot mode_game, visit_game;
   for (GameSnapshot *g : {&mode_game, &visit_game}) {
@@ -627,8 +598,7 @@ void test_follow() {
   FollowPin pin;
   WCHECK(follow_start(pin, true, true, watch_mode_game(visit_game, &mode_game), now));
   WCHECK(pin.on && pin.event_id == "401");
-  // It holds against the mode's game, and would let go at once if it were
-  // held up against the big play's game on the board.
+  // Checking against the visit's game would release the pin.
   FollowPin against_visit = pin;
   WCHECK(follow_holds(pin, watch_mode_game(visit_game, &mode_game), now + 60, 0, 0));
   WCHECK(!follow_holds(against_visit, visit_game, now + 60, 0, 0) && !against_visit.on);
@@ -645,23 +615,20 @@ void test_follow() {
   WCHECK(watch_may_switch(s));
   WCHECK(!watch_visit_over(1000, 990, 60000, s));
 
-  // The device page offers the switch during a visit only while the mode's
-  // game can still be followed, and asking leaves the pin as it was.
+  // During a visit, offer Follow only for followable games.
   FollowPin none;
   WCHECK(follow_can_start(none, true, true, watch_mode_game(visit_game, &mode_game)) && !none.on);
   GameSnapshot ended = mode_game;
   ended.state = GameState::POST;
   WCHECK(!follow_can_start(none, true, true, watch_mode_game(visit_game, &ended)));
   WCHECK(!follow_can_start(none, true, false, mode_game));  // Favorite teams with no card up
-  WCHECK(!follow_can_start(none, false, true, mode_game));  // My team
+  WCHECK(!follow_can_start(none, false, true, mode_game));  // in My team mode
   FollowPin held;
   WCHECK(follow_start(held, true, true, mode_game, now));
   WCHECK(follow_can_start(held, true, true, ended) && held.on);  // a final it holds already
 }
 
-// Bets (bets.h): a watcher's read hands back only the games the bets are
-// tied to already, those bets keep its details and take its result at the
-// final, and a bet with no game yet or on another game stays as it was.
+// Watcher reads update only games bets are tied to.
 void test_bets() {
   const std::string mlb = slurp("fixtures/day_mlb_20261012.json");
   WatchJob plain = read_day(mlb, League::MLB, live_ctx());
@@ -691,7 +658,7 @@ void test_bets() {
   WCHECK(live.team_score == w.team_score && live.opp_score == w.opp_score);
 
   const int64_t now = live.kickoff + 3600, midnight = now + 6 * 3600;
-  Bet tied{};  // a moneyline on the away side, tied to this game already
+  Bet tied{};  // away moneyline already tied to this game
   tied.team_id = w.away_id;
   tied.league = (uint8_t) League::MLB;
   tied.type = (uint8_t) BetType::MONEYLINE;
@@ -743,7 +710,7 @@ void test_bets() {
   WCHECK(src.blob.bets[1].event == 0 && src.blob.bets[2].event == event + 1);
   WCHECK(src.blob.bets[1].result == (uint8_t) BetResult::NONE && src.blob.bets[2].result == (uint8_t) BetResult::NONE);
 
-  // A game the read doesn't take (the board's own, here) hands back nothing.
+  // The board's own game isn't taken, so no bets.
   WatchCtx board = live_ctx();
   board.board_league = (uint8_t) League::MLB;
   board.board_event = w.event_id;
@@ -755,7 +722,7 @@ void test_bets() {
   input = mlb;
   WCHECK(watch_read_day(input, off) && off.bets.empty());
 
-  // A leaderboard or a game with no event id a bet keeps is no bet's game.
+  // Leaderboards and id-less games are never bet games.
   GameSnapshot g;
   g.valid = true;
   g.state = GameState::POST;
@@ -771,17 +738,7 @@ void test_bets() {
   WCHECK(watch_bet_game(g, (uint8_t) League::MLB, out) && out.phase == BetPhase::OFF);  // ended, not completed
 }
 
-// The panel's one fetch task, modeled in 50 ms steps for the scheduling
-// tests: the board's polls, and between them the watcher's reads as
-// start_watch_job_ starts them (watch_next with WatchTimes::fits, a new cycle
-// every kWatchCycleMs, a look 250 ms after one that found nothing fitting).
-// In My team and Live games the board polls every poll_every after its last
-// poll; in Favorite teams (fav) a 1 s tick (FAV_TICK) polls the locked game
-// once that is due and otherwise gives the watcher the tick, fitting against
-// watch_fav_due. With side_every set, the idle display's scores read too, as
-// start_side_job_ does from loop(): looked at once a second in the gaps
-// between the board's reads, ahead of the watcher, a read every side_every
-// that takes side_took and isn't fitted to the board's next read.
+// Models the one fetch task in 50 ms steps.
 struct FetchModel {
   std::vector<WatchSource> src;
   std::vector<WatchGame> games;
@@ -790,8 +747,7 @@ struct FetchModel {
   uint32_t poll_every = 10000, poll_took = 300;
   uint32_t side_every = 0, side_took = 4000;
   int side_reads = 0;
-  // What one watcher read takes and whether it answers: a source's day
-  // scoreboard (event id "") or one game.
+  // Read cost and answer; empty event id is a scoreboard.
   using Read = const std::string &;
   std::function<uint32_t(const WatchSource &, Read)> took = [](const WatchSource &, Read) { return 1500u; };
   std::function<bool(const WatchSource &, Read)> answers = [](const WatchSource &, Read) { return true; };
@@ -906,23 +862,18 @@ WatchSource day_source(League l) {
   return s;
 }
 
-// Favorite teams ticks every second, so its board is always due within one:
-// the watcher fits against the locked game's next poll instead, and reads
-// between polls without making one late.
+// Favorites fit reads against the locked game's next poll.
 void test_favorites_tick() {
   WCHECK(!watch_read_fits(1000, 1000 + 1000, watch_expect_ms(0, true)));  // the tick itself never leaves room
   WCHECK(watch_fav_due(1000, true, 0, 10000, 999999) == 1000);                // never polled: due now
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999) == 11000);
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 8000) == 8000);  // a team read comes first
   WCHECK(watch_fav_due(5000, false, 1000, 10000, 8000) == 8000);  // the playlist: only team reads
-  // A minor league game's poll waits out MLB's backoff: the watcher has the
-  // gap until then, and an overdue team read of a waiting host is due when
-  // the wait ends, not now.
+  // Minor league polls wait out MLB's backoff.
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 60000) == 65000);
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 30000, 60000) == 30000);  // a team read before the wait ends
   WCHECK(watch_fav_due(5000, true, 1000, 10000, 999999, 1000) == 11000);  // a wait over before the poll is due
-  // ESPN refusing a check holds the board's next read only when that read
-  // may go to ESPN.
+  // An ESPN refusal holds only ESPN-bound board reads.
   WCHECK(watch_refusal_holds_board(false, false, (uint8_t) League::NFL));    // My team, from ESPN
   WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::MILB));  // My team, from MLB
   WCHECK(!watch_refusal_holds_board(false, false, (uint8_t) League::AHL));   // and from HockeyTech
@@ -943,16 +894,12 @@ void test_favorites_tick() {
   m.src = {s};
   m.games = {game("1", (uint8_t) League::NFL, true, 7, 3, 2), game("2", (uint8_t) League::NFL, true, 0, 0, 1)};
   m.run(30 * 60 * 1000);
-  // About one read of each game a cycle, 40 cycles, and the locked game's
-  // poll no later than a tick would make it anyway.
+  // About one read per game per cycle, 40 cycles.
   WCHECK(m.game_reads["1"] >= 35 && m.game_reads["2"] >= 35);
   WCHECK(m.polls >= 160);
   WCHECK(m.worst_late <= 1000);
 }
 
-// A day scoreboard too slow for the live game's 10 s gap no longer stops the
-// reads behind it, and gets its turn again every other cycle once its time is
-// expected an eighth quicker, without making a poll late.
 void test_slow_scoreboard() {
   FetchModel m;
   m.src = {day_source(League::NFL), day_source(League::NBA)};
@@ -964,7 +911,6 @@ void test_slow_scoreboard() {
   WCHECK(m.worst_late == 0);
   WCHECK(m.polls >= 170);
 
-  // WatchTimes on its own.
   WatchTimes t;
   WCHECK(t.fits(0, 5000, (uint8_t) League::NBA, false));  // untimed: 5 s for a day
   WCHECK(!t.fits(0, 4999, (uint8_t) League::NBA, false) && t.skipped != 0);
@@ -974,15 +920,14 @@ void test_slow_scoreboard() {
   WCHECK(t.ms[(size_t) League::NBA] == 1800 && t.fits(0, 2800, (uint8_t) League::NBA, false));
   t.took((uint8_t) League::NBA, false, 900, false);  // a quick failure says nothing of a read's time
   WCHECK(t.ms[(size_t) League::NBA] == 1800 && t.fits(0, 2800, (uint8_t) League::NBA, false));
-  // A hang to the timeout says nothing of it either: the time stands, and
-  // that kind waits for the next cycle, unmarked, while the others go on.
+  // A timeout hang skips one cycle, time unchanged.
   t.took((uint8_t) League::NBA, false, 20000, false);
   WCHECK(t.ms[(size_t) League::NBA] == 1800);
   WCHECK(!t.fits(0, 60000, (uint8_t) League::NBA, false) && t.skipped == 0);
   WCHECK(t.fits(0, 60000, (uint8_t) League::NFL, false) && t.fits(0, 60000, (uint8_t) League::NBA, true));
   t.cycle();
   WCHECK(t.fits(0, 2800, (uint8_t) League::NBA, false));
-  // Hanging again right after: two cycles more, then six more each time.
+  // Repeat hangs: two more cycles, then six more each.
   auto waits = [&t]() {
     int n = 0;
     for (; n < 20 && !t.fits(0, 60000, (uint8_t) League::NBA, false); n++)
@@ -1008,9 +953,6 @@ void test_slow_scoreboard() {
   WCHECK(t.ms[kLeagueCount] == 52500);
 }
 
-// A read that fails, quick or hung until the HTTP timeout, never holds up
-// the others: they go on that cycle, and a hung one waits for the next
-// cycle, then longer each time it hangs again (WatchTimes::took).
 void test_failing_reads() {
   FetchModel m;
   m.src = {day_source(League::NFL), day_source(League::NBA)};
@@ -1019,11 +961,10 @@ void test_failing_reads() {
   m.run(30 * 60 * 1000);
   WCHECK(m.source_reads[1] >= 38);  // the NBA, every cycle
   WCHECK(m.source_reads[0] >= 5 && m.source_reads[0] <= 9);  // cycles 1, 2, 5, then every 7th
-  WCHECK(m.late_polls <= m.source_reads[0]);  // only a retry of the hung read can make one late
+  WCHECK(m.late_polls <= m.source_reads[0]);  // only the hung read's retry can delay a poll
   WCHECK(m.polls >= 160);
 
-  // My team, a game whose own read fails at once every time: the other is
-  // read that same cycle, and the failing one drops out after two tries.
+  // An always-failing game drops out after two tries.
   FetchModel t;
   t.poll_every = 15 * 60 * 1000;  // the panel's team's game is still to come
   WatchSource fav = day_source(League::NBA);
@@ -1038,7 +979,6 @@ void test_failing_reads() {
   WCHECK(t.games.size() == 1 && find(t.games, "B") != nullptr);
   WCHECK(t.game_reads["B"] >= 39);
 
-  // watch_failed on its own.
   std::vector<WatchGame> games = {game("A", 1, false, 0, 0, 1), game("B", 1, false, 0, 0, 1)};
   watch_failed(games, 1, "A");
   WCHECK(games.size() == 2 && games[0].fails == 1);
@@ -1048,8 +988,6 @@ void test_failing_reads() {
   WCHECK(games.size() == 1 && find(games, "B") != nullptr);
 }
 
-// A failed read leaves the game's last good read where it was: a good read
-// three cycles later is too far from it to tell a big play from.
 void test_failed_read_is_no_read() {
   WatchGame prev;
   snprintf(prev.event_id, sizeof(prev.event_id), "9");
@@ -1076,7 +1014,7 @@ void test_failed_read_is_no_read() {
   WCHECK(job.alert.valid && job.alert.splash.text.find("LEAD") != std::string::npos);
 }
 
-// However many games a scan or a scoreboard lists, the lists hold eight.
+// Watch lists hold at most eight games.
 void test_bounded() {
   std::vector<WatchGame> fresh;
   for (int i = 0; i < 60; i++) {
@@ -1086,7 +1024,7 @@ void test_bounded() {
     watch_keep(fresh, g);
   }
   WCHECK(fresh.size() == kWatchMax && fresh.capacity() <= kWatchMax);
-  WCHECK(find(fresh, "41") != nullptr);  // the favorite's
+  WCHECK(find(fresh, "41") != nullptr);  // the favorite's game
   std::vector<WatchGame> games = {game("x", (uint8_t) League::NBA, false, 100, 99, 4)};
   watch_merge(games, fresh, WatchScope{});
   WCHECK(games.size() == kWatchMax && games.capacity() <= kWatchMax);
@@ -1102,9 +1040,7 @@ void test_bounded() {
   WCHECK(day.size() == kWatchMax && find(day, "n0") != nullptr && find(day, "n15") == nullptr);
 }
 
-// The visit: the mode's game and the visit's are both kept off, a big play
-// elsewhere moves the board on only during the first stay, and the panel's
-// team's game ends it from its start time on.
+// Only the first stay may move to another big play.
 void test_visit() {
   WatchCtx c = live_ctx();
   c.board_league = c.visit_league = (uint8_t) League::NFL;
@@ -1129,7 +1065,7 @@ void test_visit() {
   // The panel's team kicked off while the board was away.
   s.own_live = true;
   WCHECK(watch_visit_over(1000, 900, 60000, s));
-  s.alert_fav = s.from_mine = true;  // unless a favorite's big play may take it from that game
+  s.alert_fav = s.from_mine = true;  // unless a favorite's big play may take over
   WCHECK(!watch_visit_over(1000, 900, 60000, s));
 
   GameSnapshot g;
@@ -1150,11 +1086,7 @@ void test_visit() {
   WCHECK(!watch_live(g, 1800009999));
 }
 
-// A game on that leaves the board can be one to watch now: its league's day
-// scoreboards are read again at the next cycle, waits or not. A card that
-// isn't on coming and going (Favorite teams' playlist turns one every 10
-// seconds) reads nothing again, and a game still to start sets the wait to
-// its start even while it is the board's card.
+// A game leaving the board re-reads its league next cycle.
 void test_board_moves() {
   const uint32_t now = 100000;
   std::vector<WatchSource> src = {day_source(League::NFL), day_source(League::NBA)};
@@ -1179,7 +1111,7 @@ void test_board_moves() {
   WCHECK(src[0].wait_until == 0);                      // the football game that left can be watched now
   WCHECK(src[1].wait_until == now + kWatchWaitMaxMs);  // no basketball game left the board
   WCHECK(watch_next(src, {}, 2, now + kWatchCycleMs).source == 0);
-  // A visit: nothing leaves the board when it starts, its game does when it ends.
+  // A visit's game leaves the board only when it ends.
   src[0].wait_until = 5;
   c.visit_league = (uint8_t) League::NFL;
   c.visit_event = "402";
@@ -1198,8 +1130,7 @@ void test_board_moves() {
   watch_board_moved(src, kept, c);
   WCHECK(src[1].wait_until == 5);
 
-  // Favorite teams' playlist, four favorites' cards in turn, none on: every
-  // league's wait stands, cycle after cycle.
+  // Playlist cards not on never reset the waits.
   std::vector<WatchSource> fav;
   for (League l : {League::NFL, League::MLB, League::NBA, League::NHL}) {
     WatchSource s = day_source(l);
@@ -1221,8 +1152,7 @@ void test_board_moves() {
     WCHECK(s.wait_until == now + kWatchWaitMaxMs);
   WCHECK(watch_next(fav, {}, 41, now + 40 * kWatchCycleMs).source == -1);
 
-  // The card on the board is a favorite's game still to come (VAN at 23:00):
-  // its start sets the wait, as if it weren't on the board.
+  // Board card VAN at 23:00: its start sets the wait.
   const std::string ncaa = slurp("fixtures/day_ncaa_20261017.json");
   WatchCtx vf;
   vf.mask = kAlertsAll;
@@ -1239,12 +1169,7 @@ void test_board_moves() {
   WCHECK(read_day(ncaa, League::NCAA, vf).next_start == 0);
 }
 
-// More reads due than the board's gaps can take (six leagues' day
-// scoreboards of 6 s each, about four a cycle between 10 s polls): the ones
-// a cycle left out go first the next, so every league is read at least every
-// other cycle, close enough to tell a big play from (kWatchStaleCycles), not
-// the same last ones never. The first in order keep the cycles to spare. The
-// same for one source's games read one by one, in watch_rank's order.
+// Reads left out one cycle go first the next.
 void test_fair_reads() {
   FetchModel m;
   m.src = {day_source(League::NFL), day_source(League::MLB),  day_source(League::MLS),
@@ -1253,7 +1178,7 @@ void test_fair_reads() {
   m.run(30 * 60 * 1000);
   int total = 0;
   for (int n : m.source_reads) {
-    WCHECK(n >= 19);  // 40 cycles
+    WCHECK(n >= 19);  // over 40 cycles
     total += n;
   }
   WCHECK(total >= 170);  // the gaps were full
@@ -1273,9 +1198,7 @@ void test_fair_reads() {
   WCHECK(g.worst_late == 0);
 }
 
-// Favorite teams on a live game polled every 10 s, two other favorites'
-// games read one by one: one read that hangs until the HTTP timeout costs
-// those games that cycle's reads, not minutes of them.
+// One hang costs a cycle's reads, not minutes.
 void test_one_hang() {
   FetchModel m;
   m.fav = true;
@@ -1295,9 +1218,7 @@ void test_one_hang() {
   WCHECK(m.late_polls <= 2);
 }
 
-// A golf tour or a racing series followed like a team: its leaderboard is
-// the team's game, though it names no team, and is live while a round is
-// played or a session is on track. Then "Switch from my team" decides.
+// A followed tour's leaderboard counts as the team's game.
 void test_leaderboard_team() {
   GameSnapshot golf;
   golf.valid = true;
@@ -1341,9 +1262,7 @@ void test_leaderboard_team() {
   WCHECK(!watch_visit_over(1000, 990, 60000, sw));
 }
 
-// The first read of the board's game after a visit: what happened while the
-// board was away isn't splashed late, but a final reached meanwhile still
-// gets its victory splash.
+// After a visit, splash only a final reached meanwhile.
 void test_back_prev() {
   const GameSnapshot before = basketball(98, 97, 4, "0:40");
   const GameSnapshot won = basketball(104, 99, 4, "0.0", GameState::POST);
@@ -1366,7 +1285,7 @@ void test_back_prev() {
   GameSnapshot off = won;
   off.completed = false;
   WCHECK(decide_splash(watch_back_prev(before, off), off, true, false, kAlertsAll, false).text.empty());
-  // A leaderboard splashes only its winner: the board from before stays.
+  // A leaderboard splashes only its winner.
   GameSnapshot g0;
   g0.valid = true;
   g0.sport = Sport::GOLF;
@@ -1378,11 +1297,7 @@ void test_back_prev() {
   WCHECK(gp.valid && gp.event_id == "401703500" && gp.golf.phase == GolfPhase::LIVE);
 }
 
-// My team with the scores as the idle display: the team's next game is a
-// card polled every 5 minutes while two favorites' games are on. The
-// scores' reads and the watcher's share the one fetch task without keeping
-// each other from their reads, and the board's poll waits at most for one
-// scores read, as it did before the watcher, never for a watcher read.
+// Idle scores and the watcher share the fetch task.
 void test_idle_scores() {
   auto model = [](uint32_t side_every) {
     FetchModel m;
@@ -1404,8 +1319,7 @@ void test_idle_scores() {
   WCHECK(shared.side_reads >= 4);
   WCHECK(shared.game_reads["1"] >= 155 && shared.game_reads["2"] >= 155);
   WCHECK(shared.polls >= 24 && shared.worst_late <= shared.side_took);
-  // Scores reading often (every minute, far more than they do) still leave
-  // the watcher every cycle, and the watcher leaves them every look.
+  // Even minute-by-minute scores leave the watcher every cycle.
   FetchModel busy = model(60 * 1000);
   WCHECK(busy.side_reads >= 115);
   WCHECK(busy.game_reads["1"] >= 155 && busy.game_reads["2"] >= 155);

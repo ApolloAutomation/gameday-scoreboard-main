@@ -1,5 +1,4 @@
-// Basketball's parse extras, ticker and clock row (NBA, WNBA, men's college).
-// Pure, no ESPHome includes. Its splashes are alerts.h's.
+// Basketball parse extras, ticker, clock row; no ESPHome includes.
 #include "espn_parse.h"
 
 namespace espn {

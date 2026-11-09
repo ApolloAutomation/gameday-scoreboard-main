@@ -1,7 +1,4 @@
-// Minor league baseball from the MLB Stats API: URLs, filters and the parse
-// into the shared snapshot types (source_mlbstats.h). Pure, no ESPHome
-// includes. Built for size, as sport_golf.cpp is: it runs once a poll at
-// most. Only GCC has the pragma.
+// Built for size (-Os): it runs once a poll.
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize("Os")
 #endif
@@ -21,14 +18,11 @@ using detail::text;
 
 static const char *const kSchedule = "https://statsapi.mlb.com/api/v1/schedule";
 static const char *const kLevels = "11,12,13,14";
-// fields= keeps only these keys, wherever they sit in the document. A parent
-// must be listed for its children to come through ("teams,away,team,id").
+// fields= needs each parent listed for its children.
 static const char *const kTeamFields =
     "dates,date,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
     "teamName,leagueRecord,wins,losses,gameNumber";
-// The far read leaves out each date's own date (listed_on): it lists only
-// games to come, so its first is the opener, ahead of any entry misdated
-// under a later date, and 88 dates would add 1.7 KB to every read.
+// No per-date date: 88 dates would add 1.7 KB.
 static const char *const kFarFields = "dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD";
 static const char *const kGameFields =
     "dates,games,gamePk,gameDate,status,codedGameState,statusCode,detailedState,reason,startTimeTBD,teams,away,home,"
@@ -39,17 +33,11 @@ static const char *const kDayFields =
     "dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,score,"
     "leagueRecord,wins,losses,linescore,currentInning,scheduledInnings";
 
-// The team read's days around today, and the far read's.
 static const int kTeamDaysBack = 1, kTeamDaysAhead = 10, kFarDaysAhead = 240;
-// A game not started this long after its listed start is left over from a
-// past day (a status never updated): not the game to show. A game with no
-// start time yet is listed at midnight Eastern, so its day has to be over.
+// API leaves stale statuses on past days' games.
 static const int64_t kStaleStart = 18 * 3600, kStaleTbd = 30 * 3600;
 static const int64_t kEastern = 5 * 3600;
-// Every game the four levels played in 2026 starts 12 to 30 hours after
-// midnight UTC of the date the API lists it under. One entry listed under
-// 2026-05-22 started in May 2027, a placeholder with no time yet: a start
-// outside these bounds of its date is not that date's game.
+// The API misdates some entries; bound starts to their date.
 static const int64_t kListedBefore = 12 * 3600, kListedAfter = 48 * 3600;
 
 const char *milb_level_name(uint32_t level) {
@@ -67,8 +55,7 @@ const char *milb_level_name(uint32_t level) {
   }
 }
 
-// The day an epoch falls in, as scan_url counts it for a daily league (US
-// Eastern, turning over at 4 AM): days since 1970-01-01.
+// US Eastern days, turning over at 4 AM.
 static int64_t mlb_day(int64_t epoch) {
   int64_t s = epoch - scan_day_shift(League::MILB);
   return s >= 0 ? s / 86400 : (s - 86399) / 86400;
@@ -139,10 +126,7 @@ std::string mlb_ordinal(int n) {
   return std::to_string(n) + suffix;
 }
 
-// The first letter of codedGameState: S scheduled and P pre-game or warmup
-// (or a delayed start); I in progress, M and N a challenge or a review; F and
-// O final, Q and R forfeited; D postponed, C canceled, T and U suspended.
-// Anything else (X unknown, W writing) reads as not started.
+// codedGameState letters; unknown ones read as not started.
 MlbState mlb_state(const std::string &coded) {
   switch (coded.empty() ? 'S' : coded[0]) {
     case 'I':
@@ -217,9 +201,7 @@ void fill_mlb_day_filter(JsonDocument &f) {
   keep(g["linescore"].to<JsonObject>(), {"currentInning", "scheduledInnings"});
 }
 
-// The listed start, or for a game with no start time yet (startTimeTBD: game
-// 2 of a doubleheader, after game 1) midnight Eastern of its day: the
-// placeholder ESPN uses, which the kickoff labels and tbd_day_epoch expect.
+// TBD starts become midnight Eastern, ESPN's placeholder.
 static int64_t game_start(JsonObjectConst g, bool &tbd) {
   int64_t kick = parse_iso8601_z(text(g, "gameDate"));
   tbd = g["status"]["startTimeTBD"] | false;
@@ -231,8 +213,7 @@ static int64_t game_start(JsonObjectConst g, bool &tbd) {
   return kick;
 }
 
-// Whether a start belongs to the date its entry is listed under (d, the
-// dates[] entry). A date that isn't there or doesn't parse passes.
+// A missing or unparsable date passes.
 static bool listed_on(JsonObjectConst d, int64_t kick) {
   int64_t day = parse_iso8601_z(text(d, "date") + "T00:00");
   return day <= 0 || kick <= 0 || (kick >= day - kListedBefore && kick < day + kListedAfter);
@@ -240,7 +221,6 @@ static bool listed_on(JsonObjectConst d, int64_t kick) {
 
 static uint32_t team_id(JsonObjectConst side) { return side["team"]["id"] | 0u; }
 
-// "66-52" from leagueRecord, "" when it isn't there.
 static std::string record(JsonObjectConst side) {
   JsonObjectConst r = side["leagueRecord"];
   int w = clamp_int(r["wins"], 0, 999, -1), l = clamp_int(r["losses"], 0, 999, -1);
@@ -249,8 +229,7 @@ static std::string record(JsonObjectConst side) {
   return std::to_string(w) + "-" + std::to_string(l);
 }
 
-// One side of a game, read once whichever read it is in (a field a read
-// doesn't keep comes back empty or 0), then handed to us or them.
+// Fields a read filters out come back empty or 0.
 struct Side {
   uint32_t id{0};
   int score{0}, hits{0}, errors{0};
@@ -291,8 +270,7 @@ int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedu
       uint32_t pk = g["gamePk"] | 0u;
       MlbState st = mlb_state(text(g["status"], "codedGameState"));
       if (pk != 0 && st == MlbState::FINAL && last_final != nullptr) {
-        // The latest final listed before the game the read stops at, a
-        // doubleheader's game 2 (no start time) after game 1.
+        // A TBD doubleheader game 2 sorts after game 1.
         bool tbd = false;
         int64_t kick = game_start(g, tbd);
         if (kick > 0 && listed_on(d, kick) &&
@@ -349,8 +327,7 @@ int mlb_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedu
   return found ? 1 : 0;
 }
 
-// "Top 5th", "Mid 5th", "Bot 5th", "End 5th": ESPN's words, which
-// half_from_detail and the clock row read.
+// ESPN's words, which half_from_detail and the clock row parse.
 static std::string inning_text(const std::string &state, int inning) {
   const char *w = state == "Top" ? "Top" : state == "Bottom" ? "Bot" : state == "Middle" ? "Mid"
                 : state == "End"  ? "End"
@@ -360,11 +337,9 @@ static std::string inning_text(const std::string &state, int inning) {
   return std::string(w) + " " + mlb_ordinal(inning);
 }
 
-// A delay in an inning: statusCode I plus the reason's letter (IR rain, IZ
-// about to resume). IH is a replay review, played through.
+// IH is a replay review, not a delay.
 static bool is_delay(const std::string &code) { return code.size() == 2 && code[0] == 'I' && code[1] != 'H'; }
 
-// "Rain Delay" for the weather the ticker can name in a word, else "Delayed".
 static std::string delay_text(const std::string &reason) {
   for (const char *r : {"Rain", "Snow", "Fog", "Lightning", "Wind", "Cold"})
     if (reason == r)
@@ -372,8 +347,7 @@ static std::string delay_text(const std::string &reason) {
   return "Delayed";
 }
 
-// "Final", or "Final/10" after extra innings and "Final/7" when it was called
-// early: the innings played when they differ from the innings scheduled.
+// ESPN-style "Final/10" when innings differ from scheduled.
 static std::string final_text(int inning, int scheduled) {
   if (inning > 0 && scheduled > 0 && inning != scheduled)
     return "Final/" + std::to_string(inning);
@@ -426,7 +400,7 @@ bool mlb_game_from_doc(JsonObjectConst root, uint32_t our_id, int64_t near_epoch
   switch (mlb_state(coded)) {
     case MlbState::PRE:
       s.state = GameState::PRE;
-      // PW warmup; P plus a reason letter is a delayed start
+      // PW warmup; P plus a reason letter: delayed start
       s.short_detail = code == "PW" ? "Warmup" : code.size() == 2 ? "Delayed" : "Scheduled";
       break;
     case MlbState::LIVE:
@@ -468,11 +442,11 @@ bool mlb_game_from_doc(JsonObjectConst root, uint32_t our_id, int64_t near_epoch
   b.opp_errors = them.errors;
   b.team_probable = std::move(us.probable);
   b.opp_probable = std::move(them.probable);
-  b.innings = (uint8_t) scheduled_innings(g);  // 7 for a doubleheader's games: a walk-off can come in the 7th
+  b.innings = (uint8_t) scheduled_innings(g);  // 7 for doubleheaders: a walk-off can come then
   if (s.state == GameState::IN) {
     b.half = half_from_detail(s.short_detail);
     if (b.half == Half::TOP || b.half == Half::BOTTOM) {
-      // Between half innings the API keeps the last count, as ESPN does.
+      // Between halves the API keeps a stale count.
       if (!ls["balls"].isNull())
         b.balls = (int8_t) clamp_int(ls["balls"], 0, 4, 0);
       if (!ls["strikes"].isNull())
@@ -484,7 +458,7 @@ bool mlb_game_from_doc(JsonObjectConst root, uint32_t our_id, int64_t near_epoch
                 (off["third"].isNull() ? 0 : Baseball::THIRD);
       b.batter = mlb_short_name(text(off["batter"], "fullName"));
       b.pitcher = mlb_short_name(text(ls["defense"]["pitcher"], "fullName"));
-      // The visitors bat in the top half: that side gets the underline.
+      // Visitors bat in the top half.
       bool we_bat = (b.half == Half::TOP) != s.team_home;
       s.possession = we_bat ? 1 : 2;
     }
@@ -503,10 +477,7 @@ bool mlb_day_from_doc(JsonObjectConst root, std::vector<LiveGame> &out, int64_t 
     *next_kickoff = 0;
   // Kept apart, so the cap counts this document only.
   std::vector<Pending> later;
-  // A full day is 60 finals at the four levels, and the finals rotation keeps
-  // a day's kRecapCap earliest (recap_merge). The API lists a day's games in
-  // start order (postponed ones last), so the first kRecapCap are those: the
-  // rest never sit in internal RAM.
+  // API lists in start order, so the first kRecapCap suffice.
   size_t kept = 0;
   for (JsonObjectConst d : dates) {
     for (JsonObjectConst g : d["games"].as<JsonArrayConst>()) {

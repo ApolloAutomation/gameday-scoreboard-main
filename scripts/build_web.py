@@ -37,8 +37,7 @@ LEAGUE_RE = re.compile(
 )
 # One row of app.js's LEAGUES table, the fields it copies from leagues.h.
 JS_LEAGUE_RE = re.compile(r'^\s*(\w+): \{ prefix: "([^"]*)",.*?path: "([^"]*)", logo: "([^"]*)", byId: (true|false)', re.M)
-# Leagues not read from ESPN (Source::MLB_STATS, Source::HOCKEYTECH): their
-# teams.h group rides along in TEAMS.
+# Non-ESPN leagues carry their teams.h group in TEAMS.
 SOURCE_RE = re.compile(r"\{League::(\w+),[^}\n]*Source::(?:MLB_STATS|HOCKEYTECH)\}")
 TZ_H = ROOT / "components" / "gameday" / "timezones.h"
 TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
@@ -95,9 +94,7 @@ def main():
     keys = {lg: key for lg, key, *_rest in leagues}
     rows = []
     for league, tid, abbr, name, group in TEAM_RE.findall(TEAMS_H.read_text(encoding="utf-8")):
-        # A minor league baseball team's level (its MLB Stats sport id) rides
-        # along as a fifth field, for the picker's level headings; an AHL or
-        # ECHL team's logo file, for its logo.
+        # Fifth field: MiLB level for headings, or AHL/ECHL logo.
         rows.append([keys[league], int(tid), abbr, name] + ([int(group)] if league in with_group else []))
     if len(rows) < 100:
         raise SystemExit("teams.h looks truncated")

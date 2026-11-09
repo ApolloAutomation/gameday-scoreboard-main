@@ -49,9 +49,8 @@ script:
       - if:
           # Brighter on a panel that is off means turn it on. The first press
           # brings back the brightness it was set to; stepping up as well
-          # would jump straight past it. While the idle display's Off or dim
-          # has the panel dark or dimmed it does nothing: the step wouldn't
-          # show, and the saved level would creep up unseen.
+          # would jump straight past it.
+          # Ignored while idle-dimmed; level would creep up unseen.
           condition:
             lambda: 'return button == 9;'
           then:
@@ -70,10 +69,10 @@ script:
                       call.set_value(std::min(255.0f, current + step));
                       call.perform();
       - if:
-          # Dimmer does nothing on a panel that is off, or that the idle
-          # display's Off or dim has dark or dimmed. Otherwise mashing it in
+          # Dimmer does nothing on a panel that is off. Otherwise mashing it in
           # the dark walks the saved level down to 1, and the next power on
-          # (or game) comes back as good as invisible.
+          # comes back as good as invisible.
+          # Also ignored while the idle display dims it.
           condition:
             lambda: 'return button == 8;'
           then:

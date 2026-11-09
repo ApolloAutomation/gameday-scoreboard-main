@@ -28,16 +28,7 @@ template<typename Tag, typename Tag::type M> struct Rob {
 };
 template struct Rob<ConfigTag, &hub75::HUB75Display::config_>;
 
-// The driver's layout for a 2x2. Its DMA buffer starts with the panel at the
-// far end of the chain, and its names say where, seen from the front, the
-// panel with the controller is. Seen from the back, where the cables are, a
-// chain whose first two panels stand the right way up runs left to right
-// along the top, so from the front the controller's panel is the top right
-// one: TOP_RIGHT_DOWN, with the bottom row upside down. The same top row with
-// the bottom row upright as well is the zigzag (the driver's TOP_LEFT and
-// TOP_RIGHT zigzags are the same mapping). A top row that is itself upside
-// down runs right to left seen from the back, which puts the controller's
-// panel at the front's top left: TOP_LEFT_DOWN.
+// Driver names locate the controller's panel, seen from the front.
 static Hub75PanelLayout grid_layout(uint8_t rows, uint8_t wiring) {
   if (rows < 2)
     return Hub75PanelLayout::HORIZONTAL;
@@ -70,14 +61,11 @@ void PanelLayout::setup() {
       s.wiring >= panel_layouts::kWiringCount) {
     uint8_t old = 0;
     if (this->pref_v1_.load(&old) && panel_layouts::layout_ok(old, 1, this->max_cols_, this->max_rows_)) {
-      // Saved by older firmware, which drove one or two panels wide.
+      // v1 key from older firmware, one or two wide.
       s = Saved{old, 1, panel_layouts::WIRING_FOLDED, 0};
       ESP_LOGI(TAG, "Keeping the saved panel count, %u wide", old);
     } else {
-      // First boot (or after Factory Reset): keep the build's default as the
-      // choice, so an update from a build with another default can't change
-      // it. The DIY installer flashes a one-panel or a two-panel build and
-      // both update from the one-panel stream.
+      // Saved so an update with another default can't change it.
       s = Saved{this->default_cols_, 1, panel_layouts::WIRING_FOLDED, 0};
       ESP_LOGI(TAG, "No saved panel layout, saving the default %u wide", this->default_cols_);
     }
@@ -96,8 +84,7 @@ void PanelLayout::setup() {
     cfg.layout_rows = this->rows_;
     cfg.layout = grid_layout(this->rows_, this->wiring_);
   }
-  // Once the panel has settled (the hotspot up on a panel in setup), say how
-  // much internal RAM the panels' DMA buffers left, for logs and support.
+  // Log RAM left after DMA buffers, for support.
   this->set_timeout("heap", 20000, [this]() {
     ESP_LOGI(TAG, "%ux%u panels, Bluetooth %s. Internal RAM free: %u bytes, largest block %u", this->cols_,
              this->rows_, this->bluetooth_ok() ? "allowed" : "off",
@@ -109,7 +96,7 @@ void PanelLayout::setup() {
 void PanelLayout::save_() {
   Saved s{this->cols_, this->rows_, this->wiring_, 0};
   this->pref_.save(&s);
-  // The older key, for a choice older firmware can drive.
+  // Keep the v1 key for downgrades.
   if (this->rows_ == 1 && this->cols_ <= 2)
     this->pref_v1_.save(&this->cols_);
   global_preferences->sync();

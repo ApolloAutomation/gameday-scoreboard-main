@@ -1,5 +1,4 @@
-// Soccer's parse extras, ticker and clock row. Pure, no ESPHome includes. Its
-// splashes are alerts.h's.
+// Soccer parse extras, ticker, clock row; no ESPHome includes.
 #include "espn_parse.h"
 
 #include <cstdio>
@@ -382,8 +381,6 @@ static std::string stats_line(const GameSnapshot &s) {
   return out;
 }
 
-// The followed club's place (the Standing setting) stands apart from the
-// W-D-L records: "ARS 2nd EPL | W-D-L LEE 2-3-3".
 static std::string records_part(const GameSnapshot &s, const std::string &standing) {
   if (standing.empty())
     return pair_line("W-D-L", s, s.team_record, s.opp_record);

@@ -1,10 +1,3 @@
-// A splash with its logo and points (board_layout.h, splash_layout; the
-// splash's side and points from alerts.h, players.h and the win), and the
-// Clock size and Text size layouts (game_geom, clock_card_geom,
-// lower_half), on every board: one to four panels in a row, two rows of two,
-// and the second area's 64x64 and 128x64. Every splash the panel can put up
-// keeps its logo, its words in the lines they fit and its points, inside
-// the screen with nothing on top of anything else.
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -57,10 +50,7 @@ int failures = 0;
 struct Screen {
   int w, h;
 };
-// The boards a splash covers: one to four panels in a row, two rows of two
-// (all four panels), and the second area's 64x64 (three wide) and 128x64
-// (four wide, or a 2x2's bottom half), which have the same sizes as one and
-// two panels.
+// Second areas match one and two panel sizes.
 const Screen kScreens[] = {{64, 64}, {128, 64}, {192, 64}, {256, 64}, {128, 128}};
 
 struct Box {
@@ -72,8 +62,7 @@ bool overlap(const Box &a, const Box &b) {
 }
 bool inside(const Box &a, const Screen &s) { return a.x0 >= 0 && a.y0 >= 0 && a.x1 <= s.w && a.y1 <= s.h; }
 
-// A label's lines of text centered in a spot: the rows the capitals and
-// digits ink, across the longest line's width.
+// Ink rows of capitals and digits, longest line wide.
 Box text_box(int x, int y, int w, BoardFont f, const std::vector<std::string> &lines) {
   size_t widest = 0;
   for (const auto &l : lines)
@@ -83,10 +72,7 @@ Box text_box(int x, int y, int w, BoardFont f, const std::vector<std::string> &l
   return Box{left, y + font_ink_top(f), left + px, y + ((int) lines.size() - 1) * font_rows(f) + font_ink_bottom(f) + 1};
 }
 
-// What the panel draws for a splash on a screen, as board_view.cpp does: the
-// words without the side's name beside its logo, laid out, and checked.
-// Returns the layout; ok false (with the reason printed) when anything is
-// off.
+// Mirrors board_view.cpp: words without the side's name.
 SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
   ok = true;
   const int tiles = sp.both ? 2 : sp.abbr.empty() ? 0 : 1;
@@ -107,13 +93,13 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
     fail("no logo");
     return L;
   }
-  // The words: in the lines LVGL makes of them, every word whole.
+  // Words wrap as LVGL does, every word whole.
   const size_t chars = (size_t) (L.words.w / font_px(L.words_font));
   const std::vector<std::string> lines = splash_test::layout(words, chars);
   if (lines.empty() || lines.size() != L.lines || wrap_lines(words, chars) != L.lines)
     fail("the words' lines");
   const Box wb = text_box(L.words.x, L.words.y, L.words.w, L.words_font, lines);
-  // The whole label's rows, its last line's descenders too, stay on the screen.
+  // Last line's descenders must stay on the screen too.
   if (!inside(wb, sc) || L.words.y + ((int) L.lines - 1) * font_rows(L.words_font) +
                                  font_desc_bottom(L.words_font) >= sc.h)
     fail("the words off the screen");
@@ -128,8 +114,7 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
       fail("a logo's tile smaller than the logo");
     boxes.push_back(t);
   }
-  // The points, when the play has any: all of them or their number, in the
-  // spot they are centered in.
+  // Points: whole or just the number, centered.
   if (tiles == 1 && !sp.points.empty()) {
     if (!L.points) {
       fail("no points");
@@ -155,7 +140,6 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
   return L;
 }
 
-// LVGL's line breaks (splash_test::layout) and the layout's count agree.
 void test_wrap_lines() {
   for (const char *t : {"", "TOUCHDOWN!", "PHI TOUCHDOWN", "INTER-CEPTION!", "CIN\nINTER-CEPTION", "A B C D",
                         "FUMBLE RECOVERY!", "J. WINSTON\nBUZZER BEATER", "NYY WALK-OFF", "\n\n", "A-B-C-D-E-F",
@@ -169,9 +153,6 @@ void test_wrap_lines() {
   LCHECK(wrap_lines("TOUCHDOWN", 0) == 0);
 }
 
-// Who a splash is about and what it scored: the side's logo for a score, a
-// turnover, a card, a lead change or a win, both logos for overtime and the
-// final, and the points for a score only.
 void test_splash_sides() {
   GameSnapshot g;
   g.team_abbr = "DAL";
@@ -196,12 +177,12 @@ void test_splash_sides() {
   LCHECK_EQ(play(Alert::TWO_POINT, AlertSide::TEAM, 2).points, "+2");
   LCHECK_EQ(play(Alert::SAFETY, AlertSide::OPP, 2).points, "+2");
   LCHECK_EQ(play(Alert::SCORE, AlertSide::TEAM, 9).points, "+9");
-  // Baseball: a home run's runs, a plain run's number (its words count them)
+  // A plain run's words already count them: number only.
   LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 2).points, "+2 RUNS");
   LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 1).points, "+1 RUN");
   LCHECK_EQ(play(Alert::GRAND_SLAM, AlertSide::OPP, 4).points, "+4 RUNS");
   LCHECK_EQ(play(Alert::WALK_OFF, AlertSide::TEAM, 1).points, "+1 RUN");
-  // A home run's own runs, not an earlier run's in the same read; a grand slam's 4
+  // A home run's own runs, not earlier ones this read.
   g.play_points = 2;
   LCHECK_EQ(play(Alert::HOME_RUN, AlertSide::TEAM, 3).points, "+2 RUNS");
   LCHECK_EQ(play(Alert::GRAND_SLAM, AlertSide::TEAM, 5).points, "+4 RUNS");
@@ -274,7 +255,6 @@ void test_splash_sides() {
   LCHECK(player_splash(ps, g, list, true).points.empty());
 }
 
-// Every big play, side and abbreviation length, and the win, on every board.
 void test_splash_layouts() {
   GameSnapshot g;
   g.team_color = "002a5c";
@@ -306,12 +286,11 @@ void test_splash_layouts() {
       check_splash(sp, sc, ok);
       LCHECK(ok);
     }
-  // Golf's and racing's winners have no logo: the words alone, as before.
+  // Golf and racing winners have no logo: words alone.
   bool ok = true;
   LCHECK(!check_splash(Splash{"SCHEFFLER WINS!", 0xD4AF37, "", false, 0, ""}, kScreens[0], ok).logos && ok);
 }
 
-// Every favorite's word with every name length and shape the panel keeps.
 void test_player_layouts() {
   const char *words[] = {"TOUCHDOWN", "FIELD GOAL", "SAFETY", "SCORE", "RBI", "4 RBI", "HOME RUN",
                          "GRAND SLAM", "WALK-OFF", "GOAL", "PENALTY GOAL", "LEAD CHANGE", "BUZZER BEATER"};
@@ -339,7 +318,6 @@ void test_player_layouts() {
         }
 }
 
-// Where the parts go, as the owner sees them.
 void test_splash_places() {
   GameSnapshot g;
   g.team_abbr = "DAL";
@@ -348,44 +326,40 @@ void test_splash_places() {
   const Splash td_wide = big_play_splash(BigPlay{Alert::TOUCHDOWN, AlertSide::TEAM, 6}, g, false, true);
   const Splash hr = big_play_splash(BigPlay{Alert::HOME_RUN, AlertSide::OPP, 2}, g, false, true);
   bool ok = true;
-  // One panel: the logo at the left with "+6" beside it in spleen_24, over
-  // TOUCHDOWN! on a line of spleen_12.
+  // One panel: logo left, "+6" beside it, words under.
   SplashLayout L = check_splash(td, Screen{64, 64}, ok);
   LCHECK(ok && L.tile_x[0] == 0 && L.points && L.points_font == BoardFont::S24 && L.pts.x == kSplashTile);
   LCHECK(L.words_font == BoardFont::S12 && L.lines == 1);
-  // A home run's runs don't fit beside it: the number alone.
+  // "+2 RUNS" doesn't fit beside it: number alone.
   L = check_splash(big_play_splash(BigPlay{Alert::HOME_RUN, AlertSide::OPP, 2}, g, false, false), Screen{64, 64}, ok);
   LCHECK(ok && L.points && !L.points_whole && L.points_font == BoardFont::S24);
   // No points: the logo in the middle
   L = check_splash(big_play_splash(BigPlay{Alert::INTERCEPTION, AlertSide::OPP, 0}, g, false, false), Screen{64, 64},
                    ok);
   LCHECK(ok && !L.points && L.tile_x[0] == (64 - kSplashTile) / 2 && L.lines == 2);
-  // Both logos side by side on one panel, without the edge
+  // Both logos side by side, without the edge.
   L = check_splash(big_play_splash(BigPlay{Alert::OVERTIME, AlertSide::GAME, 0}, g, false, false), Screen{64, 64},
                    ok);
   LCHECK(ok && L.tiles == 2 && L.tile_px == 32 && L.tile_x[0] == 0 && L.tile_x[1] == 32);
-  // 128 wide: the logo and "+6" in spleen_32 side by side in the middle
+  // 128 wide: logo and "+6" side by side, centered.
   L = check_splash(td_wide, Screen{128, 64}, ok);
   LCHECK(ok && L.points_font == BoardFont::S32 && L.points_whole && L.words_font == BoardFont::S16 && L.lines == 1);
   LCHECK(L.tile_x[0] + kSplashTile + esphome::gameday::kSplashGap == L.pts.x && L.tile_x[0] * 2 + kSplashTile + 6 + 32 == 128);
   // "+2 RUNS" whole in spleen_24 beside the logo
   L = check_splash(hr, Screen{128, 64}, ok);
   LCHECK(ok && L.points_whole && L.points_font == BoardFont::S24);
-  // Three and four wide: the logo at the left, the points at the right
+  // Three and four wide: logo left, points right.
   L = check_splash(td_wide, Screen{192, 64}, ok);
   LCHECK(ok && L.tile_x[0] == 0 && L.pts.x == 192 - kSplashTile && L.points_font == BoardFont::S32);
   LCHECK(L.words.x == kSplashTile && L.words.w == 192 - 2 * kSplashTile);
   L = check_splash(td_wide, Screen{256, 64}, ok);
   LCHECK(ok && L.tile_x[0] == 15 && L.pts.x == 192 && L.words.x == 64 && L.words.w == 128);
-  // Two rows of two: down the middle, "+2 RUNS" whole in spleen_32 under the words
+  // Two rows of two: stacked, points under the words.
   L = check_splash(hr, Screen{128, 128}, ok);
   LCHECK(ok && L.points_whole && L.points_font == BoardFont::S32 && L.pts.y > L.words.y && L.words.y > L.tile_y);
   LCHECK(L.tile_x[0] == (128 - kSplashTile) / 2);
 }
 
-// Large text: the ticker in spleen_12, its whole 12-row line on the board,
-// and the rows over it moved up to keep clear of it; a leaderboard keeps its
-// own ticker.
 void test_large_text() {
   using esphome::gameday::game_geom;
   using esphome::gameday::GameGeom;
@@ -393,13 +367,12 @@ void test_large_text() {
     const GameGeom n = game_geom(w), g = game_geom(w, true);
     LCHECK(n.ticker_font == BoardFont::S8 && n.ticker_y == 56);
     LCHECK(g.ticker_font == BoardFont::S12 && g.ticker_y == 52);
-    // The ticker's whole line on the board, the tails of y, p and q too
+    // Descenders of y, p and q stay on the board.
     LCHECK(g.ticker_y + font_desc_bottom(g.ticker_font) < kBoardRows);
     LCHECK(n.ticker_y + font_desc_bottom(n.ticker_font) < kBoardRows);
     const int ticker_ink = g.ticker_y + font_ink_top(g.ticker_font);
     if (g.wide) {
-      // The situation row's letters end above the ticker's, the pips and
-      // the bases above its line, whose first row "|" and "/" ink.
+      // "|" and "/" ink the ticker's first row.
       LCHECK(g.down.y + font_desc_bottom(BoardFont::S8) < ticker_ink);
       for (const GameGeom &x : {n, g})
         LCHECK(x.pip_y + 3 <= x.ticker_y && x.base_y[0] + x.base_px <= x.ticker_y);
@@ -409,11 +382,11 @@ void test_large_text() {
       LCHECK(g.down.y == n.down.y - 3 && g.pip_y == n.pip_y - 2 && g.score[0].y == n.score[0].y);
       LCHECK(g.base_y[1] == n.base_y[1] - 3 && g.base_y[1] > g.clock.y + font_ink_bottom(BoardFont::S12));
     } else {
-      // The scores, the possession line under them, the bases and the outs
+      // Scores, possession line, bases and outs don't collide.
       const int score_ink = g.score[0].y + font_ink_bottom(BoardFont::S12);
       LCHECK(g.score[0].y + g.score_poss_dy > score_ink);
-      LCHECK(n.score[0].y + n.score_poss_dy == n.score[0].y + font_rows(BoardFont::S12));  // as before
-      // The possession line, the bases and the out dots above the ticker's line
+      LCHECK(n.score[0].y + n.score_poss_dy == n.score[0].y + font_rows(BoardFont::S12));  // Normal: right under the score's rows
+      // All of them end above the ticker's line.
       for (const GameGeom &x : {n, g}) {
         LCHECK(x.score[0].y + x.score_poss_dy + 2 <= x.ticker_y);
         LCHECK(x.base_y[0] + x.base_px <= x.ticker_y && x.out_y + 2 <= x.ticker_y);
@@ -422,8 +395,7 @@ void test_large_text() {
       LCHECK(g.score[0].y > g.abbr[0].y + font_ink_bottom(BoardFont::S8));
     }
   }
-  // The warning's line covers the bigger ticker on one row of panels, its
-  // words (spleen_8) in the middle of it.
+  // The warning line covers the larger ticker, words centered.
   using esphome::gameday::guard_label_y;
   using esphome::gameday::guard_rows;
   LCHECK(esphome::gameday::guard_line_y(kBoardRows, true) <= game_geom(128, true).ticker_y);
@@ -436,8 +408,6 @@ void test_large_text() {
   }
 }
 
-// The clock card's time at each size: it fits the board, and nothing under
-// it runs into it or into the ticker.
 void test_clock_card() {
   using esphome::gameday::clock_card_geom;
   using esphome::gameday::ClockCardGeom;
@@ -460,13 +430,13 @@ void test_clock_card() {
           bottom = c.ampm_y + font_desc_bottom(BoardFont::S8);
         }
         LCHECK(c.sub_y + font_ink_top(c.sub_font) > bottom);
-        // Two lines under it on a wide board (the next game and its start), the date on one panel
+        // Wide: next game and start under it; narrow: the date.
         const int sub_end = c.sub_y + (wide ? font_rows(c.sub_font) : 0) + font_desc_bottom(c.sub_font);
         const auto g = game_geom(w, large_text);
         LCHECK(sub_end < g.ticker_y + font_ink_top(g.ticker_font));
         LCHECK(large == (c.time_font != BoardFont::S16));
         if (!large) {
-          // Normal is the card as it has always been.
+          // Normal matches game_geom's clock card.
           LCHECK(c.time_y == g.clock_time_y && c.sub_y == g.clock_sub_y && c.sub_font == g.sub_font && !c.ampm);
         }
       }
@@ -474,9 +444,6 @@ void test_clock_card() {
   LCHECK(clock_card_geom(192, true).time_font == BoardFont::S32);
 }
 
-// The second area's clock at each size: the time, the AM or PM, the date and
-// the ticker one under the other, the ticker's letters above the warning's
-// line, and the time inside the area's width.
 void test_lower_sizes() {
   using esphome::gameday::guard_rows;
   using esphome::gameday::LowerHalf;
@@ -505,18 +472,17 @@ void test_lower_sizes() {
               LCHECK(w < 128 || (int) std::string("Wed, Sep 30").size() * font_px(BoardFont::S12) <= w);
               bottom = l.date_y + font_desc_bottom(BoardFont::S12);
             }
-            // The ticker is spleen_16 at both text sizes, the biggest with every letter.
+            // spleen_16 at both sizes: the largest with every letter.
             LCHECK(l.ticker_y + font_ink_top(BoardFont::S16) > bottom);
-            // Its letters, descenders too, end above the warning's line at this text size.
+            // Descenders end above the warning line at this size.
             LCHECK(l.ticker_y + font_desc_bottom(BoardFont::S16) < kBoardRows - guard_rows(text));
-            // Under the clock card no time, and the date only when the card has the next game.
+            // Clock card: no time; date only beside the next game.
             if (card) {
               LCHECK(!l.time && l.date == !card_date);
             } else {
               LCHECK(l.time && l.date);
             }
           }
-  // Normal on both is the layout as before.
   const LowerHalf n = lower_half(false, false, 64, Sizes{});
   LCHECK(n.time_font == BoardFont::S16 && n.time_y == 5 && n.date_y == 23 && n.ticker_y == 39 && !n.ampm);
   LCHECK(lower_half(false, false, 128, Sizes{false, true}).ticker_y == 36);

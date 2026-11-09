@@ -62,8 +62,7 @@ LEAGUES = LEAGUE_RE.findall(LEAGUES_H)
 # The golf tours and racing series: a team, but never a favorite or a Live
 # games league (set_request.h).
 BOARD = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(?:GOLF|RACING)', LEAGUES_H))
-# Leagues not read from ESPN (minor league baseball, the AHL and the ECHL): no favorite players,
-# whose rosters come from ESPN (set_request.h's parse_player).
+# Non-ESPN leagues have no favorite players
 NOT_ESPN = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Source::(?!ESPN\b)\w+', LEAGUES_H))
 TZ_TEXT = "\n".join(ln for ln in (REPO / "components/gameday/timezones.h").read_text(encoding="utf-8").splitlines()
                     if not ln.lstrip().startswith("//"))
@@ -78,9 +77,7 @@ LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w
                                              + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
-# PanelLayout drives one row up to max_cols panels wide, or the 2x2 when
-# max_rows is 2 and max_cols at least 4 (gameday-common.yaml,
-# components/panel_layout/layouts.h).
+# 2x2 needs max_rows 2 and max_cols at least 4
 COMMON = (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8")
 MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", COMMON, re.M)[1])
 MAX_ROWS = int(re.search(r"^\s*max_rows: (\d+)", COMMON, re.M)[1])
@@ -107,39 +104,31 @@ def team(lg, tid):
 INITIAL = {
     "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2, "rows": 1, "wiring": 0,
     "team": team("nfl", 6),
-    # Switch every and Alternate every (startup.h): rotate in whole minutes, as
-    # pages from before 30 seconds read it, and rotatesec in seconds.
+    # rotate in whole minutes for old pages; rotatesec in seconds
     "mode": 0, "rotate": 1, "rotatesec": 60, "lockon": 15, "release": 30, "collide": 0,
     "favs": [team("nfl", 6), team("nfl", 34), team("ncaa", 145), {}],
     "favmax": FAV_MAX, "today": False, "live": ["nfl", "ncaa"], "live_auto": True,
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
     "autoupd": False, "beta": False, "standing": 0,
-    # Clock size and Text size (components/gameday/board_layout.h): 0 Normal, 1 Large.
+    # Clock size and Text size: 0 Normal, 1 Large.
     "clocksize": 0, "textsize": 0,
-    # Big-play alerts (components/gameday/alerts.h): the types switched on, bit (type - 1).
+    # Big-play alert types on, as bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
     # The big-play watcher (components/gameday/watch.h): stay in seconds.
     "watch": True, "watchstay": 60, "watchmine": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
-    # Another game's big play has the board for a moment (watch.h), and
-    # whether Follow this game could still follow the mode's own game then.
+    # A big-play visit, and whether Follow still applies
     "visit": False, "visit_follow": False,
-    # The idle display and the night hours (components/gameday/idle.h), and
-    # what they do now: idle_view "" (the mode's board), "clock", "scores" or
-    # "today"; night_now inside the night hours; dark while Off has it dark.
+    # idle_view is "", "clock", "scores" or "today" (idle.h)
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
-    # Split mode (components/gameday/split.h): the saved choice (0 off, 1 rotating
-    # live games, 2 a second team's game, 3 today's scores, 4 clock and date) and
-    # team; where the second area is ("bottom", "right2", "right1", "" for none) and
-    # what it shows now ("live", "team", "scores", "clock", "date", "" for nothing);
-    # split_n, the rotation's live games. state_doc() works out split_at and split_now.
+    # split 0-4 (split.h); state_doc() derives split_at, split_now
     "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
     "espn_kb": 412, "espn_reads": 23,
-    # Manual bets (components/gameday/bets.h), filled slots only, and how many fit.
+    # Manual bets (bets.h): filled slots only, and capacity
     "bets": [], "betmax": LIMITS["kBetSlots"],
-    # Favorite players (components/gameday/players.h), filled slots in slot order, and how many fit.
+    # Favorite players (players.h): filled slots in slot order
     "players": [], "playermax": LIMITS["kPlayerSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
@@ -198,8 +187,7 @@ WIFI = {"list": copy.deepcopy(WIFI_INITIAL)}
 # The saved team's league byte, which outlives a cleared team and counts in
 # Live auto. A fresh panel's is NFL.
 TEAM_LEAGUE = ["nfl"]
-# The favorite players by slot (players.h's blob), None for an empty one. The
-# state document lists the filled ones in slot order.
+# Players by slot (players.h's blob); None when empty
 PLAYER_SLOTS = [None] * LIMITS["kPlayerSlots"]
 
 
@@ -207,7 +195,7 @@ def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
-    # rotate and rotatesec are one setting: an override of either sets both.
+    # rotate and rotatesec are one setting
     if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
         STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
     if isinstance(overrides.get("rotatesec"), int) and "rotate" not in overrides:
@@ -484,7 +472,6 @@ def apply_set(kv):
             if v != "1":
                 let_go()
             elif can_follow():
-                # The mode's own game, and the board goes straight back to it.
                 STATE["follow"] = True
                 end_visit()
         elif k == "team":
@@ -507,7 +494,7 @@ def apply_set(kv):
                     end_visit()
                 STATE["mode"] = atoi(v)
         elif k == "rotate":
-            # Whole minutes; 0 and below are 1 minute, never 30 s.
+            # Whole minutes; at least 1, never 30 s
             set_rotate(clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes") * 60)
         elif k == "rotatesec":
             set_rotate(clamp_rotate_seconds(atoi(v)))
@@ -556,8 +543,7 @@ def apply_set(kv):
             if k == "watch" and v != "1":
                 end_visit()
         elif k == "alerts":
-            # A bit past the known types, a negative number or no number at
-            # all (which atoi would read as every switch off) is refused.
+            # Refuse unknown bits, negatives, and non-numbers (atoi gives 0)
             if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
                 STATE["alerts"] = atoi(v)
         elif k == "betdel":
@@ -579,7 +565,7 @@ def apply_set(kv):
             if doc:
                 put_player(doc)
         elif k == "panels":
-            # "3" or wide by high, "2x2"; each a byte in PanelLayout.
+            # "3" or "2x2"; each number a byte
             cols, x, high = v.partition("x")
             cols, rows = atoi(cols), atoi(high) if x else 1
             if 1 <= cols <= 255 and 1 <= rows <= 255 and layout_ok(cols, rows):
@@ -592,8 +578,7 @@ def apply_set(kv):
             if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"]:
                 STATE["split"] = int(v)
         elif k == "splitteam":
-            # set_split_team(): "none" or "" clears it; never a golf tour, a racing
-            # series or the panel's own team.
+            # Never a golf tour, racing series or own team
             ref = parse_team_ref(v)
             if v in ("none", ""):
                 STATE["splitteam"] = {}
@@ -603,7 +588,7 @@ def apply_set(kv):
             if 0 <= atoi(v) < LIMITS["kStandingCount"]:
                 STATE["standing"] = atoi(v)
         elif k in ("clocksize", "textsize"):
-            # One ASCII digit, 0 to kSizeCount - 1, nothing else, as for split.
+            # One ASCII digit, as for split
             if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSizeCount"]:
                 STATE[k] = int(v)
         elif k == "idle":
@@ -634,7 +619,7 @@ def selftest():
         if key == "favs":
             return [compact("team", t) for t in value]
         if key == "bets":
-            # The bet as entered; its game and status are the firmware's.
+            # As entered; game and status are the firmware's
             return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
         return value
 
@@ -645,9 +630,7 @@ def selftest():
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
         start["splitteam"] = to_team(start.get("splitteam", ""))
-        # board: false stands for a board with nothing of the mode's own to follow,
-        # final: true for its game having ended. During a visit that game is the
-        # mode's own, the one visit_follow says can be followed.
+        # board false: nothing to follow; final true: game ended
         if start.get("visit"):
             start["visit_follow"] = start.get("board", True) and not start.get("final", False)
         if start.pop("final", False):

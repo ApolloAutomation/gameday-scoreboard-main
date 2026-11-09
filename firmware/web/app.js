@@ -1,19 +1,15 @@
 // Game Day Scoreboard device page.
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
-//   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...,
-//                                 bet=0,nfl,2,spread,-3.5 and betdel=1 for the Bets card,
-//                                 player=nfl,3918298,2,ALLEN and playerdel=nfl,3918298 for
-//                                 the Favorite players card)
+//   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
 //   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
 // "Game Status" event, sent on every board update, is the cue to re-read the
 // state document.
 // Bundled with the team table by scripts/build_web.py, which defines
-// TEAMS = [[league, espnId, abbr, name], ...], TZS = [[name, iana], ...] and
-// the firmware's table for folding accented letters to plain ASCII, FOLD
-// (U+00C0..U+017F, a letter each) and FOLD2 ({code point: letters}).
+// TEAMS = [[league, espnId, abbr, name], ...] and TZS = [[name, iana], ...].
+// Also FOLD and FOLD2, the firmware's ASCII folding tables.
 
 (() => {
   "use strict";
@@ -44,13 +40,10 @@
   // by team id; file: one logo for the whole league ("" for none); scan:
   // extra query for today's scoreboard; board: a leaderboard sport ("golf"
   // for a golf tour, "racing" for a racing series), followed like a team but
-  // never a favorite, a Live games league or in On now; source: "mlb" for a
-  // league whose games and logos come from MLB, not ESPN (minor league
-  // baseball), and "hockeytech" for one whose come from HockeyTech (the AHL
-  // and the ECHL; logo is its folder on HockeyTech's logo server), as on the
-  // panel, with sport its sport, which ESPN's path gives for the others.
-  // scripts/build_web.py checks prefix, path, logo and byId against leagues.h
-  // and stops the build when they differ.
+  // never a favorite, a Live games league or in On now. scripts/build_web.py
+  // checks prefix, path, logo and byId against leagues.h and stops the build
+  // when they differ.
+  // source: "mlb" or "hockeytech" for non-ESPN leagues, with sport.
   const LEAGUES = {
     nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
     ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
@@ -76,23 +69,17 @@
   const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
   // Games and logos from MLB's own servers (minor league baseball)
   const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
-  // A league read from ESPN: the only rosters favorite players come from
-  // (set_request.h's parse_player refuses the others).
+  // Only ESPN leagues have rosters for favorite players
   const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
-  // Games and logos from HockeyTech (the AHL and the ECHL). Its feed answers
-  // the panel but not a browser on another site, so these leagues aren't in
-  // On now.
+  // HockeyTech blocks browsers (CORS), so not in On now
   const isHt = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "hockeytech");
   // "football", "baseball": the sport's situation switch and splashes
   const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
-  // A pro league whose teams have a seed and a place from ESPN (the Standing
-  // setting). A college league's have a rank instead, and minor league teams
-  // neither: MLB and HockeyTech list no seed or place for them.
+  // Only ESPN pro teams have a seed and place
   const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !LEAGUES[lg].source;
   // "#5 OSU": a college team's rank (1-25) before its abbreviation
   const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
-  // A minor league baseball team's level: the fifth field of its TEAMS row
-  // (its MLB Stats sport id, teams.h's group).
+  // MiLB level is TEAMS row's fifth field, MLB sport id
   const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
   const levelOf = (t) => (t && isMlb(t[0]) && LEVELS[t[4]]) || "";
   // The picker tab a league is on: the first league with the same tab text.
@@ -103,9 +90,7 @@
     if (l.file === "") return "";
     if (l.source === "mlb") return `https://midfield.mlbstatic.com/v1/team/${id}/spots/64`;
     if (l.source === "hockeytech") {
-      // An AHL or ECHL team's fifth field (teams.h's group): the season its
-      // logo file is named for, plus 65536 when the panel draws its badge
-      // instead, having no small copy; the page shows the full-size one.
+      // Fifth field: logo season, plus 0x10000 when no small logo
       const t = TEAMS.find((x) => x[0] === league && x[1] === id);
       const g = (t && t[4]) || 0;
       return `https://assets.leaguestat.com/${l.logo}/logos/${g & 0x10000 ? "" : "50x50/"}${id}${g & 0xffff ? "_" + (g & 0xffff) : ""}.png`;
@@ -127,9 +112,7 @@
   let restart = "";      // what the board says while a reboot or reset runs
   let stopped = false;   // reset into setup: the panel won't be back on this network
 
-  // Switch every (Live games) and Alternate every (Favorite teams) are one
-  // setting on the panel: 30 seconds, or whole minutes up to 30. Each option's
-  // value is in seconds, what rotatesec posts (set_request.h).
+  // Shared by Switch every and Alternate every, in seconds
   const ROTATE_OPTIONS = '<option value="30">30 s</option>'
     + Array.from({ length: 30 }, (_, i) => '<option value="' + (i + 1) * 60 + '">' + (i + 1) + " min</option>").join("");
 
@@ -446,11 +429,7 @@
   <div class="toast" id="toast" role="status"></div>`;
 
   // ---- cards that fold ---------------------------------------------------
-  // Ticker, Celebrations, Remote, Setup and Device start folded, Panel open,
-  // and Favorites, Favorite players and Bets open when they hold anything.
-  // Device opens when it offers an update (renderUpdate).
-  // The cards the viewer opens or folds stay so in this browser, when it has
-  // storage. localStorage "gd.expand" = "1" opens every card (the page tests).
+  // localStorage "gd.expand" opens every card, for tests
   let folds = {};
   let expandAll = false;
   try {
@@ -461,14 +440,13 @@
   const folded = (id) => (expandAll ? true : folds[id]);
   document.querySelectorAll("details.card").forEach((d) => {
     if (typeof folded(d.id) === "boolean") d.open = folded(d.id);
-    // A click, Enter or Space on the name, before the card turns over
+    // Fires before the toggle, so d.open is the old state
     d.firstElementChild.addEventListener("click", () => {
       folds[d.id] = !d.open;
       try { localStorage.setItem("gd.cards", JSON.stringify(folds)); } catch (_) {}
     });
   });
-  // From the panel's first state document only: a card filled or emptied
-  // later stays as it is.
+  // First state document only; later changes don't refold
   let foldsSet = false;
   const renderFolds = () => {
     if (!S || foldsSet) return;
@@ -555,7 +533,7 @@
   };
 
   let stateTimer = null;
-  let stateLeft = 0;     // when the read the page last drew left, for posts it must reflect
+  let stateLeft = 0;     // when the last drawn read was sent
   let stateInflight = false;
   let stateAgain = false;
   const fetchState = async () => {
@@ -686,8 +664,7 @@
   // marking it done; its detail says which.
   const endedAs = (g) => (g.done === false && g.detail ? g.detail : "Final");
 
-  // The rank stays on the abbreviation's line only where the two fit the
-  // team's column, as on the panel: a phone's narrow board leaves it out.
+  // Rank shows only where it fits, as on the panel
   const fitRank = (node) => {
     const rk = node.querySelector(".abbr .rk");
     if (!rk) return;
@@ -709,8 +686,7 @@
     a.classList.toggle("poss", !!poss);
     a.style.color = "#" + (color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
-    // Timeout pips are football's (other sports send no timeouts). -1 is a
-    // count ESPN didn't send, which hides them rather than showing them used.
+    // Football only; -1 (ESPN sent none) hides the pips
     node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
     node.querySelectorAll(".pips i").forEach((p, i) => p.classList.toggle("on", i < (timeouts || 0)));
   };
@@ -957,16 +933,7 @@
     const on = liveKeys();
     for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
   };
-  // Follow this game: Live games and Favorite teams keep the game on the
-  // board instead of moving on, until it ends (Favorite teams: until its
-  // final has been up for After the final). The switch posts follow=1 or 0
-  // like the others (.sw[data-set]). Not in My team, which follows one team
-  // already, nor over Live games' team card or recent finals, a golf or
-  // racing board, or a game that has ended and isn't followed already.
-  // While another game's big play has the board for a moment (S.visit), the
-  // board shows that game, but the switch follows the game the panel was
-  // showing, and the panel goes straight back to it: only while that one can
-  // still be followed (S.visit_follow), not once it has ended.
+  // During a visit it follows the game shown before
   const renderFollow = (mode) => {
     const favMode = mode === "4" && (S.favs || []).some(refKey);
     const liveGame = isLive(mode) && !S.fallback && !S.recap;
@@ -998,7 +965,7 @@
     $("#teambar").hidden = live || favs;
     $("#livebar").hidden = !live;
     $("#favbar").hidden = !favs;
-    // The setting in seconds; firmware from before 30 seconds sends only the minutes.
+    // Older firmware sends only rotate, in minutes
     const rotateSec = String(S.rotatesec || (S.rotate || 1) * 60);
     if (document.activeElement !== rotateSelect) rotateSelect.value = rotateSec;
     if (document.activeElement !== favRotate) favRotate.value = rotateSec;
@@ -1022,10 +989,7 @@
     renderFollow(mode);
   };
 
-  // ---- the idle display (Quick settings) and the night hours (Panel card) ----
-  // What the panel shows when no game it follows is on, and overnight. The
-  // device keeps the settings (idle, idledim, night, nightstart, nightend,
-  // nightbri); each control posts its own key, held until the panel has it.
+  // ---- idle display and night hours -------------------------------------
   const IDLE_HINTS = [
     "What each mode shows anyway: your team's next game, your favorites, or recent scores.",
     "The time in your team's colors, and its next game on a wide panel.",
@@ -1041,7 +1005,7 @@
   const nightBri = $("#nightbri");
   nightBri.oninput = () => ($("#nightbriVal").textContent = nightBri.value);
   nightBri.onchange = () => setGD({ nightbri: nightBri.value });
-  // A time field gives "" while it is being cleared: nothing to post then.
+  // Cleared time fields give ""; don't post those
   ["nightstart", "nightend"].forEach((key) => {
     const input = $("#" + key);
     input.onchange = () => { if (/^\d\d:\d\d$/.test(input.value)) setGD({ [key]: input.value }); };
@@ -1065,7 +1029,6 @@
       nightBri.value = S.nightbri || 1;
       $("#nightbriVal").textContent = String(S.nightbri || 1);
     }
-    // What the panel does about it now
     const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
     $("#idleNow").textContent = S.dark ? "The panel is dark until a game you follow starts."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
@@ -1073,9 +1036,7 @@
   };
 
   // ---- the second area (Quick settings) -------------------------------------
-  // Split mode (components/gameday/split.h): on two rows of two the bottom
-  // half, on four wide the right two panels, on three wide the right panel.
-  // One or two panels have none, and firmware without it sends no split.
+  // One or two panels, or older firmware: no split
   const SPLIT_TITLES = { bottom: "Bottom half", right2: "Right two panels", right1: "Right panel" };
   const SPLIT_CHOICES = [
     ["Nothing: the board fills the row", "The board stretches across every panel, as before."],
@@ -1086,7 +1047,7 @@
   ];
   const WATCH_HINT = "The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.";
   const WATCH_HINT_SPLIT = "A big play in another live game shows in the second area for the time below, and the main board stays on its game, even while you follow one.";
-  // What the second area shows by choice: Off is the clock on two rows of two.
+  // On a 2x2, Off means the clock (4)
   const splitShows = () => {
     if (!S || S.split === undefined || !S.split_at) return -1;
     const show = Number(S.split) || 0;
@@ -1113,7 +1074,6 @@
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
-    // What it shows now
     const n = Number(S.split_n) || 0;
     const now = S.split_now;
     let line = "";
@@ -1145,8 +1105,7 @@
     setOn(sw, false, "aria-checked");
     sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
   });
-  // Big-play splashes (components/gameday/alerts.h): a switch per type, in
-  // the order of the bits of the state document's "alerts" mask, by sport.
+  // Order matches the bits of the "alerts" mask
   const ALERTS = [
     ["football", "Football", [
       ["Touchdown"], ["Field goal"], ["Extra point"],
@@ -1288,18 +1247,16 @@
     // Firmware from before big-play alerts has neither.
     $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
     alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
-    // Older firmware sends no standing. The row shows while nothing is
-    // followed, or a pro team is (college teams have a rank instead).
+    // Older firmware sends no standing; college teams have ranks
     const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
     $("#standingRow").hidden = S.standing === undefined || (followed.length > 0 && !followed.some((t) => isPro(t.l)));
     if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
     // Older firmware sends no sizes.
     $("#sizeCtls").hidden = S.clocksize === undefined;
     sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
-    // Nor the switches for other games' big plays. A stay the list lacks gets its own entry.
+    // Nor watch; an unlisted stay gets its own option
     $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
-    // With the second area rotating live games, big plays show there and the
-    // main board stays on its game, so Switch from my team has nothing to do.
+    // Rotating second area takes big plays; main board stays
     const rotating = splitShows() === 1;
     $("#watchHint").textContent = rotating ? WATCH_HINT_SPLIT : WATCH_HINT;
     if (rotating) $("#watchMineRow").hidden = true;
@@ -1328,9 +1285,7 @@
   };
 
   // ---- panel picker ------------------------------------------------------------
-  // Picking a layout restarts the device, after a confirm; the page waits it
-  // out. panels is the count wide, rows 2 for the 2x2 (older firmware sends
-  // neither rows nor wiring), and wiring how the 2x2's rows are mounted.
+  // rows 2 means the 2x2; older firmware omits rows, wiring
   const PANEL_SIZES = { 1: "64x64", 2: "128x64", 3: "192x64", 4: "256x64", "2x2": "128x128" };
   const restartAs = (as) => {
     toast(as);
@@ -1349,7 +1304,7 @@
         const size = PANEL_SIZES[b.dataset.cols];
         if (!confirm("Restart the panel as " + size + "?")) return;
         picks.forEach((x) => (x.disabled = true));
-        // The 2x2 keeps the wiring saved last; it can be changed once it's back.
+        // Keep the saved wiring; change it after the restart
         const params = { panels: b.dataset.cols };
         if (b.dataset.cols === "2x2") params.wiring = String(S.wiring || 0);
         // Only a layout the panel took restarts it; a failed post has said so.
@@ -1360,7 +1315,7 @@
         restartAs("Restarting as " + size);
       };
     });
-    // The wiring matters on the 2x2 only, and changing it restarts that.
+    // Wiring matters on the 2x2 only
     $("#wiringRow").hidden = cur !== "2x2" || S.wiring === undefined;
     if (document.activeElement !== sel) sel.value = String(S.wiring || 0);
     sel.onchange = async () => {
@@ -1466,15 +1421,12 @@
 
   // ---- today's games (fetched by the browser, not the device) -------------
   const ESPN = "https://site.api.espn.com/apis/site/v2/sports/";
-  // Minor league baseball: a day's games at the four levels, from the MLB
-  // Stats API like the panel's Live games scan.
+  // MiLB's four levels, as the panel's Live games scan
   const MLB_DAY = "https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&hydrate=team,linescore"
     + "&fields=dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
     + "teamName,score,linescore,currentInning,inningState,scheduledInnings&date=";
   const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
-  // One MLB Stats game as On now's tile: "Top 5th", "Final/10", "Postponed".
-  // Game 2 of a doubleheader has no start time (startTimeTBD) and a
-  // gameDate five minutes after game 1's: "TBD", as the panel shows it.
+  // Doubleheader game 2 has startTimeTBD: show "TBD" like the panel
   const mlbGame = (lg, g) => {
     const c = String((g.status || {}).codedGameState || "S")[0];
     const state = "IMN".includes(c) ? "in" : "FOQR".includes(c) ? "post" : "DCTU".includes(c) ? "off" : "pre";
@@ -1568,7 +1520,7 @@
       const mkSide = (s) => {
         const t = teamById(g.league, s.id);
         const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
-        // A favorite player's team needs ESPN's roster: no minor league side.
+        // Player picks need an ESPN roster
         b.disabled = !t || (pickPlayer && !fromEspn(t[0]));
         b.title = t ? "Follow the " + t[3] : "Not in the team list";
         const img = el("img");
@@ -1600,24 +1552,17 @@
     }
   };
 
-  // ---- bets ----------------------------------------------------------------------
-  // Typed in by hand: the panel never connects to a sportsbook. The firmware
-  // ties each bet to a game it reads, grades it at the final and drops it at
-  // midnight (components/gameday/bets.h). A new bet posts slot 0, which the
-  // firmware puts in its first empty slot, so two pages adding at once never
-  // pick the same one (bet=0,<league>,<team id>,<type>,<line>); betdel=<slot>
-  // removes one.
+  // ---- bets: typed by hand, no sportsbook --------------------------------------
+  // Slot 0 lets the firmware pick, so pages never collide
   let betTeam = "";      // the add form's team, "nfl:2"
-  let betSign = "";      // the spread's sign from the minus and plus buttons, "" until one is tapped
+  let betSign = "";      // spread sign from the buttons, "" until tapped
   let betDrawn = null;   // the list as last drawn
-  let betPending = [];   // bets posted that the panel doesn't list yet: { l, id, type, half, at }
+  let betPending = [];   // posted, not yet listed by the panel
   const sameBet = (a, b) => a.l === b.l && a.id === b.id && a.type === b.type && a.half === b.half;
   const BET_WORDS = { covering: "COVERING", not_covering: "NOT COVERING", level: "PUSH", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
   const betTone = (st) => (st === "covering" || st === "won" ? "good" : st === "not_covering" || st === "lost" ? "bad" : BET_WORDS[st] ? "even" : "");
   const betPoints = (half, sign) => (sign && half > 0 ? "+" : half < 0 ? "-" : "") + Math.floor(Math.abs(half) / 2) + (Math.abs(half) % 2 ? ".5" : "");
-  // The line as typed, in half points, or what's wrong with it.
-  // A comma works as the decimal point ("3,5"), as a phone set to a comma
-  // locale types it.
+  // Half points, or an error; comma-decimal locales type "3,5"
   const betHalf = (raw, spread) => {
     const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
     if (spread && /^(pk|pick|pickem|pick'em)$/i.test(v)) return 0;
@@ -1633,7 +1578,6 @@
     if (half > 1999) return "The panel takes totals up to 999.5.";
     return half;
   };
-  // The bet's game and where it stands, under its name.
   const betGame = (b) => {
     if (!b.ev) return "Starts when the panel shows a " + b.abbr + " game";
     const vs = b.abbr + " vs " + (b.oa || "?") + " \u00b7 ";
@@ -1687,7 +1631,6 @@
     if (!list.length) host.appendChild(el("p", "hint", "No bets yet."));
     if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
   };
-  // The sign typed at the start of the line, "" for none.
   const typedSign = (v) => {
     const m = /^\s*([+\-\u2212])/.exec(v);
     return m ? (m[1] === "+" ? "+" : "-") : "";
@@ -1711,8 +1654,7 @@
   $("#betTeam").onclick = () => openPicker(false, true);
   $("#betType").onchange = () => { betSay(""); renderBetForm(); };
   $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
-  // A sign typed in the line lights its button; a button tapped with a sign
-  // already typed changes that sign.
+  // Typed sign and buttons stay in sync both ways
   $("#betLine").oninput = () => {
     const s = typedSign($("#betLine").value);
     if (s && s !== betSign) { betSign = s; renderBetForm(); }
@@ -1740,11 +1682,10 @@
       $("#betLine").focus();
       return;
     }
-    // An unsigned spread is never taken as one side: the owner says which.
+    // Never guess a spread's side; the owner picks
     if (type === "spread" && half !== 0 && !typedSign(raw)) return betSay("Tap \u2212 if the team is the favorite or + if it's the underdog.");
     const list = S.bets || [];
-    // A bet posted a moment ago counts too, until the panel lists it: a
-    // double tap doesn't add it twice.
+    // Count pending posts so a double tap adds once
     betPending = betPending.filter((p) => Date.now() - p.at < 5000 && !list.some((b) => sameBet(b, p)));
     const want = { l: t[0], id: t[1], type, half };
     if (list.concat(betPending).some((b) => sameBet(b, want))) return betSay("You have that bet already.");
@@ -1764,30 +1705,22 @@
   };
   renderBetForm();
 
-  // ---- favorite players -------------------------------------------------------------
-  // Picked from a team's roster, which the browser reads from ESPN (the panel
-  // never reads rosters). player=<league>,<athlete id>,<team id>,<name> adds
-  // one, or gives one already there a new name; playerdel=<league>,<athlete id>
-  // removes one (components/gameday/players.h). The name is what the panel
-  // shows: the last name in capitals, with the first initial when a teammate
-  // shares it, in at most 10 characters.
+  // ---- favorite players, picked from rosters -----------------------------------------
+  // The browser reads rosters from ESPN; the panel never does
   let playerTeam = "";   // the add form's team, "nfl:2"
   let roster = [];       // that team's players: [{id, name, pos, jersey, panel}]
   let rosterFor = "";    // the team the roster read was for
   let playerDrawn = null;
-  // Players posted that the panel doesn't list yet: {l, id, name, at, ack},
-  // ack when the panel answered the post.
+  // Posted, not yet listed; ack is when the panel answered
   let playerPending = [];
   const PANEL_NAME_MAX = 10;
-  // A letter folded to plain ASCII the way the firmware folds ESPN's words
-  // (sport_soccer.cpp's table): \u00d8 is O, \u00c6 AE, \u2019 an apostrophe.
+  // Fold to ASCII exactly as the firmware does
   const foldChar = (ch) => {
     const cp = ch.codePointAt(0);
     if (FOLD2[cp] !== undefined) return FOLD2[cp];
     return cp >= 0xc0 && cp < 0x180 ? FOLD[cp - 0xc0] : ch;
   };
-  // The letters the panel takes: capitals, digits, spaces and . ' -, folded
-  // as the firmware folds them, and any other accent dropped.
+  // Only characters the panel accepts in a name
   const panelLetters = (v) => Array.from(String(v || "").normalize("NFC"), foldChar).join("")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
     .replace(/[^A-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
@@ -1797,8 +1730,7 @@
     if (n.length > PANEL_NAME_MAX) n = n.slice(0, PANEL_NAME_MAX).replace(/[ .'-]+$/, "");
     return n;
   };
-  // ESPN's roster comes grouped by position ({athletes: [{position, items: [...]}]},
-  // football and baseball) or flat ({athletes: [...]}, the other sports).
+  // ESPN groups football and baseball rosters by position
   const rosterAthletes = (j) => {
     const out = [];
     for (const a of (j && Array.isArray(j.athletes) ? j.athletes : [])) {
@@ -1810,11 +1742,7 @@
   const words = (v) => String(v || "").trim().split(/\s+/).filter(Boolean);
   const lastOf = (a) => a.lastName || words(a.displayName || a.fullName).slice(-1)[0] || "";
   const firstOf = (a) => a.firstName || words(a.displayName || a.fullName)[0] || "";
-  // Each player's name on the panel, in the roster's order: the last name,
-  // with the first initial when a teammate has the same last name, and the
-  // first name's first two or three letters when the initial is the same
-  // too ("J. HUGHES" and "L. HUGHES", "JE. SMITH" and "JA. SMITH"). Teammates
-  // with the same first name keep the initial: nothing in a name tells them apart.
+  // Teammates sharing a last name get initials, like "J. HUGHES"
   const panelNames = (list) => {
     const lasts = list.map((a) => panelLetters(lastOf(a)));
     const firsts = list.map((a) => panelLetters(firstOf(a)).replace(/[^A-Z0-9]/g, ""));
@@ -1877,9 +1805,7 @@
     }
     $("#playerPickRow").hidden = $("#playerAdd").hidden = !roster.length;
   };
-  // A player posted is added once a read lists them. A read that left after
-  // the panel answered the post without them means the panel didn't keep
-  // them: every slot was in use (another page may have filled the last one).
+  // A read after the ack without them: slots were full
   const settlePlayers = () => {
     const list = S.players || [];
     const max = S.playermax || 8;
@@ -1896,7 +1822,6 @@
       return Date.now() - p.at < 10000;  // no read since: the panel is away
     });
   };
-  // The board's line of stat lines, and the card's list.
   const renderPlayers = () => {
     const card = $("#playerCard");
     // Firmware from before favorite players sends none.
@@ -1948,8 +1873,7 @@
     const list = S.players || [];
     const max = S.playermax || 8;
     const same = (pl) => pl.l === t[0] && pl.id === a.id;
-    // A player posted a moment ago counts until the panel lists them: a
-    // double tap posts once, and a second player can't take the last slot too.
+    // Pending posts count: no double posts or overfilled slots
     if (playerPending.some(same)) return;
     if (list.some(same)) return playerSay(a.name + " is a favorite already.");
     if (list.length + playerPending.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
@@ -1964,10 +1888,7 @@
   renderPlayerForm();
 
   // ---- team chooser ------------------------------------------------------
-  // The picker sets My team, with pickFav adds a favorite, with pickBet
-  // picks the team for a new bet, with pickPlayer the team whose roster
-  // the Favorite players card lists, and with pickSplit the second area's
-  // team (never the panel's own).
+  // Picks My team unless a pick* flag says otherwise
   let pickFav = false;
   let pickBet = false;
   let pickPlayer = false;
@@ -2004,7 +1925,7 @@
     // A tab can hold more than one league (Golf: both tours; Racing: both
     // series). A tour or a series is never a favorite yet, and search finds
     // one by its tab's name too.
-    // A minor league team is found by its level too ("double-a").
+    // Search matches a MiLB team's level, like "double-a"
     const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
     let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
@@ -2012,8 +1933,7 @@
       tiles.appendChild(el("div", "none", "No team matches"));
       return;
     }
-    // Minor league teams under a heading per level, Triple-A first, each
-    // level in name order.
+    // MiLB teams grouped by level, Triple-A first
     const byLevel = !q && list.some(levelOf);
     if (byLevel) list = list.slice().sort((a, b) => (a[4] || 0) - (b[4] || 0));
     let level = null;
@@ -2057,9 +1977,7 @@
     const team = fav || bet || player || split;
     const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
-    // Golf and racing can't be a favorite yet, take a bet or have favorite
-    // players: no Golf or Racing tab while picking one. Favorite players come
-    // from ESPN's rosters: no MiLB tab while picking a player's team.
+    // Golf/Racing only for My team; players need ESPN leagues
     tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
     try {
       const list = await loadGames(false);
@@ -2271,8 +2189,7 @@
   let splashTimer = null;
   const renderSplash = () => {
     if (!S || !S.splash) return;
-    // One splash per play: the same text with the same score and last play is
-    // a repeat. A turnover or a card changes the play, not the score.
+    // Keyed on play too: turnovers and cards keep the score
     const key = S.splash + "|" + (game ? game.ts + "-" + game.os + "|" + (game.lp || "") : "");
     if (key === lastSplashKey) return;
     lastSplashKey = key;
@@ -2347,10 +2264,10 @@
     $("#hHeap").textContent = Math.round(h.heap_kb) + " KiB, largest piece " + Math.round(h.block_kb) + " KiB";
     const answer = (code, ago) => (code === 200 ? "OK" : code === 0 ? "No answer" : "HTTP " + code) + ", " + span(ago) + " ago";
     $("#hEspn").textContent = h.espn == null ? "None yet" : answer(h.espn, h.espn_ago);
-    // Only once the panel has read minor league scores from MLB
+    // Shown once the panel has read from MLB
     $("#hMlbRow").hidden = h.mlb == null;
     if (h.mlb != null) $("#hMlb").textContent = answer(h.mlb, h.mlb_ago);
-    // and AHL or ECHL scores from HockeyTech
+    // Shown once the panel has read from HockeyTech
     $("#hHtRow").hidden = h.ht == null;
     if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
     const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
@@ -2623,9 +2540,7 @@
   // What the firmware box reads from the state document, and what it last drew with.
   const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
   let fwDrawn = fwInputs();
-  // While Device is folded, the words beside its name say what wants the
-  // owner in it, in place of what it holds: an update to install, one that
-  // didn't take, one installing, or a weak signal.
+  // Folded Device card's peek shows alerts, not contents
   let fwNote = "";
   const renderDevicePeek = () => {
     const note = fwNote || (S && S.wifi && S.wifi.weak ? "Weak signal" : "");
@@ -2671,9 +2586,7 @@
       }
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
-      // An update known to be newer, or one that didn't take, opens the card
-      // with Install in sight, unless the viewer opened or folded it; not
-      // before the running version is known, which can show the offer is older.
+      // Wait for the running version: the offer may be older
       if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
       btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";

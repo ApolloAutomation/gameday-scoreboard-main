@@ -1,7 +1,4 @@
-// Manual bets (components/gameday/bets.h): the lines the device page sends,
-// where a bet stands at a score, which game it ties to, its result and when
-// it goes. The bet= and betdel= keys themselves are in test_set.cpp and
-// fixtures/set_cases.json.
+// bet= and betdel= keys are tested in test_set.cpp.
 #include <cstdio>
 #include <string>
 
@@ -26,7 +23,7 @@ int failures = 0;
     }                                             \
   } while (0)
 
-constexpr uint32_t BUF = 2, MIA = 15;  // NFL
+constexpr uint32_t BUF = 2, MIA = 15;  // NFL team ids
 constexpr int64_t T0 = 1793000000;      // a Sunday in November 2026
 constexpr int64_t KICK = T0 + 3 * 3600;
 constexpr int64_t MIDNIGHT = T0 + 12 * 3600;
@@ -42,7 +39,7 @@ Bet make(BetType type, BetSide side, int16_t line, uint32_t team = BUF, uint8_t 
   return b;
 }
 
-// BUF at home against MIA, oriented the way the board had it.
+// BUF at home vs MIA, as the board had it.
 BetGame game(BetPhase phase, int buf, int mia, uint32_t event = 401772001, bool buf_first = true) {
   BetGame g;
   g.league = (uint8_t) League::NFL;
@@ -89,18 +86,18 @@ void test_lines() {
 }
 
 void test_margin() {
-  Bet minus = make(BetType::SPREAD, BetSide::TEAM, -7);  // BUF -3.5
+  Bet minus = make(BetType::SPREAD, BetSide::TEAM, -7);  // half points: BUF -3.5
   BCHECK(bet_margin(minus, 24, 20) == 1, "won by 4 covers -3.5");
   BCHECK(bet_margin(minus, 23, 20) == -1, "won by 3 doesn't cover -3.5");
-  Bet three = make(BetType::SPREAD, BetSide::TEAM, -6);  // BUF -3
+  Bet three = make(BetType::SPREAD, BetSide::TEAM, -6);
   BCHECK(bet_margin(three, 23, 20) == 0, "won by exactly 3 is a push on -3");
-  Bet plus = make(BetType::SPREAD, BetSide::TEAM, 14);  // BUF +7
+  Bet plus = make(BetType::SPREAD, BetSide::TEAM, 14);
   BCHECK(bet_margin(plus, 14, 20) > 0, "lost by 6 covers +7");
   BCHECK(bet_margin(plus, 13, 20) == 0, "lost by 7 is a push on +7");
   BCHECK(bet_margin(plus, 10, 20) < 0, "lost by 10 doesn't cover +7");
-  Bet over = make(BetType::TOTAL, BetSide::OVER, 95);  // over 47.5
+  Bet over = make(BetType::TOTAL, BetSide::OVER, 95);
   BCHECK(bet_margin(over, 28, 20) > 0 && bet_margin(over, 27, 20) < 0, "over 47.5");
-  Bet under = make(BetType::TOTAL, BetSide::UNDER, 94);  // under 47
+  Bet under = make(BetType::TOTAL, BetSide::UNDER, 94);
   BCHECK(bet_margin(under, 20, 20) > 0 && bet_margin(under, 27, 20) == 0 && bet_margin(under, 28, 20) < 0,
          "under 47");
   Bet ml = make(BetType::MONEYLINE, BetSide::TEAM, 0);
@@ -135,7 +132,6 @@ void test_status() {
 }
 
 void test_observe() {
-  // Ties to the team's game before it, or during it.
   Bet b = make(BetType::SPREAD, BetSide::TEAM, -7);
   BCHECK(bet_observe(b, game(BetPhase::PRE, 0, 0), T0, MIDNIGHT) && b.event == 401772001 && b.opp_id == MIA &&
              b.kickoff == (uint32_t) KICK,
@@ -145,7 +141,6 @@ void test_observe() {
   BCHECK(bet_observe(live, game(BetPhase::LIVE, 3, 0, 401772001, false), KICK, MIDNIGHT) && live.event == 401772001 &&
              live.opp_id == MIA,
          "ties to the game in progress, either side");
-  // Another league's team with the same id, another team, no event id.
   Bet nba = make(BetType::MONEYLINE, BetSide::TEAM, 0, 2, (uint8_t) League::NBA);
   BCHECK(!bet_observe(nba, game(BetPhase::PRE, 0, 0), T0, MIDNIGHT) && nba.event == 0, "Boston isn't Buffalo");
   Bet ari = make(BetType::MONEYLINE, BetSide::TEAM, 0, 22);
@@ -155,8 +150,6 @@ void test_observe() {
   Bet empty{};
   BCHECK(!bet_observe(empty, game(BetPhase::PRE, 0, 0), T0, MIDNIGHT), "an empty slot");
 
-  // A final the panel sees first: started after the bet went in, it was the
-  // bet's game; started before, it was likely over already.
   Bet late = make(BetType::SPREAD, BetSide::TEAM, -7);
   late.placed = (uint32_t) (KICK - 60);
   BCHECK(bet_observe(late, game(BetPhase::FINAL, 24, 20), KICK + 4 * 3600, MIDNIGHT) &&
@@ -181,18 +174,14 @@ void test_observe() {
   called.placed = (uint32_t) (KICK + 60);
   BCHECK(!bet_observe(called, off, KICK + 120, MIDNIGHT) && called.event == 0, "a called-off game from before the bet");
 
-  // Bound: another game of the team leaves it alone (a doubleheader).
   BCHECK(!bet_observe(b, game(BetPhase::LIVE, 7, 0, 401772555), KICK, MIDNIGHT) && b.event == 401772001,
          "the team's other game");
-  // ESPN moves the game: the bet keeps it.
   BetGame moved = game(BetPhase::PRE, 0, 0);
   moved.kickoff = KICK + 86400;
   BCHECK(bet_observe(b, moved, T0, MIDNIGHT) && b.kickoff == (uint32_t) (KICK + 86400), "a game moved to another day");
   BCHECK(bet_observe(b, game(BetPhase::PRE, 0, 0), T0, MIDNIGHT) && b.kickoff == (uint32_t) KICK, "and back");
-  // During the game nothing is saved.
   BCHECK(!bet_observe(b, game(BetPhase::LIVE, 14, 7), KICK + 600, MIDNIGHT), "a live score isn't saved");
 
-  // The final grades it, with the score, until midnight.
   BCHECK(bet_observe(b, game(BetPhase::FINAL, 23, 20), KICK + 86400 + 4 * 3600, MIDNIGHT + 86400) &&
              b.result == (uint8_t) BetResult::LOST && b.team_score == 23 && b.opp_score == 20 &&
              b.expires == (uint32_t) (MIDNIGHT + 86400),
@@ -205,19 +194,17 @@ void test_observe() {
          "a corrected score grades it again");
   BCHECK(bet_status(b, nullptr, KICK + 86400 * 2) == BetStatus::WON, "the result stays without the game");
 
-  Bet push = make(BetType::TOTAL, BetSide::OVER, 94);  // over 47
+  Bet push = make(BetType::TOTAL, BetSide::OVER, 94);
   bet_observe(push, game(BetPhase::PRE, 0, 0, 401772001, false), T0, MIDNIGHT);
   BCHECK(bet_observe(push, game(BetPhase::FINAL, 27, 20), KICK + 4 * 3600, MIDNIGHT) &&
              push.result == (uint8_t) BetResult::PUSH,
          "exactly 47: a push");
-  // A final right at midnight still gets a moment on the page.
+  // A final at midnight still gets a moment shown.
   Bet edge = make(BetType::MONEYLINE, BetSide::TEAM, 0);
   bet_observe(edge, game(BetPhase::FINAL, 1, 0), KICK + 3600, KICK + 3600);
   BCHECK(edge.result == (uint8_t) BetResult::WON && edge.expires == (uint32_t) (KICK + 3601), "a midnight not ahead");
 }
 
-// A bet is for its team's next or current game, whichever of the team's
-// games the panel reads first.
 BetGame nba(BetPhase phase, uint32_t event, uint32_t home, uint32_t away, int64_t kickoff, int hs = 0, int as = 0) {
   BetGame g;
   g.league = (uint8_t) League::NBA;
@@ -234,8 +221,7 @@ BetGame nba(BetPhase phase, uint32_t event, uint32_t home, uint32_t away, int64_
 void test_earliest_game() {
   constexpr uint32_t BOS = 2, MIA_H = 14, NYK = 18;
   const int64_t mon = T0 + 8 * 3600, wed = mon + 2 * 86400;  // BOS at NYK Monday night, MIA vs BOS Wednesday
-  // My team is MIA: its next game, MIA vs BOS on Wednesday, is on the board
-  // when the owner enters BOS -4.5 on Monday morning for BOS at NYK that night.
+  // The board has Wednesday's game; the bet is Monday's.
   Bet b = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
   BCHECK(bet_observe(b, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT) && b.event == 401800002,
          "the first BOS game the panel reads takes the bet");
@@ -254,14 +240,11 @@ void test_earliest_game() {
              b.result == (uint8_t) BetResult::LOST && b.event == 401800001,
          "Wednesday's final leaves it alone");
 
-  // Read in the other order: the earlier game keeps it.
   Bet o = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
   bet_observe(o, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0, MIDNIGHT);
   BCHECK(!bet_observe(o, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT) && o.event == 401800001,
          "a later game read second doesn't take it");
 
-  // The earlier game already on, or a final the panel missed live that
-  // started after the bet went in: still the team's game.
   Bet on = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
   bet_observe(on, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
   BCHECK(bet_observe(on, nba(BetPhase::LIVE, 401800001, NYK, BOS, mon, 50, 40), mon + 3600, MIDNIGHT) &&
@@ -279,13 +262,11 @@ void test_earliest_game() {
              before.event == 401800002,
          "a final from before the bet doesn't");
 
-  // Once its game has started, or has a result, the bet stays on it.
   Bet started = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
   bet_observe(started, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
   BCHECK(!bet_observe(started, nba(BetPhase::FINAL, 401800001, NYK, BOS, mon, 99, 101), wed + 60, MIDNIGHT) &&
              started.event == 401800002,
          "its game has started");
-  // A game ESPN moved later stays the bet's game, even past another of the team's.
   Bet moved = make(BetType::MONEYLINE, BetSide::TEAM, 0, BOS, (uint8_t) League::NBA);
   bet_observe(moved, nba(BetPhase::PRE, 401800001, NYK, BOS, mon), T0, MIDNIGHT);
   BCHECK(bet_observe(moved, nba(BetPhase::PRE, 401800001, NYK, BOS, wed + 86400), T0 + 60, MIDNIGHT) && moved.moved,
@@ -294,8 +275,7 @@ void test_earliest_game() {
              moved.event == 401800001 && moved.kickoff == (uint32_t) (wed + 86400),
          "Wednesday's game doesn't take it");
 
-  // In one pass over the board and the favorites' cards, the order the panel
-  // reads them doesn't matter.
+  // Read order within one pass doesn't matter.
   ManualBets m;
   m.at(0) = make(BetType::SPREAD, BetSide::TEAM, -9, BOS, (uint8_t) League::NBA);
   bets_observe(m, nba(BetPhase::PRE, 401800002, MIA_H, BOS, wed), T0, MIDNIGHT);
@@ -440,7 +420,6 @@ void test_parse_bet() {
     BCHECK(!parse_set("betdel", v, op, 16), "betdel=%s is refused", v);
 }
 
-// The source the device page fills: changed() marks it for saving.
 void test_manual_source() {
   ManualBets m;
   BCHECK(m.size() == kBetSlots && sizeof(BetBlob) == 36 * kBetSlots, "eight slots of 36 bytes");
@@ -461,7 +440,6 @@ void test_manual_source() {
   BCHECK(!bets_expire(src, MIDNIGHT - 1) && !m.dirty, "nothing done before midnight");
   BCHECK(bets_expire(src, MIDNIGHT) && m.dirty && bet_empty(m.at(0)) && bet_empty(m.at(3)) && !bet_empty(m.at(5)),
          "midnight drops the graded ones");
-  // Read back from flash: a slot that makes no sense is emptied.
   m.at(1) = make(BetType::SPREAD, BetSide::UNDER, -7);
   m.at(2) = make(BetType::SPREAD, BetSide::TEAM, -7);
   m.loaded();

@@ -95,8 +95,7 @@ inline void fill_baseball_filter(JsonObject ev) {
   comp["series"]["summary"] = true;
 }
 
-// ranks: a college schedule's curatedRank (a pro league's says 99 for every
-// team, a pool's worth of JSON on a season's schedule for nothing).
+// ranks: college only; pro leagues send 99 for all.
 inline void fill_upcoming_filter(JsonDocument &f, bool ranks = false) {
   JsonObject ev = f["events"].add<JsonObject>();
   ev["id"] = true;
@@ -145,9 +144,7 @@ inline void fill_scan_filter(JsonDocument &f, bool finals = false, bool pending 
   c["winner"] = true;
 }
 
-// seed: keep the record's stats for the Standing setting's seed (a filter
-// keeps every item's, about 9 KB more for an MLB team's 108); a college team
-// or a cup's read has no use for it.
+// seed costs about 9 KB for an MLB team's stats.
 inline void fill_team_filter(JsonDocument &f, bool seed = true) {
   f["team"]["id"] = true;
   f["team"]["color"] = true;
@@ -199,8 +196,7 @@ inline std::string format_over_under(JsonVariantConst v) {
   return buf;
 }
 
-// A competitor's curatedRank: 1-98, 0 when ESPN says unranked (99) or sends
-// none (espn_parse.cpp, one copy for every parse that reads it).
+// 1-98; 0 when ESPN says unranked (99) or none.
 uint8_t rank_of(JsonObjectConst c);
 
 inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSnapshot &out) {
@@ -229,8 +225,7 @@ inline bool snapshot_from_event(JsonObjectConst ev, uint32_t our_team_id, GameSn
   JsonObjectConst lp = sit["lastPlay"];
   s.last_play = str_or_empty(lp["text"]);
   s.play_secs_left = lp["probability"]["secondsLeft"] | -1;
-  // The rest is in the filter for football (type, id, teams) and baseball
-  // (type, runs) only.
+  // Filtered in for football and baseball only.
   s.play_type = str_or_empty(lp["type"]["text"]);
   s.play_id = str_or_empty(lp["id"]);
   s.play_points = lp["scoreValue"] | 0;
@@ -334,13 +329,7 @@ inline void baseball_from_event(JsonObjectConst ev, GameSnapshot &s) {
   s.possession = we_bat ? 1 : 2;
 }
 
-// Favorite players (players.h): what a game read keeps on top of its
-// sport's own fields while a favorite player is in its league. Football,
-// baseball and basketball: the last play's id, its points and the athletes
-// in it, and ESPN's game leaders (football's for the game, basketball's per
-// team, baseball's both). Soccer: each goal's scorer. Hockey: nothing, since
-// ESPN names no athletes there (players.h matches the scorer's name in the
-// play's words).
+// Hockey: none, ESPN names no athletes there.
 inline void fill_player_filter(JsonObject ev, Sport sport) {
   JsonObject comp = ev["competitions"][0];
   if (sport == Sport::SOCCER) {
@@ -374,10 +363,7 @@ inline uint32_t id_of(JsonVariantConst v) {
   return n > UINT32_MAX ? 0 : (uint32_t) n;
 }
 
-// The athletes of the last play and the leaders that are favorites, into s.
-// Basketball keeps each category a favorite leads; the other sports' lines
-// for one player say the same in every category (a batting line), so they
-// keep the player's first, without the category.
+// Non-basketball leader lines repeat per category; keep the first.
 inline void players_from_event(JsonObjectConst ev, const PlayerWatch &w, Sport sport, GameSnapshot &s) {
   JsonObjectConst comp = ev["competitions"][0];
   for (JsonObjectConst a : comp["situation"]["lastPlay"]["athletesInvolved"].as<JsonArrayConst>()) {
@@ -444,15 +430,8 @@ int racing_from_doc(JsonObjectConst root, GameSnapshot &out);
 int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::string &after_event, int64_t after_start,
                          GolfNext &out);
 
-// What parse_event reads for sport: the shared event fields and the sport's
-// own (football's last play type, id and teams; the baseball, soccer,
-// basketball and hockey extras), on a single-event document's root or on a
-// day scoreboard's event. game_from_event reads one event with them,
-// oriented around our_team_id. Both in espn_parse.cpp.
 void fill_game_filter(JsonObject ev, Sport sport);
 bool game_from_event(JsonObjectConst ev, Sport sport, uint32_t our_team_id, GameSnapshot &out);
-// A day scoreboard's event as far as saying whether it is wanted
-// (espn_parse.cpp).
 DayGame day_game(JsonObjectConst ev);
 
 }  // namespace detail
@@ -476,7 +455,7 @@ template<typename TInput> bool parse_team(TInput &input, Schedule &out, bool see
   Schedule s;
   s.team_color = detail::str_or_empty(team["color"]);
   s.team_record = detail::str_or_empty(team["record"]["items"][0]["summary"]);
-  // The first item is the season's ("total"); its playoffSeed is a number.
+  // items[0] is the season total; playoffSeed is a number.
   for (JsonObjectConst st : team["record"]["items"][0]["stats"].as<JsonArrayConst>()) {
     if (detail::str_or_empty(st["name"]) != "playoffSeed")
       continue;
@@ -552,8 +531,7 @@ bool parse_upcoming(TInput &input, uint32_t our_team_id, size_t max, std::vector
 }
 
 namespace detail {
-// The better rank of a game's two sides (rank_of, 0 unranked), 99 when
-// neither is ranked.
+// 99 when neither side is ranked.
 inline uint8_t best_rank(uint8_t a, uint8_t b) {
   uint8_t rank = 99;
   for (uint8_t r : {a, b})
@@ -709,8 +687,7 @@ int parse_team_game(TInput &input, uint32_t our_team_id, const std::string &skip
 // scoreboard, at a tenth of the size or less. Returns false on a JSON error,
 // when our team is not in it, or when event_id is given and the document is
 // some other game.
-// players: the favorite players in the game's league (players.h); with
-// any, the read keeps their leader lines and the last play's athletes too.
+// players: with any, also keep leader lines and athletes.
 template<typename TInput>
 bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot &out,
                  const std::string &event_id = "", const PlayerWatch *players = nullptr) {

@@ -64,7 +64,7 @@ button { font: inherit; color: inherit; }
 .team .abbr { position: relative; white-space: nowrap; }
 .team .abbr.poss::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: -4px; height: 3px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 10px rgba(255,208,0,.7); }
 .team .rec { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* a college team's rank, small and before the name like a broadcast */
+/* College rank, small before the name, broadcast style */
 .team .abbr .rk { font-size: .6em; color: var(--muted); letter-spacing: 0; vertical-align: .25em; }
 .team .pips { display: flex; gap: 5px; margin-top: 2px; }
 .team .pips i { width: 12px; height: 4px; border-radius: 1px; background: #262626; }
@@ -133,14 +133,14 @@ button { font: inherit; color: inherit; }
 .btn.danger { color: #ff8a8a; }
 
 /* Sections */
-/* Two columns of cards of their own, one on a phone, so opening a card only moves the cards under it. */
+/* Separate columns so opening a card moves only those below */
 .grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; align-items: start; }
 .grid .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .team img { width: 64px; height: 64px; } .score { font-size: 42px; } .mid { min-width: 120px; } }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
 .card h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-/* A card that folds: its name across the top, what it holds while folded, and an arrow. */
+/* Folding cards: title, peek text, arrow */
 details.card > summary { display: flex; align-items: center; gap: 10px; margin: -14px; padding: 14px; cursor: pointer; list-style: none; border-radius: var(--radius); }
 details.card > summary::-webkit-details-marker { display: none; }
 details.card > summary h2 { margin: 0; flex: none; }
@@ -151,9 +151,9 @@ details.card[open] > summary { margin-bottom: -6px; }
 details.card[open] > summary::after { content: "\25BE"; }
 .peek { flex: 1; min-width: 0; text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
-/* Something in the folded card wants the owner: an update, or a weak signal */
+/* Folded card needs attention: update or weak signal */
 .peek.alert { color: var(--gold); }
-/* Quick settings: what owners change most, under the board, in two columns on a wide screen */
+/* Quick settings: two columns on wide screens */
 .quick { margin-top: 14px; }
 .qcols { display: grid; grid-template-columns: 1fr; }
 .qcol { min-width: 0; }
@@ -169,7 +169,7 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .ctl label small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.35; }
 .card .sub { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
 .card .sub:first-of-type { margin-top: 4px; }
-/* Each sport's heading in Celebrations follows switches, so it is no first heading. */
+/* Celebrations sport headings follow switches, so need margin */
 .card .alertSport .sub { margin-top: 14px; }
 .ctl .val { color: var(--muted); font-size: 12px; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 .card p.weak { color: var(--gold); font-size: 13px; margin: 4px 0 8px; }
@@ -357,7 +357,7 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .livebar .name { white-space: normal; }
 .linkbtn { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--accent); font-size: 12px; cursor: pointer; }
 
-/* Bets: a chip per bet on the board's game, and the card's list and form */
+/* Bets: board chips, card list and form */
 .betline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .bet { font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .bet.good { color: var(--green); border-color: var(--green); }
@@ -367,13 +367,13 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .betrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 .betdel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 9px; padding: 0; flex: none; }
 .betmsg { color: var(--gold); font-size: 13px; margin: 6px 0; }
-/* The spread's minus and plus, next to the points */
+/* Spread sign buttons beside the points */
 .betlinebox { display: flex; align-items: center; gap: 6px; flex: none; }
 .betsign { display: flex; gap: 4px; }
 .betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
 .betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
 #betAdd { margin-top: 8px; }
-/* Favorite players: the board's stat lines, and the card's list and form */
+/* Favorite players: board stat lines, card list, form */
 .playerline .bet { color: var(--text); white-space: normal; }
 .playerrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 #playerPick { max-width: 60%; }

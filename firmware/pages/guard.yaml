@@ -36,7 +36,7 @@ script:
           then:
             - hub75.set_brightness:
                 id: matrix
-                # Outside QC, the idle display's and the night hours' level too
+                # Idle and night dimming apply outside QC only
                 brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state, !id(qc_active));'
       - lambda: |-
           const uint8_t mark = id(gameday_ctl).guard_mark();
@@ -68,9 +68,6 @@ script:
           const lv_color_t color = lv_color_hex(mark == 2 ? 0xFF2020 : 0xFF8000);
           lv_obj_set_width(id(gd_guard_line), W);
           lv_obj_set_width(id(gd_guard_lbl), W);
-          // The bottom line of the screen, over the ticker on one row of
-          // panels and under the bottom half's ticker on a 2x2
-          // (gameday::guard_line_y, lower_half), where it shows (below).
           lv_obj_set_style_text_color(id(gd_guard_lbl), color, 0);
           lv_label_set_text(id(gd_guard_lbl), mark == 2 ? "Check power supply" : "Too warm, dimming");
       - while:
@@ -81,8 +78,6 @@ script:
             - lambda: |-
                 if (id(qc_active))
                   return;
-                // Taller with Large text, whose ticker sits higher, its words
-                // in the middle of it.
                 const bool large = id(gameday_ctl).text_large();
                 lv_obj_set_height(id(gd_guard_line), gameday::guard_rows(large));
                 lv_obj_set_y(id(gd_guard_line), gameday::guard_line_y(lv_disp_get_ver_res(lv_disp_get_default()), large));
