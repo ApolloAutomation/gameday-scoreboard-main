@@ -1,8 +1,10 @@
 # Architecture
 
 How Game Day Scoreboard is put together: the builds, the components, the
-path a score takes from ESPN to the panel and the device page, the update
-channels, and the sites, scripts, CI and tests around them. File and line
+path a score takes from ESPN (or for minor league baseball, the MLB Stats
+API, and for the AHL and the ECHL, HockeyTech's feed) to the panel and the
+device page, the update channels, and the sites,
+scripts, CI and tests around them. File and line
 references are to `dev` when this was written; follow the names, since line
 numbers drift.
 
@@ -30,11 +32,16 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 
 - **Substitutions**: `name`, `friendly_name`, `version` (bumped at release
   time), `site_base` (the project's site, every update URL is built from it),
-  `update_source`, `beta_update_source`, panel geometry, and
+  `update_source`, `beta_update_source`, panel geometry, the AHL's and the
+  ECHL's HockeyTech site keys and client codes (`hockeytech_*`), and
   `hub75_studio_ref` (the hub75-studio commit the theme and clock packages are
   pinned to).
 - **esp32**: a 16 KB loop task stack; Bluetooth and mbedTLS buffers moved to
-  PSRAM so TLS has internal RAM; a shorter SNTP start delay.
+  PSRAM so TLS has internal RAM; Wi-Fi's code out of internal RAM; malloc()
+  falling back to PSRAM when internal RAM has no piece big enough (and
+  taking PSRAM first above 16 KB); a shorter SNTP start delay. Four panels'
+  DMA buffers take 144 KB of internal RAM, which is what these make room
+  for.
 - **esphome**: the project name `ApolloAutomation.gameday-scoreboard`, and
   `on_boot` steps at priority 300 (apply brightness through the guard), 260
   (name the hotspot "Game Day xxxxxx") and 240 (setup after a Wi-Fi reset,
@@ -52,8 +59,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
 - **Updates**: the `http_request` update entity `gd_firmware_update` (every
   6 h, and once 3 s after the first clock sync, since TLS fails before the
   clock is set).
-- **gameday**: the component's settings (`beta_channel`, `on_action`,
-  `on_update`).
+- **gameday**: the component's settings (`beta_channel`, `hockeytech`,
+  `on_action`, `on_update`).
 - **Home Assistant entities**: only the ones worth automating (Team, Mode,
   Power, Brightness, Scroll Speed, Select Page, Install Updates
   Automatically, the buttons, Game Status, Last Play, IP, ESPN Data, RSSI and
@@ -69,9 +76,27 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   panel's open hotspot, shown only once the hotspot is up; on Wi-Fi it is the
   device page's `http://<ip>/` (`components/gameday/setup_qr.h`). `boot_view`
   sets it with `lv_qrcode_update`, only when the text changes.
-- `gameday-live.yaml`: the scoreboard page; `gd_update` draws every field the
-  component sends, for 64 and 128 pixel wide layouts, with the splashes and
-  fireworks.
+- `gameday-live.yaml`: the scoreboard page's widgets, for boards 64, 128,
+  192 and 256 pixels wide, with the splashes and fireworks (which splashes
+  get them: `splash_fireworks`, `alerts.h`). `tt_bind_view` hands the
+  widgets to the board renderer (`components/gameday/board_view.cpp`) once;
+  `tt_apply_layout` lays them out with its `board_layout` and `on_update`
+  draws each update with its `board_draw`. The page keeps the leaderboard's
+  rows (`gd_board`), the clock's time, the ticker's scroll time and the
+  fireworks. A 2x2 (128x128) has the 128 wide board in its top half and the
+  second area (split mode, `components/gameday/split.h`) in its bottom half
+  (`gd_lower`); three and four in a row can give their right end to it, the
+  board then 128 wide on the left. `tt_apply_layout` takes both places from
+  `split_area()` and runs again on the component's `layout` action, with no
+  restart. The second area's clock is `gd_lower`'s time, date and bigger
+  ticker, ending above the heat and power line; its game card is built in
+  C++ under `gd_lower` (`area_build`) and drawn by the component itself
+  (`area_draw`). The second area's splash covers that area only; the
+  board's covers the board, and all four panels of a 2x2. The splash's logo
+  tiles, its points and a Large clock's AM or PM are built in C++ too
+  (`board_build`). Clock size and Text size (`Prefs8::sizes`) pick the fonts
+  and places: `game_geom`, `clock_card_geom` and `lower_half` in
+  `board_layout.h`; a size change runs `layout` again.
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.
@@ -87,17 +112,26 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   no ESPHome includes, so the host tests compile them directly:
   `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
-  `sport_golf.cpp`, `sport_racing.cpp`,
-  `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`,
-  `startup.h`, `panel_text.h`, `badge.h`, `set_request.h`, `captive.h`,
-  `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
+  `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
+  `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
+  `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
+  `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
+  `bets.h`, `players.h`, `split.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
-  logos. `demo.cpp` is the scripted demo. `teams.h`, `team_colors.h` and
+  logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
+  board's LVGL widgets, `board_layout` places them for the board's width
+  (the positions are `game_geom` in `board_layout.h`, which the host tests
+  check) and `board_draw` draws one `UpdateFields` into them, its text
+  through `panel_text`; an `AreaView` is the second area's widgets, drawn by
+  `area_draw`. `demo.cpp` is the scripted demo. `teams.h`, `team_colors.h` and
   `timezones_parsed.h` are generated by `scripts/build_teams.py`,
   `build_team_colors.py` and `build_timezones.py`.
-- `components/panel_layout`: the saved panel count (one or two 64x64 wide),
-  written into the HUB75 display's config before the driver starts.
-  Changing it reboots.
+- `components/panel_layout`: the saved panel layout (one to four 64x64
+  wide, or a 2x2 and how its rows are mounted), written into the HUB75
+  display's config before the driver starts. Changing it reboots. More than
+  two panels keep Bluetooth off: their DMA buffers leave it too little
+  internal RAM.
 - `components/saved_networks`: up to five Wi-Fi networks (ESPHome keeps
   one), handed to the Wi-Fi component at boot, newest first. The list logic
   is `network_list.h`, tested on the host. Also holds the "Reset Wi-Fi" setup
@@ -117,8 +151,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    `Job` describing the reads: the clock (an ESPN `Date` header when NTP is
    silent), a finals recap, a live-games scan, the next games, a soccer cup,
    the team's schedule, and the game itself.
-2. **Reading.** A short-lived FreeRTOS task (`gameday_fetch`, 16 KB stack)
-   runs the job. `open_` sends `User-Agent: curl/8.0` (ESPN's edge refuses
+2. **Reading.** A short-lived FreeRTOS task (`gameday_fetch`, 16 KB stack
+   in PSRAM, `psram_tasks.h`; the loop frees it once it parks) runs the job. `open_` sends `User-Agent: curl/8.0` (ESPN's edge refuses
    unknown agents) and treats a 403 or 429 as throttling, reading
    `Retry-After`. `ContainerReader` streams the response through a 1 KB
    buffer into ArduinoJson with a per-endpoint filter, so a scoreboard of
@@ -143,17 +177,173 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    doubling to 1 h after a 403 or 429, honoring `Retry-After`
    (`poll_timing.h`).
 6. **Splashes.** `decide_splash` compares the new snapshot with the last one
-   (per sport) to pick a touchdown, field goal, goal, home run or win splash.
+   to pick a big play (`alerts.h`: `detect_big_play`, a pure function of the
+   two reads, the alert switches and whether the other side's plays count)
+   or the win. Football's turnovers come from ESPN's last play: its type,
+   its id (so a play ESPN rewords isn't new) and the team it ended with
+   (`GameSnapshot::play_type`, `play_id`, `play_side`); baseball keeps the
+   type and the play's own runs (`play_points`) for grand slams. The alert
+   switches are their own preference blob (`Prefs9`), and in Live games
+   "Favorite teams only" switches them all off for a game without the team or
+   a favorite. The splash text goes to the panel through
+   `panel_text(text, true)`, which keeps its line break. A `Splash` also
+   names its side by abbreviation (`abbr`, or `both` for the whole game's)
+   and its points (`splash_points`); `game_fields_` turns that into the
+   update's side of the board (a read of another game can have its sides the
+   other way round), and `splash_layout` (`board_layout.h`) places the logo
+   tiles, the points and the words for each board, the side's name left out
+   of the words. A tile shows the cached logo, or the team's badge until it
+   comes in (`splash_logos`), so a splash never waits for a download.
 7. **Drawing.** `emit_` builds `UpdateFields` (status, clock, scores,
    situation, ticker text and so on), rebuilds the state document, and
    `draw_` calls the `on_update` trigger. In YAML that publishes Game Status
-   and Last Play for Home Assistant and runs `gd_update` in
-   `pages/gameday-live.yaml`, which updates the LVGL labels. Logos come from
+   and Last Play for Home Assistant and draws the board with `board_draw`
+   (`board_view.cpp`) into the widgets of `pages/gameday-live.yaml`, then
+   runs the page scripts its result asks for. Logos come from
    `logo_cache.cpp` (48 decoded 32x32 logos, least recently used out), and a
    board with new logos waits up to 3.5 s for them.
 
 The boot cache (`startup.h`) keeps the next game in flash for a day so a
 restart can skip the team read.
+
+**Bets.** The owner types bets in on the device page (`bet=`, `betdel=`;
+the page sends slot 0, which `bet_put` turns into the first empty slot);
+the panel never reads a sportsbook. `bets.h` holds up to eight `Bet`
+records in their own blob (`ManualBets`, a `BetSource`; a bet tracker's
+API could be another source). `bets_tick_`, run from `emit_`, after a
+favorite's poll and every 10 s, hands each game the panel holds (the
+board's, and in Favorite teams each favorite's card) to `bets_observe` as a
+`BetGame`: a bet ties to its team's next or current game (a later game read
+first gives way to an earlier one until it starts), keeps the final's
+result and goes at local midnight (`bets_expire`). Live standing is worked
+out from the snapshot each time and never saved. `emit_` adds the bets on
+the board's game to the ticker, and the state document lists every bet.
+
+**Split mode.** `split.h` is the second area's rules: where it goes
+(`split_area`), what it shows now (`area_view`: the owner's choice, the night
+hours, the main board's clock card, its team's game on the main board), the
+scores rotation's card for it half a loop from the main board's
+(`scores_step`), its team's poll interval (`a2_poll_ms`) and the rotation of
+watched games (`rot_pick`, `rot_card`, `rot_ticker`). The setting is its own
+16-byte blob (`SplitPrefs`, `gameday_split_v1`) and the `split` and
+`splitteam` set keys. `emit_a2_` builds the area's `UpdateFields` and draws
+them; `a2_tick_` turns the rotation, ends a big play's stay and starts or
+stops the scores reads for the area. Its reads go in the board's gaps
+(`start_gap_job_`, in order: the area's own team poll or a big play's game
+(`start_a2_job_`), the scores (`start_side_job_`, one league a read), then
+the watcher), each only when it fits before the board's next read
+(`WatchTimes`, cycled every 45 s whether the watcher reads or not); a due
+area read that doesn't fit holds the others back. Area reads carry `Job::a2`
+and their own generation (`a2_gen_`), failures (`a2_fail_`) and a deadline
+the team read's look-ahead stops at. The gap reads that go to ESPN wait out
+ESPN's backoff and, after ESPN refuses one, a hold (`espn_gap_ok_`); a minor
+league second team's reads go to MLB or HockeyTech like the board's
+(`fetch_schedule_`, `fetch_game_`) and keep to that host's wait instead
+(`host_wait_`), a refusal there backing off that host alone (`a2_failed_`).
+With Rotating live games, the watcher reads every live game of the sources'
+leagues (`WatchCtx::all`), ESPN's only, as ever (`from_espn`), and a big play
+jumps the area (`a2_jump_`) instead of taking the main board.
+
+**Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
+in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
+the board's gaps: `loop()` calls `start_gap_job_` while the next board poll
+is not due, which runs the second area's reads and the scores read
+(`start_side_job_`) before `start_watch_job_`, each fitted to the board's
+next read and bounded (a scan per league every half hour or at the next
+start, a read per source or game every cycle), so none keeps the others
+from their reads (in Favorite teams, which ticks every second, the board's
+next read is the locked game's next poll or the next team read,
+`fav_gap_due_` and `watch_fav_due`). It starts a read (a `Job` with
+`need_watch`) only when that read is further off than the read's last time
+plus a second (`WatchTimes`, timed per league's day scoreboard and for a game
+on its own by its last good read), so the board's 10 s poll waits only when
+ESPN is slower than last time. A failed read that took longer than expected
+(a hang to the HTTP timeout) keeps the time and holds its kind for the rest
+of the cycle, then 3 and 7 cycles when it does it again, until one answers.
+`watch_next` skips a read that doesn't fit for the next one that does, takes
+the one tried longest ago first (then the sources' order and `watch_rank`'s),
+so the reads a full cycle left out go first the next, and a kind no gap took
+all cycle is expected an eighth quicker the next, so a slow scoreboard is
+timed again instead of never read. Every 45 s (`kWatchCycleMs`) each source is
+read once: in Live games a pro league's day scoreboard (`scan_url`), and one
+game at a time (`event_url`) for a college league, whose games come from the
+board's own scan (`watch_feed_`), and for the favorites in My team and
+Favorite teams, found by their league's or college conference's day
+scoreboard at their next start (the board's own card's start counts too,
+`watch_want_day`), or when a game that's on leaves the board, which reads
+its league's again (`watch_board_moved`; Favorite teams' playlist of cards
+that aren't on reads nothing). Only sports with a big play switched on are read
+(`watch_sport_mask`). Up to 8 games are kept (`WatchGame`, 72 bytes each, in
+internal RAM; the documents are PSRAM's), favorites and close games first
+(`watch_rank`, `watch_keep`, which never lets a list grow past 8). The fetch
+task runs `detect_big_play` on each game against its last good read
+(`watch_detect`, which rebuilds the read before from the `WatchGame` and
+tells a home run from the score and the bases when the last play has moved
+on), never on a game's first read or one more than two cycles old. A failed
+read waits for the next cycle without holding up the others, a game whose
+own read fails twice drops out (`watch_failed`), and a refusal (403, 429)
+holds the watcher at least 5 minutes and backs the board off as its own
+would (`watch_refused_`). Like the scores' reads, it reads nothing while the
+board backs off, and nothing for a full retry after the loop gives up on a
+worker; a watcher read given up on counts as a failed one that took the
+whole wait (`WatchTimes::took`). A big play the board may take (`watch_may_switch`:
+not during its own splash, not from the panel's team's game from its start
+time on, `watch_live` (a golf tour's or a racing series' leaderboard while a
+round or a session is on, `watch_own_game`), unless a favorite plays and "Switch from my team" is
+on, a chained one only during the first stay, and `switch_allowed_()`,
+false while Follow this game holds) starts a visit: `start_job_` polls that
+game, its first poll carries the splash, and after "Stay on a big play", or
+once the panel's team's game starts, `end_visit_` puts the mode's own board
+back and reads it at once, that first read splashing only a final reached
+meanwhile (`board_prev_`, `watch_back_prev`: the victory splash, never a big
+play from while the board was away). Neither the mode's game nor the visit's
+is watched. Home Assistant keeps the mode's game (`ha_game_`), and the state
+document says `visit`, and `visit_follow` while Follow this game could still
+pin the mode's game (`follow_can_start`): the page shows the switch only
+then. Follow this game pins the mode's own game, the visit's saved
+board (`watch_mode_game`), and ends a visit up then (`set_follow`, and
+`watch_visit_over` with `allowed` false); while it holds, `watching_()` is
+false, so nothing is read and the watched games start over after it. A
+visit is busy for the idle display (`idle_busy_`'s hold): it shows over the
+clock, the scores or Off or dim, at the night brightness in the night hours,
+and the scores keep their scan's timing when back within two stays
+(`side_off_ms_`). For bets, `bets_tick_` hands a visit's game to
+`bets_update`, not `bets_observe`, and a watcher read hands back the games
+the bets are tied to already (`WatchJob::bet_events`, `WatchJob::bets`):
+those bets keep their details and take a result, but no read ties a bet to
+a game or moves one.
+
+**Favorite players.** The owner picks up to eight players on the device
+page, from a team roster the browser reads from ESPN (`player=`,
+`playerdel=`); the panel never reads rosters. `players.h` keeps them in
+their own blob (`PlayerBlob`, `gameday_players_v1`). A game read
+(`fetch_game_`) passes `parse_event` a `PlayerWatch`, the favorites' ids
+in that game's league from the job's copy of the list. With none, the
+filter and the parse are as before; with any, the read also keeps the
+last play's id, points and athletes, ESPN's leaders (football's for the
+game, basketball's per team, baseball's both) for the favorites only, and
+soccer goals' scorers (`fill_player_filter`, `players_from_event`).
+`emit_` adds `player_lines` (a favorite's leader line while the board's
+game is live) to the ticker before the bets, and the state document has
+them as `game.pl`. `board_splash_` goes through
+`board_splash_with_players`: with the Favorite player alert bit on,
+`player_scored` credits a favorite on the play that scored between two
+live reads (by id in football, baseball and basketball, never on a
+football try, whose athletes are the touchdown's, and in basketball only
+for a late lead change or a buzzer beater; by goal in soccer; by an
+unambiguous name in the goal's words in hockey) and its splash takes the
+team's place. The page folds a player's name with the firmware's own
+`ascii_fold` table (`build_web.py` copies it into the bundle), so a hockey
+name matches the goal's words. During a visit (watch.h) the board's game is
+the visit's: its poll reads with the visit's league's favorites, the
+stat lines take `board_league_()` (the visit's), and `apply_visit_job_`
+splashes through `visit_splash`, the watcher's splash on the first poll
+and `board_splash_with_players` after it, so the play that brought the
+board there splashes once and never with a name. The watcher's own reads
+pass no `PlayerWatch`, so a favorite player never starts a visit, and
+`watching_()` counts neither the final's bit nor the Favorite player bit
+as a big play switched on. `watch_back_prev` leaves a favorite's score
+from while the board was away unsplashed, as it does the team's.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -213,6 +403,88 @@ golf's: on one panel `BoardLines::value_narrow` false hides the value column
 and gives the names its room. Racing is not in Favorite teams or Live games
 either.
 
+**Minor league baseball.** `League::MILB` is the one league not read from
+ESPN: its `LeagueInfo::source` is `Source::MLB_STATS`, and its 120 teams
+(Triple-A to Single-A, `Team::group` the level's MLB Stats sport id, 11 to
+14) come from the MLB Stats API's team list (`build_teams.py --league milb`).
+The four fetch functions hand a minor league team or league to the MLB Stats
+reads in `source_mlbstats.cpp`, all on its schedule endpoint with a
+`fields=` list that cuts each document on the server and an ArduinoJson
+filter as well: the team read (`mlb_team_url`, yesterday to ten days ahead
+at all four levels, about 4 KB, which also gives the Up next list, so no
+look-ahead or game-on-now read, and today's last final for My team today
+after a restart), the far read when that lists nothing
+(`mlb_far_url`, 11 to 240 days ahead at the team's level, ids and dates only,
+about 10 KB: next season's opener), the game poll (`mlb_game_url`, one game
+with its line score and probable pitchers, about 1.4 KB; the line score
+endpoint has no status or team ids) and the day scan for Live games and the
+finals rotation (`mlb_day_url`, up to about 25 KB for 60 games, of which the
+first `kRecapCap` finals are kept). Each turns into the same `Schedule`,
+`Upcoming`, `GameSnapshot` (sport `BASEBALL`, so the baseball board, ticker
+and splashes draw it), `LiveGame`, `Final` and `Pending` as ESPN's.
+`codedGameState` decides the state: postponed, canceled and suspended games
+are post and not completed, as ESPN has them, and a game the API lists on
+several dates (postponed, then played) is read at the entry nearest the
+kickoff the board picked. A game with no start time (game 2 of a
+doubleheader) sits at midnight Eastern like ESPN's TBD games, and
+`pre_poll_near` reads a baseball one every minute on its day, and
+`day_order` puts it after game 1 for My team today. Logos are
+MLB's 64 px PNG spots (`mlb_logo_url`). There are no team colors, last play
+or home run flag in the feed, so its big-play splashes (`alerts.h`) are runs
+and walk-offs, the latter from the 7th in a 7-inning game
+(`Baseball::innings`), and it has no rank, seed or place.
+
+**Minor league hockey.** `League::AHL` and `League::ECHL` (the last two
+values the 16-bit league masks have room for) are read from HockeyTech's
+feed (`Source::HOCKEYTECH`, `source_hockeytech.cpp`), the leagues' own stats
+service, with each league's public site key and client code from the
+`hockeytech_*` substitutions (the component's `hockeytech:` block, into
+`ht_set_feed`). Their 62 teams come from its `teamsbyseason` view
+(`build_teams.py --league ahl --league echl`); `Team::group` is the season
+their logo file is named for, plus `kHtNoSmallLogo` when the logo server's
+50 px copy is missing or too large for the logo cache, and `emit_` then
+draws the team's badge (`badge.h`) in the logo's place. The four fetch
+functions hand an AHL or ECHL team or league to three reads: the team read
+(`ht_team_url`, the `scorebar` view for one team, whose day counts are
+games around the league's today: one back and five ahead, about 11 KB, with
+both records, the Up next list and today's last final for My team today
+after a restart), the game poll (`ht_game_url`, the game
+centre's `clock` tab, about 1.9 KB, which the feed's server caches a minute
+where the scorebar's is four; `ht_fill_from_schedule` adds the records and
+a TBD placeholder it lacks) and the day scan (`ht_day_url`, the
+`gamesbydate` view, about 6.5 KB a finished game with its goals, up to
+about 105 KB; its start times are local, turned to UTC by
+`ht_local_epoch`'s North American zones). Status codes 1, 2, 3 and 4, 8 and
+9 are not started, in progress, final (3 unofficial), postponed and
+suspended; the clock at zero in a period, or the words, mark an
+intermission, and a shootout leaves the period at OT, so the words and the
+scoring's `SO` key mark it, and the goal count takes the deciding goal at
+the end. There are no team colors, plays, power plays, ranks, seeds or
+places in the feed, so a goal from the score is its one big-play splash
+(`alerts.h`) and the Standing setting leaves its teams their record. The
+feed refuses requests that carry another site's Origin, so the device
+page's On now leaves both leagues out.
+
+Each host other than ESPN keeps its own accounting. `open_` tells the
+hosts apart (`is_mlb_url`, `is_ht_url`): a read's status, refusals and
+`Retry-After` go to the job's `host[]` slot for its `Source`, and a job
+that read only one other host backs off on that host's `host_wait_`
+(`HostWait`, poll_timing.h), never ESPN's run, and the other way round.
+Favorite Teams skips a favorite whose host is waiting (`host_waiting_`), a
+scan leaves a waiting host's leagues out while others are left, and a
+failed read from one host in a scan that read others backs off that host
+alone (`host_scan_result`). The idle display's scores reads keep to the
+same waits: they leave a waiting host's leagues out (`drop_source`), and
+their own failed read from one counts in its wait (`host_side_result`).
+Their bytes count in the same "ESPN Data" figure, and the health block adds
+`mlb` and `mlb_ago`, `ht` and `ht_ago`. The
+big-play watcher and favorite players stay ESPN's (`from_espn`):
+`watch_sources` and `watch_wants_teams` leave the other hosts' leagues out,
+`parse_player` and `player_valid` refuse their teams, Favorite Teams'
+watcher gap counts a favorite whose host waits as due when that wait ends
+(`watch_after_wait`), and ESPN refusing a watcher read holds My team's
+board only when its team is ESPN's (`watch_refusal_holds_board`).
+
 ## The device page and its routes
 
 `firmware/web/app.js` and `app.css` are the page; `scripts/build_web.py`
@@ -235,7 +507,12 @@ The page reads the state document, re-reads it when ESPHome's event stream
 sends a Game Status event, holds each tapped setting until the panel
 confirms it, and uses entity endpoints only for what Home Assistant also
 has (Brightness, Power, the update entity). In the browser it reads today's
-games and logos from ESPN and release notes from GitHub.
+games and logos from ESPN (minor league baseball's from the MLB Stats API
+and MLB's image server, AHL and ECHL logos from HockeyTech's logo server, but
+not their games) and release notes from GitHub. The cards under the mode bar
+are `<details>` elements; which ones a viewer opened is kept in that
+browser's localStorage (`gd.cards`) and nowhere else, and `gd.expand` set to
+`1` opens them all, which the Playwright tests do.
 `tests/fixtures/set_cases.json` is the shared table of settings cases that
 the host tests, the page's mock and the fuzzer all use.
 
@@ -249,8 +526,23 @@ for a minute after it had been connected restarts once
 15 minutes (up to 25 while someone is connected), then goes back to its
 saved networks. Setup works through the installer's Wi-Fi dialog
 (`improv_serial`), the hotspot and captive portal, or Improv over Bluetooth.
+The web server gives a request to the first handler that takes it, and the
+captive portal adds its handler only when the hotspot first starts, after
+the device page's on a panel that already had a network. So the gameday
+component adds one ahead of all of them (`hotspot.h`): while the portal is
+up and the panel is off Wi-Fi, every GET but `/gameday/` gets the setup
+page, the phones' internet checks included. Its loop also has the portal
+answer up to eight DNS lookups per pass of the main loop instead of one.
 `captive.h` notices a network that wants a sign-in page and says so on the
 panel and the page.
+
+After a new join with "Show how to connect" on, the IP address and `.local`
+name lead the ticker for 30 s once the boot screen goes (`setup_qr.h`,
+`show_join_address`), and a live game on a panel that has a team cuts the
+join's QR screen short (`board_live`, `boot.yaml`). The scoreboard page
+hides the ticker under a full-board message, and lends it to the message
+while the line is on (`join_line`, `ticker_host`), so the address still
+shows under "Can't reach ESPN" or "Getting ready".
 
 ## Brightness, heat and power
 
@@ -288,7 +580,8 @@ the planned flag in the health block's restart log, the firmware's only
 RTC_NOINIT variable); `python3 scripts/crash_report.py <panel>` prints it and
 decodes the backtrace with the release's ELF. `health.h` records why the
 panel last started (planned, power on, crash, watchdog, brownout) in RTC
-memory and reports it, with uptime, memory and the ESPN status, in the
+memory and reports it, with uptime, memory and the ESPN, MLB and HockeyTech
+status, in the
 state document.
 
 ## Sites
@@ -348,7 +641,12 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 - `make -C tests`: `test_parse.cpp` (parsers, game logic, splash rules,
   timing, updates, favorites, recap and more against the ESPN documents in
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
-  table) and `test_networks.cpp` (saved networks).
+  table), `test_alerts.cpp` (every big-play alert, and that each splash fits
+  the panel's lines on one to four panels), `test_bets.cpp` (manual bets),
+  `test_watch.cpp` (the big-play watcher: which games, big plays from day
+  scoreboards, when a read may run, when the board switches and goes back),
+  `test_players.cpp` (favorite players) and `test_networks.cpp`
+  (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.

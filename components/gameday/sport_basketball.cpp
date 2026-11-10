@@ -1,5 +1,4 @@
-// Basketball's parse extras, ticker, clock row and splash (NBA, WNBA, men's
-// college). Pure, no ESPHome includes.
+// Basketball parse extras, ticker, clock row; no ESPHome includes.
 #include "espn_parse.h"
 
 namespace espn {
@@ -88,6 +87,7 @@ std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o
     case GameState::NOT_FOUND:
       return "No upcoming game";
     case GameState::PRE:
+      add_part(out, detail::ranked_matchup(s));
       add_part(out, kickoff_local.empty() ? s.short_detail : kickoff_local);
       add_part(out, b.series);
       add_odds(out, s, o);
@@ -99,14 +99,14 @@ std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o
         return s.short_detail;
       // "Final/OT", "Final/2OT" after overtime
       out = s.short_detail.rfind("Final", 0) == 0 ? s.short_detail : "Final";
-      add_part(out, b.series.empty() ? records_line(s) : b.series);
+      add_part(out, b.series.empty() ? records_line(s, o.team_standing) : b.series);
       return out;
     case GameState::IN:
       break;
   }
   if (b.phase == Phase::HALFTIME || b.phase == Phase::END_PERIOD) {
     // The clock row says which break it is.
-    out = b.series.empty() ? records_line(s) : b.series;
+    out = b.series.empty() ? records_line(s, o.team_standing) : b.series;
     return out.empty() ? s.short_detail : out;
   }
   if (o.clock)
@@ -137,14 +137,6 @@ std::string basketball_clock_text(const GameSnapshot &s) {
   if (dash != std::string::npos)
     t.replace(dash, 3, " ");
   return t;
-}
-
-// Win only: a basketball game has around a hundred scoring plays.
-Splash basketball_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool /*opponent_splashes*/,
-                         bool neutral) {
-  if (!detail::same_game(prev, cur) || !detail::went_final(prev, cur))
-    return Splash{};
-  return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
 }
 
 }  // namespace espn

@@ -54,8 +54,10 @@ void GamedayComponent::start_demo(uint8_t kind) {
   if (kind != (uint8_t) DemoKind::PRO && kind != (uint8_t) DemoKind::COLLEGE)
     return;
   ESP_LOGI(TAG, "Demo: starting %s, looping until stopped", kind_name(kind));
-  // From the live board, keep it to come back to. Restarting from inside a
-  // run keeps the board saved when the run began.
+  // Save the live board; a restart mid-run keeps the original.
+  if (this->visit_.active && this->visit_.saved)
+    this->game_ = std::move(*this->visit_.saved);
+  this->drop_visit_();
   if (this->demo_kind_ == 0 || this->demo_gap_) {
     this->demo_saved_game_ = this->game_;
     this->demo_saved_prev_ = this->prev_;
@@ -205,7 +207,8 @@ void GamedayComponent::demo_show_step_(bool splash) {
   }
   this->prev_ = this->game_;
   this->game_ = g;
-  ::espn::Splash s = splash ? ::espn::decide_splash(this->prev_, g, true, false) : ::espn::Splash{};
+  ::espn::Splash s = splash ? ::espn::decide_splash(this->prev_, g, true, false, this->alerts_on(), this->wide_())
+                            : ::espn::Splash{};
   this->emit_(s);
 }
 

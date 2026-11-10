@@ -1,4 +1,4 @@
-// Hockey's ticker, clock row and splashes. Pure, no ESPHome includes.
+// Hockey's ticker and clock row; no ESPHome includes.
 // ESPN's NHL feed has no power play field. The board must not infer one from
 // penalties, because offsetting and coincidental minors would make it wrong.
 #include "espn_parse.h"
@@ -28,7 +28,7 @@ static bool shootout(const GameSnapshot &s) { return s.period >= 5 && !s.nhl.pla
 
 // Between periods ESPN's shortDetail reads "End of 1st" (status END_PERIOD)
 static bool intermission(const GameSnapshot &s) {
-  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0;
+  return s.state == GameState::IN && s.short_detail.rfind("End of", 0) == 0 && !clock_running(s);
 }
 
 static std::string period_name(const GameSnapshot &s) {
@@ -53,7 +53,8 @@ std::string hockey_clock_text(const GameSnapshot &s) {
   if (s.state == GameState::IN && shootout(s))
     return "SO";
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
-  bool special = s.short_detail.find(':') == std::string::npos;
+  // ESPN's shortDetail lags the clock by a poll or two.
+  bool special = s.short_detail.find(':') == std::string::npos && !clock_running(s);
   if (!has_clock || special) {
     std::string t = s.short_detail;
     size_t dash = t.find(" - ");
@@ -67,7 +68,7 @@ std::string hockey_clock_text(const GameSnapshot &s) {
 std::string hockey_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
   const Hockey &h = s.nhl;
   // The series line replaces the W-L-OTL records in the playoffs
-  const std::string standing = h.series.empty() ? records_line(s) : h.series;
+  const std::string standing = h.series.empty() ? records_line(s, o.team_standing) : h.series;
   std::string out;
   switch (s.state) {
     case GameState::NOT_FOUND:
@@ -106,23 +107,6 @@ std::string hockey_status_text(const GameSnapshot &s, const TickerOptions &o, co
   if (out.empty())
     out = s.short_detail.empty() ? "In Progress" : s.short_detail;
   return out;
-}
-
-// "GOAL!" for us, "PIT GOAL" for them or for either side in the live modes.
-// A shootout winner's extra goal splashes like any other goal.
-Splash hockey_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
-  Splash none;
-  if (!detail::same_game(prev, cur))
-    return none;
-  if (detail::went_final(prev, cur))
-    return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
-  if (prev.state != GameState::IN || cur.state != GameState::IN)
-    return none;
-  if (cur.team_score > prev.team_score)
-    return Splash{neutral ? cur.team_abbr + " GOAL" : "GOAL!", parse_color(cur.team_color)};
-  if (cur.opp_score > prev.opp_score && opponent_splashes)
-    return Splash{cur.opp_abbr + " GOAL", parse_color(cur.opp_color)};
-  return none;
 }
 
 }  // namespace espn

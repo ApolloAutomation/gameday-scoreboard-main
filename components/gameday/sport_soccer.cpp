@@ -1,5 +1,4 @@
-// Soccer's parse extras, ticker, clock row and splashes. Pure, no ESPHome
-// includes.
+// Soccer parse extras, ticker, clock row; no ESPHome includes.
 #include "espn_parse.h"
 
 #include <cstdio>
@@ -217,6 +216,7 @@ void soccer_from_event(JsonObjectConst ev, GameSnapshot &s) {
       g.ours = ours;
       g.own_goal = d["ownGoal"] | false;
       g.penalty = d["penaltyKick"] | false;
+      g.athlete = id_of(d["athletesInvolved"][0]["id"]);  // in the filter only for a favorite player
       f.goals.push_back(g);
     }
   }
@@ -381,7 +381,13 @@ static std::string stats_line(const GameSnapshot &s) {
   return out;
 }
 
-static std::string records_part(const GameSnapshot &s) { return pair_line("W-D-L", s, s.team_record, s.opp_record); }
+static std::string records_part(const GameSnapshot &s, const std::string &standing) {
+  if (standing.empty())
+    return pair_line("W-D-L", s, s.team_record, s.opp_record);
+  std::string out = s.team_abbr + " " + standing;
+  add_part(out, pair_line("W-D-L", s, "", s.opp_record));
+  return out;
+}
 
 // "Full time", "After extra time", "PSG win 4-3 on penalties".
 static std::string final_line(const GameSnapshot &s) {
@@ -422,7 +428,7 @@ std::string soccer_status_text(const GameSnapshot &s, const TickerOptions &o, co
       add_part(out, goals_line(s));
       add_part(out, pair_line("Red cards", s, f.team_reds > 0 ? std::to_string(f.team_reds) : "",
                               f.opp_reds > 0 ? std::to_string(f.opp_reds) : ""));
-      add_part(out, records_part(s));
+      add_part(out, records_part(s, o.team_standing));
       return ascii_fold(out);
     case GameState::IN:
       break;
@@ -432,7 +438,7 @@ std::string soccer_status_text(const GameSnapshot &s, const TickerOptions &o, co
     add_part(out, goals_line(s));
     add_part(out, pair_line("Cards", s, cards(f.team_yellows, f.team_reds), cards(f.opp_yellows, f.opp_reds)));
     add_part(out, stats_line(s));
-    add_part(out, records_part(s));
+    add_part(out, records_part(s, o.team_standing));
     return ascii_fold(out);
   }
   if (o.soccer_stats) {
@@ -471,30 +477,11 @@ int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const s
   return best >= 0 ? best : over;
 }
 
-// ---- splashes ------------------------------------------------------------------
-
-// A goal for us is "GOAL!", theirs "LEE GOAL" (with opponent splashes on). The
-// win splashes at full time; a draw gets none. A shootout decides a level
-// game.
-Splash soccer_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
-  Splash none;
-  if (!detail::same_game(prev, cur))
-    return none;
-  if (detail::went_final(prev, cur)) {
-    int us = cur.team_score, them = cur.opp_score;
-    if (us == them && cur.soc.team_shootout >= 0 && cur.soc.opp_shootout >= 0) {
-      us = cur.soc.team_shootout;
-      them = cur.soc.opp_shootout;
-    }
-    return detail::win_splash(cur, neutral, us, them);
+void league_standing(std::vector<Schedule> &comps) {
+  for (size_t i = 1; i < comps.size(); i++) {
+    comps[i].seed = comps[0].seed;
+    comps[i].place = comps[0].place;
   }
-  if (prev.state != GameState::IN || cur.state != GameState::IN)
-    return none;
-  if (cur.team_score > prev.team_score)
-    return Splash{neutral ? cur.team_abbr + " GOAL" : "GOAL!", parse_color(cur.team_color)};
-  if (cur.opp_score > prev.opp_score && opponent_splashes)
-    return Splash{cur.opp_abbr + " GOAL", parse_color(cur.opp_color)};
-  return none;
 }
 
 }  // namespace espn

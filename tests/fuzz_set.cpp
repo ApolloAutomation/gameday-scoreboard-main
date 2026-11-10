@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "panel_text.h"
+#include "players.h"
 #include "set_request.h"
 
 using namespace espn;
@@ -52,7 +53,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         require(op.value >= 0 && (size_t) op.value < kTimezoneCount, "the zone is past kTimezones", k, v);
         break;
       case SetKind::ROTATE:
-        require(rotate_minutes_valid(op.value), "the rotation is out of range", k, v);
+        require(rotate_seconds_valid(op.value), "the rotation is out of range", k, v);
         break;
       case SetKind::LOCKON:
         require(op.value >= kLockonMinMinutes && op.value <= kLockonMaxMinutes, "lock-on is out of range", k, v);
@@ -62,6 +63,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         break;
       case SetKind::PANELS:
         require(op.value >= 1 && op.value <= UINT8_MAX, "the count wraps in the byte PanelLayout takes", k, v);
+        require(op.rows >= 1 && op.rows <= UINT8_MAX, "the rows wrap in the byte PanelLayout takes", k, v);
+        break;
+      case SetKind::WIRING:
+        require(op.value >= 0 && op.value < panel_layouts::kWiringCount, "the wiring is past panel_layouts::Wiring",
+                k, v);
         break;
       case SetKind::FAV_SLOT:
         require(op.slot >= 1 && op.slot <= 4, "the slot is not 1 to 4", k, v);
@@ -81,9 +87,49 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
           fav_leagues.push_back(t.league);
         }
         break;
+      case SetKind::ALERTS:
+        require((op.mask >> kAlertBits) == 0, "the mask names an alert past kAlertBits", k, v);
+        break;
       case SetKind::LIVE:
         require((op.mask >> kLeagueCount) == 0, "the mask names a league past kLeagues", k, v);
-        mask = op.mask;
+        mask = (uint16_t) op.mask;
+        break;
+      case SetKind::IDLE:
+        require(op.value >= 0 && op.value < kIdleCount, "the idle display is past IdleShow", k, v);
+        break;
+      case SetKind::IDLE_DIM:
+        require(op.value >= kIdleDimMin && op.value <= kIdleDimMax, "the dim level is out of range", k, v);
+        break;
+      case SetKind::NIGHT_BRI:
+        require(op.value >= kNightBriMin && op.value <= kNightBriMax, "the night brightness is out of range", k, v);
+        break;
+      case SetKind::NIGHT_START:
+      case SetKind::NIGHT_END:
+        require(op.value >= 0 && op.value < kDayMinutes, "the night time is past the day", k, v);
+        break;
+      case SetKind::BET: {
+        // Slot 0 is the first empty one (bet_put).
+        require(op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        require(bet_valid(op.bet), "the bet isn't one the panel can keep", k, v);
+        bet_label(op.bet);
+        Bet blob[kBetSlots]{};
+        uint8_t at = bet_put(blob, op.slot, op.bet);
+        require(at >= 1 && at <= kBetSlots && !bet_empty(blob[at - 1]), "the bet went nowhere", k, v);
+        break;
+      }
+      case SetKind::BET_DEL:
+        require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        break;
+      case SetKind::PLAYER: {
+        const FavPlayer fp = make_player(op.team.league, op.athlete, op.team.id, op.name);
+        require(player_valid(fp), "the player isn't one the panel can keep", k, v);
+        require(op.name.size() <= (size_t) kPlayerNameMax, "the name is longer than the blob holds", k, v);
+        FavPlayer list[kPlayerSlots]{};
+        require(player_put(list, fp) == 1, "the player went nowhere", k, v);
+        break;
+      }
+      case SetKind::PLAYER_DEL:
+        require(op.athlete != 0 && op.team.league < kLeagueCount, "the player to drop is no player", k, v);
         break;
       default:
         break;
@@ -93,6 +139,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   for (uint8_t mode = 0; mode < kModeCount; mode++) {
     live_scan_changed(mode, live, live_leagues(0, team_league, fav_leagues));
     for (League l : scan_leagues(mode, live))
+      if (league_info(l) == nullptr)
+        abort();
+    // Idle scores; a lone golf tour reads no league.
+    for (League l : scan_leagues(mode, live_leagues(mask, team_league, fav_leagues, false), true))
       if (league_info(l) == nullptr)
         abort();
   }

@@ -41,6 +41,8 @@ These show on the board or in the ticker.
 | **Pick a team at** and an IP address | Nobody has picked a team or a mode yet. | Open that address, the device page, in a browser on the same Wi-Fi and pick one. See [Pick your team](/get-started/pick-your-team/). |
 | **Getting ready** | The panel is on Wi-Fi but hasn't set its clock yet. It can't read scores before it has. | Wait a few seconds. If it lasts, see [Troubleshooting](/help/troubleshooting/#the-panel-says-getting-ready-for-a-long-time). |
 | **Can't reach ESPN** | The panel is on Wi-Fi but gets no answer from ESPN, where the scores come from. | Check the internet connection. The panel keeps trying. |
+| **Can't reach MLB** | The same, for a minor league baseball team, whose scores come from MLB's stats service. | Check the internet connection. The panel keeps trying, and your other teams and leagues keep updating. See [Baseball: minor leagues](/using/minor-league-baseball/). |
+| **Can't reach HockeyTech** | The same, for an AHL or ECHL team, whose scores come from HockeyTech, the leagues' own stats service. | Check the internet connection. The panel keeps trying, and your other teams and leagues keep updating. See [Hockey: AHL and ECHL](/using/minor-league-hockey/). |
 | **no update yet** at the end of the ticker | Three reads from ESPN in a row failed, and none has worked since the panel started. | Check the internet connection. |
 | **no update for 12 min** at the end of the ticker | Three reads in a row failed. The score on the board is from that many minutes ago. | Check the internet connection. The board catches up once a read works. |
 | **No upcoming game** | ESPN lists no next game for your team. | Nothing. Between seasons the panel shows a clock instead, below. |
@@ -57,10 +59,14 @@ These show on the board or in the ticker.
 | A clock, with **No upcoming PGA Tour event**, **No upcoming LPGA Tour event**, **No upcoming Formula 1 race** or **No upcoming NASCAR Cup Series race** in the ticker | Your team is a golf tour or a racing series, its season is over, and ESPN hasn't listed the next event or race yet. | Nothing. See [Golf](/using/golf/) and [Racing](/using/racing/). |
 | **Postponed**, **Canceled** or **Suspended** | The game ended without being played out. A canceled or postponed golf tournament or race shows its name and **Canceled** or **Postponed**. | Nothing. |
 | **Sat TBD** | ESPN hasn't set the game's start time yet. | Nothing. The time shows once ESPN has it. |
+| **Today TBD** for a minor league team | Game 2 of a minor league doubleheader, which has no start time until it starts. | Nothing. See [Baseball: minor leagues](/using/minor-league-baseball/). |
+| **IP 192.168.1.50 \| gameday-2f6a70.local** at the start of the ticker | The panel just joined Wi-Fi, and these are its IP address and `.local` name. It goes after 30 seconds. It also runs under a message that fills the board, like **Getting ready** or **Can't reach ESPN**, which otherwise has no ticker. | To open the device page, open either one in a browser on the same Wi-Fi; use the IP address if your phone won't open the `.local` one. |
 
 With a golf tour or a racing series as your team, a tournament or a race weekend before it starts shows its name and its days, or for a race weekend the next session, in place of a matchup. See [Golf](/using/golf/) and [Racing](/using/racing/).
 
 A panel with no team picked also brings the QR code that opens its device page back over the board for 13 seconds every 3 minutes, until you pick one.
+
+An AHL or ECHL team with no small logo shows its abbreviation in a box in the logo's place. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 
 ## When you hold the button
 

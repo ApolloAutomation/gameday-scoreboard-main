@@ -19,6 +19,9 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "watch.h"
+#include "source_hockeytech.h"
+#include "source_mlbstats.h"
 
 using namespace espn;
 
@@ -149,6 +152,45 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
+// Every game marked on, so each is read in full.
+static void watch_day(const char *name, const std::string &file, League league) {
+  std::string json;
+  {
+    JsonDocument doc;
+    deserializeJson(doc, slurp("fixtures/" + file), DeserializationOption::NestingLimit(40));
+    for (JsonObject ev : doc["events"].as<JsonArray>())
+      ev["status"]["type"]["state"] = "in";
+    serializeJson(doc, json);
+  }
+  measure(name, [&] {
+    WatchJob job;
+    job.league = (uint8_t) league;
+    job.ctx.live = true;
+    job.ctx.mask = kAlertsAll;
+    return watch_read_day(json, job) && !job.fresh.empty();
+  });
+}
+
+// ids: the favorites, those in the game first.
+static void event_players(const char *name, const std::string &file, Sport sport,
+                          std::initializer_list<uint32_t> ids) {
+  std::string json = slurp("fixtures/" + file);
+  JsonDocument doc;
+  deserializeJson(doc, json);
+  std::string event_id = doc["id"] | "";
+  uint32_t team = (uint32_t) atol(doc["competitions"][0]["competitors"][0]["id"] | "0");
+  doc.clear();
+  doc.shrinkToFit();
+  PlayerWatch w;
+  for (uint32_t id : ids)
+    if (w.n < PlayerWatch::kMax)
+      w.ids[w.n++] = id;
+  measure(name, [&] {
+    GameSnapshot g;
+    return parse_event(json, sport, team, g, event_id, &w);
+  });
+}
+
 int main() {
   JsonCounter json_alloc;
   set_json_allocator(&json_alloc);
@@ -174,6 +216,20 @@ int main() {
   event("poll_nba_event", "event_nba_live.json", Sport::BASKETBALL);
   event("poll_nhl_event", "event_nhl_live.json", Sport::HOCKEY);
   event("poll_soccer_event", "event_soccer_second_half.json", Sport::SOCCER);
+  // Worst case: eight favorites, as many leaders as ESPN lists.
+  event_players("poll_ncaa_event_players", "event_ncaa_live.json", Sport::FOOTBALL,
+                {4870883, 5122157, 4879999, 5079684, 1, 2, 3, 4});
+  event_players("poll_mlb_event_players", "event_mlb_hr.json", Sport::BASEBALL,
+                {4917849, 40960, 4867424, 33912, 40576, 1, 2, 3});
+  event_players("poll_nba_event_players", "event_nba_live.json", Sport::BASKETBALL,
+                {4396909, 4017837, 5106060, 4594268, 3032976, 4432816, 4431671, 1});
+  event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
+                {199680, 205448, 1, 2, 3, 4, 5, 6});
+
+  watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
+  watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
+  watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);
+  watch_day("watch_ncaa_conference", "day_ncaa_20261017.json", League::NCAA);
 
   // A golf tour's board: the scoreboard header, and after a final the
   // season calendar for the next event.
@@ -214,6 +270,14 @@ int main() {
       return parse_team(json, s);
     });
   }
+  // Largest team read: an MLB record has 100+ stats.
+  {
+    std::string json = slurp("fixtures/team_mlb_mil_live.json");
+    measure("team_mlb", [&] {
+      Schedule s;
+      return parse_team(json, s);
+    });
+  }
   {
     std::string json = slurp("fixtures/day_ncaa_20261017.json");
     measure("team_day_ncaa", [&] {
@@ -226,6 +290,79 @@ int main() {
     measure("schedule_nfl", [&] {
       std::vector<Upcoming> up;
       return parse_upcoming(json, 6, 4, up);
+    });
+  }
+  // A college team's keeps each opponent's rank.
+  {
+    std::string json = slurp("fixtures/schedule_ncaa_iowa_tbd.json");
+    measure("schedule_ncaa", [&] {
+      std::vector<Upcoming> up;
+      return parse_upcoming(json, 2294, 4, up, true);
+    });
+  }
+
+  // Minor league baseball: each read at its largest.
+  {
+    // Every game unstarted, so the Up next list fills.
+    std::string json = slurp("fixtures/mlbstats_team_dur_202604.json");
+    for (size_t at = json.find("\"codedGameState\":\"F\""); at != std::string::npos;
+         at = json.find("\"codedGameState\":\"F\"", at))
+      json[at + 18] = 'S';
+    measure("team_milb", [&] {
+      Schedule s;
+      std::vector<Upcoming> up;
+      return parse_mlb_team(json, 234, parse_iso8601_z("2026-04-06T12:00Z"), s, &up, 4) >= 0;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_far_dur.json");
+    measure("team_far_milb", [&] {
+      Schedule s;
+      return parse_mlb_team(json, 234, parse_iso8601_z("2026-11-08T23:00Z"), s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_game_postponed.json");
+    measure("poll_milb_game", [&] {
+      GameSnapshot g;
+      return parse_mlb_game(json, 234, parse_iso8601_z("2026-04-11T05:00Z"), g);
+    });
+  }
+  {
+    std::string json = slurp("fixtures/mlbstats_day_milb_20260814.json");
+    measure("scan_milb_day", [&] {
+      std::vector<LiveGame> live;
+      std::vector<Final> finals;
+      std::vector<Pending> pending;
+      int64_t next = 0;
+      return parse_mlb_day(json, live, &next, &finals, &pending);
+    });
+  }
+
+  // AHL and ECHL: each read at its largest.
+  {
+    std::string json = slurp("fixtures/ht_team_ahl_syr.json");
+    measure("team_hockeytech", [&] {
+      Schedule s;
+      std::vector<Upcoming> up;
+      return parse_ht_team(json, 324, parse_iso8601_z("2026-11-09T01:30Z"), s, &up, 4) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/ht_game_echl_final_so.json");
+    measure("poll_hockeytech_game", [&] {
+      GameSnapshot g;
+      return parse_ht_game(json, League::ECHL, 107, g);
+    });
+  }
+  {
+    std::string json = slurp("fixtures/ht_day_ahl_20261107.json");
+    measure("scan_hockeytech_day", [&] {
+      std::vector<LiveGame> live;
+      std::vector<Final> finals;
+      std::vector<Pending> pending;
+      int64_t next = 0;
+      return parse_ht_day(json, live, &next, &finals, &pending);
     });
   }
 

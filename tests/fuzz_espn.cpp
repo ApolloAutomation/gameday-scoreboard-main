@@ -5,6 +5,7 @@
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
+// Also runs the MLB Stats and HockeyTech parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -16,9 +17,13 @@
 #include "espn_parse.h"
 #include "logo_lru.h"
 #include "panel_text.h"
+#include "players.h"
 #include "poll_timing.h"
 #include "recap.h"
+#include "source_hockeytech.h"
+#include "source_mlbstats.h"
 #include "startup.h"
+#include "watch.h"
 
 using namespace espn;
 
@@ -68,6 +73,20 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
   ev["id"] = true;
   ev["competitions"][0]["competitors"][0]["id"] = true;
   ev["competitions"][0]["competitors"][0]["team"]["id"] = true;
+  // MLB Stats: dates[].games[], team ids are numbers
+  JsonObject mg = filter["dates"].add<JsonObject>()["games"].add<JsonObject>();
+  mg["gamePk"] = true;
+  mg["teams"]["away"]["team"]["id"] = true;
+  mg["teams"]["home"]["team"]["id"] = true;
+  // HockeyTech: scorebar, day and clock; ids are strings
+  JsonObject hb = filter["SiteKit"]["Scorebar"].add<JsonObject>();
+  for (const char *k : {"ID", "HomeID", "VisitorID"})
+    hb[k] = true;
+  JsonObject hd = filter["SiteKit"]["Gamesbydate"].add<JsonObject>();
+  for (const char *k : {"id", "home_team", "visiting_team"})
+    hd[k] = true;
+  filter["GC"]["Clock"]["home_team"]["team_id"] = true;
+  filter["GC"]["Clock"]["visiting_team"]["team_id"] = true;
   JsonDocument doc;
   std::vector<Pick> picks;
   if (deserializeJson(doc, (const char *) data, size, DeserializationOption::Filter(filter),
@@ -87,6 +106,23 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
       add_pick(picks, id, c["team"]["id"]);
     }
   }
+  for (JsonObjectConst d : doc["dates"].as<JsonArrayConst>())
+    for (JsonObjectConst g : d["games"].as<JsonArrayConst>())
+      for (const char *side : {"away", "home"}) {
+        uint32_t team = g["teams"][side]["team"]["id"] | 0u;
+        if (team != 0 && picks.size() < 6)
+          picks.push_back({std::to_string(g["gamePk"] | 0u), team});
+      }
+  for (JsonObjectConst g : doc["SiteKit"]["Scorebar"].as<JsonArrayConst>()) {
+    add_pick(picks, espn::detail::str_or_empty(g["ID"]), g["HomeID"]);
+    add_pick(picks, espn::detail::str_or_empty(g["ID"]), g["VisitorID"]);
+  }
+  for (JsonObjectConst g : doc["SiteKit"]["Gamesbydate"].as<JsonArrayConst>()) {
+    add_pick(picks, espn::detail::str_or_empty(g["id"]), g["home_team"]);
+    add_pick(picks, espn::detail::str_or_empty(g["id"]), g["visiting_team"]);
+  }
+  add_pick(picks, "", doc["GC"]["Clock"]["home_team"]["team_id"]);
+  add_pick(picks, "", doc["GC"]["Clock"]["visiting_team"]["team_id"]);
   return picks;
 }
 
@@ -138,6 +174,19 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   }
   if (g.sport == Sport::BASKETBALL)
     n += basketball_series(g).size();
+  return n;
+}
+
+size_t players(const GameSnapshot &prev, const GameSnapshot &g, uint8_t league) {
+  static const uint32_t kIds[] = {4870883, 5079684, 4917849, 4396909, 4431671, 280555, 3918298, 199680};
+  FavPlayer list[kPlayerSlots]{};
+  for (int i = 0; i < kPlayerSlots; i++)
+    list[i] = make_player(league, kIds[i], i % 2 ? g.team_id : g.opp_id, i % 2 ? "B. TKACHUK" : "CONNOR");
+  size_t n = 0;
+  for (const auto &line : player_lines(g, league, list))
+    n += esphome::gameday::panel_text(line).size();
+  for (bool wide : {false, true})
+    n += board_splash_with_players(prev, g, true, false, kAlertsAll, wide, league, list).text.size();
   return n;
 }
 
@@ -257,6 +306,8 @@ size_t boot_cache(const Schedule &team, int64_t now) {
     abort();
   if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
                  back.league != (uint8_t) League::NFL))
+    abort();
+  if (loaded && (back.seed != team.seed || back.place != team.place.substr(0, sizeof(c.place) - 1)))
     abort();
   if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
     abort();
@@ -406,6 +457,30 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + g.away_abbr.size() + g.home_abbr.size();
   }
 
+  for (League league : {League::NFL, League::MLB, League::NBA, League::NHL, League::MLS}) {
+    // The big-play watcher's day read, twice.
+    WatchJob first;
+    first.league = (uint8_t) league;
+    first.ctx.live = true;
+    first.ctx.mask = kAlertsAll;
+    ChunkReader r(data, size, chunk);
+    if (!watch_read_day(r, first))
+      continue;
+    WatchJob second = first;
+    second.games = first.fresh;
+    second.fresh.clear();
+    ChunkReader r2(data, size, chunk);
+    watch_read_day(r2, second);
+    std::vector<WatchGame> games = first.fresh;
+    WatchScope scope;
+    scope.kind = WatchScope::SOURCE;
+    scope.league = (uint8_t) league;
+    watch_merge(games, second.fresh, scope);
+    if (games.size() > kWatchMax)
+      abort();
+    sink = sink + games.size() + second.alert.splash.text.size();
+  }
+
   {
     // A golf tour: its header, then the calendar for what comes after it
     GameSnapshot g;
@@ -438,13 +513,49 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + racing(racing_next_snapshot(next), GolfNext{}, now);
   }
 
+  {
+    // Minor league baseball's day scan
+    std::vector<LiveGame> live;
+    std::vector<Final> finals;
+    std::vector<Pending> pending;
+    int64_t next = 0;
+    ChunkReader r(data, size, chunk);
+    if (parse_mlb_day(r, live, &next, &finals, &pending)) {
+      if (finals.size() > kRecapCap || pending.size() > kPendingKeep)
+        abort();
+      sink = sink + recap(finals, pending, next, now, (uint8_t) League::MILB);
+    }
+  }
+
+  {
+    // The AHL's or ECHL's day scan
+    std::vector<LiveGame> live;
+    std::vector<Final> finals;
+    std::vector<Pending> pending;
+    int64_t next = 0;
+    ChunkReader r(data, size, chunk);
+    if (parse_ht_day(r, live, &next, &finals, &pending)) {
+      if (finals.size() > kRecapCap || pending.size() > kPendingKeep)
+        abort();
+      sink = sink + recap(finals, pending, next, now, (uint8_t) League::ECHL);
+    }
+  }
+
   Schedule team;
   {
     ChunkReader r(data, size, chunk);
     if (parse_team(r, team)) {
       std::vector<Schedule> comps{team, team};
       comps[1].kickoff_epoch = now + 3600;
+      comps[1].place += " cup";  // a cup's own table, which the league's replaces
+      league_standing(comps);
+      if (comps[1].place != team.place || comps[1].seed != team.seed)
+        abort();
       sink = sink + (size_t) (pick_schedule(comps, now, team.event_id) + 1);
+      // The cut place must fit beside any clock.
+      const size_t room = record_row_chars((int) (size % 80));
+      if (board_standing(team.place, room).size() > room)
+        abort();
       sink = sink + boot_cache(team, now);
     }
   }
@@ -453,9 +564,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   for (const Pick &p : picks) {
     std::vector<Upcoming> up;
     ChunkReader r1(data, size, chunk);
-    if (parse_upcoming(r1, p.team_id, 5, up))
+    if (parse_upcoming(r1, p.team_id, 5, up, true))
       for (const auto &u : up)
-        sink = sink + u.opp_name.size() + u.tv.size();
+        sink = sink + u.opp_name.size() + u.tv.size() + u.opp_rank;
 
     Schedule day;
     ChunkReader r2(data, size, chunk);
@@ -470,6 +581,45 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       prev = g;
     }
 
+    // Minor league baseball team and game reads
+    Schedule ms;
+    std::vector<Upcoming> mup;
+    ChunkReader r5(data, size, chunk);
+    int found = parse_mlb_team(r5, p.team_id, now, ms, &mup, 4);
+    if (found > 0 && (ms.event_id.empty() || mup.size() > 4))
+      abort();
+    if (found > 0)
+      sink = sink + boot_cache(ms, now) + mup.size();
+    GameSnapshot mg;
+    ChunkReader r6(data, size, chunk);
+    if (parse_mlb_game(r6, p.team_id, now, mg)) {
+      if (mg.sport != Sport::BASEBALL || mg.mlb.balls > 4 || mg.mlb.outs > 3)
+        abort();
+      sink = sink + render(prev, mg, now);
+      sink = sink + render(mg, mg, now);
+      prev = mg;
+    }
+
+    // AHL and ECHL team and game centre reads
+    Schedule hs;
+    std::vector<Upcoming> hup;
+    ChunkReader r7(data, size, chunk);
+    int listed = parse_ht_team(r7, p.team_id, now, hs, &hup, 4);
+    if (listed > 0 && (hs.event_id.empty() || hup.size() > 4))
+      abort();
+    if (listed > 0)
+      sink = sink + boot_cache(hs, now) + hup.size();
+    GameSnapshot hg;
+    ChunkReader r8(data, size, chunk);
+    if (parse_ht_game(r8, League::AHL, p.team_id, hg)) {
+      if (hg.sport != Sport::HOCKEY || hg.period < 0 || hg.period > 20)
+        abort();
+      ht_fill_from_schedule(hg, hs);
+      sink = sink + render(prev, hg, now);
+      sink = sink + render(hg, hg, now);
+      prev = hg;
+    }
+
     for (Sport sport : kSports) {
       GameSnapshot e;
       ChunkReader r4(data, size, chunk);
@@ -478,6 +628,21 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + render(prev, e, now);
       // The same game a poll later: what a splash compares.
       sink = sink + render(e, e, now);
+      // Again, with favorite players in each sport league.
+      for (const auto &l : kLeagues) {
+        if (l.sport != sport)
+          continue;
+        FavPlayer list[kPlayerSlots]{};
+        list[0] = make_player((uint8_t) l.league, 4917849, p.team_id, "MESA JR.");
+        list[1] = make_player((uint8_t) l.league, 4396909, p.team_id, "NESMITH");
+        const PlayerWatch w = player_watch(list, (uint8_t) l.league);
+        GameSnapshot f;
+        ChunkReader r5(data, size, chunk);
+        if (parse_event(r5, sport, p.team_id, f, p.event_id, &w)) {
+          sink = sink + players(prev, f, (uint8_t) l.league) + players(e, f, (uint8_t) l.league);
+          sink = sink + render(e, f, now);
+        }
+      }
       prev = e;
     }
   }

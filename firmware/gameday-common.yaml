@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.10.2"
+  version: "2026.11.0"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -22,11 +22,10 @@ substitutions:
 
   display_panel_width: "64"
   display_panel_height: "64"
+  # Chain maximum; panel_layout sets the real layout at boot
   display_layout: HORIZONTAL
   display_layout_rows: "1"
-  # The widest chain this firmware supports. The count actually driven comes
-  # from the saved "Panels" choice, applied by panel_layout at boot.
-  display_layout_cols: "2"
+  display_layout_cols: "4"
   # Panels driven before anyone picks: 1 for a DIY 64x64, 2 on boards that ship
   # with a 128x64. Also what Factory Reset returns to.
   default_panel_cols: "1"
@@ -35,6 +34,12 @@ substitutions:
   # hub75-studio packages (ESPHome version, theme, clock page). Pinned to a
   # commit so a release always builds the same thing.
   hub75_studio_ref: "2c121972321cc1e3c2c87d9647fd3beb9a5e2271"
+
+  # HockeyTech public site keys, from theahl.com and echl.com
+  hockeytech_ahl_key: "50c2cd9b5e18e390"
+  hockeytech_ahl_client: "ahl"
+  hockeytech_echl_key: "2c2b89ea7345cae8"
+  hockeytech_echl_client: "echl"
 
 # The controller package (included by each board's top-level file, e.g.
 # gameday.yaml) already sets board/framework/psram; this only
@@ -63,6 +68,15 @@ esp32:
       # The first time request waits a random 0 to 5 s by default, all of it
       # boot screen. One panel at a time doesn't need that much spread.
       CONFIG_LWIP_SNTP_MAXIMUM_STARTUP_DELAY: "1000"
+      # Frees ~18 KB internal RAM for four panels' DMA
+      CONFIG_ESP_WIFI_IRAM_OPT: n
+      CONFIG_ESP_WIFI_RX_IRAM_OPT: n
+      # Fall back to PSRAM, not crash, when internal RAM fragments
+      CONFIG_SPIRAM_USE_MALLOC: y
+      CONFIG_SPIRAM_USE_CAPS_ALLOC: n
+      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "16384"
+      # No reserve: four panels' DMA buffer needs one block
+      CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "0"
 
 esphome:
   name: "${name}"
@@ -138,6 +152,7 @@ esphome:
         # A panel with no saved network, or in setup after a reset, turns it on
         # now for setup. A panel with a saved network gets the dropout grace,
         # which on_connect cancels.
+        # Never with three or four panels: too little internal RAM.
         - if:
             condition:
               lambda: |-
@@ -147,7 +162,11 @@ esphome:
             then:
               - script.execute: gd_ble_grace
             else:
-              - ble.enable:
+              - if:
+                  condition:
+                    lambda: 'return id(gd_panels).bluetooth_ok();'
+                  then:
+                    - ble.enable:
 
 external_components:
   - source:
@@ -203,13 +222,24 @@ font:
     glyphs: *panel_glyphs
   - id: !extend spleen_16
     glyphs: *panel_glyphs
+  # Large clock and splash digits; few glyphs save flash
+  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-12x24.bdf"
+    id: spleen_24
+    size: 24
+    glyphs: &digit_glyphs
+      - ' +0123456789:AMNPRSU'
+  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-16x32.bdf"
+    id: spleen_32
+    size: 32
+    glyphs: *digit_glyphs
 
-# Panel count from the saved preference, applied before the display starts.
+# Saved arrangement, applied before the display starts.
 panel_layout:
   id: gd_panels
   display_id: matrix
   default_cols: ${default_panel_cols}
-  max_cols: 2
+  max_cols: 4
+  max_rows: 2
 
 logger:
   baud_rate: 115200
@@ -335,6 +365,9 @@ script:
           image::Image *opp = logos.get(id(gd_opp_logo_url));
           lv_image_set_src(id(gd_team_logo_img), team != nullptr ? team : id(gd_logo_blank));
           lv_image_set_src(id(gd_opp_logo_img), opp != nullptr ? opp : id(gd_logo_blank));
+          // Swap a splash's badge for the logo just loaded
+          if (gameday::BoardView *v = gameday::board_view())
+            gameday::splash_logos(*v, team, opp);
 
   # Bluetooth back on, but not for every two second blip. Bringing Bluedroid
   # up and down is a large internal-RAM alloc and free each time, and that
@@ -348,7 +381,12 @@ script:
     mode: restart
     then:
       - delay: 30s
-      - ble.enable:
+      # Never with three or four panels (see on_boot).
+      - if:
+          condition:
+            lambda: 'return id(gd_panels).bluetooth_ok();'
+          then:
+            - ble.enable:
 
   # A panel that has a saved network but cannot get back on it is stuck in a
   # way nothing else recovers from. ESPHome's own reboot_timeout is disabled
@@ -444,10 +482,12 @@ script:
           ESP_LOGW("wifi", "Setup not finished in 15 minutes, restarting onto the saved networks");
           App.safe_reboot();
 
+# Hotspot setup page; gameday's handler sends every page here
 captive_portal:
 
 improv_serial:
 
+# Saves its RAM until enabled; never with 3+ panels
 esp32_ble:
   enable_on_boot: false
 
@@ -506,12 +546,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  # The sport on the board (0 football), so the page layout can leave the
-  # timeout pips hidden for other sports until the next board update.
-  - id: gd_sport
-    type: int
-    restore_value: no
-    initial_value: '0'
   # The off-season clock's second line shows the date (true) rather than the
   # next game, so the minute refresh keeps it current (gameday-live.yaml).
   - id: gd_clock_date
@@ -559,6 +593,13 @@ gameday:
     update_id: gd_firmware_update
     stable: ${update_source}
     beta: ${beta_update_source}
+  hockeytech:
+    ahl:
+      key: ${hockeytech_ahl_key}
+      client_code: ${hockeytech_ahl_client}
+    echl:
+      key: ${hockeytech_echl_key}
+      client_code: ${hockeytech_echl_client}
   on_action:
     - if:
         condition:
@@ -571,6 +612,29 @@ gameday:
           lambda: 'return x == "guard";'
         then:
           - script.execute: gd_guard
+    # Split area or font size changed: relayout, no restart
+    - if:
+        condition:
+          lambda: 'return x == "layout";'
+        then:
+          - script.execute: tt_apply_layout
+          - script.execute: tt_ticker_timing
+          - script.execute: gd_clock_tick
+    - if:
+        condition:
+          lambda: 'return x == "a2";'
+        then:
+          - script.execute: tt_ticker_timing
+          - script.execute: gd_clock_tick
+    # Idle or night dimming; repaint needed coming back from 0
+    - if:
+        condition:
+          lambda: 'return x == "dim" && id(power).state && !id(qc_active);'
+        then:
+          - hub75.set_brightness:
+              id: matrix
+              brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state);'
+          - script.execute: gd_repaint
     # No time server answered, so the clock came from ESPN's Date header.
     - if:
         condition:
@@ -645,57 +709,35 @@ gameday:
     - text_sensor.template.publish:
         id: gd_last_play_sensor
         state: !lambda 'return x.ha_last_play;'
-    # The board gets the text through panel_text() so a character the fonts
-    # lack never draws as a box; Home Assistant keeps the original above.
-    - script.execute:
-        id: gd_update
-        game_state: !lambda 'return x.game_state;'
-        team_abbr: !lambda 'return gameday::panel_text(x.team_abbr);'
-        team_score: !lambda 'return x.team_score;'
-        opponent_abbr: !lambda 'return gameday::panel_text(x.opponent_abbr);'
-        opponent_score: !lambda 'return x.opponent_score;'
-        status_text: !lambda 'return gameday::panel_text(x.status_text);'
-        clock_text: !lambda 'return gameday::panel_text(x.clock_text);'
-        down_distance: !lambda 'return gameday::panel_text(x.down_distance);'
-        is_red_zone: !lambda 'return x.is_red_zone;'
-        team_color: !lambda 'return (int) x.team_color;'
-        opponent_color: !lambda 'return (int) x.opponent_color;'
-        team_badge: !lambda 'return x.team_badge;'
-        opponent_badge: !lambda 'return x.opponent_badge;'
-        team_ring: !lambda 'return (int) x.team_ring;'
-        opponent_ring: !lambda 'return (int) x.opponent_ring;'
-        possession: !lambda 'return x.possession;'
-        team_timeouts: !lambda 'return x.team_timeouts;'
-        opponent_timeouts: !lambda 'return x.opponent_timeouts;'
-        team_record: !lambda 'return gameday::panel_text(x.team_record);'
-        opponent_record: !lambda 'return gameday::panel_text(x.opponent_record);'
-        splash_text: !lambda 'return gameday::panel_text(x.splash_text);'
-        splash_color: !lambda 'return (int) x.splash_color;'
-        sport: !lambda 'return (int) x.sport;'
-        situation: !lambda 'return x.situation;'
-        outs: !lambda 'return x.outs;'
-        bases: !lambda 'return (int) x.bases;'
-        highlight: !lambda 'return x.highlight;'
-        team_marks: !lambda 'return x.team_marks;'
-        opp_marks: !lambda 'return x.opp_marks;'
-        message: !lambda 'return gameday::panel_text(x.message);'
-        clock_card: !lambda 'return x.clock;'
-        # Built from panel_text() pieces with a line break that panel_text()
-        # would turn into a space, so it goes to the board as it is.
-        next_line: !lambda 'return x.next_line;'
-        # A leaderboard sport (golf, sport 5; racing, 6): its leaderboard, or
-        # its card (the event's name and dates or next session in next_line)
-        # when there is no leaderboard to show.
-        board: !lambda 'return x.board;'
-        board_card: !lambda 'return x.board_card;'
-    # The leaderboard's rows, read from the component (board_fields), so the
-    # columns aren't copied into script arguments. A script with no delay
-    # runs to its end here: the rows change in the same frame as the layout.
-    - script.execute: gd_board
+    # Splash shows cached logos, or badges while downloading
     - lambda: |-
+        if (gameday::board_view() == nullptr)
+          id(tt_bind_view).execute();
+        if (gameday::BoardView *v = gameday::board_view()) {
+          image::Image *team_logo = nullptr, *opp_logo = nullptr;
+          if (!x.splash_text.empty()) {
+            team_logo = id(gameday_ctl).logos().get(x.team_logo);
+            opp_logo = id(gameday_ctl).logos().get(x.opponent_logo);
+          }
+          const gameday::DrawResult r = gameday::board_draw(*v, x, team_logo, opp_logo);
+          if (r.ticker_changed)
+            id(tt_ticker_timing).execute();
+          if (r.clock_card) {
+            id(gd_clock_date) = r.clock_date;
+            id(gd_clock_tick).execute();
+          }
+          if (r.splash) {
+            if (r.big_splash)
+              id(tt_fx).resume();
+            else
+              id(tt_fx).pause();
+            id(tt_hide_splash).execute();
+          }
+        }
+        id(gd_board).execute();
         id(gd_team_logo_url) = x.team_logo;
         id(gd_opp_logo_url) = x.opponent_logo;
-    - script.execute: gd_show_logos
+        id(gd_show_logos).execute();
 
 lvgl_page_manager:
   sort: by_order
@@ -766,13 +808,15 @@ number:
     initial_value: 128
     on_value:
       then:
+        # Owner's change overrides night brightness
+        - lambda: 'id(gameday_ctl).note_brightness();'
         - if:
             condition:
               switch.is_on: power
             then:
               - hub75.set_brightness:
                   id: matrix
-                  brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) x);'
+                  brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) x, !id(qc_active));'
   - platform: template
     name: "Scroll Speed"
     id: shared_scroll_speed

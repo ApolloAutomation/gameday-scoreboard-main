@@ -1,11 +1,11 @@
 ---
 title: "Panels and power"
-description: "Which HUB75 panels the Game Day Scoreboard firmware drives, how to chain two, and how to power them."
+description: "Which HUB75 panels the Game Day Scoreboard firmware drives, how to chain two to four, and how to power them."
 sidebar:
   order: 3
 ---
 
-The firmware is made for the common indoor HUB75 panels with an E pin (1/32 scan). It drives one 64x64 panel, or a 128x64 display: one 128x64 panel or two 64x64 panels side by side. Other sizes, like 64x32, aren't supported.
+The firmware is made for the common indoor HUB75 panels with an E pin (1/32 scan). It drives one 64x64 panel; a 128x64 display, one 128x64 panel or two 64x64 panels side by side; three or four 64x64 panels side by side (192x64 or 256x64); or four in two rows of two (128x128). Other sizes, like 64x32, aren't supported.
 
 ## What the firmware expects
 
@@ -14,40 +14,71 @@ The display settings live in `firmware/gameday-common.yaml` and `firmware/contro
 | Setting | Value |
 | --- | --- |
 | Panel size | 64x64 pixels each |
-| Chain | one row, one or two panels wide (`HORIZONTAL`) |
+| Chain | up to four panels: one row of one to four (`HORIZONTAL`), or two rows of two |
 | Scan wiring | `STANDARD_TWO_SCAN` |
 | Clock | 20 MHz |
 | Color depth | 8 bits |
 
-Pixel pitch isn't part of these settings, so a 64x64 panel is driven the same way whatever its pitch. The firmware drives a 128x64 panel the same way as two 64x64 panels in a row.
+The arrangement the panel drives is the layout you pick, saved on the panel and applied each time it starts. Pixel pitch isn't part of these settings, so a 64x64 panel is driven the same way whatever its pitch. The firmware drives a 128x64 panel the same way as two 64x64 panels in a row.
 
-## One panel or two
+## One to four panels
 
 | You have | Pick | What the board shows |
 | --- | --- | --- |
 | One 64x64 panel | One 64x64 panel | Logos side by side, stacked scores |
 | One 128x64 panel | One 128x64 panel | Logos at the edges, big scores, records and timeout pips in the middle |
 | Two 64x64 panels side by side | One 128x64 panel (the same choice) | Same as one 128x64 panel |
+| Three 64x64 panels side by side | Three wide | The wide board spread across 192 pixels |
+| Four 64x64 panels side by side | Four wide | The wide board spread across 256 pixels |
+| Four 64x64 panels in two rows of two | Two rows of two | The 128x64 board on top, the second area underneath: the time, the date and a bigger ticker to start with |
 
-One firmware drives both layouts. You pick the layout in the [DIY installer](/diy/install/) before you install, and you can change it later on the device page. See [Panel sizes](/using/panel-sizes/).
+One firmware drives every layout. The [DIY installer](/diy/install/) offers one 64x64 panel or a 128x64 display, so the first start uses the right one. For three or four panels, install the one-panel build, then pick **Three wide**, **Four wide** or **Two rows of two** on the device page. You can change the layout there any time. See [Panel sizes](/using/panel-sizes/).
 
-## Chain two 64x64 panels
+Two rows of two, and three or four in a row, can show something else beside the board: today's scores, a second team's game, other live games or the clock. See [The second area](/using/panel-sizes/#the-second-area).
 
-The firmware drives two panels as one chain. Wire the board to the input of the first panel, then run a ribbon cable from that panel's output to the input of the second. Set them side by side in one row, 128 pixels wide and 64 tall.
+With three or four panels:
+
+- **Wi-Fi setup is through the hotspot only.** Bluetooth setup, which the Game Day app uses, stays off to leave the panels the memory they need. Scan the setup screen's QR code with your phone's camera to join the panel's hotspot. See [Set up your panel](/get-started/setup/).
+- **Size the power supply for all the panels together.** Four panels at full brightness draw about four times what one does.
+
+## Chain the panels
+
+The firmware drives two or more panels as one chain. Wire the board to the input of the first panel, then run a ribbon cable from that panel's output to the input of the second. Set two side by side in one row, 128 pixels wide and 64 tall.
 
 :::tip
 If the two halves of the board show up in the wrong order, swap the two panels.
 :::
 
+**Three or four in a row** chain the same way: the board to the first panel's input, then each panel's output to the next panel's input. Seen from the back, where the cables are, the panel with the board is the left-hand end and the chain runs to the right, so seen from the front it's the right-hand end. If the parts of the board show in the wrong order, put the panels in the reverse order.
+
+**Two rows of two** is one chain of four. Where each panel goes depends on which row, if any, is upside down, so pick the build you have under **How the rows are mounted** on the device page. Seen from the back, where the cables are:
+
+- **Bottom row upside down**, the folded build: the panel with the board is top left and the second is top right. The bottom row is turned upside down, folded under the top row, with the third panel under the second and the fourth under the first, so every cable stays short. A new panel starts with this choice.
+- **All upright**: every panel stands the right way up. The panel with the board is top left and the second is top right, then a longer cable runs from the second back across to the third, under the first. The fourth is under the second.
+- **Top row upside down**: the top row is the one turned over. The panel with the board is top right and the second is top left, with the third under the second and the fourth under the first. Seen from the front, the panel with the board is top left.
+
+If part of the board shows upside down, the choice doesn't match your wiring:
+
+| You picked | What you see | Pick instead |
+| --- | --- | --- |
+| **Bottom row upside down** | The bottom half upside down | **All upright** |
+| **Bottom row upside down** | Both halves upside down | **Top row upside down** |
+| **All upright** | The bottom half upside down | **Bottom row upside down** |
+| **All upright** | The top half upside down | **Top row upside down** |
+| **Top row upside down** | Both halves upside down | **Bottom row upside down** |
+| **Top row upside down** | The top half upside down | **All upright** |
+
+If the bottom half's left and right sides are swapped with **All upright**, or each bottom panel shows its own part upside down with **Bottom row upside down**, every panel stands upright but the third sits under the second. The bottom row then runs the other way and no choice fixes it. Move the third panel under the first and the fourth under the second and keep **All upright**, or turn the bottom row upside down and pick **Bottom row upside down**.
+
 ## Change the layout
 
-In the Setup card on the device page, click the picture that matches your panels. The panel saves the choice and restarts with the new layout. Nothing needs reflashing.
+Open the Setup card on the device page (tap **Setup** if it's folded) and, under **Matrix**, click the picture that matches your panels. The page asks before it restarts the panel, which saves the choice and restarts with the new layout. For **Two rows of two**, pick **How the rows are mounted** under the pictures once the panel is back. Nothing needs reflashing.
 
 **Factory reset** returns the layout to the build's default. The one-panel build starts as one 64x64 panel. A board installed with the 128x64 choice switches to the one-panel build at its first update, so after a factory reset on that board, pick the 128x64 layout again.
 
 ## Power
 
-Power the panels from a 5 V supply rated for them. The panel's listing gives the current it draws at full brightness; size the supply for the panel maker's rating, and add up both panels if you chain two.
+Power the panels from a 5 V supply rated for them. The panel's listing gives the current it draws at full brightness; size the supply for the panel maker's rating, and add up every panel you chain. A supply that is fine for one or two can sag with four at full brightness, and the panel then holds its brightness down as described below.
 
 A new install starts at about half brightness (128 of 255). Change it with the Brightness setting on the device page.
 

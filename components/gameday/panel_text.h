@@ -122,7 +122,8 @@ inline void panel_text_append_(std::string &out, uint32_t cp) {
   }
 }
 
-inline std::string panel_text(const std::string &in) {
+// lines keeps "\n" breaks, for multi-line splash labels.
+inline std::string panel_text(const std::string &in, bool lines = false) {
   std::string out;
   out.reserve(in.size());
   size_t i = 0;
@@ -131,6 +132,8 @@ inline std::string panel_text(const std::string &in) {
     if (c < 0x80) {
       if (c >= 0x20 && c != 0x7F)
         out += (char) c;
+      else if (c == '\n' && lines)
+        out += '\n';
       else if (c == '\t' || c == '\n' || c == '\r')
         out += ' ';  // the ticker is one line
       i++;

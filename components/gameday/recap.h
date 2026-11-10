@@ -27,13 +27,42 @@ inline int32_t espn_day(int64_t epoch, uint8_t league) {
 // inside the day for either shift.
 inline int64_t espn_day_epoch(int32_t day) { return (int64_t) day * 86400 + 17 * 3600; }
 
+// Panel points this at PSRAM; internal RAM is scarce.
+struct RecapHeap {
+  void *(*alloc)(size_t){nullptr};
+  void (*release)(void *){nullptr};
+};
+inline RecapHeap &recap_heap() {
+  static RecapHeap h;
+  return h;
+}
+template<class T> struct RecapAllocator {
+  using value_type = T;
+  RecapAllocator() = default;
+  template<class U> RecapAllocator(const RecapAllocator<U> &) {}
+  T *allocate(size_t n) {
+    const RecapHeap &h = recap_heap();
+    return static_cast<T *>(h.alloc != nullptr ? h.alloc(n * sizeof(T)) : ::operator new(n * sizeof(T)));
+  }
+  void deallocate(T *p, size_t) {
+    const RecapHeap &h = recap_heap();
+    if (h.release != nullptr)
+      h.release(p);
+    else
+      ::operator delete(p);
+  }
+  template<class U> bool operator==(const RecapAllocator<U> &) const { return true; }
+  template<class U> bool operator!=(const RecapAllocator<U> &) const { return false; }
+};
+template<class T> using RecapList = std::vector<T, RecapAllocator<T>>;
+
 // One game day of one league, newest day first in a list: its finals, and
 // for today the games not started yet.
 struct RecapDay {
   uint8_t league{0};
   int32_t day{0};
-  std::vector<Final> finals;
-  std::vector<Pending> later;  // today only, best first (pending_before)
+  RecapList<Final> finals;
+  RecapList<Pending> later;  // today only, best first (pending_before)
 };
 
 // Walking back for older finals stops once a league has this many.
@@ -107,7 +136,7 @@ inline std::string recap_matchup(const Pending &p) { return p.away_abbr + " at "
 // Ranked games first (best rank on either side), then by kickoff, the way
 // ESPN lists them. Games outside college football carry no rank and keep
 // kickoff order.
-inline void recap_sort(std::vector<Final> &finals) {
+inline void recap_sort(RecapList<Final> &finals) {
   std::stable_sort(finals.begin(), finals.end(), [](const Final &a, const Final &b) {
     if (a.rank != b.rank)
       return a.rank < b.rank;
@@ -154,7 +183,7 @@ inline void recap_trim(std::vector<RecapDay> &days, int64_t now) {
     if (!recap_day_kept(d.day, today) || have[d.league] >= kRecapMinFinals)
       continue;
     if (d.day != today)
-      std::vector<Pending>().swap(d.later);
+      RecapList<Pending>().swap(d.later);
     if (d.finals.empty() && d.later.empty())
       continue;
     have[d.league] += d.finals.size();
@@ -162,6 +191,8 @@ inline void recap_trim(std::vector<RecapDay> &days, int64_t now) {
   }
   days = std::move(kept);
 }
+
+inline uint16_t recap_bit(uint8_t league) { return league < 16 ? (uint16_t) (1u << league) : 0; }
 
 // Shares cap between the leagues one card at a time, round and round, until
 // the cap is used up or no league has more: as even as it can be, and a
@@ -188,8 +219,9 @@ inline void recap_share(const size_t (&have)[kLeagueCount], size_t cap, size_t (
 // that started. A league with neither keeps its days, so a scan that failed
 // for one league never empties it. Each league keeps only the games to come
 // its share of a loop could show, since every one is internal RAM.
+// Leagues outside scanned (recap_bit mask) keep their games.
 inline void recap_absorb(std::vector<RecapDay> &days, const std::vector<Final> &finals,
-                         const std::vector<Pending> &pending, int64_t now) {
+                         const std::vector<Pending> &pending, int64_t now, uint16_t scanned = 0xFFFF) {
   size_t have[kLeagueCount] = {}, keep[kLeagueCount];
   auto today = [now](const Pending &p) {
     return p.kickoff_epoch > now && espn_day(p.kickoff_epoch, p.league) == espn_day(now, p.league);
@@ -197,8 +229,14 @@ inline void recap_absorb(std::vector<RecapDay> &days, const std::vector<Final> &
   for (const auto &p : pending)
     if (p.league < kLeagueCount && today(p))
       have[p.league]++;
+  for (const auto &d : days)
+    if (d.league < kLeagueCount && !(scanned & recap_bit(d.league)))
+      for (const auto &p : d.later)
+        have[d.league] += today(p) ? 1 : 0;
   recap_share(have, kRecapLaterCap, keep);
   for (uint8_t league = 0; league < kLeagueCount; league++) {
+    if (!(scanned & recap_bit(league)))
+      continue;
     RecapDay d;
     d.league = league;
     d.day = espn_day(now, league);
@@ -249,7 +287,6 @@ struct RecapCard {
 
 // Which leagues a mode reads, for recap_cards(): 1 << League per league.
 static const uint16_t kRecapNfl = 1 << (int) League::NFL, kRecapCollege = 1 << (int) League::NCAA;
-inline uint16_t recap_bit(uint8_t league) { return league < 16 ? (uint16_t) (1u << league) : 0; }
 
 // How long each card stays up.
 inline uint32_t recap_card_ms(RecapKind k) {

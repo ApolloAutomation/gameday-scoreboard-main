@@ -214,14 +214,19 @@ struct Health {
   const char *version;  // the release, "2026.10.0"
   int64_t built;        // the build's compile time, Unix seconds
   const char *channel;  // stable, beta, bar or none
+  int mlb_status{0};    // the same, for the MLB Stats API
+  int64_t mlb_ago{-1};  // -1 before its first read: no key
+  int ht_status{0};     // and for HockeyTech (the AHL and the ECHL)
+  int64_t ht_ago{-1};
 };
 
 // Room for the longest "health" object (GamedayComponent::health_json_
 // sends "{}" when it doesn't fit, and the device page hides Diagnostics).
-static const size_t kHealthJsonSize = 384;
+static const size_t kHealthJsonSize = 448;
 
 // The "health" object in /gameday/state. Optional keys are left out rather
 // than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read.
+// Likewise mlb and ht before their first read.
 // Returns what snprintf does; the strings are the firmware's own, no quotes.
 inline int health_json(char *buf, size_t size, const Health &h) {
   char fault[64] = "";
@@ -235,9 +240,15 @@ inline int health_json(char *buf, size_t size, const Health &h) {
   char rssi[24] = "";
   if (h.wifi)
     snprintf(rssi, sizeof(rssi), ",\"rssi\":%d", h.rssi);
-  char espn[48] = "";
+  char espn[144] = "";
+  int at = 0;
   if (h.espn_ago >= 0)
-    snprintf(espn, sizeof(espn), ",\"espn\":%d,\"espn_ago\":%lld", h.espn_status, (long long) h.espn_ago);
+    at = snprintf(espn, sizeof(espn), ",\"espn\":%d,\"espn_ago\":%lld", h.espn_status, (long long) h.espn_ago);
+  if (h.mlb_ago >= 0 && at >= 0 && (size_t) at < sizeof(espn))
+    at += snprintf(espn + at, sizeof(espn) - at, ",\"mlb\":%d,\"mlb_ago\":%lld", h.mlb_status,
+                   (long long) h.mlb_ago);
+  if (h.ht_ago >= 0 && at >= 0 && (size_t) at < sizeof(espn))
+    snprintf(espn + at, sizeof(espn) - at, ",\"ht\":%d,\"ht_ago\":%lld", h.ht_status, (long long) h.ht_ago);
   return snprintf(buf, size,
                   "{\"up\":%lld,\"start\":\"%s\",\"boots\":%u%s,\"heap_kb\":%.1f,\"block_kb\":%.1f,"
                   "\"psram_kb\":%.1f%s%s,\"version\":\"%s\",\"built\":%lld,\"channel\":\"%s\"}",

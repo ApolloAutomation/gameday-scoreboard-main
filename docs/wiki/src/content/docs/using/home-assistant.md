@@ -47,21 +47,23 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 
 | Entity | What it is |
 | --- | --- |
-| **Team** | The team the panel follows in My team. Every league except men's college basketball, whose list would be too long for one entity; pick those teams on the device page. The golf tours, **Golf: PGA Tour** and **Golf: LPGA Tour**, come after the NHL teams, and the racing series, **Racing: Formula 1** and **Racing: NASCAR Cup Series**, at the end of the list. |
+| **Team** | The team the panel follows in My team. Every league except men's college basketball and minor league baseball, whose lists would make it too long for one entity; pick those teams on the device page. AHL and ECHL teams are in it, like "AHL: Syracuse Crunch" and "ECHL: Rapid City Rush". The golf tours, **Golf: PGA Tour** and **Golf: LPGA Tour**, come after the NHL teams, and the racing series, **Racing: Formula 1** and **Racing: NASCAR Cup Series**, at the end of the list. |
 | **Mode** | My team, Favorite teams or Live games, plus the older Live NFL, Live college and Live anything. |
 | **Power** | The panel's lights on or off. |
 | **Brightness** | 1 to 255. |
 | **Scroll Speed** | The ticker speed, 1 to 10. |
 | **Select Page** | The Scoreboard or the Clock page, with **Page Next** and **Page Previous** buttons. |
 | **Game Status** | The game in one line: the matchup, whether it's upcoming, live or final, and the score. For a golf tour or a racing series, the tournament or the race weekend (below). |
-| **Last Play** | ESPN's latest play. Empty for a golf tour or a racing series. |
+| **Last Play** | ESPN's latest play. Empty for a golf tour or a racing series, and for a minor league baseball, AHL or ECHL team, since the panel gets no plays from MLB or HockeyTech. |
 | **Firmware** | The firmware update, so Home Assistant shows when a new release is out. |
 | **Install Updates Automatically** | The same switch as on the device page. See [Firmware updates](/using/updates/). |
 | **Check for Updates**, **Refresh Now**, **Reboot** | The device page's buttons. |
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
-| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded from ESPN since it started. |
+| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, and from MLB and HockeyTech for minor league baseball, AHL and ECHL teams. It keeps its name, though the device page calls it **Data used**. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
+
+For a minor league baseball, AHL or ECHL team, **Game Status** follows the game the same way. See [Baseball: minor leagues](/using/minor-league-baseball/) and [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 
 While a golf tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22". See [Golf](/using/golf/).
 
@@ -71,7 +73,7 @@ A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are the
 
 The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
 
-Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues and the panel layout have no entities. Set them on the device page or in the app.
+Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues, the panel layout and the newer settings, like the idle display, the night hours, the second area, favorite players and bets, have no entities. Set them on the device page. Game Status leaves out bets, favorite players' stat lines and the address line the ticker shows after joining Wi-Fi.
 
 ## What you can automate
 

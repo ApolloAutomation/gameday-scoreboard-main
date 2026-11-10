@@ -26,6 +26,7 @@
 # lines use the whole width. On a single 64 px panel there is no room for
 # both, so the code takes turns with the lines. See boot_qr_box below for
 # the sizing and boot_qr_cycle for the timing.
+# Wider chains put lines right of the code; 2x2 centers.
 #
 #   connected   64:  page QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
 #               128: page QR + Scan to / pick your / team, the address taking
@@ -67,7 +68,7 @@
 # Wi-Fi, with or without a team. A fresh panel keeps it up for 45 seconds, or
 # until a team is picked. A panel that already has a team gets one run of
 # turns, 18 seconds, and then its board. The address turn is what "Show
-# address at boot" on the device page controls, since it is how someone who
+# how to connect" on the device page controls, since it is how someone who
 # set the panel up through the hotspot finds it again; with the setting off
 # a fresh panel shows only the QR, and a panel with a team skips the screen
 # and goes straight to its board. Coming back to the same network after a
@@ -76,6 +77,7 @@
 # and IP, full width, with no QR, for 20 seconds. Off Wi-Fi the overlay never
 # hides, so the button cannot blank a panel that is in setup or has lost its
 # network.
+# The setting also puts the address in the ticker.
 # A panel with no team picked brings the QR back over the board for 13 s
 # every 3 minutes (boot_team_qr_turn) until one is.
 #
@@ -171,21 +173,25 @@ globals:
   - id: boot_join_qr
     type: bool
     initial_value: 'false'
+  # Address goes to the ticker when this join's screen hides
+  - id: boot_join_ticker
+    type: bool
+    initial_value: 'false'
 
 script:
-  # Positions and fonts. side true puts the lines in the right half of a
-  # 128 px chain, beside the QR, with the single panel fonts; false uses the
-  # whole width. side is ignored on a 64 px panel.
+  # side: lines beside the QR; ignored on 64 px.
   - id: boot_layout
     parameters:
       side: bool
     then:
       - lambda: |-
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const int H = lv_disp_get_ver_res(lv_disp_get_default());
           const bool col = side && W >= 128;
-          const bool wide = W >= 128 && !col;
           const int x0 = col ? 64 : 0;
-          const int cw = col ? 64 : W;
+          const int cw = W - x0;
+          const bool wide = cw >= 128;
+          const int y0 = H > 64 ? (H - 64) / 2 : 0;
           lv_obj_t *lines[4] = {id(boot_la), id(boot_lb), id(boot_lc), id(boot_ld)};
           for (auto *l : lines) {
             lv_obj_set_width(l, cw - 4);
@@ -194,25 +200,26 @@ script:
           lv_obj_set_width(id(boot_title), cw);
           lv_obj_set_width(id(boot_rule), cw - 8);
           lv_obj_set_width(id(boot_bar), cw - 16);
-          lv_obj_set_pos(id(boot_bar), x0 + 8, wide ? 60 : 59);
+          lv_obj_set_pos(id(boot_bar), x0 + 8, y0 + (wide ? 60 : 59));
+          lv_obj_set_pos(id(boot_qr_box), 0, y0);
           if (wide) {
             lv_obj_set_style_text_font(id(boot_title), id(spleen_16), 0);
-            lv_obj_set_pos(id(boot_title), x0, 2);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, 19);
+            lv_obj_set_pos(id(boot_title), x0, y0 + 2);
+            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 19);
             lv_obj_set_style_text_font(id(boot_lb), id(spleen_12), 0);
-            lv_obj_set_y(id(boot_la), 22);
-            lv_obj_set_y(id(boot_lb), 31);
-            lv_obj_set_y(id(boot_lc), 44);
-            lv_obj_set_y(id(boot_ld), 53);
+            lv_obj_set_y(id(boot_la), y0 + 22);
+            lv_obj_set_y(id(boot_lb), y0 + 31);
+            lv_obj_set_y(id(boot_lc), y0 + 44);
+            lv_obj_set_y(id(boot_ld), y0 + 53);
           } else {
             lv_obj_set_style_text_font(id(boot_title), id(spleen_12), 0);
-            lv_obj_set_pos(id(boot_title), x0, 1);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, 14);
+            lv_obj_set_pos(id(boot_title), x0, y0 + 1);
+            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 14);
             lv_obj_set_style_text_font(id(boot_lb), id(spleen_8), 0);
-            lv_obj_set_y(id(boot_la), 16);
-            lv_obj_set_y(id(boot_lb), 26);
-            lv_obj_set_y(id(boot_lc), 36);
-            lv_obj_set_y(id(boot_ld), 46);
+            lv_obj_set_y(id(boot_la), y0 + 16);
+            lv_obj_set_y(id(boot_lb), y0 + 26);
+            lv_obj_set_y(id(boot_lc), y0 + 36);
+            lv_obj_set_y(id(boot_ld), y0 + 46);
           }
 
   # Pick the layout (see boot_layout) and show the QR code holding qr, or
@@ -386,6 +393,7 @@ script:
               const bool same = !id(boot_joined_ssid).empty() && ssid == id(boot_joined_ssid);
               id(boot_joined_ssid) = ssid;
               id(boot_join_qr) = !id(gameday_ctl).setup_done() || (!same && id(gameday_ctl).show_boot_address());
+              id(boot_join_ticker) = !same && id(gameday_ctl).show_boot_address();
               ESP_LOGI("boot", "On Wi-Fi (%s): %s", same ? "same network" : "new join",
                        id(boot_join_qr) ? "showing the QR code for the device page" : "straight to the board");
             }
@@ -463,6 +471,15 @@ script:
             if (id(boot_hold_since_ms) != 0 && !via_button && !id(boot_show_address).is_running() &&
                 !id(gameday_ctl).boot_hold(id(boot_hold_since_ms)))
               id(boot_hide).execute();
+            // Live game cuts the join screen; new panels keep it
+            else if (id(boot_join_qr) && id(gameday_ctl).setup_done() && !via_button &&
+                     !id(boot_show_address).is_running() && !id(boot_team_qr_on) && !id(gameday_ctl).captive() &&
+                     id(gameday_ctl).board_ready() && id(gameday_ctl).board_live()) {
+              ESP_LOGI("boot", "A game is live: the board now, with the address in the ticker");
+              id(boot_join_qr) = false;
+              id(boot_hide_later).stop();
+              id(boot_hide).execute();
+            }
           } else if (lost) {
             // Tested before the setup branch below on purpose. The fallback AP
             // starts 90 seconds into any outage, so that branch would otherwise
@@ -623,7 +640,12 @@ script:
                                   id: boot_overlay
                                   hidden: false
                             else:
-                              - lambda: 'id(boot_hold_since_ms) = 0;'
+                              - lambda: |-
+                                  id(boot_hold_since_ms) = 0;
+                                  if (id(boot_join_ticker)) {
+                                    id(boot_join_ticker) = false;
+                                    id(gameday_ctl).show_join_address();
+                                  }
                               - component.suspend: boot_check
                               - component.suspend: boot_anim
                               - script.execute:
@@ -1021,6 +1043,7 @@ lvgl:
             # lines and bar, and the black box keeps them out from under the
             # code. No text here: it stays hidden until boot_view gives it
             # one.
+            # Longer chains: the left end; 2x2: middle rows.
             #
             # One LED per module, white modules on black, the geometry the
             # M-1's WLED setup card proved on the panel's glass (WLED-M1,

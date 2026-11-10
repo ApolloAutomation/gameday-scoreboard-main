@@ -1,6 +1,6 @@
 ---
 title: "Pick your team"
-description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the nine leagues, or a golf tour or a racing series."
+description: "Choose the team your panel follows on the panel's device page or from Home Assistant, in any of the twelve leagues, or a golf tour or a racing series."
 sidebar:
   order: 3
 ---
@@ -32,12 +32,19 @@ The Game Day app is a separate project that Apollo Automation does not maintain,
 | NFL | All 32 teams |
 | College football (NCAAF) | Every FBS team |
 | MLB | Every team |
+| Minor league baseball (MiLB) | Every Triple-A, Double-A, High-A and Single-A team, 120 in all |
 | NBA | Every team |
 | WNBA | Every team |
 | Men's college basketball (NCAAM) | Every Division I team |
 | NHL | Every team |
+| AHL | All 32 teams |
+| ECHL | All 30 teams |
 | MLS | Every team |
 | Premier League (EPL) | Every team |
+
+The **MiLB** tab lists the minor league teams under a heading for each level, and search finds a team by its level too, like "high-a". Their scores come from MLB's stats service instead of ESPN. See [Baseball: minor leagues](/using/minor-league-baseball/).
+
+The **AHL** and **ECHL** tabs hold minor league hockey. Their scores come from HockeyTech, the stats service the two leagues use for their own websites, instead of ESPN. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 
 A **Golf** tab holds the **PGA Tour** and the **LPGA Tour**. Pick one to follow that tour's tournament each week, its leaderboard and its next event. See [Golf](/using/golf/).
 
@@ -45,13 +52,13 @@ A **Racing** tab holds **Formula 1** and the **NASCAR Cup Series**. Pick one to 
 
 Soccer clubs are followed into their cup competitions too: Premier League clubs into the Champions League, Europa League and Conference League, and MLS clubs into the CONCACAF Champions Cup.
 
-Each sport has its own board. Golf's is a tournament's leaderboard, and racing's is a session's order. See [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/), [Soccer](/using/soccer/), [Golf](/using/golf/) and [Racing](/using/racing/).
+Each sport has its own board. Golf's is a tournament's leaderboard, and racing's is a session's order. See [Football](/using/football/), [Baseball](/using/baseball/), [Basketball](/using/basketball/), [Hockey](/using/hockey/), [Soccer](/using/soccer/), [Golf](/using/golf/) and [Racing](/using/racing/). Minor league baseball and the AHL and ECHL get their sport's board too.
 
 ## The On now tab
 
-The first tab in the team picker, **On now**, lists today's games across the leagues, straight from ESPN. They're grouped as **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow and the panel switches to that team. Golf and racing aren't in it; pick a tour or a series from its own tab.
+The first tab in the team picker, **On now**, lists today's games across the leagues. They're grouped as **Live now**, **Later today**, **Final** and **Postponed or canceled**. Tap the side you want to follow and the panel switches to that team. Golf and racing aren't in it; pick a tour or a series from its own tab.
 
-Your browser reads this list from ESPN, so the tab needs your phone or computer to be online, not only the panel.
+Your browser reads this list from ESPN, and today's minor league games from MLB's stats service, so the tab needs your phone or computer to be online, not only the panel. It doesn't list AHL or ECHL games: HockeyTech's feed answers the panel but not your browser, so pick those teams from their tabs.
 
 ## Changes take effect right away
 

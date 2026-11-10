@@ -5,6 +5,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "logo_lru.h"
+#include "psram_tasks.h"
 
 namespace esphome::gameday {
 
@@ -87,14 +88,15 @@ void LogoCache::prefetch(const std::string &url) {
   this->start_task_();
 }
 
-void LogoCache::pin(const std::string &team, const std::string &opponent) {
-  if (this->lock_ == nullptr || (team == this->pinned_[0] && opponent == this->pinned_[1]))
+void LogoCache::pin_at_(size_t at, const std::string &team, const std::string &opponent) {
+  std::string *p = this->pinned_ + at;
+  if (this->lock_ == nullptr || (team == p[0] && opponent == p[1]))
     return;
   Locked guard(this->lock_);
-  this->pinned_[2] = std::move(this->pinned_[0]);
-  this->pinned_[3] = std::move(this->pinned_[1]);
-  this->pinned_[0] = team;
-  this->pinned_[1] = opponent;
+  p[2] = std::move(p[0]);
+  p[3] = std::move(p[1]);
+  p[0] = team;
+  p[1] = opponent;
 }
 
 bool LogoCache::pinned_url_(std::string_view url) const {
@@ -143,8 +145,8 @@ void LogoCache::start_task_() {
   if (this->task_running_)
     return;
   this->task_running_ = true;
-  // Same stack as the ESPN worker: the TLS handshake needs it.
-  if (xTaskCreate(&LogoCache::task_, "gameday_logo", 16384, this, 1, nullptr) != pdPASS) {
+  // 16 KB: the TLS handshake needs it.
+  if (!PsramTasks::start(&LogoCache::task_, "gameday_logo", 16384, this)) {
     ESP_LOGW(TAG, "Could not start the logo task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->task_running_ = false;
@@ -153,7 +155,7 @@ void LogoCache::start_task_() {
 
 void LogoCache::task_(void *arg) {
   static_cast<LogoCache *>(arg)->run_();
-  vTaskDelete(nullptr);
+  PsramTasks::park();
 }
 
 // Logo task: works through queued logos one at a time, then exits. The task

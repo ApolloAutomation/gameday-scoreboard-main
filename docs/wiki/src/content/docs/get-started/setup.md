@@ -27,6 +27,8 @@ While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game 
 2. Pick your Wi-Fi network and enter the password.
 3. Save.
 
+While your phone is on the panel's hotspot, `192.168.4.1` shows the setup page, and so does the check for internet a phone makes as it joins, which is what makes the page open by itself. That holds on a new panel, after a [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) and on a panel that lost its Wi-Fi. Open `192.168.4.1` rather than a site you know: most sites start with `https://`, and those show an error on the hotspot instead of the setup page. If the page still doesn't open, see [The setup page doesn't open](/help/troubleshooting/#the-setup-page-doesnt-open).
+
 The panel joins your Wi-Fi. Then [pick your team](/get-started/pick-your-team/) on its device page.
 
 ## Pick your team, or add it to Home Assistant
@@ -37,7 +39,7 @@ If you run Home Assistant, it finds the panel as a new ESPHome device, and picki
 
 ## The Game Day app
 
-The Game Day app is a separate phone app that Apollo Automation does not maintain. The panel doesn't show a QR code for it or send you to it, and you don't need it. It may not find panels running this firmware, so use the steps above if it doesn't. Where it does find a new panel, you can set it up over Bluetooth. The app lists it as a new panel nearby:
+The Game Day app is a separate phone app that Apollo Automation does not maintain. The panel doesn't show a QR code for it or send you to it, and you don't need it. It may not find panels running this firmware, so use the steps above if it doesn't. Where it does find a new panel, you can set it up over Bluetooth, except on a panel set up for three or four panels, which keeps Bluetooth off to leave the panels the memory they need. The app lists it as a new panel nearby:
 
 1. Tap the panel to set it up.
 2. Pick your Wi-Fi network from the list. The list comes from the panel itself, strongest network first, so it shows what the panel can actually reach.
@@ -59,14 +61,16 @@ Right after it joins your Wi-Fi, the panel shows a QR code that opens its own de
 
 After about 13 seconds the panel's address takes a 5 second turn: **Open gameday-2f6a70.local**, with your panel's own six characters. That address is the device page too, by name. The six characters are the same ones in the hotspot's name. Open the address in a browser on any phone or computer on the same Wi-Fi to pick your team and change settings. See [The device page](/using/device-page/).
 
-A new panel keeps the QR code and the address up for 45 seconds, or until you pick a team. A panel that already has a team shows them once, for about 18 seconds, every time it starts. Then it says **Looking up scores** while the first scoreboard loads, for up to 10 seconds.
+A new panel keeps the QR code and the address up for 45 seconds, or until you pick a team. A panel that already has a team shows them once, for about 18 seconds, every time it starts. Then it says **Looking up scores** while the first scoreboard loads, for up to 10 seconds. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready instead of waiting out the QR code.
 
-Until you pick a team or a mode, the ticker along the bottom says **Pick a team at** followed by the panel's IP address, like `192.168.1.50`. Use the IP address if your phone won't open a `.local` address.
+Once the QR code and the address go, or straight away over a live game, the ticker starts with the panel's IP address and `.local` name for 30 seconds, like **IP 192.168.1.50 | gameday-2f6a70.local**. Both open the device page from a phone or computer on the same Wi-Fi; use the IP address if your phone won't open the `.local` one.
+
+Until you pick a team or a mode, the ticker along the bottom also says **Pick a team at** followed by the panel's IP address, like `192.168.1.50`.
 
 To see the address again any time, hold the button on the controller for about 1.5 seconds and let go. The panel shows its full address and IP address for 20 seconds. More on the button in [Buttons and resets](/using/buttons-and-resets/).
 
 :::tip
-To skip the QR code and the address when the panel starts, turn off **Show how to connect when the panel starts** in the Setup card on the device page. A panel that has a team then goes straight to the scoreboard. A new panel still shows the QR code, without the address, so you can pick one.
+To skip the QR code and the address when the panel starts, turn off **Show how to connect when the panel starts** in the Setup card on the device page. A panel that has a team then goes straight to the scoreboard, and the ticker doesn't start with the address. A new panel still shows the QR code, without the address, so you can pick one.
 :::
 
 ## New router or Wi-Fi password
@@ -75,7 +79,7 @@ When the panel loses its Wi-Fi for more than about 10 seconds, it covers the sco
 
 For a new router or password, use the panel's **Game Day** hotspot. It comes up within a few minutes of the panel losing Wi-Fi, and then the panel says **Wi-Fi / lost / scan to fix** with the hotspot's QR code, and takes turns showing the hotspot's name. Scan the code with your phone's camera, or join the hotspot as above, and give the panel the new network or password on the page that opens.
 
-If you use the Game Day app: about 30 seconds into the outage the panel turns Bluetooth back on, so the app can find it, and you give it the new network or password the same way as the first time. If the app hands the panel a wrong password while it's in an outage, the panel goes back to the network it had.
+If you use the Game Day app: about 30 seconds into the outage the panel turns Bluetooth back on, so the app can find it (with three or four panels it stays off), and you give it the new network or password the same way as the first time. If the app hands the panel a wrong password while it's in an outage, the panel goes back to the network it had.
 
 A panel that can't get back on its Wi-Fi restarts itself once, a minute into the outage. It never does that while you're connected to it from the app.
 
