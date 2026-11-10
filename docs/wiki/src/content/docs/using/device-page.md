@@ -115,6 +115,10 @@ The settings, in the order the page shows them:
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+**Clock size** covers the game clock too: with **Large**, the period and time during a game, like "5:21 3rd" or "Halftime", are bigger on the scoreboard wherever they fit without touching the logos, records, scores or the row under them, and stay at the normal size where they don't. Its line on the page says so. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
+:::
+
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
 **Switch every** and the time next to **Alternate** are one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).

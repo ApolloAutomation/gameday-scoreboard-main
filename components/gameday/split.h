@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "recap.h"
 #include "set_request.h"
 #include "watch.h"
 
@@ -78,6 +79,14 @@ inline SplitArea split_area(int cols, int rows, uint8_t show) {
   return a;
 }
 
+// A splash shown at since (0 none) is up
+inline bool splash_up(uint32_t now, uint32_t since) { return since != 0 && now - since < kSplashMs; }
+
+// Only a 2x2's board splash covers the area
+inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash) {
+  return at == SplitAt::BOTTOM && splash_up(now, board_splash);
+}
+
 // DATE while the main board shows a clock: never two.
 enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE };
 
@@ -144,6 +153,19 @@ inline int scores_step(size_t step, size_t cards, bool main_shows) {
   return (int) ((step + (main_shows ? cards / 2 : 0)) % cards);
 }
 
+// The area's next card with logos, skipping headers; -1 none
+inline int scores_next_logos(const std::vector<RecapCard> &cards, size_t step, bool main_shows) {
+  const size_t n = cards.size();
+  for (size_t k = 1; k <= n; k++) {
+    const int s = scores_step(step + k, n, main_shows);
+    if (s < 0)
+      return -1;
+    if (cards[(size_t) s].kind == RecapKind::FINAL || cards[(size_t) s].kind == RecapKind::LATER)
+      return s;
+  }
+  return -1;
+}
+
 // Every 15 s while the main game is live too.
 inline uint32_t a2_poll_ms(GameState state, int64_t until_start, bool tbd, bool main_live) {
   switch (state) {
@@ -188,6 +210,17 @@ inline int rot_pick(const std::vector<WatchGame> &games, uint8_t cur_league, con
       return (int) i;
   }
   return -1;
+}
+
+// The card whose logos were fetched, if still on
+inline int rot_pick_next(const std::vector<WatchGame> &games, uint8_t cur_league, const std::string &cur_event,
+                         uint8_t next_league, const std::string &next_event, uint8_t board_league,
+                         const std::string &board_event) {
+  for (size_t i = 0; i < games.size() && !next_event.empty(); i++)
+    if (watch_same(games[i], next_league, next_event) && rot_ok(games[i], board_league, board_event) &&
+        !watch_same(games[i], cur_league, cur_event))
+      return (int) i;
+  return rot_pick(games, cur_league, cur_event, board_league, board_event);
 }
 
 inline std::string rot_rgb(const uint8_t (&c)[3]) {

@@ -184,6 +184,65 @@ void test_rotation() {
   PCHECK(c.play_id.empty() && c.down_distance.empty() && c.soc.goals.empty());
 }
 
+// The card whose logos download during this one
+void test_next_logos() {
+  auto card = [](RecapKind k) {
+    RecapCard c;
+    c.kind = k;
+    return c;
+  };
+  const std::vector<RecapCard> cards = {card(RecapKind::HEADER),       card(RecapKind::FINAL), card(RecapKind::FINAL),
+                                        card(RecapKind::LATER_HEADER), card(RecapKind::LATER), card(RecapKind::NEXT)};
+  PCHECK(scores_next_logos(cards, 0, false) == 1);
+  PCHECK(scores_next_logos(cards, 1, false) == 2);
+  PCHECK(scores_next_logos(cards, 2, false) == 4);  // past the header
+  PCHECK(scores_next_logos(cards, 4, false) == 1);  // around past two
+  // Half a loop from the board's card
+  PCHECK(scores_next_logos(cards, 0, true) == 4);
+  PCHECK(scores_next_logos(cards, 1, true) == 1);
+  // Only its own card has logos: that one again
+  const std::vector<RecapCard> one = {card(RecapKind::HEADER), card(RecapKind::FINAL)};
+  PCHECK(scores_next_logos(one, 1, false) == 1);
+  PCHECK(scores_next_logos({card(RecapKind::HEADER), card(RecapKind::NEXT)}, 0, false) == -1);
+  PCHECK(scores_next_logos({}, 0, false) == -1);
+  PCHECK(scores_next_logos({card(RecapKind::FINAL)}, 0, true) == -1);
+
+  // The rotation's next card after the one going up now
+  const uint8_t nhl = (uint8_t) League::NHL;
+  std::vector<WatchGame> games = {game("1", nhl, GameState::IN), game("2", nhl, GameState::IN),
+                                  game("3", nhl, GameState::IN)};
+  const int now = rot_pick(games, nhl, "1", 0, "");
+  PCHECK(now == 1);
+  PCHECK(rot_pick(games, nhl, games[(size_t) now].event_id, 0, "") == 2);
+  // Never the board's game
+  PCHECK(rot_pick(games, nhl, "1", nhl, "3") == 1 && rot_pick(games, nhl, "2", nhl, "3") == 0);
+
+  // The card whose logos were fetched goes up next
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "2", 0, "") == 1);
+  // "2" ended: "3" next, not the list's start
+  const std::vector<WatchGame> left = {game("1", nhl, GameState::IN), game("3", nhl, GameState::IN)};
+  PCHECK(rot_pick(left, nhl, "2", 0, "") == 0);
+  PCHECK(rot_pick_next(left, nhl, "2", nhl, "3", 0, "") == 1);
+  // A game new since waits its turn
+  const std::vector<WatchGame> more = {game("1", nhl, GameState::IN), game("4", nhl, GameState::IN),
+                                       game("2", nhl, GameState::IN), game("3", nhl, GameState::IN)};
+  PCHECK(rot_pick_next(more, nhl, "1", nhl, "2", 0, "") == 2);
+  PCHECK(rot_pick_next(more, nhl, "3", nhl, "1", 0, "") == 0);
+  // Fetched card off the list: list order
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "2", nhl, "2") == 2);
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "9", 0, "") == 1);
+  PCHECK(rot_pick_next(games, nhl, "1", 0, "", 0, "") == 1);
+  std::vector<WatchGame> unread = games;
+  unread[1].state = GameState::NOT_FOUND;
+  PCHECK(rot_pick_next(unread, nhl, "1", nhl, "2", 0, "") == 2);
+  // From a reset: the first live game
+  PCHECK(rot_pick_next(games, 0, "", 0, "", 0, "") == 0);
+  // One game: it stays up
+  const std::vector<WatchGame> solo = {game("7", nhl, GameState::IN)};
+  PCHECK(rot_pick_next(solo, nhl, "7", nhl, "7", 0, "") == 0);
+  PCHECK(rot_pick_next(solo, 0, "", nhl, "7", nhl, "7") == -1);
+}
+
 std::string rot_clock(uint8_t league, uint8_t period, const char *clock, Half half = Half::NONE, uint8_t reg = 4) {
   WatchGame w = game("9", league, GameState::IN);
   w.period = period;
@@ -378,6 +437,23 @@ void test_area2_busy() {
   PCHECK(!s.dim && s.view == IdleView::CLOCK);  // the main board's view stays
 }
 
+// A 2x2's board splash holds the area's card
+void test_area_covered() {
+  PCHECK(!splash_up(5000, 0));
+  PCHECK(splash_up(5000, 5000) && splash_up(5000 + kSplashMs - 1, 5000));
+  PCHECK(!splash_up(5000 + kSplashMs, 5000));
+  PCHECK(splash_up(kSplashMs / 2, 0xFFFFFC00u));  // across millis() wrapping
+  PCHECK(area_covered(SplitAt::BOTTOM, 9000, 4000));
+  PCHECK(!area_covered(SplitAt::BOTTOM, 4000 + kSplashMs, 4000));
+  PCHECK(!area_covered(SplitAt::BOTTOM, 9000, 0));
+  // Beside the board, its splash leaves the area alone
+  for (SplitAt at : {SplitAt::RIGHT2, SplitAt::RIGHT1, SplitAt::NONE})
+    PCHECK(!area_covered(at, 9000, 4000));
+  PCHECK(split_at(2, 2) == SplitAt::BOTTOM);
+  // It hides most of a card's turn
+  PCHECK(kSplashMs > kRotCardMs / 2 && kSplashMs >= recap_card_ms(RecapKind::FINAL));
+}
+
 void test_recap_one_league() {
   // A one-league scan shares the later-today cap.
   const int64_t now = 1762700000;  // a Sunday afternoon
@@ -413,12 +489,14 @@ int run_split_tests(int &total_checks) {
   test_split_area();
   test_area_view();
   test_scores_step();
+  test_next_logos();
   test_a2_poll();
   test_rotation();
   test_rot_clock();
   test_watch_all();
   test_watch_sources_team();
   test_area2_busy();
+  test_area_covered();
   test_recap_one_league();
   total_checks += checks;
   return failures;

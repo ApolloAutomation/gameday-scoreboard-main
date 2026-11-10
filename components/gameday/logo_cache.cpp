@@ -11,9 +11,9 @@ namespace esphome::gameday {
 
 static const char *const TAG = "gameday.logo";
 static const char *const USER_AGENT = ::espn::kUserAgent;  // the same as every ESPN read (poll_timing.h)
-// About four logos per team on screen at once in the busiest playlist, times
-// a full favorites list plus live games, with room to spare. Each is ~3 KB.
-static const size_t MAX_LOGOS = 48;
+// Rotating live games plus today's scores, ~3 KB each
+static const size_t MAX_LOGOS = 128;
+static const size_t MAX_PENDING = 8;
 // ESPN's PNGs are a few KB; anything far bigger is not a logo.
 static const size_t MAX_BODY = 128 * 1024;
 static const int LOGO_SIZE = 32;
@@ -27,9 +27,47 @@ class Locked {
   SemaphoreHandle_t lock_;
 };
 
+template<class S> static uint32_t url_key(const S &url) { return ::espn::logo_key(url.data(), url.size()); }
+
 void LogoCache::setup() {
   this->lock_ = xSemaphoreCreateMutex();
   this->entries_.reserve(MAX_LOGOS);
+  this->slots_.reserve(MAX_LOGOS);
+  this->memo_.reserve(::espn::kLogoMemoCap);
+  this->pending_.reserve(MAX_PENDING);
+}
+
+LogoCache::Entry *LogoCache::find_(const std::string &url) {
+  for (auto &e : this->entries_) {
+    if (std::string_view(e->url) == url)
+      return e.get();
+  }
+  return nullptr;
+}
+
+// A logo known missing waits out its memo instead
+void LogoCache::queue_(Entry &e, uint8_t prio, uint32_t now) {
+  const uint32_t left = ::espn::memo_none_left(this->memo_, url_key(e.url), now);
+  if (left > 0) {
+    e.state = State::FAILED;
+    e.failed_ms = now;
+    e.wait_ms = left;
+    return;
+  }
+  e.state = State::QUEUED;
+  e.prio = prio;
+  e.seq = ++this->seq_;
+  this->start_task_();
+}
+
+LogoCache::Entry *LogoCache::add_(const std::string &url, uint8_t prio, uint32_t now) {
+  auto e = std::make_unique<Entry>();
+  e->url.assign(url.data(), url.size());
+  e->used_ms = now;
+  Entry *p = e.get();
+  this->entries_.push_back(std::move(e));
+  this->queue_(*p, prio, now);
+  return p;
 }
 
 image::Image *LogoCache::get(const std::string &url) {
@@ -37,55 +75,79 @@ image::Image *LogoCache::get(const std::string &url) {
     return nullptr;
   Locked guard(this->lock_);
   uint32_t now = millis();
-  for (auto &e : this->entries_) {
-    if (std::string_view(e->url) != url)
-      continue;
-    e->used_ms = now;
-    if (e->state == State::READY)
-      return &*e->image;
-    if (e->state == State::FAILED && ::espn::logo_retry_due(e->failed_ms, e->wait_ms, now)) {
-      e->state = State::QUEUED;
-      this->start_task_();
-    }
+  Entry *e = this->find_(url);
+  if (e == nullptr) {
+    this->make_room_(now);
+    this->add_(url, ::espn::LOGO_NOW, now);
     return nullptr;
   }
-  this->make_room_(now);
-  auto e = std::make_unique<Entry>();
-  e->url.assign(url.data(), url.size());
   e->used_ms = now;
-  this->entries_.push_back(std::move(e));
-  this->start_task_();
+  if (e->state == State::READY)
+    return &*e->image;
+  if (e->state == State::QUEUED)
+    e->prio = ::espn::LOGO_NOW;  // a card needs it now
+  if (e->state == State::FAILED && ::espn::logo_retry_due(e->failed_ms, e->wait_ms, now))
+    this->queue_(*e, ::espn::LOGO_NOW, now);
   return nullptr;
+}
+
+void LogoCache::want(const std::string &url) {
+  if (url.empty() || this->lock_ == nullptr)
+    return;
+  Locked guard(this->lock_);
+  uint32_t now = millis();
+  Entry *e = this->find_(url);
+  if (e == nullptr) {
+    this->make_room_(now);
+    this->add_(url, ::espn::LOGO_NEXT, now);
+    return;
+  }
+  e->used_ms = now;
+  if (e->state == State::FAILED && ::espn::logo_retry_due(e->failed_ms, e->wait_ms, now))
+    this->queue_(*e, ::espn::LOGO_NEXT, now);
 }
 
 bool LogoCache::waiting(const std::string &url) {
   if (url.empty() || this->lock_ == nullptr || this->get(url) != nullptr)
     return false;
   Locked guard(this->lock_);
-  for (auto &e : this->entries_) {
-    if (std::string_view(e->url) == url)
-      return e->state != State::FAILED;
-  }
-  return false;
+  Entry *e = this->find_(url);
+  return e != nullptr && e->state != State::FAILED;
 }
 
-// Never drops a logo to make room, since only the main loop knows what LVGL
-// is drawing; a full cache skips the head start and get() fetches it later.
+// Never evicts; when full, the main loop's want() does
 void LogoCache::prefetch(const std::string &url) {
   if (url.empty() || this->lock_ == nullptr)
     return;
   Locked guard(this->lock_);
-  for (auto &e : this->entries_) {
-    if (std::string_view(e->url) == url)
+  if (this->find_(url) != nullptr)
+    return;
+  if (this->entries_.size() < MAX_LOGOS) {
+    this->add_(url, ::espn::LOGO_NEXT, millis());
+    return;
+  }
+  for (const auto &p : this->pending_) {
+    if (std::string_view(p) == url)
       return;
   }
-  if (this->entries_.size() >= MAX_LOGOS)
-    return;
-  auto e = std::make_unique<Entry>();
-  e->url.assign(url.data(), url.size());
-  e->used_ms = millis();
-  this->entries_.push_back(std::move(e));
-  this->start_task_();
+  if (this->pending_.size() < MAX_PENDING) {
+    this->pending_.emplace_back(url.data(), url.size());
+    this->pending_any_ = true;
+  }
+}
+
+void LogoCache::drain_pending_() {
+  while (true) {
+    std::string url;
+    {
+      Locked guard(this->lock_);
+      if (this->pending_.empty())
+        return;
+      url.assign(this->pending_.front().data(), this->pending_.front().size());
+      this->pending_.erase(this->pending_.begin());
+    }
+    this->want(url);
+  }
 }
 
 void LogoCache::pin_at_(size_t at, const std::string &team, const std::string &opponent) {
@@ -116,10 +178,8 @@ void LogoCache::retry_pinned_(uint32_t now) {
   Locked guard(this->lock_);
   for (auto &e : this->entries_) {
     if (e->state == State::FAILED && this->pinned_url_(e->url) &&
-        ::espn::logo_retry_due(e->failed_ms, e->wait_ms, now)) {
-      e->state = State::QUEUED;
-      this->start_task_();
-    }
+        ::espn::logo_retry_due(e->failed_ms, e->wait_ms, now))
+      this->queue_(*e, ::espn::LOGO_NOW, now);
   }
 }
 
@@ -128,14 +188,13 @@ void LogoCache::retry_pinned_(uint32_t now) {
 void LogoCache::make_room_(uint32_t now) {
   if (this->entries_.size() < MAX_LOGOS)
     return;
-  std::vector<::espn::LogoSlot> slots;
-  slots.reserve(this->entries_.size());
+  this->slots_.clear();
   for (auto &e : this->entries_) {
     bool busy = e->state == State::QUEUED || e->state == State::LOADING || e->state == State::DOWNLOADED;
     bool pinned = this->pinned_url_(e->url);
-    slots.push_back({e->used_ms, busy, pinned});
+    this->slots_.push_back({e->used_ms, busy, pinned});
   }
-  int i = ::espn::pick_evict(slots, now);
+  int i = ::espn::pick_evict_in(this->slots_, now);
   if (i >= 0)
     this->entries_.erase(this->entries_.begin() + i);
 }
@@ -163,14 +222,13 @@ void LogoCache::task_(void *arg) {
 void LogoCache::run_() {
   while (true) {
     Entry *job = nullptr;
-    std::string url;
+    std::string url, first;
     {
       Locked guard(this->lock_);
       for (auto &e : this->entries_) {
-        if (e->state == State::QUEUED) {
+        if (e->state == State::QUEUED &&
+            (job == nullptr || ::espn::logo_job_before(e->prio, e->seq, job->prio, job->seq)))
           job = e.get();
-          break;
-        }
       }
       if (job == nullptr) {
         this->task_running_ = false;  // under the lock, so get() starts a new task for anything queued after this
@@ -178,26 +236,44 @@ void LogoCache::run_() {
       }
       job->state = State::LOADING;
       url.assign(job->url.data(), job->url.size());
+      first = ::espn::logo_first_url(url, ::espn::memo_get(this->memo_, url_key(url), millis()));
     }
     Bytes body;
     bool throttled = false;
     uint32_t retry_after_ms = 0;
+    int code = 0, plain_code = 0;
     uint32_t start = millis();
-    bool ok = this->download_(url, body, throttled, retry_after_ms);
+    bool ok = this->download_(first, body, code, throttled, retry_after_ms);
+    // Kept under the dark URL, so lookups still find it
+    const std::string plain = first == url ? ::espn::plain_logo_url(url) : std::string();
+    if (!ok && code == 404 && !plain.empty()) {
+      ESP_LOGD(TAG, "No dark logo, using %s", plain.c_str());
+      ok = this->download_(plain, body, plain_code, throttled, retry_after_ms);
+    }
+    const ::espn::LogoNote note =
+        ::espn::logo_learned(!::espn::plain_logo_url(url).empty(), first != url, code, plain_code);
     size_t bytes = body.size();
     {
       Locked guard(this->lock_);
+      const uint32_t now = millis();
+      ::espn::memo_note(this->memo_, url_key(url), note, now);
       if (ok) {
         job->body = std::move(body);
         job->state = State::DOWNLOADED;
       } else {
         job->state = State::FAILED;
-        job->failed_ms = millis();
-        ::espn::logo_failed(job->fails, job->wait_ms, throttled, retry_after_ms, random_uint32());
+        job->failed_ms = now;
+        if (note == ::espn::LogoNote::NONE)
+          job->wait_ms = ::espn::kLogoNoneMs;
+        else
+          ::espn::logo_failed(job->fails, job->wait_ms, throttled, retry_after_ms, random_uint32());
       }
     }
     if (ok) {
-      ESP_LOGD(TAG, "Downloaded %s (%u bytes, %u ms)", url.c_str(), (unsigned) bytes, (unsigned) (millis() - start));
+      ESP_LOGD(TAG, "Downloaded %s (%u bytes, %u ms)", (plain_code == 200 ? plain : first).c_str(), (unsigned) bytes,
+               (unsigned) (millis() - start));
+    } else if (note == ::espn::LogoNote::NONE) {
+      ESP_LOGI(TAG, "No logo at %s; its badge shows for now", url.c_str());
     } else {
       ESP_LOGW(TAG, "Logo download failed after %u ms: %s", (unsigned) (millis() - start), url.c_str());
     }
@@ -207,28 +283,24 @@ void LogoCache::run_() {
 
 // On a refusal (403 or 429) sets throttled, and retry_after_ms when the reply
 // carried a plain Retry-After.
-bool LogoCache::download_(const std::string &url, Bytes &body, bool &throttled, uint32_t &retry_after_ms) {
+bool LogoCache::download_(const std::string &url, Bytes &body, int &code, bool &throttled,
+                          uint32_t &retry_after_ms) {
   std::vector<http_request::Header> headers = {
       {"User-Agent", USER_AGENT},
       {"Accept", "image/png,*/*;q=0.8"},
   };
+  code = 0;
   auto container = this->http_->get(url, headers, {"retry-after"});
   if (container == nullptr)
     return false;
-  if (container->status_code != 200) {
-    int code = container->status_code;
+  code = container->status_code;
+  if (code != 200) {
     throttled = ::espn::is_throttle_status(code);
     if (throttled)
       retry_after_ms = ::espn::parse_retry_after_ms(container->get_response_header("retry-after"));
     container->end();
-    // Kept under the dark URL, so the next lookup finds it and nothing asks
-    // for the missing one again and again.
-    std::string plain = ::espn::plain_logo_url(url);
-    if (code == 404 && !plain.empty()) {
-      ESP_LOGD(TAG, "No dark logo, using %s", plain.c_str());
-      return this->download_(plain, body, throttled, retry_after_ms);
-    }
-    ESP_LOGW(TAG, "HTTP %d for %s", code, url.c_str());
+    if (code != 404 || ::espn::plain_logo_url(url).empty())
+      ESP_LOGW(TAG, "HTTP %d for %s", code, url.c_str());
     return false;
   }
   if (container->content_length > 0 && container->content_length <= MAX_BODY)
@@ -276,6 +348,8 @@ bool LogoCache::decode_(std::optional<runtime_image::RuntimeImage> &image, const
 bool LogoCache::loop() {
   if (this->lock_ == nullptr)
     return false;
+  if (this->pending_any_.exchange(false))
+    this->drain_pending_();
   this->retry_pinned_(millis());
   if (!this->downloaded_.exchange(false))
     return false;

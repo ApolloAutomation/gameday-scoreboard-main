@@ -31,6 +31,10 @@ On a single 64x64 panel the clock takes the abbreviations' place during play, an
 
 A goal fills the screen for 4 seconds with fireworks on black, in the scoring team's color, with the scoring team's logo, **+1** and "GOAL". The logo says whose goal it was, so the other side's splash leaves its abbreviation out. The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. The winning goal in a shootout splashes like any other. See [Splashes](/using/panel-sizes/#splashes).
 
+:::note[Coming in the next release]
+A goal's splash stays up for about 7 seconds, with the fireworks around the logo and **+1**, above "GOAL".
+:::
+
 Goal splashes have their own switch in the Celebrations card. See [Celebrations](/using/device-page/#celebrations).
 
 Every goal splashes the same way. ESPN's words for a goal don't say whether it came on a power play or into an empty net, and the number after the scorer's name counts goals this season, not this game, so there is no power play goal, empty net goal or hat trick splash.

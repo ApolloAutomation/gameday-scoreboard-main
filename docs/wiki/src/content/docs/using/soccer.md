@@ -50,6 +50,10 @@ A goal fills the screen for 4 seconds with fireworks on black, in the scoring cl
 
 The logo says which club it was, so the words leave its abbreviation out. See [Splashes](/using/panel-sizes/#splashes).
 
+:::note[Coming in the next release]
+A splash stays up for about 7 seconds. A goal's fireworks go off around the logo and **+1**, above "GOAL".
+:::
+
 Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
 
 At full time a win gets a victory splash with fireworks, your logo and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.

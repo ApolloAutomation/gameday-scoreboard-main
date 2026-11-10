@@ -21,8 +21,8 @@ static const uint32_t kWatchCycleMs = 45 * 1000;
 static const uint32_t kWatchStaleCycles = 2;
 // Expected read times until a read has been timed.
 static const uint32_t kWatchBoardMs = 5000, kWatchEventMs = 2500, kWatchMarginMs = 1000, kWatchTimedMaxMs = 60000;
-// Outlasts the 4 s splash in gameday-live.yaml.
-static const uint32_t kWatchSplashMs = 5000;
+// Outlasts the splash (kSplashMs).
+static const uint32_t kWatchSplashMs = kSplashMs + 1000;
 // Idle day-scoreboard wait bounds, until the next wanted start.
 static const uint32_t kWatchWaitMinMs = 2 * 60 * 1000, kWatchWaitMaxMs = 3 * 60 * 60 * 1000;
 

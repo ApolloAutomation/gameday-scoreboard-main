@@ -614,7 +614,7 @@ test("clock size and text size: normal by default, each posts large and back, hi
   await expect(page.locator("#sizeCtls")).toBeVisible();
   const clock = page.getByRole("combobox", { name: "Clock size", exact: true });
   const text = page.getByRole("combobox", { name: "Text size", exact: true });
-  await expect(clock).toHaveAccessibleDescription(/bigger digits/);
+  await expect(clock).toHaveAccessibleDescription(/^The game clock during a game, .* bigger where they fit\.$/);
   await expect(text).toHaveAccessibleDescription(/bigger letters/);
   await expect(clock).toHaveValue("0");
   await expect(text).toHaveValue("0");
