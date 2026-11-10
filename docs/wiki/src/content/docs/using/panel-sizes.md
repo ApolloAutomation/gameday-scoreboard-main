@@ -28,6 +28,10 @@ The logos sit at the far edges with the abbreviations and big scores between the
 
 A ranked college team's rank goes in front of its record under the logo, like "#5 9-1", when the two fit, and keeps clear of the game clock between them. A pro team can show its seed or place there instead of its record. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
+:::note[Coming in the next release]
+With **Clock size** set to **Large**, the logos and the records under them sit four rows higher, and the game clock between the records is a third taller when it fits there, like "9:59 2nd" or "Halftime". A longer clock, like "12:04 2nd", or one that would reach the records, stays at the normal size. The same goes for every board 128 wide or wider, both halves of two rows of two included, and for a game in a 128x64 second area. With the board across three or four panels in a row, the longer clocks fit too. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
+:::
+
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
 ### Three or four wide: 192x64 and 256x64
@@ -41,6 +45,10 @@ The top half is the 128x64 board, the same as on one 128x64 panel, its ticker al
 ### Single: 64x64
 
 The two logos sit side by side at the top, with the abbreviations and scores stacked under them. During play the game clock takes the abbreviations' place, and the gold possession line in football goes under the score. Baseball's diamond sits between the two scores with the outs as three dots under it.
+
+:::note[Coming in the next release]
+With **Clock size** set to **Large**, the game clock in the abbreviations' place is half again as tall, up to 10 characters like "End of 2nd". With **Text size** set to **Large** as well, baseball's inning stays at the normal size, since the tail of the p in "Top" would touch the scores. The right panel of three wide works the same way. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size).
+:::
 
 A single panel has no room for the records, the timeout pips, the red card marks or the situation row, so down and distance, the count and the soccer goals are in the ticker only, when their switches are on. See [The ticker](/using/ticker/).
 

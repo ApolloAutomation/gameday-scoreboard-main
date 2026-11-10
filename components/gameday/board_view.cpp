@@ -182,6 +182,19 @@ void paint_tile(BoardView &v, int i, int side, const UpdateFields &f, image::Ima
 // Hash of both logos, to spot a newer update's
 uint32_t logos_key(const UpdateFields &f) { return fnv1_hash(f.team_logo) * 31u + fnv1_hash(f.opponent_logo); }
 
+// Large game clock where its text fits
+void put_clock(BoardView &v, const GameGeom &g, bool force) {
+  if (v.clock == nullptr)
+    return;
+  const char *t = lv_label_get_text(v.clock);
+  const ClockPick p = game_clock(g, t != nullptr ? t : "", v.clock_rec, v.clock_baseball);
+  const lv_font_t *f = font_of(v, p.font);
+  if (!force && lv_obj_get_style_text_font(v.clock, LV_PART_MAIN) == f)
+    return;
+  put_font(v.clock, f);
+  place(v.clock, p.spot);
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -228,7 +241,7 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   v.w = (int16_t) w;
   v.splash_h = (int16_t) splash_h;
   v.sizes = sizes;
-  const GameGeom g = game_geom(w, sizes.text);
+  const GameGeom g = game_geom(w, sizes.text, sizes.clock);
   const SplashBox sb = splash_box(w, splash_h);
   show(v.ticker, board_ticker(h));
   // Splash covers the whole screen; fireworks stay 128 wide
@@ -264,8 +277,7 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
     place(v.abbr[i], g.abbr[i]);
     place(v.score[i], g.score[i]);
   }
-  put_font(v.clock, font_of(v, g.clock_font));
-  place(v.clock, g.clock);
+  put_clock(v, g, true);
   if (g.wide) {
     for (int i = 0; i < 2; i++) {
       put_font(v.rec[i], v.f8);
@@ -315,7 +327,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   DrawResult r;
   const int W = v.w;
   const bool wide = W >= 128;
-  const GameGeom g = game_geom(W, v.sizes.text);
+  const GameGeom g = game_geom(W, v.sizes.text, v.sizes.clock);
   const bool live = f.game_state == "IN";
   // panel_text() so missing glyphs never draw as boxes
   const std::string abbr[2] = {panel_text(f.team_abbr), panel_text(f.opponent_abbr)};
@@ -350,8 +362,14 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_text(v.score[0], std::to_string(f.team_score).c_str());
   put_text(v.score[1], std::to_string(f.opponent_score).c_str());
 
-  // College rank goes in front only where it fits
+  // Before a game, only the idle countdown sends a clock
   const bool clock_up = (live || f.game_state == "PRE") && !clock_text.empty();
+  if (clock_up)
+    put_text(v.clock, clock_text.c_str());
+  v.clock_rec = (uint8_t) std::min<size_t>(wide ? std::max(rec[0].size(), rec[1].size()) : 0, 255);
+  v.clock_baseball = f.sport == 1;
+  put_clock(v, g, false);
+  // College rank goes in front only where it fits
   const int clock_px = clock_up && v.clock != nullptr ? (int) clock_text.size() * char_px(v.clock) : 0;
   auto put_rank = [&](lv_obj_t *lbl, uint8_t rank, const std::string &text, bool row) {
     if (lbl == nullptr)
@@ -511,9 +529,6 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       }
     }
   }
-  // Before a game, only the idle countdown sends a clock
-  if (clock_up)
-    put_text(v.clock, clock_text.c_str());
   show(v.clock, clock_up);
   show(v.abbr[0], wide || !clock_up);
   show(v.abbr[1], wide || !clock_up);
@@ -756,7 +771,7 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   show(a.ampm, false);
   show(a.date, false);
   r = board_draw(v, f, team_logo, opp_logo);
-  const GameGeom g = game_geom(a.w, v.sizes.text);
+  const GameGeom g = game_geom(a.w, v.sizes.text, v.sizes.clock);
   r.ticker_changed = put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
     put_bg(v.splash, f.splash_color);

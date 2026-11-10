@@ -54,6 +54,9 @@ struct BoardView {
   int16_t splash_h{64};  // the splash's height: the screen's
   Sizes sizes;           // Clock size and Text size, from board_layout
   bool clock_split{false};  // time shows digits only; AM/PM goes in clock_ampm
+  // Last draw's longer record and sport, for game_clock
+  uint8_t clock_rec{0};
+  bool clock_baseball{false};
   // Tile's side (-1 none); waiting: badge awaiting the logo
   int8_t tile_side[2]{-1, -1};
   bool tile_waiting[2]{};

@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <string>
 
@@ -136,11 +137,21 @@ struct Spot {
   int16_t x, y, w;
 };
 
+static const int kLogoPx = 32;
+static const int kRecCharPx = 5;  // the records' spleen_8
+
 struct GameGeom {
   bool wide;  // 128 wide and up
+  int16_t w;
   int16_t logo_x[2], logo_y;
   BoardFont abbr_font, score_font, clock_font;
   Spot abbr[2], score[2], clock;
+  // Large clock: a text that doesn't fit uses these
+  BoardFont clock_fall_font;
+  Spot clock_fall;
+  // Rows the large clock may ink; bases' columns stop higher
+  int16_t clock_top, clock_bottom, clock_deep;
+  int16_t deep_x0, deep_x1;
   Spot rec[2], down;      // wide boards only
   int16_t pip_x[6];       // wide only: the team's three timeouts, then the opponent's
   int16_t pip_y;
@@ -158,13 +169,14 @@ struct GameGeom {
   Spot count, outs;         // wide only: count left, "2 OUT" right
 };
 
-inline GameGeom game_geom(int w, bool large_text = false) {
+inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = false) {
   GameGeom g{};
   const bool wide = w >= 128;
   const int half = w / 2;  // also the diamond's middle
   // Large text lifts these clear of the taller ticker.
   const int lift = large_text ? 3 : 0, pip_lift = large_text ? 2 : 0;
   g.wide = wide;
+  g.w = (int16_t) w;
   g.ticker_font = large_text ? BoardFont::S12 : BoardFont::S8;
   g.ticker_y = (int16_t) (kBoardRows - font_rows(g.ticker_font));
   g.msg_font = g.sub_font = wide ? BoardFont::S12 : BoardFont::S8;
@@ -227,7 +239,92 @@ inline GameGeom game_geom(int w, bool large_text = false) {
       g.out_x[i] = (int16_t) (half - 5 + i * 4);
     g.out_y = (int16_t) (large_text ? 50 : 51);
   }
+  g.clock_fall_font = g.clock_font;
+  g.clock_fall = g.clock;
+  if (!large_clock)
+    return g;
+  if (wide) {
+    // Logos and records move up; the clock spans the row.
+    g.logo_y = 0;
+    g.rec[0].y = g.rec[1].y = 34;
+    g.clock_font = BoardFont::S16;
+    g.clock = {0, 31, (int16_t) w};
+    g.clock_fall = {32, 32, (int16_t) (w - 64)};
+    const int under = g.down.y < g.pip_y ? g.down.y : g.pip_y;
+    g.clock_bottom = (int16_t) ((under < g.base_y[1] ? under : g.base_y[1]) - 1);
+    // Baseball's count and outs have no tall glyphs
+    const int count_ink = g.down.y + font_ink_top(BoardFont::S8);
+    const int low = count_ink < g.base_y[0] ? count_ink : g.base_y[0];
+    g.clock_deep = (int16_t) ((low < g.pip_y ? low : g.pip_y) - 1);
+    g.deep_x0 = g.base_x[1];
+    g.deep_x1 = (int16_t) (g.base_x[1] + g.base_px);
+  } else {
+    g.clock_font = BoardFont::S12;
+    g.clock = {0, 31, (int16_t) w};
+    const int score_ink = g.score[0].y + font_ink_top(g.score_font);
+    g.clock_bottom = g.clock_deep = (int16_t) ((score_ink < g.base_y[1] ? score_ink : g.base_y[1]) - 1);
+  }
+  g.clock_top = (int16_t) (g.logo_y + kLogoPx);
   return g;
+}
+
+// Ink rows of one glyph, from the label's top.
+inline void glyph_rows(BoardFont f, char c, int &top, int &bottom) {
+  top = font_ink_top(f);
+  bottom = font_ink_bottom(f);
+  if ((unsigned char) c >= 0x80) {
+    top = 0;
+    bottom = font_desc_bottom(f);
+    return;
+  }
+  if (c == 0)
+    return;
+  if (std::strchr("gjpqyQ_", c) != nullptr) {
+    bottom = font_desc_bottom(f);
+  } else if (std::strchr("/\\()[]{}|$%&'\",;", c) != nullptr) {
+    top--;
+    bottom++;
+  }
+  // spleen_8's ascenders reach its top row
+  if (f == BoardFont::S8 && std::strchr("bdfhklt", c) != nullptr)
+    top = 0;
+}
+
+// Mirrors record_row_chars: records stay a pixel clear.
+inline bool records_clear(int w, int rec_w, int clock_px, size_t chars) {
+  const int rec_px = (int) chars * kRecCharPx;
+  return chars == 0 || (rec_w - rec_px) / 2 + rec_px < w / 2 - (clock_px + 1) / 2;
+}
+
+struct ClockPick {
+  BoardFont font;
+  Spot spot;
+};
+
+// Large font only if every glyph and the records fit.
+inline ClockPick game_clock(const GameGeom &g, const std::string &text, size_t rec_chars, bool baseball) {
+  const ClockPick fall{g.clock_fall_font, g.clock_fall};
+  const int px = font_px(g.clock_font), tw = (int) text.size() * px;
+  if (g.clock_font == g.clock_fall_font || text.empty() || tw > g.clock.w)
+    return fall;
+  if (g.wide && !records_clear(g.w, g.rec[0].w, tw, rec_chars))
+    return fall;
+  // "Top" descends, so every half inning matches.
+  const int deep = baseball ? g.clock_deep : g.clock_bottom;
+  if (baseball && g.clock.y + font_desc_bottom(g.clock_font) > deep)
+    return fall;
+  const int left = g.clock.x + (g.clock.w - tw) / 2;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == ' ')
+      continue;
+    int top, bottom;
+    glyph_rows(g.clock_font, text[i], top, bottom);
+    const int x0 = left + (int) i * px;
+    const bool bases = x0 < g.deep_x1 && g.deep_x0 < x0 + px;
+    if (g.clock.y + top < g.clock_top || g.clock.y + bottom > (bases ? g.clock_bottom : deep))
+      return fall;
+  }
+  return ClockPick{g.clock_font, g.clock};
 }
 
 // Dark colors vanish on the panel, so lift them.
