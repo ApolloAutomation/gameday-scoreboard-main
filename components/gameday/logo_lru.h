@@ -61,9 +61,7 @@ inline void logo_loaded(uint8_t &fails, uint32_t &wait_ms) {
 
 inline bool logo_retry_due(uint32_t failed_ms, uint32_t wait_ms, uint32_t now) { return now - failed_ms >= wait_ms; }
 
-// How long a board with new logos waits for them before it goes up anyway,
-// with a badge where a logo is still missing. ESPN's logos usually take well
-// under a second each, one at a time.
+// Longest wait for new logos before drawing.
 static const uint32_t LOGO_HOLD_MS = 3500;
 
 // True once a held board can go up: neither logo is still on its way, or it

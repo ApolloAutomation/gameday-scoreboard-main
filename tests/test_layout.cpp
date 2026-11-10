@@ -164,7 +164,7 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
     for (size_t j = i + 1; j < boxes.size(); j++)
       if (overlap(boxes[i], boxes[j]))
         fail("two parts on top of each other");
-  // Every line of words 2 px clear of logos and points
+  // Words stay 2 px from logos, points
   const std::vector<Box> ink = line_boxes(L.words.x, L.words.y, L.words.w, L.words_font, lines);
   for (size_t i = 1; i < boxes.size(); i++) {
     for (const Box &b : ink)
@@ -443,7 +443,7 @@ void test_splash_places() {
     if (sc.w <= 128)
       LCHECK(L.fx.x == 0 && L.fx.y == 0);  // whole canvas on the screen
   }
-  // Two rows of two: the free rows above the band too
+  // 2x2: fireworks use rows above band
   L = check_splash(td_wide, Screen{128, 128}, ok);
   LCHECK(L.fx.y == 0 && L.fx_h > 32 && L.fx_h <= kBoardRows);
 }
@@ -905,7 +905,7 @@ void test_game_clock() {
     }
 }
 
-// A standing yields to the large clock, as to the normal one.
+// A standing yields to the large clock.
 void test_clock_standing() {
   using esphome::gameday::clock_standing;
   const char *const standings[] = {"1st NFCE", "10th NLW", "Seed 4", "Seed 12", "2nd AL", "1st"};
