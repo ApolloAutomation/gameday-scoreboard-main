@@ -437,6 +437,23 @@ void test_area2_busy() {
   PCHECK(!s.dim && s.view == IdleView::CLOCK);  // the main board's view stays
 }
 
+// A 2x2's board splash holds the area's card
+void test_area_covered() {
+  PCHECK(!splash_up(5000, 0));
+  PCHECK(splash_up(5000, 5000) && splash_up(5000 + kSplashMs - 1, 5000));
+  PCHECK(!splash_up(5000 + kSplashMs, 5000));
+  PCHECK(splash_up(kSplashMs / 2, 0xFFFFFC00u));  // across millis() wrapping
+  PCHECK(area_covered(SplitAt::BOTTOM, 9000, 4000));
+  PCHECK(!area_covered(SplitAt::BOTTOM, 4000 + kSplashMs, 4000));
+  PCHECK(!area_covered(SplitAt::BOTTOM, 9000, 0));
+  // Beside the board, its splash leaves the area alone
+  for (SplitAt at : {SplitAt::RIGHT2, SplitAt::RIGHT1, SplitAt::NONE})
+    PCHECK(!area_covered(at, 9000, 4000));
+  PCHECK(split_at(2, 2) == SplitAt::BOTTOM);
+  // It hides most of a card's turn
+  PCHECK(kSplashMs > kRotCardMs / 2 && kSplashMs >= recap_card_ms(RecapKind::FINAL));
+}
+
 void test_recap_one_league() {
   // A one-league scan shares the later-today cap.
   const int64_t now = 1762700000;  // a Sunday afternoon
@@ -479,6 +496,7 @@ int run_split_tests(int &total_checks) {
   test_watch_all();
   test_watch_sources_team();
   test_area2_busy();
+  test_area_covered();
   test_recap_one_league();
   total_checks += checks;
   return failures;

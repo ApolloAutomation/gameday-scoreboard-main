@@ -496,6 +496,7 @@ struct SplashLayout {
   bool points_whole{true};  // all of the points, else their number alone
   BoardFont points_font{BoardFont::S32};
   Spot pts{};  // the points' label, the text centered in it
+  bool pts_mask{false};  // fireworks behind: the label goes black
   BoardFont words_font{BoardFont::S16};
   Spot words{};  // the words' label, the lines centered in it
   uint8_t lines{0};
@@ -523,9 +524,10 @@ inline void words_ink(const std::string &words, BoardFont f, int &top, int &bott
 // Fireworks above the words, else below, else behind
 inline void splash_fx(SplashLayout &L, int w, int h, bool row, bool up_only, int ink_top, int ink_bottom) {
   int x0 = w > kFxPx ? (w - kFxPx) / 2 : 0, x1 = x0 + (w < kFxPx ? w : kFxPx);
+  // Between the logo and the points, 2 px clear
   if (row) {
-    x0 = x0 > L.words.x ? x0 : L.words.x;
-    x1 = x1 < L.words.x + L.words.w ? x1 : L.words.x + L.words.w;
+    x0 = x0 > L.words.x + kWordsGap ? x0 : L.words.x + kWordsGap;
+    x1 = x1 < L.words.x + L.words.w - kWordsGap ? x1 : L.words.x + L.words.w - kWordsGap;
   }
   const int above = ink_top - kWordsGap, below_y = ink_bottom + 1 + kWordsGap;
   const bool up = up_only || above >= kFxMinRows || above >= h - below_y;
@@ -616,7 +618,8 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
       L.tile_y = (int16_t) ((h - (kSplashTile + drop + lines_px)) / 2);
       L.tile_x[0] = (int16_t) ((w - head) / 2);
       L.tile_x[1] = (int16_t) (L.tile_x[0] + kSplashTile + kSplashGap);
-      L.pts = {L.tile_x[1], 0, (int16_t) points_px};
+      // 2 px each side, for the black box
+      L.pts = {(int16_t) (L.tile_x[1] - kWordsGap), 0, (int16_t) (points_px + 2 * kWordsGap)};
       L.words.y = (int16_t) (L.tile_y + kSplashTile + drop);
       break;
     }
@@ -636,6 +639,8 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
   if (!L.points)
     L.pts = Spot{};
   splash_fx(L, w, h, kind == ROW, kind == TWO_ROWS, L.words.y + top, L.words.y + lines_px - rows + bottom);
+  L.pts_mask = L.points && L.pts.x < L.fx.x + L.fx.w && L.fx.x < L.pts.x + L.pts.w && L.pts.y < L.fx.y + L.fx_h &&
+               L.fx.y < L.pts.y + font_rows(L.points_font);
   L.logos = true;
   return L;
 }

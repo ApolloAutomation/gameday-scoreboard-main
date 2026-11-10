@@ -2060,7 +2060,7 @@ bool GamedayComponent::idle_update_() {
   in.board_ready = this->board_ready_;
   in.connected = network::is_connected();
   // The idle display waits for a splash, a win's too
-  in.busy = this->idle_busy_() || (this->splash_ms_ != 0 && millis() - this->splash_ms_ < ::espn::kSplashMs);
+  in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_);
   in.area2_busy = this->a2_busy_();
   const ::espn::IdleState s = ::espn::idle_state(in);
   const ::espn::IdleView v = this->idle_effective_(s.view);
@@ -4802,14 +4802,41 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   if (r.ticker_changed || r.clock_card)
     this->fire_action_("a2");  // the ticker's scroll time and the clock (gameday-common.yaml)
   if (r.splash)
-    this->set_timeout("a2_splash", ::espn::kSplashMs, [this]() {
-      if (AreaView *a = area_view())
-        area_hide_splash(*a);
-      // The card under it gets its whole turn
-      if (this->a2_view_ == ::espn::AreaView::LIVE && !this->jump_.active && this->rot_ms_ != 0)
-        this->rot_ms_ = millis() | 1;
-    });
+    this->a2_splash_timer_();
 #endif
+}
+
+void GamedayComponent::a2_splash_timer_() {
+#ifdef USE_LVGL
+  this->set_timeout("a2_splash", ::espn::kSplashMs, [this]() {
+    const uint32_t now = millis();
+    // Unseen under the board's: a2_uncovered_ restarts it
+    if (this->a2_covered_(now)) {
+      this->a2_splash_ms_ = now | 1;
+      this->a2_splash_timer_();
+      return;
+    }
+    if (AreaView *a = area_view())
+      area_hide_splash(*a);
+    // The card under it gets its whole turn
+    if (this->a2_view_ == ::espn::AreaView::LIVE && !this->jump_.active && this->rot_ms_ != 0)
+      this->rot_ms_ = now | 1;
+  });
+#endif
+}
+
+void GamedayComponent::a2_uncovered_() {
+  const uint32_t now = millis();
+  // Its own splash, hidden till now, shows whole
+  if (this->a2_splash_up_(now)) {
+    this->a2_splash_ms_ = now | 1;
+    this->a2_splash_timer_();
+  }
+  // The card under it gets its whole turn
+  if (this->a2_view_ == ::espn::AreaView::LIVE && !this->jump_.active && this->rot_ms_ != 0)
+    this->rot_ms_ = now | 1;
+  if (this->a2_view_ == ::espn::AreaView::SCORES && this->recap_step_ms_ != 0)
+    this->recap_step_ms_ = now | 1;
 }
 
 void GamedayComponent::a2_show_logos_() {
@@ -4834,7 +4861,7 @@ void GamedayComponent::a2_tick_() {
   const uint32_t now = millis();
   bool redraw = false;
   // A big play's stay ends once its splash is down
-  if (this->jump_.active && ((now - this->jump_.since_ms >= this->watch_stay_ms() && !this->a2_splash_up_(now)) ||
+  if (this->jump_.active && ((now - this->jump_.since_ms >= this->watch_stay_ms() && !this->a2_held_(now)) ||
                              !this->rotation_on_())) {
     ESP_LOGI(TAG, "Second area: back to the rotation");
     this->end_jump_();
@@ -4867,7 +4894,7 @@ void GamedayComponent::a2_tick_() {
     }
     redraw = true;
   }
-  if (this->rotation_on_() && !this->jump_.active && !this->a2_splash_up_(now) &&
+  if (this->rotation_on_() && !this->jump_.active && !this->a2_held_(now) &&
       (this->rot_ms_ == 0 || now - this->rot_ms_ >= ::espn::kRotCardMs || !this->rot_here_()))
     redraw = this->rot_advance_(now) || redraw;
   if (redraw || this->a2_compute_() != this->a2_view_)
@@ -5384,6 +5411,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   if (!f.splash_text.empty()) {
     ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
     this->splash_ms_ = millis() == 0 ? 1 : millis();
+    // A 2x2's bottom half waits under it
+    if (this->a2_covered_(this->splash_ms_))
+      this->set_timeout("a2_uncover", ::espn::kSplashMs, [this]() { this->a2_uncovered_(); });
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
@@ -5998,6 +6028,9 @@ void GamedayComponent::recap_tick_() {
       this->recap_show_();
     return;
   }
+  // The area's card waits out the board's splash
+  if (this->a2_view_ == ::espn::AreaView::SCORES && this->a2_covered_(millis()))
+    return;
   const ::espn::RecapCard &c = this->recap_cards_[this->recap_step_];
   if (millis() - this->recap_step_ms_ < ::espn::recap_card_ms(c.kind))
     return;

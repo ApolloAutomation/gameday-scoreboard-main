@@ -184,6 +184,22 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
     fail("fireworks touching the words");
   if (!behind && L.fx_h < esphome::gameday::kFxMinRows)
     fail("fireworks too short to show");
+  // Points over fireworks get a black box
+  if (L.points && !behind) {
+    const Box &pb = boxes.back();
+    const Box mask{L.pts.x, L.pts.y, L.pts.x + L.pts.w, L.pts.y + font_rows(L.points_font)};
+    const int gap = esphome::gameday::kWordsGap;
+    if (clearance(pb, fx) < gap && !L.pts_mask)
+      fail("fireworks touching the points");
+    if (L.pts_mask && (mask.x0 > pb.x0 - gap || mask.y0 > pb.y0 - gap || mask.x1 < pb.x1 + gap || mask.y1 < pb.y1 + gap))
+      fail("the points' box within 2 px of them");
+    for (size_t i = 0; L.pts_mask && i + 1 < boxes.size(); i++)
+      if (overlap(mask, boxes[i]))
+        fail("the points' box over the words or a logo");
+    for (const Box &b : ink)
+      if (L.pts_mask && overlap(mask, b))
+        fail("the points' box over a line of words");
+  }
   return L;
 }
 
@@ -391,7 +407,10 @@ void test_splash_places() {
   // 128 wide: logo and "+6" side by side, centered.
   L = check_splash(td_wide, Screen{128, 64}, ok);
   LCHECK(ok && L.points_font == BoardFont::S32 && L.points_whole && L.words_font == BoardFont::S16 && L.lines == 1);
-  LCHECK(L.tile_x[0] + kSplashTile + esphome::gameday::kSplashGap == L.pts.x && L.tile_x[0] * 2 + kSplashTile + 6 + 32 == 128);
+  LCHECK(L.tile_x[0] + kSplashTile + esphome::gameday::kSplashGap == L.pts.x + esphome::gameday::kWordsGap &&
+         L.tile_x[0] * 2 + kSplashTile + 6 + 32 == 128);
+  // Its points on black, clear of the bursts
+  LCHECK(L.pts_mask && L.pts.w == 32 + 2 * esphome::gameday::kWordsGap);
   // "+2 RUNS" whole in spleen_24 beside the logo
   L = check_splash(hr, Screen{128, 64}, ok);
   LCHECK(ok && L.points_whole && L.points_font == BoardFont::S24);
@@ -417,7 +436,10 @@ void test_splash_places() {
   for (const Screen &sc : kScreens) {
     L = check_splash(td_wide, sc, ok);
     const int ink = L.words.y + font_ink_top(L.words_font);
-    LCHECK(ok && L.fx.w == std::min({sc.w, 128, (int) L.words.w}) && L.fx.y + L.fx_h == ink - kWordsGap);
+    const int row_w = sc.w > 128 && sc.h == kBoardRows ? (int) L.words.w - 2 * kWordsGap : sc.w;
+    LCHECK(ok && L.fx.w == std::min(row_w, 128) && L.fx.y + L.fx_h == ink - kWordsGap);
+    // A points box only 64 or 128 wide
+    LCHECK(L.pts_mask == (sc.w <= 128 && sc.h == kBoardRows));
     if (sc.w <= 128)
       LCHECK(L.fx.x == 0 && L.fx.y == 0);  // whole canvas on the screen
   }

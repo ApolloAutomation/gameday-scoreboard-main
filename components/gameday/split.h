@@ -79,6 +79,14 @@ inline SplitArea split_area(int cols, int rows, uint8_t show) {
   return a;
 }
 
+// A splash shown at since (0 none) is up
+inline bool splash_up(uint32_t now, uint32_t since) { return since != 0 && now - since < kSplashMs; }
+
+// Only a 2x2's board splash covers the area
+inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash) {
+  return at == SplitAt::BOTTOM && splash_up(now, board_splash);
+}
+
 // DATE while the main board shows a clock: never two.
 enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE };
 

@@ -201,6 +201,11 @@ void splash_paint(BoardView &v, bool fx, uint32_t color) {
   put_bg(v.splash, fx ? 0x000000 : color);
   put_color(v.splash_lbl, ink);
   put_color(v.splash_pts, ink);
+  // Black box: bursts never cross the points
+  if (v.splash_pts != nullptr) {
+    lv_obj_set_style_bg_color(v.splash_pts, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(v.splash_pts, fx && v.pts_mask ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+  }
 }
 
 // One canvas: the board's splash or the second area's
@@ -621,6 +626,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       put_text(v.splash_pts, (L.points_whole ? f.splash_points : points_number(f.splash_points)).c_str());
     }
     show(v.splash_pts, L.points);
+    v.pts_mask = L.pts_mask;
     r.big_splash = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
     // With a logo, clear of the words; else the band
     const SplashBox sb = splash_box(W, v.splash_h);

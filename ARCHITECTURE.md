@@ -84,8 +84,9 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   draws each update with its `board_draw`. The page keeps the leaderboard's
   rows (`gd_board`), the clock's time, the ticker's scroll time and the
   fireworks component, which the renderer starts, stops and places through
-  `fx_run`: clear of a splash's words (`splash_layout`'s `fx`), and lent to
-  the second area's splash while the board isn't using it. A splash stays up
+  `fx_run`: clear of a splash's words (`splash_layout`'s `fx`), the points
+  on black where it reaches them (`pts_mask`), and lent to the second
+  area's splash while the board isn't using it. A splash stays up
   `kSplashMs` (`alerts.h`), on the board (`tt_hide_splash`) and in the second
   area. A 2x2 (128x128) has the 128 wide board in its top half and the
   second area (split mode, `components/gameday/split.h`) in its bottom half
@@ -246,7 +247,10 @@ the next card with logos (`scores_next_logos`, or the rotation's next
 rotation puts that card up next even when the one before it ended
 (`rot_pick_next`). A live view with no card picks one at once rather than
 drawing "No other live games", and the area turned off is cleared
-(`area_clear`), so no stale card waits out a hold. `a2_tick_`
+(`area_clear`), so no stale card waits out a hold. On a 2x2 the board's
+splash covers the area (`area_covered`): the rotation, the scores and a big
+play's stay wait under it, and `a2_uncovered_` then starts the card's turn
+over and gives an area splash it hid its whole time. `a2_tick_`
 turns the rotation, ends a big play's stay and starts or
 stops the scores reads for the area. Its reads go in the board's gaps
 (`start_gap_job_`, in order: the area's own team poll or a big play's game

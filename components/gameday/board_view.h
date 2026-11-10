@@ -55,6 +55,7 @@ struct BoardView {
   int16_t splash_h{64};  // the splash's height: the screen's
   Sizes sizes;           // Clock size and Text size, from board_layout
   bool clock_split{false};  // time shows digits only; AM/PM goes in clock_ampm
+  bool pts_mask{false};     // the points over fireworks (SplashLayout)
   // Last draw's longer record and sport, for game_clock
   uint8_t clock_rec{0};
   bool clock_baseball{false};
