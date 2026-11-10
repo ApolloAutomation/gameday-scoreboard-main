@@ -76,7 +76,7 @@ The date and the line with your next game stay as they are.
 
 On the **Clock** page, **Large** makes the time as big as fits across the panel: four times as tall on 128x64, on three or four panels in a row and on two rows of two, where "09:41 PM" spans 128 columns, and twice as tall on a single 64x64 panel. The date under it, like "Mon, Nov 09", is twice as tall on 128 wide and wider, and stays as it is on a single panel, where a bigger one wouldn't fit on one line.
 
-During a game, **Clock size** sets the game clock: the time and period, like "5:21 3rd", words like "Halftime", "End of 2nd" or "Top 5th", and the countdown to the start in **My team today**. With **Large**:
+On the scoreboard, **Clock size** sets the game clock: the time and period during a game, like "5:21 3rd", words like "Halftime", "End of 2nd" or "Top 5th", and the countdown to the start in **My team today**. With **Large**:
 
 - On a 128x64 board, on three or four panels in a row, and in both halves of two rows of two, the game clock is a third taller, and the logos and the records under them sit four rows higher to make room. A game in the second area gets the same.
 - On a single 64x64 panel, and in the right panel of three wide, the game clock is half again as tall, where the abbreviations go.

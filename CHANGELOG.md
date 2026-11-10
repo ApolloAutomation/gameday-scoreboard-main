@@ -20,7 +20,7 @@ The second area's games come up with their logos, Large clock size reaches the g
 
 - The second area shows a new game with its logos in place, instead of the score first and the logos a few seconds later. It keeps the card before up while they download, for up to about 3.5 seconds, and a logo still missing after that shows as a small badge with the team's abbreviation until it comes in. Rotating live games puts a live game up as soon as you pick it, and goes on to the next one when a game ends.
 - Clock size Large now also makes the scoreboard's game clock bigger, like 5:21 3rd, Halftime or Top 5th, wherever it fits without touching the logos, records or scores, and makes the Clock page's time and date as big as fits.
-- A splash stays up about 7 seconds instead of 4. Its words keep at least 2 pixels from the logo and the points, and its fireworks go off around and above the logo, never over the words, with the points on black while they run. A touchdown's or a win's splash in the second area gets fireworks too when the board isn't showing its own.
+- A splash stays up about 7 seconds instead of 4. Its words keep at least 2 pixels from the logo and the points, and the fireworks on a team's splash go off around and above the logo, clear of the words where there's room, with the points on black while they run. A touchdown's or a win's splash in the second area gets fireworks too when the board isn't showing its own.
 - On two rows of two, the bottom half waits under the board's full-screen splash and then gets its whole turn, and a splash of its own that came meanwhile shows after it.
 - Updating keeps your team, favorites and every other setting.
 
