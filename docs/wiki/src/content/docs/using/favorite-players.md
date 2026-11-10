@@ -27,7 +27,7 @@ A name is at most 10 letters, one line of a single 64x64 panel's celebration, so
 If a player moves to another team, remove them and add them again from the new team's roster.
 
 :::note[Coming in the next release]
-Your favorite players are a shortcut for [player props](/using/bets/#player-props) too. In the **Bets** card, with **Player prop** chosen, tap **Favorite players** and the **Player** list shows just your favorite players, from every team, so you can bet on one without picking their team first.
+Your favorite players are a shortcut for [player props](/using/bets/#player-props) too. In the **Bets** card, with **Player prop** chosen, tap **Favorite players** and the **Player** list shows just your favorite players, from every team, so you can bet on one without picking their team first. Before adding the prop, your browser checks that the player is still on the team you added them from; if they've moved, the card says so, and you pick their new team instead.
 :::
 
 ## The stat line

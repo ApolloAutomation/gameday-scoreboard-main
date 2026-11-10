@@ -3392,6 +3392,37 @@ test("the Favorite players button narrows the prop's players to the favorites, a
   await expect(page.locator("#propPick option")).toHaveCount(0);
 });
 
+test("a favorite player no longer on their saved team's roster takes no prop", async ({ page, request }) => {
+  await reset(request, { players: [ALLEN] });
+  const traded = { ...BILLS_ROSTER, athletes: BILLS_ROSTER.athletes.map((g) => ({ ...g, items: g.items.filter((a) => a.id !== "3918298") })) };
+  let roster = traded;
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: roster }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await page.locator("#propFavs").click();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText(
+    "ALLEN isn't on the Buffalo Bills roster at ESPN now. Turn off Favorite players and pick their new team.");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.prop)).toEqual([]);
+  // Back on the roster, on a fresh page
+  roster = BILLS_ROSTER;
+  await page.reload();
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await page.locator("#propFavs").click();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await expect(page.locator("#betMsg")).toBeHidden();
+});
+
 test("the Favorite players button waits for a favorite player", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");

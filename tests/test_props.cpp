@@ -264,11 +264,17 @@ void test_text() {
   RCHECK_EQ(prop_label(p), "ALLEN O 250.5 PASS YDS");
   RCHECK_EQ(prop_ticker(p, PropStatus::PRE, -1), "PROP ALLEN O 250.5 PASS YDS");
   RCHECK_EQ(prop_ticker(p, PropStatus::ON_TRACK, 374), "ALLEN O 250.5 PASS YDS 187 ON TRACK");
-  RCHECK_EQ(prop_ticker(p, PropStatus::LIVE, -1), "ALLEN O 250.5 PASS YDS");
+  RCHECK_EQ(prop_ticker(p, PropStatus::LIVE, kPropNoValue), "ALLEN O 250.5 PASS YDS");
   RCHECK_EQ(prop_ticker(p, PropStatus::LIVE, 0), "ALLEN O 250.5 PASS YDS 0");
   p.final_half = 520;
   RCHECK_EQ(prop_ticker(p, PropStatus::WON, 300), "ALLEN O 250.5 PASS YDS 260 WON");
-  RCHECK_EQ(prop_ticker(p, PropStatus::VOID, -1), "ALLEN O 250.5 PASS YDS VOID");
+  RCHECK_EQ(prop_ticker(p, PropStatus::VOID, kPropNoValue), "ALLEN O 250.5 PASS YDS VOID");
+  RCHECK_EQ(prop_ticker(p, PropStatus::VOID, 0), "ALLEN O 250.5 PASS YDS VOID");
+  // Kneel-downs leave a quarterback below zero.
+  Prop rush = prop("0,nfl,3139477,12,MAHOMES,rushyds,under,20.5");
+  RCHECK_EQ(prop_ticker(rush, PropStatus::ON_TRACK, -6), "MAHOMES U 20.5 RUSH YDS -3 ON TRACK");
+  rush.final_half = -6;
+  RCHECK_EQ(prop_ticker(rush, PropStatus::WON, kPropNoValue), "MAHOMES U 20.5 RUSH YDS -3 WON");
   Prop u = prop("0,nfl,4565190,16,TURNER,sacks,under,1");
   RCHECK_EQ(prop_ticker(u, PropStatus::OFF_TRACK, 3), "TURNER U 1 SACKS 1.5 OFF TRACK");
   Prop y = prop("0,nfl,4882093,30,TUTEN,td,yes,");
@@ -285,7 +291,7 @@ void test_status() {
   RCHECK(prop_status(p, nullptr, -1, -1, T0) == PropStatus::WAITING, "no game yet");
   BetGame live = game(BetPhase::LIVE);
   RCHECK(prop_observe(p, live, KICK + 60, MIDNIGHT) && p.event == 401873051 && p.opp_id == 16, "tied to its game");
-  RCHECK(prop_status(p, &live, -1, 300, KICK + 60) == PropStatus::LIVE, "no number yet");
+  RCHECK(prop_status(p, &live, kPropNoValue, 300, KICK + 60) == PropStatus::LIVE, "no number yet");
   RCHECK(prop_status(p, &live, 86, 30, KICK + 60) == PropStatus::LIVE, "too early to call");
   RCHECK(prop_status(p, &live, 200, 354, KICK + 60) == PropStatus::ON_TRACK, "100 yards at 35%% is on pace for 282");
   RCHECK(prop_status(p, &live, 86, 354, KICK + 60) == PropStatus::OFF_TRACK, "43 yards at 35%% is not");
@@ -301,6 +307,19 @@ void test_status() {
   RCHECK(prop_status(p, nullptr, 0, -1, KICK - 60) == PropStatus::PRE, "no game shown before the start");
   BetGame fin = game(BetPhase::FINAL);
   RCHECK(prop_status(p, &fin, 300, -1, KICK + 4 * 3600) == PropStatus::OFF_TRACK, "at the final, before grading");
+  RCHECK(prop_status(u, &fin, 300, -1, KICK + 4 * 3600) == PropStatus::ON_TRACK, "an under below it");
+  Prop rec = prop("0,nfl,4379399,2,COOK,rec,over,5");
+  rec.event = p.event;
+  RCHECK(prop_status(rec, &fin, 10, -1, KICK + 4 * 3600) == PropStatus::LIVE, "on a whole line: a push, not on track");
+  rec.side = (uint8_t) PropSide::UNDER;
+  RCHECK(prop_status(rec, &fin, 10, -1, KICK + 4 * 3600) == PropStatus::LIVE, "an under on it too");
+  RCHECK(prop_status(rec, &live, 10, 1000, KICK + 60) == PropStatus::ON_TRACK, "live, on the line keeps its pace");
+  // A negative number is a number.
+  Prop rush = prop("0,nfl,3139477,12,MAHOMES,rushyds,under,20.5");
+  rush.event = p.event;
+  RCHECK(prop_status(rush, &live, -6, 500, KICK + 60) == PropStatus::ON_TRACK, "-3 rushing yards at the half");
+  rush.side = (uint8_t) PropSide::OVER;
+  RCHECK(prop_status(rush, &live, -6, 500, KICK + 60) == PropStatus::OFF_TRACK, "an over on it is off track");
   Prop y = prop("0,nfl,3918298,2,ALLEN,td,yes,");
   y.event = p.event;
   RCHECK(prop_status(y, &live, 0, 900, KICK) == PropStatus::NOT_YET, "no touchdown yet");
@@ -329,6 +348,9 @@ void test_grade() {
   prop_grade(y, true, 0, KICK, MIDNIGHT);
   RCHECK(y.result == (uint8_t) PropResult::LOST, "none");
   RCHECK(!prop_expired(o, MIDNIGHT - 1) && prop_expired(o, MIDNIGHT), "graded props go at midnight");
+  Prop neg = prop("0,nfl,3139477,12,MAHOMES,rushyds,under,20.5");
+  RCHECK(prop_grade(neg, true, -6, KICK, MIDNIGHT) && neg.result == (uint8_t) PropResult::WON && neg.final_half == -6,
+         "-3 rushing yards keeps its number");
 
   Prop off = prop("0,nfl,3918298,2,ALLEN,passyds,over,250.5");
   prop_observe(off, game(BetPhase::LIVE), KICK, MIDNIGHT);
@@ -342,6 +364,74 @@ void test_grade() {
   RCHECK(!prop_observe(other, game(BetPhase::LIVE, 401873060, 22, 16), KICK, MIDNIGHT), "another team's game");
   RCHECK(!prop_update(other, game(BetPhase::LIVE), KICK, MIDNIGHT) && other.event == 0,
          "an unfollowed read never ties a prop");
+}
+
+// The final's box score: who played.
+void test_grade_box() {
+  auto nfl = box("fixtures/summary_nfl_final.json", Sport::FOOTBALL, {4882093, 3916433, 7});
+  Prop td = prop("0,nfl,4882093,30,TUTEN,td,yes,");
+  RCHECK(prop_grade_box(td, nfl, KICK, MIDNIGHT) && td.result == (uint8_t) PropResult::WON, "Tuten's touchdown");
+  Prop none = prop("0,nfl,3916433,33,FLOWERS,td,yes,");
+  prop_grade_box(none, nfl, KICK, MIDNIGHT);
+  RCHECK(none.result == (uint8_t) PropResult::LOST, "listed without one");
+  // Football lists only players with a stat.
+  Prop gone = prop("0,nfl,7,33,KOLAR,td,yes,");
+  prop_grade_box(gone, nfl, KICK, MIDNIGHT);
+  RCHECK(gone.result == (uint8_t) PropResult::LOST && gone.final_half == 0, "no stat at all: no touchdown");
+  Prop over = prop("0,nfl,7,33,KOLAR,rec,over,0.5");
+  prop_grade_box(over, nfl, KICK, MIDNIGHT);
+  RCHECK(over.result == (uint8_t) PropResult::LOST, "an over on no catches loses");
+  Prop under = prop("0,nfl,7,33,KOLAR,rec,under,1.5");
+  prop_grade_box(under, nfl, KICK, MIDNIGHT);
+  RCHECK(under.result == (uint8_t) PropResult::WON, "an under wins");
+  auto ncaa = box("fixtures/summary_ncaa_final.json", Sport::FOOTBALL, {7});
+  Prop college = prop("0,ncaa,7,87,SMITH,rec,over,2.5");
+  RCHECK(college.athlete == 7, "a college prop");
+  prop_grade_box(college, ncaa, KICK, MIDNIGHT);
+  RCHECK(college.result == (uint8_t) PropResult::LOST, "a college receiver with no catch isn't listed");
+
+  // Other sports list who played.
+  auto nba = box("fixtures/summary_nba_final.json", Sport::BASKETBALL, {5176517, 4396971});
+  Prop dnp = prop("0,nba,5176517,5,DNP,pts,under,10.5");
+  prop_grade_box(dnp, nba, KICK, MIDNIGHT);
+  RCHECK(dnp.result == (uint8_t) PropResult::VOID, "didNotPlay voids it");
+  Prop absent = prop("0,nba,9,5,ABSENT,pts,under,10.5");
+  prop_grade_box(absent, nba, KICK, MIDNIGHT);
+  RCHECK(absent.result == (uint8_t) PropResult::VOID, "a basketball player not listed");
+  auto nhl = box("fixtures/summary_nhl_final.json", Sport::HOCKEY, {9});
+  Prop scratch = prop("0,nhl,9,26,SCRATCH,sog,under,2.5");
+  prop_grade_box(scratch, nhl, KICK, MIDNIGHT);
+  RCHECK(scratch.result == (uint8_t) PropResult::VOID, "a scratched skater");
+  auto mlb = box("fixtures/summary_mlb_final.json", Sport::BASEBALL, {9});
+  Prop bench = prop("0,mlb,9,15,BENCH,hits,under,0.5");
+  prop_grade_box(bench, mlb, KICK, MIDNIGHT);
+  RCHECK(bench.result == (uint8_t) PropResult::VOID, "a batter who never batted");
+}
+
+// Failed reads wait longer; times kept by sport.
+void test_box_timing() {
+  RCHECK(box_wait_ms(30000, 0) == 30000 && box_wait_ms(30000, 1) == 60000 && box_wait_ms(30000, 4) == 480000,
+         "the wait doubles");
+  RCHECK(box_wait_ms(30000, 5) == kBoxWaitMaxMs && box_wait_ms(60000, 255) == kBoxWaitMaxMs, "up to 15 minutes");
+  BoxTimes t;
+  RCHECK(t.expect(Sport::BASEBALL) == 6000, "a first read's guess");
+  t.took(Sport::BASKETBALL, 900, true);
+  t.took(Sport::BASEBALL, 4200, true);
+  RCHECK(t.expect(Sport::BASKETBALL) == 1900 && t.expect(Sport::BASEBALL) == 5200, "each sport its own time");
+  t.took(Sport::BASKETBALL, 300, false);
+  RCHECK(t.expect(Sport::BASKETBALL) == 1900, "a quick refusal changes nothing");
+  t.took(Sport::BASKETBALL, 20000, false);
+  RCHECK(t.expect(Sport::BASKETBALL) == 21000, "a timeout is counted");
+  t.took(Sport::HOCKEY, 120000, false);
+  RCHECK(t.expect(Sport::HOCKEY) == 61000, "a worker given up on, capped at a minute");
+  t.skip(Sport::BASKETBALL);
+  t.cycle();
+  RCHECK(t.expect(Sport::BASKETBALL) == 18500 && t.expect(Sport::HOCKEY) == 61000, "only a skipped kind shrinks");
+  t.started(Sport::BASKETBALL);
+  t.cycle();
+  RCHECK(t.expect(Sport::BASKETBALL) == 18500, "a started read stops shrinking");
+  t.took(Sport::BASKETBALL, 1100, true);
+  RCHECK(t.expect(Sport::BASKETBALL) == 2100, "a good read sets it again");
 }
 
 void test_store() {
@@ -399,6 +489,21 @@ void test_soccer() {
   RCHECK(soccer_goals(g, 218522) == 2, "with a watch, every scorer's id comes along");
   g.soc.goals[0].own_goal = true;
   RCHECK(soccer_goals(g, 218522) == 0, "an own goal isn't the player's");
+
+  // Extra time isn't a sportsbook's anytime goal.
+  RCHECK(soccer_regulation("90'+5'") && soccer_regulation("45'+3'") && soccer_regulation("52'"), "regulation");
+  RCHECK(!soccer_regulation("92'") && !soccer_regulation("105'+1'") && !soccer_regulation("120'"), "extra time");
+  const std::string aet = slurp("fixtures/event_soccer_aet.json");
+  Prop et[kPropSlots]{};
+  et[0] = prop("0,epl,45843,359,EARLY,goal,yes,");
+  et[1] = prop("0,epl,233937,359,LATE,goal,yes,");
+  et[2] = prop("0,epl,332394,359,LATER,goal,yes,");
+  PlayerWatch ew;
+  prop_watch_add(ew, et, EPL);
+  GameSnapshot a;
+  RCHECK(parse_event(aet, Sport::SOCCER, 202, a, "", &ew), "the extra-time final parses");
+  RCHECK(soccer_goals(a, 45843) == 2, "29' counts");
+  RCHECK(soccer_goals(a, 233937) == 0 && soccer_goals(a, 332394) == 0, "92' and 103' in extra time don't");
   PlayerWatch nfl;
   prop_watch_add(nfl, props, NFL);
   RCHECK(nfl.n == 0, "other sports read their box score instead");
@@ -416,6 +521,8 @@ int run_prop_tests(int &total_checks) {
   test_text();
   test_status();
   test_grade();
+  test_grade_box();
+  test_box_timing();
   test_store();
   test_progress();
   test_soccer();

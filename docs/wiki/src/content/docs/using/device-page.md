@@ -21,8 +21,12 @@ A ranked college team shows its rank in front of its abbreviation on the board, 
 
 Under the board are tags for the game on it:
 
-- **Bets**: one for each bet you typed into the **Bets** card that's on that game: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. See [Bets](/using/bets/). (Coming in the next release: one for each player prop on the game too, with the player's number and **ON TRACK**, **OFF TRACK**, **HIT** or **NOT YET**, then the result.)
+- **Bets**: one for each bet you typed into the **Bets** card that's on that game: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. See [Bets](/using/bets/).
 - **Favorite players**: while the game is live, one for each of your favorite players that ESPN lists among its leaders, with their stat line, like **ALLEN 21/34, 241 YDS, 2 TD**: the same line the panel's ticker shows. See [Favorite players](/using/favorite-players/).
+
+:::note[Coming in the next release]
+The **Bets** tags include one for each player prop on the game too, with the player's number and **ON TRACK**, **OFF TRACK**, **HIT** or **NOT YET**, then the result. See [Player props](/using/bets/#player-props).
+:::
 
 When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN**, **Can't reach MLB**, **Can't reach HockeyTech** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**, or, with nothing on the schedule, **No upcoming event for this tour** for a golf tour and **No upcoming race for this series** for a racing series. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 

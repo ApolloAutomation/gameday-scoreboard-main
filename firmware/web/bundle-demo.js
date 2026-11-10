@@ -1879,7 +1879,7 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
     if (half > 1999) return "The panel takes lines up to 999.5.";
     return half;
   };
-  const addProp = () => {
+  const addProp = async () => {
     const t = teamByKey(betTeam);
     const pl = pickedPlayer();
     if (!pl) {
@@ -1895,6 +1895,16 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
       betSay(half);
       $("#betLine").focus();
       return;
+    }
+    // A favorite's saved team may be stale
+    const home = propFavs ? teamById(pl.l, pl.team) : null;
+    if (home) {
+      if (!rosters[keyOf(home)]) betSay("Checking the " + home[3] + " roster on ESPN\u2026");
+      const r = await readRoster(home);
+      betSay("");
+      if (r && r.length && !r.some((a) => a.id === pl.id)) {
+        return betSay(pl.panel + " isn't on the " + home[3] + " roster at ESPN now. Turn off Favorite players and pick their new team.");
+      }
     }
     const list = S.props || [];
     propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));

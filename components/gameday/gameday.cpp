@@ -144,7 +144,6 @@ static const uint32_t SIDE_COLLEGE_MS = 20 * 1000;
 // Box scores: a minute apart, the final's after ESPN's cache.
 static const uint32_t BOX_LIVE_MS = 60 * 1000;
 static const uint32_t BOX_FINAL_WAIT_MS = 30 * 1000;
-static const uint32_t BOX_FIRST_MS = 6000;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
@@ -1386,7 +1385,7 @@ const GameSnapshot *GamedayComponent::game_for_(uint8_t league, uint32_t event, 
 
 int GamedayComponent::prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const {
   if (g == nullptr)
-    return -1;
+    return ::espn::kPropNoValue;
   if (g->sport == ::espn::Sport::SOCCER)
     return ::espn::soccer_goals(*g, p.athlete);
   for (const BoxGame &b : this->box_) {
@@ -1395,7 +1394,7 @@ int GamedayComponent::prop_now_(const ::espn::Prop &p, const GameSnapshot *g) co
     const ::espn::BoxLine *l = ::espn::box_line(b.lines, p.athlete);
     return l != nullptr ? ::espn::prop_value(p, *l) : 0;
   }
-  return -1;
+  return ::espn::kPropNoValue;
 }
 
 void GamedayComponent::props_ticker_(const GameSnapshot &game, uint8_t league, std::string &out) const {
@@ -1454,13 +1453,17 @@ bool GamedayComponent::start_box_job_(uint32_t now, uint32_t due) {
     const bool fin = !shown || g.phase == ::espn::BetPhase::FINAL;
     if (fin && b->final_ms == 0)
       b->final_ms = now | 1;
-    const uint32_t wait = fin ? BOX_FINAL_WAIT_MS : BOX_LIVE_MS;
-    if ((g.phase != ::espn::BetPhase::LIVE && !fin) || (fin && (b->final_read || now - b->final_ms < wait)) ||
+    const uint32_t wait = ::espn::box_wait_ms(fin ? BOX_FINAL_WAIT_MS : BOX_LIVE_MS, b->fails);
+    if ((g.phase != ::espn::BetPhase::LIVE && !fin) ||
+        (fin && (b->final_read || now - b->final_ms < BOX_FINAL_WAIT_MS)) ||
         (b->tried_ms != 0 && now - b->tried_ms < wait))
       continue;
-    const uint32_t expect = this->box_took_ms_ != 0 ? this->box_took_ms_ + ::espn::kWatchMarginMs : BOX_FIRST_MS;
-    if (!::espn::watch_read_fits(now, due, expect))
+    const ::espn::Sport sport = ::espn::league_sport((League) p.league);
+    if (!::espn::watch_read_fits(now, due, this->box_times_.expect(sport))) {
+      this->box_times_.skip(sport);
       return false;  // the board's read comes first
+    }
+    this->box_times_.started(sport);
     b->tried_ms = now | 1;
     Job &j = this->new_job_();
     j.need_box = true;
@@ -1492,10 +1495,20 @@ void GamedayComponent::run_box_job_() {
            (unsigned) reader.total());
 }
 
+// Also for a worker given up on.
+void GamedayComponent::box_failed_(uint32_t took_ms) {
+  const Job &j = this->job_;
+  this->box_times_.took(::espn::league_sport((League) j.box_league), took_ms, false);
+  for (auto &b : this->box_)
+    if (b.league == j.box_league && b.event == j.box_event && b.fails < UINT8_MAX)
+      b.fails++;
+}
+
 void GamedayComponent::apply_box_job_() {
   Job &j = this->job_;
   const uint32_t now = millis();
   if (!j.box_ok) {
+    this->box_failed_(j.took_ms);
     if (j.throttled) {
       // ESPN refused: every gap read waits.
       this->gap_hold_until_ = (now + std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE)) | 1;
@@ -1503,9 +1516,10 @@ void GamedayComponent::apply_box_job_() {
     }
     return;
   }
-  this->box_took_ms_ = j.took_ms;
+  this->box_times_.took(::espn::league_sport((League) j.box_league), j.took_ms, true);
   for (auto &b : this->box_)
     if (b.league == j.box_league && b.event == j.box_event) {
+      b.fails = 0;
       b.lines = std::move(j.box_lines);
       b.read = true;
       b.final_read = b.final_read || j.box_final;
@@ -1519,9 +1533,7 @@ void GamedayComponent::apply_box_job_() {
         if (::espn::prop_empty(p) || p.league != b.league || p.event != b.event ||
             p.result != (uint8_t) ::espn::PropResult::NONE)
           continue;
-        const ::espn::BoxLine *l = ::espn::box_line(b.lines, p.athlete);
-        graded |= ::espn::prop_grade(p, l != nullptr && l->played, l != nullptr ? ::espn::prop_value(p, *l) : 0,
-                                     tnow, midnight);
+        graded |= ::espn::prop_grade_box(p, b.lines, tnow, midnight);
       }
       if (graded) {
         this->props_pref_.save(&this->props_);
@@ -1681,6 +1693,8 @@ void GamedayComponent::loop() {
           if (!w.event_id.empty())
             ::espn::watch_failed(this->watch_, w.league, w.event_id);
         }
+        if (this->job_.need_box)
+          this->box_failed_(deadline);
         if (this->job_.side || this->job_.need_watch || this->job_.a2 != 0 || this->job_.need_box) {
           // Side reads wait as failed; the mode keeps its time.
           if (this->job_.side) {
@@ -5223,6 +5237,7 @@ void GamedayComponent::start_gap_job_(uint32_t due) {
   if (now - this->times_cycle_ms_ >= ::espn::kWatchCycleMs) {
     this->times_cycle_ms_ = now;
     this->watch_times_.cycle();  // the read times age whatever reads
+    this->box_times_.cycle();
   }
   if (!this->gap_ok_(now)) {
     // Reads from before a pause can't be compared.
@@ -6825,7 +6840,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     const ::espn::PropStatus st = ::espn::prop_status(p, gs != nullptr ? &bg : nullptr, v,
                                                       gs != nullptr ? ::espn::game_progress(*gs, p.league) : -1, tnow);
     o["st"] = ::espn::prop_status_key(st);
-    if (v >= 0 && st != ::espn::PropStatus::VOID)
+    if (v != ::espn::kPropNoValue && st != ::espn::PropStatus::VOID)
       o["v"] = v;
     if (p.event == 0)
       continue;

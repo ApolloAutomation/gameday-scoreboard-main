@@ -1145,7 +1145,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // True when a done prop was dropped.
   bool props_tick_();
   const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
-  // Half units, -1 when no number yet.
+  // Half units, kPropNoValue when no number yet.
   int prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const;
   void props_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
   // A game's box score while a prop waits.
@@ -1154,16 +1154,18 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint32_t event{0};
     uint32_t tried_ms{0};  // last read started, 0 none
     uint32_t final_ms{0};  // game first seen final, 0 not yet
+    uint8_t fails{0};      // failed reads in a row
     bool read{false};
     bool final_read{false};
     std::vector<::espn::BoxLine> lines;
   };
   std::vector<BoxGame> box_;
   uint32_t box_check_ms_{0};
-  uint32_t box_took_ms_{0};  // the last good read's time
+  ::espn::BoxTimes box_times_;
   bool start_box_job_(uint32_t now, uint32_t due);
   void run_box_job_();
   void apply_box_job_();
+  void box_failed_(uint32_t took_ms);
   ESPPreferenceObject players_pref_;
   ::espn::PlayerBlob players_{};
   void set_player_(const ::espn::SetOp &op);

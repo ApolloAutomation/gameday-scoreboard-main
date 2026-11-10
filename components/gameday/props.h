@@ -1,7 +1,10 @@
 // Player prop bets the owner enters; graded from box scores.
 #pragma once
 
+#include <algorithm>
+#include <climits>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -18,7 +21,7 @@ constexpr int kPropMaxLineHalf = kBetMaxTotalHalf;
 constexpr uint8_t kNoAtom = 0xFF;
 
 enum class PropSide : uint8_t { OVER = 1, UNDER = 2, YES = 3 };
-// VOID: the box score never lists the player.
+// VOID: the player didn't play, or no game.
 enum class PropResult : uint8_t { NONE = 0, WON = 1, LOST = 2, PUSH = 3, VOID = 4 };
 
 // Box score columns by sport, indexes into BoxLine::v.
@@ -173,6 +176,9 @@ inline std::string prop_label(const Prop &p) {
   return out + (p.side == (uint8_t) PropSide::UNDER ? " U " : " O ") + bet_points(p.line, false) + " " + label;
 }
 
+// No number yet: stats can be negative.
+constexpr int kPropNoValue = INT_MIN;
+
 // Sum of the stat's atoms, half units.
 inline int prop_value(const Prop &p, const BoxLine &line) {
   const PropStatInfo *s = prop_stat_info(p.stat);
@@ -229,7 +235,7 @@ enum class PropStatus : uint8_t {
   WON,
   LOST,
   PUSH,
-  VOID,       // no line for the player, or the game ended unplayed
+  VOID,       // didn't play, or the game ended unplayed
 };
 
 inline const char *prop_status_key(PropStatus s) {
@@ -247,7 +253,7 @@ inline const char *prop_word(PropStatus s) {
 // Pace counts from a sixteenth of the game on.
 constexpr int kPropPaceFrom = 62;
 
-// value: half units, -1 unknown; progress: game_progress.
+// value: half units or kPropNoValue; progress: game_progress.
 inline PropStatus prop_status(const Prop &p, const BetGame *g, int value, int progress, int64_t now) {
   switch ((PropResult) p.result) {
     case PropResult::WON:
@@ -269,15 +275,19 @@ inline PropStatus prop_status(const Prop &p, const BetGame *g, int value, int pr
     return PropStatus::PRE;
   if (g->phase == BetPhase::OFF)
     return PropStatus::VOID;
-  if (value < 0)
+  if (value == kPropNoValue)
     return PropStatus::LIVE;
   if (p.side == (uint8_t) PropSide::YES)
     return value >= 2 ? PropStatus::HIT : PropStatus::NOT_YET;
   const bool over = p.side == (uint8_t) PropSide::OVER;
   if (value > p.line)
     return over ? PropStatus::HIT : PropStatus::OFF_TRACK;
-  if (g->phase == BetPhase::FINAL)
+  if (g->phase == BetPhase::FINAL) {
+    // Ungraded on the line: a push, not a pace.
+    if (value == p.line)
+      return PropStatus::LIVE;
     progress = 1000;
+  }
   if (progress < kPropPaceFrom)
     return PropStatus::LIVE;
   const int64_t pace = (int64_t) value * 1000 / progress;
@@ -292,7 +302,7 @@ inline std::string prop_ticker(const Prop &p, PropStatus s, int value) {
   if (s == PropStatus::WON || s == PropStatus::LOST || s == PropStatus::PUSH)
     value = p.final_half;
   std::string out = label;
-  if (value >= 0 && p.side != (uint8_t) PropSide::YES && s != PropStatus::VOID)
+  if (value != kPropNoValue && p.side != (uint8_t) PropSide::YES && s != PropStatus::VOID)
     out += " " + bet_points(value, false);
   const char *word = prop_word(s);
   return *word ? out + " " + word : out;
@@ -366,11 +376,14 @@ inline void props_loaded(PropBlob &b) {
       p = Prop{};
 }
 
-// A soccer player's goals in the game, half units.
+// "90'+5'" is regulation; extra time's "92'" isn't.
+inline bool soccer_regulation(const std::string &clock) { return atoi(clock.c_str()) <= 90; }
+
+// A soccer player's regulation goals, half units.
 inline int soccer_goals(const GameSnapshot &g, uint32_t athlete) {
   int n = 0;
   for (const SoccerGoal &goal : g.soc.goals)
-    if (goal.athlete == athlete && !goal.own_goal)
+    if (goal.athlete == athlete && !goal.own_goal && soccer_regulation(goal.clock))
       n += 2;
   return n;
 }
@@ -399,5 +412,47 @@ inline const BoxLine *box_line(const std::vector<BoxLine> &lines, uint32_t athle
       return &l;
   return nullptr;
 }
+
+// Grades on the final's box score.
+inline bool prop_grade_box(Prop &p, const std::vector<BoxLine> &lines, int64_t now, int64_t midnight) {
+  const BoxLine *l = box_line(lines, p.athlete);
+  // Football lists only players with a stat.
+  const bool played = l != nullptr ? l->played : league_sport((League) p.league) == Sport::FOOTBALL;
+  return prop_grade(p, played, l != nullptr ? prop_value(p, *l) : 0, now, midnight);
+}
+
+// A failing box score waits longer each time.
+constexpr uint32_t kBoxWaitMaxMs = 15 * 60 * 1000;
+inline uint32_t box_wait_ms(uint32_t base, uint8_t fails) {
+  const uint64_t w = (uint64_t) base << (fails < 5 ? fails : 5);
+  return w < kBoxWaitMaxMs ? (uint32_t) w : kBoxWaitMaxMs;
+}
+
+// Box score read times by sport, as WatchTimes.
+struct BoxTimes {
+  static constexpr uint32_t kFirstMs = 6000, kMarginMs = 1000, kMaxMs = 60000;
+  static constexpr int kKinds = 4;  // football, baseball, basketball, hockey
+  uint16_t ms[kKinds]{};
+  uint8_t skipped{0};
+  static int kind(Sport s) { return (uint8_t) s < kKinds ? (uint8_t) s : 0; }
+  uint32_t expect(Sport s) const {
+    const uint16_t m = this->ms[kind(s)];
+    return m != 0 ? m + kMarginMs : kFirstMs;
+  }
+  void skip(Sport s) { this->skipped |= 1u << kind(s); }
+  void started(Sport s) { this->skipped &= ~(1u << kind(s)); }
+  // Failures slower than expected count too.
+  void took(Sport s, uint32_t took_ms, bool ok) {
+    const uint16_t t = (uint16_t) std::min(took_ms, kMaxMs);
+    if (ok || t > this->expect(s))
+      this->ms[kind(s)] = t;
+  }
+  // Skipped kinds shrink so they aren't starved.
+  void cycle() {
+    for (int k = 0; k < kKinds; k++)
+      if ((this->skipped >> k) & 1)
+        this->ms[k] -= this->ms[k] / 8;
+  }
+};
 
 }  // namespace espn
