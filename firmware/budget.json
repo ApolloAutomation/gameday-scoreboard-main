@@ -8,15 +8,15 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2434538,
+      "flash": 2485568,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2434538,
+      "flash": 2485568,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2408860,
+      "flash": 2462272,
       "static_ram": 172568
     }
   },
@@ -29,13 +29,33 @@
       "heap": 3000,
       "json": 18447
     },
+    "poll_hockeytech_game": {
+      "heap": 1056,
+      "json": 6996
+    },
+    "poll_milb_game": {
+      "heap": 1264,
+      "json": 9038
+    },
     "poll_mlb_event": {
       "heap": 1581,
       "json": 8815
     },
+    "poll_mlb_event_players": {
+      "heap": 2300,
+      "json": 14600
+    },
     "poll_nba_event": {
       "heap": 1648,
       "json": 8052
+    },
+    "poll_nba_event_players": {
+      "heap": 2300,
+      "json": 9200
+    },
+    "poll_ncaa_event_players": {
+      "heap": 2000,
+      "json": 9400
     },
     "poll_ncaa_scoreboard": {
       "heap": 1508,
@@ -57,9 +77,21 @@
       "heap": 1850,
       "json": 14444
     },
+    "poll_soccer_event_players": {
+      "heap": 1700,
+      "json": 14700
+    },
     "racing_calendar": {
       "heap": 1600,
       "json": 17922
+    },
+    "scan_hockeytech_day": {
+      "heap": 7168,
+      "json": 21177
+    },
+    "scan_milb_day": {
+      "heap": 13568,
+      "json": 61507
     },
     "scan_mlb_day": {
       "heap": 1704,
@@ -85,6 +117,10 @@
       "heap": 1792,
       "json": 7023
     },
+    "schedule_ncaa": {
+      "heap": 1936,
+      "json": 11116
+    },
     "schedule_nfl": {
       "heap": 1936,
       "json": 6657
@@ -93,9 +129,41 @@
       "heap": 1042,
       "json": 6101
     },
+    "team_far_milb": {
+      "heap": 1024,
+      "json": 27437
+    },
+    "team_hockeytech": {
+      "heap": 1744,
+      "json": 11922
+    },
+    "team_milb": {
+      "heap": 1744,
+      "json": 15671
+    },
+    "team_mlb": {
+      "heap": 1042,
+      "json": 16187
+    },
     "team_nfl": {
       "heap": 1042,
       "json": 6277
+    },
+    "watch_mlb_day": {
+      "heap": 1800,
+      "json": 14122
+    },
+    "watch_ncaa_conference": {
+      "heap": 2500,
+      "json": 24172
+    },
+    "watch_nfl_day": {
+      "heap": 3600,
+      "json": 39624
+    },
+    "watch_soccer_day": {
+      "heap": 2800,
+      "json": 29621
     }
   }
 }

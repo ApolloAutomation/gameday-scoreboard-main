@@ -30,6 +30,8 @@ If the check can't reach the update server, the page says **Could not reach the 
 1. Open the device page and tap **Install** in the Firmware box.
 2. Confirm. The panel downloads the update and restarts.
 
+The Device card, where the Firmware box is, starts folded. When an update is out, or one didn't take, the card opens by itself with **Install** in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say **Update available** and the version, **Update didn't take**, or **Installing** and the version: tap **Device** to open it. See [The Device card](/using/device-page/#the-device-card).
+
 While it installs, the box says **Installing** and the version, with **Keep the panel powered. It reboots when done and this page reconnects.** Leave the panel plugged in until it's back. The page reloads by itself once the panel answers on the new version.
 
 If the power goes out or the download fails partway through, the panel keeps running the firmware it had. A new version only starts once it's fully downloaded and checked.
@@ -57,7 +59,7 @@ While that version is the one on offer, the Firmware box says **The update to** 
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
 
-A beta carries the number of a coming release, plus a build number, like 2026.10.3-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.10.3 is newer than any 2026.10.3 beta.
+A beta carries the number of a coming release, plus a build number, like 2026.11.1-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.1 is newer than any 2026.11.1 beta.
 
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
 

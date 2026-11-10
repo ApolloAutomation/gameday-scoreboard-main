@@ -1,6 +1,6 @@
 ---
 title: "Soccer: MLS and the Premier League"
-description: "What the panel shows for an MLS or Premier League match: the minute and stoppage time, the latest goal, red cards, cup games and the next three fixtures."
+description: "What the panel shows for an MLS or Premier League match: the minute and stoppage time, the latest goal, red cards, goal, penalty and red card splashes, cup games and the next three fixtures."
 sidebar:
   order: 9
 ---
@@ -41,11 +41,20 @@ With **Match stats** on in the Ticker card, the ticker lists:
 
 **Last play** adds the latest goal or card. At half time the ticker shows the goals, cards, stats and records, whatever the switches say. See [The ticker](/using/ticker/).
 
-## Goal splashes
+## Goal and card splashes
 
-A goal fills the screen for 4 seconds with fireworks on black, in the scoring club's color. Yours says "GOAL". The other side's says their abbreviation and "GOAL", like "LEE GOAL", unless you turn off **Opponent scores too** in the Celebrations card.
+A goal fills the screen for 4 seconds with fireworks on black, in the scoring club's color, with the club's logo, **+1** and "GOAL". The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. Two more splashes:
 
-At full time a win gets a victory splash with fireworks, your abbreviation and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.
+- **PENALTY GOAL**, with fireworks: a goal from the penalty spot, from ESPN's match details, with the logo and **+1**. Kicks in a shootout don't count.
+- **RED CARD**: a red card for either side, on a red screen, with the logo of the side that got it and no points. It shows whichever side gets the card, whatever **Opponent scores too** says.
+
+The logo says which club it was, so the words leave its abbreviation out. See [Splashes](/using/panel-sizes/#splashes).
+
+Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
+
+At full time a win gets a victory splash with fireworks, your logo and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.
+
+A goal, a penalty goal or a red card in another match can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those matches about every 45 seconds, from the league's day of matches, so a favorite's cup match, like one in the Champions League, isn't watched. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 ## Full time
 
@@ -55,4 +64,4 @@ A postponed or canceled match shows ESPN's word for it and gets no victory splas
 
 ## The next three games
 
-On the device page, the **Up next** list under the board shows your club's next three games after the one on the board, with the opponent, the day and time and the TV channel. It comes from the club's league schedule, so a cup game the panel is about to follow may not be in it.
+On the device page, the **Up next** list shows your club's next three games after the one on the board, with the opponent, the day and time and the TV channel. It comes from the club's league schedule, so a cup game the panel is about to follow may not be in it.

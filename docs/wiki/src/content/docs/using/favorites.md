@@ -15,7 +15,9 @@ A golf tour or a racing series can't be a favorite yet, so the chooser hides its
 
 The order is the priority. Higher teams win when two games clash (unless you choose **Alternate**, below), and the first four are buttons 1 to 4 on a WizMote remote. The page marks those four with their button number.
 
-Then tap **Favorite teams** under the board to switch the panel to it. The list is kept when you switch to another mode and back.
+Then tap the **Favorite teams** mode button to switch the panel to it. The list is kept when you switch to another mode and back.
+
+On two rows of two, or three or four panels in a row, the [second area](/using/panel-sizes/#the-second-area) can show a second team's game. That team doesn't need to be a favorite. If it is one, the playlist skips it while it has its own area, so the board and the second area don't show the same team.
 
 ## Between games: the playlist
 
@@ -35,11 +37,23 @@ A favorite's game takes the panel, or locks on, from a set time before kickoff u
 | --- | --- | --- |
 | **Take over** | How many minutes before kickoff the game takes the panel, 5 to 120. A game with no kickoff time yet locks on once it starts. | 15 minutes |
 | **After the final** | How long the final stays up before the playlist comes back, 30 seconds to 60 minutes. | 30 seconds |
-| **Two games at once** | **Stick with the higher team** shows the favorite higher in your list. **Alternate** switches between the games every set number of minutes. | Alternate on a new panel |
+| **Two games at once** | **Stick with the higher team** shows the favorite higher in your list. **Alternate** switches between the games every 30 seconds, or every 1 to 30 minutes, as set in the list next to it. | Alternate on a new panel |
 
-The minutes for **Alternate** are the same setting as **Switch every** in Live games, so changing one changes the other.
+The time for **Alternate** is the same setting as **Switch every** in Live games, so changing one changes the other. The panel reads the game it switches to right away, so its score is fresh, even with **30 s**. When another favorite's big play takes the board for a while, the time away doesn't count, and the board comes back to the game it was showing for what was left of its turn. A favorite you jumped to with a numbered button on the remote still holds the panel while its game is on, however short the turns.
 
 Panels set up before Favorite teams could alternate keep **Stick with the higher team** until you change it.
+
+### Follow this game
+
+To stay with the favorite on the board, turn on **Follow this game** in the Quick settings card under the board on the device page. The switch then reads **Following this game**, and the bar under the mode buttons says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner. A card whose game has already ended has no switch, since there's nothing left to follow.
+
+If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it. Pressing a numbered button on the remote for one of your favorites, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
+
+Following a game also stops the panel switching to your other favorites' big plays, below, and checking their games, except for the second area's **Rotating live games**, which keeps checking and shows big plays there. If the board is on another favorite's big play when you turn the switch on, the panel goes straight back to the favorite it was showing and follows that one.
+
+### Big plays in your other favorites' games
+
+While one favorite's game has the panel, or while it goes through its cards, the panel also checks your other favorites' live games, about every 45 seconds, between its own reads. When one has a big play, like a touchdown or a goal, the board switches to that game for its splash and stays a minute (**Stay on a big play** in the Celebrations card), then goes back. In My team the panel watches all your favorites' games the same way while it shows your team, but never leaves your team's game from its start time on unless **Switch from my team** is on. Turn off **Switch to big plays in other games** to keep the board on one game, or turn on **Follow this game** to keep it on the one it shows. A big play shows over the idle display too, at the night brightness in the night hours. It uses more data; see [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 ## Using the remote
 
@@ -47,6 +61,6 @@ Buttons 1 to 4 on a paired WizMote jump to your first four favorites. In Favorit
 
 ## On the device page
 
-The **Up next** list under the board has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
+The **Up next** list on the device page has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
 
 If none of your favorites has any game scheduled, the board shows a clock in your first favorite's colors. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).

@@ -195,6 +195,69 @@ dropped; nothing the panel reads changes:
 | `racing_calendar_f1_2026.json` | `.../racing/f1/scoreboard?dates=20261110`: no events, the 2026 calendar of 25 races. Entries have no `id` (it is in `event.$ref`), and their times run 3 hours after the header's |
 | `racing_calendar_nascar_2026.json` | `.../racing/nascar-premier/scoreboard?dates=20261110`: the 2026 calendar of 40 races, exhibitions included |
 
+Minor league baseball, from the MLB Stats API's schedule endpoint
+(`https://statsapi.mlb.com/api/v1/schedule`), recorded 2026-11-08 between
+22:50 and 23:30 UTC with a `curl/8.0` User-Agent, each with the exact query
+`source_mlbstats.cpp` builds (its `fields=` list cuts the document on the
+server; `test_mlbstats.cpp` checks the URLs). Minor league baseball was
+between seasons, so the live documents are winter league games (sport 17,
+the Dominican, Venezuelan, Puerto Rican and Mexican Pacific leagues), which
+the same endpoint serves in the same shape; the team, far, final and
+postponed documents are minor league ones. The two team reads were recorded
+again at 00:30 UTC on 2026-11-09, when the team read's `fields=` list gained
+each date's own `date`; Durham's games are the same as before:
+
+| File | Source |
+| --- | --- |
+| `mlbstats_team_dur_202604.json` | Team read, Durham Bulls (234, Triple-A), `startDate=2026-04-06&endDate=2026-04-17`: 815849 at SWB postponed 4/7 (cold), listed again 4/10 as game 2 of a doubleheader (no start time, postponed again) and 4/11 as game 2 (final), a doubleheader each day. Every game over; the tests set the ones from a given day on back to Scheduled to read it as on that morning |
+| `mlbstats_team_eug_202605.json` | Team read, Eugene Emeralds (461, High-A), `startDate=2026-05-22&endDate=2026-06-02`: under 5/22, after that night's game, 864127 TRI @ EUG, game 2 with no start time, still Scheduled, its `gameDate` 2027-05-19. Of the 8,718 games the four levels list for 2026, the only one more than 30 hours from midnight UTC of its date. Every real game over |
+| `mlbstats_team_none.json` | Team read, Durham, `startDate=2026-11-07&endDate=2026-11-18`: `{"dates":[]}` between seasons |
+| `mlbstats_far_dur.json` | Far read, Durham, `sportId=11&startDate=2026-11-19&endDate=2027-07-06`: next season's first 88 games, the opener 860674 on 2027-03-26 |
+| `mlbstats_game_final.json` | Game read, 816688 MEM @ DUR 2026-08-14, Final 12-2, probable pitchers, the last count and runners still in the line score |
+| `mlbstats_game_final_extra.json` | 815051 RNO @ RR 2026-08-01, Final 9-8 in 11 |
+| `mlbstats_game_final_short.json` | 816400 MEM @ JAX 2026-08-02, called in the 7th of 9 for rain (statusCode FR) |
+| `mlbstats_game_postponed.json` | 815849 DUR @ SWB: three dated entries, postponed (DC), postponed (DI, game 2, no start time), final |
+| `mlbstats_game_pregame.json` | 850461 MXC @ MOC, Pre-Game, the line score already there with an empty count |
+| `mlbstats_game_scheduled.json` | 850462 HER @ GSV, Scheduled, no line score |
+| `mlbstats_game_top.json` | 851475 LIC @ ESC, Top 6th, 2-0, two out, runner on third |
+| `mlbstats_game_middle.json` | 851475, the next read: Middle 6th, LIC scored a run in between |
+| `mlbstats_game_loaded.json` | 851475, Bot 6th, bases loaded after a walk (the count still 4-2) |
+| `mlbstats_game_bottom.json` | 870006 MAR @ ORI, Bot 9th, 2-2, none out |
+| `mlbstats_game_end.json` | 870006, End 9th, MAR 10-6 |
+| `mlbstats_game_over.json` | 870006, the next read: Game Over (codedGameState O), MAR wins |
+| `mlbstats_game_delay.json` | 851497 AGU @ GIG, rain delay in the Top 6th (statusCode IR, reason Rain) with runners on second and third |
+| `mlbstats_day_winter.json` | Day read, `sportId=17&date=2026-11-08` at 23:16 UTC: eight games on (one in a rain delay), one final, seven to come (one listed for 21:21 UTC still Scheduled) |
+| `mlbstats_day_milb_20260814.json` | Day read at all four levels, `date=2026-08-14`: 58 finals (one in 11 innings) and three postponed, listed in start order with the postponed ones last |
+
+The AHL and the ECHL, from HockeyTech's feed
+(`https://lscluster.hockeytech.com/feed/index.php`), recorded 2026-11-09
+between 01:12 and 01:28 UTC (Sunday evening in the East) with a `curl/8.0`
+User-Agent, each with the exact query `source_hockeytech.cpp` builds
+(`test_hockeytech.cpp` checks the URLs) and the leagues' public site keys from
+`firmware/gameday-common.yaml`. Every game of the weekend was over and none
+was on, so there is no live document: the tests set a recorded clock's live
+fields (status 2, the period, the clock left, the words) the way the feed
+sends them during play. Hockey has no doubleheaders. The feed's server caches
+the scorebar and the day for four minutes and the game centre's clock for one
+(`Cache-Control`, `X-Cache-Status`):
+
+| File | Source |
+| --- | --- |
+| `ht_team_ahl_syr.json` | Team read (`view=scorebar`, `team_id=324`, one game back and five ahead), Syracuse Crunch: 1029277 HFD @ SYR 11/7, Final OT 3-2, then five games to come from 1029294 LAV @ SYR on 11/11. Its counts are games, not days, around the league's own today |
+| `ht_team_echl_rc.json` | Team read, Rapid City Rush (70): 25606 RC @ IDH 11/7 postponed (status 8, the third postponed game in a row there), then five to come from 25626 TAH @ RC on 11/11 |
+| `ht_team_ahl_abb.json` | Team read, Abbotsford Canucks (440), recorded 02:37 UTC: 1029265 ONT @ ABB 11/7 final, then five to come. Abbotsford's home games are in `America/Vancouver` at `-07:00` ("PCT"), its road games in Los Angeles' zone at `-08:00`: British Columbia stayed on summer time from 1 November 2026 |
+| `ht_team_ahl_cgy.json` | Team read, Calgary Wranglers (444), recorded with it: road games at `-07:00` and `-08:00`, then two home games in `America/Edmonton` at `-06:00` ("MDT" all winter, Alberta the same) |
+| `ht_team_ahl_mb.json` | Team read, Manitoba Moose (321), recorded with it: 1029272 TOR @ MB 11/7 in `America/Winnipeg` at `-05:00` ("CDT", Manitoba the same), then road games in Chicago's and Toronto's zones |
+| `ht_game_ahl_pre.json` | Game read (`feed=gc&tab=clock`), 1029294 LAV @ SYR, not started (status 1, progress " 7:00 PM") |
+| `ht_game_ahl_final.json` | 1029271 CLE @ LAV, Final 4-2 |
+| `ht_game_ahl_final_ot.json` | 1029277 HFD @ SYR, Final OT 3-2, the clock at 2:01 left in the overtime |
+| `ht_game_echl_final_ot.json` | 25617 CIN @ IND, Final OT1 3-2 (the ECHL's words), period name "1st OT" |
+| `ht_game_echl_final_so.json` | 25591 BLM @ FW 2026-11-06, Final SO 5-4: period 4 ("1st OT") with an `SO` entry in the scoring |
+| `ht_game_echl_postponed.json` | 25606 RC @ IDH, postponed (status 8) |
+| `ht_day_ahl_20261107.json` | Day read (`view=gamesbydate&fetch_date=2026-11-07`), the AHL's Saturday: 16 finals, four in overtime, every goal listed. Whole, 103 KB (the heap budget's day read) |
+| `ht_day_echl_20261107.json` | The ECHL's Saturday: 13 finals, three in overtime, and RC @ IDH postponed |
+| `ht_day_echl_20261110.json` | The ECHL's Tuesday, read two days ahead: two games to come, one at 10:30 AM Eastern |
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device

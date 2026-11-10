@@ -6,15 +6,20 @@
 
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace espn {
 
 // Saved in prefs and the boot cache: append, never renumber.
 enum class League : uint8_t { NFL = 0, NCAA = 1, NBA = 2, NHL = 3, MLB = 4, WNBA = 5, MLS = 6, EPL = 7, MCBB = 8,
-                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12 };
+                              PGA = 9, LPGA = 10, F1 = 11, NASCAR = 12, MILB = 13, AHL = 14, ECHL = 15 };
 
 enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY = 3, SOCCER = 4, GOLF = 5,
                              RACING = 6 };
+
+// Each source is read and backed off on its own.
+enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1, HOCKEYTECH = 2 };
+static const size_t kSourceCount = 3;
 
 struct LeagueInfo {
   League league;
@@ -27,9 +32,11 @@ struct LeagueInfo {
   bool season_list;    // the team schedule is small enough for the Up next list
   bool logo_by_id;     // logo files are named by team id, not abbreviation
   uint8_t linger_min;  // a final stays on the board this long before the next game
+  Source source{Source::ESPN};
 };
 
-constexpr LeagueInfo kLeagues[] = {
+// inline: one copy in flash, not one per file.
+inline constexpr LeagueInfo kLeagues[] = {
     {League::NFL, "nfl", "football/nfl", "NFL", "nfl", Sport::FOOTBALL, true, true, false, 30},
     {League::NCAA, "ncaa", "football/college-football", "NCAAF", "ncaa", Sport::FOOTBALL, true, true, true, 30},
     // A regular-season team schedule is ~2.7 MB, so no Up next list. Game 2
@@ -58,9 +65,16 @@ constexpr LeagueInfo kLeagues[] = {
     // scoreboard header and the season calendar.
     {League::F1, "f1", "racing/f1", "Racing", "leagues", Sport::RACING, false, false, false, 0},
     {League::NASCAR, "nascar", "racing/nascar-premier", "Racing", "leagues", Sport::RACING, false, false, false, 0},
+    // MLB Stats API; path and logo_dir aren't ESPN's.
+    {League::MILB, "milb", "mlbstats/milb", "MiLB", "milb", Sport::BASEBALL, true, true, true, 10, Source::MLB_STATS},
+    // HockeyTech feed; logo_dir is its logo server folder.
+    {League::AHL, "ahl", "hockeytech/ahl", "AHL", "ahl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
+    {League::ECHL, "echl", "hockeytech/echl", "ECHL", "echl", Sport::HOCKEY, true, true, true, 30, Source::HOCKEYTECH},
 };
 
 constexpr size_t kLeagueCount = sizeof(kLeagues) / sizeof(kLeagues[0]);
+// Full: live_mask and recap_bit are 16-bit masks.
+static_assert(kLeagueCount <= 16, "League bitmasks are 16 bits");
 
 // Arrays indexed by League are kLeagueCount long: each row's value is below
 // it and no two rows share one.
@@ -98,6 +112,23 @@ inline const char *league_key(League league) {
 inline Sport league_sport(League league) {
   const LeagueInfo *l = league_info(league);
   return l != nullptr ? l->sport : Sport::FOOTBALL;
+}
+
+inline Source league_source(League league) {
+  const LeagueInfo *l = league_info(league);
+  return l != nullptr ? l->source : Source::ESPN;
+}
+inline bool is_mlb_stats(League league) { return league_source(league) == Source::MLB_STATS; }
+// Only ESPN feeds the big-play watcher and player rosters.
+inline bool from_espn(League league) { return league_source(league) == Source::ESPN; }
+inline bool is_hockeytech(League league) { return league_source(league) == Source::HOCKEYTECH; }
+// Skips a backed-off host's leagues; true if any dropped.
+inline bool drop_source(std::vector<League> &leagues, Source source) {
+  const size_t before = leagues.size();
+  for (size_t i = leagues.size(); i-- > 0;)
+    if (league_source(leagues[i]) == source)
+      leagues.erase(leagues.begin() + i);
+  return leagues.size() != before;
 }
 
 // A golf tour (PGA, LPGA): followed like a team, but never a favorite or in

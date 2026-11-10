@@ -1,4 +1,7 @@
 #include "espn_parse.h"
+#include "alerts.h"
+#include "source_hockeytech.h"
+#include "source_mlbstats.h"
 
 #include <atomic>
 #include <cstdio>
@@ -20,6 +23,7 @@ static std::string site_base(League league) {
   return std::string(site_root.load(std::memory_order_relaxed)) + (l != nullptr ? l->path : "football/nfl");
 }
 
+GameSnapshot::GameSnapshot() = default;
 GameSnapshot::GameSnapshot(const GameSnapshot &) = default;
 GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
 GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
@@ -50,7 +54,7 @@ std::string schedule_url(League league, uint32_t espn_id) {
   return team_url(league, espn_id) + "/schedule";
 }
 
-static void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
+using detail::civil_from_epoch;
 
 std::string team_day_url(League league, uint32_t group, int64_t day_epoch) {
   return team_day_url(league, group, day_epoch, nullptr);
@@ -95,7 +99,7 @@ std::string event_url(League league, const std::string &event_id, const char *co
 
 // Number of days since 1970-01-01 for a UTC epoch, then split into y/m/d.
 // Avoids gmtime_r so the host and device agree regardless of libc quirks.
-static void civil_from_epoch(int64_t epoch, int &y, int &m, int &d) {
+void detail::civil_from_epoch(int64_t epoch, int &y, int &m, int &d) {
   int64_t z = epoch / 86400 + 719468;
   if (epoch < 0 && epoch % 86400 != 0)
     z -= 1;
@@ -214,6 +218,10 @@ std::string team_logo_url(League league, uint32_t espn_id, const char *abbr) {
   const LeagueInfo *l = league_info(league);
   if (l == nullptr || is_board_sport(l->sport))
     return "";  // a golf tour's or a racing series' board has no logo
+  if (l->source == Source::MLB_STATS)
+    return mlb_logo_url(espn_id);  // the same URL the game read gives the team
+  if (l->source == Source::HOCKEYTECH)
+    return ht_logo_url(league, espn_id);  // likewise; "" for a team drawn as a badge
   std::string file = l->logo_by_id ? std::to_string(espn_id) : a;
   bool scoreboard = league == League::NFL || league == League::MLB || league == League::NBA || league == League::NHL;
   return dark_logo(std::string("https://a.espncdn.com/i/teamlogos/") + l->logo_dir +
@@ -258,6 +266,8 @@ GameSnapshot final_snapshot(const Final &f) {
   g.opp_color = f.home_color;
   g.team_record = f.away_record;
   g.opp_record = f.home_record;
+  g.team_rank = f.away_rank;
+  g.opp_rank = f.home_rank;
   g.team_logo = team_logo_url((League) f.league, f.away_id, f.away_abbr.c_str());
   g.opp_logo = team_logo_url((League) f.league, f.home_id, f.home_abbr.c_str());
   g.sport = league_sport((League) f.league);
@@ -278,7 +288,11 @@ GameSnapshot pending_snapshot(const Pending &p) {
   g.opp_color = p.home_color;
   g.team_record = p.away_record;
   g.opp_record = p.home_record;
+  g.team_rank = p.away_rank;
+  g.opp_rank = p.home_rank;
   g.tv = p.tv;
+  g.team_timeouts = g.opp_timeouts = 3;  // before kickoff; a final card's stay unknown (-1)
+  g.to_guess = 3;
   g.team_logo = team_logo_url((League) p.league, p.away_id, p.away_abbr.c_str());
   g.opp_logo = team_logo_url((League) p.league, p.home_id, p.home_abbr.c_str());
   g.sport = league_sport((League) p.league);
@@ -287,8 +301,9 @@ GameSnapshot pending_snapshot(const Pending &p) {
 
 bool parse_team_str(const std::string &json, Schedule &out) { return parse_team(json, out); }
 
-bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out) {
-  return parse_upcoming(json, our_team_id, max, out);
+bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out,
+                        bool ranks) {
+  return parse_upcoming(json, our_team_id, max, out, ranks);
 }
 
 bool parse_scoreboard_str(const std::string &json, const std::string &event_id, uint32_t our_team_id,
@@ -301,8 +316,8 @@ bool parse_team_game_str(const std::string &json, uint32_t our_team_id, Schedule
 }
 
 bool parse_event_str(const std::string &json, Sport sport, uint32_t our_team_id, GameSnapshot &out,
-                     const std::string &event_id) {
-  return parse_event(json, sport, our_team_id, out, event_id);
+                     const std::string &event_id, const PlayerWatch *players) {
+  return parse_event(json, sport, our_team_id, out, event_id, players);
 }
 
 uint32_t parse_color(const std::string &hex) {
@@ -313,23 +328,6 @@ uint32_t parse_color(const std::string &hex) {
   if (end == nullptr || *end != '\0')
     return 0xFFFFFF;
   return (uint32_t) v;
-}
-
-static const char *score_word(int delta, bool ours) {
-  switch (delta) {
-    case 6:
-    case 7:
-    case 8:
-      return ours ? "TOUCHDOWN!" : "TOUCHDOWN";
-    case 3:
-      return ours ? "FIELD GOAL!" : "FIELD GOAL";
-    case 1:
-      return ours ? "EXTRA POINT!" : "EXTRA POINT";
-    case 2:
-      return ours ? "2-POINT!" : "2-POINT";
-    default:
-      return ours ? "SCORE!" : "SCORE";
-  }
 }
 
 // ---- leaderboard sports ------------------------------------------------------
@@ -376,38 +374,36 @@ std::string board_event_name(Sport sport, const std::string &name, size_t max) {
   return sport == Sport::RACING ? racing_event_name(name, max) : golf_event_name(name, max);
 }
 
-Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral) {
+Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral,
+                     uint32_t alerts, bool wide) {
   if (cur.sport == Sport::GOLF)
     return golf_splash(prev, cur, false);  // the one-panel splash fits both widths
   if (cur.sport == Sport::RACING)
     return racing_splash(prev, cur, false);
-  if (cur.sport == Sport::BASEBALL)
-    return baseball_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::SOCCER)
-    return soccer_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::BASKETBALL)
-    return basketball_splash(prev, cur, opponent_splashes, neutral);
-  if (cur.sport == Sport::HOCKEY)
-    return hockey_splash(prev, cur, opponent_splashes, neutral);
-  Splash none;
-  if (!detail::same_game(prev, cur))
-    return none;
-  if (detail::went_final(prev, cur))
-    return detail::win_splash(cur, neutral, cur.team_score, cur.opp_score);
-  if (prev.state != GameState::IN || cur.state != GameState::IN)
-    return none;
-  int delta = detail::score_gain(prev.team_score, cur.team_score);
-  if (delta > 0 && neutral)
-    return Splash{cur.team_abbr + " " + score_word(delta, false), parse_color(cur.team_color)};
-  if (delta > 0)
-    return Splash{score_word(delta, true), parse_color(cur.team_color)};
-  int odelta = detail::score_gain(prev.opp_score, cur.opp_score);
-  if (odelta > 0 && opponent_splashes)
-    return Splash{cur.opp_abbr + " " + score_word(odelta, false), parse_color(cur.opp_color)};
-  return none;
+  Splash win;
+  if (detail::same_game(prev, cur) && detail::went_final(prev, cur)) {
+    // A shootout decides a level soccer game.
+    int us = cur.team_score, them = cur.opp_score;
+    if (cur.sport == Sport::SOCCER && us == them && cur.soc.team_shootout >= 0 && cur.soc.opp_shootout >= 0) {
+      us = cur.soc.team_shootout;
+      them = cur.soc.opp_shootout;
+    }
+    win = detail::win_splash(cur, neutral, us, them);
+  }
+  // A game-ending play outranks the win splash.
+  const BigPlay p = detect_big_play(prev, cur, alerts, opponent_splashes);
+  if (p.type != Alert::NONE &&
+      (win.text.empty() || p.type == Alert::WALK_OFF || p.type == Alert::BUZZER_BEATER))
+    return big_play_splash(p, cur, neutral, wide);
+  return win;
 }
 
 namespace detail {
+
+uint8_t rank_of(JsonObjectConst c) {
+  int r = c["curatedRank"]["current"] | 99;
+  return r >= 1 && r < 99 ? (uint8_t) r : 0;
+}
 
 void add_part(std::string &out, const std::string &part) {
   if (part.empty())
@@ -417,13 +413,27 @@ void add_part(std::string &out, const std::string &part) {
   out += part;
 }
 
-std::string records_line(const GameSnapshot &s) {
-  std::string out;
-  if (!s.team_record.empty())
-    add_part(out, s.team_abbr + " " + s.team_record);
-  if (!s.opp_record.empty())
-    add_part(out, s.opp_abbr + " " + s.opp_record);
+// "#5 OSU 9-1", "DAL Seed 4"; "" with neither.
+static std::string side_line(uint8_t rank, const std::string &abbr, const std::string &rec) {
+  if (rec.empty() && rank == 0)
+    return "";
+  std::string out = rank_label(rank, abbr, SIZE_MAX);
+  if (!rec.empty())
+    out += " " + rec;
   return out;
+}
+
+std::string records_line(const GameSnapshot &s, const std::string &standing) {
+  std::string out;
+  add_part(out, side_line(s.team_rank, s.team_abbr, standing.empty() ? s.team_record : standing));
+  add_part(out, side_line(s.opp_rank, s.opp_abbr, s.opp_record));
+  return out;
+}
+
+std::string ranked_matchup(const GameSnapshot &s) {
+  if (s.team_rank == 0 && s.opp_rank == 0)
+    return "";
+  return rank_label(s.team_rank, s.team_abbr, SIZE_MAX) + " vs " + rank_label(s.opp_rank, s.opp_abbr, SIZE_MAX);
 }
 
 void add_odds(std::string &out, const GameSnapshot &s, const TickerOptions &o, const std::string &odds) {
@@ -452,11 +462,68 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
   // false. Only a completed game has a winner.
   if (!cur.completed)
     return Splash{};
+  auto win = [](const std::string &abbr, const std::string &color) {
+    return Splash{abbr + " WINS!", parse_color(color), abbr, false, (uint8_t) (abbr.size() < 255 ? abbr.size() + 1 : 0),
+                  ""};
+  };
   if (us > them)
-    return Splash{cur.team_abbr + " WINS!", parse_color(cur.team_color)};
+    return win(cur.team_abbr, cur.team_color);
   if (neutral && them > us)
-    return Splash{cur.opp_abbr + " WINS!", parse_color(cur.opp_color)};
+    return win(cur.opp_abbr, cur.opp_color);
   return Splash{};
+}
+
+void fill_game_filter(JsonObject ev, Sport sport) {
+  fill_event_filter(ev);
+  if (sport == Sport::FOOTBALL) {
+    // ESPN sends end.team even when possession is missing.
+    JsonObject lp = ev["competitions"][0]["situation"]["lastPlay"];
+    lp["type"]["text"] = true;
+    lp["id"] = true;
+    lp["end"]["team"]["id"] = true;
+    lp["team"]["id"] = true;
+  }
+  if (sport == Sport::BASEBALL)
+    fill_baseball_filter(ev);
+  if (sport == Sport::SOCCER)
+    fill_soccer_filter(ev);
+  if (sport == Sport::BASKETBALL)
+    fill_basketball_filter(ev);
+  if (sport == Sport::HOCKEY)
+    fill_hockey_filter(ev);
+}
+
+bool game_from_event(JsonObjectConst ev, Sport sport, uint32_t our_team_id, GameSnapshot &out) {
+  GameSnapshot s;
+  if (!snapshot_from_event(ev, our_team_id, s))
+    return false;
+  s.sport = sport;
+  if (sport == Sport::BASEBALL)
+    baseball_from_event(ev, s);
+  if (sport == Sport::SOCCER)
+    soccer_from_event(ev, s);
+  if (sport == Sport::BASKETBALL)
+    basketball_from_event(ev, s);
+  if (sport == Sport::HOCKEY)
+    hockey_from_event(ev, s);
+  out = std::move(s);
+  return true;
+}
+
+DayGame day_game(JsonObjectConst ev) {
+  DayGame d;
+  d.event_id = str_or_empty(ev["id"]);
+  const std::string state = str_or_empty(ev["status"]["type"]["state"]);
+  d.state = state == "in"     ? GameState::IN
+            : state == "post" ? GameState::POST
+            : state == "pre"  ? GameState::PRE
+                              : GameState::NOT_FOUND;
+  d.kickoff_epoch = parse_iso8601_z(str_or_empty(ev["date"]));
+  JsonObjectConst comp = ev["competitions"][0];
+  d.time_tbd = time_tbd(comp);
+  for (JsonObjectConst c : comp["competitors"].as<JsonArrayConst>())
+    (str_or_empty(c["homeAway"]) == "home" ? d.home_id : d.away_id) = (uint32_t) atol(str_or_empty(c["id"]).c_str());
+  return d;
 }
 
 }  // namespace detail
@@ -466,7 +533,8 @@ using detail::add_odds;
 using detail::add_part;
 using detail::records_line;
 
-std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses, bool captive) {
+std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed, uint32_t misses, bool captive,
+                         Source source) {
   if (captive)
     return "Wi-Fi needs a sign-in";
   if (!clock_set)
@@ -474,8 +542,90 @@ std::string no_game_text(bool clock_set, bool live_mode, bool no_game_confirmed,
   if (live_mode)
     return "";
   if (!no_game_confirmed && misses > 0)
-    return "Can't reach ESPN";
+    return source == Source::MLB_STATS    ? "Can't reach MLB"
+           : source == Source::HOCKEYTECH ? "Can't reach HockeyTech"
+                                          : "Can't reach ESPN";
   return "";
+}
+
+std::string rank_text(uint8_t rank) { return rank == 0 ? std::string() : "#" + std::to_string(rank); }
+
+std::string rank_label(uint8_t rank, const std::string &text, size_t max_chars) {
+  if (rank == 0 || text.empty())
+    return text;
+  std::string t = rank_text(rank) + " " + text;
+  return t.size() <= max_chars ? t : text;
+}
+
+std::string place_short(const std::string &summary) {
+  // "1st", "10th" before " in "
+  const size_t in = summary.find(" in ");
+  if (in == std::string::npos || in == 0 || in > 5 || !isdigit((unsigned char) summary[0]))
+    return "";
+  std::string group = summary.substr(in + 4);
+  size_t at = group.find(" Division");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Division"));
+  // The initials keep "Conference": "National Football Conference" is "NFC".
+  const std::string named = group;
+  at = group.find(" Conference");
+  if (at != std::string::npos)
+    group.erase(at, strlen(" Conference"));
+  const size_t sp = group.find(' ');
+  if (sp == std::string::npos) {
+    static const char *const kShort[][2] = {
+        {"Eastern", "East"},       {"Western", "West"}, {"Central", "Cent"},  {"Pacific", "Pac"},  {"Atlantic", "Atl"},
+        {"Metropolitan", "Metro"}, {"Southeast", "SE"}, {"Southwest", "SW"}, {"Northwest", "NW"}, {"Northeast", "NE"},
+    };
+    for (const auto &k : kShort)
+      if (group == k[0])
+        group = k[1];
+  } else {
+    // "NFC East" is "NFCE"; else initials, "EPL".
+    bool caps = sp > 0 && group.find(' ', sp + 1) == std::string::npos;
+    for (size_t i = 0; i < sp; i++)
+      caps = caps && isupper((unsigned char) group[i]);
+    std::string t = caps ? group.substr(0, sp + 2) : std::string();
+    if (caps)
+      t.erase(sp, 1);
+    for (size_t i = 0; !caps && i < named.size(); i++)
+      if (named[i] != ' ' && (i == 0 || named[i - 1] == ' '))
+        t += (char) toupper((unsigned char) named[i]);
+    group = t;
+  }
+  std::string place = summary.substr(0, in);
+  return group.empty() ? place : place + " " + group;
+}
+
+std::string standing_text(Standing kind, uint8_t seed, const std::string &place) {
+  if (kind == Standing::SEED && seed > 0)
+    return "Seed " + std::to_string(seed);
+  return kind == Standing::PLACE ? place : std::string();
+}
+
+size_t record_row_chars(int clock_px, int board_px, int row_px, int char_px) {
+  if (row_px <= 0 || char_px <= 0)
+    return 0;
+  size_t n = (size_t) (row_px / char_px);
+  // Mirrors LVGL centering, which rounds the leftover down.
+  const int clock_left = board_px / 2 - (clock_px + 1) / 2;
+  while (clock_px > 0 && n > 0 && (row_px - (int) n * char_px) / 2 + (int) n * char_px >= clock_left)
+    n--;
+  return n;
+}
+
+std::string board_standing(const std::string &standing, size_t room) {
+  if (standing.size() <= room)
+    return standing;
+  const size_t sp = standing.find(' ');
+  if (sp == std::string::npos)
+    return "";
+  std::string t = standing;
+  t.erase(sp, 1);
+  if (t.size() <= room)
+    return t;
+  // A seed's "Seed" alone says nothing
+  return isdigit((unsigned char) standing[0]) && sp <= room ? standing.substr(0, sp) : std::string();
 }
 
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local) {
@@ -497,6 +647,7 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
       return "No upcoming game";
     case GameState::PRE:
       add_part(out, s.game_name);
+      add_part(out, detail::ranked_matchup(s));
       add_part(out, kickoff_local.empty() ? s.short_detail : kickoff_local);
       add_odds(out, s, o);
       if (s.venue != s.game_name)  // "Rose Bowl | ... | Rose Bowl"
@@ -506,24 +657,32 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
       // A game that ended without being completed says why: Postponed,
       // Canceled or Suspended
       out = s.completed || s.short_detail.empty() ? std::string("Final") : s.short_detail;
-      add_part(out, records_line(s));
+      add_part(out, records_line(s, o.team_standing));
       return out;
     case GameState::IN:
       break;
   }
-  if (s.short_detail.find("Halftime") != std::string::npos) {
+  if (is_halftime(s)) {
     out = "Halftime";
-    add_part(out, records_line(s));
+    add_part(out, records_line(s, o.team_standing));
     return out;
   }
-  if (o.down_distance)
+  if (o.down_distance && in_red_zone(s))
+    add_part(out, "RED ZONE");
+  if (o.down_distance && !football_break(s))
     add_part(out, s.down_distance);
+  // ESPN leaves stale break words in shortDetail; show the clock.
+  const bool words = s.short_detail.find(':') == std::string::npos;
+  const std::string clock =
+      words && (s.resumed || clock_running(s) || s.short_detail.find("Halftime") != std::string::npos)
+          ? clock_text(s)
+          : s.short_detail;
   if (o.clock)
-    add_part(out, s.short_detail);
+    add_part(out, clock);
   if (o.last_play)
     add_last_play(out, s.last_play);
   if (out.empty())
-    out = s.short_detail.empty() ? "In Progress" : s.short_detail;
+    out = clock.empty() ? "In Progress" : clock;
   return out;
 }
 
@@ -545,7 +704,10 @@ std::string ha_status_text(const GameSnapshot &s, const std::string &kickoff_loc
       out = s.completed || s.short_detail.empty() ? std::string("Final") : s.short_detail;
       break;
     case GameState::IN:
-      out = s.short_detail.find("Halftime") != std::string::npos ? "Halftime" : "Live";
+      // Football's halftime comes from status and plays, not words.
+      out = (s.sport == Sport::FOOTBALL ? is_halftime(s) : s.short_detail.find("Halftime") != std::string::npos)
+                ? "Halftime"
+                : "Live";
       break;
   }
   add_part(out, s.team_abbr + " " + std::to_string(s.team_score) + ", " + s.opp_abbr + " " +
@@ -736,6 +898,191 @@ static std::string period_name(int period) {
   }
 }
 
+bool is_halftime(const GameSnapshot &s) {
+  if (s.resumed)
+    return false;
+  if (s.status_name == "STATUS_HALFTIME")
+    return true;
+  if (s.short_detail.find("Halftime") == std::string::npos)
+    return false;
+  return s.status_name.empty() && s.period < 3;
+}
+
+// shortDetail says "Halftime" but the second half is under way.
+static bool stale_halftime(const GameSnapshot &s) {
+  return s.short_detail.find("Halftime") != std::string::npos && !is_halftime(s);
+}
+
+bool clock_running(const GameSnapshot &s) {
+  return s.status_name == "STATUS_IN_PROGRESS" && s.period > 0 &&
+         s.display_clock.find(':') != std::string::npos && s.display_clock != "0:00";
+}
+
+std::string play_clock(const std::string &p) {
+  // "(M:SS)" or "(MM:SS)" at the start
+  size_t close = p.find(')');
+  if (p.empty() || p[0] != '(' || close == std::string::npos || close < 5 || close > 6)
+    return "";
+  std::string c = p.substr(1, close - 1);
+  size_t colon = c.find(':');
+  if (colon == std::string::npos || colon + 3 != c.size())
+    return "";
+  for (size_t i = 0; i < c.size(); i++)
+    if (i != colon && (c[i] < '0' || c[i] > '9'))
+      return "";
+  if (colon == 2 && c[0] == '0')
+    c.erase(0, 1);  // "00:14" reads "0:14", as ESPN's displayClock does
+  return c == "0:00" ? "" : c;
+}
+
+// A resumed halftime counts as the 3rd quarter.
+static int board_period(const GameSnapshot &s) {
+  if (!s.resumed || s.period >= 3)
+    return s.period;
+  return s.play_secs_left >= 0 && s.play_secs_left < 900 ? 4 : 3;
+}
+
+static int timeout_half(int period) { return period <= 2 ? 1 : (period <= 4 ? 2 : period - 2); }
+
+static int play_secs(const std::string &last_play) {
+  const std::string c = play_clock(last_play);
+  if (c.empty())
+    return -1;
+  size_t colon = c.find(':');
+  return atoi(c.substr(0, colon).c_str()) * 60 + atoi(c.substr(colon + 1).c_str());
+}
+
+// By ESPN's status alone, ignoring plays.
+static bool break_now(const GameSnapshot &s) {
+  if (s.sport != Sport::FOOTBALL || s.state != GameState::IN || s.resumed)
+    return false;
+  if (is_halftime(s))
+    return true;
+  // ESPN may end a half as IN_PROGRESS at 0:00.
+  const bool ended = s.status_name == "STATUS_END_PERIOD" ||
+                     (s.short_detail.rfind("End of", 0) == 0 && s.display_clock == "0:00");
+  return ended && (s.period == 2 || s.period >= 4);
+}
+
+// ESPN's between-play words, which aren't plays.
+static bool break_words(const std::string &p) {
+  return p.empty() || p.rfind("End of", 0) == 0 || p.rfind("END ", 0) == 0 || p.find("Halftime") != std::string::npos;
+}
+
+static bool kickoff(const std::string &p) {
+  // "kickoff", "Kickoff" or "kicks"
+  return p.find("ickoff") != std::string::npos || p.find("kicks") != std::string::npos;
+}
+
+// A late first-half play can still arrive after halftime.
+static bool after_break(const GameSnapshot &s, int break_period, const std::string &break_play, int break_secs) {
+  if (break_words(s.last_play) || s.last_play == break_play)
+    return false;
+  if (break_period != 2)
+    return true;
+  const int secs = play_secs(s.last_play);
+  // 1800 left can be a first-half kickoff return too.
+  if (s.play_secs_left >= 0)
+    return s.play_secs_left < 1800 ||
+           (s.play_secs_left == 1800 && (secs == 900 || (secs < 0 && kickoff(s.last_play))));
+  if (secs >= 0)
+    return secs > (break_secs >= 0 ? break_secs : 599);
+  return kickoff(s.last_play);
+}
+
+static bool first_half_play(const GameSnapshot &s) {
+  if (s.play_secs_left >= 0) {
+    // At 1800, the 3rd quarter's own kickoff isn't.
+    const int secs = play_secs(s.last_play);
+    return s.play_secs_left > 1800 ||
+           (s.play_secs_left == 1800 && secs != 900 && !(secs < 0 && kickoff(s.last_play)));
+  }
+  return s.last_play.find("End of 2nd") != std::string::npos || s.last_play.find("End of Half") != std::string::npos ||
+         s.last_play.find("Halftime") != std::string::npos;
+}
+
+void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
+  if (next.sport != Sport::FOOTBALL)
+    return;
+  const bool game = prev.valid && prev.event_id == next.event_id;
+  const bool was_held = game && prev.held;
+  if (next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
+    if (game && prev.resumed && !first_half_play(next))
+      next.resumed = true;  // until ESPN's status catches up
+    else
+      next.resumed = after_break(next, 2, was_held ? prev.break_play : std::string(), was_held ? prev.break_secs : -1);
+  }
+  next.held = false;
+  next.break_period = 0;
+  next.break_play.clear();
+  next.break_secs = -1;
+  auto hold = [&](int period, const std::string &play, int secs) {
+    next.held = true;
+    next.break_period = period;
+    next.break_play = play;
+    next.break_secs = secs;
+  };
+  if (next.state == GameState::IN && !next.resumed) {
+    const int secs = play_secs(next.last_play);
+    // A late first-half play moves the break's marks.
+    const bool late = was_held && !break_words(next.last_play) && next.last_play != prev.break_play && secs >= 0;
+    if (was_held && break_now(next)) {
+      hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
+    } else if (was_held && clock_running(next) && next.period == prev.break_period) {
+      // ESPN put time back in the period: play goes on
+    } else if (was_held && !after_break(next, prev.break_period, prev.break_play, prev.break_secs)) {
+      hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
+    } else if (!was_held && break_now(next)) {
+      hold(next.period >= 4 ? next.period : 2, next.last_play, secs);
+    } else if (!was_held && board_period(next) >= 3 && board_period(next) <= 4 && first_half_play(next)) {
+      hold(2, next.last_play, secs);  // ESPN's plays haven't reached the second half yet
+    }
+  }
+
+  const int now_p = board_period(next), had_p = board_period(prev);
+  const bool same = game && timeout_half(had_p) == timeout_half(now_p);
+  const bool resting = next.state == GameState::IN && next.held && !break_now(next);
+  // ESPN sends first-half counts until the second half's first play.
+  const bool leftovers = resting && next.break_period == 2 && (now_p == 3 || now_p == 4);
+  // Overtime starts with the last period's stale counts.
+  const bool stale_ot = resting && next.break_period >= 4 && now_p > next.break_period;
+  next.to_guess = 0;
+  auto fill = [&](int had, uint8_t bit, int &now) {
+    if (leftovers) {
+      now = 3;
+    } else if (stale_ot) {
+      now = -1;
+      return;
+    } else if (now >= 0) {
+      return;  // ESPN's own count
+    } else if (same && had >= 0 && !(prev.to_guess & bit)) {
+      now = had;
+      return;  // ESPN's from an earlier poll
+    } else if (same && had >= 0 && (had_p == now_p || (prev.state == GameState::PRE && now_p <= 1))) {
+      now = had;  // a guess carries only within its period
+    } else if (next.state == GameState::PRE) {
+      now = 3;
+    } else {
+      now = -1;
+      return;
+    }
+    next.to_guess |= bit;
+  };
+  fill(prev.team_timeouts, 1, next.team_timeouts);
+  fill(prev.opp_timeouts, 2, next.opp_timeouts);
+}
+
+bool in_red_zone(const GameSnapshot &s) {
+  return s.sport == Sport::FOOTBALL && s.state == GameState::IN && s.is_red_zone && s.possession != 0 &&
+         !s.short_down_distance.empty() && !football_break(s);
+}
+
+bool football_break(const GameSnapshot &s) {
+  if (s.sport != Sport::FOOTBALL || s.state != GameState::IN || s.resumed)
+    return false;
+  return break_now(s) || s.held;
+}
+
 std::string clock_text(const GameSnapshot &s) {
   if (is_board_sport(s.sport))
     return "";  // the leaderboard has its own status cell
@@ -749,6 +1096,15 @@ std::string clock_text(const GameSnapshot &s) {
     return hockey_clock_text(s);
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
   bool special = s.short_detail.find(':') == std::string::npos;  // Halftime, End of 3rd, Delayed, Final
+  if (s.resumed) {
+    // ESPN's status sticks at halftime; plays have the clock.
+    const std::string c = play_clock(s.last_play);
+    return c.empty() ? period_name(board_period(s)) : c + " " + period_name(board_period(s));
+  }
+  if (special && is_halftime(s))
+    return "Halftime";  // the status says so before shortDetail does ("End of 2nd")
+  if (special && (stale_halftime(s) || clock_running(s)))
+    return has_clock ? s.display_clock + " " + period_name(s.period) : period_name(s.period);
   if (!has_clock || special) {
     std::string t = s.short_detail;
     size_t dash = t.find(" - ");

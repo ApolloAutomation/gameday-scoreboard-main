@@ -14,6 +14,8 @@
 #include <string>
 
 #include "espn_parse.h"
+#include "source_hockeytech.h"
+#include "source_mlbstats.h"
 
 using namespace espn;
 namespace fs = std::filesystem;
@@ -48,11 +50,17 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_scoreboard_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_scan_filter(f, true, true); },
       [](JsonDocument &f) { espn::detail::fill_team_filter(f); },
-      [](JsonDocument &f) { espn::detail::fill_upcoming_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_upcoming_filter(f, true); },
       [](JsonDocument &f) { espn::detail::fill_golf_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_golf_calendar_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_racing_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_racing_calendar_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_mlb_team_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_mlb_game_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_mlb_day_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_team_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_game_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_ht_day_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;
@@ -68,6 +76,14 @@ int main(int argc, char **argv) {
       JsonArray events = doc["events"];
       while (events.size() > kMaxEvents)
         events.remove(kMaxEvents);
+      JsonArray dates = doc["dates"];  // an MLB Stats schedule's
+      while (dates.size() > kMaxEvents)
+        dates.remove(kMaxEvents);
+      for (const char *list : {"Scorebar", "Gamesbydate"}) {  // HockeyTech's two game lists
+        JsonArray games = doc["SiteKit"][list];
+        while (games.size() > kMaxEvents)
+          games.remove(kMaxEvents);
+      }
       std::string out;
       serializeJson(doc, out);
       if (out.size() < 32 || !seen.insert(out).second)

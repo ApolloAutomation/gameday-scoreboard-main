@@ -83,6 +83,59 @@ struct Backoff {
   }
 };
 
+// Per host, so one host's refusal never holds back another.
+struct HostWait {
+  Backoff run;
+  uint32_t since_ms{0};
+  uint32_t wait_ms{0};  // 0: no wait running
+
+  uint32_t fail(bool refused, uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+    this->wait_ms = this->run.fail(refused, retry_after_ms, rnd);
+    this->since_ms = now;
+    return this->wait_ms;
+  }
+  void clear() {
+    this->run.clear();
+    this->wait_ms = 0;
+  }
+  // Keeps the run, so another failure waits longer.
+  void end_wait() { this->wait_ms = 0; }
+  bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
+  uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
+};
+
+// Alone, the scan's own backoff counts the failure.
+inline uint32_t host_scan_result(HostWait &w, bool read, bool failed, bool others, bool refused,
+                                 uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return others ? w.fail(refused, retry_after_ms, rnd, now) : 0;
+}
+
+// Counts even alone: no mode backoff counts side reads.
+inline uint32_t host_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
+                                 uint32_t rnd, uint32_t now) {
+  if (!read)
+    return 0;
+  if (!failed) {
+    w.clear();
+    return 0;
+  }
+  return w.fail(refused, retry_after_ms, rnd, now);
+}
+
+// Baseball TBD is doubleheader game 2: poll it as near.
+static const int64_t kPreNearSeconds = 60 * 60;
+inline bool pre_poll_near(int64_t until_s, bool time_tbd, bool baseball) {
+  if (!time_tbd)
+    return until_s <= kPreNearSeconds;
+  return baseball && until_s <= 0 && until_s > -30 * 3600;
+}
+
 // One more read missed. The ticker and the device page warn from three in a
 // row, so the count stops at 255 instead of wrapping to 0 and dropping the
 // warning while ESPN is still out of reach.
@@ -93,6 +146,15 @@ inline uint8_t add_miss(uint8_t misses) { return misses < 255 ? (uint8_t) (misse
 // decides. Without one, a failed or refused cup read backs off.
 inline bool cup_read_backs_off(bool cup_ok, bool polled, bool game_ok, bool throttled) {
   return polled ? !game_ok : (!cup_ok || throttled);
+}
+
+// Only the waiting host's reads wait; others go on.
+inline uint32_t held_next_ms(uint32_t scan_left, uint32_t held_left, bool scan_held) {
+  if (held_left == 0)
+    return scan_left;
+  if (scan_left == 0)
+    return scan_held ? held_left : 0;
+  return held_left < scan_left ? held_left : scan_left;
 }
 
 }  // namespace espn

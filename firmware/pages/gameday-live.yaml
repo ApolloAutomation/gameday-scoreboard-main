@@ -2,8 +2,7 @@
 # Live page (MIT, Stuart Parmenter). One file for every panel arrangement: on
 # a 64-wide display it stacks logos over scores; at 128 wide and up it spreads
 # logos to the edges with big scores, records, and timeout pips in the middle.
-# The gameday component feeds it through the gd_update script; logos come
-# from its logo cache through gd_show_logos in gameday-common.yaml.
+# Drawn by board_view.h; split.h adds a second area.
 
 lvgl_page_manager:
   pages:
@@ -18,12 +17,14 @@ esphome:
             id(shared_scroll_speed).add_on_state_callback([](float sp) {
               id(tt_ticker_timing).execute();
               // Restart the scroll so the new speed shows straight away.
-              lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_CLIP);
-              lv_label_set_long_mode(id(tt_game_status_lbl), LV_LABEL_LONG_SCROLL_CIRCULAR);
+              for (lv_obj_t *l : {id(tt_game_status_lbl), id(gd_lower_ticker_lbl)}) {
+                lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
+                lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
+              }
             });
 
 # Fireworks (lvgl-canvas-fx) on a canvas behind the splash text. The canvas
-# is allocated at the widest layout and simply clips on a single panel.
+# is 128x64: clips on one panel, centered on wider screens.
 lvgl_canvas_fx:
   - id: tt_fx
     effect: fireworks
@@ -37,20 +38,22 @@ script:
   # fixed time, so the time follows the line's width in pixels, and every line
   # moves at the same pace whatever its length. Run when the line or the
   # setting changes.
+  # The 2x2's bigger ticker (gd_lower_ticker_lbl) gets the same treatment.
   - id: tt_ticker_timing
     then:
       - lambda: |-
-          lv_obj_t *l = id(tt_game_status_lbl);
-          const char *t = lv_label_get_text(l);
-          const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
-          lv_point_t sz;
-          lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-          const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
           const float sp = id(shared_scroll_speed).has_state() ? id(shared_scroll_speed).state : 5.0f;
-          const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
-          // Only when it changes: setting the style restarts the scroll.
-          if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
-            lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+          for (lv_obj_t *l : {id(tt_game_status_lbl), id(gd_lower_ticker_lbl)}) {
+            const char *t = lv_label_get_text(l);
+            const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
+            lv_point_t sz;
+            lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
+            const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
+            // Only when it changes: setting the style restarts the scroll.
+            if (lv_obj_get_style_anim_duration(l, LV_PART_MAIN) != ms)
+              lv_obj_set_style_anim_duration(l, ms, LV_PART_MAIN);
+          }
 
   - id: tt_hide_splash
     mode: restart
@@ -60,119 +63,86 @@ script:
           lv_obj_add_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
           id(tt_fx).pause();
 
+  # Binds the renderer once, by whichever runs first
+  - id: tt_bind_view
+    then:
+      - lambda: |-
+          if (gameday::board_view() != nullptr)
+            return;
+          gameday::BoardView v;
+          v.game = id(tt_game_container);
+          v.no_game = id(tt_no_game_container);
+          v.board = id(gd_board_container);
+          v.logo[0] = id(gd_team_logo_img);
+          v.logo[1] = id(gd_opp_logo_img);
+          v.badge[0] = id(gd_team_badge);
+          v.badge[1] = id(gd_opp_badge);
+          v.badge_lbl[0] = id(gd_team_badge_lbl);
+          v.badge_lbl[1] = id(gd_opp_badge_lbl);
+          v.abbr[0] = id(tt_away_team_lbl);
+          v.abbr[1] = id(tt_home_team_lbl);
+          v.score[0] = id(tt_away_score_lbl);
+          v.score[1] = id(tt_home_score_lbl);
+          v.rec[0] = id(tt_away_rec_lbl);
+          v.rec[1] = id(tt_home_rec_lbl);
+          v.poss[0] = id(tt_away_poss);
+          v.poss[1] = id(tt_home_poss);
+          v.clock = id(tt_clock_lbl);
+          v.down = id(tt_down_lbl);
+          v.pip[0] = id(tt_away_to1);
+          v.pip[1] = id(tt_away_to2);
+          v.pip[2] = id(tt_away_to3);
+          v.pip[3] = id(tt_home_to1);
+          v.pip[4] = id(tt_home_to2);
+          v.pip[5] = id(tt_home_to3);
+          v.base[0] = id(tt_base1);
+          v.base[1] = id(tt_base2);
+          v.base[2] = id(tt_base3);
+          v.out[0] = id(tt_out1);
+          v.out[1] = id(tt_out2);
+          v.out[2] = id(tt_out3);
+          v.count = id(tt_count_lbl);
+          v.outs = id(tt_outs_lbl);
+          v.ticker = id(tt_game_status_lbl);
+          v.msg = id(tt_no_game_msg_lbl);
+          v.clock_time = id(gd_clock_time_lbl);
+          v.clock_sub = id(gd_clock_sub_lbl);
+          v.splash = id(tt_splash);
+          v.splash_lbl = id(tt_splash_lbl);
+          v.fx = id(tt_fx_canvas);
+          v.f8 = id(spleen_8)->get_lv_font();
+          v.f12 = id(spleen_12)->get_lv_font();
+          v.f16 = id(spleen_16)->get_lv_font();
+          v.f24 = id(spleen_24)->get_lv_font();
+          v.f32 = id(spleen_32)->get_lv_font();
+          v.blank = id(gd_logo_blank);
+          v.w = lv_disp_get_hor_res(lv_disp_get_default());
+          gameday::BoardView *bv = gameday::board_view_set(v);
+          if (bv == nullptr)
+            return;
+          gameday::board_build(*bv);
+          gameday::area_build(id(gd_lower), id(gd_lower_time_lbl), id(gd_lower_date_lbl), id(gd_lower_ticker_lbl),
+                              *bv, id(gd_logo_blank));
+
   - id: tt_apply_layout
     then:
       - lambda: |-
           // Measure the display and lay the scoreboard out to fit it.
           // Everything is positioned here rather than in the widget config so
           // one page file serves 64x64, 128x64, and wider chains alike.
-          const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const ::espn::SplitArea area = id(gameday_ctl).split_area();
+          const gameday::Sizes sizes = id(gameday_ctl).sizes();
+          const int W = area.main_w;
+          const int screen_h = lv_disp_get_ver_res(lv_disp_get_default());
+          const int H = area.on ? 64 : screen_h;
           const bool wide = W >= 128;
-          lv_obj_set_size(id(tt_game_container), W, 64);
-          lv_obj_set_size(id(tt_no_game_container), W, 64);
-          lv_obj_set_size(id(gd_board_container), W, 64);
-          lv_obj_set_size(id(tt_splash), W, 64);
-          lv_obj_set_width(id(tt_splash_lbl), W);
-          lv_obj_set_width(id(tt_no_game_msg_lbl), W);
-          // Centered both ways, so a message that wraps to three lines on a
-          // single panel ("Saturday's / college / scores") still fits.
-          lv_obj_set_style_text_font(id(tt_no_game_msg_lbl), wide ? id(spleen_12) : id(spleen_8), 0);
-          lv_obj_align(id(tt_no_game_msg_lbl), LV_ALIGN_CENTER, 0, 0);
-          // The off-season clock: the time, and under it the next game (two
-          // lines) on a wide display or the date on a single panel.
-          lv_obj_set_width(id(gd_clock_time_lbl), W);
-          lv_obj_set_width(id(gd_clock_sub_lbl), W);
-          lv_obj_set_style_text_font(id(gd_clock_time_lbl), id(spleen_16), 0);
-          lv_obj_set_style_text_font(id(gd_clock_sub_lbl), wide ? id(spleen_12) : id(spleen_8), 0);
-          lv_obj_set_pos(id(gd_clock_time_lbl), 0, wide ? 6 : 14);
-          lv_obj_set_pos(id(gd_clock_sub_lbl), 0, wide ? 26 : 34);
-          lv_obj_set_width(id(tt_game_status_lbl), W);
-          lv_obj_t *abars[3] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3)};
-          lv_obj_t *hbars[3] = {id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
-          if (wide) {
-            // Logos at the far edges, score columns in the middle. A badge
-            // (the abbreviation standing in for a logo) takes the logo's place.
-            const int colw = W / 2 - 36;
-            lv_obj_set_pos(id(gd_team_logo_img), 2, 4);
-            lv_obj_set_pos(id(gd_opp_logo_img), W - 34, 4);
-            lv_obj_set_pos(id(gd_team_badge), 2, 4);
-            lv_obj_set_pos(id(gd_opp_badge), W - 34, 4);
-            lv_obj_set_style_text_font(id(tt_away_team_lbl), id(spleen_12), 0);
-            lv_obj_set_style_text_font(id(tt_home_team_lbl), id(spleen_12), 0);
-            lv_obj_set_style_text_font(id(tt_away_score_lbl), id(spleen_16), 0);
-            lv_obj_set_style_text_font(id(tt_home_score_lbl), id(spleen_16), 0);
-            lv_obj_set_pos(id(tt_away_team_lbl), 36, 4);
-            lv_obj_set_width(id(tt_away_team_lbl), colw);
-            lv_obj_set_pos(id(tt_home_team_lbl), W / 2, 4);
-            lv_obj_set_width(id(tt_home_team_lbl), colw);
-            lv_obj_set_pos(id(tt_away_score_lbl), 36, 18);
-            lv_obj_set_width(id(tt_away_score_lbl), colw);
-            lv_obj_set_pos(id(tt_home_score_lbl), W / 2, 18);
-            lv_obj_set_width(id(tt_home_score_lbl), colw);
-            // Records sit under each logo so they stay visible during the game
-            lv_obj_set_style_text_font(id(tt_away_rec_lbl), id(spleen_8), 0);
-            lv_obj_set_style_text_font(id(tt_home_rec_lbl), id(spleen_8), 0);
-            lv_obj_set_pos(id(tt_away_rec_lbl), 0, 38);
-            lv_obj_set_width(id(tt_away_rec_lbl), 36);
-            lv_obj_set_pos(id(tt_home_rec_lbl), W - 36, 38);
-            lv_obj_set_width(id(tt_home_rec_lbl), 36);
-            // Down and distance under the clock, in the middle
-            lv_obj_set_pos(id(tt_down_lbl), 32, 48);
-            lv_obj_set_width(id(tt_down_lbl), W - 64);
-            // Game clock takes the records row while the game is live
-            lv_obj_set_style_text_font(id(tt_clock_lbl), id(spleen_12), 0);
-            lv_obj_set_pos(id(tt_clock_lbl), 32, 35);
-            lv_obj_set_width(id(tt_clock_lbl), W - 64);
-            // Timeout pips centered under each logo
-            const int acx = 18, hcx = W - 18;
-            for (int i = 0; i < 3; i++) {
-              // Timeout pips are football's (gd_update keeps them in step).
-              if (id(gd_sport) == 0) {
-                lv_obj_clear_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
-              } else {
-                lv_obj_add_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
-              }
-              lv_obj_set_pos(abars[i], acx - 9 + i * 7, 48);
-              lv_obj_set_pos(hbars[i], hcx - 9 + i * 7, 48);
-            }
-            lv_obj_set_pos(id(tt_game_status_lbl), 0, 56);
-            lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_16), 0);
-            lv_obj_set_pos(id(tt_splash_lbl), 0, 16);
-          } else {
-            // Single panel: logos side by side, everything stacked beneath
-            lv_obj_set_pos(id(gd_team_logo_img), 0, 0);
-            lv_obj_set_pos(id(gd_opp_logo_img), W - 32, 0);
-            lv_obj_set_pos(id(gd_team_badge), 0, 0);
-            lv_obj_set_pos(id(gd_opp_badge), W - 32, 0);
-            lv_obj_set_style_text_font(id(tt_away_team_lbl), id(spleen_8), 0);
-            lv_obj_set_style_text_font(id(tt_home_team_lbl), id(spleen_8), 0);
-            lv_obj_set_style_text_font(id(tt_away_score_lbl), id(spleen_12), 0);
-            lv_obj_set_style_text_font(id(tt_home_score_lbl), id(spleen_12), 0);
-            lv_obj_set_pos(id(tt_away_team_lbl), 0, 33);
-            lv_obj_set_width(id(tt_away_team_lbl), W / 2);
-            lv_obj_set_pos(id(tt_home_team_lbl), W / 2, 33);
-            lv_obj_set_width(id(tt_home_team_lbl), W / 2);
-            // Game clock replaces the abbreviations while the game is live
-            lv_obj_set_style_text_font(id(tt_clock_lbl), id(spleen_8), 0);
-            lv_obj_set_pos(id(tt_clock_lbl), 0, 33);
-            lv_obj_set_width(id(tt_clock_lbl), W);
-            lv_obj_set_pos(id(tt_away_score_lbl), 0, 42);
-            lv_obj_set_width(id(tt_away_score_lbl), W / 2);
-            lv_obj_set_pos(id(tt_home_score_lbl), W / 2, 42);
-            lv_obj_set_width(id(tt_home_score_lbl), W / 2);
-            lv_obj_add_flag(id(tt_down_lbl), LV_OBJ_FLAG_HIDDEN);
-            // No room for records or pips on a single panel
-            lv_obj_add_flag(id(tt_away_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_home_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-            for (int i = 0; i < 3; i++) {
-              lv_obj_add_flag(abars[i], LV_OBJ_FLAG_HIDDEN);
-              lv_obj_add_flag(hbars[i], LV_OBJ_FLAG_HIDDEN);
-            }
-            lv_obj_set_pos(id(tt_game_status_lbl), 0, 56);
-            lv_obj_set_style_text_font(id(tt_splash_lbl), id(spleen_12), 0);
-            lv_obj_set_pos(id(tt_splash_lbl), 0, 18);
+          if (gameday::board_view() == nullptr)
+            id(tt_bind_view).execute();
+          if (gameday::board_view() != nullptr)
+            gameday::board_layout(*gameday::board_view(), W, H, screen_h, sizes);
+          if (gameday::AreaView *a = gameday::area_view()) {
+            gameday::area_layout(*a, area.on, area.x, area.y, area.w, area.h, sizes);
+            id(gameday_ctl).redraw_area();
           }
           // The leaderboard (golf, racing): a status row and six rows of
           // place, name, value (golf's score to par, racing's car number) and
@@ -180,413 +150,58 @@ script:
           // character). Each column is its own label, cut to fit by the
           // component. gd_board sets the one-panel name width and value
           // column for the sport on the board.
-          {
-            lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
-                                 id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
-            lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
-                                  id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
-            lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
-                                   id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
-            lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
-                                    id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
-            if (wide) {
-              // The event's name left, the status right, at W - 2
-              lv_obj_set_pos(id(gd_board_title_lbl), 2, 0);
-              lv_obj_set_width(id(gd_board_title_lbl), W - 4);
-              lv_obj_clear_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
-              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
-              lv_obj_set_width(id(gd_board_status_lbl), W - 2);
-              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
-            } else {
-              lv_obj_add_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
-              lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
-              lv_obj_set_width(id(gd_board_status_lbl), W);
-              lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
-            }
-            for (int i = 0; i < 6; i++) {
-              // Each row's look is set here, once, rather than per label in
-              // the widget list: 24 labels' worth of setup code.
-              lv_obj_t *cells[4] = {gpos[i], gname[i], gvalue[i], gdetail[i]};
-              for (int c = 0; c < 4; c++) {
-                lv_obj_set_style_text_font(cells[c], id(spleen_8), 0);
-                lv_label_set_long_mode(cells[c], LV_LABEL_LONG_CLIP);
-                lv_obj_set_style_text_align(cells[c], c == 1 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
-                // Place and detail are gray; name and value get their colors
-                // from gd_board.
-                lv_obj_set_style_text_opa(cells[c], c == 2 ? LV_OPA_COVER : c == 1 ? 230 : 191, 0);
-                if (c == 0 || c == 3)
-                  lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
-              }
-              const int y = 8 + 8 * i;
-              lv_obj_set_pos(gpos[i], wide ? 2 : 0, y);
-              lv_obj_set_width(gpos[i], 10);
-              lv_obj_set_pos(gname[i], wide ? 16 : 12, y);
-              lv_obj_set_width(gname[i], wide ? 55 : 35);
-              lv_obj_set_pos(gvalue[i], wide ? 74 : 49, y);
-              lv_obj_set_width(gvalue[i], 15);
-              lv_obj_set_pos(gdetail[i], 94, y);
-              lv_obj_set_width(gdetail[i], 30);
-              if (wide)
-                lv_obj_clear_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
-              else
-                lv_obj_add_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
-            }
-          }
-          // Baseball's bases, drawn as a small diamond (first base on the
-          // right), and the outs. gd_update shows them during a half inning.
-          lv_obj_t *bases[3] = {id(tt_base1), id(tt_base2), id(tt_base3)};
-          lv_obj_t *outs[3] = {id(tt_out1), id(tt_out2), id(tt_out3)};
-          const int cx = W / 2;
+          lv_obj_t *gpos[6] = {id(gd_board_pos1), id(gd_board_pos2), id(gd_board_pos3),
+                               id(gd_board_pos4), id(gd_board_pos5), id(gd_board_pos6)};
+          lv_obj_t *gname[6] = {id(gd_board_name1), id(gd_board_name2), id(gd_board_name3),
+                                id(gd_board_name4), id(gd_board_name5), id(gd_board_name6)};
+          lv_obj_t *gvalue[6] = {id(gd_board_value1), id(gd_board_value2), id(gd_board_value3),
+                                 id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
+          lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
+                                  id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
           if (wide) {
-            // On the situation row: count left of the diamond, outs right of it
-            for (int i = 0; i < 3; i++)
-              lv_obj_set_size(bases[i], 4, 4);
-            lv_obj_set_pos(bases[1], cx - 2, 47);
-            lv_obj_set_pos(bases[2], cx - 7, 51);
-            lv_obj_set_pos(bases[0], cx + 3, 51);
-            lv_obj_set_style_text_font(id(tt_count_lbl), id(spleen_8), 0);
-            lv_obj_set_pos(id(tt_count_lbl), 32, 48);
-            lv_obj_set_width(id(tt_count_lbl), cx - 9 - 32);
-            lv_obj_set_style_text_font(id(tt_outs_lbl), id(spleen_8), 0);
-            lv_obj_set_pos(id(tt_outs_lbl), cx + 9, 48);
-            lv_obj_set_width(id(tt_outs_lbl), 28);  // "2 OUT" is 25 px in spleen_8
-            for (int i = 0; i < 3; i++)
-              lv_obj_add_flag(outs[i], LV_OBJ_FLAG_HIDDEN);
+            // The event's name left, the status right, at W - 2
+            lv_obj_set_pos(id(gd_board_title_lbl), 2, 0);
+            lv_obj_set_width(id(gd_board_title_lbl), W - 4);
+            lv_obj_clear_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+            lv_obj_set_width(id(gd_board_status_lbl), W - 2);
+            lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_RIGHT, 0);
           } else {
-            // Between the two scores, with the outs as dots underneath
-            for (int i = 0; i < 3; i++) {
-              lv_obj_set_size(bases[i], 3, 3);
-              lv_obj_set_pos(outs[i], cx - 5 + i * 4, 51);
+            lv_obj_add_flag(id(gd_board_title_lbl), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_pos(id(gd_board_status_lbl), 0, 0);
+            lv_obj_set_width(id(gd_board_status_lbl), W);
+            lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
+          }
+          // Rows are 128 wide, centered on wider boards.
+          const int bx = W > 128 ? (W - 128) / 2 : 0;
+          for (int i = 0; i < 6; i++) {
+            // Each row's look is set here, once, rather than per label in
+            // the widget list: 24 labels' worth of setup code.
+            lv_obj_t *cells[4] = {gpos[i], gname[i], gvalue[i], gdetail[i]};
+            for (int c = 0; c < 4; c++) {
+              lv_obj_set_style_text_font(cells[c], id(spleen_8), 0);
+              lv_label_set_long_mode(cells[c], LV_LABEL_LONG_CLIP);
+              lv_obj_set_style_text_align(cells[c], c == 1 ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
+              // Place and detail are gray; name and value get their colors
+              // from gd_board.
+              lv_obj_set_style_text_opa(cells[c], c == 2 ? LV_OPA_COVER : c == 1 ? 230 : 191, 0);
+              if (c == 0 || c == 3)
+                lv_obj_set_style_text_color(cells[c], lv_color_hex(0xA0A0A0), 0);
             }
-            lv_obj_set_pos(bases[1], cx - 1, 43);
-            lv_obj_set_pos(bases[2], cx - 5, 47);
-            lv_obj_set_pos(bases[0], cx + 3, 47);
-            lv_obj_add_flag(id(tt_count_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_outs_lbl), LV_OBJ_FLAG_HIDDEN);
+            const int y = 8 + 8 * i;
+            lv_obj_set_pos(gpos[i], bx + (wide ? 2 : 0), y);
+            lv_obj_set_width(gpos[i], 10);
+            lv_obj_set_pos(gname[i], bx + (wide ? 16 : 12), y);
+            lv_obj_set_width(gname[i], wide ? 55 : 35);
+            lv_obj_set_pos(gvalue[i], bx + (wide ? 74 : 49), y);
+            lv_obj_set_width(gvalue[i], 15);
+            lv_obj_set_pos(gdetail[i], bx + 94, y);
+            lv_obj_set_width(gdetail[i], 30);
+            if (wide)
+              lv_obj_clear_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
+            else
+              lv_obj_add_flag(gdetail[i], LV_OBJ_FLAG_HIDDEN);
           }
-
-  - id: gd_update
-    parameters:
-      game_state: string
-      team_abbr: string
-      team_score: int
-      opponent_abbr: string
-      opponent_score: int
-      status_text: string
-      clock_text: string
-      down_distance: string
-      is_red_zone: bool
-      team_color: int
-      opponent_color: int
-      team_badge: bool
-      opponent_badge: bool
-      team_ring: int
-      opponent_ring: int
-      possession: int
-      team_timeouts: int
-      opponent_timeouts: int
-      team_record: string
-      opponent_record: string
-      splash_text: string
-      splash_color: int
-      sport: int
-      situation: string
-      outs: int
-      bases: int
-      highlight: bool
-      team_marks: int
-      opp_marks: int
-      message: string
-      clock_card: bool
-      next_line: string
-      board: bool
-      board_card: bool
-    then:
-      - lambda: |-
-          id(gd_sport) = sport;
-          // A side with no team yet (just after a team change) shows no logo.
-          // A side with no logo to fetch (the demo build's made-up teams)
-          // shows its abbreviation badge in the logo's place, drawn by the
-          // app's rules (badge.h) so the panel and the phone match.
-          auto slot = [](lv_obj_t *img, lv_obj_t *box, lv_obj_t *lbl, const std::string &abbr, bool badge,
-                         uint32_t fill, uint32_t ring) {
-            if (abbr.empty() || badge) lv_obj_add_flag(img, LV_OBJ_FLAG_HIDDEN);
-            else lv_obj_clear_flag(img, LV_OBJ_FLAG_HIDDEN);
-            if (abbr.empty() || !badge) {
-              lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
-              return;
-            }
-            ::espn::BadgeStyle st = ::espn::badge_style(fill, ring);
-            lv_obj_set_style_bg_color(box, lv_color_hex(st.fill), 0);
-            lv_obj_set_style_border_width(box, st.has_ring ? 2 : 0, 0);
-            lv_obj_set_style_border_color(box, lv_color_hex(st.has_ring ? st.ring : st.fill), 0);
-            const char *cur = lv_label_get_text(lbl);
-            if (cur == nullptr || abbr != cur)
-              lv_label_set_text(lbl, abbr.c_str());
-            lv_obj_set_style_text_color(lbl, lv_color_hex(st.dark_text ? 0x000000 : 0xFFFFFF), 0);
-            lv_obj_clear_flag(box, LV_OBJ_FLAG_HIDDEN);
-          };
-          slot(id(gd_team_logo_img), id(gd_team_badge), id(gd_team_badge_lbl), team_abbr, team_badge,
-               (uint32_t) team_color, (uint32_t) team_ring);
-          slot(id(gd_opp_logo_img), id(gd_opp_badge), id(gd_opp_badge_lbl), opponent_abbr, opponent_badge,
-               (uint32_t) opponent_color, (uint32_t) opponent_ring);
-      - lvgl.label.update:
-          id: tt_away_team_lbl
-          text: !lambda 'return team_abbr;'
-      - lvgl.label.update:
-          id: tt_away_score_lbl
-          text: !lambda 'return to_string(team_score);'
-      - lvgl.label.update:
-          id: tt_home_team_lbl
-          text: !lambda 'return opponent_abbr;'
-      - lvgl.label.update:
-          id: tt_home_score_lbl
-          text: !lambda 'return to_string(opponent_score);'
-      - lvgl.label.update:
-          id: tt_away_rec_lbl
-          text: !lambda 'return team_record;'
-      - lvgl.label.update:
-          id: tt_home_rec_lbl
-          text: !lambda 'return opponent_record;'
-      - lambda: |-
-          // Update the ticker only when its text changed: rewriting the label
-          // restarts the scroll animation, and pushes arrive every few seconds.
-          const char *cur = lv_label_get_text(id(tt_game_status_lbl));
-          if (cur == nullptr || status_text != cur) {
-            lv_label_set_text(id(tt_game_status_lbl), status_text.c_str());
-            id(tt_ticker_timing).execute();
-          }
-      - lambda: |-
-          // Timeout pips: lit bar = timeout remaining, dim bar = used
-          int a = team_timeouts < 0 ? 0 : (team_timeouts > 3 ? 3 : team_timeouts);
-          int h = opponent_timeouts < 0 ? 0 : (opponent_timeouts > 3 ? 3 : opponent_timeouts);
-          lv_obj_t *abars[3] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3)};
-          lv_obj_t *hbars[3] = {id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
-          for (int i = 0; i < 3; i++) {
-            lv_obj_set_style_bg_color(abars[i], i < a ? lv_color_hex(0xFFD000) : lv_color_hex(0x202020), 0);
-            lv_obj_set_style_bg_color(hbars[i], i < h ? lv_color_hex(0xFFD000) : lv_color_hex(0x202020), 0);
-          }
-      - lambda: |-
-          // Abbreviations stay in team colors; possession is a gold underline
-          // under the side with the ball (a color swap read as a team change).
-          // Dark team colors vanish on the panel, so lift them to full brightness.
-          auto bright = [](uint32_t c) -> lv_color_t {
-            uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-            uint32_t m = std::max(r, std::max(g, b));
-            if (m == 0)
-              return lv_color_hex(0xFFFFFF);
-            if (m < 0xC0) {
-              r = r * 0xC0 / m;
-              g = g * 0xC0 / m;
-              b = b * 0xC0 / m;
-            }
-            return lv_color_make(r, g, b);
-          };
-          lv_obj_set_style_text_color(id(tt_away_team_lbl), bright((uint32_t) team_color), 0);
-          lv_obj_set_style_text_color(id(tt_home_team_lbl), bright((uint32_t) opponent_color), 0);
-          lv_obj_set_style_text_color(id(tt_away_score_lbl), lv_color_hex(0xFFFFFF), 0);
-          lv_obj_set_style_text_color(id(tt_home_score_lbl), lv_color_hex(0xFFFFFF), 0);
-          const bool live = game_state == "IN";
-          // On a single panel the names hide during play, so underline the score.
-          const bool under_scores = lv_disp_get_hor_res(lv_disp_get_default()) < 128 && live && !clock_text.empty();
-          auto underline = [](lv_obj_t *lbl, lv_obj_t *bar, bool on) {
-            if (!on) {
-              lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
-              return;
-            }
-            const lv_font_t *f = lv_obj_get_style_text_font(lbl, LV_PART_MAIN);
-            const char *txt = lv_label_get_text(lbl);
-            lv_point_t sz;
-            lv_text_get_size(&sz, txt, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-            int32_t tw = sz.x;
-            if (tw < 6) tw = 6;
-            int32_t lx = lv_obj_get_x(lbl), lw = lv_obj_get_width(lbl), ly = lv_obj_get_y(lbl);
-            lv_obj_set_size(bar, tw, 2);
-            lv_obj_set_pos(bar, lx + (lw - tw) / 2, ly + lv_font_get_line_height(f));
-            lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
-          };
-          underline(under_scores ? id(tt_away_score_lbl) : id(tt_away_team_lbl), id(tt_away_poss), live && possession == 1);
-          underline(under_scores ? id(tt_home_score_lbl) : id(tt_home_team_lbl), id(tt_home_poss), live && possession == 2);
-      - lambda: |-
-          // Toggle between the game layout, a leaderboard and the "no game"
-          // layout
-          const int W = lv_disp_get_hor_res(lv_disp_get_default());
-          if (clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state == "") {
-            // The component's words for this screen (the finals rotation's
-            // headers and next kickoff, "No live games", a golf event's name
-            // and dates), else the default.
-            const char *msg = board_card ? next_line.c_str() : message.empty() ? "No upcoming game" : message.c_str();
-            const char *cur = lv_label_get_text(id(tt_no_game_msg_lbl));
-            if (cur == nullptr || strcmp(cur, msg) != 0)
-              lv_label_set_text(id(tt_no_game_msg_lbl), msg);
-            lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
-          } else if (board) {
-            lv_obj_add_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_clear_flag(id(tt_game_container), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_no_game_container), LV_OBJ_FLAG_HIDDEN);
-          }
-          if (board)
-            lv_obj_clear_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
-          else
-            lv_obj_add_flag(id(gd_board_container), LV_OBJ_FLAG_HIDDEN);
-          // The off-season clock and a leaderboard's card take the message's
-          // place, and the leaderboard the game's: each borrows the ticker
-          // from the hidden game layout so it keeps running under it.
-          lv_obj_t *ticker_parent = (clock_card || board_card) ? id(tt_no_game_container)
-                                    : board ? id(gd_board_container) : id(tt_game_container);
-          if (lv_obj_get_parent(id(tt_game_status_lbl)) != ticker_parent)
-            lv_obj_set_parent(id(tt_game_status_lbl), ticker_parent);
-          if (clock_card) {
-            lv_obj_add_flag(id(tt_no_game_msg_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_style_text_color(id(gd_clock_time_lbl), lv_color_hex((uint32_t) team_color), 0);
-            id(gd_clock_date) = W < 128 || next_line.empty();
-            if (!id(gd_clock_date)) {
-              const char *cur = lv_label_get_text(id(gd_clock_sub_lbl));
-              if (cur == nullptr || next_line != cur)
-                lv_label_set_text(id(gd_clock_sub_lbl), next_line.c_str());
-            }
-            lv_obj_clear_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(gd_clock_sub_lbl), LV_OBJ_FLAG_HIDDEN);
-            id(gd_clock_tick).execute();
-          } else {
-            lv_obj_clear_flag(id(tt_no_game_msg_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(gd_clock_sub_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          // Records sit under the logos on a wide display, live or not; a
-          // single panel has no room for them.
-          if (W < 128) {
-            lv_obj_add_flag(id(tt_away_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_home_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_clear_flag(id(tt_away_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(tt_home_rec_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          // Down and distance under the clock while live; red in the red zone
-          if (W >= 128 && game_state == "IN" && !down_distance.empty()) {
-            lv_label_set_text(id(tt_down_lbl), down_distance.c_str());
-            lv_obj_set_style_text_color(id(tt_down_lbl), is_red_zone ? lv_color_hex(0xFF3030) : lv_color_hex(0xFFFFFF), 0);
-            lv_obj_clear_flag(id(tt_down_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_add_flag(id(tt_down_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          // Soccer (sport 4): the latest goal on that row, "52' Saka"
-          if (W >= 128 && sport == 4 && game_state == "IN" && !situation.empty()) {
-            lv_label_set_text(id(tt_down_lbl), situation.c_str());
-            lv_obj_set_style_text_color(id(tt_down_lbl), lv_color_hex(0xFFFFFF), 0);
-            lv_obj_clear_flag(id(tt_down_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          // Baseball (sport 1) during a half inning: bases lit gold (red with
-          // the bases loaded), the count and outs beside them on a wide
-          // display, out dots on a single panel. Timeout pips are football's.
-          const bool diamond = sport == 1 && game_state == "IN" && outs >= 0;
-          lv_obj_t *base_objs[3] = {id(tt_base1), id(tt_base2), id(tt_base3)};
-          lv_obj_t *out_objs[3] = {id(tt_out1), id(tt_out2), id(tt_out3)};
-          for (int i = 0; i < 3; i++) {
-            if (!diamond) {
-              lv_obj_add_flag(base_objs[i], LV_OBJ_FLAG_HIDDEN);
-              lv_obj_add_flag(out_objs[i], LV_OBJ_FLAG_HIDDEN);
-              continue;
-            }
-            const bool on = (bases >> i) & 1;
-            lv_obj_set_style_bg_color(base_objs[i], on ? lv_color_hex(highlight ? 0xFF3030 : 0xFFD000) : lv_color_hex(0x303030), 0);
-            lv_obj_clear_flag(base_objs[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_style_bg_color(out_objs[i], i < outs ? lv_color_hex(0xFFD000) : lv_color_hex(0x303030), 0);
-            if (W < 128)
-              lv_obj_clear_flag(out_objs[i], LV_OBJ_FLAG_HIDDEN);
-          }
-          if (W >= 128 && diamond && !situation.empty()) {
-            lv_label_set_text(id(tt_count_lbl), situation.c_str());
-            lv_obj_clear_flag(id(tt_count_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_add_flag(id(tt_count_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          if (W >= 128 && diamond) {
-            lv_label_set_text(id(tt_outs_lbl), (to_string(outs) + " OUT").c_str());
-            lv_obj_clear_flag(id(tt_outs_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_add_flag(id(tt_outs_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          // Basketball (sport 2): the playoff series ("NY lead 2-1") on the
-          // situation row of a wide display. down_distance is always empty
-          // for it, so the football branch above has hidden the label.
-          if (sport == 2 && W >= 128 && game_state == "IN" && !situation.empty()) {
-            lv_label_set_text(id(tt_down_lbl), situation.c_str());
-            lv_obj_set_style_text_color(id(tt_down_lbl), lv_color_hex(0xFFFFFF), 0);
-            lv_obj_clear_flag(id(tt_down_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          if (W >= 128) {
-            lv_obj_t *pips[6] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3),
-                                 id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
-            for (int i = 0; i < 6; i++) {
-              if (sport == 0)
-                lv_obj_clear_flag(pips[i], LV_OBJ_FLAG_HIDDEN);
-              else
-                lv_obj_add_flag(pips[i], LV_OBJ_FLAG_HIDDEN);
-            }
-          }
-          // Soccer: red cards as red marks in the pips' places under the
-          // carded side's logo (the next football update recolors them).
-          if (W >= 128 && sport == 4) {
-            lv_obj_t *amarks[3] = {id(tt_away_to1), id(tt_away_to2), id(tt_away_to3)};
-            lv_obj_t *hmarks[3] = {id(tt_home_to1), id(tt_home_to2), id(tt_home_to3)};
-            for (int i = 0; i < 3; i++) {
-              lv_obj_set_style_bg_color(amarks[i], lv_color_hex(0xFF2020), 0);
-              lv_obj_set_style_bg_color(hmarks[i], lv_color_hex(0xFF2020), 0);
-              if (i < team_marks)
-                lv_obj_clear_flag(amarks[i], LV_OBJ_FLAG_HIDDEN);
-              if (i < opp_marks)
-                lv_obj_clear_flag(hmarks[i], LV_OBJ_FLAG_HIDDEN);
-            }
-          }
-          // Big game clock while live: its own row on wide displays, the
-          // abbreviation row on a single panel (the logos still say who is who).
-          const bool show_clock = game_state == "IN" && !clock_text.empty();
-          if (show_clock) {
-            lv_label_set_text(id(tt_clock_lbl), clock_text.c_str());
-            lv_obj_clear_flag(id(tt_clock_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_add_flag(id(tt_clock_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-          if (W < 128 && show_clock) {
-            lv_obj_add_flag(id(tt_away_team_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(id(tt_home_team_lbl), LV_OBJ_FLAG_HIDDEN);
-          } else {
-            lv_obj_clear_flag(id(tt_away_team_lbl), LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(id(tt_home_team_lbl), LV_OBJ_FLAG_HIDDEN);
-          }
-      - if:
-          condition:
-            lambda: 'return !splash_text.empty();'
-          then:
-            - lambda: |-
-                lv_label_set_text(id(tt_splash_lbl), splash_text.c_str());
-                // Touchdowns and the win get fireworks on black with the text in
-                // the team color; smaller scores keep the solid color flash.
-                const bool big = splash_text.find("TOUCHDOWN") != std::string::npos ||
-                                 splash_text.find("WINS") != std::string::npos ||
-                                 splash_text.find("HOME RUN") != std::string::npos ||
-                                 ((sport == 3 || sport == 4) && splash_text.find("GOAL") != std::string::npos);
-                if (big) {
-                  uint32_t c = (uint32_t) splash_color;
-                  uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-                  uint32_t m = std::max(r, std::max(g, b));
-                  if (m > 0 && m < 0xE0) { r = r * 0xE0 / m; g = g * 0xE0 / m; b = b * 0xE0 / m; }
-                  lv_obj_set_style_bg_color(id(tt_splash), lv_color_hex(0x000000), 0);
-                  lv_obj_set_style_text_color(id(tt_splash_lbl), m == 0 ? lv_color_hex(0xFFFFFF) : lv_color_make(r, g, b), 0);
-                  lv_obj_clear_flag(id(tt_fx_canvas), LV_OBJ_FLAG_HIDDEN);
-                  id(tt_fx).resume();
-                } else {
-                  id(tt_fx).pause();
-                  lv_obj_add_flag(id(tt_fx_canvas), LV_OBJ_FLAG_HIDDEN);
-                  lv_obj_set_style_bg_color(id(tt_splash), lv_color_hex((uint32_t) splash_color), 0);
-                  lv_obj_set_style_text_color(id(tt_splash_lbl), lv_color_hex(0xFFFFFF), 0);
-                }
-                lv_obj_clear_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
-            - script.execute: tt_hide_splash
 
   # The leaderboard (gd_board_container), from the columns the component cut
   # to fit (espn::board_lines), already plain ASCII. It reads them from the
@@ -621,7 +236,7 @@ script:
                                  id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
           lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
                                   id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
-          const bool one = lv_disp_get_hor_res(lv_disp_get_default()) < 128;
+          const bool one = id(gameday_ctl).split_area().main_w < 128;
           for (int i = 0; i < 6; i++) {
             if (one) {
               // Golf's score column, or racing's names in its room
@@ -647,20 +262,9 @@ script:
   - id: gd_clock_tick
     then:
       - lambda: |-
-          if (lv_obj_has_flag(id(gd_clock_time_lbl), LV_OBJ_FLAG_HIDDEN))
-            return;
           ESPTime now = id(ha_time).now();
-          if (!now.is_valid())
-            return;
-          struct tm t = now.to_c_tm();
-          auto put = [](lv_obj_t *lbl, const std::string &text) {
-            const char *cur = lv_label_get_text(lbl);
-            if (cur == nullptr || text != cur)
-              lv_label_set_text(lbl, text.c_str());
-          };
-          put(id(gd_clock_time_lbl), ::espn::clock_time_text(t));
-          if (id(gd_clock_date))
-            put(id(gd_clock_sub_lbl), ::espn::clock_date_text(t));
+          if (now.is_valid())
+            gameday::clock_tick(now.to_c_tm(), id(gd_clock_date));
 
 interval:
   - interval: 1s
@@ -709,7 +313,7 @@ lvgl:
               # Abbreviation badges, each in its logo's place when that side
               # has no logo: a rounded square in the team's color with a ring
               # in its second color and the abbreviation on it (badge.h).
-              # Shown by gd_update; the fill, ring and letters are set there.
+              # The renderer shows them and sets fill, ring, letters.
               - obj:
                   id: gd_team_badge
                   scrollbar_mode: "OFF"
@@ -908,7 +512,7 @@ lvgl:
                   bg_color: 0x202020
 
               # Baseball: bases (1st, 2nd, 3rd), outs, and the count on a wide
-              # display. Laid out by tt_apply_layout, shown by gd_update.
+              # display. Laid out by tt_apply_layout, shown by the renderer.
               - obj:
                   id: tt_base1
                   scrollbar_mode: "OFF"
@@ -1008,10 +612,7 @@ lvgl:
 
         # The leaderboard (golf, racing): the event and its status on the top
         # row, six rows of place, name, value and (wide) detail, and the
-        # ticker, which gd_update moves in. Every label clips; the component
-        # cuts each column to fit (espn::board_lines). The rows' labels are
-        # styled and laid out by tt_apply_layout, filled by gd_board, shown by
-        # gd_update. Drawn before the splash so a winner's splash covers it.
+        # ticker. Drawn before the splash so it covers this.
         - obj:
             id: gd_board_container
             scrollbar_mode: "OFF"
@@ -1115,6 +716,47 @@ lvgl:
                   id: gd_board_detail6
                   text: ""
 
+        # Second area (split.h); its ticker clears the guard line
+        - obj:
+            id: gd_lower
+            scrollbar_mode: "OFF"
+            x: 0
+            y: 64
+            width: 128
+            height: 64
+            hidden: true
+            widgets:
+              - label:
+                  id: gd_lower_time_lbl
+                  x: 0
+                  y: 5
+                  width: 128
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_16
+                  text: ""
+                  styles: ["tt_st_score_text"]
+              - label:
+                  id: gd_lower_date_lbl
+                  x: 0
+                  y: 23
+                  width: 128
+                  text_align: CENTER
+                  long_mode: CLIP
+                  text_font: spleen_12
+                  text_color: 0xB0B8C4
+                  text: ""
+              - label:
+                  id: gd_lower_ticker_lbl
+                  x: 0
+                  y: 39
+                  width: 128
+                  text_align: CENTER
+                  long_mode: SCROLL_CIRCULAR
+                  text_font: spleen_16
+                  text: ""
+                  styles: ["tt_st_status_text"]
+
         # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
         - obj:
             id: tt_splash
@@ -1163,7 +805,7 @@ lvgl:
                   long_mode: WRAP
                   text: "No upcoming game"
                   styles: ["tt_st_team_text"]
-              # The off-season clock, shown by gd_update in the message's place
+              # Off-season clock, in the message's place
               - label:
                   id: gd_clock_time_lbl
                   x: 0

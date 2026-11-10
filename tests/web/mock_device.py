@@ -6,7 +6,8 @@ the entities the page builds controls from, and the gameday component's
 routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
-  POST /gameday/set      only the keys in SET_KEYS; 400 when none match
+  POST /gameday/set      only the keys in SET_KEYS; 400 when none match (player= and
+                         playerdel= keep the favorite players in their slots, as players.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
@@ -29,7 +30,7 @@ Started by playwright.config.js. Run by hand with `python mock_device.py 8765`
 and open http://127.0.0.1:8765/.
 
 The set keys, their limits and the Live auto pick come from
-components/gameday/set_request.h. `python mock_device.py --selftest` runs
+components/gameday/set_request.h, and the bet limits from bets.h. `python mock_device.py --selftest` runs
 tests/fixtures/set_cases.json, the table the firmware's host tests also
 check, through apply_set, so the mock can't drift from the panel.
 """
@@ -61,6 +62,8 @@ LEAGUES = LEAGUE_RE.findall(LEAGUES_H)
 # The golf tours and racing series: a team, but never a favorite or a Live
 # games league (set_request.h).
 BOARD = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(?:GOLF|RACING)', LEAGUES_H))
+# Non-ESPN leagues have no favorite players
+NOT_ESPN = set(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Source::(?!ESPN\b)\w+', LEAGUES_H))
 TZ_TEXT = "\n".join(ln for ln in (REPO / "components/gameday/timezones.h").read_text(encoding="utf-8").splitlines()
                     if not ln.lstrip().startswith("//"))
 TZ_ROWS = TZ_RE.findall(TZ_TEXT)
@@ -70,11 +73,23 @@ TZS = [name for name, _posix, _iana in TZ_ROWS]
 SET_H = (REPO / "components/gameday/set_request.h").read_text(encoding="utf-8")
 SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kSetKeys\[\] = \{(.*?)\};", SET_H, re.S).group(1)))
 LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w+) = (\d+);",
-                                             SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8"))}
+                                             SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
-# PanelLayout refuses a count past this (gameday-common.yaml).
-MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8"),
-                         re.M)[1])
+# 2x2 needs max_rows 2 and max_cols at least 4
+COMMON = (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8")
+MAX_COLS = int(re.search(r"^\s*max_cols: (\d+)", COMMON, re.M)[1])
+MAX_ROWS = int(re.search(r"^\s*max_rows: (\d+)", COMMON, re.M)[1])
+LAYOUTS_H = (REPO / "components/panel_layout/layouts.h").read_text(encoding="utf-8")
+WIRING_COUNT = int(re.search(r"kWiringCount = (\d+);", LAYOUTS_H)[1])
+
+
+def layout_ok(cols, rows):
+    """panel_layouts::layout_ok() with the build's limits."""
+    if rows == 1:
+        return 1 <= cols <= MAX_COLS
+    return rows == 2 and rows <= MAX_ROWS and cols == 2 and cols * rows <= MAX_COLS
 FIXTURE = REPO / "tests/fixtures/set_cases.json"
 
 
@@ -87,15 +102,34 @@ def team(lg, tid):
 
 
 INITIAL = {
-    "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2,
+    "name": "gameday-2f6a70", "version": "v1.5.4", "setup": True, "panels": 2, "rows": 1, "wiring": 0,
     "team": team("nfl", 6),
-    "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
+    # rotate in whole minutes for old pages; rotatesec in seconds
+    "mode": 0, "rotate": 1, "rotatesec": 60, "lockon": 15, "release": 30, "collide": 0,
     "favs": [team("nfl", 6), team("nfl", 34), team("ncaa", 145), {}],
     "favmax": FAV_MAX, "today": False, "live": ["nfl", "ncaa"], "live_auto": True,
     "tz": 1, "tz_name": "US Central", "tz_auto": True,
     "down": True, "count": True, "match": True, "play": True, "odds": True, "opp": True, "bootaddr": True,
-    "autoupd": False, "beta": False,
-    "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "espn_kb": 412, "espn_reads": 23,
+    "autoupd": False, "beta": False, "standing": 0,
+    # Clock size and Text size: 0 Normal, 1 Large.
+    "clocksize": 0, "textsize": 0,
+    # Big-play alert types on, as bit (type - 1).
+    "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
+    # The big-play watcher (components/gameday/watch.h): stay in seconds.
+    "watch": True, "watchstay": 60, "watchmine": False,
+    "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
+    # A big-play visit, and whether Follow still applies
+    "visit": False, "visit_follow": False,
+    # idle_view is "", "clock", "scores" or "today" (idle.h)
+    "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
+    "idle_view": "", "night_now": False, "dark": False,
+    # split 0-4 (split.h); state_doc() derives split_at, split_now
+    "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
+    "espn_kb": 412, "espn_reads": 23,
+    # Manual bets (bets.h): filled slots only, and capacity
+    "bets": [], "betmax": LIMITS["kBetSlots"],
+    # Favorite players (players.h): filled slots in slot order
+    "players": [], "playermax": LIMITS["kPlayerSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
     "health": {"up": 7260, "start": "restart", "boots": 2, "fault": "crash", "fault_ago": 90000,
                "heap_kb": 143.2, "block_kb": 40.0, "psram_kb": 4100.5, "rssi": -58, "espn": 200,
@@ -153,16 +187,25 @@ WIFI = {"list": copy.deepcopy(WIFI_INITIAL)}
 # The saved team's league byte, which outlives a cleared team and counts in
 # Live auto. A fresh panel's is NFL.
 TEAM_LEAGUE = ["nfl"]
+# Players by slot (players.h's blob); None when empty
+PLAYER_SLOTS = [None] * LIMITS["kPlayerSlots"]
 
 
 def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
+    # rotate and rotatesec are one setting
+    if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
+        STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
+    if isinstance(overrides.get("rotatesec"), int) and "rotate" not in overrides:
+        STATE["rotate"] = rotate_minutes_of(overrides["rotatesec"])
     # A null override drops the key, like firmware that doesn't send it.
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
+    players = STATE.get("players") or []
+    PLAYER_SLOTS[:] = [players[i] if i < len(players) else None for i in range(LIMITS["kPlayerSlots"])]
 
 
 # The firmware's C library reads ASCII digits and spaces only; Python's \d and
@@ -176,6 +219,24 @@ def clamp(v, lo, hi):
     return min(LIMITS[hi], max(LIMITS[lo], v))
 
 
+def clamp_rotate_seconds(v):
+    """clamp_rotate_seconds() (startup.h): under a minute is 30 s, else whole minutes, rounded down, at most 30."""
+    if v < 60:
+        return LIMITS["kRotateHalfSeconds"]
+    return clamp(v // 60, "kRotateMinMinutes", "kRotateMaxMinutes") * 60
+
+
+def rotate_minutes_of(seconds):
+    """rotate_minutes_of() (startup.h): the state's "rotate", 1 for 30 s."""
+    return max(LIMITS["kRotateMinMinutes"], clamp_rotate_seconds(seconds) // 60)
+
+
+def set_rotate(seconds):
+    """set_rotate_seconds(): one setting, in both of the state's keys."""
+    STATE["rotatesec"] = seconds
+    STATE["rotate"] = rotate_minutes_of(seconds)
+
+
 def parse_team_ref(v):
     """parse_team_ref() plus known_team(): (league, id) of a team in teams.h, else None."""
     lg, colon, tid = v.partition(":")
@@ -184,6 +245,14 @@ def parse_team_ref(v):
     m = re.match(r"\s*\+?\d+", tid, re.ASCII)
     ref = (lg, int(m.group())) if colon and lg in LEAGUES and m else None
     return ref if ref in TEAMS else None
+
+
+def parse_hhmm(v):
+    """idle.h's parse_hhmm(): "22:00" or "7:05" to minutes after midnight, -1 for anything else."""
+    m = re.fullmatch(r"([0-9]{1,2}):([0-9]{2})", v)
+    if not m or int(m[1]) > 23 or int(m[2]) > 59:
+        return -1
+    return int(m[1]) * 60 + int(m[2])
 
 
 def timezone_index(v):
@@ -198,28 +267,237 @@ def live_auto_leagues():
     return [lg for lg in LEAGUES if lg in used and lg not in BOARD] or ["nfl"]
 
 
+SPLIT_NOW = {1: "live", 2: "team", 3: "scores", 4: "clock"}
+
+
+def split_doc():
+    """split.h's split_at and split_effective, and a split_now for the choice: the
+    clock for Off on two rows of two and for a second team's game with no team, the
+    rotation with split_n games or else the clock. The panel's own split_now also
+    follows the night hours and what the main board shows."""
+    if "split" not in STATE:
+        return
+    cols, rows = STATE.get("panels", 1), STATE.get("rows", 1)
+    at = "bottom" if (cols, rows) == (2, 2) else "right2" if (cols, rows) == (4, 1) else \
+        "right1" if (cols, rows) == (3, 1) else ""
+    STATE["split_at"] = at
+    show = STATE["split"] if at else 0
+    if at == "bottom" and show == 0:
+        show = 4
+    now = SPLIT_NOW.get(show, "")
+    if show == 2 and not STATE.get("splitteam"):
+        now = "clock"
+    if show == 1 and not STATE.get("split_n"):
+        now = "clock"
+    STATE["split_now"] = now
+    if show == 1:
+        STATE.setdefault("split_n", 0)
+    else:
+        STATE.pop("split_n", None)
+
+
 def state_doc():
     """rebuild_state_() works the auto leagues out each time from the team and favorites."""
     if STATE.get("live_auto"):
         STATE["live"] = live_auto_leagues()
+    split_doc()
+    if "players" in STATE:
+        STATE["players"] = [p for p in PLAYER_SLOTS if p]
     return STATE
+
+
+def can_follow():
+    """set_follow() (follow.h): the mode put the game on the board itself. Live games
+    (and the old live modes 1-3) with a game it picked, not the team's card or the
+    finals, or Favorite teams with favorites. My team has nothing to pin, and a game
+    that has ended has nothing left to keep up (a pin it already has stays). While
+    another game's big play has the board (visit), the game to follow is the mode's
+    own, which the mock doesn't keep: visit_follow says whether it can be followed."""
+    g = STATE.get("game") or {}
+    up = g.get("s", "NOT_FOUND") not in ("NOT_FOUND", "POST") and bool(g.get("id")) and g.get("sport") not in (5, 6)
+    if STATE.get("visit"):
+        up = bool(STATE.get("visit_follow"))
+    if STATE["mode"] == 4:
+        return up and any(STATE["favs"])
+    return up and STATE["mode"] in (1, 2, 3, 5) and not STATE.get("fallback") and not STATE.get("recap")
+
+
+def let_go():
+    """A new team or mode, any favorites post and new leagues let the pin go."""
+    STATE["follow"] = False
+
+
+def end_visit():
+    """end_visit_() and drop_visit_(): another game's big play gives the board back."""
+    STATE["visit"] = False
+    STATE["visit_follow"] = False
+
+
+def bet_line(v, spread):
+    """parse_bet_line() (bets.h): whole or half points into half points, else None."""
+    m = re.fullmatch(r"([+-]?)(\d{1,4})(?:\.([05]))?" if spread else r"()(\d{1,4})(?:\.([05]))?", v, re.ASCII)
+    if not m:
+        return None
+    half = int(m.group(2)) * 2 + (1 if m.group(3) == "5" else 0)
+    half = -half if m.group(1) == "-" else half
+    if spread:
+        return half if abs(half) <= LIMITS["kBetMaxSpreadHalf"] else None
+    return half if 1 <= half <= LIMITS["kBetMaxTotalHalf"] else None
+
+
+def parse_bet(v):
+    """parse_bet() (set_request.h): (slot, league, team id, type, half) or None. Slot 0 is the first empty one."""
+    f = v.split(",")
+    if len(f) != 5 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kBetSlots"]):
+        return None
+    lg, tid, kind, line = f[1], f[2], f[3], f[4]
+    if lg not in LEAGUES or lg in BOARD or not re.fullmatch(r"\d{1,10}", tid, re.ASCII) or (lg, int(tid)) not in TEAMS:
+        return None
+    if kind == "ml":
+        half = 0 if line == "" else None
+    elif kind in ("spread", "over", "under"):
+        half = bet_line(line, kind == "spread")
+    else:
+        half = None
+    return None if half is None else (int(f[0]), lg, int(tid), kind, half)
+
+
+def bet_points(half, sign):
+    """bet_points() (bets.h): "3.5", "+7"."""
+    out = "+" if sign and half > 0 else "-" if half < 0 else ""
+    return out + str(abs(half) // 2) + (".5" if abs(half) % 2 else "")
+
+
+def bet_doc(slot, lg, tid, kind, half):
+    """One "bets" entry of rebuild_state_(), for a bet with no game yet."""
+    abbr = TEAMS[(lg, tid)][0]
+    text = (kind.upper() + " " + bet_points(half, False) if kind in ("over", "under")
+            else abbr + " ML" if kind == "ml" else abbr + " " + ("PK" if half == 0 else bet_points(half, True)))
+    return {"slot": slot, "l": lg, "id": tid, "abbr": abbr, "type": kind, "half": half, "text": text, "st": "waiting"}
+
+
+def bet_on_board(b):
+    """bets_tick_(): a bet on the board's game takes it, and where it stands."""
+    g = STATE.get("game") or {}
+    if g.get("l") != b["l"] or b["id"] not in (g.get("ti"), g.get("oi")) or g.get("s") not in ("PRE", "IN", "POST"):
+        return b
+    ours = b["id"] == g.get("ti")
+    us, them = (g.get("ts", 0), g.get("os", 0)) if ours else (g.get("os", 0), g.get("ts", 0))
+    b.update({"ev": str(g.get("id", "")), "kick": g.get("kick", 0), "oa": g.get("oa") if ours else g.get("ta")})
+    if g["s"] == "PRE":
+        b["st"] = "pre"
+        return b
+    m = (2 * (us - them) + b["half"] if b["type"] == "spread" else us - them if b["type"] == "ml"
+         else (2 * (us + them) - b["half"]) * (-1 if b["type"] == "under" else 1))
+    words = ("covering", "not_covering", "level") if g["s"] == "IN" else ("won", "lost", "push")
+    b.update({"st": words[0] if m > 0 else words[1] if m < 0 else words[2], "ts": us, "os": them})
+    return b
+
+
+def put_bet(slot, doc):
+    """The slot's entry, or none: the list stays in slot order. bet_put() (bets.h): with a doc, slot 0 is the
+    first empty slot, and with every slot in use nothing changes."""
+    if slot == 0 and doc:
+        used = {b["slot"] for b in STATE.get("bets", [])}
+        slot = next((s for s in range(1, LIMITS["kBetSlots"] + 1) if s not in used), 0)
+        if not slot:
+            return
+        doc["slot"] = slot
+    keep = [b for b in STATE.get("bets", []) if b["slot"] != slot]
+    STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
+
+
+def clean_player_name(v):
+    """clean_player_name() (set_request.h): capitals, digits, spaces and . ' - only, spaces at either end
+    dropped and a run inside made one, cut to kPlayerNameMax and a cut never left ending in a space or
+    . ' -; "" refuses it, as does a name with no letter or digit left."""
+    out = ""
+    for ch in v:
+        if "a" <= ch <= "z":
+            ch = chr(ord(ch) - 32)
+        if not ("A" <= ch <= "Z" or "0" <= ch <= "9" or ch in " .'-"):
+            return ""
+        if ch != " " or (out and out[-1] != " "):
+            out += ch
+    out = out.rstrip(" ")
+    if len(out) > LIMITS["kPlayerNameMax"]:
+        out = out[:LIMITS["kPlayerNameMax"]].rstrip(" .'-")
+    return out if re.search(r"[A-Z0-9]", out) else ""
+
+
+def espn_id(v):
+    """parse_espn_id() (set_request.h): 1 to 10 ASCII digits, not 0, under 2^32; else None."""
+    if not re.fullmatch(r"[0-9]{1,10}", v, re.ASCII) or not 0 < int(v) <= 0xFFFFFFFF:
+        return None
+    return int(v)
+
+
+def parse_player(v, delete):
+    """parse_player() (set_request.h): {l, id, team, name} for player=, (league, id) for playerdel=, else None."""
+    f = v.split(",")
+    if len(f) != (2 if delete else 4) or f[0] not in LEAGUES or f[0] in BOARD or f[0] in NOT_ESPN \
+            or espn_id(f[1]) is None:
+        return None
+    if delete:
+        return (f[0], espn_id(f[1]))
+    team_id = espn_id(f[2])
+    name = clean_player_name(f[3])
+    if team_id is None or (f[0], team_id) not in TEAMS or not name:
+        return None
+    return {"l": f[0], "id": espn_id(f[1]), "team": team_id, "name": name}
+
+
+def put_player(doc):
+    """player_put() (players.h): the same league and id keeps its slot, anyone else the first empty one,
+    and with every slot in use nothing changes."""
+    for i, p in enumerate(PLAYER_SLOTS):
+        if p and (p["l"], p["id"]) == (doc["l"], doc["id"]):
+            PLAYER_SLOTS[i] = doc
+            return
+    if None in PLAYER_SLOTS:
+        PLAYER_SLOTS[PLAYER_SLOTS.index(None)] = doc
+
+
+def drop_player(lg, pid):
+    """player_drop() (players.h)."""
+    for i, p in enumerate(PLAYER_SLOTS):
+        if p and (p["l"], p["id"]) == (lg, pid):
+            PLAYER_SLOTS[i] = None
 
 
 def apply_set(kv):
     """GamedayComponent::apply_set_ through set_request.h's parse_set."""
     for k, v in kv:
-        if k == "team":
+        if k == "follow":
+            if v != "1":
+                let_go()
+            elif can_follow():
+                STATE["follow"] = True
+                end_visit()
+        elif k == "team":
             ref = parse_team_ref(v)
             if ref:
+                if (STATE["team"].get("l"), STATE["team"].get("id")) != ref:
+                    let_go()
+                    end_visit()
                 STATE["team"] = team(*ref)
                 TEAM_LEAGUE[0] = ref[0]
             elif v == "none":
+                if STATE["team"]:
+                    let_go()
+                    end_visit()
                 STATE["team"] = {}
         elif k == "mode":
             if 0 <= atoi(v) < LIMITS["kModeCount"]:
+                if atoi(v) != STATE["mode"]:
+                    let_go()
+                    end_visit()
                 STATE["mode"] = atoi(v)
         elif k == "rotate":
-            STATE["rotate"] = clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes")
+            # Whole minutes; at least 1, never 30 s
+            set_rotate(clamp(atoi(v), "kRotateMinMinutes", "kRotateMaxMinutes") * 60)
+        elif k == "rotatesec":
+            set_rotate(clamp_rotate_seconds(atoi(v)))
         elif k == "lockon":
             STATE["lockon"] = clamp(atoi(v), "kLockonMinMinutes", "kLockonMaxMinutes")
         elif k == "release":
@@ -236,6 +514,7 @@ def apply_set(kv):
                     refs.append(ref)
             # set_favorites_(): the list in order, then empty slots up to the four remote slots.
             STATE["favs"] = [team(*r) for r in refs] + [{}] * (4 - len(refs))
+            let_go()
         elif k in ("fav1", "fav2", "fav3", "fav4"):
             ref = parse_team_ref(v)
             if ref and ref[0] in BOARD:
@@ -243,10 +522,13 @@ def apply_set(kv):
             if ref is None and v not in ("none", ""):
                 continue
             STATE["favs"][int(k[3]) - 1] = team(*ref) if ref else {}
+            let_go()
         elif k == "today":
             STATE["today"] = v == "1"
         elif k == "live":
             keys = [lg for lg in LEAGUES if lg in v.split(",") and lg not in BOARD]
+            if keys != ([] if STATE.get("live_auto") else STATE["live"]):
+                let_go()
             STATE["live_auto"] = not keys
             STATE["live"] = keys
         elif k == "tz":
@@ -255,11 +537,73 @@ def apply_set(kv):
                 STATE["tz"], STATE["tz_name"] = i, TZS[i]
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
-        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta"):
+        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "watch",
+                   "watchmine"):
             STATE[k] = v == "1"
+            if k == "watch" and v != "1":
+                end_visit()
+        elif k == "alerts":
+            # Refuse unknown bits, negatives, and non-numbers (atoi gives 0)
+            if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
+                STATE["alerts"] = atoi(v)
+        elif k == "betdel":
+            if len(v) == 1 and "1" <= v <= str(LIMITS["kBetSlots"]):
+                put_bet(int(v), None)
+        elif k == "bet":
+            bet = parse_bet(v)
+            if bet:
+                put_bet(bet[0], bet_on_board(bet_doc(*bet)))
+        elif k == "watchstay":
+            # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
+            STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
+        elif k == "playerdel":
+            ref = parse_player(v, True)
+            if ref:
+                drop_player(*ref)
+        elif k == "player":
+            doc = parse_player(v, False)
+            if doc:
+                put_player(doc)
         elif k == "panels":
-            if 1 <= atoi(v) <= MAX_COLS:
-                STATE["panels"] = atoi(v)
+            # "3" or "2x2"; each number a byte
+            cols, x, high = v.partition("x")
+            cols, rows = atoi(cols), atoi(high) if x else 1
+            if 1 <= cols <= 255 and 1 <= rows <= 255 and layout_ok(cols, rows):
+                STATE["panels"], STATE["rows"] = cols, rows
+        elif k == "wiring":
+            if 0 <= atoi(v) < WIRING_COUNT:
+                STATE["wiring"] = atoi(v)
+        elif k == "split":
+            # One ASCII digit, 0 to kSplitCount - 1, nothing else.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"]:
+                STATE["split"] = int(v)
+        elif k == "splitteam":
+            # Never a golf tour, racing series or own team
+            ref = parse_team_ref(v)
+            if v in ("none", ""):
+                STATE["splitteam"] = {}
+            elif ref and ref[0] not in BOARD and (STATE["team"].get("l"), STATE["team"].get("id")) != ref:
+                STATE["splitteam"] = team(*ref)
+        elif k == "standing":
+            if 0 <= atoi(v) < LIMITS["kStandingCount"]:
+                STATE["standing"] = atoi(v)
+        elif k in ("clocksize", "textsize"):
+            # One ASCII digit, as for split
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSizeCount"]:
+                STATE[k] = int(v)
+        elif k == "idle":
+            if 0 <= atoi(v) < LIMITS["kIdleCount"]:
+                STATE["idle"] = atoi(v)
+        elif k == "idledim":
+            STATE["idledim"] = clamp(atoi(v), "kIdleDimMin", "kIdleDimMax")
+        elif k == "night":
+            STATE["night"] = v == "1"
+        elif k in ("nightstart", "nightend"):
+            minute = parse_hhmm(v)
+            if minute >= 0:
+                STATE[k] = "%02d:%02d" % divmod(minute, 60)
+        elif k == "nightbri":
+            STATE["nightbri"] = clamp(atoi(v), "kNightBriMin", "kNightBriMax")
 
 
 def selftest():
@@ -270,10 +614,13 @@ def selftest():
         return team(*parse_team_ref(ref)) if ref else {}
 
     def compact(key, value):
-        if key == "team":
+        if key in ("team", "splitteam"):
             return f'{value["l"]}:{value["id"]}' if value else ""
         if key == "favs":
             return [compact("team", t) for t in value]
+        if key == "bets":
+            # As entered; game and status are the firmware's
+            return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
         return value
 
     bad = 0
@@ -282,6 +629,15 @@ def selftest():
         team_league = start.pop("team_league", "nfl")
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
+        start["splitteam"] = to_team(start.get("splitteam", ""))
+        # board false: nothing to follow; final true: game ended
+        if start.get("visit"):
+            start["visit_follow"] = start.get("board", True) and not start.get("final", False)
+        if start.pop("final", False):
+            start["game"] = {**INITIAL["game"], "s": "POST"}
+        if not start.pop("board", True):
+            start["game"] = {"s": "NOT_FOUND"}
+        start["bets"] = [bet_doc(b["slot"], b["l"], b["id"], b["type"], b["half"]) for b in start.get("bets", [])]
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league

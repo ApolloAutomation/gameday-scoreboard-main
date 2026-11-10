@@ -11,11 +11,11 @@
 
 namespace espn {
 
-// The "Switch every" setting, in minutes. A saved value outside the range is
-// treated as corrupt at boot and replaced with the default.
+// 30 seconds: Prefs2 holds 1 minute, Prefs8 a flag.
 static const int kRotateMinMinutes = 1;
 static const int kRotateMaxMinutes = 30;
 static const int kRotateDefaultMinutes = 1;
+static const int kRotateHalfSeconds = 30;
 
 inline bool rotate_minutes_valid(int minutes) {
   return minutes >= kRotateMinMinutes && minutes <= kRotateMaxMinutes;
@@ -29,9 +29,48 @@ inline int clamp_rotate_minutes(int minutes) {
   return minutes;
 }
 
+inline bool rotate_seconds_valid(int seconds) {
+  return seconds == kRotateHalfSeconds || (seconds % 60 == 0 && rotate_minutes_valid(seconds / 60));
+}
+
+inline int clamp_rotate_seconds(int seconds) {
+  return seconds < 60 ? kRotateHalfSeconds : clamp_rotate_minutes(seconds / 60) * 60;
+}
+
+// Older pages read 30 seconds as 1 minute.
+inline int rotate_minutes_of(int seconds) {
+  const int s = clamp_rotate_seconds(seconds);
+  return s < 60 ? kRotateMinMinutes : s / 60;
+}
+
+inline int rotate_saved_seconds(int minutes, bool half) {
+  return half && minutes == kRotateMinMinutes ? kRotateHalfSeconds : clamp_rotate_minutes(minutes) * 60;
+}
+
+// started_ms 0 means the turn's clock hasn't started.
+inline bool rotate_turn_over(uint32_t now_ms, uint32_t started_ms, int seconds) {
+  return started_ms != 0 && now_ms - started_ms >= (uint32_t) seconds * 1000u;
+}
+
+// Time away for a big play doesn't count.
+inline uint32_t rotate_turn_resume(uint32_t started_ms, uint32_t now_ms, uint32_t away_ms) {
+  if (started_ms == 0)
+    return 0;
+  const uint32_t ran = now_ms - started_ms;
+  const uint32_t out = started_ms + (away_ms < ran ? away_ms : ran);
+  return out == 0 ? 1 : out;
+}
+
+// Favorite teams' version; since is an epoch second.
+inline int64_t rotate_since_resume(int64_t since, int64_t now, int64_t away_s) {
+  if (away_s <= 0)
+    return since;
+  return since + away_s < now ? since + away_s : (since < now ? now : since);
+}
+
 // The team endpoint's answer for the saved team, kept in flash so a boot can
 // go straight to the scoreboard instead of reading the team endpoint (about
-// 23 KB) first. Only what the scoreboard request needs.
+// 23 KB) first. Another size won't load; a read rebuilds.
 struct TeamCache {
   uint8_t league;
   uint32_t team_id;
@@ -39,6 +78,8 @@ struct TeamCache {
   int64_t kickoff_epoch;
   uint32_t group;
   int64_t saved_epoch;
+  uint8_t seed;
+  char place[16];  // place_short(), cut to 15 characters
 } __attribute__((packed));
 
 // Older than this, the team endpoint is read again first.
@@ -66,6 +107,8 @@ inline bool team_cache_save(const Schedule &s, League league, uint32_t team_id, 
   out.kickoff_epoch = s.kickoff_epoch;
   out.group = s.group;
   out.saved_epoch = now_epoch;
+  out.seed = s.seed;
+  memcpy(out.place, s.place.c_str(), s.place.size() < sizeof(out.place) ? s.place.size() : sizeof(out.place) - 1);
   return true;
 }
 
@@ -88,6 +131,11 @@ inline bool team_cache_load(const TeamCache &c, League league, uint32_t team_id,
   out.event_id = id;
   out.kickoff_epoch = c.kickoff_epoch;
   out.group = c.group;
+  out.seed = c.seed;
+  char place[sizeof(c.place) + 1];
+  memcpy(place, c.place, sizeof(c.place));
+  place[sizeof(c.place)] = '\0';
+  out.place = place;
   adopt_league(out, league);
   return true;
 }
