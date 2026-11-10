@@ -125,6 +125,34 @@ inline ClockCardGeom clock_card_geom(int w, bool large_clock) {
   return ClockCardGeom{BoardFont::S32, 0, false, 0, BoardFont::S12, 28};
 }
 
+// The Clock page: "09:41 PM" and "Mon, Nov 09"
+static const int kPageTimeChars = 8, kPageDateChars = 11, kPageRowGap = 6;
+struct ClockPageFonts {
+  BoardFont time, date;
+};
+
+// Large: the widest fonts that fit, the date full-glyph
+inline ClockPageFonts clock_page_fonts(int w, int h, bool large_clock) {
+  ClockPageFonts p{BoardFont::S8, BoardFont::S8};
+  if (!large_clock)
+    return p;
+  for (int f = (int) BoardFont::S32; f > (int) BoardFont::S8; f--)
+    if (kPageTimeChars * font_px((BoardFont) f) <= w) {
+      p.time = (BoardFont) f;
+      break;
+    }
+  for (int f = (int) BoardFont::S16; f > (int) BoardFont::S8; f--)
+    if (kPageDateChars * font_px((BoardFont) f) <= w) {
+      p.date = (BoardFont) f;
+      break;
+    }
+  while (p.date != BoardFont::S8 && font_rows(p.time) + kPageRowGap + font_rows(p.date) > h)
+    p.date = (BoardFont) ((int) p.date - 1);
+  while (p.time != BoardFont::S8 && font_rows(p.time) + kPageRowGap + font_rows(p.date) > h)
+    p.time = (BoardFont) ((int) p.time - 1);
+  return p;
+}
+
 inline std::string clock_digits(const std::string &time) { return time.substr(0, time.find(' ')); }
 inline std::string clock_ampm(const std::string &time) {
   const size_t sp = time.find(' ');
@@ -454,7 +482,9 @@ inline size_t wrap_lines(const std::string &text, size_t chars) {
 // Tiles 2 px bigger so logos stand out on flashes.
 static const int kSplashTile = 34;  // 32 px logo plus a 1 px edge
 static const int kSplashLogo = 32;
-static const int kSplashGap = 6;  // between a tile and what is beside it
+static const int kSplashGap = 6;    // between a tile and what is beside it
+static const int kWordsGap = 2;     // clear rows around the words' ink
+static const int kFxMinRows = 16;   // less room: fireworks behind the words
 
 struct SplashLayout {
   bool logos{false};
@@ -469,10 +499,45 @@ struct SplashLayout {
   BoardFont words_font{BoardFont::S16};
   Spot words{};  // the words' label, the lines centered in it
   uint8_t lines{0};
+  Spot fx{};  // the fireworks canvas, kWordsGap clear of the words
+  int16_t fx_h{0};
 };
 
 // The points' number: "+2" of "+2 RUNS".
 inline std::string points_number(const std::string &points) { return points.substr(0, points.find(' ')); }
+
+// Ink rows of the words' tallest and deepest glyphs
+inline void words_ink(const std::string &words, BoardFont f, int &top, int &bottom) {
+  top = font_ink_top(f);
+  bottom = font_ink_bottom(f);
+  for (char c : words) {
+    if (c == ' ' || c == '\n')
+      continue;
+    int t, b;
+    glyph_rows(f, c, t, b);
+    top = t < top ? t : top;
+    bottom = b > bottom ? b : bottom;
+  }
+}
+
+// Fireworks above the words, else below, else behind
+inline void splash_fx(SplashLayout &L, int w, int h, bool row, bool up_only, int ink_top, int ink_bottom) {
+  int x0 = w > kFxPx ? (w - kFxPx) / 2 : 0, x1 = x0 + (w < kFxPx ? w : kFxPx);
+  if (row) {
+    x0 = x0 > L.words.x ? x0 : L.words.x;
+    x1 = x1 < L.words.x + L.words.w ? x1 : L.words.x + L.words.w;
+  }
+  const int above = ink_top - kWordsGap, below_y = ink_bottom + 1 + kWordsGap;
+  const bool up = up_only || above >= kFxMinRows || above >= h - below_y;
+  int y = up ? (above > kBoardRows ? above - kBoardRows : 0) : below_y;
+  int fh = up ? above - y : (h - below_y < kBoardRows ? h - below_y : kBoardRows);
+  if (fh < kFxMinRows) {
+    y = (h - kBoardRows) / 2;
+    fh = kBoardRows;
+  }
+  L.fx = Spot{(int16_t) x0, (int16_t) y, (int16_t) (x1 - x0)};
+  L.fx_h = (int16_t) fh;
+}
 
 inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &points, const std::string &words) {
   SplashLayout L;
@@ -486,23 +551,30 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
     BoardFont font;
     uint8_t lines;
   };
-  static const Try kTries[4][2] = {{{BoardFont::S12, 2}, {BoardFont::S8, 3}},
-                                   {{BoardFont::S16, 3}, {BoardFont::S16, 3}},
-                                   {{BoardFont::S16, 2}, {BoardFont::S12, 2}},
-                                   {{BoardFont::S16, 3}, {BoardFont::S16, 3}}};
+  static const Try kTries[4][3] = {{{BoardFont::S12, 2}, {BoardFont::S8, 3}, {BoardFont::S8, 3}},
+                                   {{BoardFont::S16, 3}, {BoardFont::S16, 3}, {BoardFont::S16, 3}},
+                                   {{BoardFont::S16, 2}, {BoardFont::S12, 2}, {BoardFont::S8, 3}},
+                                   {{BoardFont::S16, 3}, {BoardFont::S16, 3}, {BoardFont::S16, 3}}};
   static const int8_t kWholeLast[4] = {(int8_t) BoardFont::S32 + 1, (int8_t) BoardFont::S24, (int8_t) BoardFont::S24,
                                        (int8_t) BoardFont::S24};
   static const int8_t kNumberLast[4] = {(int8_t) BoardFont::S16, (int8_t) BoardFont::S32, (int8_t) BoardFont::S32,
                                         (int8_t) BoardFont::S16};
   const int room[4] = {w - kSplashTile, w, w - kSplashTile - kSplashGap, side - 2};
+  const int under_h = kind == ONE ? kBoardRows : h;  // a tile over the words
+  L.tile_px = kind == ONE && L.tiles == 2 ? kSplashLogo : kSplashTile;
   L.words = kind == ROW ? Spot{(int16_t) side, 0, (int16_t) (w - 2 * side)} : Spot{0, 0, (int16_t) w};
+  int top = 0, bottom = 0;  // the words' ink rows in a line
   for (const Try &t : kTries[kind]) {
     const size_t n = wrap_lines(words, (size_t) (L.words.w / font_px(t.font)));
-    if (n > 0 && n <= t.lines) {
-      L.words_font = t.font;
-      L.lines = (uint8_t) n;
-      break;
-    }
+    if (n == 0 || n > t.lines)
+      continue;
+    words_ink(words, t.font, top, bottom);
+    // Under a tile: the gap, then every line whole
+    if ((kind == ONE || kind == WIDE) && L.tile_px + kWordsGap - top + (int) n * font_rows(t.font) > under_h)
+      continue;
+    L.words_font = t.font;
+    L.lines = (uint8_t) n;
+    break;
   }
   if (L.lines == 0)
     return SplashLayout{};
@@ -516,17 +588,16 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
         L.points_font = (BoardFont) f;
       }
   const int points_px = (L.points_whole ? whole_n : number_n) * font_px(L.points_font);
-  const int lines_px = L.lines * font_rows(L.words_font);
-  const int blank = font_ink_top(L.words_font);  // the words' first rows, blank in capitals
+  const int rows = font_rows(L.words_font), lines_px = L.lines * rows;
+  const int drop = kWordsGap - top;  // the tile's bottom to the words' label
   switch (kind) {
     case ONE:
       // Tile beside the number, or both logos, over words.
-      L.tile_px = L.tiles == 2 ? kSplashLogo : kSplashTile;
-      L.tile_y = (int16_t) ((kBoardRows - (L.tile_px + 1 + lines_px)) / 2);
+      L.tile_y = (int16_t) ((kBoardRows - (L.tile_px + drop + lines_px)) / 2);
       L.tile_x[0] = (int16_t) (L.tiles == 1 && !L.points ? (w - kSplashTile) / 2 : 0);
       L.tile_x[1] = (int16_t) (w - kSplashLogo);
       L.pts = {kSplashTile, 0, (int16_t) (w - kSplashTile)};
-      L.words.y = (int16_t) (L.tile_y + L.tile_px + 1);
+      L.words.y = (int16_t) (L.tile_y + L.tile_px + drop);
       break;
     case TWO_ROWS: {
       // The tile, the words, the points, down the middle
@@ -542,11 +613,11 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
     case WIDE: {
       // Tile and points side by side, over the words.
       const int head = kSplashTile + (L.tiles == 2 ? kSplashGap + kSplashTile : L.points ? kSplashGap + points_px : 0);
-      L.tile_y = (int16_t) ((h - (kSplashTile + lines_px - blank)) / 2);
+      L.tile_y = (int16_t) ((h - (kSplashTile + drop + lines_px)) / 2);
       L.tile_x[0] = (int16_t) ((w - head) / 2);
       L.tile_x[1] = (int16_t) (L.tile_x[0] + kSplashTile + kSplashGap);
       L.pts = {L.tile_x[1], 0, (int16_t) points_px};
-      L.words.y = (int16_t) (L.tile_y + kSplashTile - blank);
+      L.words.y = (int16_t) (L.tile_y + kSplashTile + drop);
       break;
     }
     case ROW:
@@ -564,6 +635,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
                          (font_ink_top(L.points_font) + font_ink_bottom(L.points_font) + 1) / 2);
   if (!L.points)
     L.pts = Spot{};
+  splash_fx(L, w, h, kind == ROW, kind == TWO_ROWS, L.words.y + top, L.words.y + lines_px - rows + bottom);
   L.logos = true;
   return L;
 }

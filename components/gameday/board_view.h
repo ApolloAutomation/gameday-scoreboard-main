@@ -42,7 +42,8 @@ struct BoardView {
   lv_obj_t *clock_ampm{nullptr};  // Large clock's AM/PM under digits, one panel only
   lv_obj_t *splash{nullptr};
   lv_obj_t *splash_lbl{nullptr};
-  lv_obj_t *fx{nullptr};  // the fireworks canvas, behind the splash's words
+  lv_obj_t *fx{nullptr};  // the fireworks canvas; the second area borrows it
+  void (*fx_run)(bool){nullptr};  // starts or stops the fireworks (tt_fx)
   // Splash tiles: a logo or badge each, built by board_build
   lv_obj_t *tile[2]{};
   lv_obj_t *tile_img[2]{};
@@ -69,7 +70,9 @@ struct DrawResult {
   bool clock_card{false};      // the clock card is up: fill its time (gd_clock_tick)
   bool clock_date{false};      // its second line is the date (gd_clock_date)
   bool splash{false};          // a splash went up: hide it later (tt_hide_splash)
-  bool big_splash{false};      // with fireworks: run them, else stop them
+  bool big_splash{false};      // a splash that gets fireworks
+  Spot fx{};                   // where they go in the splash
+  int16_t fx_h{0};
 };
 
 // The bound board, or nullptr before binding
@@ -84,6 +87,8 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);
 // Logos nullptr while downloading; the splash shows badges
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo = nullptr,
                       image::Image *opp_logo = nullptr);
+// Hides the board's splash and its fireworks
+void board_hide_splash(BoardView &v);
 // Logo, or its badge when missing or badge set
 void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]);
 // Swaps a splash badge for its newly loaded logo
@@ -91,7 +96,7 @@ void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo)
 // card_date: the card's second line shows the date
 void clock_tick(const struct tm &t, bool card_date);
 
-// Second area (split.h): no pips, diamond or fireworks
+// Second area (split.h): no pips or diamond; fireworks when free
 struct AreaView {
   lv_obj_t *root{nullptr};
   lv_obj_t *time{nullptr}, *date{nullptr}, *ticker{nullptr};
@@ -100,6 +105,7 @@ struct AreaView {
   image::Image *blank{nullptr};  // a logo still downloading
   int16_t w{0}, h{0};
   bool time_split{false};  // time shows digits only; AM/PM goes in ampm
+  uint32_t splash_color{0};  // its flash, should the board take the fireworks
 };
 
 // The bound area, or nullptr before binding

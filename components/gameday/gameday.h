@@ -1250,6 +1250,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   GameSnapshot &jump_game_() { return this->idle_snaps_[2]; }
   const GameSnapshot &jump_game_() const { return this->idle_snaps_[2]; }
   uint32_t a2_splash_ms_{0};
+  // Its splash is up: the next card waits
+  bool a2_splash_up_(uint32_t now) const {
+    return this->a2_splash_ms_ != 0 && now - this->a2_splash_ms_ < ::espn::kSplashMs;
+  }
   std::string a2_logo_[2];
   bool a2_badge_[2]{};
   // A new card waiting for these logos

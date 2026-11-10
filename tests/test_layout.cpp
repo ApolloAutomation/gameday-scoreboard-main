@@ -73,6 +73,32 @@ Box text_box(int x, int y, int w, BoardFont f, const std::vector<std::string> &l
   return Box{left, y + font_ink_top(f), left + px, y + ((int) lines.size() - 1) * font_rows(f) + font_ink_bottom(f) + 1};
 }
 
+// Clear pixels between two boxes, along the separating side
+int clearance(const Box &a, const Box &b) {
+  return std::max(std::max(b.x0 - a.x1, a.x0 - b.x1), std::max(b.y0 - a.y1, a.y0 - b.y1));
+}
+
+// Each line's ink, every glyph's own rows
+std::vector<Box> line_boxes(int x, int y, int w, BoardFont f, const std::vector<std::string> &lines) {
+  std::vector<Box> out;
+  for (size_t i = 0; i < lines.size(); i++) {
+    int top = 99, bottom = -1;
+    for (char c : lines[i]) {
+      if (c == ' ')
+        continue;
+      int t, b;
+      esphome::gameday::glyph_rows(f, c, t, b);
+      top = std::min(top, t);
+      bottom = std::max(bottom, b);
+    }
+    if (bottom < 0)
+      continue;
+    const int px = (int) lines[i].size() * font_px(f), left = x + (w - px) / 2, row = y + (int) i * font_rows(f);
+    out.push_back(Box{left, row + top, left + px, row + bottom + 1});
+  }
+  return out;
+}
+
 // Mirrors board_view.cpp: words without the side's name.
 SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
   ok = true;
@@ -138,6 +164,26 @@ SplashLayout check_splash(const Splash &sp, const Screen &sc, bool &ok) {
     for (size_t j = i + 1; j < boxes.size(); j++)
       if (overlap(boxes[i], boxes[j]))
         fail("two parts on top of each other");
+  // Every line of words 2 px clear of logos and points
+  const std::vector<Box> ink = line_boxes(L.words.x, L.words.y, L.words.w, L.words_font, lines);
+  for (size_t i = 1; i < boxes.size(); i++) {
+    for (const Box &b : ink)
+      if (clearance(b, boxes[i]) < esphome::gameday::kWordsGap)
+        fail("words within 2 px of a logo or the points");
+    if (i + 1 == boxes.size() && L.points && L.tiles == 1 && clearance(boxes[1], boxes[i]) < 2)
+      fail("the points within 2 px of the logo");
+  }
+  // Fireworks on screen, in the canvas, clear of words
+  const Box fx{L.fx.x, L.fx.y, L.fx.x + L.fx.w, L.fx.y + L.fx_h};
+  if (fx.empty() || !inside(fx, sc) || L.fx.w > esphome::gameday::kFxPx || L.fx_h > kBoardRows)
+    fail("the fireworks off the screen or bigger than their canvas");
+  bool behind = false;
+  for (const Box &b : ink)
+    behind = behind || clearance(b, fx) < esphome::gameday::kWordsGap;
+  if (behind && L.fx_h != kBoardRows)
+    fail("fireworks touching the words");
+  if (!behind && L.fx_h < esphome::gameday::kFxMinRows)
+    fail("fireworks too short to show");
   return L;
 }
 
@@ -359,6 +405,41 @@ void test_splash_places() {
   L = check_splash(hr, Screen{128, 128}, ok);
   LCHECK(ok && L.points_whole && L.points_font == BoardFont::S32 && L.pts.y > L.words.y && L.words.y > L.tile_y);
   LCHECK(L.tile_x[0] == (128 - kSplashTile) / 2);
+  // 128 wide: TOUCHDOWN 2 px under the tile
+  using esphome::gameday::kWordsGap;
+  L = check_splash(td_wide, Screen{128, 64}, ok);
+  LCHECK(ok && L.words.y + font_ink_top(L.words_font) == L.tile_y + kSplashTile + kWordsGap);
+  // A long name with TOUCHDOWN: two smaller lines
+  const Splash name = Splash{"ST. BROWN TOUCHDOWN JR", 0x0076B6, "DET", false, 0, "+6"};
+  L = check_splash(name, Screen{128, 64}, ok);
+  LCHECK(ok && L.lines == 2 && L.words_font == BoardFont::S12);
+  // Fireworks beside the logo, above the words
+  for (const Screen &sc : kScreens) {
+    L = check_splash(td_wide, sc, ok);
+    const int ink = L.words.y + font_ink_top(L.words_font);
+    LCHECK(ok && L.fx.w == std::min({sc.w, 128, (int) L.words.w}) && L.fx.y + L.fx_h == ink - kWordsGap);
+    if (sc.w <= 128)
+      LCHECK(L.fx.x == 0 && L.fx.y == 0);  // whole canvas on the screen
+  }
+  // Two rows of two: the free rows above the band too
+  L = check_splash(td_wide, Screen{128, 128}, ok);
+  LCHECK(L.fx.y == 0 && L.fx_h > 32 && L.fx_h <= kBoardRows);
+}
+
+void test_clock_page() {
+  using esphome::gameday::clock_page_fonts;
+  using esphome::gameday::ClockPageFonts;
+  for (int w : {64, 128, 192, 256})
+    for (int h : {64, 128}) {
+      const ClockPageFonts n = clock_page_fonts(w, h, false), l = clock_page_fonts(w, h, true);
+      LCHECK(n.time == BoardFont::S8 && n.date == BoardFont::S8);  // the theme's own font
+      // "09:41 PM" and "Mon, Nov 09" fit the width
+      LCHECK(8 * font_px(l.time) <= w && 11 * font_px(l.date) <= w);
+      LCHECK(l.date <= BoardFont::S16);  // full glyphs for the day's letters
+      LCHECK(font_rows(l.time) + 6 + font_rows(l.date) <= h);
+      LCHECK(l.time == (w >= 128 ? BoardFont::S32 : BoardFont::S16));
+      LCHECK(l.date == (w >= 128 ? BoardFont::S16 : BoardFont::S8));
+    }
 }
 
 void test_large_text() {
@@ -854,6 +935,7 @@ int run_layout_tests(int &total_checks) {
   test_splash_layouts();
   test_player_layouts();
   test_splash_places();
+  test_clock_page();
   test_large_text();
   test_clock_card();
   test_lower_sizes();

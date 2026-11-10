@@ -141,7 +141,6 @@ static const uint32_t SIDE_RETRY = 5 * MINUTE;
 static const uint32_t SIDE_AWAY_RESCAN = 2 * ::espn::kWatchStayMaxSeconds * 1000;
 // College days are 750 KB-1.4 MB: need this slack.
 static const uint32_t SIDE_COLLEGE_MS = 20 * 1000;
-static const uint32_t A2_SPLASH_MS = 4000;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
@@ -2060,7 +2059,8 @@ bool GamedayComponent::idle_update_() {
   }
   in.board_ready = this->board_ready_;
   in.connected = network::is_connected();
-  in.busy = this->idle_busy_();
+  // The idle display waits for a splash, a win's too
+  in.busy = this->idle_busy_() || (this->splash_ms_ != 0 && millis() - this->splash_ms_ < ::espn::kSplashMs);
   in.area2_busy = this->a2_busy_();
   const ::espn::IdleState s = ::espn::idle_state(in);
   const ::espn::IdleView v = this->idle_effective_(s.view);
@@ -4802,9 +4802,12 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   if (r.ticker_changed || r.clock_card)
     this->fire_action_("a2");  // the ticker's scroll time and the clock (gameday-common.yaml)
   if (r.splash)
-    this->set_timeout("a2_splash", A2_SPLASH_MS, []() {
+    this->set_timeout("a2_splash", ::espn::kSplashMs, [this]() {
       if (AreaView *a = area_view())
         area_hide_splash(*a);
+      // The card under it gets its whole turn
+      if (this->a2_view_ == ::espn::AreaView::LIVE && !this->jump_.active && this->rot_ms_ != 0)
+        this->rot_ms_ = millis() | 1;
     });
 #endif
 }
@@ -4830,7 +4833,9 @@ void GamedayComponent::a2_tick_() {
   }
   const uint32_t now = millis();
   bool redraw = false;
-  if (this->jump_.active && (now - this->jump_.since_ms >= this->watch_stay_ms() || !this->rotation_on_())) {
+  // A big play's stay ends once its splash is down
+  if (this->jump_.active && ((now - this->jump_.since_ms >= this->watch_stay_ms() && !this->a2_splash_up_(now)) ||
+                             !this->rotation_on_())) {
     ESP_LOGI(TAG, "Second area: back to the rotation");
     this->end_jump_();
     redraw = true;
@@ -4862,7 +4867,7 @@ void GamedayComponent::a2_tick_() {
     }
     redraw = true;
   }
-  if (this->rotation_on_() && !this->jump_.active &&
+  if (this->rotation_on_() && !this->jump_.active && !this->a2_splash_up_(now) &&
       (this->rot_ms_ == 0 || now - this->rot_ms_ >= ::espn::kRotCardMs || !this->rot_here_()))
     redraw = this->rot_advance_(now) || redraw;
   if (redraw || this->a2_compute_() != this->a2_view_)

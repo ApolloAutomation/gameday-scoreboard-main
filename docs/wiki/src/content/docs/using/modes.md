@@ -96,6 +96,10 @@ A game counts as on once it starts. In Live games the game the panel moves to co
 
 The idle display needs the time of day. What it shows waits for the panel's first board after a restart, or after you pick a new team or mode, but **Off or dim** and the night hours start as soon as the panel knows the time, and a restart keeps it. While the panel isn't on Wi-Fi, **Off or dim** leaves it lit. **Scores** reads today's games from ESPN about once every half hour while games you don't follow are on, and at the next start time otherwise, the same as Live games does. Minor league scores come from MLB and AHL and ECHL scores from HockeyTech, and while one of them fails or refuses the panel its scores wait for it, as your own team's game from it does, and the other leagues' scores go on. See [Night hours](/using/brightness-and-clock/#night-hours) for the overnight schedule.
 
+:::note[Coming in the next release]
+The idle display waits for a splash on the board to finish, about 7 seconds, before it takes the panel, so a win's splash shows whole, even with **Off or dim**.
+:::
+
 A big play in another game counts as a game that's on (see [Big plays in other games](#big-plays-in-other-games)). The panel switches to it over the clock, the scores, **My team today** or **Off or dim**, and lights up for it even when **Off or dim** has it dark. In the night hours it stays at the night brightness. After the stay the idle display has the panel back, and **Scores** comes back without reading today's games again. To keep the panel dark or on the clock while games you don't follow are on, turn off **Switch to big plays in other games**. While **Scores** shows, its reads and the checks of other games take turns between the panel's own reads, and neither holds the other up.
 
 ## Big plays in other games

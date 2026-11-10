@@ -45,6 +45,10 @@ When play stops for weather or darkness, the top row says "R2 suspended" or "R2 
 
 The top row says "Final" in gold and the winner's name turns gold. When the panel sees the tournament end, the winner's name fills the screen with fireworks for 4 seconds, like "JAMES WINS!". On a single panel a name longer than 10 letters is cut to fit its line, like "YELLAMARAJ WINS!". The ticker says who won and at what score, like "James wins at -20", then the next four places and the tour's next event with its days.
 
+:::note[Coming in the next release]
+The winner's splash stays up for about 7 seconds. On a single 64x64 panel more of its fireworks show, since none go off past the panel's edge.
+:::
+
 The final stays up until ESPN moves on to the tour's next event, usually a day or two later. Then the board shows that event's name and days. If the panel can't read the tour's schedule after a final, the final stays up and the panel tries again within minutes, rather than saying there's no event to come.
 
 A canceled or postponed tournament shows its name and "Canceled" or "Postponed".

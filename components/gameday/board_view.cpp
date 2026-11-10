@@ -195,6 +195,46 @@ void put_clock(BoardView &v, const GameGeom &g, bool force) {
   place(v.clock, p.spot);
 }
 
+// Black behind fireworks, else a flash of the color
+void splash_paint(BoardView &v, bool fx, uint32_t color) {
+  const uint32_t ink = fx ? lift_color(color, 0xE0) : 0xFFFFFF;
+  put_bg(v.splash, fx ? 0x000000 : color);
+  put_color(v.splash_lbl, ink);
+  put_color(v.splash_pts, ink);
+}
+
+// One canvas: the board's splash or the second area's
+enum class FxHost : uint8_t { NONE, BOARD, AREA };
+FxHost fx_host = FxHost::NONE;
+
+bool fx_start(lv_obj_t *splash, FxHost who, const Spot &at, int h) {
+  BoardView *m = page_view;
+  if (m == nullptr || m->fx == nullptr || m->fx_run == nullptr || splash == nullptr)
+    return false;
+  // The board takes it back; the area flashes instead
+  if (fx_host == FxHost::AREA && who == FxHost::BOARD && area_ptr != nullptr)
+    splash_paint(area_ptr->game, false, area_ptr->splash_color);
+  if (lv_obj_get_parent(m->fx) != splash)
+    lv_obj_set_parent(m->fx, splash);
+  lv_obj_move_to_index(m->fx, 0);
+  lv_obj_set_pos(m->fx, at.x, at.y);
+  lv_obj_set_size(m->fx, std::min<int>(at.w, kFxPx), std::min(h, kBoardRows));
+  show(m->fx, true);
+  m->fx_run(true);
+  fx_host = who;
+  return true;
+}
+
+void fx_stop(FxHost who) {
+  BoardView *m = page_view;
+  if (fx_host != who || m == nullptr)
+    return;
+  if (m->fx_run != nullptr)
+    m->fx_run(false);
+  show(m->fx, false);
+  fx_host = FxHost::NONE;
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -216,6 +256,9 @@ void board_build(BoardView &v) {
     v.clock_ampm = plain_label(v.no_game, v.f8, LV_OPA_COVER);
     lv_obj_add_flag(v.clock_ampm, LV_OBJ_FLAG_HIDDEN);
   }
+  // Fireworks fill the canvas's top left
+  if (v.fx != nullptr)
+    lv_image_set_inner_align(v.fx, LV_IMAGE_ALIGN_TOP_LEFT);
   if (v.splash == nullptr || v.tile[0] != nullptr)
     return;
   for (int i = 0; i < 2; i++) {
@@ -244,8 +287,6 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   const GameGeom g = game_geom(w, sizes.text, sizes.clock);
   const SplashBox sb = splash_box(w, splash_h);
   show(v.ticker, board_ticker(h));
-  // Splash covers the whole screen; fireworks stay 128 wide
-  put_pos(v.fx, sb.fx_x, sb.band_y);
   put_size(v.game, w, kBoardRows);
   put_size(v.no_game, w, kBoardRows);
   put_size(v.board, w, kBoardRows);
@@ -580,25 +621,30 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       put_text(v.splash_pts, (L.points_whole ? f.splash_points : points_number(f.splash_points)).c_str());
     }
     show(v.splash_pts, L.points);
-    const bool big = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
-    const uint32_t ink = big ? lift_color(f.splash_color, 0xE0) : 0xFFFFFF;
-    if (big) {
-      put_bg(v.splash, 0x000000);
-      show(v.fx, true);
-    } else {
-      show(v.fx, false);
-      put_bg(v.splash, f.splash_color);
+    r.big_splash = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
+    // With a logo, clear of the words; else the band
+    const SplashBox sb = splash_box(W, v.splash_h);
+    r.fx = L.logos ? L.fx : Spot{(int16_t) sb.fx_x, (int16_t) sb.band_y, (int16_t) std::min(W, kFxPx)};
+    r.fx_h = L.logos ? L.fx_h : (int16_t) kBoardRows;
+    bool fx = false;
+    if (&v == page_view) {
+      fx = r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
+      if (!fx)
+        fx_stop(FxHost::BOARD);
     }
-    put_color(v.splash_lbl, ink);
-    put_color(v.splash_pts, ink);
+    splash_paint(v, fx, f.splash_color);
     show(v.splash, true);
     r.splash = true;
-    r.big_splash = big;
   } else if (logos_key(f) != v.tile_logos) {
     // Board moved on; a late logo is another game's
     v.tile_waiting[0] = v.tile_waiting[1] = false;
   }
   return r;
+}
+
+void board_hide_splash(BoardView &v) {
+  show(v.splash, false);
+  fx_stop(FxHost::BOARD);
 }
 
 void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]) {
@@ -783,21 +829,27 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   const GameGeom g = game_geom(a.w, v.sizes.text, v.sizes.clock);
   r.ticker_changed = put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
-    put_bg(v.splash, f.splash_color);
-    put_color(v.splash_lbl, 0xFFFFFF);
-    put_color(v.splash_pts, 0xFFFFFF);
-    r.big_splash = false;
+    // Fireworks when the board isn't using them
+    a.splash_color = f.splash_color;
+    const bool fx = r.big_splash && fx_host != FxHost::BOARD && fx_start(v.splash, FxHost::AREA, r.fx, r.fx_h);
+    if (!fx)
+      fx_stop(FxHost::AREA);
+    splash_paint(v, fx, f.splash_color);
   }
   return r;
 }
 
-void area_hide_splash(AreaView &a) { show(a.game.splash, false); }
+void area_hide_splash(AreaView &a) {
+  show(a.game.splash, false);
+  fx_stop(FxHost::AREA);
+}
 
 void area_clear(AreaView &a) {
   BoardView &v = a.game;
   show(v.game, false);
   show(v.no_game, false);
   show(v.splash, false);
+  fx_stop(FxHost::AREA);
   show(a.time, false);
   show(a.ampm, false);
   show(a.date, false);

@@ -51,6 +51,10 @@ The logo says whose run it was, so the other side's splash leaves its abbreviati
 
 A home run, a grand slam and a walk-off get fireworks on black with the words in the team's color. Other runs flash the screen in the team's color. The other side's splashes need **Opponent scores too** on.
 
+:::note[Coming in the next release]
+A splash stays up for about 7 seconds, and its fireworks go off around the logo and the runs, above the words. See [Splashes](/using/panel-sizes/#splashes).
+:::
+
 Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
 
 When your team wins, a victory splash with fireworks shows your logo and "WINS".

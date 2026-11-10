@@ -83,7 +83,11 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `tt_apply_layout` lays them out with its `board_layout` and `on_update`
   draws each update with its `board_draw`. The page keeps the leaderboard's
   rows (`gd_board`), the clock's time, the ticker's scroll time and the
-  fireworks. A 2x2 (128x128) has the 128 wide board in its top half and the
+  fireworks component, which the renderer starts, stops and places through
+  `fx_run`: clear of a splash's words (`splash_layout`'s `fx`), and lent to
+  the second area's splash while the board isn't using it. A splash stays up
+  `kSplashMs` (`alerts.h`), on the board (`tt_hide_splash`) and in the second
+  area. A 2x2 (128x128) has the 128 wide board in its top half and the
   second area (split mode, `components/gameday/split.h`) in its bottom half
   (`gd_lower`); three and four in a row can give their right end to it, the
   board then 128 wide on the left. `tt_apply_layout` takes both places from
@@ -96,7 +100,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   tiles, its points and a Large clock's AM or PM are built in C++ too
   (`board_build`). Clock size and Text size (`Prefs8::sizes`) pick the fonts
   and places: `game_geom`, `clock_card_geom` and `lower_half` in
-  `board_layout.h`; a size change runs `layout` again.
+  `board_layout.h`; a size change runs `layout` again, which also sets the
+  Clock page's fonts (`gd_clock_page`, `clock_page_fonts`).
 - `wizmote.yaml`: WiZ WizMote pairing over ESP-NOW and its buttons.
 - `qc.yaml`: the factory check (colors, row walk, readout), started by an NVS
   flag that `scripts/factory_flash.py` sets or by `/gameday/action?do=qc`.

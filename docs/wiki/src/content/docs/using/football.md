@@ -59,6 +59,10 @@ Two points say which they were. A play ESPN calls a safety says "SAFETY", and so
 
 A touchdown gets fireworks on black with the words in the team's color. The smaller scores flash the screen in the team's color with white words.
 
+:::note[Coming in the next release]
+A splash stays up for about 7 seconds. A touchdown and its extra point a read later still show one after the other, with the board between them, and a new splash that comes while one is up takes its place. A touchdown's fireworks go off around the logo and the points, above the words, so the words stay clear of them. See [Splashes](/using/panel-sizes/#splashes).
+:::
+
 The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN, in their color. The other side's splashes need **Opponent scores too** in the Celebrations card. The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.
 
 The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN.

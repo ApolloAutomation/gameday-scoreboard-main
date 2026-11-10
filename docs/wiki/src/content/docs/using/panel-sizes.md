@@ -38,9 +38,17 @@ On the start-up screen, the QR code sits on the left half with the words beside 
 
 The wide layout spreads across the whole width: the logos at the far ends, the abbreviations and big scores between them, the game clock and the situation row in the middle, and the ticker along the whole bottom. A golf or racing leaderboard sits in the middle. The game clock is far from the records under the logos, so a rank or a standing there always has its 7 characters. A splash has the team's logo at the left end, its words in the middle with a touchdown's or a win's fireworks behind them, and the points at the right end. On the start-up screen, the words take everything to the right of the QR code. With a [second area](#the-second-area) picked, the board takes the left two panels, seen from the front, and is laid out as on one 128x64 panel.
 
+:::note[Coming in the next release]
+A splash's fireworks go off above its words instead of behind them, across the middle of the row, unless the words take three lines.
+:::
+
 ### Two rows of two: 128x128
 
 The top half is the 128x64 board, the same as on one 128x64 panel, its ticker along its bottom with your [favorite players](/using/favorite-players/)' stat lines and your bets in it as on any board. The bottom half is the [second area](#the-second-area), which starts on **Clock and date**: the time and the date, and under them its own ticker in bigger letters with your next games. The heat and power line, **Too warm, dimming** or **Check power supply**, goes along the bottom edge. Under the off-season clock or the idle display's clock, which already show the time, the bottom half leaves the time out: it shows its ticker, with the date above it when the clock has your next game under the time instead of the date. The board's splashes, a favorite player's celebration and a [big play in another game](/using/modes/#big-plays-in-other-games) cover all four panels, with the logo, the words and the points down the middle and the fireworks behind them. The start-up and setup screens sit in the middle of the four panels.
+
+:::note[Coming in the next release]
+The fireworks go off around the logo, in the rows above the words, so the words and the points under them stay clear. A celebration with fireworks in the bottom half gets them there too, when the board isn't showing its own. See [Splashes](#splashes).
+:::
 
 ### Single: 64x64
 
@@ -88,6 +96,10 @@ One or two panels have no second area, and the device page doesn't offer one. Wi
 **Logos come up with the score.** The second area keeps its card up until the next card's logos have downloaded, for up to about 3.5 seconds, the way the board does, and the next card still gets its whole turn. The panel starts downloading the next card's logos while the card before it is up, in **Today's scores**, **Rotating live games** and for the second team, and keeps many more logos than before, so a loop of scores or live games downloads each logo once. A logo the board or the second area needs right now downloads before ones for later cards. When you switch to **Rotating live games**, or a game in it ends, the next live game comes up in its place instead of **No other live games**, and after a game ends the rotation goes on to the game that was next. With three or four panels in a row, turning the second area back on leaves it empty until its first card's logos are in, for up to about 3.5 seconds.
 
 A team with no logo at ESPN, like some smaller college teams, shows its abbreviation on a badge in its color, on the board and in the second area, and the panel doesn't ask ESPN for that logo again for a few hours. A logo still downloading after the wait shows the badge too, until the logo comes in.
+
+**Celebrations with fireworks.** A touchdown, a home run, a goal, a buzzer beater or a win in the second area gets fireworks on black, as on the board, whenever the board isn't showing fireworks of its own. If the board's own celebration with fireworks comes while the second area's is up, the board takes them and the second area's splash turns to a flash of the team's color for the rest of its time.
+
+**Splashes and turns.** A splash in the second area stays up for about 7 seconds, as on the board. **Rotating live games** waits for it to finish before it goes on to the next game, and a big play's stay ends only once its splash is down, so the game after it still gets its whole 8 seconds.
 :::
 
 ## Splashes
@@ -103,6 +115,12 @@ A score's or a big play's splash shows the logo of the team it's about, with the
 | The second area | As on one 64x64 panel (three wide) or 128x64 (four wide, or the bottom half of two rows of two), over that area only, as a flash of the team's color. |
 
 The logo is the one the panel already has for the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, as the demo's made-up teams have, and the logo takes the badge's place if it comes in while the splash is still up. The splash never waits for it. An [AHL or ECHL](/using/minor-league-hockey/) team that shows its badge on the board, for want of a small logo, keeps it on its splash too.
+
+:::note[Coming in the next release]
+- **About 7 seconds.** A splash stays up for about 7 seconds, on the board and in the second area. A new one that comes while one is up takes its place and stays its own 7 seconds. The panel reads a live game about every 10 seconds, so a touchdown and its extra point a read later still show one after the other, with the board between them. A big play in another game never takes the board while the board's own splash is up, and the idle display, **Off or dim** included, waits for a splash to finish, so a win's splash shows whole.
+- **Room around the words.** The words never touch the logo or the points: there are always at least 2 blank rows or columns between them, on every layout, in the second area, and for a favorite player's name with its play. On 128x64, and in a 128x64 second area, words too long for one line, like a long name with TOUCHDOWN, go on two lines in smaller letters, so they still clear the logo above them.
+- **Fireworks beside the logo.** A splash with fireworks shows them around the logo and the points, above the words, so the words stay easy to read: across the whole width of a single panel or a 128x64 one, across the middle of three or four panels in a row, and on two rows of two in up to 64 rows above the words. Only when the words leave too little room above and below them, as three lines across the middle of three or four panels do, do the fireworks go behind them. In the second area they show whenever the board isn't using them; see [The second area](#the-second-area).
+:::
 
 ## Changing the layout
 
