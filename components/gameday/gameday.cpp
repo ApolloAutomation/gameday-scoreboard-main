@@ -5532,9 +5532,9 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   }
   if (!standing.empty()) {
     // Standing beside the clock if it fits, else the record.
-    const int clock_px = (int) f.clock_text.size() * ::espn::kClockCharPx;
-    std::string board =
-        ::espn::board_standing(standing, ::espn::record_row_chars(clock_px, this->board_px_()));
+    const GameGeom geo = game_geom(this->board_px_(), this->text_large(), this->clock_large());
+    std::string board = clock_standing(geo, f.clock_text, standing, f.team_record, f.opponent_record.size(),
+                                       g.sport == ::espn::Sport::BASEBALL, ::espn::board_standing);
     if (!board.empty())
       f.team_record = std::move(board);
   }

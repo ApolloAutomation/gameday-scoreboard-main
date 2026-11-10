@@ -139,6 +139,7 @@ struct Spot {
 
 static const int kLogoPx = 32;
 static const int kRecCharPx = 5;  // the records' spleen_8
+static const int kRecRowPx = 36;  // a record row, under its logo
 
 struct GameGeom {
   bool wide;  // 128 wide and up
@@ -153,6 +154,7 @@ struct GameGeom {
   int16_t clock_top, clock_bottom, clock_deep;
   int16_t deep_x0, deep_x1;
   Spot rec[2], down;      // wide boards only
+  bool rec_slide;         // records slide out to clear the clock
   int16_t pip_x[6];       // wide only: the team's three timeouts, then the opponent's
   int16_t pip_y;
   BoardFont msg_font;     // the no-game message (centered both ways)
@@ -196,8 +198,8 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
     g.score[0] = {36, 18, (int16_t) colw};
     g.score[1] = {(int16_t) half, 18, (int16_t) colw};
     g.clock = {32, 35, (int16_t) (w - 64)};  // the records' row, between them
-    g.rec[0] = {0, 38, 36};
-    g.rec[1] = {(int16_t) (w - 36), 38, 36};
+    g.rec[0] = {0, 38, kRecRowPx};
+    g.rec[1] = {(int16_t) (w - kRecRowPx), 38, kRecRowPx};
     g.down = {32, (int16_t) (48 - lift), (int16_t) (w - 64)};
     // Centered under each logo, 18 px in from its edge
     for (int i = 0; i < 3; i++) {
@@ -247,6 +249,7 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
     // Logos and records move up; the clock spans the row.
     g.logo_y = 0;
     g.rec[0].y = g.rec[1].y = 34;
+    g.rec_slide = true;
     g.clock_font = BoardFont::S16;
     g.clock = {0, 31, (int16_t) w};
     g.clock_fall = {32, 32, (int16_t) (w - 64)};
@@ -279,9 +282,13 @@ inline void glyph_rows(BoardFont f, char c, int &top, int &bottom) {
   }
   if (c == 0)
     return;
+  // These reach a row past the rest, by font
+  const bool tall = std::strchr("/\\()[]{}|$,;", c) != nullptr ||
+                    (std::strchr("'\"", c) != nullptr && f != BoardFont::S12) ||
+                    (std::strchr("%&", c) != nullptr && f == BoardFont::S8);
   if (std::strchr("gjpqyQ_", c) != nullptr) {
     bottom = font_desc_bottom(f);
-  } else if (std::strchr("/\\()[]{}|$%&'\",;", c) != nullptr) {
+  } else if (tall) {
     top--;
     bottom++;
   }
@@ -290,10 +297,46 @@ inline void glyph_rows(BoardFont f, char c, int &top, int &bottom) {
     top = 0;
 }
 
-// Mirrors record_row_chars: records stay a pixel clear.
-inline bool records_clear(int w, int rec_w, int clock_px, size_t chars) {
-  const int rec_px = (int) chars * kRecCharPx;
-  return chars == 0 || (rec_w - rec_px) / 2 + rec_px < w / 2 - (clock_px + 1) / 2;
+// The centered clock's left edge, as LVGL rounds it.
+inline int clock_left_x(int w, int clock_px) { return w / 2 - (clock_px + 1) / 2; }
+
+// A record this wide stays a pixel clear.
+inline bool record_clears(const GameGeom &g, int rec_px, int clock_px) {
+  const int vis = rec_px < kRecRowPx ? rec_px : kRecRowPx;
+  const int edge = g.rec_slide ? vis : (kRecRowPx - vis) / 2 + vis;
+  return clock_px <= 0 || edge < clock_left_x(g.w, clock_px);
+}
+
+// Characters a record row holds beside the clock.
+inline size_t record_fit(const GameGeom &g, int clock_px, int char_px = kRecCharPx) {
+  if (char_px <= 0)
+    return 0;
+  size_t n = (size_t) (kRecRowPx / char_px);
+  while (n > 0 && !record_clears(g, (int) n * char_px, clock_px))
+    n--;
+  return n;
+}
+
+inline bool records_clear(const GameGeom &g, int clock_px, size_t chars) {
+  return chars == 0 || record_clears(g, (int) chars * kRecCharPx, clock_px);
+}
+
+// Record label's x: under its logo, else slid clear.
+inline int record_label_x(const GameGeom &g, int side, int rec_px, int clock_px) {
+  const Spot &r = g.rec[side];
+  const int vis = rec_px < r.w ? rec_px : r.w, pad = (r.w - vis) / 2;
+  if (!g.rec_slide || clock_px <= 0)
+    return r.x;
+  const int left = clock_left_x(g.w, clock_px);
+  int x = r.x + pad;
+  if (side == 0) {
+    const int most = left - 1 - vis;
+    x = x < most ? x : (most > 0 ? most : 0);
+  } else {
+    const int least = left + clock_px + 1, edge = g.w - vis;
+    x = x > least ? x : (least < edge ? least : edge);
+  }
+  return x - pad;
 }
 
 struct ClockPick {
@@ -307,7 +350,7 @@ inline ClockPick game_clock(const GameGeom &g, const std::string &text, size_t r
   const int px = font_px(g.clock_font), tw = (int) text.size() * px;
   if (g.clock_font == g.clock_fall_font || text.empty() || tw > g.clock.w)
     return fall;
-  if (g.wide && !records_clear(g.w, g.rec[0].w, tw, rec_chars))
+  if (g.wide && !records_clear(g, tw, rec_chars))
     return fall;
   // "Top" descends, so every half inning matches.
   const int deep = baseball ? g.clock_deep : g.clock_bottom;
@@ -325,6 +368,21 @@ inline ClockPick game_clock(const GameGeom &g, const std::string &text, size_t r
       return fall;
   }
   return ClockPick{g.clock_font, g.clock};
+}
+
+using Squeeze = std::string (*)(const std::string &, size_t);
+
+// Standing squeezed for the large clock when both fit.
+inline std::string clock_standing(const GameGeom &g, const std::string &clock, const std::string &standing,
+                                  const std::string &record, size_t other_chars, bool baseball, Squeeze squeeze) {
+  const int n = (int) clock.size();
+  if (g.clock_font != g.clock_fall_font) {
+    std::string s = squeeze(standing, record_fit(g, n * font_px(g.clock_font)));
+    const size_t mine = (s.empty() ? record : s).size();
+    if (game_clock(g, clock, mine > other_chars ? mine : other_chars, baseball).font == g.clock_font)
+      return s;
+  }
+  return squeeze(standing, record_fit(g, n * font_px(g.clock_fall_font)));
 }
 
 // Dark colors vanish on the panel, so lift them.

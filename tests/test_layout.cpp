@@ -495,6 +495,8 @@ using esphome::gameday::game_clock;
 using esphome::gameday::game_geom;
 using esphome::gameday::GameGeom;
 using esphome::gameday::glyph_rows;
+using esphome::gameday::record_fit;
+using esphome::gameday::record_label_x;
 using esphome::gameday::Spot;
 
 // Ink rows measured from the Spleen bitmaps, in hex.
@@ -522,9 +524,10 @@ const char *const kInnings[] = {"1st", "5th", "9th", "10th", "12th"};
 const char *const kHalves[] = {"Top ", "Mid ", "Bot ", "End "};
 const char *const kBaseballBreaks[] = {"Delayed", "Rain Delay", "Suspended"};
 
-// Records, the longest seven characters
-const char *const kRecords[][2] = {{"", ""}, {"2-1", "1-2"}, {"15-3", "12-6"}, {"45-37", "22-10"},
-                                   {"10-5-2", "8-9"},  {"30-15-5", "28-20-3"}, {"1stNFCE", "9-8"}};
+// Records; eight characters overflow the row
+const char *const kRecords[][2] = {{"", ""},           {"2-1", "1-2"},         {"15-3", "12-6"},
+                                   {"45-37", "22-10"}, {"10-5-2", "8-9"},      {"8-9", "10-3-1"},
+                                   {"30-15-5", "28-20-3"}, {"1stNFCE", "9-8"}, {"41-30-11", "38-31-13"}};
 
 struct ClockScreen {
   int w;
@@ -547,10 +550,14 @@ Box text_in(const Spot &s, int chars, int px, int y0, int y1) {
 // Records as drawn: the rank only where it fits
 std::vector<Box> record_parts(const GameGeom &g, int clock_px, const char *const rec[2], uint8_t rank) {
   std::vector<Box> b;
+  const int px = font_px(BoardFont::S8);
   for (int i = 0; i < 2 && g.wide; i++) {
-    const std::string shown = rank_label(rank, rec[i], record_row_chars(clock_px, g.w, g.rec[i].w));
-    if (!shown.empty())
-      b.push_back(text_in(g.rec[i], (int) shown.size(), font_px(BoardFont::S8), 0, font_ink_bottom(BoardFont::S8)));
+    const std::string shown = rank_label(rank, rec[i], record_fit(g, clock_px));
+    if (shown.empty())
+      continue;
+    Spot at = g.rec[i];
+    at.x = (int16_t) record_label_x(g, i, (int) shown.size() * px, clock_px);
+    b.push_back(text_in(at, (int) shown.size(), px, 0, font_ink_bottom(BoardFont::S8)));
   }
   return b;
 }
@@ -622,8 +629,10 @@ void test_glyph_rows() {
       glyph_rows(m.font, kRowChars[i], top, bottom);
       const int real_top = std::stoi(std::string(1, m.top[i]), nullptr, 16);
       const int real_bottom = std::stoi(std::string(1, m.bottom[i]), nullptr, 16);
-      LCHECK(top <= real_top && bottom >= real_bottom);
-      if (top > real_top || bottom < real_bottom)
+      // Never above the ink top unless it inks there
+      const int ink_top = std::min(real_top, font_ink_top(m.font));
+      LCHECK(top <= real_top && bottom >= real_bottom && top >= ink_top);
+      if (top > real_top || bottom < real_bottom || top < ink_top)
         printf("  '%c' in %dpx: %d-%d, inks %d-%d\n", kRowChars[i], font_rows(m.font), top, bottom, real_top,
                real_bottom);
     }
@@ -661,11 +670,12 @@ BoardFont check_clock(const ClockScreen &s, bool large_text, bool large_clock, c
   if (!s.area)
     parts.push_back(Box{s.w - 9, 0, s.w, 13});  // the heat or power icon
   // Beside the normal clock the records are as before.
-  if (big) {
+  const size_t row_chars = (size_t) (esphome::gameday::kRecRowPx / font_px(BoardFont::S8));
+  const bool recs_fit = g.wide && record_fit(g, clock_px) >= std::min(rec_chars, row_chars);
+  if (big && g.wide && !recs_fit)
+    fail("a record cut short");
+  if (big || recs_fit)
     parts.insert(parts.end(), recs.begin(), recs.end());
-    if (g.wide && rec_chars > 0 && record_row_chars(clock_px, s.w) < rec_chars)
-      fail("a record cut short");
-  }
   for (const Box &c : clock_glyphs(pick.font, pick.spot, text)) {
     if (!inside(c, Screen{s.w, kBoardRows}))
       fail("off the board");
@@ -679,6 +689,8 @@ BoardFont check_clock(const ClockScreen &s, bool large_text, bool large_clock, c
       if (overlap(m, p))
         fail("a logo on another part");
   for (const Box &m : recs) {
+    if (!inside(m, Screen{s.w, kBoardRows}))
+      fail("a record off the board");
     for (const Box &p : rest)
       if (overlap(m, p))
         fail("a record on another part");
@@ -693,11 +705,35 @@ BoardFont check_clock(const ClockScreen &s, bool large_text, bool large_clock, c
 void test_game_clock() {
   using esphome::gameday::records_clear;
   test_glyph_rows();
-  // The fit mirrors the record rows' own rule.
-  for (int w : {128, 192, 256})
+  // Normal: the record rows' own rule, centered
+  for (int w : {64, 128, 192, 256})
     for (int px = 0; px <= w; px++)
-      for (size_t chars = 0; chars <= 7; chars++)
-        LCHECK(records_clear(w, kRecordRowPx, px, chars) == (record_row_chars(px, w) >= chars));
+      LCHECK(record_fit(game_geom(w), px) == record_row_chars(px, w));
+  for (int w : {128, 192, 256})
+    for (bool large_clock : {false, true}) {
+      const GameGeom g = game_geom(w, false, large_clock);
+      LCHECK(g.rec_slide == large_clock);
+      for (int px = 0; px <= w; px += 2)
+        for (size_t chars = 0; chars <= 7; chars++)
+          LCHECK(records_clear(g, px, chars) == (record_fit(g, px) >= chars));
+    }
+  // Large: records slide out only as far as they must
+  for (int w : {128, 192, 256}) {
+    const GameGeom g = game_geom(w, false, true);
+    for (int clock_px = 0; clock_px <= w; clock_px += 2)
+      for (int chars = 0; chars <= 7; chars++) {
+        const int px = chars * font_px(BoardFont::S8), pad = (kRecordRowPx - px) / 2;
+        const int left = w / 2 - clock_px / 2, right = left + clock_px;
+        const int x0 = record_label_x(g, 0, px, clock_px) + pad, x1 = record_label_x(g, 1, px, clock_px) + pad;
+        const int c0 = g.rec[0].x + pad, c1 = g.rec[1].x + pad;
+        LCHECK(x0 >= 0 && x1 + px <= w && x0 <= c0 && x1 >= c1);
+        if (clock_px == 0 || chars == 0 || !records_clear(g, clock_px, (size_t) chars))
+          continue;
+        LCHECK(x0 + px < left && x1 > right);
+        LCHECK(x0 == c0 || x0 + px == left - 1);
+        LCHECK(x1 == c1 || x1 == right + 1);
+      }
+  }
   for (const ClockScreen &s : kClockScreens)
     for (bool large_text : {false, true})
       for (bool large_clock : {false, true})
@@ -742,17 +778,72 @@ void test_game_clock() {
       LCHECK(check_clock(s, large_text, true, "5:21 3rd", false, college) == big);
       LCHECK(check_clock(s, large_text, true, "PENS 3-2", false, college) == big);
       LCHECK(check_clock(s, large_text, true, "in 2h 5m", false, college) == big);
-      // Ten characters fit all but two wide.
+      // Ten characters fit beside short records.
       for (const char *t : {"12:04 2nd", "End of 2nd", "in 23h 59m"})
-        LCHECK(check_clock(s, large_text, true, t, false, college) == (s.w == 128 ? normal : big));
+        LCHECK(check_clock(s, large_text, true, t, false, college) == big);
       LCHECK(check_clock(s, large_text, true, "12:04 2nd", false, short_rec) == big);
       LCHECK(check_clock(s, large_text, true, "End of 2nd", false, none) == big);
+      // Two wide: records slide out, but only so far
+      const char *const pro[2] = {"45-37", "22-10"};
+      const char *const hockey[2] = {"10-3-1", "8-9-2"};
+      LCHECK(check_clock(s, large_text, true, "12:04 2nd", false, pro) == big);
+      LCHECK(check_clock(s, large_text, true, "End of 2nd", false, pro) == (s.w == 128 ? normal : big));
+      for (const char *t : {"5:21 3rd", "Halftime", "0:45 3rd", "9:59 2nd", "End 3rd"})
+        LCHECK(check_clock(s, large_text, true, t, false, hockey) == big);
+      LCHECK(check_clock(s, large_text, true, "19:59 1st", false, hockey) == (s.w == 128 ? normal : big));
+      // Soccer's minutes clear the logos on one panel too.
+      for (const char *t : {"67'", "45'+2'", "90'+5'", "ET 105'", "ET HT"})
+        LCHECK(check_clock(s, large_text, true, t, false, college) == big);
       // One panel, Large text: no room under "Top".
       LCHECK(check_clock(s, large_text, true, "Top 5th", true, college) == (!wide && large_text ? normal : big));
       LCHECK(check_clock(s, large_text, true, "Top 10th", true, college) == (!wide && large_text ? normal : big));
       // "/" reaches the logos' row on one panel.
       LCHECK(check_clock(s, large_text, true, "Final/OT", false, college) == (wide ? big : normal));
     }
+}
+
+// A standing yields to the large clock, as to the normal one.
+void test_clock_standing() {
+  using esphome::gameday::clock_standing;
+  const char *const standings[] = {"1st NFCE", "10th NLW", "Seed 4", "Seed 12", "2nd AL", "1st"};
+  const char *const records[] = {"", "10-6", "10-6-1", "30-15-5"};
+  const char *const others[] = {"", "9-8", "45-37", "10-3-1", "28-20-3"};
+  for (int w : {64, 128, 192, 256})
+    for (bool large_text : {false, true})
+      for (bool large_clock : {false, true}) {
+        const GameGeom g = game_geom(w, large_text, large_clock);
+        for (const char *clock : kClockTexts)
+          for (const char *st : standings)
+            for (const char *rec : records)
+              for (const char *other : others) {
+                const std::string got = clock_standing(g, clock, st, rec, strlen(other), false, board_standing);
+                const size_t n = strlen(clock);
+                if (!large_clock && g.wide)
+                  LCHECK_EQ(got, board_standing(st, record_row_chars((int) n * kClockCharPx, w)));
+                if (!g.wide)
+                  continue;
+                // The clock the board then picks
+                const size_t mine = (got.empty() ? std::string(rec) : got).size();
+                const auto pick = game_clock(g, clock, std::max(mine, strlen(other)), false);
+                LCHECK(got.size() <= record_fit(g, (int) n * font_px(pick.font)));
+                // Large whenever a squeezed standing allows it
+                const std::string sq = board_standing(st, record_fit(g, (int) n * font_px(g.clock_font)));
+                const size_t sq_n = (sq.empty() ? std::string(rec) : sq).size();
+                if (game_clock(g, clock, std::max(sq_n, strlen(other)), false).font == g.clock_font)
+                  LCHECK(pick.font == g.clock_font);
+              }
+      }
+  // Two wide, Large: a place shortens for the big clock
+  const GameGeom g = game_geom(128, false, true);
+  LCHECK_EQ(clock_standing(g, "5:21 3rd", "1st NFCE", "10-6", 3, false, board_standing), "1st");
+  LCHECK_EQ(clock_standing(g, "Halftime", "Seed 12", "10-6", 3, false, board_standing), "Seed12");
+  LCHECK_EQ(clock_standing(g, "0:07 4th", "Seed 4", "10-6", 3, false, board_standing), "Seed 4");
+  LCHECK(game_clock(g, "5:21 3rd", 6, false).font == BoardFont::S16);
+  // A long other record keeps the normal clock's room.
+  LCHECK_EQ(clock_standing(g, "5:21 3rd", "1st NFCE", "10-6", 7, false, board_standing), "1stNFCE");
+  // Squeezed away, the record must fit too
+  LCHECK_EQ(clock_standing(g, "End of 2nd", "Seed 12", "10-6-1", 3, false, board_standing), "Seed12");
+  LCHECK_EQ(clock_standing(g, "End of 2nd", "Seed 12", "10-6", 3, false, board_standing), "");
 }
 
 }  // namespace
@@ -767,6 +858,7 @@ int run_layout_tests(int &total_checks) {
   test_clock_card();
   test_lower_sizes();
   test_game_clock();
+  test_clock_standing();
   total_checks += checks;
   return failures;
 }

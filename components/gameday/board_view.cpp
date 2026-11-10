@@ -376,7 +376,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       return;
     const int cw = char_px(lbl);
     const int lw = (int) lv_obj_get_style_width(lbl, LV_PART_MAIN);
-    const size_t fit = cw <= 0 || lw <= 0 ? 0 : row ? ::espn::record_row_chars(clock_px, W, lw, cw) : (size_t) (lw / cw);
+    const size_t fit = cw <= 0 || lw <= 0 ? 0 : row ? record_fit(g, clock_px, cw) : (size_t) (lw / cw);
     lv_label_set_text(lbl, ::espn::rank_label(rank, text, fit).c_str());
   };
   const bool abbr_rank = !wide && !live;
@@ -384,6 +384,15 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_rank(v.abbr[1], abbr_rank ? f.opponent_rank : 0, abbr[1], false);
   put_rank(v.rec[0], wide ? f.team_rank : 0, rec[0], true);
   put_rank(v.rec[1], wide ? f.opponent_rank : 0, rec[1], true);
+  // Large clock: records slide out to clear it
+  for (int i = 0; i < 2 && wide; i++) {
+    if (v.rec[i] == nullptr)
+      continue;
+    const int px = (int) strlen(lv_label_get_text(v.rec[i])) * char_px(v.rec[i]);
+    const int x = record_label_x(g, i, px, clock_px);
+    if (lv_obj_get_style_x(v.rec[i], LV_PART_MAIN) != x)
+      lv_obj_set_x(v.rec[i], x);
+  }
 
   // Rewriting restarts the scroll; leaderboards fit only spleen_8
   if (v.ticker != nullptr) {
