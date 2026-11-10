@@ -3760,6 +3760,125 @@ static void test_logo_backoff() {
   CHECK_EQ(wait_b, 15000u);
 }
 
+// Shown cards' logos download first, then prefetches, oldest first
+static void test_logo_order() {
+  using espn::LOGO_NEXT;
+  using espn::LOGO_NOW;
+  CHECK(espn::logo_job_before(LOGO_NOW, 9, LOGO_NEXT, 1));
+  CHECK(!espn::logo_job_before(LOGO_NEXT, 1, LOGO_NOW, 9));
+  CHECK(espn::logo_job_before(LOGO_NEXT, 3, LOGO_NEXT, 4));
+  CHECK(!espn::logo_job_before(LOGO_NOW, 4, LOGO_NOW, 3));
+  CHECK(!espn::logo_job_before(LOGO_NOW, 4, LOGO_NOW, 4));
+  // Order holds across the counter's wrap
+  CHECK(espn::logo_job_before(LOGO_NOW, 0xFFFFFFFFu, LOGO_NOW, 2));
+  std::vector<espn::LogoSlot> slots = {{100, false, false}, {50, false, true}, {70, false, false}};
+  CHECK_EQ(espn::pick_evict_in(slots, 1000), 2);
+}
+
+// A new area card waits for its logos
+static void test_logo_hold_step() {
+  using espn::HoldStep;
+  const uint32_t hold = espn::LOGO_HOLD_MS;
+  espn::LogoHold h;
+  // Same logos, a splash or a clock: up at once
+  CHECK(h.step(false, true, true, 1000) == HoldStep::DRAW);
+  CHECK(!h.on);
+  // New logos already cached: up at once
+  CHECK(h.step(true, false, false, 1000) == HoldStep::DRAW);
+  CHECK(!h.on && !h.over(false, false, 1000));
+  // New logos on their way: waits
+  CHECK(h.step(true, true, false, 2000) == HoldStep::WAIT);
+  CHECK(h.on && h.since == 2000u);
+  CHECK(h.step(true, false, true, 2000 + hold - 1) == HoldStep::WAIT);
+  CHECK(!h.over(false, true, 2000 + hold - 1));
+  // The cap counts from the first wait, whatever came since
+  CHECK(h.over(true, true, 2000 + hold));
+  CHECK(h.step(true, true, true, 2000 + hold) == HoldStep::DRAW_LATE);
+  CHECK(!h.on);
+  // Logos in early: up then, and its turn restarts
+  CHECK(h.step(true, true, true, 9000) == HoldStep::WAIT);
+  CHECK(h.over(false, false, 9400));
+  CHECK(h.step(true, false, false, 9400) == HoldStep::DRAW_LATE);
+  // A splash ends a wait at once
+  CHECK(h.step(true, true, false, 20000) == HoldStep::WAIT);
+  CHECK(h.step(false, false, false, 20001) == HoldStep::DRAW_LATE);
+  CHECK(h.step(false, false, false, 20002) == HoldStep::DRAW);
+  // A failed logo is not waited for
+  CHECK(h.step(true, false, false, 30000) == HoldStep::DRAW);
+  // Across the millis() wrap
+  CHECK(h.step(true, true, true, 0xFFFFF000u) == HoldStep::WAIT);
+  CHECK(h.step(true, true, true, 0xFFFFF000u + hold - 1) == HoldStep::WAIT);
+  CHECK(h.step(true, true, true, 0xFFFFF000u + hold) == HoldStep::DRAW_LATE);
+}
+
+// Which logo URL works per team, and teams with none
+static void test_logo_memo() {
+  using espn::LogoNote;
+  using espn::LogoVariant;
+  const std::string dark = espn::dark_logo("https://a.espncdn.com/i/teamlogos/ncaa/500/3246.png");
+  const std::string plain = espn::plain_logo_url(dark);
+  CHECK_EQ(espn::logo_key("", 0), 2166136261u);
+  CHECK_EQ(espn::logo_key("a", 1), 0xE40C292Cu);
+  const uint32_t key = espn::logo_key(dark.data(), dark.size());
+  CHECK(key != espn::logo_key(plain.data(), plain.size()));
+
+  // What a download teaches
+  CHECK(espn::logo_learned(true, false, 200, 0) == LogoNote::DARK);
+  CHECK(espn::logo_learned(true, false, 404, 200) == LogoNote::PLAIN);
+  CHECK(espn::logo_learned(true, false, 404, 404) == LogoNote::NONE);
+  CHECK(espn::logo_learned(true, false, 404, 0) == LogoNote::KEEP);
+  CHECK(espn::logo_learned(true, false, 0, 0) == LogoNote::KEEP);
+  CHECK(espn::logo_learned(true, false, 429, 0) == LogoNote::KEEP);
+  CHECK(espn::logo_learned(true, false, 500, 0) == LogoNote::KEEP);
+  CHECK(espn::logo_learned(false, false, 404, 0) == LogoNote::NONE);
+  CHECK(espn::logo_learned(false, false, 200, 0) == LogoNote::DARK);
+  CHECK(espn::logo_learned(true, true, 200, 0) == LogoNote::PLAIN);
+  CHECK(espn::logo_learned(true, true, 404, 0) == LogoNote::NONE);
+  CHECK(espn::logo_learned(true, true, 0, 0) == LogoNote::KEEP);
+
+  std::vector<espn::LogoMemo> memo;
+  CHECK(espn::memo_get(memo, key, 1000) == LogoVariant::DARK);
+  CHECK_EQ(espn::logo_first_url(dark, LogoVariant::DARK), dark);
+  // Dark missing: plain first from then on
+  espn::memo_note(memo, key, LogoNote::PLAIN, 1000);
+  CHECK(espn::memo_get(memo, key, 1000 + 3600000) == LogoVariant::PLAIN);
+  CHECK_EQ(espn::logo_first_url(dark, LogoVariant::PLAIN), plain);
+  CHECK_EQ(espn::logo_first_url(plain, LogoVariant::PLAIN), plain);
+  CHECK_EQ(espn::memo_none_left(memo, key, 2000), 0u);
+  // Asked for again after a day
+  CHECK(espn::memo_get(memo, key, 1000 + espn::kLogoPlainMs) == LogoVariant::DARK);
+  // No logo at all: not asked for again for hours
+  espn::memo_note(memo, key, LogoNote::NONE, 5000);
+  CHECK_EQ(memo.size(), (size_t) 1);
+  CHECK(espn::memo_get(memo, key, 5000) == LogoVariant::NONE);
+  CHECK_EQ(espn::memo_none_left(memo, key, 5000), espn::kLogoNoneMs);
+  CHECK_EQ(espn::memo_none_left(memo, key, 5000 + 3600000), espn::kLogoNoneMs - 3600000);
+  CHECK_EQ(espn::memo_none_left(memo, key, 5000 + espn::kLogoNoneMs), 0u);
+  CHECK(espn::memo_get(memo, key, 5000 + espn::kLogoNoneMs) == LogoVariant::DARK);
+  CHECK_EQ(espn::logo_first_url(dark, LogoVariant::NONE), dark);
+  // Timeouts keep it; a working dark logo forgets it
+  espn::memo_note(memo, key, LogoNote::KEEP, 6000);
+  CHECK(espn::memo_get(memo, key, 6000) == LogoVariant::NONE);
+  espn::memo_note(memo, key, LogoNote::DARK, 7000);
+  CHECK(memo.empty());
+  espn::memo_note(memo, key, LogoNote::DARK, 7000);
+  CHECK(memo.empty());
+  // Across the millis() wrap
+  espn::memo_put(memo, key, LogoVariant::NONE, 0xFFFFF000u);
+  CHECK_EQ(espn::memo_none_left(memo, key, 0x1000u), espn::kLogoNoneMs - 0x2000u);
+  // Full: the oldest gives way
+  memo.clear();
+  for (uint32_t i = 0; i < 4; i++)
+    espn::memo_put(memo, 100 + i, LogoVariant::NONE, 1000 + i, 4);
+  espn::memo_put(memo, 200, LogoVariant::PLAIN, 2000, 4);
+  CHECK_EQ(memo.size(), (size_t) 4);
+  CHECK(espn::memo_get(memo, 100, 2000) == LogoVariant::DARK);
+  CHECK(espn::memo_get(memo, 101, 2000) == LogoVariant::NONE);
+  CHECK(espn::memo_get(memo, 200, 2000) == LogoVariant::PLAIN);
+  espn::memo_put(memo, 300, LogoVariant::NONE, 3000, 0);
+  CHECK(espn::memo_get(memo, 300, 3000) == LogoVariant::DARK);
+}
+
 // Counts what the parsers allocate through the hook the firmware points at PSRAM
 struct CountingAllocator : ArduinoJson::Allocator {
   int calls = 0;
@@ -9021,6 +9140,9 @@ int main() {
   test_logo_lru();
   test_logo_lru_edges();
   test_logo_backoff();
+  test_logo_order();
+  test_logo_hold_step();
+  test_logo_memo();
   test_json_allocator();
   test_timezone_index();
   test_postseason();

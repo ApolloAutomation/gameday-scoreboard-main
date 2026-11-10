@@ -182,6 +182,64 @@ void paint_tile(BoardView &v, int i, int side, const UpdateFields &f, image::Ima
 // Hash of both logos, to spot a newer update's
 uint32_t logos_key(const UpdateFields &f) { return fnv1_hash(f.team_logo) * 31u + fnv1_hash(f.opponent_logo); }
 
+// Large game clock where its text fits
+void put_clock(BoardView &v, const GameGeom &g, bool force) {
+  if (v.clock == nullptr)
+    return;
+  const char *t = lv_label_get_text(v.clock);
+  const ClockPick p = game_clock(g, t != nullptr ? t : "", v.clock_rec, v.clock_baseball);
+  const lv_font_t *f = font_of(v, p.font);
+  if (!force && lv_obj_get_style_text_font(v.clock, LV_PART_MAIN) == f)
+    return;
+  put_font(v.clock, f);
+  place(v.clock, p.spot);
+}
+
+// Black behind fireworks, else a flash of the color
+void splash_paint(BoardView &v, bool fx, uint32_t color) {
+  const uint32_t ink = fx ? lift_color(color, 0xE0) : 0xFFFFFF;
+  put_bg(v.splash, fx ? 0x000000 : color);
+  put_color(v.splash_lbl, ink);
+  put_color(v.splash_pts, ink);
+  // Black box: bursts never cross the points
+  if (v.splash_pts != nullptr) {
+    lv_obj_set_style_bg_color(v.splash_pts, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(v.splash_pts, fx && v.pts_mask ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+  }
+}
+
+// One canvas: the board's splash or the second area's
+enum class FxHost : uint8_t { NONE, BOARD, AREA };
+FxHost fx_host = FxHost::NONE;
+
+bool fx_start(lv_obj_t *splash, FxHost who, const Spot &at, int h) {
+  BoardView *m = page_view;
+  if (m == nullptr || m->fx == nullptr || m->fx_run == nullptr || splash == nullptr)
+    return false;
+  // The board takes it back; the area flashes instead
+  if (fx_host == FxHost::AREA && who == FxHost::BOARD && area_ptr != nullptr)
+    splash_paint(area_ptr->game, false, area_ptr->splash_color);
+  if (lv_obj_get_parent(m->fx) != splash)
+    lv_obj_set_parent(m->fx, splash);
+  lv_obj_move_to_index(m->fx, 0);
+  lv_obj_set_pos(m->fx, at.x, at.y);
+  lv_obj_set_size(m->fx, std::min<int>(at.w, kFxPx), std::min(h, kBoardRows));
+  show(m->fx, true);
+  m->fx_run(true);
+  fx_host = who;
+  return true;
+}
+
+void fx_stop(FxHost who) {
+  BoardView *m = page_view;
+  if (fx_host != who || m == nullptr)
+    return;
+  if (m->fx_run != nullptr)
+    m->fx_run(false);
+  show(m->fx, false);
+  fx_host = FxHost::NONE;
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -203,6 +261,9 @@ void board_build(BoardView &v) {
     v.clock_ampm = plain_label(v.no_game, v.f8, LV_OPA_COVER);
     lv_obj_add_flag(v.clock_ampm, LV_OBJ_FLAG_HIDDEN);
   }
+  // Fireworks fill the canvas's top left
+  if (v.fx != nullptr)
+    lv_image_set_inner_align(v.fx, LV_IMAGE_ALIGN_TOP_LEFT);
   if (v.splash == nullptr || v.tile[0] != nullptr)
     return;
   for (int i = 0; i < 2; i++) {
@@ -228,11 +289,9 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   v.w = (int16_t) w;
   v.splash_h = (int16_t) splash_h;
   v.sizes = sizes;
-  const GameGeom g = game_geom(w, sizes.text);
+  const GameGeom g = game_geom(w, sizes.text, sizes.clock);
   const SplashBox sb = splash_box(w, splash_h);
   show(v.ticker, board_ticker(h));
-  // Splash covers the whole screen; fireworks stay 128 wide
-  put_pos(v.fx, sb.fx_x, sb.band_y);
   put_size(v.game, w, kBoardRows);
   put_size(v.no_game, w, kBoardRows);
   put_size(v.board, w, kBoardRows);
@@ -264,8 +323,7 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
     place(v.abbr[i], g.abbr[i]);
     place(v.score[i], g.score[i]);
   }
-  put_font(v.clock, font_of(v, g.clock_font));
-  place(v.clock, g.clock);
+  put_clock(v, g, true);
   if (g.wide) {
     for (int i = 0; i < 2; i++) {
       put_font(v.rec[i], v.f8);
@@ -315,7 +373,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   DrawResult r;
   const int W = v.w;
   const bool wide = W >= 128;
-  const GameGeom g = game_geom(W, v.sizes.text);
+  const GameGeom g = game_geom(W, v.sizes.text, v.sizes.clock);
   const bool live = f.game_state == "IN";
   // panel_text() so missing glyphs never draw as boxes
   const std::string abbr[2] = {panel_text(f.team_abbr), panel_text(f.opponent_abbr)};
@@ -334,10 +392,10 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   for (int i = 0; i < 2; i++) {
     const bool none = abbr[i].empty();
     show(v.logo[i], !none && !badge[i]);
-    if (none || !badge[i]) {
-      show(v.badge[i], false);
+    show(v.badge[i], !none && badge[i]);
+    // Styled anyway, for a logo that never comes
+    if (none)
       continue;
-    }
     const ::espn::BadgeStyle st = ::espn::badge_style(color[i], ring[i]);
     if (v.badge[i] != nullptr) {
       lv_obj_set_style_bg_color(v.badge[i], lv_color_hex(st.fill), 0);
@@ -346,20 +404,25 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     }
     put_changed(v.badge_lbl[i], abbr[i].c_str());
     put_color(v.badge_lbl[i], st.dark_text ? 0x000000 : 0xFFFFFF);
-    show(v.badge[i], true);
   }
   put_text(v.score[0], std::to_string(f.team_score).c_str());
   put_text(v.score[1], std::to_string(f.opponent_score).c_str());
 
-  // College rank goes in front only where it fits
+  // Before a game, only the idle countdown sends a clock
   const bool clock_up = (live || f.game_state == "PRE") && !clock_text.empty();
+  if (clock_up)
+    put_text(v.clock, clock_text.c_str());
+  v.clock_rec = (uint8_t) std::min<size_t>(wide ? std::max(rec[0].size(), rec[1].size()) : 0, 255);
+  v.clock_baseball = f.sport == 1;
+  put_clock(v, g, false);
+  // College rank goes in front only where it fits
   const int clock_px = clock_up && v.clock != nullptr ? (int) clock_text.size() * char_px(v.clock) : 0;
   auto put_rank = [&](lv_obj_t *lbl, uint8_t rank, const std::string &text, bool row) {
     if (lbl == nullptr)
       return;
     const int cw = char_px(lbl);
     const int lw = (int) lv_obj_get_style_width(lbl, LV_PART_MAIN);
-    const size_t fit = cw <= 0 || lw <= 0 ? 0 : row ? ::espn::record_row_chars(clock_px, W, lw, cw) : (size_t) (lw / cw);
+    const size_t fit = cw <= 0 || lw <= 0 ? 0 : row ? record_fit(g, clock_px, cw) : (size_t) (lw / cw);
     lv_label_set_text(lbl, ::espn::rank_label(rank, text, fit).c_str());
   };
   const bool abbr_rank = !wide && !live;
@@ -367,6 +430,15 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_rank(v.abbr[1], abbr_rank ? f.opponent_rank : 0, abbr[1], false);
   put_rank(v.rec[0], wide ? f.team_rank : 0, rec[0], true);
   put_rank(v.rec[1], wide ? f.opponent_rank : 0, rec[1], true);
+  // Large clock: records slide out to clear it
+  for (int i = 0; i < 2 && wide; i++) {
+    if (v.rec[i] == nullptr)
+      continue;
+    const int px = (int) strlen(lv_label_get_text(v.rec[i])) * char_px(v.rec[i]);
+    const int x = record_label_x(g, i, px, clock_px);
+    if (lv_obj_get_style_x(v.rec[i], LV_PART_MAIN) != x)
+      lv_obj_set_x(v.rec[i], x);
+  }
 
   // Rewriting restarts the scroll; leaderboards fit only spleen_8
   if (v.ticker != nullptr) {
@@ -512,9 +584,6 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       }
     }
   }
-  // Before a game, only the idle countdown sends a clock
-  if (clock_up)
-    put_text(v.clock, clock_text.c_str());
   show(v.clock, clock_up);
   show(v.abbr[0], wide || !clock_up);
   show(v.abbr[1], wide || !clock_up);
@@ -557,25 +626,49 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       put_text(v.splash_pts, (L.points_whole ? f.splash_points : points_number(f.splash_points)).c_str());
     }
     show(v.splash_pts, L.points);
-    const bool big = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
-    const uint32_t ink = big ? lift_color(f.splash_color, 0xE0) : 0xFFFFFF;
-    if (big) {
-      put_bg(v.splash, 0x000000);
-      show(v.fx, true);
-    } else {
-      show(v.fx, false);
-      put_bg(v.splash, f.splash_color);
+    v.pts_mask = L.pts_mask;
+    r.big_splash = ::espn::splash_fireworks(splash, (::espn::Sport) f.sport);
+    // With a logo, clear of the words; else the band
+    const SplashBox sb = splash_box(W, v.splash_h);
+    r.fx = L.logos ? L.fx : Spot{(int16_t) sb.fx_x, (int16_t) sb.band_y, (int16_t) std::min(W, kFxPx)};
+    r.fx_h = L.logos ? L.fx_h : (int16_t) kBoardRows;
+    bool fx = false;
+    if (&v == page_view) {
+      fx = r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
+      if (!fx)
+        fx_stop(FxHost::BOARD);
     }
-    put_color(v.splash_lbl, ink);
-    put_color(v.splash_pts, ink);
+    splash_paint(v, fx, f.splash_color);
     show(v.splash, true);
     r.splash = true;
-    r.big_splash = big;
   } else if (logos_key(f) != v.tile_logos) {
     // Board moved on; a late logo is another game's
     v.tile_waiting[0] = v.tile_waiting[1] = false;
   }
   return r;
+}
+
+void board_hide_splash(BoardView &v) {
+  show(v.splash, false);
+  fx_stop(FxHost::BOARD);
+}
+
+void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]) {
+  image::Image *const img[2] = {team, opp};
+  for (int i = 0; i < 2; i++) {
+    if (v.logo[i] == nullptr)
+      continue;
+    image::Image *src = img[i] != nullptr ? img[i] : v.blank;
+    if (src != nullptr)
+      ::lv_image_set_src(v.logo[i], src->get_lv_image_dsc());
+    // A side board_draw left out stays hidden
+    if (v.badge[i] == nullptr ||
+        (lv_obj_has_flag(v.logo[i], LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(v.badge[i], LV_OBJ_FLAG_HIDDEN)))
+      continue;
+    const bool use_badge = badge[i] || img[i] == nullptr;
+    show(v.logo[i], !use_badge);
+    show(v.badge[i], use_badge);
+  }
 }
 
 void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo) {
@@ -739,25 +832,36 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   show(a.ampm, false);
   show(a.date, false);
   r = board_draw(v, f, team_logo, opp_logo);
-  const GameGeom g = game_geom(a.w, v.sizes.text);
+  const GameGeom g = game_geom(a.w, v.sizes.text, v.sizes.clock);
   r.ticker_changed = put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
-    put_bg(v.splash, f.splash_color);
-    put_color(v.splash_lbl, 0xFFFFFF);
-    put_color(v.splash_pts, 0xFFFFFF);
-    r.big_splash = false;
+    // Fireworks when the board isn't using them
+    a.splash_color = f.splash_color;
+    const bool fx = r.big_splash && fx_host != FxHost::BOARD && fx_start(v.splash, FxHost::AREA, r.fx, r.fx_h);
+    if (!fx)
+      fx_stop(FxHost::AREA);
+    splash_paint(v, fx, f.splash_color);
   }
   return r;
 }
 
-void area_logos(AreaView &a, image::Image *team, image::Image *opp) {
-  image::Image *img[2] = {team != nullptr ? team : a.blank, opp != nullptr ? opp : a.blank};
-  for (int i = 0; i < 2; i++)
-    if (a.game.logo[i] != nullptr && img[i] != nullptr)
-      ::lv_image_set_src(a.game.logo[i], img[i]->get_lv_image_dsc());
+void area_hide_splash(AreaView &a) {
+  show(a.game.splash, false);
+  fx_stop(FxHost::AREA);
 }
 
-void area_hide_splash(AreaView &a) { show(a.game.splash, false); }
+void area_clear(AreaView &a) {
+  BoardView &v = a.game;
+  show(v.game, false);
+  show(v.no_game, false);
+  show(v.splash, false);
+  fx_stop(FxHost::AREA);
+  show(a.time, false);
+  show(a.ampm, false);
+  show(a.date, false);
+  if (a.ticker != nullptr)
+    lv_label_set_text(a.ticker, "");
+}
 
 }  // namespace esphome::gameday
 

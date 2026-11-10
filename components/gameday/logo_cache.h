@@ -13,6 +13,7 @@
 
 #include "esphome/components/http_request/http_request.h"
 #include "esphome/components/runtime_image/runtime_image.h"
+#include "logo_lru.h"
 
 namespace esphome::gameday {
 
@@ -53,6 +54,8 @@ class LogoCache {
 
   // The rest is main loop only.
 
+  // Like prefetch, but may drop an old logo
+  void want(const std::string &url);
   // The decoded logo, or nullptr while it is still missing; a miss starts a download.
   image::Image *get(const std::string &url);
   // True while the logo is still on its way. A miss starts it, as get() does;
@@ -82,6 +85,8 @@ class LogoCache {
     Bytes body;  // the PNG, from the task to the main loop
     std::optional<runtime_image::RuntimeImage> image;
     State state{State::QUEUED};
+    uint8_t prio{::espn::LOGO_NOW};
+    uint32_t seq{0};   // queue order within a priority
     uint8_t fails{0};  // failures in a row, for the wait
     uint32_t used_ms{0};
     uint32_t failed_ms{0};
@@ -90,22 +95,33 @@ class LogoCache {
 
   static void task_(void *arg);
   void run_();
-  bool download_(const std::string &url, Bytes &body, bool &throttled, uint32_t &retry_after_ms);
+  // code: the HTTP status, 0 for no answer
+  bool download_(const std::string &url, Bytes &body, int &code, bool &throttled, uint32_t &retry_after_ms);
   bool decode_(std::optional<runtime_image::RuntimeImage> &image, const Bytes &body);
   void make_room_(uint32_t now);  // now: millis()
   void start_task_();
   bool pinned_url_(std::string_view url) const;
   void pin_at_(size_t at, const std::string &team, const std::string &opponent);
   void retry_pinned_(uint32_t now);
+  void drain_pending_();
+  // These three: caller holds the lock
+  Entry *find_(const std::string &url);
+  Entry *add_(const std::string &url, uint8_t prio, uint32_t now);
+  void queue_(Entry &e, uint8_t prio, uint32_t now);
 
   http_request::HttpRequestComponent *http_{nullptr};
-  // Guards entries_ and every Entry's state and body.
+  // Guards entries_, memo_, pending_ and every Entry's state and body.
   SemaphoreHandle_t lock_{nullptr};
-  std::vector<std::unique_ptr<Entry>> entries_;
+  std::vector<std::unique_ptr<Entry>, PsramAllocator<std::unique_ptr<Entry>>> entries_;
+  std::vector<::espn::LogoSlot, PsramAllocator<::espn::LogoSlot>> slots_;  // scratch space for make_room_
+  std::vector<::espn::LogoMemo, PsramAllocator<::espn::LogoMemo>> memo_;
+  std::vector<Url, PsramAllocator<Url>> pending_;  // prefetches for the main loop
+  uint32_t seq_{0};
   std::string pinned_[8];  // board pair, previous pair, then second area's two
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
   std::atomic<bool> downloaded_{false};
+  std::atomic<bool> pending_any_{false};
   std::atomic<uint32_t> bytes_downloaded_{0};
 };
 

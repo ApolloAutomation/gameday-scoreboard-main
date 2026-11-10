@@ -197,6 +197,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   }
   // Team logos for the board (gameday-common.yaml, gd_show_logos)
   LogoCache &logos() { return this->logos_; }
+  // Board's logos, or badges where missing
+  void show_logos();
   void set_time(time::RealTimeClock *time) { this->time_ = time; }
   // Registers the hotspot handler first, before any setup().
   void set_web_server_base(web_server_base::WebServerBase *base);
@@ -813,6 +815,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // The logos on the board, and an update with new ones waiting for them
   // (hold_for_logos_) since logo_hold_ms_.
   std::string shown_team_logo_, shown_opp_logo_;
+  bool shown_badge_[2]{};
   uint32_t logo_hold_ms_{0};
   bool logo_held_{false};
   // Turns f into the off-season clock card when the board has nothing to
@@ -1226,6 +1229,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint8_t rot_league_{0};
   std::string rot_event_;
   uint32_t rot_ms_{0};
+  // The card after it, whose logos are downloading
+  uint8_t rot_next_league_{0};
+  std::string rot_next_event_;
+  bool rot_here_() const;          // the card up is still one to show
+  bool rot_advance_(uint32_t now);  // true when the area needs a redraw
   // Big play's game held in the area.
   struct A2Jump {
     bool active{false};
@@ -1242,7 +1250,22 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   GameSnapshot &jump_game_() { return this->idle_snaps_[2]; }
   const GameSnapshot &jump_game_() const { return this->idle_snaps_[2]; }
   uint32_t a2_splash_ms_{0};
+  bool a2_splash_up_(uint32_t now) const { return ::espn::splash_up(now, this->a2_splash_ms_); }
+  // A 2x2's board splash covers the area
+  bool a2_covered_(uint32_t now) const {
+    return this->panels_ != nullptr &&
+           ::espn::area_covered(::espn::split_at(this->panels_->cols(), this->panels_->rows()), now,
+                                this->splash_ms_);
+  }
+  // Either splash up: the next card waits
+  bool a2_held_(uint32_t now) const { return this->a2_splash_up_(now) || this->a2_covered_(now); }
+  void a2_splash_timer_();  // hides the area's splash once seen
+  void a2_uncovered_();     // the board's splash left the area
   std::string a2_logo_[2];
+  bool a2_badge_[2]{};
+  // A new card waiting for these logos
+  ::espn::LogoHold a2_hold_;
+  std::string a2_hold_logo_[2];
   ::espn::AreaView a2_compute_() const;
   // Draws if bound; updates split_now and split_n.
   void emit_a2_(const ::espn::Splash &splash);

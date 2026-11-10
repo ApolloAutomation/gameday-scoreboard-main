@@ -296,6 +296,9 @@ inline Splash big_play_splash(const BigPlay &p, const GameSnapshot &g, bool neut
                 (uint8_t) (abbr.size() < 255 ? abbr.size() + 1 : 0), points};
 }
 
+// How long a splash stays up, board and second area
+static const uint32_t kSplashMs = 7000;
+
 // "WINS!" needs the "!" so player names never match.
 inline bool splash_fireworks(const std::string &text, Sport sport) {
   for (const char *w : {"TOUCHDOWN", "WINS!", "HOME RUN", "GRAND SLAM", "WALK-OFF", "BUZZER"})

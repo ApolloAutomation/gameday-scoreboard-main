@@ -91,7 +91,7 @@ The settings, in the order the page shows them:
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them, every 30 seconds or every 1 to 30 minutes, from the list next to it. |
 | **Ticker speed** (Panel) | How fast the ticker scrolls, 1 to 10. |
 | **Showing** (Panel) | The Scoreboard page or the Clock page. |
-| **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
+| **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, the Clock page and the game clock during a game, like "5:21 3rd" or "Halftime", wherever they fit without touching the logos, records, scores or the row under them, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
 | **Standing next to pro teams** (Panel) | **Record** (where a new panel starts), **Seed** or **Place**: what your pro team shows where its record goes. See below. |
 | **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores** or **Next game**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
@@ -216,7 +216,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.1-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.2-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
