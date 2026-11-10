@@ -34,7 +34,7 @@ On a single 64x64 panel the diamond sits between the two scores, with the outs a
 
 ## Runs, home runs, grand slams and walk-offs
 
-When the score changes, the panel fills the screen for 4 seconds in the scoring team's color, with the logo of the team that scored and the runs it gained:
+When the score changes, the panel fills the screen for about 7 seconds in the scoring team's color, with the logo of the team that scored and the runs it gained:
 
 | Score | Splash | Runs shown |
 | --- | --- | --- |
@@ -49,11 +49,7 @@ When the score changes, the panel fills the screen for 4 seconds in the scoring 
 
 The logo says whose run it was, so the other side's splash leaves its abbreviation out. A home run counts its own runs and a grand slam is always **+4 RUNS**, even when another run scored earlier in the same update. On a single 64x64 panel, and at the right end of three or four panels in a row, there's room for the number only, like **+2**. See [Splashes](/using/panel-sizes/#splashes).
 
-A home run, a grand slam and a walk-off get fireworks on black with the words in the team's color. Other runs flash the screen in the team's color. The other side's splashes need **Opponent scores too** on.
-
-:::note[Coming in the next release]
-A splash stays up for about 7 seconds, and its fireworks go off around the logo and the runs, above the words. See [Splashes](/using/panel-sizes/#splashes).
-:::
+A home run, a grand slam and a walk-off get fireworks on black with the words in the team's color, the fireworks around the logo and the runs, above the words. Other runs flash the screen in the team's color. The other side's splashes need **Opponent scores too** on.
 
 Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
 

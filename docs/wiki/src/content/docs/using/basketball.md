@@ -39,9 +39,7 @@ Baskets don't splash. A game has around a hundred scoring plays, so splashing ea
 
 When your team wins, a victory splash with fireworks shows your logo and "WINS".
 
-:::note[Coming in the next release]
-A splash stays up for about 7 seconds, with the fireworks around the logo, above the words. A buzzer beater and the victory splash an update later still show one after the other.
-:::
+Each splash stays up for about 7 seconds, and its fireworks go off around the logo, above the words.
 
 Each of these shows a logo with its words: a lead change or a buzzer beater the logo of the team that scored, a buzzer beater with the points, like **+3**, and overtime and the final both teams' logos. The logo says whose play it was, so the other side's splash leaves its abbreviation out. The other side's lead changes and buzzer beaters need **Opponent scores too**. See [Splashes](/using/panel-sizes/#splashes) and [Celebrations](/using/device-page/#celebrations).
 
