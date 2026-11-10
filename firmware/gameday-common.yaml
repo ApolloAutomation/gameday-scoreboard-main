@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.11.0"
+  version: "2026.11.1"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -353,21 +353,23 @@ script:
                   u->check();
                 #endif
 
-  # Point both logo slots at the cached logos. A logo that is still
-  # downloading shows blank until the logo_ready action runs this again.
-  # A failed download is retried by the cache itself on a later board update.
+  # Cached logos, or badges until logo_ready reruns this
   - id: gd_show_logos
     then:
+      - lambda: 'id(gameday_ctl).show_logos();'
+
+  # The Clock page's fonts follow Clock size (gameday::clock_page_fonts)
+  - id: gd_clock_page
+    then:
       - lambda: |-
-          auto &logos = id(gameday_ctl).logos();
-          logos.pin(id(gd_team_logo_url), id(gd_opp_logo_url));
-          image::Image *team = logos.get(id(gd_team_logo_url));
-          image::Image *opp = logos.get(id(gd_opp_logo_url));
-          lv_image_set_src(id(gd_team_logo_img), team != nullptr ? team : id(gd_logo_blank));
-          lv_image_set_src(id(gd_opp_logo_img), opp != nullptr ? opp : id(gd_logo_blank));
-          // Swap a splash's badge for the logo just loaded
-          if (gameday::BoardView *v = gameday::board_view())
-            gameday::splash_logos(*v, team, opp);
+          auto *d = lv_disp_get_default();
+          const gameday::ClockPageFonts p = gameday::clock_page_fonts(
+              lv_disp_get_hor_res(d), lv_disp_get_ver_res(d), id(gameday_ctl).clock_large());
+          const lv_font_t *fonts[] = {id(spleen_8)->get_lv_font(), id(spleen_12)->get_lv_font(),
+                                      id(spleen_16)->get_lv_font(), id(spleen_24)->get_lv_font(),
+                                      id(spleen_32)->get_lv_font()};
+          lv_obj_set_style_text_font(id(lbl_time), fonts[(int) p.time], 0);
+          lv_obj_set_style_text_font(id(lbl_date), fonts[(int) p.date], 0);
 
   # Bluetooth back on, but not for every two second blip. Bringing Bluedroid
   # up and down is a large internal-RAM alloc and free each time, and that
@@ -552,15 +554,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'true'
-  # The logos the board wants right now, from the latest board update.
-  - id: gd_team_logo_url
-    type: std::string
-    restore_value: no
-    initial_value: '""'
-  - id: gd_opp_logo_url
-    type: std::string
-    restore_value: no
-    initial_value: '""'
   # Seconds the panel has been off its saved network, counted only once it has
   # been on that network at least once this boot. Not restored, and neither is
   # gd_ever_connected: the panel that comes back from the offline restart has
@@ -618,6 +611,7 @@ gameday:
           lambda: 'return x == "layout";'
         then:
           - script.execute: tt_apply_layout
+          - script.execute: gd_clock_page
           - script.execute: tt_ticker_timing
           - script.execute: gd_clock_tick
     - if:
@@ -726,17 +720,10 @@ gameday:
             id(gd_clock_date) = r.clock_date;
             id(gd_clock_tick).execute();
           }
-          if (r.splash) {
-            if (r.big_splash)
-              id(tt_fx).resume();
-            else
-              id(tt_fx).pause();
+          if (r.splash)
             id(tt_hide_splash).execute();
-          }
         }
         id(gd_board).execute();
-        id(gd_team_logo_url) = x.team_logo;
-        id(gd_opp_logo_url) = x.opponent_logo;
         id(gd_show_logos).execute();
 
 lvgl_page_manager:

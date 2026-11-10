@@ -23,8 +23,7 @@ esphome:
               }
             });
 
-# Fireworks (lvgl-canvas-fx) on a canvas behind the splash text. The canvas
-# is 128x64: clips on one panel, centered on wider screens.
+# Fireworks: one 128x64 canvas, board or second area
 lvgl_canvas_fx:
   - id: tt_fx
     effect: fireworks
@@ -58,10 +57,12 @@ script:
   - id: tt_hide_splash
     mode: restart
     then:
-      - delay: 4s
+      - delay: !lambda 'return ::espn::kSplashMs;'
       - lambda: |-
-          lv_obj_add_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
-          id(tt_fx).pause();
+          if (gameday::BoardView *v = gameday::board_view())
+            gameday::board_hide_splash(*v);
+          else
+            lv_obj_add_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
 
   # Binds the renderer once, by whichever runs first
   - id: tt_bind_view
@@ -110,6 +111,12 @@ script:
           v.splash = id(tt_splash);
           v.splash_lbl = id(tt_splash_lbl);
           v.fx = id(tt_fx_canvas);
+          v.fx_run = [](bool on) {
+            if (on)
+              id(tt_fx).resume();
+            else
+              id(tt_fx).pause();
+          };
           v.f8 = id(spleen_8)->get_lv_font();
           v.f12 = id(spleen_12)->get_lv_font();
           v.f16 = id(spleen_16)->get_lv_font();

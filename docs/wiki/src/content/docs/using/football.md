@@ -44,7 +44,7 @@ On a single 64x64 panel, the logos sit side by side with the scores under them. 
 
 ## Scoring splashes
 
-When the score changes, the panel fills the screen with a splash for 4 seconds, in the scoring team's color, with the logo of the team that scored and the points it gained:
+When the score changes, the panel fills the screen with a splash for about 7 seconds, in the scoring team's color, with the logo of the team that scored and the points it gained:
 
 | Score | Splash | Points |
 | --- | --- | --- |
@@ -57,11 +57,11 @@ When the score changes, the panel fills the screen with a splash for 4 seconds, 
 
 Two points say which they were. A play ESPN calls a safety says "SAFETY", and so do two points in the middle of a drive, when the panel last saw a team with the ball and a down to play. Two points after a touchdown say "2-PT" for the conversion, and so do two points the panel can't tell apart, since a conversion is far more common than a safety.
 
-A touchdown gets fireworks on black with the words in the team's color. The smaller scores flash the screen in the team's color with white words.
+A touchdown gets fireworks on black with the words in the team's color. The fireworks go off around the logo and the points, above the words, so the words stay clear of them. The smaller scores flash the screen in the team's color with white words.
 
 The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN, in their color. The other side's splashes need **Opponent scores too** in the Celebrations card. The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.
 
-The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN.
+The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN. An extra point a read later gets its own splash after the touchdown's, with the board between them. A new splash that comes while one is up takes its place.
 
 ### Turnovers
 

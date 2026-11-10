@@ -57,7 +57,7 @@ The panel compares each read of the game with the one before, so a score shows w
 
 A play that ends the game, like a walk-off or a buzzer beater that wins it, names the player only when a read catches it while ESPN still has the game on. Once ESPN posts the final, it no longer lists the last play, so a game-ending play read only at the final gets the team's splash.
 
-On one panel the name and the play go under the logo in two lines, like **ALLEN** over **TOUCHDOWN**, or in three in smaller letters when a long name comes with a two-word play. On a 128x64 display they share a line when they fit, and on three or four panels in a row they sit between the logo and the points. On two rows of two the celebration covers all four panels, with the name and the play across the middle under the logo.
+On one panel the name and the play go under the logo in two lines, like **ALLEN** over **TOUCHDOWN**, or in three in smaller letters when a long name comes with a two-word play. On a 128x64 display they share a line when they fit, or else take two lines in smaller letters, clear of the logo above them. On three or four panels in a row they sit between the logo and the points. On two rows of two the celebration covers all four panels, with the name and the play across the middle under the logo.
 
 ### Its switch
 
