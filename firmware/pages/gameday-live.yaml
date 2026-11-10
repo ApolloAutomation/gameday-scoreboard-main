@@ -1,16 +1,8 @@
 # Game Day Scoreboard page (LVGL). Adapted from hub75-studio's Team Tracker
 # Live page (MIT, Stuart Parmenter). One file for every panel arrangement: on
-# a 64-wide display it stacks logos over scores; at 128 wide and up (three and
-# four panels in a row too) it spreads logos to the edges with big scores,
-# records, and timeout pips in the middle. A 2x2 (128x128) draws the 128x64
-# board in its top half and the second area in its bottom half (gd_lower);
-# three and four in a row can give their right end to it too, the board
-# then 128 wide on the left (components/gameday/split.h). The second area
-# shows the time, the date and its own ticker in a bigger font, or a game
-# card the component builds and draws there (board_view.h, area_build).
-# The gameday component's on_update (gameday-common.yaml) draws each update
-# into it with the board renderer (components/gameday/board_view.h); logos
-# come from its logo cache through gd_show_logos there.
+# a 64-wide display it stacks logos over scores; at 128 wide and up it spreads
+# logos to the edges with big scores, records, and timeout pips in the middle.
+# Drawn by board_view.h; split.h adds a second area.
 
 lvgl_page_manager:
   pages:
@@ -32,9 +24,7 @@ esphome:
             });
 
 # Fireworks (lvgl-canvas-fx) on a canvas behind the splash text. The canvas
-# is allocated at 128x64 and simply clips on a single panel; on three or four
-# panels in a row it sits in the middle, behind the text, and on a 2x2 in the
-# middle rows (components/gameday/board_layout.h, splash_box).
+# is 128x64: clips on one panel, centered on wider screens.
 lvgl_canvas_fx:
   - id: tt_fx
     effect: fireworks
@@ -73,9 +63,7 @@ script:
           lv_obj_add_flag(id(tt_splash), LV_OBJ_FLAG_HIDDEN);
           id(tt_fx).pause();
 
-  # Points the board renderer (components/gameday/board_view.h) at this
-  # page's widgets, once: tt_apply_layout lays them out with it and on_update
-  # (gameday-common.yaml) draws into them, whichever comes first.
+  # Binds the renderer once, by whichever runs first
   - id: tt_bind_view
     then:
       - lambda: |-
@@ -132,9 +120,7 @@ script:
           gameday::BoardView *bv = gameday::board_view_set(v);
           if (bv == nullptr)
             return;
-          // The splash's logos and points, and a Large clock's AM or PM
           gameday::board_build(*bv);
-          // The second area (split.h) in gd_lower, with its own game layout.
           gameday::area_build(id(gd_lower), id(gd_lower_time_lbl), id(gd_lower_date_lbl), id(gd_lower_ticker_lbl),
                               *bv, id(gd_logo_blank));
 
@@ -142,15 +128,8 @@ script:
     then:
       - lambda: |-
           // Measure the display and lay the scoreboard out to fit it.
-          // Everything is positioned at runtime rather than in the widget
-          // config so one page file serves 64x64, 128x64, wider chains (192
-          // and 256 wide) and the 2x2 alike. The board is always the top 64
-          // rows, 128 wide beside a second area (split.h); the renderer
-          // places the game layout, the no-game screen, the splash and the
-          // second area (board_layout.h, board_view.h), at the owner's Clock
-          // size and Text size. Run again when the second area comes or goes,
-          // or a size changes (the "layout" action). A splash covers the
-          // board, and on a 2x2 all four panels.
+          // Everything is positioned here rather than in the widget config so
+          // one page file serves 64x64, 128x64, and wider chains alike.
           const ::espn::SplitArea area = id(gameday_ctl).split_area();
           const gameday::Sizes sizes = id(gameday_ctl).sizes();
           const int W = area.main_w;
@@ -193,7 +172,7 @@ script:
             lv_obj_set_width(id(gd_board_status_lbl), W);
             lv_obj_set_style_text_align(id(gd_board_status_lbl), LV_TEXT_ALIGN_CENTER, 0);
           }
-          // The rows are 128 wide: in the middle of a wider board.
+          // Rows are 128 wide, centered on wider boards.
           const int bx = W > 128 ? (W - 128) / 2 : 0;
           for (int i = 0; i < 6; i++) {
             // Each row's look is set here, once, rather than per label in
@@ -279,9 +258,7 @@ script:
 
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
-  # changes, so once a minute. The second area (gd_lower) has the time and
-  # date too. A Large clock's AM or PM can have a line of its own
-  # (board_view.h, clock_tick).
+  # changes, so once a minute.
   - id: gd_clock_tick
     then:
       - lambda: |-
@@ -336,7 +313,7 @@ lvgl:
               # Abbreviation badges, each in its logo's place when that side
               # has no logo: a rounded square in the team's color with a ring
               # in its second color and the abbreviation on it (badge.h).
-              # Shown by the renderer, which sets the fill, ring and letters.
+              # The renderer shows them and sets fill, ring, letters.
               - obj:
                   id: gd_team_badge
                   scrollbar_mode: "OFF"
@@ -635,11 +612,7 @@ lvgl:
 
         # The leaderboard (golf, racing): the event and its status on the top
         # row, six rows of place, name, value and (wide) detail, and the
-        # ticker, which the renderer moves in. Every label clips; the
-        # component cuts each column to fit (espn::board_lines). The rows'
-        # labels are styled and laid out by tt_apply_layout, filled by
-        # gd_board, shown by the renderer. Drawn before the splash so a
-        # winner's splash covers it.
+        # ticker. Drawn before the splash so it covers this.
         - obj:
             id: gd_board_container
             scrollbar_mode: "OFF"
@@ -743,13 +716,7 @@ lvgl:
                   id: gd_board_detail6
                   text: ""
 
-        # The second area (split.h): the 2x2's bottom half, or the right end
-        # of three or four in a row. The time, the date and its own ticker in
-        # spleen_16, the ticker ending above the heat and power warning's
-        # bottom line (pages/guard.yaml), or a game card the component builds
-        # in here (board_view.h, area_build), with the ticker along its
-        # bottom in spleen_8. Placed and shown by tt_apply_layout, the time
-        # and date by gd_clock_tick, the rest by the component (area_draw).
+        # Second area (split.h); its ticker clears the guard line
         - obj:
             id: gd_lower
             scrollbar_mode: "OFF"
@@ -790,11 +757,7 @@ lvgl:
                   text: ""
                   styles: ["tt_st_status_text"]
 
-        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores,
-        # all four panels of a 2x2. Sized and placed by tt_apply_layout
-        # (gameday::splash_box); the renderer adds the side's logo tiles and
-        # the points (board_view.h, board_build) and places them with the
-        # words (board_layout.h, splash_layout).
+        # Full-screen score splash (TOUCHDOWN! etc), shown briefly on scores
         - obj:
             id: tt_splash
             scrollbar_mode: "OFF"
@@ -842,8 +805,7 @@ lvgl:
                   long_mode: WRAP
                   text: "No upcoming game"
                   styles: ["tt_st_team_text"]
-              # The off-season clock, shown by the renderer in the message's
-              # place
+              # Off-season clock, in the message's place
               - label:
                   id: gd_clock_time_lbl
                   x: 0

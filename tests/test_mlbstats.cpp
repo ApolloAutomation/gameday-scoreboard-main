@@ -1,7 +1,4 @@
-// Minor league baseball from the MLB Stats API (components/gameday/
-// source_mlbstats.h): the URLs, every parse against the recorded documents in
-// fixtures/mlbstats_*.json, and how the results go through the shared
-// baseball text, splashes, Live games and the finals rotation.
+// Minor league baseball via the MLB Stats API (source_mlbstats.h).
 #include <ArduinoJson.h>
 
 #include <algorithm>
@@ -60,8 +57,7 @@ std::string slurp(const std::string &name) {
 
 int64_t at(const char *iso) { return parse_iso8601_z(iso); }
 
-// The parsers take their input by reference (the firmware's is a streaming
-// reader): these hand them a copy of a document.
+// Parsers take a reference; hand them a copy.
 int team_read(std::string json, uint32_t our_id, int64_t now, Schedule &out, std::vector<Upcoming> *up = nullptr,
               size_t max = 0) {
   return parse_mlb_team(json, our_id, now, out, up, max);
@@ -74,7 +70,7 @@ bool day_read(std::string json, std::vector<LiveGame> &out, int64_t *next = null
   return parse_mlb_day(json, out, next, finals, pending);
 }
 
-// Recorded documents (fixtures/README.md). Teams by MLB Stats id.
+// Teams by MLB Stats id, not ESPN's.
 const uint32_t kDurham = 234, kScranton = 531, kMemphis = 235, kRoundRock = 102, kReno = 2310, kJacksonville = 564;
 const uint32_t kLicey = 672, kEscogido = 671, kAguilas = 667, kGigantes = 670, kMargarita = 697, kOriente = 694;
 const uint32_t kMochis = 675, kMexicali = 673, kHermosillo = 677;
@@ -88,9 +84,7 @@ GameSnapshot game(const std::string &file, uint32_t our_id, int64_t near = 0) {
   return g;
 }
 
-// A recorded team read with every game from `from` on set back to not
-// started: the same document as read on an earlier morning. The API keeps
-// each date's entry, so this is what it listed then, scores aside.
+// The recorded read as it looked on an earlier morning.
 std::string reopened(const std::string &file, const char *from) {
   JsonDocument doc;
   deserializeJson(doc, slurp(file));
@@ -106,7 +100,6 @@ std::string reopened(const std::string &file, const char *from) {
 
 void test_urls() {
   const int64_t now = at("2026-11-08T23:00:00Z");
-  // The same reads as the recorded team, far and game documents.
   MCHECK_EQ(mlb_team_url(kDurham, now),
             std::string("https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&teamId=234"
                         "&startDate=2026-11-07&endDate=2026-11-18&hydrate=team&fields=dates,date,games,gamePk,"
@@ -127,21 +120,18 @@ void test_urls() {
                         "&hydrate=linescore,team&fields=dates,games,gamePk,gameDate,status,codedGameState,"
                         "startTimeTBD,teams,away,home,team,id,abbreviation,score,leagueRecord,wins,losses,linescore,"
                         "currentInning,scheduledInnings"));
-  // The day turns over at 4 AM Eastern (9 AM UTC), like the ESPN scans: a
-  // West Coast game after midnight Eastern is still the day it started.
+  // Day turns at 4 AM Eastern, like ESPN scans.
   MCHECK(mlb_day_url(at("2026-08-15T08:59:00Z")).find("date=2026-08-14&") != std::string::npos);
   MCHECK(mlb_day_url(at("2026-08-15T09:00:00Z")).find("date=2026-08-15&") != std::string::npos);
-  // Across a month and a year end
   MCHECK(mlb_team_url(kDurham, at("2026-12-31T23:00:00Z")).find("startDate=2026-12-30&endDate=2027-01-10&") !=
          std::string::npos);
-  // A far read asks for one level: the team's, and Triple-A for anything else.
+  // Far read asks one level: the team's, else Triple-A.
   MCHECK(mlb_far_url(kDurham, kMilbSingleA, now).find("sportId=14&") != std::string::npos);
   MCHECK(mlb_far_url(kDurham, 0, now).find("sportId=11&") != std::string::npos);
   MCHECK(mlb_far_url(kDurham, 99, now).find("sportId=11&") != std::string::npos);
-  // Logos: the 64 px PNG spot, the same URL from the team table and the game.
   MCHECK_EQ(mlb_logo_url(kDurham), std::string("https://midfield.mlbstatic.com/v1/team/234/spots/64"));
   MCHECK_EQ(team_logo_url(League::MILB, kDurham, "DUR"), mlb_logo_url(kDurham));
-  // Only the MLB Stats API's reads are counted on MLB's side.
+  // Only MLB Stats API reads count against MLB.
   MCHECK(is_mlb_url(mlb_game_url("1")));
   MCHECK(!is_mlb_url("https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"));
   MCHECK(!is_mlb_url("https://midfield.mlbstatic.com/v1/team/234/spots/64"));
@@ -162,23 +152,21 @@ void test_league() {
   MCHECK(!is_leaderboard(League::MILB));
   MCHECK_EQ(std::string(league_info(League::MILB)->prefix), std::string("MiLB"));
   MCHECK_EQ(std::string(recap_league_word((uint8_t) League::MILB)), std::string("MiLB"));
-  // The live mask and the finals rotation still have a bit for it.
+  // League must fit the 16-bit live and finals masks.
   MCHECK((int) League::MILB < 16);
   MCHECK_EQ(recap_bit((uint8_t) League::MILB), (uint16_t) (1u << 13));
   MCHECK_EQ(live_mask_from_keys("milb,mlb"), (uint16_t) ((1u << 13) | (1u << 4)));
   std::vector<League> live = live_leagues(1u << 13, 0, {});
   MCHECK(live.size() == 1 && live[0] == League::MILB);
-  // Auto: the saved team's league, a minor league one too.
   live = live_leagues(0, (uint8_t) League::MILB, {(uint8_t) League::NHL});
   MCHECK(live.size() == 2 && live[0] == League::NHL && live[1] == League::MILB);
-  // A minor league team is a team like any other: picked, a favorite.
   SetOp op;
   MCHECK(parse_set("team", "milb:234", op, 16));
   MCHECK(op.team.league == (uint8_t) League::MILB && op.team.id == kDurham);
   MCHECK(parse_set("favs", "milb:234,nfl:6", op, 16));
   MCHECK_EQ(op.teams.size(), (size_t) 2);
   MCHECK(!parse_set("team", "milb:999999", op, 16));
-  // The four levels, 30 teams each, every one with its level as the group.
+  // Four levels of 30 teams, grouped by level.
   int levels[4] = {0, 0, 0, 0};
   for (const auto &t : kTeams) {
     if (t.league != League::MILB)
@@ -200,7 +188,7 @@ void test_league() {
 void test_words() {
   MCHECK_EQ(mlb_short_name("Justyn-Henry Malloy"), std::string("J. Malloy"));
   MCHECK_EQ(mlb_short_name("Homer Bush Jr."), std::string("H. Bush Jr."));
-  MCHECK_EQ(mlb_short_name("Jasson Dom\xc3\xadnguez"), std::string("J. Dominguez"));  // accents dropped
+  MCHECK_EQ(mlb_short_name("Jasson Dom\xc3\xadnguez"), std::string("J. Dominguez"));  // UTF-8 accents dropped
   MCHECK_EQ(mlb_short_name("Ichiro"), std::string("Ichiro"));
   MCHECK_EQ(mlb_short_name("  Pete   Hansen "), std::string("P. Hansen "));
   MCHECK_EQ(mlb_short_name(""), std::string(""));
@@ -265,7 +253,7 @@ void test_game_final() {
   MCHECK_EQ(g.mlb.opp_errors, 0);
   MCHECK_EQ(g.mlb.team_probable, std::string("L. Workman"));
   MCHECK_EQ(g.mlb.opp_probable, std::string("M. Molina"));
-  // A final keeps the last count and runners in the line score: not shown.
+  // Finals keep a stale count in the line score.
   MCHECK_EQ((int) g.mlb.balls, -1);
   MCHECK_EQ((int) g.mlb.outs, -1);
   MCHECK_EQ((int) g.mlb.bases, 0);
@@ -273,12 +261,10 @@ void test_game_final() {
   MCHECK_EQ(g.possession, 0);
   TickerOptions o;
   MCHECK_EQ(status_text(g, o, ""), std::string("Final | DUR 4 H 2 E, MEM 13 H 0 E | DUR 53-64 | MEM 66-52"));
-  // From the other side
   GameSnapshot m = game("mlbstats_game_final.json", kMemphis);
   MCHECK_EQ(m.team_abbr, std::string("MEM"));
   MCHECK(m.team_winner);
   MCHECK(!m.team_home);
-  // A team that isn't in the game: no snapshot
   GameSnapshot none;
   MCHECK(!game_read(slurp("mlbstats_game_final.json"), kScranton, 0, none));
   MCHECK(!none.valid);
@@ -291,7 +277,7 @@ void test_game_final() {
   MCHECK(x.team_winner);
   MCHECK_EQ(x.opp_id, kReno);
   MCHECK_EQ(status_text(x, o, "").substr(0, 9), std::string("Final/11 "));
-  // Called in the 7th of 9 for rain (statusCode FR): Final/7
+  // Called for rain in the 7th (statusCode FR).
   GameSnapshot r = game("mlbstats_game_final_short.json", kJacksonville);
   MCHECK_EQ(r.short_detail, std::string("Final/7"));
   MCHECK(r.completed);
@@ -302,9 +288,7 @@ void test_game_final() {
 }
 
 void test_game_postponed() {
-  // DUR @ SWB 815849: postponed 4/7 (cold), set for 4/10 as game 2 of a
-  // doubleheader and postponed again, played 4/11 as game 2. The game read
-  // lists all three; the one nearest the start the board picked is read.
+  // Listed three times; the entry nearest the start is read.
   const std::string json = slurp("mlbstats_game_postponed.json");
   GameSnapshot g;
   MCHECK(game_read(json, kDurham, at("2026-04-07T22:35:00Z"), g));
@@ -324,7 +308,7 @@ void test_game_postponed() {
   before.state = GameState::IN;
   MCHECK(decide_splash(before, g, true).text.empty());
 
-  // Game 2 on 4/10, no start time (after game 1): midnight Eastern of its day.
+  // TBD game 2 starts at midnight Eastern that day.
   MCHECK(game_read(json, kDurham, at("2026-04-10T05:00:00Z"), g));
   MCHECK_EQ(g.short_detail, std::string("Postponed"));
   MCHECK(g.time_tbd);
@@ -344,8 +328,7 @@ void test_game_postponed() {
 }
 
 void test_game_pre() {
-  // MXC @ MOC (Mexican Pacific League), Pre-Game: the line score is already
-  // there with an empty count, which doesn't show before the first pitch.
+  // Pre-game line score has an empty count: not shown.
   GameSnapshot g = game("mlbstats_game_pregame.json", kMochis, at("2026-11-09T00:00:00Z"));
   MCHECK(g.state == GameState::PRE);
   MCHECK(!g.completed);
@@ -373,16 +356,13 @@ void test_game_pre() {
   MCHECK_EQ(s.opp_record, std::string("17-5"));
   MCHECK_EQ(s.venue, std::string("Kuroda Park"));
   MCHECK_EQ(s.period, 0);
-  // The poll before it: every minute in its last hour, 15 minutes before.
+  // Pre-game polls: each minute in the last hour.
   MCHECK(pre_poll_near(3600, false, true));
   MCHECK(!pre_poll_near(3601, false, true));
 }
 
 void test_game_live() {
-  // LIC @ ESC (Dominican league), 2026-11-08, read 23:09 UTC: Top 6th, 2-0,
-  // two out, a runner on third. Winter league games stand in for minor
-  // league ones (the same API and document); minor league baseball was
-  // between seasons when these were recorded.
+  // Winter league games stand in for off-season minor league.
   GameSnapshot top = game("mlbstats_game_top.json", kLicey);
   MCHECK(top.state == GameState::IN);
   MCHECK_EQ(top.short_detail, std::string("Top 6th"));
@@ -410,7 +390,7 @@ void test_game_live() {
   MCHECK_EQ(esc.possession, 2);
   MCHECK(esc.team_home);
 
-  // The next read, Middle 6th: LIC scored a run in between.
+  // Next read, Middle 6th: LIC scored a run.
   GameSnapshot mid = game("mlbstats_game_middle.json", kLicey);
   MCHECK_EQ(mid.short_detail, std::string("Mid 6th"));
   MCHECK(mid.mlb.half == Half::MID);
@@ -428,10 +408,10 @@ void test_game_live() {
   GameSnapshot esc_mid = game("mlbstats_game_middle.json", kEscogido);
   MCHECK_EQ(decide_splash(esc, esc_mid, true).text, std::string("LIC SCORES"));
   MCHECK(decide_splash(esc, esc_mid, false).text.empty());
-  // Live games: nobody is ours, the visitors are the snapshot's team
+  // Live games: the visitors are the snapshot's team.
   MCHECK_EQ(decide_splash(top, mid, true, true).text, std::string("LIC SCORES"));
 
-  // MAR @ ORI, Bot 9th, 2-2, none out: the home side bats.
+  // MAR @ ORI, Bot 9th, 2-2, none out.
   GameSnapshot bot = game("mlbstats_game_bottom.json", kOriente);
   MCHECK_EQ(bot.short_detail, std::string("Bot 9th"));
   MCHECK(bot.mlb.half == Half::BOTTOM);
@@ -444,8 +424,7 @@ void test_game_live() {
   MCHECK_EQ(bot.opp_id, kMargarita);
   MCHECK_EQ(status_text(bot, o, ""), std::string("2-2, 0 outs | P A. Hernandez, AB R. Cuadrado | Bot 9th"));
 
-  // The same game a few reads on: End 9th, MAR 10-6, then Game Over
-  // (codedGameState O): the win splash, from MAR's side and in Live games.
+  // Later reads: End 9th MAR 10-6, then Game Over.
   GameSnapshot end = game("mlbstats_game_end.json", kMargarita);
   MCHECK_EQ(end.short_detail, std::string("End 9th"));
   MCHECK(end.mlb.half == Half::END);
@@ -465,7 +444,7 @@ void test_game_live() {
   MCHECK(decide_splash(ori_end, ori_over, true).text.empty());  // our side lost
   MCHECK_EQ(status_text(over, o, ""), std::string("Final | MAR 12 H 3 E, ORI 7 H 0 E | MAR 11-11 | ORI 15-6"));
 
-  // LIC @ ESC, Bot 6th, bases loaded after a walk (the count still 4-2)
+  // Bases loaded on a walk; count still reads 4-2.
   GameSnapshot loaded = game("mlbstats_game_loaded.json", kEscogido);
   MCHECK_EQ(loaded.short_detail, std::string("Bot 6th"));
   MCHECK_EQ((int) loaded.mlb.bases, (int) (Baseball::FIRST | Baseball::SECOND | Baseball::THIRD));
@@ -475,8 +454,7 @@ void test_game_live() {
   MCHECK_EQ(loaded.mlb.batter, std::string("Y. Navarro"));
   MCHECK_EQ(loaded.opp_id, kLicey);
 
-  // AGU @ GIG, rain delay in the Top 6th (statusCode IR) with runners on
-  // second and third: the clock row says so, the count and runners wait.
+  // Rain delay (statusCode IR): count and runners wait.
   GameSnapshot d = game("mlbstats_game_delay.json", kGigantes);
   MCHECK(d.state == GameState::IN);
   MCHECK_EQ(d.short_detail, std::string("Rain Delay"));
@@ -490,7 +468,6 @@ void test_game_live() {
   MCHECK_EQ(status_text(d, o, ""), std::string("GIG 4 H 1 E, AGU 1 H 0 E"));
   MCHECK_EQ(clock_text(d), std::string("Rain Delay"));
 
-  // Other delays and replay reviews, from the same document
   auto with_status = [](const std::string &code, const std::string &reason) {
     JsonDocument doc;
     deserializeJson(doc, slurp("mlbstats_game_delay.json"));
@@ -531,7 +508,7 @@ void test_game_documents() {
   MCHECK(!game_read(std::string("{\"dates\":5}"), kDurham, 0, g));
   MCHECK(!game_read(std::string("{\"dates\":[]}"), kDurham, 0, g));
   MCHECK(!game_read(std::string("{\"dates\":[{\"games\":[{\"gamePk\":0}]}]}"), kDurham, 0, g));
-  // A game with a team but nothing else: a pre-game card with no numbers
+  // A bare game still makes a pre-game card.
   MCHECK(game_read(std::string("{\"dates\":[{\"games\":[{\"gamePk\":7,\"teams\":{\"home\":{\"team\":{\"id\":234}}}}]}]}"),
                         kDurham, 0, g));
   MCHECK(g.state == GameState::PRE);
@@ -554,28 +531,25 @@ void test_game_documents() {
 
 void test_team() {
   const int64_t nov = at("2026-11-08T23:00:00Z");
-  // Between seasons the coming days list nothing...
+  // Off-season: the coming days list nothing.
   Schedule s;
   MCHECK_EQ(team_read(slurp("mlbstats_team_none.json"), kDurham, nov, s), 0);
   MCHECK(s.valid);
   MCHECK(s.event_id.empty());
-  // ...and the far read has next season's opener, ids and dates only.
+  // The far read has next season's opener only.
   MCHECK_EQ(team_read(slurp("mlbstats_far_dur.json"), kDurham, nov, s), 1);
   MCHECK_EQ(s.event_id, std::string("860674"));
   MCHECK_EQ(s.kickoff_epoch, at("2027-03-26T22:35:00Z"));
   MCHECK(!s.time_tbd);
   MCHECK_EQ(s.opp_id, 0u);
   MCHECK(s.team_record.empty());
-  // which the board shows as the off-season clock with the opener under it
   MCHECK(off_season(GameState::PRE, s.kickoff_epoch, nov, season_horizon(Sport::BASEBALL)));
 
-  // DUR's April trip to Scranton, as read the morning of 4/10: the 4/7 game
-  // postponed, 4/8 and 4/9 final, a doubleheader on 4/10 (game 2 with no
-  // start time) and again on 4/11 after game 2 was postponed once more.
+  // 4/10 morning: postponements and doubleheaders on 4/10 and 4/11.
   const std::string apr10 = reopened("mlbstats_team_dur_202604.json", "2026-04-10T00:00:00Z");
   std::vector<Upcoming> up;
   MCHECK_EQ(team_read(apr10, kDurham, at("2026-04-10T15:00:00Z"), s, &up, 4), 1);
-  MCHECK_EQ(s.event_id, std::string("815845"));  // game 1
+  MCHECK_EQ(s.event_id, std::string("815845"));  // 4/10 game 1
   MCHECK_EQ(s.kickoff_epoch, at("2026-04-10T20:35:00Z"));
   MCHECK_EQ(s.opp_id, kScranton);
   MCHECK_EQ(s.opp_abbr, std::string("SWB"));
@@ -596,7 +570,7 @@ void test_team() {
   MCHECK_EQ(team_read(apr10, kDurham, at("2026-04-10T15:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("815845"));
 
-  // Game 1 over: game 2 is next, no start time, read every minute on its day.
+  // TBD game 2 is polled every minute its day.
   const std::string g2 = reopened("mlbstats_team_dur_202604.json", "2026-04-10T20:40:00Z");
   const int64_t evening = at("2026-04-10T23:30:00Z");
   MCHECK_EQ(team_read(g2, kDurham, evening, s), 1);
@@ -607,22 +581,22 @@ void test_team() {
   MCHECK(!pre_poll_near(s.kickoff_epoch - evening, s.time_tbd, false));  // not a football TBD
   MCHECK(!pre_poll_near(s.kickoff_epoch - at("2026-04-09T12:00:00Z"), true, true));  // the day before
   MCHECK(!pre_poll_near(s.kickoff_epoch - at("2026-04-11T12:00:00Z"), true, true));  // its day is over
-  // and the game read for it is that date's entry, not 4/7's or 4/11's
+  // Game read takes that date's entry, not 4/7's or 4/11's.
   GameSnapshot g;
   MCHECK(game_read(slurp("mlbstats_game_postponed.json"), kDurham, s.kickoff_epoch, g));
   MCHECK_EQ(g.kickoff_epoch, at("2026-04-10T05:00:00Z"));
 
-  // A postponed game is passed over: on 4/7 the next game is 4/8's.
+  // Postponed games are skipped: 4/7's next is 4/8.
   const std::string apr8 = reopened("mlbstats_team_dur_202604.json", "2026-04-08T00:00:00Z");
   MCHECK_EQ(team_read(apr8, kDurham, at("2026-04-07T23:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("815856"));
-  // A game whose status never moved past Scheduled a day later is left behind.
+  // A game still Scheduled a day later is skipped.
   MCHECK_EQ(team_read(apr8, kDurham, at("2026-04-09T18:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("815855"));
   MCHECK_EQ(team_read(apr8, kDurham, at("2026-04-09T16:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("815856"));  // 17.4 hours: still the one
 
-  // A game on now comes first, and the list has only games not started.
+  // A live game first; the list holds unstarted games.
   {
     JsonDocument doc;
     deserializeJson(doc, apr10);
@@ -638,15 +612,12 @@ void test_team() {
     if (!up.empty())
       MCHECK_EQ(up[0].event_id, std::string("815849"));
   }
-  // The recorded document as it stands: every game over, nothing to show.
+  // As recorded every game is over: nothing to show.
   MCHECK_EQ(team_read(slurp("mlbstats_team_dur_202604.json"), kDurham, at("2026-04-18T12:00:00Z"), s, &up, 4),
             0);
   MCHECK(up.empty());
 
-  // Eugene's read the morning of 5/23. MLB lists a game 2 against Tri-City
-  // under 5/22, never played, with no start time and a gameDate in May 2027.
-  // It comes before that night's game in the list, but it isn't 5/22's game
-  // (or any game this read is for): that night's game is next.
+  // MLB lists a phantom 5/22 game 2 dated May 2027.
   const std::string may23 = reopened("mlbstats_team_eug_202605.json", "2026-05-23T12:00:00Z");
   MCHECK_EQ(team_read(may23, kEugene, at("2026-05-23T15:00:00Z"), s, &up, 4), 1);
   MCHECK_EQ(s.event_id, std::string("819418"));
@@ -660,16 +631,14 @@ void test_team() {
     MCHECK_EQ(up[2].event_id, std::string("819088"));
     MCHECK_EQ(up[3].event_id, std::string("819083"));
   }
-  // As recorded (every real game over), that entry is the only one not
-  // over, and still not a game to show.
+  // Even alone, the phantom entry is not shown.
   MCHECK_EQ(team_read(slurp("mlbstats_team_eug_202605.json"), kEugene, at("2026-05-23T15:00:00Z"), s, &up, 4), 0);
   MCHECK(up.empty());
-  // Every real game sits 12 to 30 hours after midnight UTC of its date: the
-  // West Coast's night games (5/22's at 01:35 UTC on 5/23) are kept.
+  // Real games start 12-30 hours after their date's midnight UTC.
   const std::string may22 = reopened("mlbstats_team_eug_202605.json", "2026-05-22T00:00:00Z");
   MCHECK_EQ(team_read(may22, kEugene, at("2026-05-22T15:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("819423"));
-  // A document without the dates' own date (an older read) is taken as listed.
+  // Without the dates' date field, games are taken as listed.
   MCHECK_EQ(team_read(std::string("{\"dates\":[{\"games\":[{\"gamePk\":9,\"gameDate\":\"2027-05-19T00:15:00Z\","
                                   "\"status\":{\"codedGameState\":\"S\"}}]}]}"),
                       kEugene, at("2026-05-23T15:00:00Z"), s),
@@ -682,8 +651,7 @@ void test_team() {
 }
 
 void test_day() {
-  // A day of winter league games, read 23:16 UTC: eight on, one final, seven
-  // to come (one listed for 21:21 still Scheduled two hours on).
+  // Winter day: eight games, one final, seven to come.
   std::vector<LiveGame> live;
   std::vector<Final> finals;
   std::vector<Pending> pending;
@@ -716,14 +684,11 @@ void test_day() {
     MCHECK_EQ(pending[0].event_id, std::string("872084"));
     MCHECK(pending[0].tv.empty());
   }
-  // The scan alone
   live.clear();
   MCHECK(day_read(slurp("mlbstats_day_winter.json"), live));
   MCHECK_EQ(live.size(), (size_t) 8);
 
-  // A full minor league day at the four levels: 58 finals, three postponed.
-  // The rotation keeps a day's kRecapCap earliest finals (recap_merge), so
-  // the parse keeps only those, in start order.
+  // Parse keeps only the kRecapCap earliest finals the rotation uses.
   const std::string day = slurp("mlbstats_day_milb_20260814.json");
   std::vector<int64_t> starts;
   {
@@ -750,7 +715,7 @@ void test_day() {
     MCHECK(f.detail.rfind("Final", 0) == 0);
     MCHECK(!f.away_abbr.empty() && !f.home_abbr.empty());
   }
-  // What the rotation keeps of it is the same with or without the cap.
+  // The rotation keeps the same finals with or without cap.
   {
     std::vector<RecapDay> days;
     std::vector<Final> stamped = finals;
@@ -761,12 +726,12 @@ void test_day() {
     if (!days.empty())
       MCHECK_EQ(days[0].finals.size(), kRecapCap);
   }
-  // A scan that already holds another league's finals keeps them all.
+  // Other leagues' finals already held are all kept.
   finals.assign(30, Final{});
   live.clear();
   MCHECK(day_read(day, live, nullptr, &finals));
   MCHECK_EQ(finals.size(), (size_t) 30 + kRecapCap);
-  // MEM @ DUR, Final 12-2, and an 11-inning final, from a day of two
+  // Two finals: MEM @ DUR 12-2 and an 11-inning game.
   const std::string two =
       "{\"dates\":[{\"games\":[{\"gamePk\":816688,\"gameDate\":\"2026-08-14T22:45:00Z\",\"status\":"
       "{\"codedGameState\":\"F\"},\"teams\":{\"away\":{\"team\":{\"id\":235,\"abbreviation\":\"MEM\"},\"score\":12,"
@@ -803,23 +768,20 @@ void test_day() {
   MCHECK(!day_read(std::string("{\"dates\":{}}"), live));
 }
 
-// Live games between scans while MLB waits out a failure: only MLB's reads
-// wait for it. A minor league day MLB failed doesn't hold the finals
-// rotation's other days or the scan for a live game, and the fallback card's
-// failed read never pushes the scan back.
+// Only MLB's reads wait out an MLB failure.
 void test_held_next() {
-  // No wait running: the scan's own time, 0 when it is due.
+  // No wait: the scan's own time.
   MCHECK_EQ(held_next_ms(90000, 0, false), 90000u);
   MCHECK_EQ(held_next_ms(0, 0, true), 0u);
-  // MLB waiting: the scan when it is due, beside ESPN's leagues...
+  // MLB waiting: the scan still runs beside ESPN's leagues.
   MCHECK_EQ(held_next_ms(0, 600000, false), 0u);
-  // ...but not a scan of minor league baseball alone, which waits for MLB.
+  // A minor-league-only scan waits for MLB.
   MCHECK_EQ(held_next_ms(0, 600000, true), 600000u);
-  // Between scans, whichever comes first: the scan, or MLB's day again.
+  // Between scans: the scan or MLB's day, whichever first.
   MCHECK_EQ(held_next_ms(120000, 600000, false), 120000u);
   MCHECK_EQ(held_next_ms(120000, 30000, false), 30000u);
   MCHECK_EQ(held_next_ms(120000, 30000, true), 30000u);
-  // A refusal's long wait never stands in for the 2 minute rescan.
+  // A refusal's long wait never replaces the 2-minute rescan.
   HostWait w;
   uint32_t ms = w.fail(true, 30 * 60 * 1000, 0, 1000);
   MCHECK(ms >= 30u * 60 * 1000);
@@ -830,7 +792,7 @@ void test_held_next() {
 }
 
 void test_host_wait() {
-  // MLB's run of failures is its own: ESPN's Backoff is a different object.
+  // MLB's failure run is separate from ESPN's Backoff.
   HostWait w;
   MCHECK(!w.waiting(1000));
   uint32_t ms = w.fail(false, 0, 0, 1000);
@@ -861,16 +823,13 @@ void test_host_wait() {
 }
 
 void test_scan_backoff() {
-  // Live games scanning minor league baseball alone while MLB refuses: the
-  // scan fails with nothing live, and back_off_ (a job that read only MLB)
-  // counts it against MLB. The scan's own step must leave the run alone, so
-  // each failed scan waits longer, up to the hour, instead of starting over.
+  // Scan's own step must not reset MLB's failure run.
   HostWait w;
   uint32_t now = 1000, last = 0;
   for (int scan = 1; scan <= 5; scan++) {
     MCHECK_EQ(host_scan_result(w, true, true, false, true, 0, 0, now), 0u);
     MCHECK_EQ((int) w.run.streak, scan - 1);
-    uint32_t ms = w.fail(true, 0, 0, now);  // back_off_
+    uint32_t ms = w.fail(true, 0, 0, now);  // stands in for back_off_
     MCHECK_EQ((int) w.run.streak, scan);
     MCHECK(ms > last);
     last = ms;
@@ -888,8 +847,7 @@ void test_scan_backoff() {
   MCHECK_EQ(host_scan_result(w, true, false, false, false, 0, 0, now), 0u);
   MCHECK_EQ((int) w.run.streak, 0);
   MCHECK(!w.waiting(now));
-  // Beside ESPN's leagues the scan goes on with them, so MLB's failure is
-  // counted here, and back_off_ (if the scan failed too) is ESPN's.
+  // Mixed scans count MLB's failure here; back_off_ is ESPN's.
   HostWait mixed;
   uint32_t ms = host_scan_result(mixed, true, true, true, true, 20 * 60 * 1000, 0, 5000);
   MCHECK(ms >= 20u * 60 * 1000);
@@ -899,16 +857,14 @@ void test_scan_backoff() {
   MCHECK_EQ((int) mixed.run.streak, 2);
   MCHECK_EQ(host_scan_result(mixed, true, false, true, false, 0, 0, 5000), 0u);
   MCHECK_EQ((int) mixed.run.streak, 0);
-  // A scan that didn't ask MLB (it was waiting) leaves the run as it is.
+  // A scan that skipped MLB leaves its run alone.
   mixed.fail(true, 0, 0, 5000);
   MCHECK_EQ(host_scan_result(mixed, false, false, true, false, 0, 0, 5000), 0u);
   MCHECK_EQ((int) mixed.run.streak, 1);
   MCHECK(mixed.waiting(5000));
 }
 
-// The idle display's scores, read outside the mode: they leave minor league
-// baseball out while MLB's wait runs, and their own minor league read that
-// fails counts in it, alone or beside ESPN's leagues.
+// Idle scores skip minor league while MLB's wait runs.
 void test_side_backoff() {
   std::vector<League> leagues = {League::MLB, League::MILB, League::NHL};
   MCHECK(drop_source(leagues, Source::MLB_STATS));
@@ -920,8 +876,7 @@ void test_side_backoff() {
   MCHECK(alone.empty());  // start_side_job_ then waits for MLB, reading nothing
 
   HostWait w;
-  // MLB refuses the scores' scan, beside ESPN's leagues or alone: its wait
-  // starts, with Retry-After, and grows with each refusal.
+  // Each refusal starts or grows MLB's wait, honoring Retry-After.
   uint32_t ms = host_side_result(w, true, true, true, 30 * 60 * 1000, 0, 1000);
   MCHECK(ms >= 30u * 60 * 1000);
   MCHECK(w.waiting(1000 + 29 * 60 * 1000));
@@ -929,7 +884,7 @@ void test_side_backoff() {
   w.end_wait();
   MCHECK(host_side_result(w, true, true, false, 0, 0, 2000) > 0u);
   MCHECK_EQ((int) w.run.streak, 2);
-  // A read that didn't ask MLB leaves it alone; an answer starts it over.
+  // Skipping MLB leaves the wait; an answer resets it.
   MCHECK_EQ(host_side_result(w, false, false, false, 0, 0, 3000), 0u);
   MCHECK_EQ((int) w.run.streak, 2);
   MCHECK_EQ(host_side_result(w, true, false, false, 0, 0, 3000), 0u);
@@ -937,13 +892,9 @@ void test_side_backoff() {
   MCHECK(!w.waiting(3000));
 }
 
-// The features that came after minor league baseball, with a minor league
-// game: big-play splashes, Follow this game, bets, My team today, ranks and
-// the Standing setting.
+// Newer features (big plays, Follow, bets) with minor league.
 void test_merged_features() {
-  // Big plays. MLB's minor league scores don't say how a run scored: every
-  // run is RUN or SCORES, under the Runs switch, never a home run or a grand
-  // slam, which would need ESPN's play.
+  // MLB never says how runs scored: no homer splashes.
   GameSnapshot top = game("mlbstats_game_top.json", kLicey);
   GameSnapshot mid = game("mlbstats_game_middle.json", kLicey);
   MCHECK(top.last_play.empty() && top.play_type.empty() && mid.play_points == 0);
@@ -952,13 +903,10 @@ void test_merged_features() {
   MCHECK_EQ(decide_splash(top, mid, true, false, runs).text, std::string("RUN!"));
   MCHECK(decide_splash(top, mid, true, false, homers).text.empty());
   MCHECK(decide_splash(top, mid, true, false, kAlertsAll & ~runs).text.empty());
-  // The same read twice, or a read with nothing new: no splash
   MCHECK(decide_splash(mid, mid, true).text.empty());
   MCHECK(decide_splash(top, top, true).text.empty());
 
-  // A walk-off: the home side goes ahead in the bottom of the last inning,
-  // the 9th, or the 7th in a doubleheader's 7-inning game, read live and at
-  // the final. The final's read after a live walk-off is the win, once.
+  // Walk-off inning is the 9th, or 7th in doubleheaders.
   MCHECK_EQ((int) game("mlbstats_game_final.json", kDurham).mlb.innings, 9);
   {
     std::string doc = slurp("mlbstats_game_bottom.json");
@@ -988,14 +936,13 @@ void test_merged_features() {
   MCHECK_EQ(decide_splash(tied, ahead, true).text, std::string("WALK-OFF!"));
   MCHECK_EQ(decide_splash(tied, fin, true).text, std::string("WALK-OFF!"));
   MCHECK_EQ(decide_splash(ahead, fin, true).text, std::string("ORI WINS!"));
-  // In a 9-inning game the 7th is no walk-off: a run, then the win.
+  // In a 9-inning game the 7th isn't a walk-off.
   for (GameSnapshot *g : {&tied, &ahead, &fin})
     g->mlb.innings = 9;
   MCHECK_EQ(decide_splash(tied, ahead, true).text, std::string("RUN!"));
   MCHECK_EQ(decide_splash(tied, fin, true).text, std::string("ORI WINS!"));
 
-  // Follow this game: a minor league game Live games picked is held while
-  // it's on, and let go at its final (Live games keeps no final).
+  // Follow holds a minor league game until its final.
   FollowPin pin;
   const int64_t t0 = top.kickoff_epoch + 3600;
   MCHECK(follow_start(pin, true, true, top, t0));
@@ -1006,14 +953,13 @@ void test_merged_features() {
   done.completed = true;
   MCHECK(!follow_holds(pin, done, t0 + 1200, follow_after_final_s(false, 1800), 0));
   MCHECK(!pin.on);
-  // In Favorite teams the final stays up for After the final first.
+  // Favorite teams keep the final up for After the final.
   MCHECK(follow_start(pin, true, true, top, t0));
   MCHECK(follow_holds(pin, done, t0 + 1200, follow_after_final_s(true, 1800), 0));
   MCHECK(!follow_holds(pin, done, t0 + 1200 + 1800, follow_after_final_s(true, 1800), 0));
   MCHECK(!follow_start(pin, true, true, done, t0));  // a final can't be followed
 
-  // Bets: a minor league team takes a bet like any other (gamePk is the
-  // game's id), and it's graded on MLB's score.
+  // Bets key on gamePk and grade on MLB's score.
   Bet b{};
   b.team_id = kDurham;
   b.league = (uint8_t) League::MILB;
@@ -1037,8 +983,7 @@ void test_merged_features() {
   MCHECK_EQ((int) b.result, (int) BetResult::LOST);
   MCHECK_EQ(bet_ticker(b, bet_status(b, &g, dur.kickoff_epoch + 4 * 3600)), std::string("DUR ML LOST"));
 
-  // No ranks and no standing: the MLB Stats API has no poll and no seed, so
-  // Seed or Place leaves a minor league team its record.
+  // MLB Stats has no polls or seeds: record stays.
   MCHECK(dur.team_rank == 0 && dur.opp_rank == 0);
   Schedule s;
   const std::string apr10 = reopened("mlbstats_team_dur_202604.json", "2026-04-10T00:00:00Z");
@@ -1049,8 +994,7 @@ void test_merged_features() {
   MCHECK_EQ(espn::detail::records_line(dur, standing_text(Standing::SEED, s.seed, s.place)),
             std::string("DUR 53-64 | MEM 66-52"));
 
-  // My team today after a restart: the team read names today's final too.
-  // 4/10, game 1 over and game 2 (no start time) still to come: game 1.
+  // After a restart the team read names today's final.
   Schedule last;
   std::string doc = reopened("mlbstats_team_dur_202604.json", "2026-04-10T20:40:00Z");
   MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-10T23:30:00Z"), s, nullptr, 0, &last), 1);
@@ -1060,13 +1004,12 @@ void test_merged_features() {
   MCHECK(!last.time_tbd);
   int64_t since = at("2026-04-10T04:00:00Z");  // midnight in New York
   MCHECK(want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
-  // Nothing over yet that day: the last final is the day before's, not today's.
+  // Nothing final yet today: the last final is yesterday's.
   doc = reopened("mlbstats_team_dur_202604.json", "2026-04-10T00:00:00Z");
   MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-10T15:00:00Z"), s, nullptr, 0, &last), 1);
   MCHECK_EQ(last.event_id, std::string("815855"));
   MCHECK(!want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), 0));
-  // 4/11's doubleheader, both over: game 2, though its placeholder start is
-  // midnight Eastern, before game 1's. It replaces game 1's final kept.
+  // Game 2 wins despite its earlier placeholder start time.
   doc = reopened("mlbstats_team_dur_202604.json", "2026-04-12T00:00:00Z");
   MCHECK_EQ(parse_mlb_team(doc, kDurham, at("2026-04-12T02:00:00Z"), s, nullptr, 0, &last), 1);
   MCHECK_EQ(s.event_id, std::string("815848"));  // 4/12's game next
@@ -1077,7 +1020,7 @@ void test_merged_features() {
   const int64_t game1 = day_order(at("2026-04-11T19:05:00Z"), false);
   MCHECK(want_today_final(since, true, day_order(last.kickoff_epoch, last.time_tbd), game1));
   MCHECK(!want_today_final(since, true, game1, day_order(last.kickoff_epoch, last.time_tbd)));
-  // and My team today shows game 2's final over game 1's
+  // My team today shows game 2's final, not game 1's.
   LocalDay day{since, since + 86400};
   std::vector<TodayGame> today(2);
   today[0] = TodayGame{true, GameState::POST, at("2026-04-11T19:05:00Z"), false};
@@ -1085,7 +1028,7 @@ void test_merged_features() {
   MCHECK_EQ(today_pick(today, day), 1);
   std::swap(today[0], today[1]);
   MCHECK_EQ(today_pick(today, day), 0);
-  // Without the list of finals asked for, the read is as before.
+  // Without a finals list, the read is unchanged.
   MCHECK_EQ(team_read(doc, kDurham, at("2026-04-12T02:00:00Z"), s), 1);
   MCHECK_EQ(s.event_id, std::string("815848"));
 }

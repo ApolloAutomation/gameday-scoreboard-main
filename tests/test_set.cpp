@@ -47,24 +47,14 @@ std::string keys(const std::vector<League> &leagues) {
 }
 
 // What the firmware keeps for the settings a set request reaches, and what
-// apply_set_'s setters store. PanelLayout's check of the arrangement
-// (panel_layouts::layout_ok with gameday-common.yaml's max_cols 4 and
-// max_rows 2) is the one refusal outside set_request.h.
-// follow is the Follow this game pin, kept in memory only; board says the
-// mode has a game of its own on the panel to follow (not Live games'
-// fallback card or finals rotation, nor an empty board), and final that the
-// game has ended. bets are the manual bets by slot (bets.h), as entered.
-// visit: another game's big play has the board for a moment (watch.h), the
-// mode's own game being the one board and final describe. split and
-// splitteam: what the second area shows and its team (split.h). clocksize
-// and textsize: Clock size and Text size, 0 Normal or 1 Large.
+// apply_set_'s setters store. layout_ok is the only other refusal.
 struct Settings {
   TeamRef team;
   TeamRef splitteam;
   int split{0};
   int clocksize{0}, textsize{0};
   uint8_t team_league{0};
-  // rotatesec: Switch every in seconds (startup.h), what set_rotate_seconds keeps.
+  // rotatesec: Switch every, in seconds.
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
@@ -129,7 +119,7 @@ void load(Settings &s, JsonObjectConst o) {
       v = o[k].as<bool>();
   };
   num("mode", s.mode);
-  // A start in minutes means that many minutes; rotatesec beside it wins.
+  // rotate is minutes; rotatesec beside it wins.
   if (o["rotate"].is<int>())
     s.rotatesec = o["rotate"].as<int>() * 60;
   num("rotatesec", s.rotatesec);
@@ -172,7 +162,6 @@ void load(Settings &s, JsonObjectConst o) {
     s.nightstart = parse_hhmm(o["nightstart"].as<const char *>());
   if (o["nightend"].is<const char *>())
     s.nightend = parse_hhmm(o["nightend"].as<const char *>());
-  // bets: the state document's slot, l, id, type and half of each bet.
   if (o["bets"].is<JsonArrayConst>()) {
     for (auto &b : s.bets)
       b = Bet{};
@@ -192,8 +181,6 @@ void load(Settings &s, JsonObjectConst o) {
   }
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
-  // players: the state document's l, id, team and name of each favorite
-  // player, in slot order.
   if (o["players"].is<JsonArrayConst>()) {
     for (auto &p : s.players)
       p = FavPlayer{};
@@ -216,11 +203,7 @@ bool any_favorite(const Settings &s) {
   return false;
 }
 
-// A change to what the panel follows lets the Follow this game pin go: a new
-// team or mode (reset_game_), any favorites post (favorites_changed_) and new
-// leagues (set_live_mask_). The same team, mode or leagues again change nothing.
-// Those lines in gameday.cpp are mirrored here, not run: the host tests don't
-// build gameday.cpp. follow=1 itself goes through follow.h's follow_start.
+// Mirrors gameday.cpp's setters; host tests don't build it.
 void apply(Settings &s, const SetOp &op) {
   switch (op.kind) {
     case SetKind::TEAM:
@@ -266,7 +249,7 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::AUTOUPD: s.autoupd = op.on; break;
     case SetKind::BETA: s.beta = op.on; break;
     case SetKind::FOLLOW: {
-      // set_follow: a follow=1 with nothing to follow leaves the pin as it was.
+      // set_follow: nothing to follow leaves the pin alone.
       if (!op.on) {
         s.follow = false;
         break;
@@ -283,13 +266,13 @@ void apply(Settings &s, const SetOp &op) {
       follow_start(p, follow_mode_ok((uint8_t) s.mode, any_favorite(s)), s.board, g, 0);
       s.follow = p.on;
       if (s.follow)
-        s.visit = false;  // the board goes straight back to the game it follows (end_visit_)
+        s.visit = false;  // back to the followed game (end_visit_)
       break;
     }
     case SetKind::ALERTS: s.alerts = (int) op.mask; break;
     case SetKind::ALERTFAV: s.alertfav = op.on; break;
     case SetKind::STANDING: s.standing = op.value; break;
-    case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // set_bet_
+    case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // as set_bet_ does
     case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
     case SetKind::WATCH:
       s.watch = op.on;
@@ -378,7 +361,6 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["nightstart"] = clock_hhmm(s.nightstart);
   doc["nightend"] = clock_hhmm(s.nightend);
   doc["nightbri"] = s.nightbri;
-  // The bet's own keys of each "bets" entry, filled slots in slot order.
   JsonArray bets = doc["bets"].to<JsonArray>();
   for (int i = 0; i < kBetSlots; i++) {
     const Bet &b = s.bets[i];
@@ -398,7 +380,6 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["clocksize"] = s.clocksize;
   doc["textsize"] = s.textsize;
   doc["splitteam"] = team_str(s.splitteam);
-  // The favorite players, filled slots in slot order.
   JsonArray players = doc["players"].to<JsonArray>();
   for (const FavPlayer &p : s.players) {
     if (player_empty(p))
@@ -514,7 +495,7 @@ void test_parse_set() {
   SCHECK(!parse_set("wiring", "3", op, kFavMax), "wiring past the last");
   SCHECK(!parse_set("wiring", "-1", op, kFavMax), "wiring -1");
   {
-    // By name: keys added earlier in the list (rotatesec) move both along.
+    // By name, since earlier keys shift the indexes.
     int panels_at = -1, wiring_at = -1;
     for (int i = 0; i < (int) (sizeof(kSetKeys) / sizeof(kSetKeys[0])); i++) {
       if (std::string(kSetKeys[i]) == "panels")
@@ -551,7 +532,7 @@ void test_parse_set() {
   SCHECK(!parse_set("alerts", std::to_string(1 << kAlertBits), op, kFavMax), "alerts past the known types");
   SCHECK(!parse_set("alerts", "-1", op, kFavMax), "alerts -1");
   SCHECK(!parse_set("alerts", "99999999999", op, kFavMax), "alerts past int");
-  // No number at all is refused, not read as 0, which would turn every switch off.
+  // Empty must not parse as 0: every switch off.
   SCHECK(!parse_set("alerts", "", op, kFavMax), "alerts empty");
   SCHECK(!parse_set("alerts", "abc", op, kFavMax), "alerts text");
   SCHECK(!parse_set("alerts", " ", op, kFavMax), "alerts space");
@@ -647,7 +628,6 @@ void test_set_limits() {
   SCHECK(parse_set("rotate", "30", op, kFavMax) && op.value == 1800, "rotate 30");
   SCHECK(parse_set("rotatesec", "30", op, kFavMax) && op.value == 30, "rotatesec 30");
   SCHECK(parse_set("rotatesec", "60", op, kFavMax) && op.value == 60, "rotatesec 60");
-  // Every value parse_set gives the setting is one the firmware can save and show.
   for (int v : {INT_MIN, -1, 0, 29, 30, 31, 59, 60, 61, 119, 120, 1799, 1800, 1801, INT_MAX}) {
     SCHECK(parse_set("rotatesec", std::to_string(v), op, kFavMax) && rotate_seconds_valid(op.value),
            "rotatesec %d is saved as %d", v, op.value);
@@ -700,7 +680,6 @@ void test_live_leagues() {
   uint16_t mlb_nba = (uint16_t) ((1u << (uint8_t) League::MLB) | (1u << (uint8_t) League::NBA));
   SCHECK(keys(live_leagues(mlb_nba, (uint8_t) League::NFL, {(uint8_t) League::NHL})) == "mlb,nba",
          "an explicit mask ignores team and favorites");
-  // Every bit of the 16-bit mask is a league now, the last the ECHL's
   SCHECK(keys(live_leagues(1u << 15, (uint8_t) League::MLB, none)) == "echl", "the mask's last bit is the ECHL");
   SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, none)) == "nfl", "auto skips a golf team");
   SCHECK(keys(live_leagues(0, (uint8_t) League::PGA, {(uint8_t) League::LPGA, (uint8_t) League::NHL})) == "nhl",

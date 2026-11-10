@@ -22,14 +22,7 @@
 namespace espn {
 
 // In the order the firmware applies them, whatever order the request uses.
-// follow comes first: it pins the game the page showed, and a change later in
-// the same request that moves the board lets the pin go again. rotatesec
-// comes after rotate, so a request with both keeps rotatesec's. wiring comes
-// right after panels, so a request that picks the 2x2 and its wiring saves
-// both before the restart either one asks for. betdel comes before bet, so a
-// request with both empties a slot and then fills it, and playerdel before
-// player the same way. splitteam comes before split, so a request that picks
-// A second team's game and its team has the team first.
+// follow first; deletes, rotate, panels, splitteam precede their partners.
 constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rotate",   "rotatesec",  "fav1",
                                     "fav2",      "fav3",       "fav4",      "tz",       "tzauto",     "down",
                                     "play",      "odds",       "opp",       "panels",   "wiring",     "bootaddr",
@@ -47,15 +40,14 @@ enum class Mode : uint8_t { MY_TEAM = 0, LIVE_NFL = 1, LIVE_NCAA = 2, LIVE_ANY =
 constexpr int kModeCount = 6;
 static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kModeCount - 1");
 
-// What the second area shows (split.h), kept as a byte: OFF, Rotating live
-// games, A second team's game, Today's scores, Clock and date.
+// Saved as a byte (SplitPrefs): keep the values.
 enum class SplitShow : uint8_t { OFF = 0, LIVE = 1, TEAM = 2, SCORES = 3, CLOCK = 4 };
 constexpr int kSplitCount = 5;
 
-// Clock size and Text size: 0 Normal, 1 Large (board_layout.h, Sizes).
+// Clock size and Text size: 0 Normal, 1 Large.
 constexpr int kSizeCount = 2;
 
-// Standing next to pro teams: 0 Record, 1 Seed, 2 Place (espn::Standing).
+// Standing: 0 Record, 1 Seed, 2 Place.
 constexpr int kStandingCount = 3;
 static_assert((int) Standing::PLACE + 1 == kStandingCount, "parse_set takes standings 0 to kStandingCount - 1");
 
@@ -63,10 +55,9 @@ constexpr int kLockonMinMinutes = 5;
 constexpr int kLockonMaxMinutes = 120;
 constexpr int kReleaseMinSeconds = 30;
 constexpr int kReleaseMaxSeconds = 3600;
-// Big-play alert types (alerts.h), one switch each: "alerts" is the mask of
-// the ones on, bit (type - 1).
+// "alerts" mask: bit (type - 1) per alert type.
 constexpr int kAlertBits = 20;
-// "Stay on a big play" (watch.h), in seconds, kept in tens of seconds.
+// Seconds, saved in tens of seconds.
 constexpr int kWatchStayMinSeconds = 30;
 constexpr int kWatchStayMaxSeconds = 300;
 
@@ -76,8 +67,7 @@ inline int clamp_watch_stay_seconds(int seconds) {
                                                  : seconds;
   return s / 10 * 10;
 }
-// Favorite players (players.h): how many the panel keeps, and the longest
-// name it shows for one, a line of the splash on one panel.
+// Name max: one splash line on one panel.
 constexpr int kPlayerSlots = 8;
 constexpr int kPlayerNameMax = 10;
 
@@ -89,7 +79,7 @@ inline int clamp_release_seconds(int seconds) {
   return seconds < kReleaseMinSeconds ? kReleaseMinSeconds : seconds > kReleaseMaxSeconds ? kReleaseMaxSeconds : seconds;
 }
 
-// The idle display's dim level (0 dark) and the night brightness, out of 255.
+// Dim level (0 dark) and night brightness, out of 255.
 constexpr int kIdleDimMin = 0;
 constexpr int kIdleDimMax = 255;
 constexpr int kNightBriMin = 1;
@@ -157,8 +147,8 @@ inline uint16_t live_mask_from_keys(const std::string &keys) {
 // saved team's league and each favorite's. team_league is the league byte
 // the panel keeps, which stays after the team is cleared. Golf and racing are
 // never scanned: a tour or a series followed as the team adds nothing. NFL
-// when nothing is left, unless nfl_default is false: the idle display's
-// scores then have no league and show the clock instead.
+// when nothing is left.
+// With nfl_default false, idle scores fall back to the clock.
 inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, const std::vector<uint8_t> &fav_leagues,
                                         bool nfl_default = true) {
   if (mask == 0) {
@@ -180,9 +170,8 @@ inline std::vector<League> live_leagues(uint16_t mask, uint8_t team_league, cons
 // The leagues a mode's scan reads, in the order it reads them, and so the
 // leagues its finals rotation covers. live is Live games' own list
 // (live_leagues above). Live anything is also the no-team default. A mode
-// that follows a team scans none, unless the idle display shows the scores
-// rotation (idle_scores, idle.h): then live, which for those modes is the
-// leagues of the team and favorites, or Live games' own list.
+// that follows a team scans none.
+// With idle_scores, those modes scan live too.
 inline std::vector<League> scan_leagues(uint8_t mode, const std::vector<League> &live, bool idle_scores = false) {
   switch ((Mode) mode) {
     case Mode::LIVE_NFL:
@@ -212,7 +201,7 @@ inline bool live_scan_changed(uint8_t mode, const std::vector<League> &before, c
 enum class SetKind : uint8_t {
   TEAM,      // team, id 0 clears it
   MODE,      // value
-  ROTATE,    // value, seconds: 30, or 60 to 1800 in whole minutes (startup.h)
+  ROTATE,    // value, seconds: 30, or whole minutes to 1800
   FAV_SLOT,  // slot (1-4), team (id 0 clears the slot)
   TZ,        // value, index into kTimezones
   TZ_AUTO,   // on
@@ -220,7 +209,7 @@ enum class SetKind : uint8_t {
   PLAY,      // on
   ODDS,      // on
   OPP,       // on
-  PANELS,    // value (panels wide) and rows, 1-255 each; PanelLayout refuses an arrangement it can't drive
+  PANELS,    // value wide, rows high; PanelLayout refuses bad ones
   WIRING,    // value, the 2x2's wiring (panel_layouts::Wiring)
   BOOTADDR,  // on
   LOCKON,    // value, minutes
@@ -233,22 +222,22 @@ enum class SetKind : uint8_t {
   COUNT,     // on, baseball
   MATCH,     // on, soccer
   BETA,      // on, release builds only
-  FOLLOW,    // on: pin the game on the board (follow.h); memory only
+  FOLLOW,    // on: pin the board's game; memory only
   ALERTS,    // mask, the alert types switched on
-  ALERTFAV,  // on, alerts only for games with the team or a favorite
-  STANDING,  // value, espn::Standing
+  ALERTFAV,  // on, alerts only for the team's or favorites' games
+  STANDING,  // value, an espn::Standing
   IDLE,         // value, idle.h's IdleShow
   IDLE_DIM,     // value, 0 (dark) to 255
   NIGHT,        // on: the night hours apply
   NIGHT_START,  // value, minutes after local midnight
   NIGHT_END,    // value, minutes after local midnight
   NIGHT_BRI,    // value, 1 to 255
-  BET,          // slot (1-kBetSlots), bet: a manual bet into that slot (bets.h)
+  BET,          // slot (0 first empty), bet: a manual bet
   BET_DEL,      // slot: empties it
   WATCH,        // on, switch to big plays in other games
   WATCHSTAY,    // value, seconds on the big play's game
-  WATCHMINE,    // on, a favorite's big play can take the board from the team's live game
-  PLAYER,       // team (league, team id), athlete, name: a favorite player (players.h)
+  WATCHMINE,    // on, a favorite's big play can preempt the team
+  PLAYER,       // team, athlete, name: a favorite player (players.h)
   PLAYER_DEL,   // team.league, athlete: drops that favorite player
   SPLIT,        // value, split.h's SplitShow: what the second area shows
   SPLIT_TEAM,   // team: the second area's team (id 0 clears it)
@@ -265,7 +254,7 @@ struct TeamRef {
 struct SetOp {
   SetKind kind{SetKind::TEAM};
   int value{0};
-  int rows{1};  // PANELS only
+  int rows{1};  // used by PANELS only
   bool on{false};
   uint8_t slot{0};
   uint32_t mask{0};
@@ -277,13 +266,7 @@ struct SetOp {
   std::string name;                  // PLAYER: the panel's name for the player (clean_player_name)
 };
 
-// The panel's name for a favorite player, from what the page sends: capital
-// letters, digits, spaces and . ' - only (lower case is raised), spaces at
-// either end dropped and a run of them inside made one, cut to
-// kPlayerNameMax characters, and a cut never left ending in a space or
-// . ' -. "" when a character is anything else, or no letter or digit is
-// left, which refuses the request. "Allen" is "ALLEN", "J. Hughes"
-// "J. HUGHES", "St. Brown" "ST. BROWN".
+// "" refuses the request; "St. Brown" becomes "ST. BROWN".
 inline std::string clean_player_name(const std::string &v) {
   auto alnum = [](char c) { return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); };
   std::string out;
@@ -308,8 +291,6 @@ inline std::string clean_player_name(const std::string &v) {
   return "";
 }
 
-// An ESPN id as the page sends it: 1 to 10 digits, nothing else, not 0 and
-// under 2^32.
 inline bool parse_espn_id(const std::string &v, uint32_t &id) {
   if (v.empty() || v.size() > 10)
     return false;
@@ -325,7 +306,6 @@ inline bool parse_espn_id(const std::string &v, uint32_t &id) {
   return true;
 }
 
-// The comma-separated fields of v, at most max (false for more).
 inline bool split_fields(const std::string &v, std::string *f, size_t max, size_t &n) {
   n = 0;
   size_t start = 0;
@@ -340,13 +320,7 @@ inline bool split_fields(const std::string &v, std::string *f, size_t max, size_
   }
 }
 
-// player=<league>,<athlete id>,<team id>,<name>: "nfl,3918298,2,ALLEN". The
-// league one the panel follows teams in (not a golf tour or a racing
-// series) and reads from ESPN, whose rosters the page picks players from
-// (not minor league baseball, the AHL or the ECHL), the team one in its list,
-// the athlete's id ESPN's, the name what clean_player_name keeps.
-// playerdel=<league>,<athlete id> drops one. Anything else, extra fields
-// included, is refused.
+// player=nfl,3918298,2,ALLEN; ESPN-roster leagues only.
 inline bool parse_player(const std::string &v, bool del, SetOp &op) {
   std::string f[4];
   size_t n = 0;
@@ -365,8 +339,7 @@ inline bool parse_player(const std::string &v, bool del, SetOp &op) {
   return !op.name.empty();
 }
 
-// A bet slot as the page sends it: one digit, 1 to kBetSlots, or with
-// free_ok 0 for the first empty slot (bet_put).
+// With free_ok, 0 means the first empty slot.
 inline bool parse_bet_slot(const std::string &v, uint8_t &slot, bool free_ok = false) {
   if (v.size() != 1 || v[0] < (free_ok ? '0' : '1') || v[0] > '0' + kBetSlots)
     return false;
@@ -374,13 +347,7 @@ inline bool parse_bet_slot(const std::string &v, uint8_t &slot, bool free_ok = f
   return true;
 }
 
-// bet=<slot>,<league>,<team id>,<type>,<line>: "1,nfl,2,spread,-3.5",
-// "2,nfl,2,over,47.5", "3,nba,2,ml," (a moneyline has no line). Slot 0 is
-// the first empty slot, which the device page sends; 1 to kBetSlots replaces
-// the bet in that slot. The type is
-// spread, over, under or ml; the team one in the panel's list, not a golf
-// tour or a racing series; the line whole or half points (parse_bet_line).
-// Anything else, extra spaces and fields included, is refused.
+// bet=1,nfl,2,spread,-3.5; slot 0 is the first empty.
 inline bool parse_bet(const std::string &v, uint8_t &slot, Bet &b) {
   std::string f[5];
   size_t n = 0, start = 0;
@@ -451,13 +418,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.value = read_int(v);
     return op.value >= 0 && op.value < kStandingCount;
   }
-  // Switch every (Live games) and Alternate every (Favorite teams), one
-  // setting. rotate is whole minutes, 1 to 30, as before 30 seconds: 0 and
-  // anything lower is still 1 minute, so a page, app or script from before
-  // never sets 30 seconds by accident. rotatesec, which nothing from before
-  // sends, is seconds: under a minute is 30 seconds, a minute or more whole
-  // minutes, rounded down, at most 30. The state document has both: "rotate"
-  // in minutes (1 for 30 seconds) and "rotatesec" in seconds.
+  // Old clients' rotate=0 must never mean 30 seconds.
   if (k == "rotate") {
     op.kind = SetKind::ROTATE;
     op.value = clamp_rotate_minutes(read_int(v)) * 60;
@@ -479,9 +440,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k == "panels") {
-    // The panels wide ("2"), or wide by high ("2x2"). PanelLayout takes each
-    // as a byte and refuses an arrangement it can't drive; a value that
-    // doesn't fit would wrap first (257 to one panel).
+    // Check before the byte cast: 257 would wrap to 1.
     op.kind = SetKind::PANELS;
     op.value = read_int(v);
     const size_t x = v.find('x');
@@ -504,9 +463,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k == "alerts") {
-    // A bit past the known types is refused, not dropped: the page sends
-    // only what it knows. So is a value with no number in it, which atoi
-    // would read as 0 and so turn every switch off.
+    // atoi would read junk as 0: every switch off.
     op.kind = SetKind::ALERTS;
     char *end = nullptr;
     const long n = strtol(v.c_str(), &end, 10);
@@ -571,8 +528,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::AUTOUPD);
   if (k == "beta")
     return on(SetKind::BETA);
-  // A follow=1 with nothing to follow is the firmware's to ignore, not a
-  // refused value.
+  // Nothing to follow is ignored later, not refused here.
   if (k == "follow")
     return on(SetKind::FOLLOW);
   if (k == "alertfav")
@@ -590,7 +546,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   if (k == "night")
     return on(SetKind::NIGHT);
   if (k == "nightstart" || k == "nightend") {
-    // "22:00", 24-hour: anything else is refused, not read as some other time.
+    // "22:00", 24-hour; anything else is refused.
     op.kind = k == "nightstart" ? SetKind::NIGHT_START : SetKind::NIGHT_END;
     op.value = parse_hhmm(v);
     return op.value >= 0;
@@ -618,20 +574,18 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return true;
   }
   if (k == "split") {
-    // One digit, nothing else: the page sends only the choices it shows.
+    // One digit only: the page sends just its choices.
     op.kind = SetKind::SPLIT;
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
   if (k == "clocksize" || k == "textsize") {
-    // One digit, nothing else, as for split.
     op.kind = k == "clocksize" ? SetKind::CLOCK_SIZE : SetKind::TEXT_SIZE;
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSizeCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
   if (k == "splitteam") {
-    // "none" or "" clears it. Not a golf tour or a racing series, as for a
-    // favorite: the area shows a game.
+    // No golf or racing: the area shows a game.
     op.kind = SetKind::SPLIT_TEAM;
     if (v == "none" || v.empty())
       return true;

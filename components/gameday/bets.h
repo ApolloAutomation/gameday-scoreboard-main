@@ -1,18 +1,4 @@
-// Active bets the owner types in on the device page: a point spread or a
-// moneyline on a team, or a total on a team's game. The panel never connects
-// to a sportsbook. It compares each bet with the score of a game it already
-// reads (the game on the board, and in Favorite teams each favorite's card)
-// and says where the bet stands: the line before the start, COVERING, NOT
-// COVERING or PUSH while the game is on, and WON, LOST or PUSH after the
-// final until local midnight, when the bet is dropped.
-//
-// Where bets come from is a BetSource: the device page's manual entries
-// (ManualBets, kept in flash) are the only one now. A bet tracker's API could
-// be another source of the same Bet records, and the panel would follow its
-// bets the same way (bets_observe, bets_expire). Likewise a BetGame is any
-// game the panel has read: the big-play watcher's reads of other games
-// (watch.h) feed theirs too, to the bets tied to them already (bets_update).
-// Pure, no ESPHome includes, so the host tests cover it.
+// Bets the owner enters; graded from games already read.
 #pragma once
 
 #include <cstdint>
@@ -24,49 +10,42 @@
 
 namespace espn {
 
-// How many bets the panel keeps. The saved blob holds exactly this many: a
-// blob that changes size fails to load and loses every bet in it, so more
-// would need a new blob.
+// Blob size: changing it loses every saved bet.
 constexpr int kBetSlots = 8;
-// Lines in half points: a spread up to 99.5 either way, a total up to 999.5.
+// Half points: spread to ±99.5, total to 999.5.
 constexpr int kBetMaxSpreadHalf = 199;
 constexpr int kBetMaxTotalHalf = 1999;
-// A bet whose game the panel stopped reading before its final (another mode
-// or team took the board, or the game was called off) is dropped this long
-// after the start.
+// Drops bets whose game stopped being read before final.
 constexpr int64_t kBetUnreadSeconds = 36 * 3600;
 
 enum class BetType : uint8_t { SPREAD = 0, TOTAL = 1, MONEYLINE = 2 };
-// A spread or a moneyline is on the team; a total is over or under the line.
+// Spreads and moneylines use TEAM; totals OVER or UNDER.
 enum class BetSide : uint8_t { TEAM = 0, OVER = 1, UNDER = 2 };
 // A graded bet, kept until local midnight.
 enum class BetResult : uint8_t { NONE = 0, WON = 1, LOST = 2, PUSH = 3 };
 
-// One bet, laid out as the saved blob keeps it: fixed size, no padding.
-// Zero (Bet{}) is an empty slot.
+// Saved blob layout: fixed size, no padding.
 struct Bet {
-  uint32_t team_id;   // the team bet on, or for a total a team in the game; 0 = empty slot
-  uint32_t placed;    // when it was entered, epoch seconds; 0 when the clock wasn't set
-  uint32_t event;     // ESPN's id of the game it applies to, 0 until the panel reads that game
+  uint32_t team_id;   // team bet on (totals: either); 0 empty
+  uint32_t placed;    // entered at, epoch seconds; 0 if clock unset
+  uint32_t event;     // ESPN game id; 0 until that game is read
   uint32_t opp_id;    // that game's other team
   uint32_t kickoff;   // that game's start, epoch seconds
   uint32_t expires;   // local midnight after the final, 0 before the final
-  int16_t line;       // half points: a spread from the team's side (-7 is -3.5), a total; 0 for a moneyline
+  int16_t line;       // half points: spread (team's side), total; moneyline 0
   uint16_t team_score, opp_score;  // at the final
-  uint8_t league;     // League
-  uint8_t type;       // BetType
-  uint8_t side;       // BetSide
-  uint8_t result;     // BetResult
-  uint8_t moved;      // 1 once ESPN moved its game to another start: it stays on that game
+  uint8_t league;     // a League value
+  uint8_t type;       // a BetType value
+  uint8_t side;       // a BetSide value
+  uint8_t result;     // a BetResult value
+  uint8_t moved;      // 1: ESPN moved its game; bet stays on it
   uint8_t spare;
 };
 static_assert(sizeof(Bet) == 36, "Bet is the saved blob's layout: keep its size");
 
 inline bool bet_empty(const Bet &b) { return b.team_id == 0; }
 
-// What a bet says, without the game: a known league with a team, and a type
-// with its side and a line in range. A slot read back from flash that isn't
-// is emptied.
+// Flash slots failing these checks are emptied.
 inline bool bet_valid(const Bet &b) {
   if (b.team_id == 0 || b.league >= kLeagueCount || is_leaderboard((League) b.league) ||
       b.result > (uint8_t) BetResult::PUSH || b.moved > 1)
@@ -88,9 +67,7 @@ inline bool bet_valid(const Bet &b) {
   return false;
 }
 
-// A line as the device page sends it, into half points: a spread "-3.5",
-// "+7", "7" or "0" (pick'em), a total "47.5" or "47" with no sign. Whole or
-// half points only ("3.0" is 3, "3.25" is refused), nothing before or after.
+// Whole or half points only; totals take no sign.
 inline bool parse_bet_line(const std::string &v, bool spread, int16_t &half) {
   size_t i = 0;
   bool neg = false;
@@ -120,26 +97,25 @@ inline bool parse_bet_line(const std::string &v, bool spread, int16_t &half) {
   return true;
 }
 
-// The type word of the device page's bet= key and the state document.
+// Wire word shared with the page and state document.
 inline const char *bet_type_key(const Bet &b) {
   if (b.type == (uint8_t) BetType::TOTAL)
     return b.side == (uint8_t) BetSide::UNDER ? "under" : "over";
   return b.type == (uint8_t) BetType::MONEYLINE ? "ml" : "spread";
 }
 
-// A game the panel has read, for the bets on it. Either team may be "team".
+// Either team may be "team".
 enum class BetPhase : uint8_t { PRE, LIVE, FINAL, OFF };  // OFF: ended without being completed (postponed, canceled)
 struct BetGame {
   uint8_t league{0};
-  uint32_t event{0};  // ESPN's event id; 0 when it has none the panel can keep
+  uint32_t event{0};  // ESPN's event id; 0 if not storable
   uint32_t team_id{0}, opp_id{0};
   int team_score{0}, opp_score{0};
   int64_t kickoff{0};
   BetPhase phase{BetPhase::PRE};
 };
 
-// ESPN's event id as the saved bet keeps it: all digits and under 2^32
-// (they are around 400 million), else 0, which no bet ties to.
+// ESPN ids are numeric, around 400 million; fits 32 bits.
 inline uint32_t bet_event_id(const std::string &id) {
   if (id.empty() || id.size() > 10)
     return 0;
@@ -152,7 +128,7 @@ inline uint32_t bet_event_id(const std::string &id) {
   return n > UINT32_MAX ? 0 : (uint32_t) n;
 }
 
-// The bet's team plays in g (a total names either team of its game).
+// A total's team_id may be either side.
 inline bool bet_in_game(const Bet &b, const BetGame &g) {
   return !bet_empty(b) && g.event != 0 && b.league == g.league && (b.team_id == g.team_id || b.team_id == g.opp_id);
 }
@@ -164,10 +140,7 @@ inline void bet_score(const Bet &b, const BetGame &g, int &us, int &them) {
   them = ours ? g.opp_score : g.team_score;
 }
 
-// Where the bet stands at this score, in half points: above 0 it is covering
-// (won at the final), below 0 not covering, 0 level (a push). A spread adds
-// its line to the team's score, a total compares both scores with its line,
-// and a moneyline is the team ahead or not.
+// Sign matters: positive covers, negative doesn't, 0 pushes.
 inline int bet_margin(const Bet &b, int us, int them) {
   switch ((BetType) b.type) {
     case BetType::SPREAD:
@@ -182,22 +155,12 @@ inline int bet_margin(const Bet &b, int us, int them) {
   return 0;
 }
 
-// g could be the bet's game: anything but a game that ended (a final, or
-// called off) before the bet went in, which was most likely over by then.
-// With no clock when the bet went in, an ended game can't be told apart.
+// Games ended before the bet was placed can't be it.
 inline bool bet_game_open(const Bet &b, const BetGame &g) {
   return !((g.phase == BetPhase::FINAL || g.phase == BetPhase::OFF) && (b.placed == 0 || g.kickoff < b.placed));
 }
 
-// The panel read g. A bet is for its team's next or current game, so a bet
-// with no game yet takes g when bet_game_open, and a bet tied to a later game
-// of the team moves to g when g starts earlier, while that later game hasn't
-// started and the bet has no result: the panel read the later game first (the
-// team was the other side of the game on the board, or another favorite's
-// card came first). A bet whose game ESPN moved to another start stays on it.
-// The bet on g keeps its details and, at the final, its result, until
-// midnight (the local midnight after now). True when the bet changed and its
-// source should keep it.
+// A later game read first yields to an earlier one.
 inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
   if (!bet_in_game(b, g))
     return false;
@@ -239,8 +202,6 @@ inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight)
   return true;
 }
 
-// Done with: its result has been up until midnight, or the panel never saw
-// its game's final (kBetUnreadSeconds after the start).
 inline bool bet_expired(const Bet &b, int64_t now) {
   if (bet_empty(b))
     return false;
@@ -249,11 +210,11 @@ inline bool bet_expired(const Bet &b, int64_t now) {
   return b.event != 0 && b.kickoff != 0 && now - (int64_t) b.kickoff >= kBetUnreadSeconds;
 }
 
-// Where a bet stands, for the ticker and the device page.
+// Order matches bet_status_key's names.
 enum class BetStatus : uint8_t {
-  WAITING,       // no game yet: the panel hasn't read the team's next game
+  WAITING,       // no game read yet for the team
   PRE,           // its game hasn't started: the line only
-  UNREAD,        // its game has started but the panel isn't reading it now
+  UNREAD,        // started, but the panel isn't reading it
   COVERING,
   NOT_COVERING,
   LEVEL,         // exactly on the line during the game
@@ -263,7 +224,7 @@ enum class BetStatus : uint8_t {
   VOID,          // the game ended without being completed (postponed, canceled)
 };
 
-// g: the bet's game as the panel has it now, nullptr when it has none.
+// g is nullptr when the panel has no game.
 inline BetStatus bet_status(const Bet &b, const BetGame *g, int64_t now) {
   switch ((BetResult) b.result) {
     case BetResult::WON:
@@ -292,14 +253,13 @@ inline BetStatus bet_status(const Bet &b, const BetGame *g, int64_t now) {
   return (int64_t) b.kickoff > now ? BetStatus::PRE : BetStatus::UNREAD;
 }
 
-// The state document's name for a status.
+// Keys in the state document; keep BetStatus order.
 inline const char *bet_status_key(BetStatus s) {
   static const char *const kNames[] = {"waiting", "pre", "unread", "covering", "not_covering",
                                        "level",   "won", "lost",   "push",     "void"};
   return kNames[(uint8_t) s];
 }
 
-// The word the ticker puts after the bet: "" before the start or with no game.
 inline const char *bet_word(BetStatus s) {
   switch (s) {
     case BetStatus::COVERING:
@@ -320,7 +280,7 @@ inline const char *bet_word(BetStatus s) {
   }
 }
 
-// Half points as a line: "3.5", "7"; with sign, "+7", "-3.5".
+// Half points as "3.5", or "+7" with sign.
 inline std::string bet_points(int half, bool sign) {
   std::string out = sign && half > 0 ? "+" : half < 0 ? "-" : "";
   int a = half < 0 ? -half : half;
@@ -330,7 +290,6 @@ inline std::string bet_points(int half, bool sign) {
   return out;
 }
 
-// The team's abbreviation from the team list, "" for one not in it.
 inline const char *bet_team_abbr(uint8_t league, uint32_t id) {
   for (size_t t = 0; t < kTeamCount; t++)
     if ((uint8_t) kTeams[t].league == league && kTeams[t].espn_id == id)
@@ -338,8 +297,7 @@ inline const char *bet_team_abbr(uint8_t league, uint32_t id) {
   return "";
 }
 
-// The bet in a few words: "BUF -3.5", "BUF +7", "BUF PK", "OVER 47.5",
-// "UNDER 47", "BUF ML".
+// e.g. "BUF -3.5", "BUF PK", "OVER 47.5", "BUF ML".
 inline std::string bet_label(const Bet &b) {
   if (b.type == (uint8_t) BetType::TOTAL)
     return std::string(b.side == (uint8_t) BetSide::UNDER ? "UNDER " : "OVER ") + bet_points(b.line, false);
@@ -349,18 +307,13 @@ inline std::string bet_label(const Bet &b) {
   return out + " " + (b.line == 0 ? std::string("PK") : bet_points(b.line, true));
 }
 
-// The ticker's part for a bet on the game on the board: "BUF -3.5
-// COVERING", "OVER 47.5 WON", and before the start "BET BUF -3.5".
+// e.g. "BUF -3.5 COVERING"; before start "BET BUF -3.5".
 inline std::string bet_ticker(const Bet &b, BetStatus s) {
   const char *word = bet_word(s);
   return *word ? bet_label(b) + " " + word : "BET " + bet_label(b);
 }
 
-// Where the panel's bets come from. The device page's manual entries are
-// the only source now; a bet tracker's API could be another, handing the
-// panel the same Bet records. The panel ties each bet to its game, grades it
-// and drops it (bets_observe, bets_expire) and tells the source through
-// changed(), so a source that keeps its bets saves them then.
+// Abstract so a bet tracker API could feed bets.
 class BetSource {
  public:
   virtual ~BetSource() = default;
@@ -369,9 +322,7 @@ class BetSource {
   virtual void changed() = 0;
 };
 
-// Puts b in its slot (1 to kBetSlots, replacing the bet there) or, for slot
-// 0, in the first empty slot, so two device pages adding a bet at the same
-// time each get their own. The slot it went in, 0 when every slot is in use.
+// Slot 0 takes a free slot; concurrent pages don't collide.
 inline uint8_t bet_put(Bet (&bets)[kBetSlots], uint8_t slot, const Bet &b) {
   if (slot > kBetSlots)
     return 0;
@@ -384,8 +335,7 @@ inline uint8_t bet_put(Bet (&bets)[kBetSlots], uint8_t slot, const Bet &b) {
   return slot;
 }
 
-// The bets entered on the device page, one per slot (1 to kBetSlots), saved
-// in the panel's flash as one blob.
+// Saved to flash as one fixed-size blob.
 struct BetBlob {
   Bet bets[kBetSlots];
 };
@@ -395,8 +345,7 @@ class ManualBets final : public BetSource {
   uint8_t size() const override { return kBetSlots; }
   Bet &at(uint8_t i) override { return this->blob.bets[i]; }
   void changed() override { this->dirty = true; }
-  // From flash: a slot that doesn't make sense (a newer firmware's bet type,
-  // a league this one doesn't know) is emptied.
+  // Empties slots from newer firmware or unknown leagues.
   void loaded() {
     for (auto &b : this->blob.bets)
       if (!bet_empty(b) && !bet_valid(b))
@@ -406,19 +355,13 @@ class ManualBets final : public BetSource {
   bool dirty{false};  // changed since the last save
 };
 
-// The panel read g: each of the source's bets on it ties to it, keeps its
-// details or takes its result.
 inline void bets_observe(BetSource &src, const BetGame &g, int64_t now, int64_t midnight) {
   for (uint8_t i = 0; i < src.size(); i++)
     if (bet_observe(src.at(i), g, now, midnight))
       src.changed();
 }
 
-// The panel read g for another reason than following it: the big-play
-// watcher's look at another game, or the board on that game's big play for a
-// moment (watch.h). Only a bet tied to g already keeps its details and takes
-// its result; none ties to g or moves to it, which only the games the panel
-// follows do (bets_observe).
+// Unfollowed reads never tie or move a bet.
 inline bool bet_update(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
   if (bet_empty(b) || b.event == 0 || b.event != g.event || b.league != g.league)
     return false;
@@ -431,7 +374,6 @@ inline void bets_update(BetSource &src, const BetGame &g, int64_t now, int64_t m
       src.changed();
 }
 
-// Drops the source's bets that are done. True when one went.
 inline bool bets_expire(BetSource &src, int64_t now) {
   bool any = false;
   for (uint8_t i = 0; i < src.size(); i++) {

@@ -1,12 +1,4 @@
-// The parts of the scoreboard page (firmware/pages/gameday-live.yaml) that
-// change with the panel arrangement: the board's width, where each of the
-// board's widgets goes on it (board_view.cpp places them), where a splash
-// and its logo go, what the second area's clock shows (split.h) and where
-// the heat and power warning (pages/guard.yaml) goes, at the owner's Clock
-// size and Text size. The board itself is always 64 rows: the whole screen
-// of one row of panels (64, 128, 192 or 256 wide, or 128 beside a second
-// area), the top half of a 2x2 (128x128). Pure, with no ESPHome or LVGL
-// includes, so the host tests compile it directly.
+// Panel-arrangement layout math; pure, so host tests compile it.
 #pragma once
 
 #include <cstddef>
@@ -19,15 +11,9 @@ namespace esphome::gameday {
 static const int kPanelPx = 64;   // one panel, each way
 static const int kBoardRows = 64;  // the board's height on every arrangement
 
-// The panel's fonts, all Spleen and fixed width: spleen_8, spleen_12 and
-// spleen_16 (the theme's), which hold every letter panel_text() puts out,
-// and spleen_24 and spleen_32, which hold only a Large clock's and a
-// splash's points' characters (gameday-common.yaml's font block).
+// spleen_24/32 hold only clock and points glyphs.
 enum class BoardFont : uint8_t { S8, S12, S16, S24, S32 };
-// A character's width, a line's height, and the first and last rows of a
-// capital's or a digit's ink in its line (from the fonts' own bitmaps), which
-// is what the eye sees: a line's top rows and its descenders' are blank in
-// capitals.
+// Metrics measured from the fonts' own bitmaps.
 inline int font_px(BoardFont f) {
   static const int8_t k[] = {5, 6, 8, 12, 16};
   return k[(int) f];
@@ -44,36 +30,24 @@ inline int font_ink_bottom(BoardFont f) {
   static const int8_t k[] = {6, 8, 11, 18, 25};
   return k[(int) f];
 }
-// The last row any of its characters inks (a descender's, a comma's): the
-// tail of y, p or q (and of ç, ý and ÿ) on spleen_12's last row. spleen_24
-// and spleen_32 have no letter with a tail among their few.
+// Lowest inked row, descenders included.
 inline int font_desc_bottom(BoardFont f) {
   static const int8_t k[] = {7, 11, 14, 18, 25};
   return k[(int) f];
 }
 
-// The owner's Clock size and Text size (Normal or Large, set_request.h): the
-// clock's digits, and the ticker's letters where a bigger font fits its row.
 struct Sizes {
-  bool clock{false};  // Large clock
-  bool text{false};   // Large text
+  bool clock{false};  // Large clock size
+  bool text{false};   // Large text size
 };
 
-// The board's width for panels panels in a row (a 2x2 is two wide).
+// A 2x2 counts as two panels wide.
 inline int board_px(int panels) { return panels > 0 ? panels * kPanelPx : kPanelPx; }
 
-// The characters a splash line holds on a board w px wide: spleen_16 (8 px a
-// character) from 128 wide, spleen_12 (6 px) on one panel. 10 on one panel,
-// 16 on two, 24 on three, 32 on four. The words are sized for two panels
-// (decide_splash's wide), so a wider board fits them in as many lines or
-// fewer.
+// Words are sized for two panels; wider boards fit.
 inline size_t splash_chars(int w) { return (size_t) (w >= 128 ? w / 8 : w / 6); }
 
-// A splash (tt_splash) covers the whole screen, a 2x2's bottom half too. Its
-// words and the fireworks sit in 64 rows: the board's, or the middle ones of
-// a 2x2. The fireworks canvas is 128x64, in the middle of a wider board. The
-// words start 16 rows into those 64 on a wide board (three lines of
-// spleen_16 end at the bottom) and 18 on one panel (three of spleen_12).
+// Text offsets let three lines end at the bottom.
 struct SplashBox {
   int height;  // the splash: the screen's height
   int band_y;  // the top of its 64 rows
@@ -91,34 +65,16 @@ inline SplashBox splash_box(int w, int h) {
   return b;
 }
 
-// The heat and power warning (pages/guard.yaml): a line kGuardRows high
-// along the bottom of a screen h rows high, kGuardRowsLarge with Large text,
-// whose ticker's line is 12 rows (game_geom). On one row of panels it covers
-// the ticker; on a 2x2 it sits under the bottom half's ticker. Its words
-// (spleen_8) sit in the middle of the line: guard_label_y rows down.
+// Large text needs 12 rows to cover its ticker.
 static const int kGuardRows = 9, kGuardRowsLarge = 12;
 inline int guard_rows(bool large_text) { return large_text ? kGuardRowsLarge : kGuardRows; }
 inline int guard_line_y(int h, bool large_text = false) { return h - guard_rows(large_text); }
 inline int guard_label_y(bool large_text) { return (guard_rows(large_text) - kGuardRows + 1) / 2; }
 
-// The board's own ticker, along its bottom 8 rows, shows when the board is
-// the whole screen's height: one row of panels, or the top half of a 2x2
-// beside its second area (split.h), which has a ticker of its own.
+// A 2x2's second area has its own ticker.
 inline bool board_ticker(int h) { return h <= kBoardRows; }
 
-// The second area's clock (split.h; gd_lower, 64 rows): the time
-// (spleen_16, 16 rows from row 5), the date (spleen_12) and its ticker
-// (spleen_16). Under the main board's clock card, which has the time
-// already, the time stays hidden; the date shows only when the card has the
-// next game under its time rather than the date, so neither is up twice.
-// card_date: the clock card shows the date. The ticker always ends above the
-// heat and power warning's line (guard_line_y), which would cut its letters
-// off; under the clock card what shows is centered in the 64 rows.
-// A Large clock is spleen_24, "12:45 PM" from 128 wide; on one panel (64
-// wide) the digits alone, with the AM or PM under them in spleen_8. The
-// ticker is spleen_16 at either text size, already the panel's biggest with
-// every letter; with Large text it ends three rows higher, above the
-// warning's taller line.
+// Never repeat the clock card's time or date.
 static const int kLowerTimeY = 5, kLowerTimeRows = 16, kLowerDateRows = 12, kLowerTickerRows = 16;
 struct LowerHalf {
   bool time;
@@ -127,12 +83,12 @@ struct LowerHalf {
   int ticker_y;
   BoardFont time_font{BoardFont::S16};
   int time_y{kLowerTimeY};
-  bool ampm{false};  // the time's digits alone, the AM or PM on a line of its own (spleen_8)
+  bool ampm{false};  // AM or PM on its own line (spleen_8)
   int ampm_y{0};
 };
 
 inline LowerHalf lower_half(bool clock_card, bool card_date, int w = 128, Sizes sz = Sizes{}) {
-  // The ticker's last row above the warning's line at this text size
+  // Ticker ends above the warning, which would clip it.
   const int ticker_end = kBoardRows - guard_rows(sz.text) - kLowerTickerRows;
   if (clock_card) {
     if (card_date)
@@ -146,16 +102,11 @@ inline LowerHalf lower_half(bool clock_card, bool card_date, int w = 128, Sizes 
   return LowerHalf{true, true, 22, ticker_end < 38 ? ticker_end : 38, BoardFont::S24, 1};
 }
 
-// The main board's clock card (the off-season clock and the idle display's
-// Clock): its time, and under it the next game on a wide board (two lines
-// of spleen_12) or the date on one panel. A Large clock is spleen_24
-// ("12:45 PM", 96 px) up to 128 wide and spleen_32 (128 px) on three or four
-// panels in a row; one panel has room for its digits alone, so the AM or PM
-// goes on a line of its own under them, then the date.
+// One panel fits only the digits; AM/PM goes below.
 struct ClockCardGeom {
   BoardFont time_font;
   int16_t time_y;
-  bool ampm;  // the digits alone, the AM or PM under them in spleen_8
+  bool ampm;  // AM or PM under the digits (spleen_8)
   int16_t ampm_y;
   BoardFont sub_font;
   int16_t sub_y;
@@ -173,32 +124,13 @@ inline ClockCardGeom clock_card_geom(int w, bool large_clock) {
   return ClockCardGeom{BoardFont::S32, 0, false, 0, BoardFont::S12, 28};
 }
 
-// The clock's time split for a line of its own for the AM or PM: "12:45 PM"
-// is "12:45" and "PM".
 inline std::string clock_digits(const std::string &time) { return time.substr(0, time.find(' ')); }
 inline std::string clock_ampm(const std::string &time) {
   const size_t sp = time.find(' ');
   return sp == std::string::npos ? std::string() : time.substr(sp + 1);
 }
 
-// Where the game layout's widgets go on a board w px wide. From 128 wide
-// the logos sit at the far edges with the abbreviations and big scores in
-// two columns between them, the records (or a college rank) under the logos
-// with the timeout pips below them, and the game clock and the situation
-// row (down and distance, a goal, a series, baseball's count, bases and
-// outs) in the middle. On one panel the logos sit side by side over the
-// abbreviations (the clock in their row while the game is on) and the
-// scores, with the bases between the scores and the outs as dots under
-// them; a single panel has no room for records, pips or the situation row,
-// which stay hidden and keep no place here (zero). A badge takes its logo's
-// place. Index 0 is the team's side, on the left; 1 the opponent's.
-// Large text makes the ticker spleen_12, its 12-row line (the tails of y, p
-// and q on the last) four rows higher. What sits over it moves up to keep
-// clear of it: the situation row's letters (down and distance, the count,
-// the outs) three rows and the pips two on a wide board, and on one panel
-// the scores two, the possession line under them closer. Shapes end above
-// the ticker's line, whose first row its "|" and "/" ink: the bases three
-// rows higher, one panel's out dots one.
+// Index 0 is the team's side, on the left.
 
 struct Spot {
   int16_t x, y, w;
@@ -209,7 +141,7 @@ struct GameGeom {
   int16_t logo_x[2], logo_y;
   BoardFont abbr_font, score_font, clock_font;
   Spot abbr[2], score[2], clock;
-  Spot rec[2], down;      // wide only
+  Spot rec[2], down;      // wide boards only
   int16_t pip_x[6];       // wide only: the team's three timeouts, then the opponent's
   int16_t pip_y;
   BoardFont msg_font;     // the no-game message (centered both ways)
@@ -218,22 +150,19 @@ struct GameGeom {
   BoardFont splash_font;  // the splash's words, at splash_box's text_y
   int16_t ticker_y;       // the board's own ticker, along its bottom
   BoardFont ticker_font;
-  int16_t score_poss_dy;  // one panel: from a score's top to the possession line under it
-  // Baseball: first, second and third base as a small diamond (first on the
-  // right), each base_px square.
+  int16_t score_poss_dy;  // one panel: score top to possession line
+  // Bases first to third; first is on the right.
   int16_t base_px;
   int16_t base_x[3], base_y[3];
   int16_t out_x[3], out_y;  // one panel only: the out dots
-  Spot count, outs;         // wide only: the count left of the diamond, "2 OUT" right of it
+  Spot count, outs;         // wide only: count left, "2 OUT" right
 };
 
 inline GameGeom game_geom(int w, bool large_text = false) {
   GameGeom g{};
   const bool wide = w >= 128;
   const int half = w / 2;  // also the diamond's middle
-  // On a wide board, with Large text: the situation row's letters, whose
-  // tails (spleen_8's last row) end above the ticker's capitals, and the
-  // bases, above its line; the pips end well above it
+  // Large text lifts these clear of the taller ticker.
   const int lift = large_text ? 3 : 0, pip_lift = large_text ? 2 : 0;
   g.wide = wide;
   g.ticker_font = large_text ? BoardFont::S12 : BoardFont::S8;
@@ -301,10 +230,7 @@ inline GameGeom game_geom(int w, bool large_text = false) {
   return g;
 }
 
-// A team color the board can show as text: a dark color vanishes on the
-// panel, so its brightest channel is lifted to floor with the others in
-// proportion, and black becomes white. The abbreviations lift to 0xC0, a
-// fireworks splash's words to 0xE0.
+// Dark colors vanish on the panel, so lift them.
 inline uint32_t lift_color(uint32_t c, uint32_t floor) {
   uint32_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
   uint32_t m = r > g ? r : g;
@@ -320,24 +246,15 @@ inline uint32_t lift_color(uint32_t c, uint32_t floor) {
   return (r << 16) | (g << 8) | b;
 }
 
-// The no-game screen is up in the game's place: the clock card, a
-// leaderboard's card, or no game to show (game_state "NOT_FOUND", "BYE" or
-// empty). Its message is a leaderboard card's next_line, the component's
-// words (the finals rotation's headers, "No live games") or "No upcoming
-// game".
 inline bool no_game_screen(const std::string &game_state, bool clock_card, bool board_card) {
   return clock_card || board_card || game_state == "NOT_FOUND" || game_state == "BYE" || game_state.empty();
 }
 
-// The clock card's second line is the date, not the next game: on one panel,
-// or with no next game known.
 inline bool clock_card_date(int w, bool have_next) { return w < 128 || !have_next; }
 
 // ---- a splash with its logo --------------------------------------------------
 
-// The lines LVGL breaks text into in a label chars characters wide: a new
-// line at "\n", else at a space or after a hyphen once the next word won't
-// fit. 0 when a word is longer than a line, which LVGL would cut in two.
+// Mirrors LVGL wrapping; 0 if LVGL would split a word.
 inline size_t wrap_lines(const std::string &text, size_t chars) {
   if (chars == 0)
     return 0;
@@ -379,29 +296,8 @@ inline size_t wrap_lines(const std::string &text, size_t chars) {
   return lines;
 }
 
-// A score's or a big play's splash shows the logo of the side it is about
-// (alerts.h, Splash::abbr), or both sides' for the whole game's (overtime,
-// basketball's final), with the points beside or under it ("+6", "+2 RUNS")
-// and the words, the fireworks or the color flash behind them as before.
-// Each logo sits on a tile 2 px bigger, black with round corners, so it
-// stands out on the color flash too; while the logo downloads the tile is the
-// team's abbreviation badge (badge.h). Two tiles side by side on one panel
-// lose the edge.
-// - One panel (and the second area's 64x64): the tile with the points'
-//   number beside it, or alone in the middle, or both logos, over the words in
-//   spleen_12, two lines at most, else spleen_8 in three.
-// - 128 wide (and the second area's 128x64): the tile and the points beside
-//   it in the middle, over the words in spleen_16, two lines at most.
-// - Three or four in a row: the tile at the left, the words in the middle 128
-//   px (124 on three panels), the points or the other logo at the right.
-// - Two rows of two, over all four panels: the tile, the words under it in up
-//   to three lines, the points under them.
-// The points are the biggest font they fit: spleen_32 or spleen_24, all of
-// them ("+2 RUNS") or just their number ("+2") where they don't fit whole.
-// words are the splash's words without the side's name, which the logo says
-// (Splash::lead). Nothing fits (logos false): the words alone, as a splash
-// without a logo has them (splash_box).
-static const int kSplashTile = 34;  // a logo's tile: the 32 px logo and a 1 px edge
+// Tiles 2 px bigger so logos stand out on flashes.
+static const int kSplashTile = 34;  // 32 px logo plus a 1 px edge
 static const int kSplashLogo = 32;
 static const int kSplashGap = 6;  // between a tile and what is beside it
 
@@ -428,11 +324,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
   if (tiles <= 0 || words.empty() || w < kPanelPx || h < kBoardRows)
     return L;
   L.tiles = tiles > 1 ? 2 : 1;
-  // The four layouts: one panel, two rows of two, 128 wide, three or four in
-  // a row. Each has the words' fonts to try, biggest first, with the lines
-  // each may take; the fonts the points may take, all of them (from
-  // spleen_32 down to whole_last, none past it) or their number alone (down
-  // to number_last); and the room beside or under the tile for them.
+  // Per layout: word fonts biggest first, then point fonts.
   enum { ONE, TWO_ROWS, WIDE, ROW } kind = w < 128 ? ONE : h > kBoardRows ? TWO_ROWS : w < 192 ? WIDE : ROW;
   const int side = (w - 128) / 2 > kSplashTile ? (w - 128) / 2 : kSplashTile;  // ROW: the tile's and the points' room
   struct Try {
@@ -459,7 +351,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
   }
   if (L.lines == 0)
     return SplashLayout{};
-  // The biggest font the points fit their room in: all of them, else their number.
+  // Biggest font that fits: whole points, else the number.
   const int whole_n = (int) points.size(), number_n = (int) points_number(points).size();
   for (int whole = 1; L.tiles == 1 && whole_n > 0 && !L.points && whole >= 0; whole--)
     for (int f = (int) BoardFont::S32; f >= (whole ? kWholeLast[kind] : kNumberLast[kind]) && !L.points; f--)
@@ -473,8 +365,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
   const int blank = font_ink_top(L.words_font);  // the words' first rows, blank in capitals
   switch (kind) {
     case ONE:
-      // The tile with the points' number beside it, or alone in the middle,
-      // or both logos, over the words.
+      // Tile beside the number, or both logos, over words.
       L.tile_px = L.tiles == 2 ? kSplashLogo : kSplashTile;
       L.tile_y = (int16_t) ((kBoardRows - (L.tile_px + 1 + lines_px)) / 2);
       L.tile_x[0] = (int16_t) (L.tiles == 1 && !L.points ? (w - kSplashTile) / 2 : 0);
@@ -494,7 +385,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
       break;
     }
     case WIDE: {
-      // The tile and the points side by side, over the words
+      // Tile and points side by side, over the words.
       const int head = kSplashTile + (L.tiles == 2 ? kSplashGap + kSplashTile : L.points ? kSplashGap + points_px : 0);
       L.tile_y = (int16_t) ((h - (kSplashTile + lines_px - blank)) / 2);
       L.tile_x[0] = (int16_t) ((w - head) / 2);
@@ -512,8 +403,7 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
       L.words.y = (int16_t) ((h - lines_px) / 2);
       break;
   }
-  // The points' ink centered on the tile's middle row, but under the words
-  // on two rows of two
+  // Center the points' ink on the tile's middle row.
   if (kind != TWO_ROWS)
     L.pts.y = (int16_t) (L.tile_y + L.tile_px / 2 -
                          (font_ink_top(L.points_font) + font_ink_bottom(L.points_font) + 1) / 2);

@@ -441,8 +441,7 @@ static void test_splash() {
   CHECK_EQ(decide_splash(live(0, 0), live(8, 0), true).text, std::string("TOUCHDOWN!"));
   CHECK_EQ(decide_splash(live(7, 0), live(10, 0), true).text, std::string("FIELD GOAL!"));
   CHECK_EQ(decide_splash(live(6, 0), live(7, 0), true).text, std::string("EXTRA POINT!"));
-  // Two points are a conversion unless something says safety: the play, or
-  // a read before from the middle of a drive (alerts.h).
+  // Two points are a conversion unless something says safety.
   CHECK_EQ(decide_splash(live(6, 0), live(8, 0), true).text, std::string("2-PT!"));
   GameSnapshot td = live(6, 0);
   td.last_play = "Pass short left to D.Moore for 11 yards, TOUCHDOWN.";
@@ -499,14 +498,14 @@ static void test_win_splash_every_sport() {
       return s;
     };
     const GameSnapshot was = at(3, 3, GameState::IN, false);
-    // Basketball says FINAL when there is no win to celebrate (alerts.h).
+    // Basketball says FINAL when there's no win to celebrate.
     const std::string no_win = sport == Sport::BASKETBALL ? "FINAL" : "";
     CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), true).text, std::string("DAL WINS!"));
     CHECK_EQ(decide_splash(was, at(4, 3, GameState::POST, true), false).color, (uint32_t) 0x002a5c);
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true).text, no_win);
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).text, std::string("PHI WINS!"));
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), false, true).color, (uint32_t) 0x004c54);
-    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, no_win);  // a draw
+    CHECK_EQ(decide_splash(was, at(3, 3, GameState::POST, true), true, true).text, no_win);  // a draw, no winner
     CHECK_EQ(decide_splash(was, at(3, 4, GameState::POST, true), true, false, kAlertsAll & ~alert_bit(Alert::FINAL)).text,
              std::string(""));
     // Suspended or canceled: post, never completed, no winner
@@ -806,8 +805,7 @@ static void test_setup_qr() {
   CHECK(device_page_qr("192.168.29.10").size() <= 20);
 }
 
-// The ticker's address line after a join: the IP first, then the .local
-// name, for 30 seconds from when it started, across the millis() wrap.
+// Address line runs 30 s after a join, IP first.
 static void test_join_ticker() {
   using esphome::gameday::join_ticker_on;
   using esphome::gameday::join_ticker_text;
@@ -815,11 +813,11 @@ static void test_join_ticker() {
   CHECK_EQ(join_ticker_text("192.168.1.23", "gameday-2f6a70"),
            std::string("IP 192.168.1.23 | gameday-2f6a70.local | "));
   CHECK_EQ(join_ticker_text("192.168.1.23", ""), std::string("IP 192.168.1.23 | "));
-  // No address, off Wi-Fi: nothing, not "IP  | "
+  // Off Wi-Fi: nothing, not a bare IP label.
   CHECK_EQ(join_ticker_text("", "gameday-2f6a70"), std::string(""));
 
   CHECK_EQ(kJoinTickerMs, (uint32_t) 30000);
-  CHECK(!join_ticker_on(0, 5000));  // never started
+  CHECK(!join_ticker_on(0, 5000));  // clock never started
   CHECK(join_ticker_on(1000, 1000));
   CHECK(join_ticker_on(1000, 30999));
   CHECK(!join_ticker_on(1000, 31000));
@@ -829,54 +827,42 @@ static void test_join_ticker() {
   CHECK(!join_ticker_on(0xFFFFF000u, 0x00008000u));
 }
 
-// Where the scoreboard page runs the ticker. A message ("Can't reach ESPN",
-// "Getting ready", "Looking for a live game", a finals header) hides it, but
-// not while the address line after a join leads it, or the address would
-// time out unseen on exactly the screens where an owner needs it.
+// Messages hide the ticker, except while the address leads.
 static void test_ticker_host() {
   using esphome::gameday::ticker_host;
   using esphome::gameday::TickerHost;
   // ticker_host(no_game_screen, card, board, join_line)
-  // A game: under the score, address line or not.
   CHECK(ticker_host(false, false, false, false) == TickerHost::GAME);
   CHECK(ticker_host(false, false, false, true) == TickerHost::GAME);
-  // A leaderboard: under its rows.
   CHECK(ticker_host(false, false, true, false) == TickerHost::BOARD);
   CHECK(ticker_host(false, false, true, true) == TickerHost::BOARD);
   // The off-season clock or a leaderboard's card: under it.
   CHECK(ticker_host(true, true, false, false) == TickerHost::NO_GAME);
   CHECK(ticker_host(true, true, false, true) == TickerHost::NO_GAME);
-  // A message: stays hidden with the game layout as before...
+  // A message hides it...
   CHECK(ticker_host(true, false, false, false) == TickerHost::GAME);
-  // ...and runs under the message while the address line leads it.
+  // ...unless the address line leads.
   CHECK(ticker_host(true, false, false, true) == TickerHost::NO_GAME);
 }
 
-// Who answers on the panel's setup hotspot (hotspot.h). While the portal is
-// up and the panel is off Wi-Fi, every OS's check for internet and every
-// page gets the setup page, the panel's own /gameday/ routes still answer,
-// and POSTs go where they always did. On Wi-Fi, or with no hotspot,
-// nothing changes, so the device page stays where it is.
+// Off Wi-Fi, the hotspot sends every page to setup.
 static void test_hotspot_route() {
   using esphome::gameday::hotspot_route;
   using esphome::gameday::HotspotRoute;
   using esphome::gameday::panel_route;
-  // Android, Samsung and other Android makers, iPhone and Mac (old and new),
-  // Windows (old and new), Firefox, Linux, and the address typed by hand or
-  // handed out by the hotspot's DHCP (/)
+  // Captive-portal probes from each OS, plus / by hand.
   const char *const probes[] = {"/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
                                 "/connecttest.txt", "/ncsi.txt", "/redirect", "/canonical.html", "/success.txt",
                                 "/check_network_status.txt", "/", "/config.json", "/wifisave"};
   for (const char *p : probes) {
     CHECK(hotspot_route(true, false, true, p) == HotspotRoute::SETUP_PAGE);
-    // On Wi-Fi the hotspot is going: the device page and the rest as usual
+    // On Wi-Fi the hotspot is going: usual routes.
     CHECK(hotspot_route(true, true, true, p) == HotspotRoute::USUAL);
-    // No hotspot
     CHECK(hotspot_route(false, false, true, p) == HotspotRoute::USUAL);
   }
-  // The device page's own files are the setup page too while off Wi-Fi
+  // Off Wi-Fi even device page files get setup.
   CHECK(hotspot_route(true, false, true, "/0.js") == HotspotRoute::SETUP_PAGE);
-  // The panel's own routes, for a bench script on the hotspot
+  // Panel routes still answer for bench scripts.
   CHECK(hotspot_route(true, false, true, "/gameday/state") == HotspotRoute::PANEL);
   CHECK(hotspot_route(true, false, true, "/gameday/crash") == HotspotRoute::PANEL);
   CHECK(hotspot_route(true, true, true, "/gameday/state") == HotspotRoute::USUAL);
@@ -972,7 +958,7 @@ static void test_upcoming() {
     CHECK_EQ(up[2].tv, std::string(""));  // no broadcast listed yet
     CHECK_EQ((int) up[0].opp_rank, 0);  // left out unless asked for
   }
-  // With ranks (a college league's read): #17 SMU, and 99 is unranked.
+  // College read with ranks: #17 SMU; 99 is unranked.
   up.clear();
   CHECK(parse_upcoming_str(slurp("fixtures/schedule_ncaa_bc.json"), 103, 4, up, true));
   CHECK_EQ(up.size(), (size_t) 4);
@@ -1059,8 +1045,7 @@ static void test_clock_text() {
   s.short_detail = "12:34 - 4th";
   CHECK_EQ(clock_text(s), std::string("12:34 4th"));
 
-  // Halftime goes by ESPN's status name. shortDetail lags it, so a
-  // "Halftime" still there once the second half has started is ignored.
+  // shortDetail lags ESPN's status name, so status decides halftime.
   GameSnapshot h = live(14, 7);
   h.period = 2;
   h.display_clock = "0:00";
@@ -1099,7 +1084,7 @@ static void test_clock_text() {
   CHECK(status_text(h, all, "").rfind("Halftime", 0) != 0);
   CHECK(ha_status_text(h, "").rfind("Halftime", 0) != 0);
 
-  // Any break's words give way once ESPN says the clock runs again.
+  // Break words give way once ESPN's clock runs.
   GameSnapshot q = live(14, 7);
   q.period = 4;
   q.display_clock = "15:00";
@@ -1115,7 +1100,7 @@ static void test_clock_text() {
   CHECK(!clock_running(q));
   CHECK_EQ(clock_text(q), std::string("End of 3rd"));
 
-  // The drive carries across the 1st and 3rd quarter breaks, not the others.
+  // The drive carries across 1st and 3rd quarter breaks only.
   GameSnapshot b = live(14, 7);
   b.down_distance = "3rd & 4 at DAL 30";
   b.status_name = "STATUS_END_PERIOD";
@@ -1139,9 +1124,9 @@ static void test_clock_text() {
   CHECK(!football_break(b));
   b.sport = Sport::BASKETBALL;
   b.status_name = "STATUS_HALFTIME";
-  CHECK(!football_break(b));  // football only
+  CHECK(!football_break(b));  // football breaks only
 
-  // Hockey: an intermission's words give way once the next period's clock runs.
+  // Hockey intermission words give way once the clock runs.
   GameSnapshot k = live(2, 1);
   k.sport = Sport::HOCKEY;
   k.period = 2;
@@ -1160,7 +1145,7 @@ static void test_carry_football() {
   GameSnapshot pre = live(0, 0, GameState::PRE);
   pre.team_timeouts = pre.opp_timeouts = -1;
   carry_football(none, pre);
-  CHECK_EQ(pre.team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pre.team_timeouts, 3);  // guessed 3 before kickoff
   CHECK_EQ(pre.opp_timeouts, 3);
   GameSnapshot q1 = live(0, 0);
   q1.period = 1;
@@ -1178,7 +1163,7 @@ static void test_carry_football() {
   carry_football(q2, q2b);
   CHECK_EQ(q2b.team_timeouts, 1);  // the last count, the same half
   CHECK_EQ(q2b.opp_timeouts, 0);   // a real 0 carries too
-  GameSnapshot ht = q2b;  // halftime
+  GameSnapshot ht = q2b;
   ht.status_name = "STATUS_HALFTIME";
   ht.short_detail = "Halftime";
   carry_football(q2b, ht);
@@ -1189,8 +1174,8 @@ static void test_carry_football() {
   q3.last_play = "(14:20) First play of the half.";
   q3.team_timeouts = q3.opp_timeouts = -1;
   carry_football(ht, q3);
-  CHECK_EQ(q3.team_timeouts, -1);  // a play in, no count from ESPN: unknown, not a guess
-  q3.team_timeouts = q3.opp_timeouts = 3;  // ESPN's
+  CHECK_EQ(q3.team_timeouts, -1);  // no ESPN count after a play: unknown, not guessed
+  q3.team_timeouts = q3.opp_timeouts = 3;  // ESPN's own counts
   GameSnapshot q4 = q3;
   q4.period = 4;
   q4.team_timeouts = 2;
@@ -1212,7 +1197,7 @@ static void test_carry_football() {
   mid.period = 2;
   mid.team_timeouts = -1;
   carry_football(none, mid);
-  CHECK_EQ(mid.team_timeouts, -1);  // no guess
+  CHECK_EQ(mid.team_timeouts, -1);  // no guess mid-game
   GameSnapshot other = q2;
   other.event_id = "2";  // another game's count never carries
   GameSnapshot nxt = q2b;
@@ -1244,14 +1229,14 @@ static void test_carry_football() {
   // Cards the panel builds without ESPN's situation
   Pending pd;
   pd.league = (uint8_t) League::NFL;
-  CHECK_EQ(pending_snapshot(pd).team_timeouts, 3);  // before kickoff
+  CHECK_EQ(pending_snapshot(pd).team_timeouts, 3);  // three before kickoff
   CHECK_EQ(pending_snapshot(pd).to_guess, 3);       // the panel's, not ESPN's
   Final fn;
   fn.league = (uint8_t) League::NFL;
   CHECK_EQ(final_snapshot(fn).team_timeouts, -1);  // unknown: hidden, not all used
 }
 
-// ESPN's status can stay at halftime while the second half's plays come in.
+// ESPN's status can stick at halftime into the 2nd half.
 static void test_halftime_resumes() {
   GameSnapshot h = live(14, 7);
   h.period = 2;
@@ -1317,7 +1302,7 @@ static void test_halftime_resumes() {
   CHECK(!caught.resumed);
   CHECK_EQ(clock_text(caught), std::string("13:58 3rd"));
 
-  // The second half before its first play: ESPN still sends the first half's counts.
+  // Before the 2nd half's first play, ESPN sends old counts.
   GameSnapshot q3 = h;
   q3.status_name = "STATUS_IN_PROGRESS";
   q3.short_detail = "15:00 - 3rd";
@@ -1344,7 +1329,7 @@ static void test_halftime_resumes() {
   CHECK_EQ(play_clock("End of 2nd quarter."), std::string(""));
   CHECK_EQ(play_clock("(1a:00) x"), std::string(""));
 
-  // "Halftime" left in shortDetail while the status says the 2nd is still on.
+  // shortDetail still says "Halftime" while the 2nd runs.
   GameSnapshot lag = live(7, 7);
   lag.period = 2;
   lag.short_detail = "Halftime";
@@ -1358,7 +1343,7 @@ static void test_halftime_resumes() {
   early.short_detail = "End of 2nd";
   early.display_clock = "0:00";
   CHECK_EQ(clock_text(early), std::string("Halftime"));
-  // Soccer's Home Assistant line keeps "Live" at half time, as before.
+  // Soccer's Home Assistant line keeps "Live" at half time.
   GameSnapshot soc = live(1, 0);
   soc.sport = Sport::SOCCER;
   soc.status_name = "STATUS_HALFTIME";
@@ -1380,7 +1365,7 @@ static void test_break_timelines() {
     g.possession = 1;
     return g;
   };
-  // The 4th quarter's end keeps ESPN's counts, and the final keeps them.
+  // The 4th's end and the final keep ESPN's counts.
   GameSnapshot q4 = at(4, "STATUS_IN_PROGRESS", "0:31 - 4th", "0:31", "(00:31) Run for 2 yards.");
   q4.team_timeouts = 0;
   q4.opp_timeouts = 1;
@@ -1399,7 +1384,7 @@ static void test_break_timelines() {
   CHECK_EQ(fin.team_timeouts, 0);
   CHECK_EQ(fin.opp_timeouts, 1);
 
-  // A first-half play that reaches ESPN's plays after halftime began isn't the 3rd quarter.
+  // A late-arriving first-half play isn't the 3rd quarter.
   GameSnapshot h1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:14) Pass incomplete.");
   carry_football(none, h1);
   CHECK(h1.held);
@@ -1417,7 +1402,7 @@ static void test_break_timelines() {
   carry_football(h2, h3);
   CHECK(!h3.resumed);
   CHECK(h3.held);
-  // ESPN's status moves to the 3rd before the half's first play: drive and counts held.
+  // Status at 3rd before its first play: drive, counts held.
   GameSnapshot s3 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", "End of Half");
   s3.team_timeouts = 1;
   s3.opp_timeouts = 0;
@@ -1428,7 +1413,7 @@ static void test_break_timelines() {
   CHECK(status_text(s3, all, "").find("2nd & 6") == std::string::npos);
   CHECK_EQ(s3.team_timeouts, 3);
   CHECK_EQ(s3.opp_timeouts, 3);
-  GameSnapshot s3b = s3;  // the kickoff
+  GameSnapshot s3b = s3;  // the 3rd quarter kickoff
   s3b.last_play = "(15:00) Kickoff for a touchback.";
   s3b.team_timeouts = 3;
   s3b.opp_timeouts = 3;
@@ -1436,7 +1421,7 @@ static void test_break_timelines() {
   CHECK(!s3b.held);
   CHECK(!football_break(s3b));
 
-  // ESPN's seconds left tells the halves apart, plays without a clock included.
+  // ESPN's seconds left tell the halves apart.
   GameSnapshot c1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
   c1.play_secs_left = 1800;
   carry_football(none, c1);
@@ -1459,20 +1444,20 @@ static void test_break_timelines() {
   carry_football(c2, c4);
   CHECK(c4.resumed);
   CHECK_EQ(clock_text(c4), std::string("3rd"));
-  // The panel's first look at a game whose status is stuck at halftime
+  // First look at a game stuck at halftime.
   GameSnapshot cold = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
   cold.play_secs_left = 1720;
   carry_football(none, cold);
   CHECK(cold.resumed);
   CHECK(!football_break(cold));
   GameSnapshot cold2 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(13:40) Run for 4 yards.");
-  carry_football(none, cold2);  // no seconds left sent: a 10:00 or later clock still tells
+  carry_football(none, cold2);  // no seconds left: a 10:00+ clock still tells
   CHECK(cold2.resumed);
   GameSnapshot cold3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(00:21) Run for 4 yards.");
   carry_football(none, cold3);
   CHECK(!cold3.resumed);  // a late first-half play
 
-  // ESPN's plays frozen at the half's end into the 4th: the counts stay the guessed 3.
+  // Plays frozen at halftime into the 4th: guessed 3 stays.
   GameSnapshot f3 = s3;
   GameSnapshot f4 = at(4, "STATUS_IN_PROGRESS", "14:00 - 4th", "14:00", "End of Half");
   f4.team_timeouts = 1;
@@ -1482,7 +1467,7 @@ static void test_break_timelines() {
   CHECK_EQ(f4.team_timeouts, 3);
   CHECK_EQ(f4.opp_timeouts, 3);
 
-  // A gap from mid-2nd to mid-3rd (no halftime seen) doesn't guess 3.
+  // No halftime seen between reads: no guessed 3.
   GameSnapshot m2 = at(2, "STATUS_IN_PROGRESS", "5:00 - 2nd", "5:00", "(05:00) Run.");
   m2.team_timeouts = 1;
   carry_football(none, m2);
@@ -1492,7 +1477,6 @@ static void test_break_timelines() {
   CHECK_EQ(m3.team_timeouts, -1);
 }
 
-// The fourth review's cases
 static void test_break_edges() {
   GameSnapshot none;
   auto at = [](int period, const char *name, const char *detail, const char *clock, const char *play) {
@@ -1507,7 +1491,7 @@ static void test_break_edges() {
     g.possession = 1;
     return g;
   };
-  // Time put back after "End of 4th": play goes on with ESPN's counts.
+  // Time put back after "End of 4th": ESPN's counts.
   GameSnapshot e4 = at(4, "STATUS_IN_PROGRESS", "End of 4th", "0:00", "(00:05) Pass incomplete.");
   e4.team_timeouts = 0;
   e4.opp_timeouts = 1;
@@ -1523,7 +1507,7 @@ static void test_break_edges() {
   CHECK_EQ(back.team_timeouts, 0);
   CHECK_EQ(back.opp_timeouts, 1);
 
-  // After the status reaches the 3rd, ESPN's words or an empty play don't end the hold.
+  // At the 3rd, words or empty plays keep the hold.
   GameSnapshot h = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "End of 2nd quarter.");
   h.play_secs_left = 1800;
   carry_football(none, h);
@@ -1554,7 +1538,7 @@ static void test_break_edges() {
   carry_football(again, first);
   CHECK(!first.held);
 
-  // A first look at a 3rd quarter whose plays are still the first half's (recorded)
+  // Recorded: a 3rd quarter still listing first-half plays.
   std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
   GameSnapshot ark;
   CHECK(parse_scoreboard_str(json, "401856635", 8, ark));
@@ -1565,14 +1549,14 @@ static void test_break_edges() {
   CHECK_EQ(ark.team_timeouts, 3);  // over the first half's 1 and 0
   CHECK_EQ(ark.opp_timeouts, 3);
 
-  // A stuck halftime into the 4th quarter reads "4th" from ESPN's seconds left.
+  // Stuck halftime into the 4th: seconds left say "4th".
   GameSnapshot h4 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "(08:12) Run for 3 yards.");
   h4.play_secs_left = 492;
   carry_football(none, h4);
   CHECK(h4.resumed);
   CHECK_EQ(clock_text(h4), std::string("8:12 4th"));
 
-  // A kickoff without a clock at 1800 seconds left resumes a stuck halftime.
+  // A clockless kickoff at 1800 seconds left resumes play.
   GameSnapshot k1 = h;
   GameSnapshot k2 = h;
   k2.last_play = "J.Smith kickoff for 65 yds for a touchback.";
@@ -1580,7 +1564,7 @@ static void test_break_edges() {
   carry_football(k1, k2);
   CHECK(k2.resumed);
 
-  // A first-half kickoff returned as the half ran out also has 1800 left.
+  // A first-half kickoff at the buzzer also shows 1800.
   GameSnapshot r1 = h;
   GameSnapshot r2 = h;
   r2.last_play = "(00:05) #44 G.Spetic kickoff 65 yards to the PHI00, #3 A.Smith return 28 yards to the PHI28";
@@ -1592,7 +1576,7 @@ static void test_break_edges() {
   r3.play_secs_left = 1800;
   carry_football(none, r3);  // a first look too
   CHECK(!r3.resumed);
-  // A first look at the 3rd quarter's kickoff touchback isn't a held break.
+  // A first look at a 3rd quarter touchback isn't held.
   GameSnapshot t1 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00",
                        "(15:00) J.Bates kicks 65 yards from DET 35 to end zone, Touchback.");
   t1.play_secs_left = 1800;
@@ -1607,13 +1591,13 @@ static void test_break_edges() {
   c1.play_secs_left = 1800;
   carry_football(none, c1);
   CHECK(!c1.held);
-  // A resumed halftime whose plays go back to the first half's says Halftime again.
+  // Plays reverting to the first half say Halftime again.
   GameSnapshot u1 = h4;
   GameSnapshot u2 = h;
   carry_football(u1, u2);
   CHECK(!u2.resumed);
 
-  // An overtime before its first play hides the 4th quarter's counts.
+  // Overtime before its first play hides 4th quarter counts.
   GameSnapshot ot = at(5, "STATUS_IN_PROGRESS", "10:00 - OT", "10:00", "(00:05) Pass incomplete.");
   ot.team_timeouts = 0;
   ot.opp_timeouts = 1;
@@ -1631,7 +1615,7 @@ static void test_break_edges() {
   CHECK_EQ(ot1.team_timeouts, 2);
 }
 
-// ESPN also ends a half as in progress: "End of 2nd" at 0:00.
+// ESPN may end a half in progress: "End of 2nd".
 static void test_end_of_half_in_progress() {
   std::string json = slurp("fixtures/day_ncaa_20261017.json");
   GameSnapshot s;
@@ -1644,7 +1628,7 @@ static void test_end_of_half_in_progress() {
   CHECK(status_text(s, all, "").find("2nd & 15") == std::string::npos);
 }
 
-// ESPN flags the red zone on extra-point tries and after scores too.
+// ESPN flags the red zone on tries and after scores.
 static void test_red_zone() {
   std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
   GameSnapshot duke;
@@ -1671,7 +1655,7 @@ static void test_red_zone() {
   CHECK(!in_red_zone(pre));
 }
 
-// The recorded STATUS_HALFTIME game keeps the punt's "1st & 10" in situation.
+// Recorded halftime keeps the punt's "1st & 10" situation.
 static void test_halftime_fixture() {
   std::string json = slurp("fixtures/scoreboard_ncaa_live.json");
   GameSnapshot s;
@@ -1832,7 +1816,7 @@ static void test_followed_favorite() {
   CHECK_EQ(followed_favorite({FavGame{}, fav(GameState::POST, T - 3600), fav(GameState::POST, T - 60)}), 1);
 }
 
-// ---- Follow this game: the pin on the board's game ---------------------------------
+// ---- Follow this game -----------------------------------------------------------
 static GameSnapshot board_game(const char *event, GameState st, Sport sport = Sport::FOOTBALL) {
   GameSnapshot g;
   g.valid = true;
@@ -1845,8 +1829,7 @@ static GameSnapshot board_game(const char *event, GameState st, Sport sport = Sp
 static void test_follow() {
   const int64_t T = 1000000;
   const int64_t H = 3600;
-  // The modes that pick games themselves: Live games, the old live modes,
-  // and Favorite teams with a favorite set.
+  // Only modes that pick games themselves allow Follow.
   CHECK(follow_mode_ok((uint8_t) Mode::LIVE, false));
   CHECK(follow_mode_ok((uint8_t) Mode::LIVE_NFL, false));
   CHECK(follow_mode_ok((uint8_t) Mode::LIVE_NCAA, false));
@@ -1856,9 +1839,7 @@ static void test_follow() {
   CHECK(!follow_mode_ok((uint8_t) Mode::MY_TEAM, true));
   CHECK(!follow_mode_ok(kModeCount, true));
 
-  // A final stays up for the mode's own time: Live games moves on at its
-  // first look after a final, as it does without the pin, and Favorite teams
-  // keeps it for After the final.
+  // A final stays up for the mode's own time.
   const int64_t LIVE = follow_after_final_s(false, 30);
   CHECK_EQ(LIVE, (int64_t) 0);
   CHECK_EQ(follow_after_final_s(false, 3600), (int64_t) 0);
@@ -1867,7 +1848,7 @@ static void test_follow() {
 
   // Nothing to follow: the pin stays off
   FollowPin p;
-  CHECK(!follow_start(p, false, true, board_game("1", GameState::IN), T));  // My team
+  CHECK(!follow_start(p, false, true, board_game("1", GameState::IN), T));  // in My team mode
   CHECK(!follow_start(p, true, false, board_game("1", GameState::IN), T));  // Live games' fallback card, the finals
   CHECK(!follow_start(p, true, true, GameSnapshot{}, T));                   // an empty board
   CHECK(!follow_start(p, true, true, board_game("", GameState::PRE), T));   // a team's card before its first read
@@ -1876,7 +1857,7 @@ static void test_follow() {
   CHECK(!follow_start(p, true, true, board_game("1", GameState::POST), T));  // over already: a favorite's last final
   CHECK(!p.on);
 
-  // A live game holds for as long as it is on, whatever the switch timer says
+  // A live game holds whatever the switch timer says.
   CHECK(follow_start(p, true, true, board_game("1", GameState::IN), T));
   CHECK(p.on);
   CHECK_EQ(p.since, T);
@@ -1888,7 +1869,7 @@ static void test_follow() {
   CHECK(p.event_id.empty());
   CHECK(!follow_holds(p, board_game("1", GameState::POST), T + 4 * H + 120, LIVE, 5));
 
-  // Favorite teams: the final stays up for After the final, from when the panel saw it
+  // Favorite teams: After the final counts from when seen.
   CHECK(follow_start(p, true, true, board_game("2", GameState::IN), T));
   CHECK(follow_holds(p, board_game("2", GameState::POST), T + 3 * H, 300, 5));
   CHECK_EQ(p.final_epoch, T + 3 * H);
@@ -1896,7 +1877,7 @@ static void test_follow() {
   CHECK(!follow_holds(p, board_game("2", GameState::POST), T + 3 * H + 300, 300, 5));
   CHECK(!p.on);
 
-  // ESPN takes a final back: the wait starts over at the next one
+  // ESPN retracts a final: the wait restarts at the next.
   CHECK(follow_start(p, true, true, board_game("2", GameState::IN), T));
   CHECK(follow_holds(p, board_game("2", GameState::POST), T + 100, 30, 5));
   CHECK(follow_holds(p, board_game("2", GameState::IN), T + 200, 30, 5));
@@ -1905,7 +1886,7 @@ static void test_follow() {
   CHECK(follow_holds(p, board_game("2", GameState::POST), T + 329, 30, 5));
   CHECK(!follow_holds(p, board_game("2", GameState::POST), T + 330, 30, 5));
 
-  // A game days off holds until it is over; another game on the board lets go at once
+  // A future game holds; another game on the board releases.
   GameSnapshot later = board_game("3", GameState::PRE);
   later.kickoff_epoch = T + 3 * 86400;
   CHECK(follow_start(p, true, true, later, T));
@@ -1916,9 +1897,7 @@ static void test_follow() {
   CHECK(!follow_holds(p, GameSnapshot{}, T + 10, 30, 5));  // the board emptied
   CHECK(!p.on);
 
-  // A game that never finishes. ESPN stops answering for it: half an hour
-  // with no good read lets go, counted from the pin at the earliest, where
-  // Live games' Switch every moved past it before.
+  // 30 minutes without a good read lets go.
   GameSnapshot on = board_game("4", GameState::IN);
   on.kickoff_epoch = T - H;
   CHECK(follow_start(p, true, true, on, T));
@@ -1929,13 +1908,13 @@ static void test_follow() {
   CHECK(follow_start(p, true, true, on, T));
   CHECK(follow_holds(p, on, T + 2 * H, LIVE, kFollowUnreadSeconds - 1));  // a good read now and then keeps it
   CHECK(!follow_holds(p, on, T + 2 * H, LIVE, kFollowUnreadSeconds));
-  // ESPN keeps it in progress: 8 hours past its start lets go
+  // Stuck in progress: 8 hours past start lets go.
   on.kickoff_epoch = T + H;  // pinned an hour before it started
   CHECK(follow_start(p, true, true, on, T));
   CHECK(follow_holds(p, on, T + 9 * H - 1, LIVE, 5));
   CHECK(!follow_holds(p, on, T + 9 * H, LIVE, 5));
   CHECK(!p.on);
-  // A game with no start, or pinned past its start, counts from the pin
+  // No start, or pinned late: counts from the pin.
   on.kickoff_epoch = 0;
   CHECK(follow_start(p, true, true, on, T));
   CHECK(follow_holds(p, on, T + 8 * H - 1, LIVE, 5));
@@ -1944,22 +1923,21 @@ static void test_follow() {
   CHECK(follow_start(p, true, true, on, T));
   CHECK(follow_holds(p, on, T + 8 * H - 1, LIVE, 5));
   CHECK(!follow_holds(p, on, T + 8 * H, LIVE, 5));
-  // A game with no start time yet counts from the end of its day
+  // A TBD game counts from the end of its day.
   GameSnapshot tbd = board_game("5", GameState::PRE);
   tbd.kickoff_epoch = T + 86400;
   tbd.time_tbd = true;
   CHECK(follow_start(p, true, true, tbd, T));
   CHECK(follow_holds(p, tbd, T + 2 * 86400 + 8 * H - 1, 30, 5));
   CHECK(!follow_holds(p, tbd, T + 2 * 86400 + 8 * H, 30, 5));
-  // A final that comes just inside the 8 hours still gets its own time
+  // A final just inside 8 hours still gets its time.
   CHECK(follow_start(p, true, true, board_game("5", GameState::IN), T));
   CHECK(follow_holds(p, board_game("5", GameState::IN), T + 8 * H - 60, 300, 5));
   CHECK(follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 60, 300, 5));
   CHECK(follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 359, 300, 5));
   CHECK(!follow_holds(p, board_game("5", GameState::POST), T + 8 * H + 360, 300, 5));
 
-  // follow=1 again on the same game keeps its count, even on its final; on
-  // another game it starts over
+  // Refollowing the same game keeps its count; another restarts.
   CHECK(follow_start(p, true, true, board_game("6", GameState::IN), T));
   CHECK(follow_holds(p, board_game("6", GameState::POST), T + 10, 30, 5));
   CHECK(follow_start(p, true, true, board_game("6", GameState::POST), T + 20));
@@ -2042,13 +2020,11 @@ static void test_schedule_due() {
 }
 
 static void test_team_read_waits() {
-  // My team, a final on the board since 10:00 (millis 36,000,000) with a
-  // 30 minute linger (the AHL's and the ECHL's) or 10 (minor league baseball)
+  // Final up since millis 36,000,000; AHL/ECHL linger 30 minutes.
   const uint32_t at_final = 36000000u, min = 60000u, linger = 30 * min;
-  // ESPN's team endpoint keeps naming the final: its read never waits
+  // ESPN's team endpoint keeps naming the final: never waits.
   CHECK(!team_read_waits(Source::ESPN, at_final, at_final + 5 * min, linger));
-  // MLB's and HockeyTech's name the next game: the six-hour read or Refresh
-  // Now waits until the final has lingered its time
+  // MLB and HockeyTech name the next game, so wait.
   CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final, linger));
   CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final + 29 * min, linger));
   CHECK(!team_read_waits(Source::HOCKEYTECH, at_final, at_final + linger, linger));
@@ -2057,11 +2033,11 @@ static void test_team_read_waits() {
   // No final on the board: read as usual
   CHECK(!team_read_waits(Source::HOCKEYTECH, 0, at_final, linger));
   CHECK(!team_read_waits(Source::MLB_STATS, 0, 5 * min, linger));
-  // Across the millis() wrap the final's age is still a few minutes
+  // Final age stays right across the millis() wrap.
   const uint32_t before_wrap = 0xFFFFFFFFu - min;
   CHECK(team_read_waits(Source::HOCKEYTECH, before_wrap, 4 * min, linger));
   CHECK(!team_read_waits(Source::HOCKEYTECH, before_wrap, linger, linger));
-  // Refresh Now (schedule_due's force) in the linger: the read is due but waits
+  // Refresh Now during the linger is due but waits.
   CHECK(schedule_due(true, true, at_final + min, at_final - min, kSix));
   CHECK(team_read_waits(Source::HOCKEYTECH, at_final, at_final + min, linger));
 }
@@ -2082,7 +2058,7 @@ static void test_team_cache() {
   CHECK_EQ(s.kickoff_epoch, d.kickoff_epoch);
   CHECK_EQ(s.group, d.group);
   CHECK_EQ(s.league, (uint8_t) League::NFL);
-  // The seed and place the Standing setting shows, which only the team read has
+  // Only the team read has seed and place.
   CHECK_EQ((int) s.seed, 4);
   CHECK_EQ(s.place, std::string(""));
   Schedule placed = d;
@@ -2204,9 +2180,7 @@ static void test_rotate_minutes() {
   CHECK(espn::clamp_rotate_minutes(45) == 30);
 }
 
-// Switch every's 30 seconds: what the set request's seconds come to, what is
-// saved for them (the minutes, and the flag that counts only next to 1
-// minute), and what the state document shows pages from before.
+// 30-second Switch every saves as 1 minute plus a flag.
 static void test_rotate_seconds() {
   CHECK(espn::rotate_seconds_valid(30));
   CHECK(espn::rotate_seconds_valid(60));
@@ -2226,7 +2200,7 @@ static void test_rotate_seconds() {
   for (int s = -100; s < 4000; s++)
     CHECK(espn::rotate_seconds_valid(espn::clamp_rotate_seconds(s)));
 
-  // Saved: the minutes stay 1 to 30, as older firmware checks them at boot.
+  // Minutes stay 1 to 30: older firmware checks at boot.
   CHECK_EQ(espn::rotate_minutes_of(30), 1);
   CHECK_EQ(espn::rotate_minutes_of(60), 1);
   CHECK_EQ(espn::rotate_minutes_of(600), 10);
@@ -2236,9 +2210,7 @@ static void test_rotate_seconds() {
     CHECK(espn::rotate_minutes_valid(m));
     CHECK_EQ(espn::rotate_saved_seconds(m, s < 60), s);  // what is saved reads back the same
   }
-  // The flag counts only next to 1 minute: any other minute set on older
-  // firmware, which leaves it set, is still minutes, and every panel from
-  // before reads as it was. 1 minute set there can't be told from 30 seconds.
+  // The flag counts only beside 1 minute, for older firmware.
   CHECK_EQ(espn::rotate_saved_seconds(1, true), 30);
   CHECK_EQ(espn::rotate_saved_seconds(1, false), 60);
   CHECK_EQ(espn::rotate_saved_seconds(10, true), 600);
@@ -2246,7 +2218,7 @@ static void test_rotate_seconds() {
   for (int m = espn::kRotateMinMinutes; m <= espn::kRotateMaxMinutes; m++)
     CHECK_EQ(espn::rotate_saved_seconds(m, false), m * 60);
 
-  // A turn is over once its clock has run the setting; 0 hasn't started.
+  // A turn ends once its clock runs; 0 means unstarted.
   CHECK(!espn::rotate_turn_over(5000, 0, 30));
   CHECK(!espn::rotate_turn_over(30999, 1000, 30));
   CHECK(espn::rotate_turn_over(31000, 1000, 30));
@@ -2256,24 +2228,22 @@ static void test_rotate_seconds() {
   CHECK(!espn::rotate_turn_over(24999, UINT32_MAX - 4999, 30));
 }
 
-// Another game's big play (watch.h) has the board for a while: the game the
-// board goes back to gets what was left of its turn, not a turn already used
-// up by the stay.
+// After a big-play visit, the game resumes its turn's remainder.
 static void test_rotate_turn_resume() {
-  // 30 s turns, a 60 s stay starting 20 s in: 10 s left on the way back.
+  // 30s turn, 60s stay 20s in: 10s left.
   uint32_t t = espn::rotate_turn_resume(1000, 81000, 60000);
   CHECK_EQ(t, 61000u);
   CHECK(!espn::rotate_turn_over(81000, t, 30));
   CHECK(!espn::rotate_turn_over(90999, t, 30));
   CHECK(espn::rotate_turn_over(91000, t, 30));
-  // A turn that was over before the stay is still over after it.
+  // A turn over before the stay stays over.
   t = espn::rotate_turn_resume(1000, 96000, 60000);
   CHECK(espn::rotate_turn_over(96000, t, 30));
-  // Never moves past now, and a clock that hasn't started stays that way.
+  // Never past now; an unstarted clock stays unstarted.
   CHECK_EQ(espn::rotate_turn_resume(1000, 5000, 60000), 5000u);
   CHECK_EQ(espn::rotate_turn_resume(0, 5000, 1000), 0u);
   CHECK_EQ(espn::rotate_turn_resume(1000, 5000, 0), 1000u);
-  // Across the millis() wrap, and never the 0 that means no clock.
+  // Across the millis() wrap, never 0 (no clock).
   CHECK_EQ(espn::rotate_turn_resume(UINT32_MAX - 999, 20000, 10000), 9000u);
   CHECK_EQ(espn::rotate_turn_resume(UINT32_MAX, 10, 1), 1u);
 
@@ -2283,7 +2253,7 @@ static void test_rotate_turn_resume() {
   CHECK_EQ(espn::rotate_since_resume(T, T + 50, 60), T + 50);
   CHECK_EQ(espn::rotate_since_resume(T, T + 80, 0), T);
   CHECK_EQ(espn::rotate_since_resume(T, T + 80, -5), T);
-  // Alternating every 30 s, a 60 s stay from 20 s in: the favorite keeps 10 s.
+  // Alternate every 30s, 60s stay 20s in: 10s left.
   FavRules r;
   r.alternate = true;
   r.rotate_s = 30;
@@ -2512,7 +2482,7 @@ static void test_mlb_splash() {
   CHECK_EQ(decide_splash(prev, after(3, 0, "Play Result"), true).text, std::string("3 RUNS!"));
   CHECK_EQ(decide_splash(prev, after(2, 0, "Home Run"), true).text, std::string("HOME RUN!"));
   CHECK_EQ(decide_splash(prev, after(4, 0, "Home Run"), true).text, std::string("GRAND SLAM!"));
-  // Four runs in the update but two from the home run itself (alerts.h).
+  // Four runs, but only two from the home run.
   GameSnapshot two_and_two = after(4, 0, "Home Run");
   two_and_two.play_points = 2;
   CHECK_EQ(decide_splash(prev, two_and_two, true).text, std::string("HOME RUN!"));
@@ -3084,7 +3054,7 @@ static void test_nba_live() {
   CHECK_EQ(g.nba.series, std::string(""));
   CHECK_EQ((int) g.nba.team_wins, -1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, -1);  // not sent
+  CHECK_EQ(g.team_timeouts, -1);  // timeouts not sent
   CHECK_EQ(g.team_logo, std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/nba/500-dark/scoreboard/ind.png&w=64&h=64"));
   CHECK_EQ(clock_text(g), std::string("8:27 3rd"));
   CHECK_EQ(basketball_series(g), std::string(""));
@@ -3388,7 +3358,7 @@ static void test_nhl_live() {
   CHECK_EQ(g.opp_score, 0);
   CHECK_EQ(g.period, 1);
   CHECK_EQ(g.possession, 0);
-  CHECK_EQ(g.team_timeouts, -1);  // not sent
+  CHECK_EQ(g.team_timeouts, -1);  // timeouts not sent
   CHECK_EQ(g.down_distance, std::string(""));
   CHECK_EQ(g.team_record, std::string("2-0-1"));
   CHECK_EQ(g.opp_record, std::string("2-0-0"));
@@ -3661,14 +3631,14 @@ static void test_lookahead() {
 
 int run_football_golden();  // golden_football.cpp
 int run_set_tests(int &checks);  // test_set.cpp
-int run_alert_tests(int &checks);  // test_alerts.cpp
-int run_bet_tests(int &checks);  // test_bets.cpp
-int run_watch_tests(int &checks);  // test_watch.cpp
-int run_player_tests(int &checks);  // test_players.cpp
-int run_mlbstats_tests(int &checks);  // test_mlbstats.cpp
-int run_hockeytech_tests(int &checks);  // test_hockeytech.cpp
-int run_split_tests(int &checks);  // test_split.cpp
-int run_layout_tests(int &checks);  // test_layout.cpp
+int run_alert_tests(int &checks);
+int run_bet_tests(int &checks);
+int run_watch_tests(int &checks);
+int run_player_tests(int &checks);
+int run_mlbstats_tests(int &checks);
+int run_hockeytech_tests(int &checks);
+int run_split_tests(int &checks);
+int run_layout_tests(int &checks);
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -3922,10 +3892,9 @@ static void test_postseason() {
   CHECK_EQ(sea.game_name, std::string("Super Bowl LX"));
 }
 
-// A college team's rank: ESPN's curatedRank on each side of the followed game
-// (99 when unranked), in the ticker's pre-game matchup and its records lines.
+// ESPN's curatedRank, 99 meaning unranked, shown before kickoff.
 static void test_ranks() {
-  // The Big Ten title game: #2 IU at #1 OSU. The ACC's: DUKE at #17 UVA.
+  // #2 IU at #1 OSU; DUKE at #17 UVA.
   const std::string titles = slurp("fixtures/scoreboard_ncaa_conf_titles.json");
   GameSnapshot iu;
   CHECK(parse_scoreboard_str(titles, "401777353", 84, iu));
@@ -3939,10 +3908,10 @@ static void test_ranks() {
   CHECK_EQ(status_text(iu, o, ""), std::string("Final | #2 IU 13-0 | #1 OSU 12-1"));
   GameSnapshot duke;
   CHECK(parse_scoreboard_str(titles, "401777328", 150, duke));
-  CHECK_EQ((int) duke.team_rank, 0);  // 99: unranked
+  CHECK_EQ((int) duke.team_rank, 0);  // ESPN's 99 means unranked
   CHECK_EQ((int) duke.opp_rank, 17);
 
-  // Before kickoff: the matchup with each side's rank, the unranked one bare.
+  // Pre-game matchup shows ranks; the unranked side is bare.
   const std::string sat = slurp("fixtures/scoreboard_ncaa_live.json");
   GameSnapshot miss;
   CHECK(parse_scoreboard_str(sat, "401856661", 145, miss));
@@ -3959,7 +3928,7 @@ static void test_ranks() {
   CHECK_EQ((int) fiu.team_rank, 0);
   CHECK_EQ((int) fiu.opp_rank, 0);
   CHECK_EQ(espn::detail::ranked_matchup(fiu), std::string(""));
-  // Live, the ticker has no matchup; halftime's records line keeps the ranks.
+  // Live: no matchup; halftime's records line keeps ranks.
   GameSnapshot ore;
   CHECK(parse_scoreboard_str(sat, kLiveEvent, kOregon, ore));
   CHECK_EQ((int) ore.team_rank, 2);
@@ -3969,14 +3938,14 @@ static void test_ranks() {
   ore.period = 2;
   CHECK_EQ(status_text(ore, o, ""), std::string("Halftime | #2 ORE 0-0 | BOIS 0-0"));
 
-  // A pro league's competitors carry 99 as well: no rank, no matchup.
+  // Pro competitors carry 99 too: no rank, no matchup.
   GameSnapshot sea;
   CHECK(parse_scoreboard_str(slurp("fixtures/scoreboard_nfl.json"), kNflEvent, kSeahawks, sea));
   CHECK_EQ((int) sea.team_rank, 0);
   CHECK_EQ((int) sea.opp_rank, 0);
   CHECK(status_text(sea, o, "Sun 1:00 PM").find('#') == std::string::npos);
 
-  // Men's college basketball: the national title game between #2 and #1.
+  // Men's college basketball title game, #2 versus #1.
   GameSnapshot conn = hoops_event("fixtures/event_mcbb_final.json", kUConn);
   CHECK_EQ((int) conn.team_rank, 2);
   CHECK_EQ((int) conn.opp_rank, 1);
@@ -3984,7 +3953,7 @@ static void test_ranks() {
   pre.state = GameState::PRE;
   CHECK_EQ(status_text(pre, quiet, "Mon 9:20 PM").rfind("#2 CONN vs #1 MICH | Mon 9:20 PM", 0), (size_t) 0);
 
-  // The finals rotation and the later-today cards keep each side's rank.
+  // Finals rotation and later-today cards keep each rank.
   std::vector<LiveGame> live;
   std::vector<Final> finals;
   CHECK(parse_live_games(titles, live, nullptr, &finals));
@@ -4008,8 +3977,8 @@ static void test_ranks() {
     if (p.event_id != "401856723")
       continue;
     found = true;
-    CHECK_EQ((int) p.away_rank, 6);   // ALA
-    CHECK_EQ((int) p.home_rank, 14);  // at TENN
+    CHECK_EQ((int) p.away_rank, 6);   // ALA, the away side
+    CHECK_EQ((int) p.home_rank, 14);  // at TENN, home side
     Pending q = p;
     q.league = (uint8_t) League::NCAA;
     GameSnapshot card = pending_snapshot(q);
@@ -4019,10 +3988,7 @@ static void test_ranks() {
   CHECK(found);
 }
 
-// Where the panel has room for a rank: before an abbreviation on one panel (32
-// px), before a record under a logo on two (36 px). Spleen 8 is 5 px a
-// character for every glyph the panel draws (the font's BDF), so the panel's
-// measure of label width over glyph width comes to 6 and 7 characters.
+// Spleen 8 glyphs are 5 px: 6 or 7 characters.
 static void test_rank_width() {
   const size_t abbr = 32 / 5, rec = 36 / 5;
   CHECK_EQ(abbr, (size_t) 6);
@@ -4043,8 +4009,7 @@ static void test_rank_width() {
   CHECK_EQ(rank_label(5, "9-1", 0), std::string("9-1"));  // a label the panel couldn't measure
 }
 
-// Standing next to pro teams: ESPN's playoffSeed and standingSummary from the
-// team endpoint, cut short, for the followed team's record's place.
+// Pro standing: ESPN's playoffSeed and standingSummary, cut short.
 static void test_standings() {
   struct Doc {
     const char *file;
@@ -4056,7 +4021,7 @@ static void test_standings() {
       {"fixtures/team_nba_ind.json", 5, "2nd Cent"},      {"fixtures/team_nhl_edm.json", 4, "2nd Pac"},
       {"fixtures/team_nhl_pit_post.json", 8, "3rd Metro"}, {"fixtures/team_wnba_ny.json", 4, "4th East"},
       {"fixtures/team_epl_ars.json", 0, "2nd EPL"},       {"fixtures/team_mls_mia.json", 0, "3rd MLS"},
-      // A week into the season ESPN had DAL's seed and no summary yet.
+      // Early season, ESPN had DAL's seed but no summary.
       {"fixtures/team_nfl_dal.json", 4, ""},              {"fixtures/team_ncaa_bc.json", 0, "3rd ACC"},
   };
   for (const auto &d : docs) {
@@ -4067,8 +4032,7 @@ static void test_standings() {
   }
   CHECK_EQ(place_short("1st in NFC East"), std::string("1st NFCE"));
   CHECK_EQ(place_short("2nd in AFC North"), std::string("2nd AFCN"));
-  // ESPN gives some NFL teams their conference's place, by its full name:
-  // the initials keep "Conference".
+  // ESPN spells out NFL conferences; initials keep "Conference".
   CHECK_EQ(place_short("14th in National Football Conference"), std::string("14th NFC"));
   CHECK_EQ(place_short("3rd in American Football Conference"), std::string("3rd AFC"));
   CHECK_EQ(place_short("4th in Eastern Conference Division"), std::string("4th East"));
@@ -4102,12 +4066,11 @@ static void test_standings() {
   CHECK_EQ(odd.team_record, std::string("2-1"));
 
   CHECK_EQ(standing_text(Standing::SEED, 4, "1st NFCE"), std::string("Seed 4"));
-  CHECK_EQ(standing_text(Standing::SEED, 0, "1st NFCE"), std::string(""));  // the record
+  CHECK_EQ(standing_text(Standing::SEED, 0, "1st NFCE"), std::string(""));  // falls back to the record
   CHECK_EQ(standing_text(Standing::PLACE, 4, "1st NFCE"), std::string("1st NFCE"));
   CHECK_EQ(standing_text(Standing::PLACE, 4, ""), std::string(""));
   CHECK_EQ(standing_text(Standing::RECORD, 4, "1st NFCE"), std::string(""));
-  // Under a logo on two panels: 7 characters, so a longer place drops its
-  // space, else keeps the place alone; beside a 10-character clock, 6.
+  // 7 characters under a logo, 6 beside a long clock.
   const size_t row = record_row_chars(0), beside = record_row_chars(10 * kClockCharPx);
   CHECK_EQ(board_standing("Seed 12", row), std::string("Seed 12"));
   CHECK_EQ(board_standing("2nd Pac", row), std::string("2nd Pac"));
@@ -4124,8 +4087,7 @@ static void test_standings() {
   CHECK_EQ(board_standing("10th West", 3), std::string(""));
   CHECK_EQ(board_standing("", row), std::string(""));
 
-  // The ticker: the followed team's standing in its record's place, the
-  // opponent's record as it was.
+  // Ticker: our standing replaces our record; theirs unchanged.
   GameSnapshot chi;
   CHECK(parse_scoreboard_str(slurp("fixtures/scoreboard_nfl_wild_card.json"), "401772981", 3, chi));
   TickerOptions o;
@@ -4139,9 +4101,7 @@ static void test_standings() {
   CHECK_EQ(status_text(a, placed, ""),
            std::string("Full time | Goals ARS 58' Guimaraes, 90'+7' Saka (P) | Red cards SUN 1 | ARS 2nd EPL | W-D-L SUN 1-1-2"));
 
-  // A cup's team read ranks the club in the cup's own table under the
-  // league's name: on a Champions League night ARS is 2nd in the Premier
-  // League, not 15th.
+  // ESPN's cup read ranks the cup table, not the league.
   Schedule league, cup;
   CHECK(parse_team_str(slurp("fixtures/team_epl_ars.json"), league));
   CHECK(parse_team_str(slurp("fixtures/team_ucl_ars.json"), cup));
@@ -4167,8 +4127,7 @@ static void test_standings() {
   league_standing(alone);  // no cups: nothing to do
   CHECK_EQ(alone[0].place, std::string("2nd EPL"));
 
-  // A read whose seed goes unused (a college team's, a cup's) leaves the
-  // record's stats out: no seed, the rest as before.
+  // An unused seed leaves the record's stats out.
   Schedule bare;
   const std::string atl = slurp("fixtures/team_mlb_atl.json");
   CHECK(parse_team(atl, bare, false));
@@ -4177,19 +4136,14 @@ static void test_standings() {
   CHECK_EQ(bare.team_record, std::string("94-68"));
 }
 
-// The record row under each logo on two panels beside the clock: 36 px of
-// spleen_8 (5 px a character, 7 characters) at the board's edge, the clock in
-// spleen_12 (6 px) centered on the 128 px board. A 10-character clock leaves
-// 6 characters, so a ranked 7-character record drops its rank there.
+// Two panels: a 10-character clock leaves records 6 characters.
 static void test_record_row() {
   CHECK_EQ(record_row_chars(0), (size_t) 7);
-  CHECK_EQ(record_row_chars(9 * kClockCharPx), (size_t) 7);   // "12:34 2nd"
+  CHECK_EQ(record_row_chars(9 * kClockCharPx), (size_t) 7);   // a clock like "12:34 2nd"
   CHECK_EQ(record_row_chars(10 * kClockCharPx), (size_t) 6);  // "End of 2nd"
   CHECK_EQ(record_row_chars(11 * kClockCharPx), (size_t) 5);
   CHECK_EQ(record_row_chars(0, 128, 36, 0), (size_t) 0);  // a font the panel couldn't measure
-  // Where each row's text lands as LVGL centers it (the clock's label is 64
-  // px at x 32): a pixel clear of the clock's text on both sides, for every
-  // clock up to the label's 10 characters.
+  // LVGL-centered rows clear the clock text by a pixel.
   for (int chars = 1; chars <= 10; chars++) {
     const int clock_px = chars * kClockCharPx;
     const int t = (int) record_row_chars(clock_px) * kRecordCharPx;
@@ -4199,9 +4153,7 @@ static void test_record_row() {
     CHECK(left_end < clock_left);
     CHECK(right_start > clock_right);
   }
-  // #16 MSST at #22 LSU at the end of the 2nd quarter: the clock reads "End
-  // of 2nd", so the records under the logos keep to 6 characters and the
-  // ranks drop out until the clock runs again.
+  // "End of 2nd" clock: 6-character records, ranks drop.
   GameSnapshot msst;
   CHECK(parse_scoreboard_str(slurp("fixtures/day_ncaa_20261017.json"), "401856720", 344, msst));
   CHECK_EQ(clock_text(msst), std::string("End of 2nd"));
@@ -4218,11 +4170,7 @@ static void test_record_row() {
   // Before and after the game, no clock: 7.
   CHECK_EQ(rank_label(msst.opp_rank, msst.opp_record, record_row_chars(0)), std::string("#22 4-2"));
 
-  // Three and four panels in a row (192 and 256 px): the rows stay 36 px at
-  // the board's edges and the clock's label runs from x 32 to 32 px short of
-  // the right edge, so every clock the panel sends (up to 10 characters, "End
-  // of 2nd" or a countdown) is far from both rows and they keep all 7
-  // characters. A 2x2's board is the 128 px one.
+  // Three or four panels: records keep all 7 characters.
   using esphome::gameday::board_px;
   CHECK_EQ(board_px(1), 64);
   CHECK_EQ(board_px(2), kBoardPx);
@@ -4244,20 +4192,14 @@ static void test_record_row() {
   }
   CHECK_EQ(rank_label(msst.team_rank, msst.team_record, record_row_chars(10 * kClockCharPx, board_px(3))),
            std::string("#16 4-1"));
-  // A pro team's place keeps its group beside "End of 2nd" there.
+  // A pro place keeps its group beside "End of 2nd".
   CHECK_EQ(board_standing("1st NFCE", record_row_chars(10 * kClockCharPx, board_px(4))), std::string("1stNFCE"));
   CHECK_EQ(board_standing("1st NFCE", record_row_chars(10 * kClockCharPx, board_px(2))), std::string("1st"));
-  // The idle display's countdown to a game sits where the clock does: "in
-  // 23h 59m" is 10 characters, so on 128 px a ranked record keeps clear of
-  // it the same way.
+  // Countdowns take the clock's place, at most 10 characters.
   CHECK_EQ(countdown_text(23 * 3600 + 59 * 60).size(), (size_t) 10);
   CHECK_EQ(record_row_chars((int) countdown_text(23 * 3600 + 59 * 60).size() * kClockCharPx), (size_t) 6);
 
-  // The clock row the record rows are sized beside (board_clock_text): the
-  // game clock during play, and My team today's countdown before a kickoff
-  // that has a time. A pro team's place under its logo keeps clear of the
-  // countdown like a rank: "1st NFCE" beside "in 11h 20m" is "1st" on 128
-  // px, all seven characters on three or four panels.
+  // Records size beside board_clock_text: game clock or countdown.
   const int64_t now = 1794000000;
   GameSnapshot today = live(0, 0, GameState::PRE);
   today.kickoff_epoch = now + 11 * 3600 + 20 * 60;
@@ -4270,15 +4212,15 @@ static void test_record_row() {
   CHECK_EQ(standing_beside(today, now, board_px(3)), std::string("1stNFCE"));
   CHECK_EQ(standing_beside(today, now, board_px(4)), std::string("1stNFCE"));
   CHECK_EQ(board_standing("Seed 10", record_row_chars(10 * kClockCharPx)), std::string("Seed10"));
-  // A shorter countdown leaves the seven: "in 9h 5m" is 8 characters.
+  // "in 9h 5m" is 8 characters: all seven fit.
   CHECK_EQ(standing_beside(today, today.kickoff_epoch - (9 * 3600 + 5 * 60), kBoardPx), std::string("1stNFCE"));
-  // No countdown without a kickoff time, or without the time of day.
+  // No countdown without a kickoff time of day.
   GameSnapshot tbd = today;
   tbd.time_tbd = true;
   CHECK_EQ(board_clock_text(tbd, true, now), std::string(""));
   CHECK_EQ(board_clock_text(today, true, 0), std::string(""));
   CHECK_EQ(standing_beside(tbd, now, kBoardPx), std::string("1stNFCE"));
-  // During play the game clock, countdown or not; nothing after the final.
+  // Game clock during play; nothing after the final.
   GameSnapshot on = live(7, 3);
   on.sport = Sport::FOOTBALL;
   on.short_detail = "End of 2nd";
@@ -4287,9 +4229,7 @@ static void test_record_row() {
   CHECK_EQ(board_clock_text(live(7, 3, GameState::POST), true, now), std::string(""));
 }
 
-// The parts of the scoreboard page that change with the arrangement
-// (board_layout.h): a splash over the whole screen with its words and
-// fireworks in 64 rows, and what a 2x2's bottom half shows.
+// Splash and 2x2 bottom half by arrangement (board_layout.h).
 static void test_board_layout() {
   using namespace esphome::gameday;
   struct Screen {
@@ -4301,18 +4241,17 @@ static void test_board_layout() {
     CHECK_EQ(b.height, sc.h);  // the whole screen, a 2x2's bottom half too
     CHECK(b.band_y >= 0 && b.band_y + kBoardRows <= sc.h);
     CHECK_EQ(b.band_y * 2 + kBoardRows, sc.h);  // the middle rows
-    // The 128 px fireworks canvas in the middle, clipped on one panel.
+    // 128 px fireworks canvas centered, clipped on one panel.
     if (sc.w >= kFxPx) {
       CHECK_EQ(b.fx_x * 2 + kFxPx, sc.w);
     } else {
       CHECK_EQ(b.fx_x, 0);
     }
-    // Three lines of the words' font end inside the 64 rows: spleen_16 on a
-    // wide board, spleen_12 on one panel.
+    // Three lines of splash text fit in 64 rows.
     const int line = sc.w >= 128 ? 16 : 12;
     CHECK(b.text_y >= b.band_y && b.text_y + 3 * line <= b.band_y + kBoardRows);
   }
-  // On a board of 64 rows nothing moves: as it was before the 2x2.
+  // 64-row boards keep their original splash positions.
   CHECK_EQ(splash_box(128, 64).text_y, 16);
   CHECK_EQ(splash_box(64, 64).text_y, 18);
   CHECK_EQ(splash_box(256, 64).fx_x, 64);
@@ -4322,31 +4261,25 @@ static void test_board_layout() {
   CHECK_EQ(splash_chars(192), (size_t) 24);
   CHECK_EQ(splash_chars(256), (size_t) 32);
 
-  // The heat and power warning's 9 rows along the bottom of the screen:
-  // over the ticker on one row of panels, as before, and on a 2x2 along its
-  // bottom edge. The board's own ticker shows on one row of panels only; a
-  // 2x2 has it once, in its bottom half.
+  // The 9-row heat warning sits at the screen's bottom.
   CHECK_EQ(guard_line_y(kBoardRows), 55);
   CHECK_EQ(guard_line_y(2 * kBoardRows), 119);
   CHECK(board_ticker(kBoardRows));
   CHECK(!board_ticker(2 * kBoardRows));
 
-  // A 2x2's bottom half. With the board up: the time, the date and the
-  // ticker, the ticker ending above the warning's line.
+  // 2x2 bottom half: time, date, ticker above the warning.
   const LowerHalf board = lower_half(false, false);
   CHECK(board.time && board.date);
   CHECK_EQ(board.date_y, 23);
   CHECK_EQ(board.ticker_y, 39);
   CHECK(lower_half(false, true).time);  // card_date only counts under the clock card
-  // Under the clock card no time twice, and the date only when the card has
-  // the next game in its place.
+  // Clock card: no second time; date only with next game.
   for (bool card_date : {false, true}) {
     const LowerHalf l = lower_half(true, card_date);
     CHECK(!l.time);
     CHECK_EQ(l.date, !card_date);
   }
-  // Nothing overlaps, everything ends inside the 64 rows, and what shows is
-  // centered there.
+  // No overlaps, all within 64 rows, and centered.
   for (bool card : {false, true})
     for (bool card_date : {false, true}) {
       const LowerHalf l = lower_half(card, card_date);
@@ -4354,23 +4287,19 @@ static void test_board_layout() {
       CHECK(!l.time || kLowerTimeY + kLowerTimeRows <= l.date_y);
       CHECK(!l.date || l.date_y + kLowerDateRows <= l.ticker_y);
       CHECK(l.ticker_y + kLowerTickerRows <= kBoardRows);
-      // The warning's line, on the screen's bottom rows, never cuts the
-      // ticker's letters off.
+      // The warning line never clips the ticker's letters.
       CHECK(kBoardRows + l.ticker_y + kLowerTickerRows <= guard_line_y(2 * kBoardRows));
       if (card)
         CHECK_EQ(top + (l.ticker_y + kLowerTickerRows), kBoardRows);
     }
 }
 
-// Where the board renderer (board_view.cpp) puts the game layout's widgets
-// on each width (board_layout.h, game_geom): the places the page has always
-// used, and nothing in the way of anything else.
+// Game layout widget places per width, none overlapping.
 static void test_game_geom() {
   using namespace esphome::gameday;
   auto at = [](const Spot &s, int x, int y, int w) { return s.x == x && s.y == y && s.w == w; };
 
-  // One panel: logos side by side, the abbreviations (or the clock while
-  // the game is on) and the scores stacked under them.
+  // One panel: logos side by side, text stacked below.
   const GameGeom one = game_geom(64);
   CHECK(!one.wide);
   CHECK_EQ(one.logo_x[0], 0);
@@ -4384,16 +4313,16 @@ static void test_game_geom() {
   CHECK_EQ(one.clock_time_y, 14);
   CHECK_EQ(one.clock_sub_y, 34);
   CHECK_EQ(one.ticker_y, 56);
-  // The bases between the scores, the outs as dots under them
+  // Bases between the scores, outs as dots below.
   CHECK_EQ(one.base_px, 3);
   CHECK(one.base_x[0] == 35 && one.base_y[0] == 47);  // first, on the right
   CHECK(one.base_x[1] == 31 && one.base_y[1] == 43);
   CHECK(one.base_x[2] == 27 && one.base_y[2] == 47);
   CHECK(one.out_x[0] == 27 && one.out_x[1] == 31 && one.out_x[2] == 35 && one.out_y == 51);
-  // No room for records, pips or the situation row: hidden, with no place
+  // No room for records, pips or situation: hidden.
   CHECK(at(one.rec[0], 0, 0, 0) && at(one.down, 0, 0, 0) && at(one.count, 0, 0, 0));
 
-  // Two, three and four panels: logos at the edges, two columns between them.
+  // Wider boards: logos at the edges, two columns between.
   struct Wide {
     int w, colw, opp_logo, home_col, home_rec, mid_w, home_pip, count_w;
   };
@@ -4424,9 +4353,7 @@ static void test_game_geom() {
     CHECK(g.base_x[2] == half - 7 && g.base_y[2] == 51);
     CHECK(at(g.count, 32, 48, e.count_w));
     CHECK(at(g.outs, half + 9, 48, 28));
-    // The columns sit between the logos, side by side; the records and
-    // pips under the logos; the count and the outs either side of the
-    // diamond, clear of it; everything on the board and above the ticker.
+    // No overlaps, all on the board above the ticker.
     CHECK(g.abbr[0].x >= g.logo_x[0] + 32 && g.abbr[0].x + g.abbr[0].w <= g.abbr[1].x);
     CHECK(g.abbr[1].x + g.abbr[1].w <= g.logo_x[1]);
     CHECK(g.rec[1].x + g.rec[1].w == e.w);
@@ -4436,12 +4363,12 @@ static void test_game_geom() {
     CHECK(g.down.y + 8 <= g.ticker_y);
   }
 
-  // A team color the board can show: dark ones lifted, black white.
+  // Dark team colors are lifted; black becomes white.
   CHECK_EQ(lift_color(0x000000, 0xC0), 0xFFFFFFu);
   CHECK_EQ(lift_color(0xFFFFFF, 0xC0), 0xFFFFFFu);
   CHECK_EQ(lift_color(0xC00000, 0xC0), 0xC00000u);
   CHECK_EQ(lift_color(0x800000, 0xC0), 0xC00000u);
-  CHECK_EQ(lift_color(0x002244, 0xC0), 0x0060C0u);  // in proportion
+  CHECK_EQ(lift_color(0x002244, 0xC0), 0x0060C0u);  // lifted in proportion
   CHECK_EQ(lift_color(0x101010, 0xE0), 0xE0E0E0u);
   CHECK_EQ(lift_color(0xD00000, 0xE0), 0xE00000u);
   CHECK_EQ(lift_color(0xE01020, 0xE0), 0xE01020u);
@@ -6531,7 +6458,7 @@ static void test_panel_text() {
   CHECK_EQ(panel_text("a\xC2\xA0" "b\xE2\x80\x89" "c"), std::string("a b c"));
   CHECK_EQ(panel_text("a\xE2\x80\x8B" "b\xC2\xAD" "c\xEF\xBB\xBF"), std::string("abc"));
   CHECK_EQ(panel_text("line\none\ttwo"), std::string("line one two"));
-  // A splash keeps its line break ("PHI" over "FUMBLE RECOVERY"), nothing else.
+  // A splash keeps only its line break.
   CHECK_EQ(panel_text("PHI\nFUMBLE RECOVERY", true), std::string("PHI\nFUMBLE RECOVERY"));
   CHECK_EQ(panel_text("a\r\nb\tc", true), std::string("a \nb c"));
   CHECK_EQ(panel_text("Mu\xC3\xB1oz\nGOAL", true), std::string("Mu\xC3\xB1oz\nGOAL"));
@@ -7628,8 +7555,7 @@ static void test_racing_urls() {
     }
   }
   CHECK(lpga < kTeamCount && f1 == lpga + 1 && nascar == lpga + 2);
-  // Appended: every earlier option keeps its place. Only leagues added later
-  // (minor league baseball) come after.
+  // Appended so every earlier option keeps its place.
   for (size_t i = nascar + 1; i < kTeamCount; i++)
     CHECK((int) kTeams[i].league > (int) League::NASCAR);
 }
@@ -8403,13 +8329,12 @@ static void test_racing_timing() {
 
 // ---- The idle display (idle.h) ----------------------------------------------
 
-// The night hours: start included, end not, across midnight when the end is
-// earlier, and none at all when they are the same.
+// Night hours: start included, end excluded, wrapping midnight.
 static void test_idle_night_window() {
   const int ten_pm = 22 * 60, seven_am = 7 * 60;
   CHECK(in_night(ten_pm, ten_pm, seven_am));
   CHECK(in_night(23 * 60 + 59, ten_pm, seven_am));
-  CHECK(in_night(0, ten_pm, seven_am));  // midnight
+  CHECK(in_night(0, ten_pm, seven_am));  // minute 0 is midnight
   CHECK(in_night(seven_am - 1, ten_pm, seven_am));
   CHECK(!in_night(seven_am, ten_pm, seven_am));
   CHECK(!in_night(12 * 60, ten_pm, seven_am));
@@ -8420,10 +8345,10 @@ static void test_idle_night_window() {
   CHECK(!in_night(360, 60, 360));
   CHECK(!in_night(59, 60, 360));
   CHECK(!in_night(23 * 60, 60, 360));
-  // The same start and end is no night hours, not all day.
+  // Equal start and end means no night, not all day.
   for (int m = 0; m < kDayMinutes; m += 37)
     CHECK(!in_night(m, 600, 600));
-  // 10 PM to 7 AM is nine hours, minute by minute across midnight.
+  // 10 PM to 7 AM is nine hours.
   int night = 0;
   for (int m = 0; m < kDayMinutes; m++)
     night += in_night(m, ten_pm, seven_am) ? 1 : 0;
@@ -8433,14 +8358,13 @@ static void test_idle_night_window() {
   CHECK(!in_night(0, 23 * 60 + 59, 0));
 }
 
-// What shows: the mode's board while a followed game is on, the owner's
-// choice when nothing is, and at night the quiet version of it.
+// Followed game shows the board; otherwise the owner's choice.
 static void test_idle_state() {
   IdleInputs in;
   in.clock_valid = true;
   in.board_ready = true;
   in.connected = true;
-  in.minute = 14 * 60;  // 2 PM
+  in.minute = 14 * 60;  // 2 PM, daytime
   in.night_on = true;
   in.night_start = 22 * 60;
   in.night_end = 7 * 60;
@@ -8448,8 +8372,7 @@ static void test_idle_state() {
     in.show = (uint8_t) show;
     return idle_state(in);
   };
-  // A panel that never chose: the mode's own board, day and night alike
-  // until the night hours (then the clock).
+  // Never chose: the mode's board, the clock at night.
   CHECK(view(IdleShow::NEXT).view == IdleView::BOARD);
   CHECK(!view(IdleShow::NEXT).night);
   CHECK(view(IdleShow::CLOCK).view == IdleView::CLOCK);
@@ -8457,18 +8380,15 @@ static void test_idle_state() {
   CHECK(view(IdleShow::TODAY).view == IdleView::TODAY);
   IdleState off = view(IdleShow::OFF);
   CHECK(off.view == IdleView::CLOCK && off.dim && !off.night);
-  // A followed game on (or its final's wait, or Follow this game): the board,
-  // whatever the choice.
+  // A followed game shows the board, whatever the choice.
   in.busy = true;
   for (int s = 0; s < kIdleCount; s++) {
     IdleState st = view((IdleShow) s);
     CHECK(st.view == IdleView::BOARD && !st.dim && !st.night);
   }
-  // At night: the scores and the mode's board give way to the clock; My team
-  // today and Off or dim stay. A followed game still shows, in the night
-  // hours (night brightness).
+  // At night scores and board yield to the clock.
   in.minute = 23 * 60;
-  CHECK(view(IdleShow::SCORES).view == IdleView::BOARD);  // busy
+  CHECK(view(IdleShow::SCORES).view == IdleView::BOARD);  // a followed game wins
   CHECK(view(IdleShow::SCORES).night);
   in.busy = false;
   CHECK(view(IdleShow::NEXT).view == IdleView::CLOCK);
@@ -8482,8 +8402,7 @@ static void test_idle_state() {
   CHECK(!view(IdleShow::SCORES).night);
   CHECK(view(IdleShow::SCORES).view == IdleView::SCORES);
   CHECK(view(IdleShow::NEXT).view == IdleView::BOARD);
-  // No clock yet: nothing can be decided, so the mode's board at the owner's
-  // brightness, night hours or not.
+  // No clock yet: the mode's board at owner brightness.
   in.night_on = true;
   in.clock_valid = false;
   for (int s = 0; s < kIdleCount; s++) {
@@ -8498,10 +8417,7 @@ static void test_idle_state() {
   CHECK(std::string(idle_view_key(IdleView::BOARD)).empty());
   CHECK_EQ(std::string(idle_view_key(IdleView::TODAY)), std::string("today"));
 
-  // Before the first board after a restart or a new team or mode: the boot
-  // screen and that board stay up, but the night hours and Off or dim go by
-  // the clock alone. An overnight update's restart at 3 AM stays dark or at
-  // the night brightness.
+  // Before the first board: a 3 AM restart stays dark.
   in.board_ready = false;
   in.minute = 3 * 60;
   off = view(IdleShow::OFF);
@@ -8512,8 +8428,7 @@ static void test_idle_state() {
   in.minute = 14 * 60;
   off = view(IdleShow::OFF);
   CHECK(off.view == IdleView::BOARD && off.dim && !off.night);
-  // Off Wi-Fi the panel's screens about getting connected stay lit (at the
-  // night brightness in the night hours), and the view is as it would be.
+  // Off Wi-Fi, connection screens stay lit, even at night.
   in.board_ready = true;
   in.connected = false;
   off = view(IdleShow::OFF);
@@ -8523,52 +8438,50 @@ static void test_idle_state() {
   CHECK(!off.dim && off.night);
   in.connected = true;
   CHECK(view(IdleShow::OFF).dim);
-  // A followed game still wins at night, before the first board too.
+  // A followed game wins at night, even before boards.
   in.busy = true;
   in.board_ready = false;
   off = view(IdleShow::OFF);
   CHECK(off.view == IdleView::BOARD && !off.dim && off.night);
 }
 
-// The owner's Brightness change in the night hours holds until they end, not
-// through a moment without the time or the first board after a change.
+// A night brightness change holds until the night hours end.
 static void test_idle_night_override() {
   NightOverride o;
   o.update(true, false);
   o.brightness_changed(false);  // in the day: nothing to hold
   CHECK(!o.on);
-  o.update(true, true);  // 10 PM
+  o.update(true, true);  // 10 PM, night
   CHECK(!o.on);
   o.brightness_changed(true);
   CHECK(o.on);
   o.update(true, true);
   CHECK(o.on);
-  // The time unknown for a while (the night reads false then): still theirs
+  // Time briefly unknown: the owner's change still holds.
   o.update(false, false);
   CHECK(o.on);
   o.update(true, true);
   CHECK(o.on);
-  // 7 AM: the hours end, and the next night starts at the night brightness
+  // 7 AM ends it; next night starts fresh.
   o.update(true, false);
   CHECK(!o.on);
   o.update(true, true);
   CHECK(!o.on);
-  // The hours ending while the time was unknown end the change too.
+  // Night ending while time was unknown ends it too.
   o.brightness_changed(true);
   o.update(false, false);
   o.update(true, false);
   CHECK(!o.on);
-  // After a restart in the night hours the change is gone, as before.
+  // A restart at night drops the change.
   NightOverride boot;
   boot.update(true, true);
   CHECK(!boot.on);
 }
 
-// Whether the mode's own game keeps the panel, from plain values: the live
-// against idle decision behind every idle display.
+// Whether the mode's game keeps the panel from idle.
 static void test_idle_busy() {
   const int64_t now = parse_iso8601_z("2026-11-08T23:00Z");
-  BusyInputs my;  // My team
+  BusyInputs my;  // in My team mode
   my.valid = true;
   my.now = now;
   my.kickoff = now - 3600;
@@ -8582,10 +8495,9 @@ static void test_idle_busy() {
   none.valid = false;
   none.state = GameState::IN;
   CHECK(!idle_busy(none));
-  // In progress: busy.
   my.state = GameState::IN;
   CHECK(idle_busy(my));
-  // The final: the half hour after the panel saw it end, once.
+  // Final: busy for the half hour after it's seen.
   my.state = GameState::POST;
   CHECK(!idle_busy(my));  // no wait started (not read as a final yet)
   my.post_seen = true;
@@ -8597,7 +8509,7 @@ static void test_idle_busy() {
   my.post_age_ms = 30 * 60 * 1000;
   CHECK(!idle_busy(my));
   my.post_age_ms = 0;
-  my.lingered = true;  // the team endpoint still names a final that had its wait
+  my.lingered = true;  // the endpoint still names an already-lingered final
   CHECK(!idle_busy(my));
   my.lingered = false;
   // Baseball's ten minutes
@@ -8607,10 +8519,7 @@ static void test_idle_busy() {
   my.linger_ms = 30 * 60 * 1000;
   my.post_age_ms = 60 * 1000;
 
-  // Right after a restart: a final the panel only read as one. Last night's
-  // game, which ESPN still names at the 3 AM restart of an overnight update,
-  // gets no new wait, so Off or dim stays dark and the clock comes straight
-  // back. One that started under four hours ago may have just ended: its wait.
+  // After a restart, old finals get no new wait.
   my.saw_play = false;
   my.kickoff = parse_iso8601_z("2026-11-08T01:20Z");  // 7:20 PM Central the evening before
   my.now = parse_iso8601_z("2026-11-08T09:00Z");      // 3 AM Central
@@ -8621,14 +8530,13 @@ static void test_idle_busy() {
   CHECK(!idle_busy(my));
   my.kickoff = 0;  // no start time known: nothing says it is new
   CHECK(!idle_busy(my));
-  // A final the panel saw end keeps its wait however long the game ran.
+  // A final seen ending keeps its wait regardless.
   my.saw_play = true;
   my.kickoff = my.now - 6 * 3600;
   CHECK(idle_busy(my));
   my.now = now;
 
-  // Live games: its own pick until its next look moves on after the final;
-  // the finals rotation follows no game; the team card is like My team.
+  // Live games: busy with its pick until it moves on.
   BusyInputs live = my;
   live.live_mode = true;
   live.state = GameState::IN;
@@ -8638,9 +8546,7 @@ static void test_idle_busy() {
   CHECK(idle_busy(live));
   live.state = GameState::PRE;
   CHECK(!idle_busy(live));
-  // A game the scan picked, before its first read lands: its board was
-  // cleared for that read, and the scan saw it in progress, so the clock or
-  // Off or dim doesn't come up at each Switch every.
+  // A picked game is busy before its first read lands.
   BusyInputs picked = live;
   picked.valid = false;
   picked.state = GameState::NOT_FOUND;
@@ -8667,8 +8573,7 @@ static void test_idle_busy() {
   live.saw_play = true;
   CHECK(idle_busy(live));
 
-  // Favorite teams: a favorite that took over (Take over before kickoff, the
-  // game, After the final) or one in progress; the playlist alone is idle.
+  // Favorites: busy when one takes over; the playlist is idle.
   BusyInputs fav;
   fav.favorites = true;
   fav.now = now;
@@ -8683,7 +8588,7 @@ static void test_idle_busy() {
   fav.state = GameState::IN;  // the card on the board is the playlist's
   CHECK(!idle_busy(fav));
 
-  // Follow this game, and the demo's scripted game, hold whatever else.
+  // Follow this game and the demo hold regardless.
   BusyInputs hold;
   hold.hold = true;
   CHECK(idle_busy(hold));
@@ -8691,9 +8596,7 @@ static void test_idle_busy() {
   hold.recap = true;
   CHECK(idle_busy(hold));
 
-  // A golf tour or a racing series: busy while a round or session is on, not
-  // overnight between rounds or between a weekend's sessions, and for the
-  // half hour after its final, not the day or two ESPN keeps it.
+  // Leaderboards: busy on course, 30 minutes after the final.
   BusyInputs golf;
   golf.valid = true;
   golf.leaderboard = true;
@@ -8720,24 +8623,21 @@ static void test_idle_busy() {
   CHECK(!idle_busy(golf));
 }
 
-// My team today's final after a restart, and the records with the ranks.
 static void test_idle_today_final() {
-  const int64_t day = parse_iso8601_z("2026-11-08T06:00Z");  // midnight Central
-  // The team read names a final that started today, later than the one kept
-  // (none, yesterday's, or a doubleheader's first): read it.
+  const int64_t day = parse_iso8601_z("2026-11-08T06:00Z");  // midnight US Central
+  // Read today's final when newer than the kept one.
   const int64_t seven_pm = day + 19 * 3600;
   CHECK(want_today_final(day, true, seven_pm, 0));
   CHECK(want_today_final(day, true, day, 0));
   CHECK(want_today_final(day, true, seven_pm, day - 5 * 3600));
   CHECK(want_today_final(day, true, seven_pm, day + 13 * 3600));
-  // Already kept, yesterday's, not a final, or My team today off.
+  // Kept, yesterday's, not final, or My team today off.
   CHECK(!want_today_final(day, true, seven_pm, seven_pm));
   CHECK(!want_today_final(day, true, day - 60, 0));
   CHECK(!want_today_final(day, false, seven_pm, 0));
   CHECK(!want_today_final(0, true, seven_pm, 0));
 
-  // The ranks come with a game, and My team today's records line (the
-  // ticker's own, records_line) puts each side's in front of it.
+  // My team today's records line puts ranks first.
   GameSnapshot fin = hoops_event("fixtures/event_mcbb_final.json", kMichigan);
   CHECK_EQ((int) fin.team_rank, 1);
   CHECK_EQ((int) fin.opp_rank, 2);
@@ -8768,7 +8668,7 @@ static void test_idle_brightness() {
   CHECK_EQ((int) idle_brightness(128, dark, 20, 0, false), 0);
   dark.night = true;
   CHECK_EQ((int) idle_brightness(128, dark, 20, 0, false), 0);
-  // Dim: the dim level, never brighter than the panel would be anyway.
+  // Dim: the dim level, never brighter than otherwise.
   IdleState dim;
   dim.dim = true;
   CHECK_EQ((int) idle_brightness(128, dim, 20, 30, false), 30);
@@ -8776,20 +8676,19 @@ static void test_idle_brightness() {
   dim.night = true;
   CHECK_EQ((int) idle_brightness(128, dim, 20, 30, false), 20);
   CHECK_EQ((int) idle_brightness(128, dim, 40, 30, false), 30);
-  // The remote's brightness buttons wait while Off or dim holds the panel
-  // below what it would have: dark, or a dim level under the brightness.
+  // Remote brightness buttons wait while Off or dim caps.
   CHECK(idle_caps(128, dark, 20, 0, false));
   IdleState day_dim;
   day_dim.dim = true;
   CHECK(idle_caps(128, day_dim, 20, 30, false));
   CHECK(!idle_caps(20, day_dim, 20, 30, false));  // 20 shows as 20: a step shows
   CHECK(!idle_caps(30, day_dim, 20, 30, false));
-  CHECK(!idle_caps(128, IdleState{}, 20, 0, false));  // not idle
+  CHECK(!idle_caps(128, IdleState{}, 20, 0, false));  // not idle: no cap
   CHECK(!idle_caps(128, night, 20, 0, false));        // the night hours alone
   CHECK(!idle_caps(128, dim, 20, 30, false));  // night 20 is under the dim level 30
   CHECK(idle_caps(128, dim, 40, 30, false));
   CHECK(idle_caps(128, dim, 20, 30, true));  // the owner's 128 tonight, held at 30
-  // Then the heat and power guard on top, as guard_brightness() does it.
+  // The heat and power guard applies on top.
   CHECK_EQ((int) guarded_brightness(idle_brightness(200, night, 100, 0, false), 0, true), (int) kPowerCap);
 }
 
@@ -8797,7 +8696,7 @@ static void test_idle_countdown() {
   CHECK_EQ(countdown_text(2 * 3600 + 15 * 60), std::string("in 2h 15m"));
   CHECK_EQ(countdown_text(2 * 3600), std::string("in 2h"));
   CHECK_EQ(countdown_text(45 * 60), std::string("in 45m"));
-  // Rounded up: a game 30 seconds away is a minute away, never "in 0m".
+  // Rounded up, never "in 0m".
   CHECK_EQ(countdown_text(30), std::string("in 1m"));
   CHECK_EQ(countdown_text(61), std::string("in 2m"));
   CHECK_EQ(countdown_text(2 * 3600 - 1), std::string("in 2h"));
@@ -8834,8 +8733,7 @@ static void test_idle_hhmm() {
     CHECK_EQ(parse_hhmm(clock_hhmm(m)), m);
 }
 
-// The zone for these tests' local_day(): TZ for the host's mktime, a
-// POSIX rule like the ones in timezones_parsed.h. Put back afterwards.
+// Sets TZ for mktime, restored afterwards.
 struct ScopedTz {
   std::string old;
   bool had{false};
@@ -8856,9 +8754,7 @@ struct ScopedTz {
   }
 };
 
-// Today in the zone tz, the way the panel works it out: its local time now,
-// and each midnight from its date. mktime with tm_isdst -1 stands in for the
-// time component's conversion, which matches it (ESPTime::recalc_timestamp_local).
+// mktime with tm_isdst -1 mirrors the panel's conversion.
 static LocalDay idle_day(int64_t now, const char *tz) {
   ScopedTz z(tz);
   time_t t = (time_t) now;
@@ -8883,8 +8779,7 @@ static TodayGame idle_game(GameState state, const char *kick, bool tbd = false) 
   return g;
 }
 
-// My team today: the game today counts down, its final stays until local
-// midnight, and a day without one is the clock, all in the panel's zone.
+// Today is computed in the panel's own zone.
 static void test_idle_today() {
   // November: standard time in both
   const char *central = "CST6CDT,M3.2.0,M11.1.0", *utc = "UTC0", *berlin = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -8899,16 +8794,14 @@ static void test_idle_today() {
   CHECK_EQ(d.start, parse_iso8601_z("2026-11-08T06:00Z"));
   CHECK_EQ(d.end, parse_iso8601_z("2026-11-09T06:00Z"));
 
-  // The final, until local midnight: at 11:59 PM yes, at 12:01 AM the clock.
+  // The final stays until local midnight, then the clock.
   std::vector<TodayGame> final_only = {idle_game(GameState::POST, "2026-11-09T01:00Z")};
   CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T05:59Z"), central)), 0);
   CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T06:01Z"), central)), -1);
-  // A late game that ends past midnight is the day it started: the clock
-  // the next day.
+  // A game past midnight belongs to its start day.
   CHECK_EQ(today_pick(final_only, idle_day(parse_iso8601_z("2026-11-09T07:30Z"), central)), -1);
 
-  // A doubleheader: the second game counts down once the first is over, then
-  // its own final is the one that stays.
+  // Doubleheader: game 2 counts down, then its final stays.
   std::vector<TodayGame> two = {idle_game(GameState::POST, "2026-11-08T19:00Z"),
                                 idle_game(GameState::PRE, "2026-11-09T00:10Z")};
   CHECK_EQ(today_pick(two, d), 1);
@@ -8917,9 +8810,9 @@ static void test_idle_today() {
   two[0].kickoff = parse_iso8601_z("2026-11-09T02:00Z");  // the later one wins
   CHECK_EQ(today_pick(two, d), 0);
 
-  // Favorites: the first game today that hasn't ended, whoever plays it.
+  // Favorites: today's first unfinished game, whoever plays.
   std::vector<TodayGame> favs = {idle_game(GameState::PRE, "2026-11-09T03:00Z"),
-                                 idle_game(GameState::PRE, "2026-11-10T01:00Z"),  // tomorrow
+                                 idle_game(GameState::PRE, "2026-11-10T01:00Z"),  // tomorrow, not today
                                  idle_game(GameState::PRE, "2026-11-08T21:00Z"),
                                  idle_game(GameState::POST, "2026-11-08T17:00Z")};
   CHECK_EQ(today_pick(favs, d), 2);
@@ -8928,28 +8821,25 @@ static void test_idle_today() {
   favs[0].state = GameState::POST;
   CHECK_EQ(today_pick(favs, d), 0);  // the latest final today
 
-  // No game today, a game with nothing to show, and one ESPN dropped.
+  // No game today, an empty game, an ESPN-dropped one.
   std::vector<TodayGame> none = {idle_game(GameState::PRE, "2026-11-12T01:00Z"), TodayGame{},
                                  idle_game(GameState::NOT_FOUND, "2026-11-08T20:00Z")};
   CHECK_EQ(today_pick(none, d), -1);
   CHECK_EQ(today_pick({}, d), -1);
 
-  // A game with no time yet sits at midnight Eastern of its day: Sunday's is
-  // today in Central, though its placeholder is Saturday evening there.
+  // TBD placeholders are midnight Eastern, Saturday evening in Central.
   std::vector<TodayGame> tbd = {idle_game(GameState::PRE, "2026-11-08T05:00Z", true)};
   CHECK_EQ(today_pick(tbd, d), 0);
   tbd[0].tbd = false;
   CHECK_EQ(today_pick(tbd, d), -1);  // with a real time, 11 PM Saturday Central
 }
 
-// The days the clocks change are 23 and 25 hours long: a Saturday 11 PM final
-// is yesterday's on the spring Sunday, and midnight to 1 AM is today on the
-// fall one. US Central's 2026 changes are March 8 and November 1.
+// DST days are 23 and 25 hours long.
 static void test_idle_dst_day() {
   const char *chicago = "CST6CDT,M3.2.0,M11.1.0";
-  LocalDay spring = idle_day(parse_iso8601_z("2026-03-08T17:00Z"), chicago);  // noon CDT
-  CHECK_EQ(spring.start, parse_iso8601_z("2026-03-08T06:00Z"));               // midnight CST
-  CHECK_EQ(spring.end, parse_iso8601_z("2026-03-09T05:00Z"));                 // midnight CDT
+  LocalDay spring = idle_day(parse_iso8601_z("2026-03-08T17:00Z"), chicago);  // at noon CDT
+  CHECK_EQ(spring.start, parse_iso8601_z("2026-03-08T06:00Z"));               // local midnight CST
+  CHECK_EQ(spring.end, parse_iso8601_z("2026-03-09T05:00Z"));                 // local midnight CDT
   std::vector<TodayGame> sat = {idle_game(GameState::POST, "2026-03-08T05:15Z")};  // Sat 11:15 PM CST
   CHECK_EQ(today_pick(sat, spring), -1);
   sat[0].kickoff = parse_iso8601_z("2026-03-08T06:30Z");  // Sun 12:30 AM CST
@@ -8957,16 +8847,16 @@ static void test_idle_dst_day() {
   // Either side of 2 AM, the same day
   CHECK_EQ(idle_day(parse_iso8601_z("2026-03-08T07:59Z"), chicago).start, spring.start);
   CHECK_EQ(idle_day(parse_iso8601_z("2026-03-08T08:00Z"), chicago).start, spring.start);
-  // 11:59 PM CDT is still Sunday, 12:00 AM Monday is not
+  // 11:59 PM CDT is Sunday; 12:00 AM is Monday.
   CHECK_EQ(idle_day(parse_iso8601_z("2026-03-09T04:59Z"), chicago).start, spring.start);
   CHECK_EQ(idle_day(parse_iso8601_z("2026-03-09T05:00Z"), chicago).start, spring.end);
   LocalDay sat_day = idle_day(parse_iso8601_z("2026-03-07T18:00Z"), chicago);
   CHECK_EQ(sat_day.end - sat_day.start, (int64_t) 86400);
   CHECK_EQ(sat_day.end, spring.start);
 
-  LocalDay fall = idle_day(parse_iso8601_z("2026-11-01T18:00Z"), chicago);  // noon CST
-  CHECK_EQ(fall.start, parse_iso8601_z("2026-11-01T05:00Z"));               // midnight CDT
-  CHECK_EQ(fall.end, parse_iso8601_z("2026-11-02T06:00Z"));                 // midnight CST
+  LocalDay fall = idle_day(parse_iso8601_z("2026-11-01T18:00Z"), chicago);  // at noon CST
+  CHECK_EQ(fall.start, parse_iso8601_z("2026-11-01T05:00Z"));               // local midnight CDT
+  CHECK_EQ(fall.end, parse_iso8601_z("2026-11-02T06:00Z"));                 // local midnight CST
   std::vector<TodayGame> early = {idle_game(GameState::POST, "2026-11-01T05:30Z")};  // 12:30 AM CDT
   CHECK_EQ(today_pick(early, fall), 0);
   early[0].kickoff = parse_iso8601_z("2026-11-01T04:30Z");  // Sat 11:30 PM CDT
@@ -8978,7 +8868,7 @@ static void test_idle_dst_day() {
   CHECK_EQ(mon.start, fall.end);
   CHECK_EQ(mon.end - mon.start, (int64_t) 86400);
 
-  // The next midnight across a month's and a year's end, and a leap day.
+  // Midnights across month and year ends, and leap day.
   LocalDay nye = idle_day(parse_iso8601_z("2026-12-31T18:00Z"), chicago);
   CHECK_EQ(nye.start, parse_iso8601_z("2026-12-31T06:00Z"));
   CHECK_EQ(nye.end, parse_iso8601_z("2027-01-01T06:00Z"));
@@ -8986,7 +8876,7 @@ static void test_idle_dst_day() {
   CHECK_EQ(feb.end, parse_iso8601_z("2028-02-29T06:00Z"));
   CHECK_EQ(idle_day(parse_iso8601_z("2027-02-28T18:00Z"), chicago).end, parse_iso8601_z("2027-03-01T06:00Z"));
   CHECK_EQ(idle_day(parse_iso8601_z("2026-04-30T18:00Z"), chicago).end, parse_iso8601_z("2026-05-01T05:00Z"));
-  // Midnight conversions that make no sense: 24 hours from the time of day.
+  // Nonsense midnight conversions fall back to 24 hours.
   struct tm odd {};
   odd.tm_year = 126;
   odd.tm_mon = 10;
@@ -8996,9 +8886,7 @@ static void test_idle_dst_day() {
   LocalDay fallback = local_day(two_pm, odd, [](int, int, int) -> int64_t { return -1; });
   CHECK_EQ(fallback.start, parse_iso8601_z("2026-11-08T00:00Z"));
   CHECK_EQ(fallback.end, parse_iso8601_z("2026-11-09T00:00Z"));
-  // A zone whose clocks jump at midnight itself (Chile, Saturday 24:00): the
-  // day still holds the time, whatever the C library makes of the missing
-  // midnight.
+  // Chile's clocks jump at midnight; the day still holds.
   const char *santiago = "<-04>4<-03>,M9.1.6/24,M4.1.6/24";
   const int64_t sun = parse_iso8601_z("2026-09-06T16:00Z");
   LocalDay jump = idle_day(sun, santiago);
@@ -9006,7 +8894,6 @@ static void test_idle_dst_day() {
   CHECK(jump.end - jump.start >= 22 * 3600 && jump.end - jump.start <= 26 * 3600);
 }
 
-// The leagues the idle display's scores read in My team and Favorite teams.
 static void test_idle_scan_leagues() {
   std::vector<League> live = {League::MLB, League::NHL};
   CHECK(scan_leagues((uint8_t) Mode::MY_TEAM, live).empty());
@@ -9015,7 +8902,7 @@ static void test_idle_scan_leagues() {
   CHECK(scan_leagues((uint8_t) Mode::FAVORITES, live, true) == live);
   CHECK(scan_leagues((uint8_t) Mode::LIVE, live, true) == live);
   CHECK(scan_leagues((uint8_t) Mode::LIVE_NFL, live, true) == std::vector<League>{League::NFL});
-  // A golf tour with no favorites has no league to read: no NFL stand-in.
+  // A golf tour without favorites reads no NFL stand-in.
   CHECK(live_leagues(0, (uint8_t) League::PGA, {}, false).empty());
   CHECK(live_leagues(0, (uint8_t) League::PGA, {}) == std::vector<League>{League::NFL});
   CHECK(live_leagues(0, 0xFF, {(uint8_t) League::NBA}, false) == std::vector<League>{League::NBA});

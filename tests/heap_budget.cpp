@@ -152,10 +152,7 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
-// The big-play watcher's read of a day scoreboard (watch.h, run_watch_job_)
-// in Live games, with every game on it marked on, so each is read in full
-// and kept as a WatchGame. A game on its own is read as the poll_*_event
-// cases are.
+// Every game marked on, so each is read in full.
 static void watch_day(const char *name, const std::string &file, League league) {
   std::string json;
   {
@@ -174,9 +171,7 @@ static void watch_day(const char *name, const std::string &file, League league) 
   });
 }
 
-// The same with favorite players in the league (players.h): the read keeps
-// their leader lines and the last play's athletes too. ids are the
-// favorites, those in the game first.
+// ids: the favorites, those in the game first.
 static void event_players(const char *name, const std::string &file, Sport sport,
                           std::initializer_list<uint32_t> ids) {
   std::string json = slurp("fixtures/" + file);
@@ -221,8 +216,7 @@ int main() {
   event("poll_nba_event", "event_nba_live.json", Sport::BASKETBALL);
   event("poll_nhl_event", "event_nhl_live.json", Sport::HOCKEY);
   event("poll_soccer_event", "event_soccer_second_half.json", Sport::SOCCER);
-  // Eight favorites in the league, as many of them leaders in the game as
-  // ESPN lists.
+  // Worst case: eight favorites, as many leaders as ESPN lists.
   event_players("poll_ncaa_event_players", "event_ncaa_live.json", Sport::FOOTBALL,
                 {4870883, 5122157, 4879999, 5079684, 1, 2, 3, 4});
   event_players("poll_mlb_event_players", "event_mlb_hr.json", Sport::BASEBALL,
@@ -232,9 +226,6 @@ int main() {
   event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
                 {199680, 205448, 1, 2, 3, 4, 5, 6});
 
-  // The watcher: an NFL Sunday's 16 games, a baseball and a soccer day, and
-  // a college conference's Saturday (the scoreboard that finds a college
-  // favorite's game).
   watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
   watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
   watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);
@@ -279,8 +270,7 @@ int main() {
       return parse_team(json, s);
     });
   }
-  // The largest team read: an MLB team's record carries over a hundred stats,
-  // kept for the Standing setting's seed.
+  // Largest team read: an MLB record has 100+ stats.
   {
     std::string json = slurp("fixtures/team_mlb_mil_live.json");
     measure("team_mlb", [&] {
@@ -311,13 +301,9 @@ int main() {
     });
   }
 
-  // Minor league baseball, from the MLB Stats API (source_mlbstats.h): a
-  // team read of twelve days with the Up next list, the far read of next
-  // season's first 88 games, the game poll (three dated entries for a game
-  // postponed twice, the largest), and a full day's scan at four levels.
+  // Minor league baseball: each read at its largest.
   {
-    // As read before the trip: every game not started yet, so the Up next
-    // list fills up.
+    // Every game unstarted, so the Up next list fills.
     std::string json = slurp("fixtures/mlbstats_team_dur_202604.json");
     for (size_t at = json.find("\"codedGameState\":\"F\""); at != std::string::npos;
          at = json.find("\"codedGameState\":\"F\"", at))
@@ -353,10 +339,7 @@ int main() {
     });
   }
 
-  // The AHL and the ECHL, from HockeyTech's feed (source_hockeytech.h): the
-  // team read (a scorebar of six games) with the Up next list, the game
-  // centre's clock (the shootout final, the largest), and a full Saturday's
-  // sixteen finals with every goal, the largest day.
+  // AHL and ECHL: each read at its largest.
   {
     std::string json = slurp("fixtures/ht_team_ahl_syr.json");
     measure("team_hockeytech", [&] {

@@ -122,8 +122,7 @@ inline void panel_text_append_(std::string &out, uint32_t cp) {
   }
 }
 
-// lines: keep a "\n" as a line break, for a label of more than one line
-// (a big play's splash, "PHI" over "FUMBLE RECOVERY").
+// lines keeps "\n" breaks, for multi-line splash labels.
 inline std::string panel_text(const std::string &in, bool lines = false) {
   std::string out;
   out.reserve(in.size());

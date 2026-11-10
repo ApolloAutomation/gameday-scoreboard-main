@@ -54,9 +54,7 @@ void GamedayComponent::start_demo(uint8_t kind) {
   if (kind != (uint8_t) DemoKind::PRO && kind != (uint8_t) DemoKind::COLLEGE)
     return;
   ESP_LOGI(TAG, "Demo: starting %s, looping until stopped", kind_name(kind));
-  // From the live board, keep it to come back to (the mode's own, when
-  // another game's big play had it). Restarting from inside a run keeps the
-  // board saved when the run began.
+  // Save the live board; a restart mid-run keeps the original.
   if (this->visit_.active && this->visit_.saved)
     this->game_ = std::move(*this->visit_.saved);
   this->drop_visit_();

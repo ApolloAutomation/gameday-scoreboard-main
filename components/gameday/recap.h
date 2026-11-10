@@ -27,10 +27,7 @@ inline int32_t espn_day(int64_t epoch, uint8_t league) {
 // inside the day for either shift.
 inline int64_t espn_day_epoch(int32_t day) { return (int64_t) day * 86400 + 17 * 3600; }
 
-// Where the rotation keeps its days' lists. Internal RAM is the panel's
-// scarcest memory and a busy day of several leagues keeps a hundred finals,
-// so the panel points this at PSRAM; the host tests keep the default heap.
-// The panel's free takes either heap's memory.
+// Panel points this at PSRAM; internal RAM is scarce.
 struct RecapHeap {
   void *(*alloc)(size_t){nullptr};
   void (*release)(void *){nullptr};
@@ -195,7 +192,6 @@ inline void recap_trim(std::vector<RecapDay> &days, int64_t now) {
   days = std::move(kept);
 }
 
-// A league's bit in a set of leagues (recap_cards, recap_absorb).
 inline uint16_t recap_bit(uint8_t league) { return league < 16 ? (uint16_t) (1u << league) : 0; }
 
 // Shares cap between the leagues one card at a time, round and round, until
@@ -222,10 +218,8 @@ inline void recap_share(const size_t (&have)[kLeagueCount], size_t cap, size_t (
 // had for today, so the rotation fills up as games end and drops the ones
 // that started. A league with neither keeps its days, so a scan that failed
 // for one league never empties it. Each league keeps only the games to come
-// its share of a loop could show, since every one is internal RAM. scanned
-// is the leagues the scan read (recap_bit() each): a scan of one league
-// shares the games to come with the ones the others kept from theirs, and
-// leaves those alone.
+// its share of a loop could show, since every one is internal RAM.
+// Leagues outside scanned (recap_bit mask) keep their games.
 inline void recap_absorb(std::vector<RecapDay> &days, const std::vector<Final> &finals,
                          const std::vector<Pending> &pending, int64_t now, uint16_t scanned = 0xFFFF) {
   size_t have[kLeagueCount] = {}, keep[kLeagueCount];

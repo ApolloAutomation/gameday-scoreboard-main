@@ -390,7 +390,7 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
     }
     win = detail::win_splash(cur, neutral, us, them);
   }
-  // The play that ended the game beats the win; anything else waits for none.
+  // A game-ending play outranks the win splash.
   const BigPlay p = detect_big_play(prev, cur, alerts, opponent_splashes);
   if (p.type != Alert::NONE &&
       (win.text.empty() || p.type == Alert::WALK_OFF || p.type == Alert::BUZZER_BEATER))
@@ -413,7 +413,7 @@ void add_part(std::string &out, const std::string &part) {
   out += part;
 }
 
-// "#5 OSU 9-1", "DAL Seed 4", "MICH 8-2"; "" with neither a record nor a rank.
+// "#5 OSU 9-1", "DAL Seed 4"; "" with neither.
 static std::string side_line(uint8_t rank, const std::string &abbr, const std::string &rec) {
   if (rec.empty() && rank == 0)
     return "";
@@ -462,7 +462,6 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
   // false. Only a completed game has a winner.
   if (!cur.completed)
     return Splash{};
-  // The winner's logo with "WINS!"
   auto win = [](const std::string &abbr, const std::string &color) {
     return Splash{abbr + " WINS!", parse_color(color), abbr, false, (uint8_t) (abbr.size() < 255 ? abbr.size() + 1 : 0),
                   ""};
@@ -477,9 +476,7 @@ Splash win_splash(const GameSnapshot &cur, bool neutral, int us, int them) {
 void fill_game_filter(JsonObject ev, Sport sport) {
   fill_event_filter(ev);
   if (sport == Sport::FOOTBALL) {
-    // An interception or a lost fumble (alerts.h): what the play was, which
-    // play, and who has the ball after it, which ESPN sends even when it
-    // leaves possession out around a score.
+    // ESPN sends end.team even when possession is missing.
     JsonObject lp = ev["competitions"][0]["situation"]["lastPlay"];
     lp["type"]["text"] = true;
     lp["id"] = true;
@@ -584,9 +581,7 @@ std::string place_short(const std::string &summary) {
       if (group == k[0])
         group = k[1];
   } else {
-    // Two words, the first in capitals ("NFC East", "NL Cent"): the
-    // conference and the direction's letter. Otherwise the initials
-    // ("English Premier League": "EPL").
+    // "NFC East" is "NFCE"; else initials, "EPL".
     bool caps = sp > 0 && group.find(' ', sp + 1) == std::string::npos;
     for (size_t i = 0; i < sp; i++)
       caps = caps && isupper((unsigned char) group[i]);
@@ -612,8 +607,7 @@ size_t record_row_chars(int clock_px, int board_px, int row_px, int char_px) {
   if (row_px <= 0 || char_px <= 0)
     return 0;
   size_t n = (size_t) (row_px / char_px);
-  // LVGL centers a line at the label's x plus half the room left over
-  // (rounded down); the clock's label is centered on the board.
+  // Mirrors LVGL centering, which rounds the leftover down.
   const int clock_left = board_px / 2 - (clock_px + 1) / 2;
   while (clock_px > 0 && n > 0 && (row_px - (int) n * char_px) / 2 + (int) n * char_px >= clock_left)
     n--;
@@ -677,8 +671,7 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
     add_part(out, "RED ZONE");
   if (o.down_distance && !football_break(s))
     add_part(out, s.down_distance);
-  // Break words ESPN has left in shortDetail once play is under way give way
-  // to the clock the panel shows.
+  // ESPN leaves stale break words in shortDetail; show the clock.
   const bool words = s.short_detail.find(':') == std::string::npos;
   const std::string clock =
       words && (s.resumed || clock_running(s) || s.short_detail.find("Halftime") != std::string::npos)
@@ -711,7 +704,7 @@ std::string ha_status_text(const GameSnapshot &s, const std::string &kickoff_loc
       out = s.completed || s.short_detail.empty() ? std::string("Final") : s.short_detail;
       break;
     case GameState::IN:
-      // Football's halftime goes by ESPN's status and plays; other sports keep their words.
+      // Football's halftime comes from status and plays, not words.
       out = (s.sport == Sport::FOOTBALL ? is_halftime(s) : s.short_detail.find("Halftime") != std::string::npos)
                 ? "Halftime"
                 : "Live";
@@ -942,18 +935,15 @@ std::string play_clock(const std::string &p) {
   return c == "0:00" ? "" : c;
 }
 
-// The period as the panel counts it: a resumed halftime is the 3rd quarter,
-// or the 4th when ESPN's seconds left say so.
+// A resumed halftime counts as the 3rd quarter.
 static int board_period(const GameSnapshot &s) {
   if (!s.resumed || s.period >= 3)
     return s.period;
   return s.play_secs_left >= 0 && s.play_secs_left < 900 ? 4 : 3;
 }
 
-// 1 for the first half, 2 for the second, then one per overtime period.
 static int timeout_half(int period) { return period <= 2 ? 1 : (period <= 4 ? 2 : period - 2); }
 
-// A play's clock in seconds, -1 when it has none.
 static int play_secs(const std::string &last_play) {
   const std::string c = play_clock(last_play);
   if (c.empty())
@@ -962,20 +952,19 @@ static int play_secs(const std::string &last_play) {
   return atoi(c.substr(0, colon).c_str()) * 60 + atoi(c.substr(colon + 1).c_str());
 }
 
-// Halftime or the end of the 2nd or 4th quarter, by ESPN's status alone.
+// By ESPN's status alone, ignoring plays.
 static bool break_now(const GameSnapshot &s) {
   if (s.sport != Sport::FOOTBALL || s.state != GameState::IN || s.resumed)
     return false;
   if (is_halftime(s))
     return true;
-  // ESPN also ends a half as STATUS_IN_PROGRESS, "End of 2nd" at 0:00
+  // ESPN may end a half as IN_PROGRESS at 0:00.
   const bool ended = s.status_name == "STATUS_END_PERIOD" ||
                      (s.short_detail.rfind("End of", 0) == 0 && s.display_clock == "0:00");
   return ended && (s.period == 2 || s.period >= 4);
 }
 
-// ESPN's words between plays, not a play: empty, "End of 2nd quarter.",
-// "END QUARTER 2", "End of Half", "Halftime".
+// ESPN's between-play words, which aren't plays.
 static bool break_words(const std::string &p) {
   return p.empty() || p.rfind("End of", 0) == 0 || p.rfind("END ", 0) == 0 || p.find("Halftime") != std::string::npos;
 }
@@ -985,19 +974,14 @@ static bool kickoff(const std::string &p) {
   return p.find("ickoff") != std::string::npos || p.find("kicks") != std::string::npos;
 }
 
-// A play from after the break that began in break_period. After halftime a
-// late first-half play can still arrive, so it needs ESPN's seconds left
-// under 1800 (or the 3rd quarter's kickoff), a clock later than any seen in
-// the break (10:00 or later when none was), or a kickoff text. After the 4th
-// quarter or an overtime, any new play.
+// A late first-half play can still arrive after halftime.
 static bool after_break(const GameSnapshot &s, int break_period, const std::string &break_play, int break_secs) {
   if (break_words(s.last_play) || s.last_play == break_play)
     return false;
   if (break_period != 2)
     return true;
   const int secs = play_secs(s.last_play);
-  // 1800 left is also a first-half kickoff whose return ran out the clock, so
-  // only a 15:00 or clockless kickoff counts there
+  // 1800 left can be a first-half kickoff return too.
   if (s.play_secs_left >= 0)
     return s.play_secs_left < 1800 ||
            (s.play_secs_left == 1800 && (secs == 900 || (secs < 0 && kickoff(s.last_play))));
@@ -1006,11 +990,9 @@ static bool after_break(const GameSnapshot &s, int break_period, const std::stri
   return kickoff(s.last_play);
 }
 
-// The last play is still the first half's: ESPN's seconds left say so, or it
-// has no figure and is ESPN's end-of-half words.
 static bool first_half_play(const GameSnapshot &s) {
   if (s.play_secs_left >= 0) {
-    // At 1800 left the 3rd quarter's own kickoff (15:00 or clockless) isn't
+    // At 1800, the 3rd quarter's own kickoff isn't.
     const int secs = play_secs(s.last_play);
     return s.play_secs_left > 1800 ||
            (s.play_secs_left == 1800 && secs != 900 && !(secs < 0 && kickoff(s.last_play)));
@@ -1026,7 +1008,7 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   const bool was_held = game && prev.held;
   if (next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
     if (game && prev.resumed && !first_half_play(next))
-      next.resumed = true;  // until ESPN's status catches up, or its plays go back to the first half's
+      next.resumed = true;  // until ESPN's status catches up
     else
       next.resumed = after_break(next, 2, was_held ? prev.break_play : std::string(), was_held ? prev.break_secs : -1);
   }
@@ -1042,12 +1024,12 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   };
   if (next.state == GameState::IN && !next.resumed) {
     const int secs = play_secs(next.last_play);
-    // A late first-half play in the break moves its marks along
+    // A late first-half play moves the break's marks.
     const bool late = was_held && !break_words(next.last_play) && next.last_play != prev.break_play && secs >= 0;
     if (was_held && break_now(next)) {
       hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
     } else if (was_held && clock_running(next) && next.period == prev.break_period) {
-      // time put back in the break's own period: play goes on
+      // ESPN put time back in the period: play goes on
     } else if (was_held && !after_break(next, prev.break_period, prev.break_play, prev.break_secs)) {
       hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
     } else if (!was_held && break_now(next)) {
@@ -1060,9 +1042,9 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
   const int now_p = board_period(next), had_p = board_period(prev);
   const bool same = game && timeout_half(had_p) == timeout_half(now_p);
   const bool resting = next.state == GameState::IN && next.held && !break_now(next);
-  // The second half before its first play: ESPN still sends the first half's counts
+  // ESPN sends first-half counts until the second half's first play.
   const bool leftovers = resting && next.break_period == 2 && (now_p == 3 || now_p == 4);
-  // An overtime before its first play: the last period's counts, which don't apply
+  // Overtime starts with the last period's stale counts.
   const bool stale_ot = resting && next.break_period >= 4 && now_p > next.break_period;
   next.to_guess = 0;
   auto fill = [&](int had, uint8_t bit, int &now) {
@@ -1072,12 +1054,12 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
       now = -1;
       return;
     } else if (now >= 0) {
-      return;  // ESPN's
+      return;  // ESPN's own count
     } else if (same && had >= 0 && !(prev.to_guess & bit)) {
       now = had;
       return;  // ESPN's from an earlier poll
     } else if (same && had >= 0 && (had_p == now_p || (prev.state == GameState::PRE && now_p <= 1))) {
-      now = had;  // a guess carries only within its period, or from before kickoff into the 1st
+      now = had;  // a guess carries only within its period
     } else if (next.state == GameState::PRE) {
       now = 3;
     } else {
@@ -1115,7 +1097,7 @@ std::string clock_text(const GameSnapshot &s) {
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
   bool special = s.short_detail.find(':') == std::string::npos;  // Halftime, End of 3rd, Delayed, Final
   if (s.resumed) {
-    // ESPN's status is stuck at halftime; the latest play has the clock
+    // ESPN's status sticks at halftime; plays have the clock.
     const std::string c = play_clock(s.last_play);
     return c.empty() ? period_name(board_period(s)) : c + " " + period_name(board_period(s));
   }

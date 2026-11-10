@@ -141,7 +141,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     for (League l : scan_leagues(mode, live))
       if (league_info(l) == nullptr)
         abort();
-    // The idle display's scores, which read no league for a lone golf tour
+    // Idle scores; a lone golf tour reads no league.
     for (League l : scan_leagues(mode, live_leagues(mask, team_league, fav_leagues, false), true))
       if (league_info(l) == nullptr)
         abort();

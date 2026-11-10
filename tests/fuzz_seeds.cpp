@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
       JsonArray dates = doc["dates"];  // an MLB Stats schedule's
       while (dates.size() > kMaxEvents)
         dates.remove(kMaxEvents);
-      for (const char *list : {"Scorebar", "Gamesbydate"}) {  // HockeyTech's
+      for (const char *list : {"Scorebar", "Gamesbydate"}) {  // HockeyTech's two game lists
         JsonArray games = doc["SiteKit"][list];
         while (games.size() > kMaxEvents)
           games.remove(kMaxEvents);

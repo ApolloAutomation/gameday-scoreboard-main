@@ -1,7 +1,4 @@
-// Minor league hockey from HockeyTech's feed: URLs, filters and the parse
-// into the shared snapshot types (source_hockeytech.h). Pure, no ESPHome
-// includes. Built for size, as sport_golf.cpp is: it runs once a poll at
-// most. Only GCC has the pragma.
+// Built for size (-Os): it runs once a poll.
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize("Os")
 #endif
@@ -21,7 +18,6 @@ using detail::text;
 
 namespace {
 
-// The leagues' keys and client codes (ht_set_feed), from the YAML.
 struct Feed {
   League league;
   const char *key;
@@ -38,17 +34,14 @@ const Feed *feed_of(League league) {
 
 const char *const kFeed = "https://lscluster.hockeytech.com/feed/index.php?feed=";
 
-// The team read's games around today: one back, five ahead (today's first).
 const int kTeamBack = 1, kTeamAhead = 5;
-// A game not started this long after its listed start is left over from a
-// past day (a status never updated): not the game to show. A game with no
-// start time yet sits at midnight Eastern, so its day has to be over.
+// The feed leaves stale statuses on past days' games.
 const int64_t kStaleStart = 18 * 3600, kStaleTbd = 30 * 3600;
 const int64_t kEastern = 5 * 3600;
 
 bool has(const std::string &s, const char *part) { return s.find(part) != std::string::npos; }
 
-// The feed sends its numbers as strings ("4"); a number passes too.
+// The feed sends numbers as strings ("4").
 long num(JsonVariantConst v) {
   if (v.is<long long>())
     return (long) v.as<long long>();
@@ -58,7 +51,7 @@ long num(JsonVariantConst v) {
 long num(JsonVariantConst v, const char *key) { return num(field(v, key)); }
 int bounded(long v, int hi) { return v < 0 ? 0 : v > hi ? hi : (int) v; }
 
-// "1st", "2nd", "3rd", "OT", then "2OT", "3OT" for the playoffs' overtimes.
+// Playoff overtimes are "2OT", "3OT" and so on.
 std::string period_word(int p) {
   static const char *const kWords[] = {"", "1st", "2nd", "3rd", "OT"};
   if (p <= 4)
@@ -66,8 +59,7 @@ std::string period_word(int p) {
   return std::to_string(p - 3) + "OT";
 }
 
-// "Final", "Final/OT", "Final/SO", "Final/2OT": the words ESPN's NHL finals
-// use, which the ticker and the finals rotation expect.
+// ESPN's NHL final words, which the ticker expects.
 std::string final_text(bool shootout, int period) {
   if (shootout)
     return "Final/SO";
@@ -84,8 +76,7 @@ const char *off_word(const std::string &code, const std::string &words) {
   return "Postponed";
 }
 
-// "12:34" from the game centre's "00:12:34" or the scorebar's "12:34", ""
-// for anything else.
+// Game centre sends "00:12:34", the scorebar "12:34".
 std::string clock_text(const std::string &c) {
   int h = 0, m = 0, s = 0;
   int n = sscanf(c.c_str(), "%3d:%3d:%3d", &h, &m, &s);
@@ -104,22 +95,19 @@ std::string clock_text(const std::string &c) {
   return buf;
 }
 
-// "10-3-1": wins, regulation losses, and overtime and shootout losses
-// together, the way the NHL counts them.
+// OT and shootout losses together, as the NHL counts.
 std::string record(long w, long l, long otl, long sol) {
   return std::to_string(bounded(w, 999)) + "-" + std::to_string(bounded(l, 999)) + "-" +
          std::to_string(bounded(otl + sol, 999));
 }
 
-// Midnight Eastern of a start's day: the placeholder ESPN uses for a game
-// with no time yet, which the kickoff labels and tbd_day_epoch expect.
+// ESPN's placeholder for a game with no time yet.
 int64_t tbd_midnight(int64_t kick) {
   int64_t s = kick - kEastern;
   int64_t day = s >= 0 ? s / 86400 : (s - 86399) / 86400;
   return day * 86400 + kEastern;
 }
 
-// One side of a game, whichever read it came from.
 struct Side {
   uint32_t id{0};
   int score{0};
@@ -152,8 +140,7 @@ int64_t bar_start(JsonObjectConst g, bool &tbd) {
   return tbd && kick > 0 ? tbd_midnight(kick) : kick;
 }
 
-// The game centre has a shot or a goal in this period: it was played, so a
-// clock at zero is its end, not a clock not set yet.
+// A played period's zero clock is its end, not unset.
 bool period_played(JsonObjectConst c, int period) {
   const std::string p = std::to_string(period);
   long n = 0;
@@ -183,19 +170,14 @@ Side day_side(JsonObjectConst g, bool home) {
   return s;
 }
 
-// North American zones a game can be in: the standard offset in minutes,
-// whether the zone keeps daylight saving time, and whether it stopped
-// changing clocks on 1 November 2026. Anything else is Eastern.
+// Unknown zones fall back to Eastern.
 struct Zone {
   const char *city;
   int16_t minutes;
   bool dst;
   bool fixed_2026;
 };
-// British Columbia, Alberta and Manitoba kept summer time from 2 AM on
-// 1 November 2026 (local, as if it were UTC): UTC-7, -6 and -5 all year, as
-// the feed's own offsets and tzdata 2026f have them. Their days before that
-// keep the old rule.
+// BC, Alberta and Manitoba kept summer time from 2026-11-01.
 const int64_t kFixedFrom2026 = 1793498400;
 const Zone kZones[] = {
     {"St_Johns", -210, true, false},   {"Halifax", -240, true, false},     {"Moncton", -240, true, false},
@@ -205,9 +187,7 @@ const Zone kZones[] = {
     {"Anchorage", -540, true, false},
 };
 
-// A local time (as if it were UTC) inside daylight saving time, as the US and
-// Canada keep it: from 2 AM on March's second Sunday to 2 AM on November's
-// first.
+// US and Canada: second Sunday of March to November's first.
 bool in_dst(int64_t local) {
   int y = 0, m = 0, d = 0;
   detail::civil_from_epoch(local, y, m, d);
@@ -353,8 +333,8 @@ HtState ht_state(const std::string &code, const std::string &words, bool started
     case 3:  // over, not yet made official
     case 4:
       return HtState::FINAL;
-    case 8:  // postponed
-    case 9:  // suspended
+    case 8:  // status 8: postponed
+    case 9:  // status 9: suspended
       return HtState::OFF;
     default:
       break;
@@ -383,8 +363,7 @@ void fill_ht_game_filter(JsonDocument &f) {
            "season_name", "venue", "home_goal_count", "visiting_goal_count"});
   for (const char *side : {"home_team", "visiting_team"})
     keep(c[side].to<JsonObject>(), {"team_id", "team_code"});
-  // Goals and shots by period, a few dozen bytes: whether a period was
-  // played, and the shootout's "SO" entry
+  // A few dozen bytes; shows a period was played.
   keep(c, {"scoring", "shots_on_goal"});
 }
 
@@ -413,8 +392,7 @@ int ht_team_from_doc(JsonObjectConst root, uint32_t our_id, int64_t now, Schedul
     const std::string id = text(g, "ID");
     HtState st = ht_state(text(g, "GameStatus"), text(g, "GameStatusStringLong"));
     if (!id.empty() && st == HtState::FINAL && last_final != nullptr && !found) {
-      // The latest final listed before the game the read stops at, with the
-      // records the scorebar has now, which count it.
+      // Scorebar records already count this final.
       bool tbd = false;
       int64_t kick = bar_start(g, tbd);
       if (kick > 0 && (!last_final->valid || day_order(kick, tbd) >= day_order(last_final->kickoff_epoch,
@@ -483,8 +461,7 @@ bool ht_game_from_doc(JsonObjectConst root, League league, uint32_t our_id, Game
   s.nhl.playoffs = has(text(c, "season_name"), "Playoff");
   const int period = bounded(num(c, "period"), 20);
   const std::string progress = text(c, "progress"), pname = text(c, "period_name");
-  // A shootout decides only a regular-season game. The game centre leaves
-  // the period at OT and says so in its words and its scoring.
+  // The game centre keeps the period at OT in shootouts.
   const bool shootout = !s.nhl.playoffs && (has(progress, "SO") || has(pname, "SO") || has(pname, "Shootout") ||
                                             !c["scoring"]["home"]["SO"].isNull());
   switch (ht_state(text(c, "status"), progress, text(c, "started") == "1")) {
@@ -504,13 +481,12 @@ bool ht_game_from_doc(JsonObjectConst root, League league, uint32_t our_id, Game
       s.period = period > 0 ? period : 1;
       s.display_clock = clock_text(text(c, "game_clock"));
       if (s.display_clock == "0:00" && !period_played(c, s.period)) {
-        // Status 2 with the clock not set yet (the pre-game clock is zero):
-        // the period alone until it is.
+        // Status 2's pre-game clock is zero: show the period.
         s.display_clock.clear();
         s.short_detail = period_word(s.period);
         s.status_name = "STATUS_IN_PROGRESS";
       } else if (has(progress, "Intermission") || progress.rfind("End", 0) == 0 || s.display_clock == "0:00") {
-        // Between periods the clock sits at zero until the next one starts.
+        // Between periods the clock sits at zero.
         s.display_clock = "0:00";
         s.short_detail = "End of " + period_word(s.period);
         s.status_name = "STATUS_END_PERIOD";

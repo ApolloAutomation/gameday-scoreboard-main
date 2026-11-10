@@ -1,8 +1,4 @@
-// Favorite players (components/gameday/players.h): what a game read keeps
-// for them, their stat lines, who scored and the splash that names them, from
-// ESPN's own documents in fixtures/ with the play or the score moved on. The
-// player= and playerdel= keys themselves are in test_set.cpp and
-// fixtures/set_cases.json.
+// player= and playerdel= keys are tested in test_set.cpp.
 #include <ArduinoJson.h>
 
 #include <algorithm>
@@ -54,7 +50,6 @@ std::string slurp(const char *path) {
 constexpr uint8_t NFL = (uint8_t) League::NFL, NCAA = (uint8_t) League::NCAA, MLB = (uint8_t) League::MLB,
                   NBA = (uint8_t) League::NBA, NHL = (uint8_t) League::NHL, EPL = (uint8_t) League::EPL;
 
-// A list of favorites, the rest of the slots empty.
 struct List {
   FavPlayer p[kPlayerSlots]{};
   List(std::initializer_list<FavPlayer> players) {
@@ -63,7 +58,6 @@ struct List {
   }
 };
 
-// A game read the way the panel reads it with these favorites.
 GameSnapshot read_json(const std::string &json, Sport sport, uint32_t team, const List &list, uint8_t league) {
   GameSnapshot s;
   const PlayerWatch w = player_watch(list.p, league);
@@ -75,8 +69,7 @@ GameSnapshot read(const char *path, Sport sport, uint32_t team, const List &list
   return read_json(slurp(path), sport, team, list, league);
 }
 
-// One event of a scoreboard fixture, as the panel's own read of that game
-// gets it (the single-event document is the event).
+// A single-event document is the event itself.
 std::string event_of(const char *path, size_t i) {
   JsonDocument doc;
   PCHECK(!deserializeJson(doc, slurp(path), DeserializationOption::NestingLimit(40)));
@@ -90,7 +83,6 @@ std::string splash(const GameSnapshot &prev, const GameSnapshot &cur, uint8_t le
   return board_splash_with_players(prev, cur, theirs, neutral, alerts, wide, league, list.p).text;
 }
 
-// The points beside that splash's words
 std::string points(const GameSnapshot &prev, const GameSnapshot &cur, uint8_t league, const List &list) {
   return board_splash_with_players(prev, cur, true, false, kAlertsAll, false, league, list.p).points;
 }
@@ -110,7 +102,7 @@ void test_list() {
   PCHECK(player_valid(allen));
   PCHECK(player_put(list, allen) == 1);
   PCHECK(player_put(list, make_player(NFL, 15847, 12, "KELCE")) == 2);
-  // The same player again keeps their slot and takes the new name and team.
+  // Same player: keeps the slot, takes new name and team.
   PCHECK(player_put(list, make_player(NFL, 3918298, 12, "J. ALLEN")) == 1);
   PCHECK_EQ(list[0].name, "J. ALLEN");
   PCHECK(list[0].team_id == 12);
@@ -129,7 +121,7 @@ void test_list() {
   PCHECK(player_watch(list, MLB).n == 0);
   PCHECK(player_watch(list, NFL).n == 6);
 
-  // What flash can hand back that isn't a player: emptied at boot.
+  // Bad blobs from flash are emptied at boot.
   FavPlayer bad = allen;
   bad.team_id = 99999;
   PCHECK(!player_valid(bad));
@@ -139,7 +131,7 @@ void test_list() {
   bad = allen;
   bad.league = 200;
   PCHECK(!player_valid(bad));
-  // A minor league team is in the list, but its roster isn't ESPN's.
+  // Minor league rosters aren't ESPN's.
   bad = allen;
   bad.league = (uint8_t) League::MILB;
   bad.team_id = 234;
@@ -151,7 +143,7 @@ void test_list() {
   bad.team_id = 74;
   PCHECK(known_team(bad.league, bad.team_id) && !player_valid(bad));
   bad = allen;
-  memset(bad.name, 'A', sizeof(bad.name));  // no end
+  memset(bad.name, 'A', sizeof(bad.name));  // no terminating NUL
   PCHECK(!player_valid(bad));
   bad = allen;
   strcpy(bad.name, "allen");
@@ -178,7 +170,7 @@ void test_names() {
   PCHECK_EQ(clean_player_name("A\nB"), "");
   PCHECK_EQ(clean_player_name("   "), "");
   PCHECK_EQ(clean_player_name(""), "");
-  // A name needs a letter or a digit, and a run of spaces inside is one.
+  // Needs a letter or digit; inner spaces collapse.
   PCHECK_EQ(clean_player_name("-"), "");
   PCHECK_EQ(clean_player_name("..."), "");
   PCHECK_EQ(clean_player_name("' '"), "");
@@ -232,7 +224,7 @@ void test_read() {
   PCHECK(g.last_play == plain.last_play && g.team_score == plain.team_score && g.opp_score == plain.opp_score &&
          g.possession == plain.possession && g.play_side == plain.play_side);
 
-  // Soccer: each goal's scorer, only with a favorite in the league.
+  // Soccer: goal scorers, only with a league favorite.
   GameSnapshot epl;
   PCHECK(parse_event_str(slurp("fixtures/event_epl_final.json"), Sport::SOCCER, 359, epl));
   PCHECK(epl.soc.goals.size() == 2 && epl.soc.goals[0].athlete == 0);
@@ -278,8 +270,7 @@ void test_stat_lines() {
   sb.state = GameState::IN;
   PCHECK_EQ(joined(player_lines(sb, NFL, ne.p)), "MAYE 27/43, 295 YDS, 2 TD, 2 INT");
 
-  // Basketball: each team's leaders. ESPN's summary line when he leads it,
-  // else the categories he leads, with their units.
+  // Basketball: ESPN's summary line, else his categories with units.
   const List nba{make_player(NBA, 4396909, 11, "NESMITH"), make_player(NBA, 3032976, 16, "GOBERT"),
                  make_player(NBA, 4432816, 16, "BALL"), make_player(NBA, 5106060, 11, "WALKER"),
                  make_player(NBA, 4431671, 16, "MCDANIELS")};
@@ -299,7 +290,7 @@ void test_stat_lines() {
   // Baseball: the batting line, from whichever category names him.
   const List tb{make_player(MLB, 4917849, 30, "MESA JR."), make_player(MLB, 33912, 10, "BELLINGER")};
   GameSnapshot m = read("fixtures/event_mlb_hr.json", Sport::BASEBALL, 10, tb, MLB);
-  PCHECK(m.leaders.size() == 2);  // one line each, though ESPN lists Mesa Jr. in four categories
+  PCHECK(m.leaders.size() == 2);  // one line each, though ESPN lists him four times
   PCHECK_EQ(joined(player_lines(m, MLB, tb.p)), "MESA JR. 1-3, HR, 2 RBI, R, K | BELLINGER 0-2");
 
   // Hockey and soccer have no leaders.
@@ -311,8 +302,7 @@ void test_stat_lines() {
 
 void test_football() {
   const List fiu{make_player(NCAA, kResar, kFIU, "RESAR")};
-  // JXST 27, FIU 24, FIU's ball: Resar's 6-yard catch. The next read: his
-  // touchdown.
+  // JXST 27, FIU 24: Resar's catch, then his touchdown.
   GameSnapshot prev = read("fixtures/event_ncaa_live.json", Sport::FOOTBALL, kFIU, fiu, NCAA);
   GameSnapshot td = prev;
   td.play_id = "401871053766";
@@ -328,7 +318,7 @@ void test_football() {
   PCHECK_EQ(splash(prev, td, NCAA, fiu, false, 0), "");
   // The team's own switches don't matter to his.
   PCHECK_EQ(splash(prev, td, NCAA, fiu, false, alert_bit(Alert::PLAYER)), "RESAR\nTOUCHDOWN");
-  // Someone else's touchdown, no favorite at all, or a list for another league.
+  // Someone else's touchdown, no favorite, or another league's list.
   PCHECK_EQ(splash(prev, td, NCAA, List{make_player(NCAA, kKohl, kFIU, "KOHL")}), "TOUCHDOWN!");
   PCHECK_EQ(splash(prev, td, NCAA, List{}), "TOUCHDOWN!");
   PCHECK_EQ(splash(prev, td, NFL, fiu), "TOUCHDOWN!");
@@ -341,9 +331,7 @@ void test_football() {
   PCHECK_EQ(splash(prev, fg, NCAA, fiu), "RESAR\nFIELD GOAL");
   PCHECK_EQ(points(prev, td, NCAA, fiu), "+6");
   PCHECK_EQ(points(prev, fg, NCAA, fiu), "+3");
-  // A touchdown and his field goal in one read: the field goal's 3 beside
-  // its words, never the 9 the side gained; the team's splash, whose words
-  // are the 9's, keeps them.
+  // His field goal's 3, never the side's 9.
   GameSnapshot td_fg = fg;
   td_fg.team_score += 6;
   PCHECK_EQ(splash(prev, td_fg, NCAA, fiu), "RESAR\nFIELD GOAL");
@@ -354,9 +342,7 @@ void test_football() {
   fg_td.team_score += 3;
   PCHECK_EQ(splash(prev, fg_td, NCAA, fiu), "RESAR\nTOUCHDOWN");
   PCHECK_EQ(points(prev, fg_td, NCAA, fiu), "+6");
-  // A try is never his: its athletes are the touchdown's. A point read on
-  // its own after his touchdown is the team's extra point, a 2-point
-  // conversion the team's too.
+  // A try is never his: it lists the touchdown's athletes.
   GameSnapshot xp = td;
   xp.play_id = "401871053767";
   xp.play_points = 1;
@@ -370,8 +356,7 @@ void test_football() {
   PCHECK_EQ(splash(td, two, NCAA, fiu), "2-PT!");
   two.play_type = "Two Point Pass";
   PCHECK_EQ(splash(td, two, NCAA, fiu), "2-PT!");
-  // The NFL writes the try into the touchdown's play, its type the
-  // touchdown's: his touchdown, whatever points ESPN gives the play.
+  // The NFL folds the try into the touchdown's play.
   GameSnapshot nfl7 = prev;
   nfl7.play_id = "401871053780";
   nfl7.play_points = 7;
@@ -386,29 +371,26 @@ void test_football() {
   nfl8.last_play = "J.Resar up the middle for 30 yards, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. J.Resar rushes. ATTEMPT SUCCEEDS.";
   PCHECK_EQ(splash(prev, nfl8, NCAA, fiu), "RESAR\nTOUCHDOWN");
 
-  // A play that scored nothing (the kickoff after the score), the same play
-  // read again, or points in a read whose play is no new one: not his.
+  // No points, a reread, or an old play: not his.
   GameSnapshot kickoff = td;
   kickoff.play_points = 0;
   PCHECK_EQ(splash(prev, kickoff, NCAA, fiu), "TOUCHDOWN!");
   GameSnapshot same = td;
   same.play_id = prev.play_id;
   PCHECK_EQ(splash(prev, same, NCAA, fiu), "TOUCHDOWN!");
-  // The other side scored: his name is in the play, but his side didn't score.
+  // Named in the play, but the other side scored.
   GameSnapshot theirs = td;
   theirs.team_score = prev.team_score;
   theirs.opp_score += 6;
   PCHECK_EQ(splash(prev, theirs, NCAA, fiu), "JXST TOUCHDOWN");
-  // ESPN lists him on the side that didn't score (a safety, tackled in his
-  // own end zone): not his.
+  // A safety lists him on the side that didn't score.
   GameSnapshot safety = prev;
   safety.play_id = "401871053772";
   safety.play_points = 2;
   safety.opp_score += 2;
   safety.last_play = "J.Resar run for a loss of 3 yards, tackled in the end zone, SAFETY";
   PCHECK_EQ(splash(prev, safety, NCAA, fiu), "JXST SAFETY");
-  // The other side's favorite who scored is named, whether or not the
-  // other side's plays splash for the team.
+  // The other side's scoring favorite is always named.
   const List jx{make_player(NCAA, 5122157, kJXST, "CREEL")};
   GameSnapshot run = prev;
   run.play_id = "401871053773";
@@ -416,7 +398,7 @@ void test_football() {
   run.opp_score += 6;
   run.play_athletes = {PlayAthlete{5122157, kJXST}};
   PCHECK_EQ(splash(prev, run, NCAA, jx, false, kAlertsAll, false), "CREEL\nTOUCHDOWN");
-  // Before the game is on, or across a new game: nothing.
+  // Before the game, or across a new game: nothing.
   GameSnapshot pre = prev;
   pre.state = GameState::PRE;
   PCHECK_EQ(splash(pre, td, NCAA, fiu), "");
@@ -425,9 +407,7 @@ void test_football() {
   PCHECK_EQ(splash(prev, other, NCAA, fiu), "");
 }
 
-// ESPN's own college documents: the extra point is a play of its own, with an
-// id below zero, that lists the touchdown's scorer (TE Lacota Dippre, RB
-// Jamarion Morrow), never the kicker.
+// College extra points: own play, negative id, scorer listed.
 void test_college_try() {
   const char *day = "fixtures/day_ncaa_20261017.json";
   struct Case {
@@ -440,7 +420,7 @@ void test_college_try() {
     GameSnapshot xp = read_json(event_of(day, c.event), Sport::FOOTBALL, c.team, fav, NCAA);
     PCHECK(xp.state == GameState::IN && xp.play_points == 1 && xp.play_id[0] == '-');
     PCHECK(xp.play_athletes.size() == 1 && xp.play_athletes[0].id == c.scorer && xp.play_athletes[0].team == c.team);
-    // The read before: his touchdown. The one before that: the drive.
+    // Read before: his touchdown; before that, the drive.
     GameSnapshot td = xp;
     td.play_id = "401856724500";
     td.play_points = 6;
@@ -456,10 +436,9 @@ void test_college_try() {
     drive.last_play = "pass complete for 9 yards";
     const std::string name = c.name;
     PCHECK_EQ(splash(drive, td, NCAA, fav), name + "\nTOUCHDOWN");
-    // The extra point after it: the team's, not a second splash with his name.
+    // The extra point after it is the team's.
     PCHECK_EQ(splash(td, xp, NCAA, fav), "EXTRA POINT!");
-    // The touchdown and the extra point in one read: his touchdown, where
-    // the team's splash would be the touchdown too.
+    // Touchdown and extra point in one read: his touchdown.
     PCHECK_EQ(splash(drive, xp, NCAA, fav), name + "\nTOUCHDOWN");
     PCHECK_EQ(points(drive, xp, NCAA, fav), "+7");  // the touchdown and its try, as the team's
     PCHECK_EQ(splash(drive, xp, NCAA, fav, true), name + " TOUCHDOWN");
@@ -472,7 +451,7 @@ void test_college_try() {
     PCHECK_EQ(splash(drive, missed, NCAA, fav), name + "\nTOUCHDOWN");
     // A favorite kicker isn't named either: ESPN doesn't list him.
     PCHECK_EQ(splash(td, xp, NCAA, List{make_player(NCAA, 1, c.team, "KICKER")}), "EXTRA POINT!");
-    // A field goal and the try in one read is no touchdown of his.
+    // A field goal plus a try isn't his touchdown.
     GameSnapshot fg_try = drive;
     fg_try.team_score = xp.team_score - 3;
     PCHECK_EQ(splash(fg_try, xp, NCAA, fav), "FIELD GOAL!");
@@ -480,39 +459,38 @@ void test_college_try() {
 }
 
 void test_baseball() {
-  // NYY 2, TB 2: Mesa Jr.'s two-run home run for TB.
+  // NYY 2, TB 2: Mesa Jr.'s two-run homer.
   const List tb{make_player(MLB, 4917849, 30, "MESA JR.")};
   GameSnapshot before = read("fixtures/event_mlb_hr_before.json", Sport::BASEBALL, 10, tb, MLB);
   GameSnapshot hr = read("fixtures/event_mlb_hr.json", Sport::BASEBALL, 10, tb, MLB);
   PCHECK(hr.play_points == 2 && hr.play_athletes.size() == 1 && hr.play_athletes[0].team == 30);
   PCHECK_EQ(splash(before, hr, MLB, tb), "MESA JR.\nHOME RUN");
   PCHECK_EQ(points(before, hr, MLB, tb), "+2 RUNS");
-  // A run before it in the same read: the home run's own 2, his and the team's.
+  // An earlier run this read: still the homer's 2.
   GameSnapshot hr3 = hr;
   hr3.opp_score = before.opp_score + 3;
   PCHECK_EQ(splash(before, hr3, MLB, tb), "MESA JR.\nHOME RUN");
   PCHECK_EQ(points(before, hr3, MLB, tb), "+2 RUNS");
   PCHECK_EQ(points(before, hr3, MLB, List{}), "+2 RUNS");
-  PCHECK_EQ(splash(before, hr, MLB, tb, true), "MESA JR.\nHOME RUN");  // 17 characters
+  PCHECK_EQ(splash(before, hr, MLB, tb, true), "MESA JR.\nHOME RUN");  // 17 characters long
   PCHECK(board_splash_with_players(before, hr, true, false, kAlertsAll, false, MLB, tb.p).color == 0x092c5c);
-  // The Yankees' panel that doesn't show the other side's plays still names him.
+  // Still named where the other side's plays don't splash.
   PCHECK_EQ(splash(before, hr, MLB, tb, false, kAlertsAll, false), "MESA JR.\nHOME RUN");
   PCHECK_EQ(splash(before, hr, MLB, tb, false, kAlertsAll & ~alert_bit(Alert::PLAYER), false), "");
   // A Yankee favorite: the team's splash.
   PCHECK_EQ(splash(before, hr, MLB, List{make_player(MLB, 33912, 10, "BELLINGER")}), "TB HOME RUN");
-  // Reads made before he was a favorite keep no athletes: nothing to credit.
+  // Reads before he was a favorite keep no athletes.
   GameSnapshot plain_before, plain_hr;
   PCHECK(parse_event_str(slurp("fixtures/event_mlb_hr_before.json"), Sport::BASEBALL, 10, plain_before));
   PCHECK(parse_event_str(slurp("fixtures/event_mlb_hr.json"), Sport::BASEBALL, 10, plain_hr));
   PCHECK_EQ(splash(plain_before, plain_hr, MLB, tb), "TB HOME RUN");
-  // A run that isn't a home run: the runs he drove in.
+  // A non-homer run: the runs he drove in.
   GameSnapshot single = hr;
   single.play_type = "Single";
   single.last_play = "Mesa Jr. singled to center, Caminero scored, Walls scored.";
   PCHECK_EQ(splash(before, single, MLB, tb), "MESA JR.\n2 RBI");
   PCHECK_EQ(points(before, single, MLB, tb), "+2");
-  // His 2 RBI after an earlier run in the same read: "+2" with them, the
-  // team's "3 RUNS!" its "+3".
+  // His "+2" RBI; the team's "3 RUNS!" gets "+3".
   single.opp_score = before.opp_score + 3;
   PCHECK_EQ(splash(before, single, MLB, tb), "MESA JR.\n2 RBI");
   PCHECK_EQ(points(before, single, MLB, tb), "+2");
@@ -527,46 +505,40 @@ void test_baseball() {
   slam.opp_score = before.opp_score + 4;
   PCHECK_EQ(splash(before, slam, MLB, tb), "MESA JR.\nGRAND SLAM");
   PCHECK_EQ(points(before, slam, MLB, tb), "+4 RUNS");
-  // ... with a run before it in the read: still 4, his and the team's.
+  // ... with an earlier run in the read: still 4.
   slam.opp_score += 1;
   PCHECK_EQ(points(before, slam, MLB, tb), "+4 RUNS");
   PCHECK_EQ(splash(before, slam, MLB, List{}), "TB\nGRAND SLAM");
   PCHECK_EQ(points(before, slam, MLB, List{}), "+4 RUNS");
-  // ESPN's words say grand slam but its play has no runs: 4 all the same.
+  // ESPN's words say grand slam with no runs: still 4.
   slam.play_points = 0;
   slam.last_play = "Mesa Jr. hit a grand slam to left field.";
   PCHECK_EQ(points(before, slam, MLB, List{}), "+4 RUNS");
 }
 
-// Another game's big play on the board (watch.h). The reads of other games
-// keep no players, so the play that brought the board there is the team's,
-// and it splashes once; a favorite's score in a later poll of that game names
-// them, as on the board's own game. Back on the board's game, nothing that
-// happened while it was away is splashed, a favorite's score included.
+// Other games' reads keep no players: the team's splash.
 void test_watcher() {
   const List tb{make_player(MLB, 4917849, 30, "MESA JR.")};
   GameSnapshot before = read("fixtures/event_mlb_hr_before.json", Sport::BASEBALL, 10, tb, MLB);
   GameSnapshot hr = read("fixtures/event_mlb_hr.json", Sport::BASEBALL, 10, tb, MLB);
   const Splash brought{"TB HOME RUN", 0x092c5c, "TB", false, 3, "+1 RUN"};
-  // The first poll's read credits him, but its splash is the one that brought the board.
+  // The first poll credits him but keeps the bringing splash.
   PCHECK_EQ(visit_splash(true, brought, GameSnapshot{}, hr, kAlertsAll, false, MLB, tb.p).text, "TB HOME RUN");
   // The next poll reads the same play: nothing again.
   PCHECK_EQ(visit_splash(false, brought, hr, hr, kAlertsAll, false, MLB, tb.p).text, "");
-  // His home run between two later polls names him, either side counting.
+  // His home run between later polls names him.
   PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, MLB, tb.p).text, "MESA JR.\nHOME RUN");
   const List nyy{make_player(MLB, 33912, 10, "BELLINGER")};
   PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, MLB, nyy.p).text, "TB HOME RUN");
-  // The Favorite player switch off, or the visited game in another league
-  // than the list's: the team's splash.
+  // Switch off or another league: the team's splash.
   PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll & ~alert_bit(Alert::PLAYER), false, MLB, tb.p).text,
             "TB HOME RUN");
   PCHECK_EQ(visit_splash(false, brought, before, hr, kAlertsAll, false, NFL, tb.p).text, "TB HOME RUN");
   // A favorite player's score is no switch the watcher reads.
   PCHECK((watch_sport_mask(Sport::BASEBALL) & alert_bit(Alert::PLAYER)) == 0);
-  // Back on the board's game after the visit: his home run while it was
-  // away isn't splashed.
+  // Back home, his home run while away isn't splashed.
   PCHECK_EQ(splash(watch_back_prev(before, hr), hr, MLB, tb), "");
-  // A game that ended meanwhile gets its win, never his name.
+  // A game that ended meanwhile gets its win only.
   GameSnapshot final_read = hr;
   final_read.state = GameState::POST;
   final_read.completed = true;
@@ -575,17 +547,16 @@ void test_watcher() {
 }
 
 void test_basketball() {
-  // IND 74, MIN 73 in the 3rd: McDaniels' jumper for MIN, read as MIN's game.
+  // IND 74, MIN 73 in the 3rd: McDaniels' jumper.
   const List min{make_player(NBA, 4431671, 16, "MCDANIELS")};
   GameSnapshot cur = read("fixtures/event_nba_live.json", Sport::BASKETBALL, 16, min, NBA);
   PCHECK(cur.team_abbr == "MIN" && cur.play_points == 2 && cur.play_athletes.size() == 1);
-  // In the 3rd quarter it's a basket like any other: ESPN's last play is only
-  // the latest at each read, so baskets don't splash.
+  // ESPN's last play is only each read's latest: no splash.
   GameSnapshot prev = cur;
   prev.team_score -= 2;
   prev.play_id = "401914123410";
   PCHECK_EQ(splash(prev, cur, NBA, min), "");
-  // The same basket taking the lead with a minute left: a late lead change.
+  // Taking the lead with a minute left: late lead change.
   GameSnapshot late = cur, late_prev = prev;
   late.period = late_prev.period = 4;
   late_prev.display_clock = "1:10";
@@ -611,13 +582,12 @@ void test_basketball() {
   bz.team_score = 74;
   bz.opp_score = 74;
   PCHECK_EQ(splash(bz_prev, bz, NBA, min), "MCDANIELS\nBUZZER BEATER");
-  // One that wins it, read while ESPN still has the game on: his.
+  // A winner read while ESPN still has it live: his.
   GameSnapshot horn = bz, horn_prev = bz_prev;
   horn.period = horn_prev.period = 4;
   horn.team_score = 75;
   PCHECK_EQ(splash(horn_prev, horn, NBA, min), "MCDANIELS\nBUZZER BEATER");
-  // Read only at the final, ESPN's final document has no last play (no
-  // situation at all), so nothing names him: the team's splash.
+  // ESPN's final document has no last play: team's splash.
   GameSnapshot fin = read("fixtures/event_nba_final.json", Sport::BASKETBALL, 16, min, NBA);
   PCHECK(fin.state == GameState::POST && fin.completed && fin.play_athletes.empty() && fin.play_id.empty() &&
          fin.last_play.empty());
@@ -629,7 +599,7 @@ void test_basketball() {
   fin.opp_score = fin_prev.opp_score;  // MIN's two at the horn win it by one
   fin.display_clock = "0.0";
   PCHECK_EQ(splash(fin_prev, fin, NBA, min), "BUZZER BEATER!");
-  // Baseball's final document is the same: a walk-off read only at the final names nobody.
+  // Baseball's final document has no last play either.
   const List chw{make_player(MLB, 1, 4, "BENINTENDI")};
   GameSnapshot mlb = read("fixtures/event_mlb_final.json", Sport::BASEBALL, 4, chw, MLB);
   PCHECK(mlb.state == GameState::POST && mlb.play_athletes.empty() && mlb.play_id.empty() && mlb.last_play.empty());
@@ -645,7 +615,7 @@ void test_soccer() {
   before.soc.goals.pop_back();
   before.team_score -= 1;
   PCHECK_EQ(splash(before, end, EPL, ars), "SAKA\nPENALTY GOAL");
-  PCHECK_EQ(splash(before, end, EPL, ars, true), "SAKA\nPENALTY GOAL");  // 17 characters
+  PCHECK_EQ(splash(before, end, EPL, ars, true), "SAKA\nPENALTY GOAL");  // 17 characters long
   // The first goal is Guimaraes', not his.
   GameSnapshot first = before, nil = before;
   nil.soc.goals.pop_back();
@@ -653,7 +623,7 @@ void test_soccer() {
   PCHECK_EQ(splash(nil, first, EPL, ars), "GOAL!");
   PCHECK_EQ(splash(nil, first, EPL, List{make_player(EPL, 218522, 359, "GUIMARAES")}), "GUIMARAES\nGOAL");
   PCHECK_EQ(splash(nil, first, EPL, List{make_player(EPL, 218522, 359, "GUIMARAES")}, true), "GUIMARAES GOAL");
-  // An own goal by a favorite counts for the other side: not his.
+  // A favorite's own goal counts for the other side.
   GameSnapshot og = end;
   og.soc.goals.back().own_goal = true;
   og.soc.goals.back().ours = true;
@@ -672,7 +642,7 @@ void test_hockey() {
   PCHECK_EQ(splash(prev, goal, NHL, wpg, true), "CONNOR GOAL");
   // An assist isn't a goal.
   PCHECK_EQ(splash(prev, goal, NHL, List{make_player(NHL, 3041969, 28, "SCHEIFELE")}), "GOAL!");
-  // Two favorites on the team with that name: nobody can say which.
+  // Two same-named favorites on the team: ambiguous, so neither.
   PCHECK_EQ(splash(prev, goal, NHL, List{make_player(NHL, 3899937, 28, "CONNOR"), make_player(NHL, 1, 28, "CONNOR")}),
             "GOAL!");
   // The same name on the other side.
@@ -684,7 +654,7 @@ void test_hockey() {
   PCHECK_EQ(splash(prev, brady, NHL, tk), "B. TKACHUK\nGOAL");
   PCHECK_EQ(splash(prev, brady, NHL, List{make_player(NHL, 11, 28, "TKACHUK")}), "TKACHUK\nGOAL");
   PCHECK_EQ(splash(prev, brady, NHL, List{make_player(NHL, 10, 28, "M. TKACHUK")}), "GOAL!");
-  // A fresh goal that came before its scorer, a part of a name, and an accent.
+  // No scorer yet, a partial name, and an accent.
   GameSnapshot nameless = goal;
   nameless.last_play = ", assists: Neal Pionk (1), Dylan Samberg (1)";
   PCHECK_EQ(splash(prev, nameless, NHL, wpg), "GOAL!");
@@ -694,7 +664,7 @@ void test_hockey() {
   GameSnapshot accent = goal;
   accent.last_play = "Tim St\xc3\xbctzle Goal (3) Backhand";
   PCHECK_EQ(splash(prev, accent, NHL, List{make_player(NHL, 9, 28, "STUTZLE")}), "STUTZLE\nGOAL");
-  // A second goal while ESPN's words still name the first scorer: the team's.
+  // ESPN's words still naming the first scorer: team's splash.
   GameSnapshot second = goal;
   second.team_score += 1;
   PCHECK_EQ(splash(goal, second, NHL, wpg), "GOAL!");
@@ -703,7 +673,7 @@ void test_hockey() {
   against.opp_score += 1;
   against.last_play = goal.last_play;
   PCHECK_EQ(splash(prev, against, NHL, wpg), "COL GOAL");
-  // A name the page cut to 10 characters is the start of the scorer's last name.
+  // The page cuts names to 10 characters.
   struct Cut {
     const char *full, *words;
   };
@@ -728,13 +698,12 @@ void test_hockey() {
   PCHECK(!espn::detail::nhl_name_is(marchessault, "M. MARCHES"));  // the initial still counts
   PCHECK(!espn::detail::nhl_name_is("KYLE CONNORS", "CONNOR"));    // a whole name is never cut
   PCHECK(espn::detail::nhl_name_is("JAMES VAN RIEMSDYK", "J. VAN RIE"));
-  // More of the first name when teammates share the initial too, and a
-  // last name with a dot in it.
+  // Longer first-name prefixes, and a dotted last name.
   PCHECK(espn::detail::nhl_name_is("JEREMIAH SMITH", "JE. SMITH"));
   PCHECK(!espn::detail::nhl_name_is("JAMES SMITH", "JE. SMITH"));
   PCHECK(espn::detail::nhl_name_is("JACK ST. IVANY", "ST. IVANY"));
   PCHECK(!espn::detail::nhl_name_is("JACK IVANY", "ST. IVANY"));
-  // Letters ESPN writes that the page folds the same way: \u00d8, \u2019.
+  // ESPN letters the page folds alike: \u00d8, \u2019.
   PCHECK(espn::detail::nhl_name_is(espn::detail::nhl_scorer("Mads S\xc3\xb8gaard Goal (1) Wrist Shot"), "SOGAARD"));
   PCHECK(espn::detail::nhl_name_is(espn::detail::nhl_scorer("Ryan O\xe2\x80\x99Reilly Goal (2) Wrist Shot"), "O'REILLY"));
   PCHECK(espn::detail::nhl_scorer("Kyle Connor Goal") == "KYLE CONNOR");
@@ -742,8 +711,7 @@ void test_hockey() {
   PCHECK(espn::detail::nhl_scorer("Delaying Game - Puck over glass served by Fedor Svechkov").empty());
 }
 
-// The panel's fireworks go with the play's words, never with a name: a
-// favorite's splash gets them when the team's splash for the play would.
+// Fireworks follow the play's words, never the name.
 void test_fireworks() {
   struct Play {
     const char *word, *team;
@@ -777,12 +745,7 @@ void test_fireworks() {
   PCHECK(!splash_fireworks("PHI\nFUMBLE RECOVERY", Sport::FOOTBALL));
 }
 
-// Every word a favorite's splash can have, with every name length the panel
-// keeps, on every board: one to four panels in a row and the 2x2, whose
-// splash covers all four panels with its words in the middle 64 rows
-// (board_layout.h). The name on its own first line, three lines at most that
-// end inside those 64 rows, no word cut, and on three or four panels never
-// more lines than on two.
+// The 2x2's splash words sit in the middle 64 rows.
 void test_splash_fits() {
   using esphome::gameday::panel_text;
   using esphome::gameday::splash_box;

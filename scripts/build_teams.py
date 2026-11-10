@@ -51,7 +51,7 @@ STANDINGS_ROOT = "https://site.api.espn.com/apis/v2/sports"
 D1_GROUP = "50"  # NCAA Division I, the parent of every D1 basketball conference
 SITE = f"{SITE_ROOT}/football"
 MLB_STATS = "https://statsapi.mlb.com/api/v1"
-# Triple-A, Double-A, High-A and Single-A: MLB Stats sport ids, kept as the group.
+# Triple-A to Single-A MLB Stats sport ids, kept as group.
 MILB_LEVELS = (11, 12, 13, 14)
 
 # ESPN conference group ids that make up the FBS.
@@ -75,10 +75,7 @@ LEAGUES_H = COMPONENT / "leagues.h"
 COMMON_YAML = Path(__file__).resolve().parent.parent / "firmware" / "gameday-common.yaml"
 HOCKEYTECH = "https://lscluster.hockeytech.com/feed/index.php?feed=modulekit"
 HOCKEYTECH_LOGOS = "https://assets.leaguestat.com"
-# The group bit for a team with no logo small enough for the panel
-# (source_hockeytech.h's kHtNoSmallLogo): it draws the team's badge. The
-# panel's logo cache takes up to 128 KB (logo_cache.cpp's MAX_BODY); a logo
-# near that is left out too, so a slightly larger copy later can't break it.
+# Logos near the cache's 128 KB cap draw the badge.
 HT_NO_SMALL_LOGO = 1 << 16
 HT_LOGO_MAX = 120 * 1024
 
@@ -199,7 +196,7 @@ def milb_season(asked):
         try:
             if len(milb_teams(today.year + 1)) >= MIN_TEAMS["MILB"]:
                 return today.year + 1
-        except Exception as ex:  # not listed yet: this season's
+        except Exception as ex:  # next season not listed yet: use this one
             print(f"MILB {today.year + 1}: {ex}", file=sys.stderr)
     return today.year
 

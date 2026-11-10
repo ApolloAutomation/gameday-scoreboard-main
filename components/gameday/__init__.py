@@ -42,10 +42,7 @@ CONF_BETA = "beta"
 CONF_UPDATE_MIRROR = "update_mirror"
 CONF_SOURCE = "source"
 CONF_HOST = "host"
-# HockeyTech's feed (source_hockeytech.h), where the AHL's and the ECHL's
-# games come from: each league's public site key and client code, the ones
-# its own site sends. gameday-common.yaml sets them from substitutions, so
-# they can change without a code edit; a league left out can't be read.
+# HockeyTech's public site keys, set from YAML substitutions.
 CONF_HOCKEYTECH = "hockeytech"
 CONF_KEY = "key"
 CONF_CLIENT_CODE = "client_code"
@@ -70,9 +67,8 @@ _LEAGUE_RE = re.compile(r'\{League::(\w+),\s*"(\w+)",\s*"[^"]+",\s*"([^"]+)",')
 _TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
 # Leagues left out of Home Assistant's team select. Men's college
 # basketball's ~365 teams would push the options past Home Assistant's 16 KB
-# attribute limit, and minor league baseball's 120 would take them from about
-# 9 KB to 12; the device page lists both. The AHL's and the ECHL's 62 teams
-# are in it (about 1.6 KB more).
+# attribute limit; the device page lists them.
+# Minor league baseball's 120 teams would add about 3 KB.
 _HA_SKIP_LEAGUES = {"MCBB", "MILB"}
 
 

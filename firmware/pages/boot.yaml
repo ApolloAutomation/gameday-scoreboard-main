@@ -14,20 +14,19 @@
 #     panel's own open hotspot, "Game Day 2f6a70", named in on_boot. The
 #     iPhone and Android cameras both offer to join it, and the phone then
 #     offers ESPHome's captive portal (192.168.4.1) to pick the home
-#     network (components/gameday/hotspot.h sends every page there). It
-#     only shows once the hotspot is really up, so it never points at a
-#     network that is not there yet; until then the lines are text only.
+#     network. It only shows once the hotspot is really up, so it never
+#     points at a network that is not there yet; until then the lines are
+#     text only.
 #   - On Wi-Fi the code opens the panel's own device page by IP address,
 #     http://192.168.1.50/, not by its .local name, which many Android phones
 #     can't open.
 #
 # On a 128 px chain the code sits on the left half and the lines move to the
 # right half, so nothing has to take turns with it; with no code up the
-# lines use the whole width. On three or four panels in a row the lines take
-# everything right of the code, in the wide fonts. On a single 64 px panel
-# there is no room for both, so the code takes turns with the lines. A 2x2
-# shows the 128 px screen in the middle of its 128 rows. See boot_qr_box
-# below for the sizing and boot_qr_cycle for the timing.
+# lines use the whole width. On a single 64 px panel there is no room for
+# both, so the code takes turns with the lines. See boot_qr_box below for
+# the sizing and boot_qr_cycle for the timing.
+# Wider chains put lines right of the code; 2x2 centers.
 #
 #   connected   64:  page QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
 #               128: page QR + Scan to / pick your / team, the address taking
@@ -72,16 +71,13 @@
 # how to connect" on the device page controls, since it is how someone who
 # set the panel up through the hotspot finds it again; with the setting off
 # a fresh panel shows only the QR, and a panel with a team skips the screen
-# and goes straight to its board. With the setting on, the address then
-# leads the ticker for 30 seconds once the screen goes (boot_join_ticker,
-# the gameday component's show_join_address). A game being played on a
-# panel with a team doesn't wait for the 18 seconds: the screen goes as soon
-# as that board is up and the address is in the ticker only. Coming back to
-# the same network after a drop is not a new join and shows nothing:
-# whoever set the panel up has already found its page. A boot button hold
-# always shows the full address and IP, full width, with no QR, for 20
-# seconds. Off Wi-Fi the overlay never hides, so the button cannot blank a
-# panel that is in setup or has lost its network.
+# and goes straight to its board. Coming back to the same network after a
+# drop is not a new join and shows nothing: whoever set the panel up has
+# already found its page. A boot button hold always shows the full address
+# and IP, full width, with no QR, for 20 seconds. Off Wi-Fi the overlay never
+# hides, so the button cannot blank a panel that is in setup or has lost its
+# network.
+# The setting also puts the address in the ticker.
 # A panel with no team picked brings the QR back over the board for 13 s
 # every 3 minutes (boot_team_qr_turn) until one is.
 #
@@ -177,19 +173,13 @@ globals:
   - id: boot_join_qr
     type: bool
     initial_value: 'false'
-  # Whether the ticker takes up the address once this join's screen goes
-  # (boot_hide): a new join with "Show how to connect" on, the joins whose
-  # screen gives the address. Decided with boot_join_qr, used once.
+  # Address goes to the ticker when this join's screen hides
   - id: boot_join_ticker
     type: bool
     initial_value: 'false'
 
 script:
-  # Positions and fonts. side true puts the lines right of the QR on a chain
-  # of 128 px or more: the single panel fonts in the right half of a 128 px
-  # chain, the wide ones on three or four panels. false uses the whole width.
-  # side is ignored on a 64 px panel. On a 2x2 (or anything taller than 64)
-  # the whole screen sits in the middle rows.
+  # side: lines beside the QR; ignored on 64 px.
   - id: boot_layout
     parameters:
       side: bool
@@ -481,11 +471,7 @@ script:
             if (id(boot_hold_since_ms) != 0 && !via_button && !id(boot_show_address).is_running() &&
                 !id(gameday_ctl).boot_hold(id(boot_hold_since_ms)))
               id(boot_hide).execute();
-            // A game being played on a panel that already has a team: this
-            // join's QR and address give way to the board as soon as it is
-            // up, and the address goes in the ticker (boot_hide starts it).
-            // A new panel keeps its screen: that is how its first team gets
-            // picked. The button's address and the sign-in screen stay too.
+            // Live game cuts the join screen; new panels keep it
             else if (id(boot_join_qr) && id(gameday_ctl).setup_done() && !via_button &&
                      !id(boot_show_address).is_running() && !id(boot_team_qr_on) && !id(gameday_ctl).captive() &&
                      id(gameday_ctl).board_ready() && id(gameday_ctl).board_live()) {
@@ -656,8 +642,6 @@ script:
                             else:
                               - lambda: |-
                                   id(boot_hold_since_ms) = 0;
-                                  // This join's screen gave the address: the ticker carries it
-                                  // on for a while over the board (setup_qr.h, kJoinTickerMs).
                                   if (id(boot_join_ticker)) {
                                     id(boot_join_ticker) = false;
                                     id(gameday_ctl).show_join_address();
@@ -1054,12 +1038,12 @@ lvgl:
             # device page on it (components/gameday/setup_qr.h). boot_view
             # sets its text, with lv_qrcode_update, and shows and hides it.
             # Always the left 64 px: the whole screen of a single panel,
-            # taking turns with the lines, or the left end of a longer chain
-            # with the lines beside it (in the middle rows of a 2x2, from
-            # boot_layout). Listed last so it draws over the
+            # taking turns with the lines, or the left half of a 128 px chain
+            # with the lines beside it. Listed last so it draws over the
             # lines and bar, and the black box keeps them out from under the
             # code. No text here: it stays hidden until boot_view gives it
             # one.
+            # Longer chains: the left end; 2x2: middle rows.
             #
             # One LED per module, white modules on black, the geometry the
             # M-1's WLED setup card proved on the panel's glass (WLED-M1,

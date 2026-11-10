@@ -1,12 +1,11 @@
-// Fuzz target: one input goes through every ESPN parser the panel runs,
-// minor league baseball's MLB Stats parsers (source_mlbstats.h) and the AHL's
-// and the ECHL's HockeyTech parsers (source_hockeytech.h), the text built
-// from what they read, and the finals rotation (recap.h). ESPN's
+// Fuzz target: one input goes through every ESPN parser the panel runs, the
+// text built from what they read, and the finals rotation (recap.h). ESPN's
 // documents share one shape (events, competitions, competitors), so a
 // mutated scoreboard also reaches the event and team parsers. The same input,
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
+// Also runs the MLB Stats and HockeyTech parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -74,13 +73,12 @@ std::vector<Pick> find_picks(const uint8_t *data, size_t size) {
   ev["id"] = true;
   ev["competitions"][0]["competitors"][0]["id"] = true;
   ev["competitions"][0]["competitors"][0]["team"]["id"] = true;
-  // An MLB Stats schedule: dates[].games[], the teams' ids are numbers
+  // MLB Stats: dates[].games[], team ids are numbers
   JsonObject mg = filter["dates"].add<JsonObject>()["games"].add<JsonObject>();
   mg["gamePk"] = true;
   mg["teams"]["away"]["team"]["id"] = true;
   mg["teams"]["home"]["team"]["id"] = true;
-  // HockeyTech: a scorebar's games, a day's, and a game centre clock; the
-  // ids are strings
+  // HockeyTech: scorebar, day and clock; ids are strings
   JsonObject hb = filter["SiteKit"]["Scorebar"].add<JsonObject>();
   for (const char *k : {"ID", "HomeID", "VisitorID"})
     hb[k] = true;
@@ -179,9 +177,6 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   return n;
 }
 
-// Favorite players (players.h) in every league of the sport, with ids from
-// the fixtures: what a read with them keeps, their stat lines and who
-// scored, from the read before to this one.
 size_t players(const GameSnapshot &prev, const GameSnapshot &g, uint8_t league) {
   static const uint32_t kIds[] = {4870883, 5079684, 4917849, 4396909, 4431671, 280555, 3918298, 199680};
   FavPlayer list[kPlayerSlots]{};
@@ -312,7 +307,6 @@ size_t boot_cache(const Schedule &team, int64_t now) {
   if (loaded && (back.event_id != id || back.kickoff_epoch != team.kickoff_epoch || back.group != team.group ||
                  back.league != (uint8_t) League::NFL))
     abort();
-  // The Standing setting's seed and place come back too, the place cut to the record's 15 characters.
   if (loaded && (back.seed != team.seed || back.place != team.place.substr(0, sizeof(c.place) - 1)))
     abort();
   if (team_cache_load(c, League::NFL, 7, now, back) || team_cache_load(c, League::NCAA, 6, now, back))
@@ -464,8 +458,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   for (League league : {League::NFL, League::MLB, League::NBA, League::NHL, League::MLS}) {
-    // The big-play watcher reading a day scoreboard twice in Live games, the
-    // second read checked against the first, and folded into its games.
+    // The big-play watcher's day read, twice.
     WatchJob first;
     first.league = (uint8_t) league;
     first.ctx.live = true;
@@ -521,7 +514,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   {
-    // Minor league baseball's day: its live games, finals and games to come
+    // Minor league baseball's day scan
     std::vector<LiveGame> live;
     std::vector<Final> finals;
     std::vector<Pending> pending;
@@ -535,7 +528,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   {
-    // The AHL's or the ECHL's day, the same way
+    // The AHL's or ECHL's day scan
     std::vector<LiveGame> live;
     std::vector<Final> finals;
     std::vector<Pending> pending;
@@ -559,7 +552,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       if (comps[1].place != team.place || comps[1].seed != team.seed)
         abort();
       sink = sink + (size_t) (pick_schedule(comps, now, team.event_id) + 1);
-      // The board's cut of the place fits the row beside any clock.
+      // The cut place must fit beside any clock.
       const size_t room = record_row_chars((int) (size % 80));
       if (board_standing(team.place, room).size() > room)
         abort();
@@ -588,8 +581,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       prev = g;
     }
 
-    // Minor league baseball: the team read with its Up next list, and the
-    // game read around this team
+    // Minor league baseball team and game reads
     Schedule ms;
     std::vector<Upcoming> mup;
     ChunkReader r5(data, size, chunk);
@@ -608,8 +600,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       prev = mg;
     }
 
-    // The AHL and the ECHL: the team read with its Up next list, and the
-    // game centre's clock around this team, with the schedule's fill
+    // AHL and ECHL team and game centre reads
     Schedule hs;
     std::vector<Upcoming> hup;
     ChunkReader r7(data, size, chunk);
@@ -637,7 +628,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + render(prev, e, now);
       // The same game a poll later: what a splash compares.
       sink = sink + render(e, e, now);
-      // Read again with favorite players in each of the sport's leagues.
+      // Again, with favorite players in each sport league.
       for (const auto &l : kLeagues) {
         if (l.sport != sport)
           continue;

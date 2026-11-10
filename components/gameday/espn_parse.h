@@ -25,22 +25,19 @@ struct Schedule {
   uint32_t group{0};
   std::string team_color;
   std::string team_record;
-  std::string opp_record;  // the team read's, where it has one (the AHL and the ECHL)
+  std::string opp_record;  // from the team read (AHL and ECHL only)
   const char *comp_slug{nullptr};  // a kCups slug when the game is in that cup, nullptr for the league
   bool next_final{false};          // the team endpoint's next event is already over (ESPN lags)
   // The other side of event_id, so its logo can download early. 0 when the
   // team endpoint did not say.
   uint32_t opp_id{0};
   std::string opp_abbr;
-  // The team's standing, for the Standing setting (pro leagues): ESPN's
-  // playoffSeed (0 when it gave none) and its standingSummary cut short
-  // (place_short: "1st NFCE"; "" when it gave none).
+  // ESPN playoffSeed and short standingSummary; 0 or "" if absent.
   uint8_t seed{0};
   std::string place;
 };
 
-// The Standing setting: what follows a pro team's abbreviation where its
-// record goes, for the team the board follows. Saved as a byte (Prefs8).
+// Saved as a byte (Prefs8); keep values stable.
 enum class Standing : uint8_t { RECORD = 0, SEED = 1, PLACE = 2 };
 
 enum class Half : uint8_t { NONE, TOP, MID, BOTTOM, END };
@@ -56,8 +53,7 @@ struct Baseball {
   std::string batter, pitcher;               // "A. Riley", while a half inning is on
   std::string team_probable, opp_probable;   // starting pitchers, pre-game
   std::string series;                        // "LAD lead series 2-1", postseason
-  // Innings scheduled: 9, or 7 for a minor league doubleheader's games (MLB
-  // Stats API; ESPN's reads leave the 9).
+  // 7 for minor league doubleheaders (MLB Stats API only).
   uint8_t innings{9};
 };
 
@@ -68,7 +64,7 @@ struct SoccerGoal {
   std::string name;
   bool ours{false};  // counts for our side; an own goal counts for the side it helped
   bool own_goal{false}, penalty{false};
-  uint32_t athlete{0};  // the scorer's ESPN id, read only for a favorite player (players.h); 0 otherwise
+  uint32_t athlete{0};  // scorer's ESPN id, favorite players only; else 0
 };
 
 // Soccer's goals and cards (the event's details), form, shootout, match
@@ -211,13 +207,9 @@ struct Racing {
   bool next_unknown{false};              // the calendar read failed after a final
 };
 
-// Favorite players (players.h). A game is read with their ESPN ids in its
-// league (parse_event's players): only then does the read keep the last
-// play's athletes and the game leaders, so a panel without favorite players
-// reads and keeps what it always did. The ids are 32-bit (ESPN's run to
-// about five million).
+// Empty watch keeps reads unchanged; ESPN ids fit 32 bits.
 struct PlayerWatch {
-  static constexpr int kMax = 8;  // kPlayerSlots (set_request.h)
+  static constexpr int kMax = 8;  // equals kPlayerSlots (set_request.h)
   uint32_t ids[kMax]{};
   uint8_t n{0};
   bool has(uint32_t id) const {
@@ -228,16 +220,13 @@ struct PlayerWatch {
   }
 };
 
-// One athlete ESPN lists for the last play, and the team it lists them on (0
-// when it didn't say).
+// team is 0 when ESPN didn't say.
 struct PlayAthlete {
   uint32_t id{0};
   uint32_t team{0};
 };
 
-// One of ESPN's game leaders that is a favorite player: their line ("21/34,
-// 241 YDS, 2 TD", "19") and, in basketball, the category's name ("points",
-// "rating"; empty elsewhere, where a player's lines are all the same).
+// cat is set for basketball only, e.g. "points".
 struct Leader {
   uint32_t athlete{0};
   std::string cat, value;
@@ -245,7 +234,7 @@ struct Leader {
 
 // One scoreboard event, resolved to "us" and "them".
 struct GameSnapshot {
-  // Made, copied and moved all over the component: one out-of-line copy of each
+  // Copied and moved all over the component: one out-of-line copy of each
   // (espn_parse.cpp), not one inlined into every file that moves one.
   GameSnapshot();
   GameSnapshot(const GameSnapshot &);
@@ -265,9 +254,7 @@ struct GameSnapshot {
   int period{0};
   std::string team_abbr, opp_abbr;
   uint32_t team_id{0}, opp_id{0};
-  // A college team's rank, ESPN's curatedRank (the AP poll, then the College
-  // Football Playoff's once it ranks): 1-25 (detail::rank_of), 0 unranked or
-  // a pro team.
+  // ESPN curatedRank 1-25 (AP, then CFP); 0 unranked.
   uint8_t team_rank{0}, opp_rank{0};
   int team_score{0}, opp_score{0};
   std::string team_record, opp_record;
@@ -276,33 +263,25 @@ struct GameSnapshot {
   bool team_winner{false};
   int possession{0};
   int team_timeouts{-1}, opp_timeouts{-1};  // -1: no count (see carry_football)
-  uint8_t to_guess{0};     // bit 0 ours, bit 1 theirs: a count the panel filled in, not ESPN's
-  // Football: the game seconds left in regulation at the last play, from ESPN
-  // (3600 at kickoff, 1800 at halftime; -1 when not sent, as on extra points).
+  uint8_t to_guess{0};     // bits 0 ours, 1 theirs: panel-guessed counts
+  // Regulation seconds left; ESPN omits it on extra points.
   int play_secs_left{-1};
-  // Football breaks (carry_football): held from a break until a play from
-  // after it, the period it began in (2 for halftime), the last play seen in
-  // it, and that play's clock in seconds (-1 none).
+  // Football break state for carry_football (2 is halftime).
   bool held{false};
   int break_period{0};
   std::string break_play;
   int break_secs{-1};
-  bool resumed{false};  // football: the second half's plays came in while ESPN's status still says halftime
+  bool resumed{false};  // second-half plays arrived during ESPN's halftime status
   std::string last_play, down_distance;
-  // ESPN's type for the last play, kept for football and baseball only:
-  // "Pass Interception Return", "Fumble Recovery (Own)", "Ball".
+  // Football and baseball only, e.g. "Fumble Recovery (Own)".
   std::string play_type;
-  // More of the last play for big-play alerts (alerts.h). Football: ESPN's
-  // id for it ("401856777515", the same however often its words change)
-  // and the side with the ball after it, 1 ours, 2 theirs, 0 not sent.
-  // Baseball: the runs it scored.
+  // Stable play id; side 1 ours, 2 theirs, 0 unsent.
   std::string play_id;
   int play_side{0};
   int play_points{0};
   std::string short_down_distance;  // "3rd & 10"
   bool is_red_zone{false};
-  // Favorite players only (PlayerWatch): the last play's athletes, at most
-  // four, and the game leaders that are favorites. Empty otherwise.
+  // Favorite players only (PlayerWatch); athletes capped at four.
   std::vector<PlayAthlete> play_athletes;
   std::vector<Leader> leaders;
   std::string odds, over_under, tv, venue;
@@ -339,12 +318,11 @@ struct LiveGame {
   uint32_t away_id{0};      // shown on the left, like a broadcast
   uint32_t home_id{0};      // for its logo, fetched as soon as the game is picked
   std::string away_abbr, home_abbr;
-  // HockeyTech's day read only (the AHL, the ECHL): its game read has none
+  // HockeyTech's game read lacks these; day read only.
   std::string away_record, home_record;
 };
 
-// One game of a day's scoreboard before it is read in full: enough for the
-// big-play watcher to say whether it is wanted (watch.h).
+// Just enough for the watcher to pick games (watch.h).
 struct DayGame {
   std::string event_id;
   GameState state{GameState::NOT_FOUND};
@@ -414,25 +392,19 @@ struct TickerOptions {
   bool soccer_stats{true};    // goals, cards, possession and shots
   bool last_play{true};
   bool odds{true};
-  // The followed pro team's seed or place in its record's place (standing_text,
-  // the Standing setting); "" shows its record.
+  // Seed or place instead of the record; "" for record.
   std::string team_standing;
 };
 
 struct Splash {
   std::string text;
   uint32_t color{0};
-  // Whose logo the panel shows with the words (board_layout.h,
-  // splash_layout): the abbreviation of the side that scored, took the
-  // ball, got the card or won. Empty for nobody's (golf, racing), or with
-  // both the whole game's (overtime, basketball's final), which shows both.
+  // Logo's side; empty for golf, racing, or both logos.
   std::string abbr;
   bool both{false};
-  // How many of text's first characters name abbr ("PHI ", "CIN\n"), which
-  // the logo says instead.
+  // Leading chars naming abbr, which the logo replaces.
   uint8_t lead{0};
-  // What the side gained: "+6", "+3", "+2 RUNS"; empty for a play that
-  // scores none, a lead change, overtime, the final or a win.
+  // e.g. "+6" or "+2 RUNS"; empty when nothing scored.
   std::string points;
 };
 
@@ -468,8 +440,7 @@ std::string dark_logo(const std::string &url);
 std::string team_logo_url(League league, uint32_t espn_id, const char *abbr);  // for a team with no game loaded yet
 
 bool parse_team_str(const std::string &json, Schedule &out);
-// Up to `max` games not yet started, in date order, from the schedule endpoint;
-// ranks: each opponent's rank too (a college league's schedule).
+// Up to `max` games not yet started, in date order, from the schedule endpoint.
 bool parse_upcoming_str(const std::string &json, uint32_t our_team_id, size_t max, std::vector<Upcoming> &out,
                         bool ranks = false);
 bool parse_scoreboard_str(const std::string &json, const std::string &event_id, uint32_t our_team_id,
@@ -480,58 +451,35 @@ bool parse_team_game_str(const std::string &json, uint32_t our_team_id, Schedule
                          const std::string &skip_event = "");
 // The single-event document from event_url(). With event_id, a document for
 // some other game reads as a failure.
-// players: the favorite players in the game's league, whose leader lines
-// and plays the read then keeps too (PlayerWatch).
 bool parse_event_str(const std::string &json, Sport sport, uint32_t our_team_id, GameSnapshot &out,
                      const std::string &event_id = "", const PlayerWatch *players = nullptr);
 
-// The splash for two reads of one game: a big play (alerts.h) whose switch
-// is on in alerts, or the win. neutral = nobody is "our" team (live-game
-// modes): both sides splash with their abbreviation. opponent_splashes: the
-// other side's plays count too. wide: the words fit two panels (16
-// characters a line) rather than one (10).
+// neutral: no "our" team; wide: 16-char lines, else 10.
 Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opponent_splashes, bool neutral = false,
                      uint32_t alerts = UINT32_MAX, bool wide = false);
 uint32_t parse_color(const std::string &hex);
 std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 // "#5" for a rank, "" for 0 (unranked).
 std::string rank_text(uint8_t rank);
-// text with the rank in front ("#5 OSU", "#5 9-1") when the two fit
-// max_chars, else text alone; text alone for no rank or no text. The panel
-// passes a label's width over its font's character width (the Spleen fonts
-// are fixed width, 5 px a character in spleen_8): 6 for an abbreviation on
-// one panel (32 px), and for a record under a logo on two record_row_chars.
+// Rank prefix only if it fits; fonts are fixed width.
 std::string rank_label(uint8_t rank, const std::string &text, size_t max_chars);
-// ESPN's standingSummary cut short: "1st in NFC East" is "1st NFCE", "2nd in
-// Central Division" "2nd Cent", "4th in Eastern Conference Division" "4th
-// East", "2nd in English Premier League" "2nd EPL", "14th in National
-// Football Conference" "14th NFC". "" when it doesn't read as a place.
+// e.g. "1st in NFC East" becomes "1st NFCE".
 std::string place_short(const std::string &summary);
-// What the Standing setting puts in a pro team's record's place: "Seed 4", the
-// place, or "" (its record) for Record or when ESPN gave neither.
+// "Seed 4", the place, or "" to show the record.
 std::string standing_text(Standing kind, uint8_t seed, const std::string &place);
-// The record row under each logo on two panels (board_layout.h, game_geom): a
-// label 36 px wide at the board's edge, its text centered, in spleen_8 (5 px
-// a character). While the game is on, the clock sits between the two rows,
-// centered on the 128 px board, in spleen_12 (6 px a character).
+// Record rows: 36 px, spleen_8; clock in spleen_12.
 static const int kBoardPx = 128, kRecordRowPx = 36, kRecordCharPx = 5, kClockCharPx = 6;
-// The characters the record row holds a pixel clear of a clock text clock_px
-// wide (0: no clock): 7, and 6 beside a 10-character clock ("End of 2nd").
-// The panel passes its fonts' measured widths.
+// Stays a pixel clear of the clock; clock_px 0: none.
 size_t record_row_chars(int clock_px, int board_px = kBoardPx, int row_px = kRecordRowPx,
                         int char_px = kRecordCharPx);
-// A standing in room characters of the record row: as it is, else without
-// the space after the place ("1stNFCE", "Seed10"), else the place alone
-// ("10th"); "" (the record) when none of it fits.
+// Squeezes to "1stNFCE", then "1st"; "" if nothing fits.
 std::string board_standing(const std::string &standing, size_t room);
-// League-wide: a college league's teams carry a rank, a pro league's a standing.
+// College teams carry a rank; pro teams a standing.
 inline bool is_college(League league) { return league == League::NCAA || league == League::MCBB; }
 // The board and ticker with no game on the board, in place of the page's
 // "No upcoming game": "Getting ready" until the clock is set (nothing can
 // be read from ESPN before it), "Can't reach ESPN" while reads fail and
-// ESPN has never said this team has no game ("Can't reach MLB" for a team
-// whose games come from the MLB Stats API, "Can't reach HockeyTech" for an
-// AHL or ECHL team: source). Empty for the default, and in
+// ESPN has never said this team has no game. Empty for the default, and in
 // a live mode, which has its own words. captive (captive.h: the Wi-Fi answered
 // with a sign-in page and ESPN has not answered since) wins over all of it,
 // live modes included, since nothing can be read until it ends.
@@ -563,10 +511,7 @@ std::string day_label(const struct tm &kick_local, const struct tm &now_local);
 // needs the game's day uses noon Eastern instead: the same calendar day from
 // Hawaii to central Europe.
 inline int64_t tbd_day_epoch(int64_t placeholder) { return placeholder + 12 * 3600; }
-// Which of two games came later, as a start to compare: a game with no start
-// time goes after every game of its day that has one, the way a
-// doubleheader's game 2 (minor league baseball's always has none) follows
-// game 1.
+// TBD games sort last, like a doubleheader's game 2.
 inline int64_t day_order(int64_t kickoff, bool time_tbd) { return time_tbd ? kickoff + 24 * 3600 - 1 : kickoff; }
 int64_t parse_iso8601_z(const std::string &s);
 // An HTTP Date header, "Sat, 17 Oct 2026 23:39:29 GMT" (the only form a
@@ -579,49 +524,22 @@ const char *state_name(GameState s);
 // have no clock (Halftime, End of 3rd, Delayed).
 std::string clock_text(const GameSnapshot &s);
 
-// At halftime: ESPN's status says so, or (in documents without a status
-// name) shortDetail does before the third period. A football game whose plays
-// have moved on (resumed) isn't, whatever the status says.
+// Resumed football isn't halftime, whatever ESPN's status says.
 bool is_halftime(const GameSnapshot &s);
 
-// ESPN's status name says the period is under way and the clock has time on
-// it, so a shortDetail without a clock ("End of 3rd") is left from the break.
+// Running clock means "End of 3rd" is a stale shortDetail.
 bool clock_running(const GameSnapshot &s);
 
-// A football break the drive doesn't carry across: halftime, or the end of the
-// 2nd or 4th quarter (which ESPN also sends as in progress, "End of 2nd" at
-// 0:00), until the next play comes in. ESPN keeps the last drive's down,
-// possession and red zone there, which no longer apply.
+// ESPN keeps stale down and possession through breaks.
 bool football_break(const GameSnapshot &s);
 
-// The game clock a football play started at, from ESPN's play text
-// ("(14:52) J.Smith kicks ..." is "14:52"); "" when it has none or it is 0:00.
+// "(14:52) J.Smith kicks" gives "14:52"; 0:00 gives "".
 std::string play_clock(const std::string &last_play);
 
-// ESPN's status and its plays come from separate feeds and drift apart around
-// breaks: the status can stay at STATUS_HALFTIME while the second half's
-// plays come in, and a first-half play can arrive after the break began.
-// Football only, given the previous snapshot of the same board or favorite:
-// - held: a break began and no play from after it has come in (ESPN's
-//   end-of-quarter words, an empty play and late first-half plays don't end
-//   it; time put back in the break's own period does). A first look at a 3rd
-//   or 4th quarter whose last play is still the first half's counts as held.
-// - resumed: during STATUS_HALFTIME, a play from the second half: ESPN puts
-//   it under 1800 seconds left, or it is the 3rd quarter's kickoff. For a
-//   play without that figure, its clock must be later than any seen in the
-//   break (the clock counts down, so a late first-half play's is earlier), or
-//   10:00 or later when none was.
-// - Timeouts ESPN left out (-1): the last count from the same game and half
-//   (each overtime its own), 3 before kickoff, otherwise unknown, which hides
-//   the pips. While the second half is held after halftime, ESPN still sends
-//   the first half's counts, so it shows 3; an overtime held before its first
-//   play hides them. A count the panel filled in is marked in to_guess and
-//   carried only within its period.
+// ESPN's status and play feeds drift apart around breaks.
 void carry_football(const GameSnapshot &prev, GameSnapshot &next);
 
-// The team with the ball is inside the 20. ESPN's isRedZone is also set on
-// extra-point tries and after a score, so it counts only with a down and a
-// team in possession, and not at a break.
+// ESPN also sets isRedZone on tries and after scores.
 bool in_red_zone(const GameSnapshot &s);
 
 // The team endpoint does not say which league answered, so a freshly parsed
@@ -632,8 +550,7 @@ inline void adopt_league(Schedule &s, League league) { s.league = (uint8_t) leag
 // A cup's team endpoint does not name the cup either.
 inline void adopt_comp(Schedule &s, const char *comp_slug) { s.comp_slug = comp_slug; }
 
-// Per-sport text. status_text and clock_text hand any snapshot that is not
-// football to these (sport_baseball.cpp).
+// Per-sport text for non-football games (sport_baseball.cpp).
 std::string baseball_status_text(const GameSnapshot &s, const TickerOptions &o, const std::string &kickoff_local);
 std::string baseball_clock_text(const GameSnapshot &s);
 // The count while a half inning is on ("2-1"), else "".
@@ -658,10 +575,7 @@ std::string ascii_fold(const std::string &utf8);
 // game that kicked off over four hours ago, or done_event (a game the panel
 // saw finish), only counts when no read names anything else.
 int pick_schedule(const std::vector<Schedule> &comps, int64_t now_epoch, const std::string &done_event);
-// The Standing setting's seed and place are the league's: a cup's team read
-// ranks the club in the cup's own table under the league's name ("15th in
-// English Premier League" on a Champions League night). Each cup's read
-// (comps[1] on) takes the league read's, comps[0].
+// ESPN labels cup tables with the league's name.
 void league_standing(std::vector<Schedule> &comps);
 // Basketball (sport_basketball.cpp). The JSON filter and extras parse are
 // declared in espn_parse_impl.h, next to ArduinoJson.
@@ -856,7 +770,7 @@ std::string board_card_text(const GameSnapshot &g, bool wide, const std::string 
 std::string board_event_name(Sport sport, const std::string &name, size_t max);
 
 namespace detail {
-// A UTC epoch's calendar date (y, m 1-12, d 1-31), with no libc.
+// UTC calendar date without libc; m and d 1-based.
 void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
 // Ticker helpers shared by the sport files.
 void add_part(std::string &out, const std::string &part);
@@ -876,7 +790,7 @@ std::string whole_words(const std::string &s, size_t max);
 std::string fit_words(const std::string &s, size_t line);
 // standing: in place of our side's record (TickerOptions::team_standing).
 std::string records_line(const GameSnapshot &s, const std::string &standing);
-// "#5 OSU vs #12 MICH" before a game when either side is ranked, else "".
+// "#5 OSU vs #12 MICH" pregame if either is ranked.
 std::string ranked_matchup(const GameSnapshot &s);
 // The pre-game betting parts when the ticker shows odds: the line, the
 // over/under and the TV listing. Soccer builds its own line.
@@ -919,14 +833,7 @@ inline bool schedule_due(bool have_schedule, bool force, uint32_t now, uint32_t 
   return force || !have_schedule || (now - fetched_ms) >= interval;
 }
 
-// MLB's and HockeyTech's team reads list only games still to come, so in My
-// team a read while a final lingers (the six-hour read or Refresh Now) names
-// the next game and would take the final off the board early. ESPN's team
-// endpoint keeps naming the final, and run_job_ skips its look-ahead then.
-// For a team from another host the read waits for the linger to end: the
-// cycle polls the final instead, and Refresh Now's flag stays set for the
-// read after. post_since_ms is when the board first showed the final (0: not
-// final); unsigned subtraction keeps its age right across the millis() wrap.
+// MLB and HockeyTech reads omit finals, so wait out lingers.
 inline bool team_read_waits(Source source, uint32_t post_since_ms, uint32_t now, uint32_t linger_ms) {
   return source != Source::ESPN && post_since_ms != 0 && (now - post_since_ms) < linger_ms;
 }

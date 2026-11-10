@@ -1,5 +1,4 @@
-// Baseball's ticker and clock row. Pure, no ESPHome includes. Its splashes
-// are alerts.h's.
+// Baseball's ticker and clock row; no ESPHome includes.
 #include "espn_parse.h"
 
 namespace espn {

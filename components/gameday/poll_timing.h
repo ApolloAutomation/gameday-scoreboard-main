@@ -83,10 +83,7 @@ struct Backoff {
   }
 };
 
-// The run of failed reads and the wait it started, for one host: the MLB
-// Stats API (minor league baseball) and HockeyTech (the AHL and the ECHL)
-// keep their own, so a refusal there never holds back ESPN's reads, nor
-// ESPN's a minor league team's.
+// Per host, so one host's refusal never holds back another.
 struct HostWait {
   Backoff run;
   uint32_t since_ms{0};
@@ -101,22 +98,13 @@ struct HostWait {
     this->run.clear();
     this->wait_ms = 0;
   }
-  // Read now, but keep the run so another failure waits longer.
+  // Keeps the run, so another failure waits longer.
   void end_wait() { this->wait_ms = 0; }
   bool waiting(uint32_t now) const { return this->wait_ms != 0 && now - this->since_ms < this->wait_ms; }
-  // The time left in the wait, 0 when none is running.
   uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
 };
 
-// A Live games scan's reads from one host other than ESPN (the MLB Stats
-// API, HockeyTech), folded into that host's wait (apply_job_). read: the
-// scan asked the host. failed: one of those reads failed. others: the scan
-// read leagues from another host too. Beside them a failure is counted here
-// and the scan goes on with the others. With only this host's leagues, the
-// failure is the scan's own, which the scan's backoff (back_off_, for a job
-// that read only that host) counts once: clearing the run here first would
-// start every failed scan over at the shortest wait. An answer starts the
-// run over. Returns the wait a failure started here, 0 when none did.
+// Alone, the scan's own backoff counts the failure.
 inline uint32_t host_scan_result(HostWait &w, bool read, bool failed, bool others, bool refused,
                                  uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {
   if (!read)
@@ -128,14 +116,7 @@ inline uint32_t host_scan_result(HostWait &w, bool read, bool failed, bool other
   return others ? w.fail(refused, retry_after_ms, rnd, now) : 0;
 }
 
-// The idle display's scores, read outside the mode (gameday.cpp's side
-// reads): their reads from a host other than ESPN (the MLB Stats API for
-// minor league baseball, HockeyTech for the AHL and the ECHL) keep to that
-// host's wait too. While it runs they leave its leagues out
-// (start_side_job_), and a read of theirs from it that failed or was refused
-// counts in it, beside other hosts' leagues or alone, since no backoff of the
-// mode's counts it. An answer starts the run over. Returns the wait a failure
-// started, 0 when none did.
+// Counts even alone: no mode backoff counts side reads.
 inline uint32_t host_side_result(HostWait &w, bool read, bool failed, bool refused, uint32_t retry_after_ms,
                                  uint32_t rnd, uint32_t now) {
   if (!read)
@@ -147,11 +128,7 @@ inline uint32_t host_side_result(HostWait &w, bool read, bool failed, bool refus
   return w.fail(refused, retry_after_ms, rnd, now);
 }
 
-// A game not started yet is read every minute in its last hour and every 15
-// before. One with no start time yet sits at midnight Eastern of its day
-// (tbd_day_epoch): baseball's is game 2 of a doubleheader, which starts
-// about half an hour after game 1 ends, so on its day it is read as if
-// within the hour. until_s is the start minus now.
+// Baseball TBD is doubleheader game 2: poll it as near.
 static const int64_t kPreNearSeconds = 60 * 60;
 inline bool pre_poll_near(int64_t until_s, bool time_tbd, bool baseball) {
   if (!time_tbd)
@@ -171,13 +148,7 @@ inline bool cup_read_backs_off(bool cup_ok, bool polled, bool game_ok, bool thro
   return polled ? !game_ok : (!cup_ok || throttled);
 }
 
-// Live games between scans, while a host other than ESPN waits out a failure
-// (HostWait): only that host's reads wait for it. The finals rotation's days
-// from it and the fallback card's reads come when its wait ends, while the
-// rotation's other days and the scan for a live game go on. scan_left: the
-// time until the scan, 0 when it is due. held_left: the wait left, 0 when
-// none runs. scan_held: the scan would read only leagues from that host, so
-// it waits too. Returns the time until the next job, 0 to start it now.
+// Only the waiting host's reads wait; others go on.
 inline uint32_t held_next_ms(uint32_t scan_left, uint32_t held_left, bool scan_held) {
   if (held_left == 0)
     return scan_left;

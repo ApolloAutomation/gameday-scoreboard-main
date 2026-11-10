@@ -1,5 +1,4 @@
-// Hockey's ticker and clock row. Pure, no ESPHome includes. Its splashes are
-// alerts.h's.
+// Hockey's ticker and clock row; no ESPHome includes.
 // ESPN's NHL feed has no power play field. The board must not infer one from
 // penalties, because offsetting and coincidental minors would make it wrong.
 #include "espn_parse.h"
@@ -54,8 +53,7 @@ std::string hockey_clock_text(const GameSnapshot &s) {
   if (s.state == GameState::IN && shootout(s))
     return "SO";
   bool has_clock = s.display_clock.find(':') != std::string::npos && s.period > 0;
-  // ESPN's shortDetail lags the status name and clock by a poll or two, so an
-  // "End of 1st" left from the intermission gives way once the clock runs.
+  // ESPN's shortDetail lags the clock by a poll or two.
   bool special = s.short_detail.find(':') == std::string::npos && !clock_running(s);
   if (!has_clock || special) {
     std::string t = s.short_detail;

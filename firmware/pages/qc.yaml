@@ -2,8 +2,7 @@
 # whatever else is up, and runs round and round:
 #
 #   red, green, blue, white   2 s each, the whole panel lit
-#   row walk                  one white line down every row (64, or 128 on a
-#                             2x2), 40 ms a row
+#   row walk                  white line down every row, 40 ms each
 #   readout                   6 s: firmware version, PSRAM size, the
 #                             strongest Wi-Fi network's RSSI (from a scan, no
 #                             join needed), panel size, and the button test
@@ -64,9 +63,7 @@ script:
           lv_obj_move_foreground(id(qc_layer));
           lv_obj_clear_flag(id(qc_layer), LV_OBJ_FLAG_HIDDEN);
           id(qc_show).execute(0);
-      # Lit at the Brightness setting even if Power was off, or the idle
-      # display has the panel dark. The switch is left alone, so leaving QC
-      # knows what to go back to.
+      # Lit even if off or idle-dimmed; switch untouched for exit
       - hub75.set_brightness:
           id: matrix
           brightness: !lambda 'return id(gameday_ctl).guard_brightness((uint8_t) id(brightness).state, false);'

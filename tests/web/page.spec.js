@@ -7,9 +7,7 @@ const { expect } = base;
 // Answer every off-device request locally so the suite needs no network.
 // ESPN's scoreboard feeds the picker's "On now" tab and has no games unless a test routes one.
 // Uncaught page errors fail the test.
-// expand: the page opens every card that folds (localStorage "gd.expand"),
-// so a test can reach any control. The tests of the folding turn it off with
-// test.use({ expand: false }).
+// expand opens every folding card so tests reach controls
 const test = base.test.extend({
   expand: [true, { option: true }],
   page: async ({ page, baseURL, expand }, use) => {
@@ -322,7 +320,6 @@ test("mode pills post the mode and swap the settings bar", async ({ page, reques
   await expect(page.locator("#livebar")).toBeVisible();
   await expect(page.locator("#teambar")).toBeHidden();
 
-  // Switch every: 30 seconds, then every whole minute to 30, posted in seconds.
   await expect(page.locator("#rotate")).toHaveValue("60");
   const choices = await page.locator("#rotate option").allTextContents();
   expect(choices.slice(0, 3)).toEqual(["30 s", "1 min", "2 min"]);
@@ -331,7 +328,7 @@ test("mode pills post the mode and swap the settings bar", async ({ page, reques
   await page.locator("#rotate").selectOption("30");
   await expectSet(request, { rotatesec: "30" });
   await expect(page.locator("#rotate")).toHaveValue("30");
-  // The panel has it, in seconds and, for pages from before, as 1 minute.
+  // Old pages read rotate, in whole minutes
   await expect.poll(async () => (await deviceState(request)).rotatesec).toBe(30);
   expect((await deviceState(request)).rotate).toBe(1);
   await page.locator("#rotate").selectOption("1800");
@@ -463,8 +460,7 @@ test("the On now tab asks ESPN for every college game, not the Top 25", async ({
 });
 
 test("a college team's rank shows before its abbreviation on the board and in the lists", async ({ page, request }) => {
-  // On now (it opens there with a game in progress): ESPN's curatedRank, 99
-  // for an unranked side
+  // ESPN's curatedRank is 99 for an unranked side
   const side = (homeAway, id, abbr, name, rank) =>
     ({ homeAway, score: "0", curatedRank: { current: rank }, team: { id, abbreviation: abbr, shortDisplayName: name } });
   await page.route("https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard*", (route) =>
@@ -491,7 +487,6 @@ test("a college team's rank shows before its abbreviation on the board and in th
   await expect(page.locator("#tA .rec")).toHaveText("9-1");
   await expect(page.locator("#tB .abbr")).toHaveText("#12 MICH");
 
-  // On now
   await page.locator("#pick").click();
   await expect(page.locator(".tabs button.on")).toHaveText("On now");
   await expect(page.locator("#tiles .side .a")).toHaveText(["AUB", "#14 TENN"]);
@@ -518,7 +513,7 @@ test("a college team's rank shows before its abbreviation on the board and in th
   await page.reload();
   await expect(page.locator("#upnextList .un.fav .n")).toHaveText(["#5 OSU vs #12 MICH", "DAL vs PHI"]);
 
-  // My team's Up next: a ranked opponent's rank before its name
+  // Up next: a ranked opponent's rank before its name
   await reset(request, {
     team: { l: "ncaa", id: 103, abbr: "BC", name: "Boston College Eagles" },
     favs: [{}, {}, {}, {}],
@@ -572,7 +567,7 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await expectSet(request, { standing: "2" });
   expect((await deviceState(request)).standing).toBe(2);
 
-  // What the panel puts in the record's place shows under the team.
+  // The panel's standing text shows under the team
   const g = (await deviceState(request)).game;
   await reset(request, { standing: 2, game: { ...g, tr: "1st NFCE" } });
   await page.reload();
@@ -580,17 +575,17 @@ test("standing next to pro teams: the record by default, posts seed and place, h
   await expect(page.locator("#tA .rec")).toHaveText("1st NFCE");
   await expect(page.locator("#tB .rec")).toHaveText("0-1");
 
-  // A panel that follows only college teams: they have a rank instead.
+  // Only college teams: they have a rank instead
   await reset(request, { team: { l: "ncaa", id: 194, abbr: "OSU", name: "Ohio State Buckeyes" }, favs: [{}, {}, {}, {}] });
   await page.reload();
   await expect(page.locator("#hostname")).not.toBeEmpty();
   await expect(page.locator("#standingRow")).toBeHidden();
-  // Minor league teams have no seed or place from MLB: only their record.
+  // MLB gives minor league teams no seed or place
   await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
   await page.reload();
   await expect(page.locator("#hostname")).not.toBeEmpty();
   await expect(page.locator("#standingRow")).toBeHidden();
-  // With a pro team as a favorite, back, and saying what a minor league team shows.
+  // A pro favorite brings it back
   await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" },
     favs: [{ l: "nfl", id: 6, abbr: "DAL", name: "Dallas Cowboys" }, {}, {}, {}] });
   await page.reload();
@@ -903,8 +898,7 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expectSet(request, { alerts: String(ALL) });
   await expect(sw("Basketball: Final")).toBeChecked();
 
-  // A minor league team alone is baseball too: its switches and the count,
-  // with the hints saying what a minor league game gets.
+  // A minor league team alone counts as baseball
   await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" }, favs: [{}, {}, {}, {}] });
   await page.reload();
   await expect(sw("Baseball: Runs")).toBeVisible();
@@ -916,14 +910,13 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   // Favorite players' switch shows whatever the sports.
   await expect(page.locator("#alertCtls .alertSport:visible .sub")).toHaveText(["Baseball", "Favorite players"]);
   await expect(page.locator("#alertCtls .alertSport:visible").first()).toContainText("every minor league run");
-  // Picked by hand as the one Live games league, with no team, the same.
+  // Same with MiLB as the only Live games league
   await reset(request, { team: {}, favs: [{}, {}, {}, {}], live_auto: false, live: ["milb"] });
   await page.reload();
   await expect(sw("Baseball: Grand slam")).toBeVisible();
   await expect(sw("Hockey: Goal")).toBeHidden();
 
-  // An AHL team alone, or the ECHL as the one Live games league, is hockey:
-  // its one switch, no situation switch, and the hint covering their games.
+  // An AHL or ECHL team counts as hockey
   await reset(request, { team: { l: "ahl", id: 324, abbr: "SYR", name: "Syracuse Crunch" }, favs: [{}, {}, {}, {}] });
   await page.reload();
   await expect(sw("Hockey: Goal")).toBeVisible();
@@ -943,7 +936,7 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(sw("Hockey: Goal")).toBeVisible();
   await expect(sw("Soccer: Goal")).toBeVisible();
   await expect(page.locator("#alertCtls .ctl")).toHaveCount(20);
-  // Each sport's heading sits as far from the switch above it as the other cards' headings do.
+  // Headings keep the other cards' spacing above them
   const heads = page.locator("#alertCtls .alertSport .sub");
   await expect(heads).toHaveCount(6);
   // Favorite players' switch is the last bit, whatever the sports.
@@ -1328,12 +1321,12 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await expect(page.locator("#liveName")).toHaveText("Following a random game in progress");
   await expect.poll(async () => (await deviceState(request)).follow).toBe(false);
 
-  // An old football live mode shows as Live games, and follows the same way
+  // Old football live modes count as Live games
   await reset(request, { mode: 2 });
   await page.reload();
   await expect(bar).toBeVisible();
 
-  // Not over your team's card or recent finals with nothing live, nor an empty board
+  // Hidden over a fallback card, recent finals or no game
   await reset(request, { mode: 5, fallback: true });
   await page.reload();
   await expect(page.locator("#liveName")).toHaveText("No live game right now, showing your team until one starts");
@@ -1375,7 +1368,7 @@ test("Follow this game shows in Live games and Favorite teams with a game up, an
   await expect(page.locator("#gstate")).toHaveText("FINAL");
   await expect(page.locator("#favName")).toHaveText("Cycling through your favorites");
   await expect(bar).toBeHidden();
-  // Nor a final in Live games, the minute before it moves on
+  // Nor a Live games final before it moves on
   await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" } });
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("FINAL");
@@ -1399,7 +1392,7 @@ test("Follow this game during another game's big play follows the game the panel
   const sw = page.getByRole("switch", { name: "Follow this game" });
   await reset(request);
   const g = (await deviceState(request)).game;
-  // The board is on another game's big play, even one that has just ended
+  // A big-play visit, even to a game just ended
   await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, visit: true, visit_follow: true });
   await page.goto("/");
   await expect(page.locator("#gstate")).toHaveText("FINAL");
@@ -1416,8 +1409,7 @@ test("Follow this game during another game's big play follows the game the panel
   await page.reload();
   await expect(bar).toBeVisible();
   await expect(page.locator("#followLg")).toHaveText("The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel until its final has been up for After the final.");
-  // Not when the game the panel was showing has ended meanwhile, or Favorite
-  // teams had no favorite's card up: the panel couldn't follow it
+  // Hidden when the shown game can no longer be followed
   await reset(request, { mode: 5, game: { ...g, ...LIVE }, visit: true, visit_follow: false });
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("LIVE");
@@ -1445,18 +1437,18 @@ test("Follow this game shows what the panel has, turns off on an open page when 
   await expect(name).toHaveText("Following this game");
   await expect(page.locator("#followLg")).toHaveText("The panel stays on this game until it ends. Turn this off to go back to switching games.");
 
-  // The page's regular read: the game ended, and the switch stays on over the final the panel still holds
+  // Game ended: the switch stays on over the final
   await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: true });
   await page.clock.fastForward(16000);
   await expect(page.locator("#gstate")).toHaveText("FINAL");
   await expect(bar).toBeVisible();
   await expect(sw).toBeChecked();
-  // The panel let go by itself after the final: the switch goes, since a final has nothing left to follow
+  // Panel let go after the final: the switch hides
   await reset(request, { mode: 5, game: { ...g, ...LIVE, s: "POST" }, follow: false });
   await page.clock.fastForward(16000);
   await expect(bar).toBeHidden();
 
-  // The panel let go on a game still on (a change made in the app): the switch turns off on the open page
+  // Panel let go mid-game, as from the app: switch off
   await reset(request, { mode: 5, game: { ...g, ...LIVE }, follow: true });
   await page.clock.fastForward(16000);
   await expect(sw).toBeChecked();
@@ -1466,7 +1458,7 @@ test("Follow this game shows what the panel has, turns off on an open page when 
   await expect(name).toHaveText("Follow this game");
   await expect(page.locator("#liveName")).toHaveText("Following a random game in progress");
 
-  // A follow=1 the panel answered but didn't take: the switch shows the tap, then the panel's off
+  // Answered but not taken: the tap shows, then reverts
   await page.route("**/gameday/set*", (route) => route.fulfill({ json: { ok: true } }));
   const posted = page.waitForRequest((r) => r.url().includes("/gameday/set?follow=1"));
   await sw.click();
@@ -1960,7 +1952,7 @@ test("On now lists today's minor league games from MLB's stats service", async (
               teams: { away: side(531, "SWB", "RailRiders"), home: side(552, "SYR", "Mets") } },
             { gamePk: 4, gameDate: "2026-07-05T00:05:00Z", status: { codedGameState: "S", startTimeTBD: false },
               teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
-            // Game 2 of a doubleheader: no start time, listed five minutes after game 1
+            // Doubleheader game 2: TBD, five minutes after game 1
             { gamePk: 5, gameDate: "2026-07-05T00:10:00Z", status: { codedGameState: "S", startTimeTBD: true },
               teams: { away: side(564, "JAX", "Jumbo Shrimp"), home: side(235, "MEM", "Redbirds") } },
           ],
@@ -2004,7 +1996,7 @@ test("AHL and ECHL teams have their own tabs, with HockeyTech's logos", async ({
   // A logo file named for its season
   await expect(page.locator("#tiles .tile", { hasText: "Cleveland Monsters" }).locator("img"))
     .toHaveAttribute("src", "https://assets.leaguestat.com/ahl/logos/50x50/373_94.png");
-  // No small copy (the panel draws its badge): the page shows the full-size logo
+  // No small copy: the page uses the full-size logo
   await expect(page.locator("#tiles .tile", { hasText: "Hamilton Hammers" }).locator("img"))
     .toHaveAttribute("src", "https://assets.leaguestat.com/ahl/logos/457.png");
   await page.locator(".tabs button", { hasText: "ECHL" }).click();
@@ -2020,8 +2012,7 @@ test("AHL and ECHL teams have their own tabs, with HockeyTech's logos", async ({
   await page.locator("#pick").click();
   await page.locator("#q").fill("crunch");
   await expect(page.locator("#tiles .tile .n")).toHaveText(["Syracuse Crunch"]);
-  // HockeyTech's feed doesn't answer a browser on another site: On now
-  // leaves the two leagues out rather than asking it
+  // HockeyTech blocks browsers, so On now skips those leagues
   await page.locator("#q").fill("");
   await page.locator(".tabs button", { hasText: "On now" }).click();
   await expect(page.locator("#tiles .none")).toHaveText("No games today");
@@ -2243,7 +2234,7 @@ test("the 2x2 keeps its saved wiring, and on a 2x2 the wiring can be changed", a
   await expectSet(request, { wiring: "1" });
   expect(asked).toBe("Restart the panel with the new wiring?");
   await expect(page.locator("#toast")).toHaveText("Restarting with the new wiring");
-  // Picking the two-wide picture from the 2x2 is a change of layout.
+  // Two wide from the 2x2 changes layout
   await reset(request, { panels: 2, rows: 2, wiring: 0 });
   await page.reload();
   page.once("dialog", (d) => d.accept());
@@ -2318,14 +2309,14 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await expect(page.locator("#hFw")).toHaveText("1.5.4 beta, built Oct 17, 8:01 PM");
   await expect(page.locator("#rssi")).toHaveText("Not connected");
 
-  // Minor league scores read from MLB: their own row, only once there is one
+  // MLB's row shows only once there is a read
   await expect(page.locator("#hMlbRow")).toBeHidden();
   await reset(request, { health: { ...h, mlb: 429, mlb_ago: 40 } });
   await page.reload();
   await expect(page.locator("#hMlbRow")).toBeVisible();
   await expect(page.locator("#hMlb")).toHaveText("HTTP 429, 40 s ago");
   await expect(page.locator("#hEspn")).toHaveText("OK, 9 s ago");
-  // and AHL and ECHL scores read from HockeyTech
+  // Same for HockeyTech's row
   await expect(page.locator("#hHtRow")).toBeHidden();
   await reset(request, { health: { ...h, ht: 200, ht_ago: 12 } });
   await page.reload();
@@ -2681,8 +2672,6 @@ test("the idle display says what the panel shows now, and hides on firmware with
   await expect(page.locator("#idleCtls")).toBeHidden();
 });
 
-// Split mode (components/gameday/split.h): the second area's block in the
-// Panel card, on three and four wide and two rows of two.
 test("the second area shows on three and four wide and two rows of two, titled for where it is", async ({ page, request }) => {
   await reset(request);  // two panels: no second area
   await page.goto("/");
@@ -2694,7 +2683,7 @@ test("the second area shows on three and four wide and two rows of two, titled f
   await reset(request, { panels: 2, rows: 2 });
   await page.reload();
   await expect(page.locator("#splitTitle")).toHaveText("Bottom half");
-  // Two rows of two always has it: no Nothing, and Off is the clock.
+  // A 2x2 has no Nothing; Off is the clock
   await expect(choices).toHaveText(["Rotating live games", "A second team's game", "Today's scores", "Clock and date"]);
   await expect(split).toHaveValue("4");
   await expect(page.locator("#splitHint")).toContainText("The time and the date");
@@ -2735,14 +2724,13 @@ test("the second area posts its choice, and its team from the chooser, a minor l
   await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
   await page.locator("#q").fill("pga tour");
   await expect(page.locator("#tiles .none")).toHaveText("No team matches");
-  // A minor league baseball, AHL or ECHL team can be the second team: its
-  // tabs are there, and "tour" finds the Asheville Tourists, never a tour.
+  // "tour" finds the Asheville Tourists, never a tour
   for (const tab of ["MiLB", "AHL", "ECHL"])
     await expect(page.locator(".tabs button", { hasText: new RegExp(`^${tab}$`) })).toBeVisible();
   await page.locator("#q").fill("tour");
   await expect(page.locator("#tiles .tile")).toHaveCount(1);
   await expect(page.locator("#tiles .tile")).toContainText("Asheville Tourists");
-  // The panel's own team is refused, and the chooser stays open.
+  // The panel's own team is refused; chooser stays open
   await page.locator("#q").fill("cowboys");
   await page.locator("#tiles .tile", { hasText: "Dallas Cowboys" }).click();
   await expect(page.locator("#toast")).toContainText("panel's own team");
@@ -2804,8 +2792,6 @@ test("a night time cleared in its field isn't posted", async ({ page, request })
   await expectSet(request, { nightstart: "21:45" });
 });
 
-// Manual bets (components/gameday/bets.h): the Bets card, folded away at the
-// end, and the bets on the board's game under the board.
 const BET = { slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" };
 const openBets = async (page) => {
   if (!(await page.locator("#betCard").evaluate((d) => d.open))) await page.locator("#betCard summary").click();
@@ -2830,7 +2816,7 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expect(page.locator("#betTeam")).toHaveText("Dallas Cowboys");
   await page.locator("#betLine").fill("-3.5");
   await page.locator("#betAdd").click();
-  // Slot 0: the panel puts it in its first empty slot.
+  // Slot 0: the panel picks the first empty slot
   await expectSet(request, { bet: "0,nfl,6,spread,-3.5" });
   await expect(page.locator("#toast")).toHaveText("Added DAL -3.5");
   await expect(page.locator("#betList .betrow label")).toHaveCount(1);
@@ -2839,7 +2825,7 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await expect(page.locator("#betSum")).toHaveText("1 of 8");
   // Before kickoff the board shows the line only.
   await expect(page.locator("#betline .bet")).toHaveText(["DAL -3.5"]);
-  // The team stays picked for the next bet: an over on the same game.
+  // The team stays picked for the next bet
   await page.locator("#betType").selectOption("over");
   await expect(page.locator("#betLineHint")).toHaveText("Total points in the game, like 47.5");
   await page.locator("#betLine").fill("47.5");
@@ -2925,7 +2911,7 @@ test("the Bets card says what's wrong with a bet before posting it", async ({ pa
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("A total is more than 0.");
   expect((await sets(request)).filter((q) => q.bet)).toEqual([]);
-  // Pick'em is a spread of 0, a moneyline has no line, and "+7.0" is +7.
+  // PK is 0, ML has no line, "+7.0" is +7
   await page.locator("#betType").selectOption("spread");
   await page.locator("#betLine").fill("PK");
   await page.locator("#betAdd").click();
@@ -2940,7 +2926,7 @@ test("the Bets card says what's wrong with a bet before posting it", async ({ pa
   await page.locator("#betAdd").click();
   await expectSet(request, { bet: "0,nfl,2,spread,+7" });
   await expect(page.locator("#betList .betrow")).toHaveCount(3);
-  // A spread with no sign is neither side until the owner says which.
+  // An unsigned spread waits for the owner to pick
   await page.locator("#betLine").fill("7");
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("Tap \u2212 if the team is the favorite or + if it's the underdog.");
@@ -2948,7 +2934,7 @@ test("the Bets card says what's wrong with a bet before posting it", async ({ pa
   await expect(msg).toBeHidden();
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("You have that bet already.");
-  // A comma for the decimal point, as a phone set to a comma locale types it.
+  // A comma decimal, as comma-locale phones type it
   await page.locator("#betLine").fill("3,5");
   await page.getByRole("button", { name: "Minus, the favorite" }).click();
   await page.locator("#betAdd").click();
@@ -2968,7 +2954,7 @@ test("the spread's sign comes from the minus and plus buttons, so no keyboard ne
   await page.locator("#betTeam").click();
   await page.locator("#q").fill("Buffalo");
   await page.locator("#tiles .tile", { hasText: "Buffalo Bills" }).click();
-  // The decimal pad an iPhone opens for the line has no minus.
+  // iPhone's decimal pad has no minus key
   await expect(page.locator("#betLine")).toHaveAttribute("inputmode", "decimal");
   const minus = page.getByRole("button", { name: "Minus, the favorite" });
   const plus = page.getByRole("button", { name: "Plus, the underdog" });
@@ -2987,7 +2973,7 @@ test("the spread's sign comes from the minus and plus buttons, so no keyboard ne
   // The next bet starts with neither side picked.
   await expect(minus).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#betLine")).toHaveValue("");
-  // A sign typed in lights its button, and the other button changes it.
+  // Typed sign lights its button; the other button flips it
   await page.locator("#betLine").pressSequentially("-6");
   await expect(minus).toHaveAttribute("aria-pressed", "true");
   await plus.click();
@@ -3026,8 +3012,7 @@ test("two device pages adding a bet at the same time each keep theirs", async ({
     await p.goto("/");
     await openBets(p);
   }
-  // The other page keeps the state from before either bet, as a phone tab
-  // just woken up would: it sees slot 1 free.
+  // Stale like a woken phone tab: slot 1 looks free
   const before = await deviceState(request);
   await other.route("**/gameday/state*", (route) => route.fulfill({ json: before }));
   const add = async (p, name) => {
@@ -3037,7 +3022,7 @@ test("two device pages adding a bet at the same time each keep theirs", async ({
     await p.locator("#betType").selectOption("ml");
     await p.locator("#betAdd").click();
   };
-  // Neither page has seen the other's bet when it adds its own.
+  // Neither page sees the other's bet before adding
   await add(page, "Buffalo Bills");
   await add(other, "Miami Dolphins");
   await expect.poll(async () => (await deviceState(request)).bets.map((b) => b.slot + " " + b.text)).toEqual(["1 BUF ML", "2 MIA ML"]);
@@ -3099,9 +3084,6 @@ test("firmware without bets has no Bets card", async ({ page, request }) => {
   await expect(page.locator("#betline")).toBeHidden();
 });
 
-// Favorite players (components/gameday/players.h): the card reads a team's
-// roster from ESPN in the browser, posts the player with the name the panel
-// shows, and the board lists their stat lines on its game.
 const BILLS_ROSTER = {
   team: { id: "2", abbreviation: "BUF" },
   athletes: [
@@ -3128,7 +3110,7 @@ const ALLEN = { l: "nfl", id: 3918298, team: 2, name: "ALLEN" };
 const pickPlayerTeam = async (page, name) => {
   await page.locator("#playerTeam").click();
   await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
-  // A golf tour or a racing series has no players to pick.
+  // Golf tours and racing series have no players
   await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
   await expect(page.locator(".tabs button", { hasText: "Racing" })).toBeHidden();
   await page.locator("#q").fill(name);
@@ -3181,8 +3163,7 @@ test("the Favorite players card leaves minor league, AHL and ECHL teams out of i
         linescore: { currentInning: 7, inningState: "Bottom", scheduledInnings: 9 } },
     ] }] },
   }));
-  // The panel follows a minor league team: the chooser still opens on a tab
-  // whose teams have ESPN rosters.
+  // Following MiLB, the chooser opens on an ESPN tab
   await reset(request, { team: { l: "milb", id: 234, abbr: "DUR", name: "Durham Bulls" } });
   await page.goto("/");
   await page.locator("#playerTeam").click();
@@ -3192,7 +3173,7 @@ test("the Favorite players card leaves minor league, AHL and ECHL teams out of i
   await expect(page.locator(".tabs button", { hasText: "ECHL" })).toBeHidden();
   await expect(page.locator(".tabs button", { hasText: "NHL" })).toBeVisible();
   await expect(page.locator(".tabs button", { hasText: "On now" })).toBeVisible();
-  // On now lists the minor league game, but neither side picks a roster.
+  // On now's minor league sides pick no roster
   await page.locator(".tabs button", { hasText: "On now" }).click();
   await expect(page.locator("#tiles .game .side", { hasText: "Bulls" })).toBeDisabled();
   await expect(page.locator("#tiles .game .side", { hasText: "Redbirds" })).toBeDisabled();
@@ -3226,11 +3207,11 @@ test("the Favorite players card says when ESPN's roster can't be read, and tells
   fail = false;
   await pickPlayerTeam(page, "New Jersey Devils");
   await expect(page.locator("#playerMsg")).toBeHidden();
-  // Flat: each player once, the one without an id left out.
+  // Flat: each player once, any without an id dropped
   await expect(page.locator("#playerPick option")).toHaveCount(3);
   await page.locator("#playerPick").selectOption("4697389");
   await page.locator("#playerAdd").click();
-  // A teammate has the same last name: the initial says which.
+  // Same last name as a teammate: add the initial
   await expectSet(request, { player: "nhl,4697389,11,L. HUGHES" });
   await page.locator("#playerPick").selectOption("3114758");
   await page.locator("#playerAdd").click();
@@ -3287,9 +3268,7 @@ test("a double tap on Add player posts the player once", async ({ page, request 
 
 test("a player the panel didn't keep is never shown as added", async ({ page, request }) => {
   await reset(request, { players: SEVEN });
-  // Another page takes the last slot; this one still lists seven. Until it
-  // posts its own player, the reads it gets are from before that post, so a
-  // start-up read that lands late doesn't show it the eighth first.
+  // Another page took the last slot; ours reads stale state
   let stale = null;
   await page.route("**/gameday/state*", async (route) => {
     const res = await route.fetch();
@@ -3314,8 +3293,7 @@ test("a player the panel didn't keep is never shown as added", async ({ page, re
   expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "COOK"]);
 });
 
-// Letters the panel folds the way the firmware folds ESPN's words, and
-// teammates who share a last name and an initial.
+// Folded letters, and teammates sharing a last name and initial
 const NAMES_ROSTER = {
   athletes: [
     { id: "203669", firstName: "Martin", lastName: "\u00d8degaard", displayName: "Martin \u00d8degaard", jersey: "8" },
@@ -3343,7 +3321,7 @@ test("the Favorite players card folds letters as the panel does and tells teamma
   await add("5002", "HOJLUND");
   await add("5003", "JE. SMITH");
   await add("5004", "JA. SMITH");
-  // The same first name too: nothing in the name tells them apart.
+  // Same first name too: nothing tells them apart
   await add("5005", "E. PETTERS");
   await expect(page.locator("#playerList .playerrow label")).toHaveCount(6);
 });
@@ -3376,9 +3354,7 @@ test("firmware without favorite players has no card and no switch for them", asy
   await expect(page.getByRole("switch", { name: "Favorite players: Scores", exact: true })).toBeHidden();
 });
 
-// The page's layout: Quick settings under the board, the mode under it, and
-// cards that fold, each remembered in the browser. These run without the
-// expand hook, as an owner sees the page.
+// Without the expand hook, as an owner sees it
 test.describe("cards that fold", () => {
   test.use({ expand: false });
   const card = (page, id) => page.locator("#" + id);
@@ -3392,10 +3368,9 @@ test.describe("cards that fold", () => {
     await expect(quick.getByRole("switch", { name: "Panel on" })).toBeChecked();
     await expect(quick.getByRole("slider", { name: "Brightness", exact: true })).toHaveValue("128");
     await expect(quick.getByRole("combobox", { name: /^Idle display/ })).toHaveValue("0");
-    // My team follows one team already, and one panel row has no second area.
+    // My team can't follow; one row has no second area
     await expect(quick.getByRole("switch", { name: "Follow this game" })).toBeHidden();
     await expect(page.locator("#splitCtls")).toBeHidden();
-    // The board, Quick settings, then the mode buttons and the mode's bar, then the cards.
     const order = await page.evaluate(() => ["#board", "#quick", "#modes", "#teambar", ".grid"]
       .map((sel) => document.querySelector(sel).getBoundingClientRect().top));
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -3407,7 +3382,7 @@ test.describe("cards that fold", () => {
     await quick.getByRole("combobox", { name: /^Idle display/ }).selectOption("1");
     await expectSet(request, { idle: "1" });
 
-    // A game Live games picked can be followed, and two rows of two has a second area.
+    // Live games can follow; a 2x2 has a second area
     const g = (await deviceState(request)).game;
     await reset(request, { mode: 5, panels: 2, rows: 2, game: { ...g, ...LIVE } });
     await page.reload();
@@ -3417,7 +3392,7 @@ test.describe("cards that fold", () => {
     await expectSet(request, { split: "3" });
     await quick.getByRole("switch", { name: "Follow this game" }).click();
     await expectSet(request, { follow: "1" });
-    // Clock size and Text size stay in the Panel card, which starts open.
+    // Size settings stay in the Panel card, open by default
     await expect(card(page, "panelCard").getByRole("combobox", { name: "Clock size", exact: true })).toBeVisible();
   });
 
@@ -3433,7 +3408,7 @@ test.describe("cards that fold", () => {
     await expect(card(page, "deviceCard").locator("summary")).toContainText("Updates, Wi-Fi, diagnostics");
     expect(await isOpen(page, "panelCard")).toBe(true);
     await expect(page.getByRole("slider", { name: "Ticker speed" })).toBeVisible();
-    // Three favorites: open, with the count beside the name. No players or bets: folded.
+    // Three favorites: open. No players or bets: folded.
     await expect.poll(() => isOpen(page, "favCard")).toBe(true);
     await expect(page.locator("#favSum")).toHaveText("3 of 16");
     expect(await isOpen(page, "playerCard")).toBe(false);
@@ -3441,7 +3416,7 @@ test.describe("cards that fold", () => {
     await expect(page.locator("#betAdd")).toBeHidden();
     await expect(page.locator("#betSum")).toHaveText("");
 
-    // A tap on the name opens a card; another folds it.
+    // Tapping the name opens a card; again folds it
     await card(page, "tickerCard").locator("summary").click();
     await expect(page.getByRole("switch", { name: "Down and distance" })).toBeVisible();
     await card(page, "tickerCard").locator("summary").click();
@@ -3483,12 +3458,12 @@ test.describe("cards that fold", () => {
     await expect(page.locator("#panels")).toBeVisible();
     expect(await isOpen(page, "setupCard")).toBe(true);
     expect(await isOpen(page, "panelCard")).toBe(false);
-    // Favorites stays folded with favorites in it, as the viewer left it.
+    // Favorites stays folded, as the viewer left it
     await sleep(500);
     expect(await isOpen(page, "favCard")).toBe(false);
     expect(await isOpen(page, "tickerCard")).toBe(false);
 
-    // A bet added while the page is open leaves the Bets card folded.
+    // A bet added later leaves Bets folded
     await page.evaluate(() => localStorage.clear());
     await page.clock.install();
     await page.reload();
@@ -3528,7 +3503,7 @@ test.describe("cards that fold", () => {
     // The card opens by itself, with Install in sight.
     await expect(page.locator("#fwInstall")).toBeVisible();
     expect(await isOpen(page, "deviceCard")).toBe(true);
-    // Folded by the viewer, its name says an update is out, and it stays folded.
+    // Viewer-folded: the peek says Update available, stays folded
     await card(page, "deviceCard").locator("summary").click();
     await expect(page.locator("#fwInstall")).toBeHidden();
     await expect(peek).toBeVisible();
@@ -3541,7 +3516,7 @@ test.describe("cards that fold", () => {
     expect(await isOpen(page, "deviceCard")).toBe(false);
     await expect(peek).toBeVisible();
 
-    // One that didn't take opens the card too, and says so folded.
+    // A failed update opens it too, and says so
     await page.evaluate(() => localStorage.clear());
     entity = { ...fw, value: "2026.10.3", current_version: "2026.10.2" };
     await reset(request, { update_failed: "2026.10.3" });
@@ -3552,7 +3527,7 @@ test.describe("cards that fold", () => {
     await expect(peek).toHaveText("Update didn't take");
     await expect(peek).toBeVisible();
 
-    // An offer older than the panel's version is nothing to install: Device stays folded.
+    // An older offer isn't an update: Device stays folded
     await page.evaluate(() => localStorage.clear());
     entity = { ...fw, value: "2026.10.2", current_version: "2026.11.0-beta.812" };
     await reset(request);
@@ -3563,7 +3538,7 @@ test.describe("cards that fold", () => {
     await expect(peek).toHaveText("Updates, Wi-Fi, diagnostics");
     await expect(peek).not.toHaveClass(/\balert\b/);
 
-    // A weak signal shows beside the name, and leaves the card folded.
+    // Weak signal shows in the peek; the card stays folded
     entity = { ...fw, state: "NO UPDATE", value: "2026.10.2", current_version: "2026.10.2" };
     await reset(request, { wifi: { rssi: -81, step: 300, hist: [-80, -81], weak: true, drops: 0, day: 0, causes: {} } });
     await page.reload();
