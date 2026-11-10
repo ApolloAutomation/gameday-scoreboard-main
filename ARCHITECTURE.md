@@ -237,7 +237,11 @@ watched games (`rot_pick`, `rot_card`, `rot_ticker`). The setting is its own
 them, keeping the card before up while a card with new logos waits up to
 3.5 s for them (`LogoHold`), after which the held card's turn starts over;
 the next card with logos (`scores_next_logos`, or the rotation's next
-`rot_pick`) downloads its logos while the card before it is up. `a2_tick_`
+`rot_pick`) downloads its logos while the card before it is up, and the
+rotation puts that card up next even when the one before it ended
+(`rot_pick_next`). A live view with no card picks one at once rather than
+drawing "No other live games", and the area turned off is cleared
+(`area_clear`), so no stale card waits out a hold. `a2_tick_`
 turns the rotation, ends a big play's stay and starts or
 stops the scores reads for the area. Its reads go in the board's gaps
 (`start_gap_job_`, in order: the area's own team poll or a big play's game

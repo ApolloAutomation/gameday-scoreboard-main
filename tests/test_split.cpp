@@ -216,6 +216,31 @@ void test_next_logos() {
   PCHECK(rot_pick(games, nhl, games[(size_t) now].event_id, 0, "") == 2);
   // Never the board's game
   PCHECK(rot_pick(games, nhl, "1", nhl, "3") == 1 && rot_pick(games, nhl, "2", nhl, "3") == 0);
+
+  // The card whose logos were fetched goes up next
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "2", 0, "") == 1);
+  // "2" ended: "3" next, not the list's start
+  const std::vector<WatchGame> left = {game("1", nhl, GameState::IN), game("3", nhl, GameState::IN)};
+  PCHECK(rot_pick(left, nhl, "2", 0, "") == 0);
+  PCHECK(rot_pick_next(left, nhl, "2", nhl, "3", 0, "") == 1);
+  // A game new since waits its turn
+  const std::vector<WatchGame> more = {game("1", nhl, GameState::IN), game("4", nhl, GameState::IN),
+                                       game("2", nhl, GameState::IN), game("3", nhl, GameState::IN)};
+  PCHECK(rot_pick_next(more, nhl, "1", nhl, "2", 0, "") == 2);
+  PCHECK(rot_pick_next(more, nhl, "3", nhl, "1", 0, "") == 0);
+  // Fetched card off the list: list order
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "2", nhl, "2") == 2);
+  PCHECK(rot_pick_next(games, nhl, "1", nhl, "9", 0, "") == 1);
+  PCHECK(rot_pick_next(games, nhl, "1", 0, "", 0, "") == 1);
+  std::vector<WatchGame> unread = games;
+  unread[1].state = GameState::NOT_FOUND;
+  PCHECK(rot_pick_next(unread, nhl, "1", nhl, "2", 0, "") == 2);
+  // From a reset: the first live game
+  PCHECK(rot_pick_next(games, 0, "", 0, "", 0, "") == 0);
+  // One game: it stays up
+  const std::vector<WatchGame> solo = {game("7", nhl, GameState::IN)};
+  PCHECK(rot_pick_next(solo, nhl, "7", nhl, "7", 0, "") == 0);
+  PCHECK(rot_pick_next(solo, 0, "", nhl, "7", nhl, "7") == -1);
 }
 
 std::string rot_clock(uint8_t league, uint8_t period, const char *clock, Half half = Half::NONE, uint8_t reg = 4) {

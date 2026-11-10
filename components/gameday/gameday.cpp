@@ -4554,6 +4554,7 @@ void GamedayComponent::a2_reset_() {
   this->a2_gen_++;  // a read in flight was for the old view
   this->end_jump_();
   this->rot_event_.clear();
+  this->rot_next_event_.clear();
   this->rot_ms_ = 0;
   this->a2_fail_.clear();
   this->a2_misses_ = 0;
@@ -4737,6 +4738,9 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
     return;  // called before setup()
   const ::espn::AreaView v = this->a2_compute_();
   this->a2_view_ = v;
+  // A live game now, never "No other live games"
+  if (v == ::espn::AreaView::LIVE && !this->jump_.active && !this->rot_here_())
+    this->rot_advance_(millis());
   // Tell the state document only when the view changes.
   const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
   const uint8_t n =
@@ -4750,6 +4754,11 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   AreaView *av = area_view();
   if (v == ::espn::AreaView::NONE || av == nullptr) {
     this->a2_hold_ = {};
+    // Turned back on, it shows nothing stale
+    if (av != nullptr)
+      area_clear(*av);
+    this->a2_logo_[0].clear();
+    this->a2_logo_[1].clear();
     return;
   }
   UpdateFields f;
@@ -4853,35 +4862,47 @@ void GamedayComponent::a2_tick_() {
     }
     redraw = true;
   }
-  if (this->rotation_on_() && !this->jump_.active) {
-    bool here = false;
-    for (const auto &w : this->watch_)
-      here = here || (::espn::watch_same(w, this->rot_league_, this->rot_event_) &&
-                      ::espn::rot_ok(w, this->mode_league_(), mg.event_id));
-    if (!here || this->rot_ms_ == 0 || now - this->rot_ms_ >= ::espn::kRotCardMs) {
-      const int i = ::espn::rot_pick(this->watch_, this->rot_league_, this->rot_event_, this->mode_league_(),
-                                     mg.event_id);
-      const std::string was = this->rot_event_;
-      if (i < 0) {
-        this->rot_event_.clear();
-      } else {
-        const ::espn::WatchGame &w = this->watch_[i];
-        this->rot_league_ = w.league;
-        this->rot_event_ = w.event_id;
-        // The next card's logos start downloading now.
-        const int k = ::espn::rot_pick(this->watch_, w.league, w.event_id, this->mode_league_(), mg.event_id);
-        if (k >= 0 && k != i) {
-          const ::espn::WatchGame &n = this->watch_[k];
-          this->logos_.want(::espn::team_logo_url((League) n.league, n.away_id, n.away_abbr));
-          this->logos_.want(::espn::team_logo_url((League) n.league, n.home_id, n.home_abbr));
-        }
-      }
-      this->rot_ms_ = now | 1;
-      redraw = redraw || was != this->rot_event_ || !here;
-    }
-  }
+  if (this->rotation_on_() && !this->jump_.active &&
+      (this->rot_ms_ == 0 || now - this->rot_ms_ >= ::espn::kRotCardMs || !this->rot_here_()))
+    redraw = this->rot_advance_(now) || redraw;
   if (redraw || this->a2_compute_() != this->a2_view_)
     this->emit_a2_({});
+}
+
+bool GamedayComponent::rot_here_() const {
+  const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
+  for (const auto &w : this->watch_)
+    if (::espn::watch_same(w, this->rot_league_, this->rot_event_) &&
+        ::espn::rot_ok(w, this->mode_league_(), mg.event_id))
+      return true;
+  return false;
+}
+
+// Next card up; the one after's logos start
+bool GamedayComponent::rot_advance_(uint32_t now) {
+  const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
+  const bool here = this->rot_here_();
+  const int i = ::espn::rot_pick_next(this->watch_, this->rot_league_, this->rot_event_, this->rot_next_league_,
+                                      this->rot_next_event_, this->mode_league_(), mg.event_id);
+  const std::string was = this->rot_event_;
+  this->rot_next_event_.clear();
+  if (i < 0) {
+    this->rot_event_.clear();
+  } else {
+    const ::espn::WatchGame &w = this->watch_[i];
+    this->rot_league_ = w.league;
+    this->rot_event_ = w.event_id;
+    const int k = ::espn::rot_pick(this->watch_, w.league, w.event_id, this->mode_league_(), mg.event_id);
+    if (k >= 0 && k != i) {
+      const ::espn::WatchGame &n = this->watch_[k];
+      this->rot_next_league_ = n.league;
+      this->rot_next_event_ = n.event_id;
+      this->logos_.want(::espn::team_logo_url((League) n.league, n.away_id, n.away_abbr));
+      this->logos_.want(::espn::team_logo_url((League) n.league, n.home_id, n.home_abbr));
+    }
+  }
+  this->rot_ms_ = now | 1;
+  return was != this->rot_event_ || !here;
 }
 
 // No gap reads while a logo downloads on tight RAM.

@@ -769,6 +769,18 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
 
 void area_hide_splash(AreaView &a) { show(a.game.splash, false); }
 
+void area_clear(AreaView &a) {
+  BoardView &v = a.game;
+  show(v.game, false);
+  show(v.no_game, false);
+  show(v.splash, false);
+  show(a.time, false);
+  show(a.ampm, false);
+  show(a.date, false);
+  if (a.ticker != nullptr)
+    lv_label_set_text(a.ticker, "");
+}
+
 }  // namespace esphome::gameday
 
 #endif  // USE_LVGL

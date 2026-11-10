@@ -204,6 +204,17 @@ inline int rot_pick(const std::vector<WatchGame> &games, uint8_t cur_league, con
   return -1;
 }
 
+// The card whose logos were fetched, if still on
+inline int rot_pick_next(const std::vector<WatchGame> &games, uint8_t cur_league, const std::string &cur_event,
+                         uint8_t next_league, const std::string &next_event, uint8_t board_league,
+                         const std::string &board_event) {
+  for (size_t i = 0; i < games.size() && !next_event.empty(); i++)
+    if (watch_same(games[i], next_league, next_event) && rot_ok(games[i], board_league, board_event) &&
+        !watch_same(games[i], cur_league, cur_event))
+      return (int) i;
+  return rot_pick(games, cur_league, cur_event, board_league, board_event);
+}
+
 inline std::string rot_rgb(const uint8_t (&c)[3]) {
   char buf[8];
   snprintf(buf, sizeof(buf), "%02X%02X%02X", c[0], c[1], c[2]);

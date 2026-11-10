@@ -109,6 +109,8 @@ void area_layout(AreaView &a, bool on, int x, int y, int w, int h, Sizes sizes);
 DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date,
                      image::Image *team_logo = nullptr, image::Image *opp_logo = nullptr);
 void area_hide_splash(AreaView &a);
+// Hides the card, clock and ticker while off
+void area_clear(AreaView &a);
 
 }  // namespace esphome::gameday
 

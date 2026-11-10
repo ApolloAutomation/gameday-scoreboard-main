@@ -1229,6 +1229,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint8_t rot_league_{0};
   std::string rot_event_;
   uint32_t rot_ms_{0};
+  // The card after it, whose logos are downloading
+  uint8_t rot_next_league_{0};
+  std::string rot_next_event_;
+  bool rot_here_() const;          // the card up is still one to show
+  bool rot_advance_(uint32_t now);  // true when the area needs a redraw
   // Big play's game held in the area.
   struct A2Jump {
     bool active{false};
