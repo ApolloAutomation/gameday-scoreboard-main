@@ -29,7 +29,7 @@ Once the panel is on your Wi-Fi, its QR code opens the device page, where you pi
 
 ## Does it need Home Assistant?
 
-No. The panel runs on its own and gets its scores from ESPN by itself. If you use Home Assistant, it finds the panel on your network and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
+No. The panel runs on its own and gets its scores by itself, from ESPN, and from MLB and HockeyTech for minor league baseball, the AHL and the ECHL. If you use Home Assistant, it finds the panel on your network and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
 
 ## How often does it check scores?
 
@@ -40,23 +40,15 @@ No. The panel runs on its own and gets its scores from ESPN by itself. If you us
 | Further from the start | Every 15 minutes |
 | After the final | Every minute for half an hour, ten minutes for baseball, then it looks up the next game |
 
-In Live games with nothing on, the panel waits for the next start time instead of checking every few minutes. When a read fails, it waits longer before the next try.
+In Live games with nothing on, the panel waits for the next start time instead of checking every few minutes. When a read fails, it waits longer before the next try. With **Switch to big plays in other games** on, it also checks other live games about every 45 seconds, between its own reads.
 
 A golf tour or a racing series has its own schedule, like every minute during a round of golf and every 30 seconds during a race. See [Golf](/using/golf/#how-often-it-updates) and [Racing](/using/racing/#how-often-it-updates).
 
 ## What does it cost to run?
 
-Nothing beyond the panel and its electricity. There's no subscription and no account. The scores come from ESPN's public feed, and the panel reads them itself over your Wi-Fi.
+Nothing beyond the panel and its electricity. There's no subscription and no account. The scores come from ESPN's public feed, and the panel reads them itself over your Wi-Fi. Minor league baseball scores come from MLB's public stats service, and AHL and ECHL scores from HockeyTech, the stats service the two leagues use for their own websites, both free too.
 
-If your internet plan has a data cap, **ESPN data** in the Device card on the device page shows how much the panel has downloaded since it started.
-
-:::note[Coming in the next release]
-Minor league teams' scores come from MLB's public stats service instead, also free. The row is called **Data used** and counts both.
-:::
-
-:::note[Coming in the next release]
-AHL and ECHL scores come from HockeyTech, the stats service the two leagues use for their own websites, also free. **Data used** counts them too.
-:::
+If your internet plan has a data cap, **Data used** in the Device card on the device page shows how much the panel has downloaded from all three since it started. **Switch to big plays in other games**, in the Celebrations card, can add the most; turn it off to save data. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 ## Can I follow more than one team?
 

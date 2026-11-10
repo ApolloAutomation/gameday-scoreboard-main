@@ -18,16 +18,21 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 
 - Next-game card while you wait: both logos, season records, kickoff day and time in your timezone, and a ticker with the betting line, over/under, TV network and venue
 - Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance and where the ball is (one switch) and the last play (another); the clock keeps its own row and never goes in the ticker
-- Full-screen splashes in your team's color for touchdowns, field goals, extra points and two-point conversions, the opponent's scores acknowledged in theirs, and a victory splash on a win
-- Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs and goals get the fireworks too
+- Full-screen splashes in the scoring team's color, with its logo and the points it gained, for touchdowns, field goals, extra points, 2-point conversions, safeties, interceptions and fumble recoveries, the opponent's acknowledged in theirs, and a victory splash on a win; each kind has its own switch
+- Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs, grand slams, walk-offs, goals and buzzer beaters get the fireworks too, and red cards, late lead changes and overtime get splashes of their own
+- Big plays in other games: the panel checks other live games about every 45 seconds and switches to one for its big play, then goes back, never leaving your team's live game unless you allow a favorite's; Follow this game keeps one game on the board instead
 - Golf: follow the PGA Tour or the LPGA Tour like a team, with this week's tournament and the top of its leaderboard, and the next event and its days between tournaments
 - Racing: follow Formula 1 or the NASCAR Cup Series like a team, with the race weekend's next session and its start time, the latest session's order with car numbers and gaps, the race winner's splash, and the next race between weekends
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
-- Live games: follows a random game in progress in the leagues you choose and moves on when it ends
-- A device page that mirrors the panel, celebrates with it, lists the next three games in football and soccer, and holds every setting
+- Live games: follows a random game in progress in the leagues you choose and moves on when it ends, or every 30 seconds to 30 minutes
+- An idle display for when none of your games is on (the next game, a clock, today's scores, your team's game today with a countdown, or off or dim), and night hours with their own brightness
+- College teams' ranks, and a pro team's seed or place in place of its record if you like
+- Favorite players' stat lines in the ticker while they lead their game, and their name on the celebration when they score
+- Bets you type in by hand, with whether each is covering during the game and won or lost after; the panel never connects to a sportsbook
+- A device page that mirrors the panel, celebrates with it, lists the next three games in football, soccer, minor league baseball, the AHL and the ECHL, and holds every setting
 - Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
-- Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting
+- Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting. Three or four panels and two rows of two can show a second area beside the board: the clock, today's scores, a second team's game or other live games
 
 ## Hardware
 
@@ -57,12 +62,12 @@ Team changes take effect immediately and survive reboots. Wrong panel size? Clic
 
 ## The device page
 
-The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games straight from ESPN (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond the logos and the "On now" tab, which your browser reads from ESPN. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
+The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, and rosters from ESPN when you add a favorite player. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
 
 | Setting | What it does |
 | --- | --- |
-| Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every few minutes |
-| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team and every Division I men's college basketball team, a tab per league, plus an "On now" tab. The Golf tab has the PGA Tour and the LPGA Tour and the Racing tab Formula 1 and the NASCAR Cup Series, each followed like a team |
+| Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every 30 seconds to 30 minutes |
+| Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team, every Division I men's college basketball team, every Triple-A to Single-A minor league baseball team and every AHL and ECHL team, a tab per league, plus an "On now" tab. The Golf tab has the PGA Tour and the LPGA Tour and the Racing tab Formula 1 and the NASCAR Cup Series, each followed like a team |
 | Timezone | Follows the browser's zone unless you pick one by hand; used for kickoff times |
 | Ticker: game situation, last play, odds and TV | Choose what scrolls along the bottom. Game situation is down and distance in football, the count and outs in baseball, and goals, cards and stats in soccer |
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
@@ -80,7 +85,7 @@ The device runs on its own, but it is a normal ESPHome device. If Home Assistant
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=esphome)
 
-It comes with the controls worth automating: Team, Mode, Power, Brightness, Scroll Speed, Select Page, Game Status, Last Play, Firmware, Install Updates Automatically, Refresh Now, Reboot and the WizMote pairing switches. Favorites, timezone, ticker options, splashes and the panel count are set from the device page only. Men's college basketball teams aren't in Home Assistant's Team list (it would be too long for an entity); pick them on the device page. The API has no encryption key in the prebuilt binary; build from YAML if you want one.
+It comes with the controls worth automating: Team, Mode, Power, Brightness, Scroll Speed, Select Page, Game Status, Last Play, Firmware, Install Updates Automatically, Refresh Now, Reboot and the WizMote pairing switches. Favorites, timezone, ticker options, splashes and the panel count are set from the device page only. Men's college basketball and minor league baseball teams aren't in Home Assistant's Team list (it would be too long for an entity); pick them on the device page. The API has no encryption key in the prebuilt binary; build from YAML if you want one.
 
 ## Build it yourself
 
@@ -90,7 +95,7 @@ cd gameday-scoreboard-main/firmware
 esphome run gameday.yaml
 ```
 
-`gameday.yaml` only names the build and picks the controller pin map from `firmware/controllers/`; everything else lives in `gameday-common.yaml`. The panel count is a saved preference applied at boot by `components/panel_layout`, so one binary serves both layouts. The scoreboard page is in `pages/gameday-live.yaml`, the ESPN logic in `components/gameday`, and the device web page in `firmware/web` (edit `app.js`, `app.css` or `demo.js`, then run `python3 scripts/build_web.py` to refresh the embedded bundles). The theme and clock packages come from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit.
+`gameday.yaml` only names the build and picks the controller pin map from `firmware/controllers/`; everything else lives in `gameday-common.yaml`. The panel count is a saved preference applied at boot by `components/panel_layout`, so one binary serves every layout. The scoreboard page is in `pages/gameday-live.yaml`, the ESPN logic in `components/gameday`, and the device web page in `firmware/web` (edit `app.js`, `app.css` or `demo.js`, then run `python3 scripts/build_web.py` to refresh the embedded bundles). The theme and clock packages come from [hub75-studio](https://github.com/pavlov-net/hub75-studio), pinned to a commit.
 
 ## How it works
 

@@ -5,10 +5,6 @@ sidebar:
   order: 10.5
 ---
 
-:::note[Coming in the next release]
-Bets are new in the next release. This page describes them ahead of it.
-:::
-
 Keep an eye on bets you've placed. You type each one into the **Bets** card on the [device page](/using/device-page/), and during the game the panel says in the ticker whether it's covering. The panel never connects to a sportsbook and never asks for an account or a password. It only compares the bet you typed in with the score it's already showing.
 
 ## What you can enter
