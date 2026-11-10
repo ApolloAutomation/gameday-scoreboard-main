@@ -18,6 +18,7 @@
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "players.h"
+#include "props.h"
 #include "poll_timing.h"
 #include "recap.h"
 #include "source_hockeytech.h"
@@ -448,6 +449,39 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (parse_live_games(r, live, &next, &finals, &pending))
       sink = sink + recap(finals, pending, next, now, league);
   }
+  // A summary's box score, cut where the panel stops reading.
+  for (Sport sport : {Sport::FOOTBALL, Sport::BASKETBALL, Sport::BASEBALL, Sport::HOCKEY}) {
+    PlayerWatch w;
+    for (uint32_t id : {3918298u, 4431680u, 5080761u, 3114727u, 4882093u})
+      w.ids[w.n++] = id;
+    BoxCutter cut;
+    StringReader in(json, &cut);
+    std::vector<BoxLine> lines;
+    if (!parse_box(in, sport, w, lines))
+      continue;
+    if (lines.size() > (size_t) PlayerWatch::kMax || cut.used() > size)
+      abort();
+    for (size_t stat = 0; stat < kPropStatCount; stat++) {
+      if (kPropStats[stat].sport != sport)
+        continue;
+      Prop pr{};
+      pr.athlete = lines.empty() ? 1 : lines[0].athlete;
+      pr.stat = (uint8_t) stat;
+      pr.side = (uint8_t) (kPropStats[stat].yes ? PropSide::YES : PropSide::OVER);
+      pr.line = kPropStats[stat].yes ? 0 : 49;
+      strncpy(pr.name, "ALLEN", kPropNameMax);
+      for (const BoxLine &l : lines) {
+        const int v = prop_value(pr, l);
+        BetGame g;
+        g.event = 1;
+        g.phase = BetPhase::LIVE;
+        pr.event = 1;
+        sink = sink + prop_ticker(pr, prop_status(pr, &g, v, 500, now), v).size();
+        prop_grade(pr, l.played, v, now, now + 3600);
+        sink = sink + prop_ticker(pr, PropStatus::WON, v).size();
+      }
+    }
+  }
   {
     // The plain scan, with nothing kept for the rotation.
     std::vector<LiveGame> live;
@@ -628,6 +662,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + render(prev, e, now);
       // The same game a poll later: what a splash compares.
       sink = sink + render(e, e, now);
+      for (const auto &l : kLeagues)
+        if (l.sport == sport)
+          sink = sink + game_progress(e, (uint8_t) l.league) + soccer_goals(e, 280555);
       // Again, with favorite players in each sport league.
       for (const auto &l : kLeagues) {
         if (l.sport != sport)

@@ -3293,6 +3293,180 @@ test("a player the panel didn't keep is never shown as added", async ({ page, re
   expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "COOK"]);
 });
 
+// ---- player props ----
+const pickPropTeam = async (page, name) => {
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
+  await page.locator("#q").fill(name);
+  await page.locator("#tiles .tile", { hasText: name }).click();
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  await expect(page.locator("#betTeam")).toHaveText(name);
+};
+
+test("the Bets card adds a player prop on a player from the team's roster", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#propRows")).toBeHidden();
+  await page.locator("#betType").selectOption("prop");
+  await expect(page.locator("#propRows")).toBeVisible();
+  await expect(page.locator("#betTeamHint")).toHaveText("The player's team. Minor league teams have no player props.");
+  // Minor league teams have no rosters on ESPN.
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
+  await page.getByRole("button", { name: "Close" }).click();
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(page.locator("#propPick option")).toHaveText([
+    "Josh Allen · QB #17", "Tyler Bass · PK #2", "James Cook · RB #4", "Marquez Valdes-Scantling · WR #11",
+  ]);
+  // Football's stats, in the page's words.
+  await expect(page.locator("#propStat option").first()).toHaveText("Passing yards");
+  await expect(page.locator("#propStat option", { hasText: "Anytime touchdown" })).toHaveCount(1);
+  await expect(page.locator("#propStat option", { hasText: "Rebounds" })).toHaveCount(0);
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await expect(page.locator("#betLine")).toHaveAttribute("inputmode", "decimal");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await expect(page.locator("#toast")).toHaveText("Added ALLEN O 250.5 PASS YDS");
+  await expect(page.locator("#betList .proprow label")).toContainText("ALLEN O 250.5 PASS YDS");
+  await expect(page.locator("#betList .proprow small")).toHaveText("Starts when the panel shows a BUF game");
+  await expect(page.locator("#betSum")).toHaveText("1 prop");
+  // A yes prop has no side or line.
+  await page.locator("#propPick").selectOption("nfl:4379399");
+  await page.locator("#propStat").selectOption("td");
+  await expect(page.locator("#propSideRow")).toBeHidden();
+  await expect(page.locator("#betLineRow")).toBeHidden();
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,td,yes," });
+  await expect(page.locator("#toast")).toHaveText("Added COOK ANY TD");
+  // An under on a whole number
+  await page.locator("#propStat").selectOption("rushyds");
+  await page.locator("#propSide").selectOption("under");
+  await page.locator("#betLine").fill("70");
+  await page.locator("#betLine").press("Enter");
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,rushyds,under,70" });
+  expect((await deviceState(request)).props.map((p) => p.slot)).toEqual([1, 2, 3]);
+  await page.getByRole("button", { name: "Remove COOK ANY TD" }).click();
+  await expectSet(request, { propdel: "2" });
+  await expect(page.locator("#betList .proprow label")).toHaveCount(2);
+  // Back to a spread: the prop's rows go.
+  await page.locator("#betType").selectOption("spread");
+  await expect(page.locator("#propRows")).toBeHidden();
+  await expect(page.locator("#betSign")).toBeVisible();
+});
+
+test("the Favorite players button narrows the prop's players to the favorites, across teams", async ({ page, request }) => {
+  await reset(request, { players: [ALLEN, { l: "nba", id: 4594268, team: 16, name: "EDWARDS" }] });
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  const favs = page.locator("#propFavs");
+  await expect(favs).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#propPickHint")).toHaveText("From the team's roster, or tap Favorite players");
+  await favs.click();
+  await expect(favs).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#betTeamRow")).toBeHidden();
+  await expect(page.locator("#propPick option")).toHaveText(["ALLEN · Buffalo Bills", "EDWARDS · Minnesota Timberwolves"]);
+  // The stats follow the picked player's sport.
+  await page.locator("#propPick").selectOption("nba:4594268");
+  await expect(page.locator("#propStat option").first()).toHaveText("Points");
+  await page.locator("#propStat").selectOption("pra");
+  await page.locator("#propSide").selectOption("under");
+  await page.locator("#betLine").fill("40.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nba,4594268,16,EDWARDS,pra,under,40.5" });
+  await expect(page.locator("#toast")).toHaveText("Added EDWARDS U 40.5 PTS+REB+AST");
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await expect(page.locator("#propStat option").first()).toHaveText("Passing yards");
+  await page.locator("#propStat").selectOption("td");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,td,yes," });
+  // Off again: the team's roster.
+  await favs.click();
+  await expect(page.locator("#betTeamRow")).toBeVisible();
+  await expect(page.locator("#propPick option")).toHaveCount(0);
+});
+
+test("the Favorite players button waits for a favorite player", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await expect(page.locator("#propFavs")).toBeDisabled();
+  await expect(page.locator("#propPickHint")).toHaveText("From the team's roster");
+});
+
+test("the Bets card says what's wrong with a prop before posting it", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  const msg = page.locator("#betMsg");
+  // A minor league team has no players.
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("triple-a durham");
+  await page.locator("#tiles .tile", { hasText: "Durham Bulls" }).click();
+  await page.locator("#betType").selectOption("prop");
+  await expect(msg).toHaveText("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(msg).toBeHidden();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Type the line, like 24.5.");
+  await expect(page.locator("#betLine")).toBeFocused();
+  for (const [line, says] of [["-10.5", "A prop's line has no + or -. Type it like 24.5."],
+    ["250.25", "Lines go in whole or half numbers, like 6 or 6.5."], ["lots", "That isn't a number. Type it like 24.5."],
+    ["0", "A line is more than 0."], ["1000", "The panel takes lines up to 999.5."]]) {
+    await page.locator("#betLine").fill(line);
+    await page.locator("#betAdd").click();
+    await expect(msg).toHaveText(says);
+  }
+  expect((await sets(request)).filter((q) => q.prop)).toEqual([]);
+  // A comma decimal, as comma-locale phones type it
+  await page.locator("#betLine").fill("250,5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("You have that prop already.");
+});
+
+test("the Bets card says when ESPN's roster can't be read for a prop", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ status: 500, body: "" }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(page.locator("#betMsg")).toHaveText(
+    "Couldn't read the Buffalo Bills roster from ESPN. Check this device's internet connection and try again.");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText("Pick the player first.");
+});
+
+test("a prop on the board's game shows its number and whether it's on track", async ({ page, request }) => {
+  const prop = { slot: 1, l: "nfl", id: 2577417, team: 6, name: "PRESCOTT", stat: "passyds", side: "over", half: 501,
+    text: "PRESCOTT O 250.5 PASS YDS", st: "on_track", v: 374, ev: "401772001", kick: 1792531500, oa: "PHI" };
+  const done = { slot: 2, l: "nfl", id: 2577417, team: 6, name: "PRESCOTT", stat: "td", side: "yes", half: 0,
+    text: "PRESCOTT ANY TD", st: "won", v: 2, ev: "401772000", kick: 1791926700, oa: "NYG" };
+  await reset(request, { game: { s: "IN", l: "nfl", ta: "DAL", ti: 6, ts: 14, oa: "PHI", oi: 21, os: 10, id: "401772001" },
+    props: [prop, done] });
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#betline .bet")).toHaveText(["PRESCOTT O 250.5 PASS YDS 187 ON TRACK"]);
+  await expect(page.locator("#betline .bet")).toHaveClass(/good/);
+  await expect(page.locator("#betList .proprow small")).toHaveText(["DAL vs PHI · 187 so far", "DAL vs NYG · Final"]);
+  await expect(page.locator("#betList .proprow .bet")).toHaveText(["ON TRACK", "WON"]);
+  await expect(page.locator("#betSum")).toHaveText("2 props");
+});
+
 // Folded letters, and teammates sharing a last name and initial
 const NAMES_ROSTER = {
   athletes: [

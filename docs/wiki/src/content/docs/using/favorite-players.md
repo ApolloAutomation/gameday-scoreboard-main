@@ -26,6 +26,10 @@ A name is at most 10 letters, one line of a single 64x64 panel's celebration, so
 
 If a player moves to another team, remove them and add them again from the new team's roster.
 
+:::note[Coming in the next release]
+Your favorite players are a shortcut for [player props](/using/bets/#player-props) too. In the **Bets** card, with **Player prop** chosen, tap **Favorite players** and the **Player** list shows just your favorite players, from every team, so you can bet on one without picking their team first.
+:::
+
 ## The stat line
 
 While a favorite player's game is on the board and live, the ticker adds the player's line from ESPN's game leaders, like **ALLEN 21/34, 241 YDS, 2 TD**, after the game's own parts and before your [bets](/using/bets/). On two rows of two they run in the bottom half's ticker, the only one there. The device page shows the same lines as tags under its board. Each player has a line only while ESPN lists them among the leaders, so a player who isn't leading anything has none, and a line can come and go during the game.
@@ -84,5 +88,9 @@ When the board goes back to its own game, a favorite player's score from while i
 The panel reads nothing more from ESPN for favorite players: no rosters and no extra pages. It keeps a little more of each read it already makes of a game, and only while a favorite player is in that game's league, so a panel without favorite players reads and keeps exactly what it did before. The rosters are read by your browser, once, when you pick a team in the card.
 
 Home Assistant gets no new entities, and its **Game Status** leaves the stat lines out.
+
+:::note[Coming in the next release]
+Favorite players still read nothing more. A [player prop](/using/bets/#player-props) does: while a game with a prop is on, the panel reads that game's box score about once a minute. The stat line above stays the one from ESPN's leaders, whether or not a prop is on the game.
+:::
 
 Favorite players are saved on the panel, so they stay through a restart or an update.

@@ -12,7 +12,7 @@
 
 namespace espn {
 
-static_assert(PlayerWatch::kMax == kPlayerSlots, "a game read can watch every favorite player");
+static_assert(PlayerWatch::kMax >= kPlayerSlots + kPropSlots, "a game read can watch every favorite and prop player");
 
 // Saved blob layout: fixed size, no padding.
 struct FavPlayer {

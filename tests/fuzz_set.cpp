@@ -120,6 +120,19 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       case SetKind::BET_DEL:
         require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
         break;
+      case SetKind::PROP: {
+        // Slot 0 is the first empty one (prop_put).
+        require(op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        require(prop_valid(op.prop), "the prop isn't one the panel can keep", k, v);
+        prop_label(op.prop);
+        Prop blob[kPropSlots]{};
+        const uint8_t at = prop_put(blob, op.slot, op.prop);
+        require(at >= 1 && at <= kPropSlots && !prop_empty(blob[at - 1]), "the prop went nowhere", k, v);
+        break;
+      }
+      case SetKind::PROP_DEL:
+        require(op.slot >= 1 && op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        break;
       case SetKind::PLAYER: {
         const FavPlayer fp = make_player(op.team.league, op.athlete, op.team.id, op.name);
         require(player_valid(fp), "the player isn't one the panel can keep", k, v);

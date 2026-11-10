@@ -21,6 +21,22 @@
     }
   },
   "host": {
+    "box_mlb_final": {
+      "heap": 2000,
+      "json": 18400
+    },
+    "box_nba_live": {
+      "heap": 2000,
+      "json": 17000
+    },
+    "box_nfl_final": {
+      "heap": 2000,
+      "json": 34800
+    },
+    "box_nhl_final": {
+      "heap": 2000,
+      "json": 30500
+    },
     "golf_calendar": {
       "heap": 1600,
       "json": 15985
