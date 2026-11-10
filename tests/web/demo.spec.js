@@ -35,6 +35,9 @@ test("starts, shows and stops the demo", async ({ page, request }) => {
   const card = page.locator("#demo");
   await expect(card).toBeVisible();
   await expect(page.locator("#demoNow")).toHaveText("Stopped, showing live scores");
+  // Right under the board, before Quick settings.
+  expect(await page.evaluate(() => [document.querySelector("#board").nextElementSibling.id,
+    document.querySelector("#demo").nextElementSibling.id])).toEqual(["demo", "guard"]);
 
   await card.getByRole("button", { name: "Start pro" }).click();
   await expect.poll(() => demoPosts(request)).toContainEqual({ do: "start", kind: "pro" });

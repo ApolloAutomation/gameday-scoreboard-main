@@ -15,7 +15,7 @@ A golf tour or a racing series can't be a favorite yet, so the chooser hides its
 
 The order is the priority. Higher teams win when two games clash (unless you choose **Alternate**, below), and the first four are buttons 1 to 4 on a WizMote remote. The page marks those four with their button number.
 
-Then tap **Favorite teams** under the board to switch the panel to it. The list is kept when you switch to another mode and back.
+Then tap the **Favorite teams** mode button to switch the panel to it. The list is kept when you switch to another mode and back.
 
 :::note[Coming in the next release]
 On two rows of two, or three or four panels in a row, the [second area](/using/panel-sizes/#the-second-area) can show a second team's game. That team doesn't need to be a favorite. If it is one, the playlist skips it while it has its own area, so the board and the second area don't show the same team.
@@ -50,7 +50,7 @@ The minutes for **Alternate** are the same setting as **Switch every** in Live g
 Panels set up before Favorite teams could alternate keep **Stick with the higher team** until you change it.
 
 :::note[Coming in the next release]
-To stay with the favorite on the board, turn on **Follow this game** under the board on the device page. The switch then reads **Following this game**, and the bar under the mode buttons says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner. A card whose game has already ended has no switch, since there's nothing left to follow.
+To stay with the favorite on the board, turn on **Follow this game** in the Quick settings card under the board on the device page. The switch then reads **Following this game**, and the bar under the mode buttons says **Following** and the team's name. The playlist stops, and no other favorite's game takes over, even one higher in your list or one that goes live. If that game hasn't started yet, its card stays up and the score shows once it starts. Its final stays up for **After the final**, and then the panel goes back to your favorites by itself. Turn the switch off to go back sooner. A card whose game has already ended has no switch, since there's nothing left to follow.
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it. Pressing a numbered button on the remote for one of your favorites, or changing your favorites, the mode or your team, stops following too. So does a restart, since the panel doesn't save it.
 
@@ -65,6 +65,6 @@ Buttons 1 to 4 on a paired WizMote jump to your first four favorites. In Favorit
 
 ## On the device page
 
-The **Up next** list under the board has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
+The **Up next** list on the device page has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
 
 If none of your favorites has any game scheduled, the board shows a clock in your first favorite's colors. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).

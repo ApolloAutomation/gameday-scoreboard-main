@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-The three buttons under the board on the device page, **My team**, **Live games** and **Favorite teams**, choose what the panel follows. The Game Day app has the same choice. The panel changes over right away and keeps the choice through restarts.
+The three mode buttons on the device page, **My team**, **Live games** and **Favorite teams**, choose what the panel follows. The Game Day app has the same choice. The panel changes over right away and keeps the choice through restarts.
 
 ## My team
 
@@ -48,7 +48,7 @@ The panel follows a game in progress, picked at random from the leagues you choo
 :::
 
 :::note[Coming in the next release]
-To stay with one game, turn on **Follow this game** under the board on the device page. The panel then keeps that game up past **Switch every** and doesn't look for another game. When the game ends, the panel goes back to switching games by itself, the same as without the switch, so the final shows for about a minute. Turn the switch off to go back to switching sooner.
+To stay with one game, turn on **Follow this game** in the Quick settings card under the board on the device page. The panel then keeps that game up past **Switch every** and doesn't look for another game. When the game ends, the panel goes back to switching games by itself, the same as without the switch, so the final shows for about a minute. Turn the switch off to go back to switching sooner.
 
 If the panel can't get the game from ESPN for half an hour, or ESPN still shows it in progress 8 hours after it started (or after you turned the switch on, if that was later), the panel stops following it and goes back to switching games. Changing the mode, your team, your favorites or the leagues stops following too. So does a restart, since the panel doesn't save it. The switch shows only while Live games has a game it picked on the board that hasn't ended, not while it shows your team's card or recent finals with nothing live. My team follows one team already, so it has no such switch.
 
@@ -89,7 +89,7 @@ The panel waits for the next kickoff before it checks again, instead of checking
 The panel cycles through up to 16 favorite teams, and a favorite's game takes the panel shortly before kickoff. See [Favorite teams](/using/favorites/) for how the playlist works and its settings.
 
 :::note[Coming in the next release]
-**Follow this game** under the board keeps the favorite on the board there, with no playlist and no other favorite's game taking over, until its final has been up for **After the final**. See [Favorite teams](/using/favorites/#when-a-game-is-on).
+**Follow this game**, in the Quick settings card under the board, keeps the favorite on the board there, with no playlist and no other favorite's game taking over, until its final has been up for **After the final**. See [Favorite teams](/using/favorites/#when-a-game-is-on).
 :::
 
 Favorite teams with no favorites set works like My team, and the ticker asks you to add teams.
@@ -97,7 +97,7 @@ Favorite teams with no favorites set works like My team, and the ticker asks you
 ## When nothing is on: the idle display
 
 :::note[Coming in the next release]
-**Idle display**, in the Panel card on the device page, picks what the panel shows while none of the games it follows is on. It works in My team, Favorite teams and Live games, and the panel goes back to the game by itself when one you follow starts.
+**Idle display**, in the Quick settings card on the device page, picks what the panel shows while none of the games it follows is on. It works in My team, Favorite teams and Live games, and the panel goes back to the game by itself when one you follow starts.
 
 - **Next game**, what every panel starts with: each mode's own board, as this page describes. My team shows your team's next game, Favorite teams cycles through your favorites, and Live games shows your team's card, or recent scores with no team picked.
 - **Clock**: the scoreboard's clock in your team's colors, with your team's next game under the time on a wide panel and in the ticker. In Favorite teams it's in the colors of the favorite that plays next, with that game. In Live games with no team picked the clock is gray, with the next game of the day when there is one. Between seasons it's the same clock as always (see [When your team has no game coming](#when-your-team-has-no-game-coming)).

@@ -133,12 +133,35 @@ button { font: inherit; color: inherit; }
 .btn.danger { color: #ff8a8a; }
 
 /* Sections */
-/* Two flowing columns (not grid rows), so a short card never leaves a hole beside a tall one. */
-.grid { columns: 2; column-gap: 14px; margin-top: 14px; }
-.grid .card { break-inside: avoid; margin-bottom: 14px; }
-@media (max-width: 560px) { .grid { columns: 1; } .team img { width: 64px; height: 64px; } .score { font-size: 42px; } .mid { min-width: 120px; } }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+/* Two columns of cards of their own, one on a phone, so opening a card only moves the cards under it. */
+.grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; align-items: start; }
+.grid .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .team img { width: 64px; height: 64px; } .score { font-size: 42px; } .mid { min-width: 120px; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
 .card h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+/* A card that folds: its name across the top, what it holds while folded, and an arrow. */
+details.card > summary { display: flex; align-items: center; gap: 10px; margin: -14px; padding: 14px; cursor: pointer; list-style: none; border-radius: var(--radius); }
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary h2 { margin: 0; flex: none; }
+details.card > summary:hover h2 { color: var(--text); }
+details.card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+details.card > summary::after { content: "\25B8"; color: var(--muted); flex: none; }
+details.card[open] > summary { margin-bottom: -6px; }
+details.card[open] > summary::after { content: "\25BE"; }
+.peek { flex: 1; min-width: 0; text-align: right; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
+/* Something in the folded card wants the owner: an update, or a weak signal */
+.peek.alert { color: var(--gold); }
+/* Quick settings: what owners change most, under the board, in two columns on a wide screen */
+.quick { margin-top: 14px; }
+.qcols { display: grid; grid-template-columns: 1fr; }
+.qcol { min-width: 0; }
+#idleCtls { border-top: 1px solid #1a2029; }
+@media (min-width: 720px) { .qcols { grid-template-columns: 1fr 1fr; column-gap: 28px; } #idleCtls { border-top: 0; } }
+#splitTitle { margin-top: 10px; }
+.followbar.on #followName { color: var(--accent); font-weight: 600; }
+#nightCtls > .ctl:first-child { border-top: 1px solid #1a2029; }
 .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
 .ctl { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #1a2029; }
 .ctl:first-of-type { border-top: 0; }
@@ -317,7 +340,7 @@ button { font: inherit; color: inherit; }
   .down { font-size: 17px; }
   .mid { min-width: 240px; }
   .ticker, .play { font-size: 15px; }
-  .grid { column-gap: 18px; }
+  .grid { gap: 18px; }
 }
 
 
@@ -332,8 +355,6 @@ button { font: inherit; color: inherit; }
 /* Automatic leagues are the device's suggestion, not a pick */
 .chips.auto .chip.on { border-style: dashed; }
 .livebar .name { white-space: normal; }
-/* Follow this game: the bar under the board, outlined while the panel holds the game */
-.followbar.on { border-color: var(--accent); }
 .linkbtn { background: none; border: 0; padding: 0; margin-top: 8px; color: var(--accent); font-size: 12px; cursor: pointer; }
 
 /* Bets: a chip per bet on the board's game, and the card's list and form */
@@ -342,13 +363,6 @@ button { font: inherit; color: inherit; }
 .bet.good { color: var(--green); border-color: var(--green); }
 .bet.bad { color: var(--red); border-color: var(--red); }
 .bet.even { color: var(--gold); border-color: var(--gold); }
-.betcard summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
-#betSum { margin-left: auto; color: var(--muted); font-size: 12px; }
-.betcard summary::-webkit-details-marker { display: none; }
-.betcard summary h2 { margin: 0; }
-.betcard summary::after { content: "\25B8"; color: var(--muted); }
-.betcard[open] summary::after { content: "\25BE"; }
-.betcard[open] summary { margin-bottom: 8px; }
 .betcard .ctl input { width: 90px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 14px; text-align: center; }
 .betrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 .betdel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 9px; padding: 0; flex: none; }

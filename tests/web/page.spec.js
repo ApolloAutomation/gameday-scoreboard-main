@@ -7,8 +7,13 @@ const { expect } = base;
 // Answer every off-device request locally so the suite needs no network.
 // ESPN's scoreboard feeds the picker's "On now" tab and has no games unless a test routes one.
 // Uncaught page errors fail the test.
+// expand: the page opens every card that folds (localStorage "gd.expand"),
+// so a test can reach any control. The tests of the folding turn it off with
+// test.use({ expand: false }).
 const test = base.test.extend({
-  page: async ({ page, baseURL }, use) => {
+  expand: [true, { option: true }],
+  page: async ({ page, baseURL, expand }, use) => {
+    if (expand) await page.addInitScript(() => { try { localStorage.setItem("gd.expand", "1"); } catch (_) {} });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route(
@@ -249,7 +254,8 @@ test("a device that never answers /gameday/state leaves the page waiting, not br
   await expect(page.locator("#curName")).toHaveText("No team chosen");
   await expect(page.locator("#modes button")).toHaveText(["My team", "Live games", "Favorite teams"]);
   // Entity controls still come from the event stream.
-  await expect(page.locator("#panelCtls .ctl")).toHaveCount(4);
+  await expect(page.locator("#quickCtls .ctl")).toHaveCount(2);
+  await expect(page.locator("#panelCtls .ctl")).toHaveCount(2);
 });
 
 test("Diagnostics shows the Wi-Fi history, its drops and the weak-signal hint", async ({ page, request }) => {
@@ -2530,7 +2536,7 @@ test("Reboot says it's restarting and reloads when the panel is back", async ({ 
   page.on("dialog", (d) => d.accept());
   await page.goto("/");
   await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
-  await page.locator("#actions button", { hasText: "Reboot" }).click();
+  await page.locator("#dangerActions button", { hasText: "Reboot" }).click();
   const restarting = "Restarting. This page reconnects when the panel is back.";
   await expect(page.locator("#gone")).toHaveText(restarting);
   await expect(page.locator("#board")).toHaveClass(/dim/);
@@ -2552,7 +2558,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   page.on("dialog", (d) => d.accept());
   await page.goto("/");
   await expect(page.locator("#gstate")).toHaveText("UPCOMING");
-  await page.locator("#actions button", { hasText: "Reset Wi-Fi" }).click();
+  await page.locator("#dangerActions button", { hasText: "Reset Wi-Fi" }).click();
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept,"
     + " and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows."
@@ -2562,7 +2568,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
 
   await page.reload();
   await expect(page.locator("#gstate")).toHaveText("UPCOMING");
-  await page.locator("#actions button", { hasText: "Factory reset" }).click();
+  await page.locator("#dangerActions button", { hasText: "Factory reset" }).click();
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into setup with everything erased, so this page won't reconnect."
     + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
@@ -2580,7 +2586,7 @@ test("a reset the panel never got doesn't claim it's resetting", async ({ page, 
   await page.goto("/");
   await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
   await page.route("**/button/**", (route) => route.fulfill({ status: 500, body: "" }));
-  await page.locator("#actions button", { hasText: "Factory reset" }).click();
+  await page.locator("#dangerActions button", { hasText: "Factory reset" }).click();
   await expect(page.locator("#toast")).toHaveText("Device did not respond (HTTP 500). Try again.");
   await expect(page.locator("#gone")).toBeHidden();
   await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
@@ -2802,7 +2808,7 @@ test("a night time cleared in its field isn't posted", async ({ page, request })
 // end, and the bets on the board's game under the board.
 const BET = { slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" };
 const openBets = async (page) => {
-  await page.locator("#betCard summary").click();
+  if (!(await page.locator("#betCard").evaluate((d) => d.open))) await page.locator("#betCard summary").click();
   await expect(page.locator("#betAdd")).toBeVisible();
 };
 
@@ -2810,7 +2816,6 @@ test("the Bets card adds a spread on a team from the picker, and the board shows
   await reset(request);
   await page.goto("/");
   await expect(page.locator("#betCard")).toBeVisible();
-  await expect(page.locator("#betAdd")).toBeHidden();  // folded away until opened
   await openBets(page);
   await expect(page.locator("#betList")).toHaveText("No bets yet.");
   await expect(page.locator("#betline")).toBeHidden();
@@ -3369,4 +3374,232 @@ test("firmware without favorite players has no card and no switch for them", asy
   await expect(page.locator("#playerCard")).toBeHidden();
   await expect(page.locator("#playerline")).toBeHidden();
   await expect(page.getByRole("switch", { name: "Favorite players: Scores", exact: true })).toBeHidden();
+});
+
+// The page's layout: Quick settings under the board, the mode under it, and
+// cards that fold, each remembered in the browser. These run without the
+// expand hook, as an owner sees the page.
+test.describe("cards that fold", () => {
+  test.use({ expand: false });
+  const card = (page, id) => page.locator("#" + id);
+  const isOpen = (page, id) => card(page, id).evaluate((d) => d.open);
+  const FOLDED = ["tickerCard", "celebCard", "remoteCard", "setupCard", "deviceCard"];
+
+  test("Quick settings sits under the board with power, brightness and the idle display, and the mode under it", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    const quick = page.locator("#quick");
+    await expect(quick.getByRole("switch", { name: "Panel on" })).toBeChecked();
+    await expect(quick.getByRole("slider", { name: "Brightness", exact: true })).toHaveValue("128");
+    await expect(quick.getByRole("combobox", { name: /^Idle display/ })).toHaveValue("0");
+    // My team follows one team already, and one panel row has no second area.
+    await expect(quick.getByRole("switch", { name: "Follow this game" })).toBeHidden();
+    await expect(page.locator("#splitCtls")).toBeHidden();
+    // The board, Quick settings, then the mode buttons and the mode's bar, then the cards.
+    const order = await page.evaluate(() => ["#board", "#quick", "#modes", "#teambar", ".grid"]
+      .map((sel) => document.querySelector(sel).getBoundingClientRect().top));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(await page.evaluate(() => document.querySelector("#quick").nextElementSibling.id)).toBe("modes");
+    // Power and brightness work from there, as Home Assistant's entities.
+    const off = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/switch/Power/turn_off"));
+    await quick.getByRole("switch", { name: "Panel on" }).click();
+    await off;
+    await quick.getByRole("combobox", { name: /^Idle display/ }).selectOption("1");
+    await expectSet(request, { idle: "1" });
+
+    // A game Live games picked can be followed, and two rows of two has a second area.
+    const g = (await deviceState(request)).game;
+    await reset(request, { mode: 5, panels: 2, rows: 2, game: { ...g, ...LIVE } });
+    await page.reload();
+    await expect(quick.getByRole("switch", { name: "Follow this game" })).toBeVisible();
+    await expect(quick.locator("#splitTitle")).toHaveText("Bottom half");
+    await quick.getByRole("combobox", { name: /^Shows/ }).selectOption("3");
+    await expectSet(request, { split: "3" });
+    await quick.getByRole("switch", { name: "Follow this game" }).click();
+    await expectSet(request, { follow: "1" });
+    // Clock size and Text size stay in the Panel card, which starts open.
+    await expect(card(page, "panelCard").getByRole("combobox", { name: "Clock size", exact: true })).toBeVisible();
+  });
+
+  test("the advanced cards start folded, Panel open, and Favorites, Favorite players and Bets open only when they hold anything", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#favCtls .ctl.fav")).toHaveCount(3);
+    for (const id of FOLDED) expect(await isOpen(page, id), id).toBe(false);
+    await expect(page.getByRole("switch", { name: "Down and distance" })).toBeHidden();
+    await expect(page.locator("#dangerActions button", { hasText: "Reboot" })).toBeHidden();
+    await expect(page.locator("#panels")).toBeHidden();
+    // What a folded card holds shows beside its name.
+    await expect(card(page, "deviceCard").locator("summary")).toContainText("Updates, Wi-Fi, diagnostics");
+    expect(await isOpen(page, "panelCard")).toBe(true);
+    await expect(page.getByRole("slider", { name: "Ticker speed" })).toBeVisible();
+    // Three favorites: open, with the count beside the name. No players or bets: folded.
+    await expect.poll(() => isOpen(page, "favCard")).toBe(true);
+    await expect(page.locator("#favSum")).toHaveText("3 of 16");
+    expect(await isOpen(page, "playerCard")).toBe(false);
+    expect(await isOpen(page, "betCard")).toBe(false);
+    await expect(page.locator("#betAdd")).toBeHidden();
+    await expect(page.locator("#betSum")).toHaveText("");
+
+    // A tap on the name opens a card; another folds it.
+    await card(page, "tickerCard").locator("summary").click();
+    await expect(page.getByRole("switch", { name: "Down and distance" })).toBeVisible();
+    await card(page, "tickerCard").locator("summary").click();
+    await expect(page.getByRole("switch", { name: "Down and distance" })).toBeHidden();
+    // From the keyboard too.
+    await card(page, "deviceCard").locator("summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#dangerActions button", { hasText: "Reboot" })).toBeVisible();
+
+    // No favorites: folded. A bet and a player: open.
+    await reset(request, {
+      favs: [{}, {}, {}, {}],
+      bets: [{ slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" }],
+      players: [{ l: "nfl", id: 3059915, team: 6, name: "PRESCOTT" }],
+    });
+    await page.evaluate(() => localStorage.removeItem("gd.cards"));
+    await page.reload();
+    await expect(page.locator("#betList .betrow")).toHaveCount(1);
+    await expect.poll(() => isOpen(page, "betCard")).toBe(true);
+    await expect(page.locator("#betSum")).toHaveText("1 of 8");
+    expect(await isOpen(page, "playerCard")).toBe(true);
+    await expect(page.locator("#playerSum")).toHaveText("1 of 8");
+    expect(await isOpen(page, "favCard")).toBe(false);
+    // Folding a card posts nothing to the panel.
+    expect(await sets(request)).toEqual([]);
+  });
+
+  test("each card stays as the viewer left it in this browser, and a card filled later stays as it is", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect.poll(() => isOpen(page, "favCard")).toBe(true);
+    await card(page, "setupCard").locator("summary").click();
+    await card(page, "panelCard").locator("summary").click();
+    await card(page, "favCard").locator("summary").click();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("gd.cards"))))
+      .toEqual({ setupCard: true, panelCard: false, favCard: false });
+    await page.reload();
+    await expect(page.locator("#favCtls .ctl.fav")).toHaveCount(3);
+    await expect(page.locator("#panels")).toBeVisible();
+    expect(await isOpen(page, "setupCard")).toBe(true);
+    expect(await isOpen(page, "panelCard")).toBe(false);
+    // Favorites stays folded with favorites in it, as the viewer left it.
+    await sleep(500);
+    expect(await isOpen(page, "favCard")).toBe(false);
+    expect(await isOpen(page, "tickerCard")).toBe(false);
+
+    // A bet added while the page is open leaves the Bets card folded.
+    await page.evaluate(() => localStorage.clear());
+    await page.clock.install();
+    await page.reload();
+    await expect.poll(() => isOpen(page, "favCard")).toBe(true);
+    expect(await isOpen(page, "betCard")).toBe(false);
+    await reset(request, { bets: [{ slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" }] });
+    await page.clock.fastForward(16000);
+    await expect(page.locator("#betSum")).toHaveText("1 of 8");
+    expect(await isOpen(page, "betCard")).toBe(false);
+  });
+
+  test("with no storage the page works and each card starts the default way", async ({ page, request }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "localStorage", { get() { throw new Error("blocked"); } });
+    });
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+    await expect.poll(() => isOpen(page, "favCard")).toBe(true);
+    for (const id of FOLDED) expect(await isOpen(page, id), id).toBe(false);
+    await card(page, "tickerCard").locator("summary").click();
+    await expect(page.getByRole("switch", { name: "Down and distance" })).toBeVisible();
+    await page.reload();
+    await expect.poll(() => isOpen(page, "favCard")).toBe(true);
+    expect(await isOpen(page, "tickerCard")).toBe(false);
+  });
+
+  test("an update on offer opens Device, and a folded Device says an update, one that didn't take or a weak signal beside its name", async ({ page, request }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await reset(request, { autoupd: false });
+    const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+    let entity = { ...fw, value: "2026.11.0-beta.812", current_version: "2026.10.2" };
+    await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+    const peek = card(page, "deviceCard").locator("summary .peek");
+    const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    await page.goto("/");
+    // The card opens by itself, with Install in sight.
+    await expect(page.locator("#fwInstall")).toBeVisible();
+    expect(await isOpen(page, "deviceCard")).toBe(true);
+    // Folded by the viewer, its name says an update is out, and it stays folded.
+    await card(page, "deviceCard").locator("summary").click();
+    await expect(page.locator("#fwInstall")).toBeHidden();
+    await expect(peek).toBeVisible();
+    await expect(peek).toHaveText("Update available: v2026.11.0-beta.812");
+    await expect(peek).toHaveClass(/\balert\b/);
+    expect(await wide()).toBeLessThanOrEqual(0);
+    await page.reload();
+    await expect(peek).toHaveText("Update available: v2026.11.0-beta.812");
+    await sleep(500);
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    await expect(peek).toBeVisible();
+
+    // One that didn't take opens the card too, and says so folded.
+    await page.evaluate(() => localStorage.clear());
+    entity = { ...fw, value: "2026.10.3", current_version: "2026.10.2" };
+    await reset(request, { update_failed: "2026.10.3" });
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("The update to v2026.10.3 didn't take and the panel went back to v2026.10.2");
+    await expect(page.locator("#fwInstall")).toBeVisible();
+    await card(page, "deviceCard").locator("summary").click();
+    await expect(peek).toHaveText("Update didn't take");
+    await expect(peek).toBeVisible();
+
+    // An offer older than the panel's version is nothing to install: Device stays folded.
+    await page.evaluate(() => localStorage.clear());
+    entity = { ...fw, value: "2026.10.2", current_version: "2026.11.0-beta.812" };
+    await reset(request);
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v2026.11.0-beta.812");
+    await sleep(500);
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    await expect(peek).toHaveText("Updates, Wi-Fi, diagnostics");
+    await expect(peek).not.toHaveClass(/\balert\b/);
+
+    // A weak signal shows beside the name, and leaves the card folded.
+    entity = { ...fw, state: "NO UPDATE", value: "2026.10.2", current_version: "2026.10.2" };
+    await reset(request, { wifi: { rssi: -81, step: 300, hist: [-80, -81], weak: true, drops: 0, day: 0, causes: {} } });
+    await page.reload();
+    await expect(page.locator("#fwText")).toHaveText("You're up to date, v2026.10.2");
+    await expect(peek).toHaveText("Weak signal");
+    await expect(peek).toBeVisible();
+    expect(await isOpen(page, "deviceCard")).toBe(false);
+    // None of it is posted to the panel.
+    expect(await sets(request)).toEqual([]);
+  });
+
+  test("the restart and reset buttons are together at the bottom of the Device card", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await card(page, "deviceCard").locator("summary").click();
+    await expect(page.locator("#dangerActions button")).toHaveText(["Reboot", "Reset Wi-Fi", "Factory reset"]);
+    await expect(page.locator("#actions button")).toHaveText(["Refresh scores", "Check for updates"]);
+    expect(await page.evaluate(() => document.querySelector("#deviceCard").lastElementChild.id)).toBe("dangerActions");
+  });
+
+  test("nothing scrolls sideways on a 375 px phone, folded or with every card open", async ({ page, request }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    const g = (await (await request.get("/gameday/state")).json()).game;
+    for (const state of [{}, { mode: 5, panels: 2, rows: 2, split: 2, game: { ...g, ...LIVE },
+      bets: [{ slot: 1, l: "nfl", id: 6, abbr: "DAL", type: "spread", half: -7, text: "DAL -3.5" }] }]) {
+      await reset(request, state);
+      await page.goto("/");
+      await expect(page.locator("#hostname")).not.toBeEmpty();
+      const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(await wide()).toBeLessThanOrEqual(0);
+      const shut = await page.locator("details.card:not([hidden]):not([open])").evaluateAll((ds) => ds.map((d) => d.id));
+      expect(shut.length).toBeGreaterThan(3);
+      for (const id of shut) await page.locator("#" + id + " > summary").click();
+      expect(await page.locator("details.card:not([hidden]):not([open])").count()).toBe(0);
+      expect(await wide()).toBeLessThanOrEqual(0);
+      await page.evaluate(() => localStorage.clear());
+    }
+  });
 });

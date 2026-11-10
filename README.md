@@ -57,7 +57,7 @@ Team changes take effect immediately and survive reboots. Wrong panel size? Clic
 
 ## The device page
 
-The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games straight from ESPN (tap the side you want to follow), and the settings grouped in plain language. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond the logos and the "On now" tab, which your browser reads from ESPN. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
+The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games straight from ESPN (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond the logos and the "On now" tab, which your browser reads from ESPN. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
 
 | Setting | What it does |
 | --- | --- |

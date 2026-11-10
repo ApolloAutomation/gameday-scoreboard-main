@@ -23,7 +23,7 @@ Lines are whole or half points, like 3 or 3.5, and a comma works in place of the
 
 ## Adding a bet
 
-1. Open the device page and tap **Bets** near the bottom of the page to open the card.
+1. Open the device page and find the **Bets** card, after the Favorites and Favorite players cards. If it's folded, as it is while it holds no bets, tap **Bets** to open it.
 2. Tap **Pick a team**. The team chooser opens, and its **On now** tab lists today's games, so you can tap the side you bet on.
 3. Choose the kind of bet: **Point spread**, **Total, over**, **Total, under** or **Moneyline**.
 4. Type the line. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. Type 0 for a pick'em. For a total, type the game's total, like 47.5.
