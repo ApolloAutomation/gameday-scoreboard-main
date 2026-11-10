@@ -29,11 +29,7 @@ On a single 64x64 panel the clock takes the abbreviations' place during play, an
 
 ## Goal splashes
 
-A goal fills the screen for 4 seconds with fireworks on black, in the scoring team's color, with the scoring team's logo, **+1** and "GOAL". The logo says whose goal it was, so the other side's splash leaves its abbreviation out. The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. The winning goal in a shootout splashes like any other. See [Splashes](/using/panel-sizes/#splashes).
-
-:::note[Coming in the next release]
-A goal's splash stays up for about 7 seconds, with the fireworks around the logo and **+1**, above "GOAL".
-:::
+A goal fills the screen for about 7 seconds with fireworks on black, in the scoring team's color, with the scoring team's logo, **+1** and "GOAL". The fireworks go off around the logo and **+1**, above "GOAL". The logo says whose goal it was, so the other side's splash leaves its abbreviation out. The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. The winning goal in a shootout splashes like any other. See [Splashes](/using/panel-sizes/#splashes).
 
 Goal splashes have their own switch in the Celebrations card. See [Celebrations](/using/device-page/#celebrations).
 

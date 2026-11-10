@@ -64,26 +64,24 @@ The same clock can stand in whenever nothing you follow is on, in season too: se
 
 **Clock size** and **Text size** in the Panel card on the device page make the clock and the ticker bigger. Each is **Normal**, where a panel starts, or **Large**, and a change shows at once, with no restart.
 
-**Clock size** sets the time wherever the scoreboard shows a clock: the off-season clock, the idle display's **Clock**, and the second area's **Clock and date** on two rows of two or three or four panels in a row. **Large** has bigger digits where they fit:
+**Clock size** sets the game clock on the scoreboard and the time wherever the panel shows a clock: the off-season clock, the idle display's **Clock**, the second area's **Clock and date** on two rows of two or three or four panels in a row, and the **Clock** page under **Showing**. **Large** makes each bigger where it fits.
+
+For the off-season clock, the idle display's **Clock** and the second area's **Clock and date**, **Large** has bigger digits:
 
 - On a 128x64 board, and in the second area on two rows of two or the right two panels of four wide, the time is half again as tall, like "12:45 PM".
 - On three or four panels in a row, with the board across the whole row, its clock is twice as tall.
 - On a single 64x64 panel, and in the right panel of three wide, the digits are half again as tall and **AM** or **PM** goes on a small line of its own under them.
 
-The date and the line with your next game stay as they are. The **Clock** page under **Showing** has its own clock and doesn't change.
+The date and the line with your next game stay as they are.
 
-:::note[Coming in the next release]
-**Clock size** also sets the **Clock** page under **Showing**, at once with no restart. **Normal** keeps it as it is. With **Large**, the time is as big as fits across the panel: four times as tall on 128x64, on three or four panels in a row and on two rows of two, where "09:41 PM" spans 128 columns, and twice as tall on a single 64x64 panel. The date under it, like "Mon, Nov 09", is twice as tall on 128 wide and wider, and stays as it is on a single panel, where a bigger one wouldn't fit on one line.
-:::
+On the **Clock** page, **Large** makes the time as big as fits across the panel: four times as tall on 128x64, on three or four panels in a row and on two rows of two, where "09:41 PM" spans 128 columns, and twice as tall on a single 64x64 panel. The date under it, like "Mon, Nov 09", is twice as tall on 128 wide and wider, and stays as it is on a single panel, where a bigger one wouldn't fit on one line.
 
-:::note[Coming in the next release]
-**Clock size** also sets the game clock on the scoreboard: the time and period during a game, like "5:21 3rd", words like "Halftime", "End of 2nd" or "Top 5th", and the countdown to the start in **My team today**. With **Large**:
+During a game, **Clock size** sets the game clock: the time and period, like "5:21 3rd", words like "Halftime", "End of 2nd" or "Top 5th", and the countdown to the start in **My team today**. With **Large**:
 
 - On a 128x64 board, on three or four panels in a row, and in both halves of two rows of two, the game clock is a third taller, and the logos and the records under them sit four rows higher to make room. A game in the second area gets the same.
 - On a single 64x64 panel, and in the right panel of three wide, the game clock is half again as tall, where the abbreviations go.
 
-The bigger clock never covers anything else on the board. A clock that would run into the records, the logos, the scores, the situation row or the bases stays at the normal size until it fits again. On a 128x64 board the records slide toward the edges when that makes room. There a clock like "9:59 2nd" or "Halftime" is bigger beside records of up to 6 characters, like a hockey team's "10-3-1", and a longer one like "12:04 2nd" or "End of 2nd" is bigger beside shorter records, like "15-3". On three or four panels in a row the longer ones fit beside any record. A ranked team's rank shows in front of its record when it still fits beside the bigger clock, and your team's seed or place gets shorter to let the bigger clock fit, like "1st" for "1st NFCE". On a single panel with **Text size** set to **Large**, baseball's inning stays at the normal size all game, since the tail of the p in "Top" has no room above the scores. A golf or racing leaderboard doesn't change.
-:::
+The bigger clock never covers anything else on the board. A clock that would run into the records, the logos, the scores, the situation row or the bases stays at the normal size until it fits again. On a 128x64 board the records slide toward the edges when that makes room. There a clock like "9:59 2nd" or "Halftime" is bigger beside records of up to 6 characters, like a hockey team's "10-3-1", and a longer one like "12:04 2nd" or "End of 2nd" is bigger beside shorter records, like "15-3". On three or four panels in a row the longer ones fit beside any record. A ranked team's rank shows in front of its record when it still fits beside the bigger clock, and your team's seed or place gets shorter to let the bigger clock fit, like "1st" for "1st NFCE". On a single panel with **Text size** set to **Large**, baseball's inning stays at the normal size all game, since the tail of the p in "Top" has no room above the scores. A golf or racing leaderboard doesn't change. See [Panel sizes and layouts](/using/panel-sizes/#what-each-layout-shows) for where each part goes.
 
 **Text size** sets the ticker; see [Text size](/using/ticker/#text-size).
 

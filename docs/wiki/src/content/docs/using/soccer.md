@@ -43,16 +43,12 @@ With **Match stats** on in the Ticker card, the ticker lists:
 
 ## Goal and card splashes
 
-A goal fills the screen for 4 seconds with fireworks on black, in the scoring club's color, with the club's logo, **+1** and "GOAL". The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. Two more splashes:
+A goal fills the screen for about 7 seconds with fireworks on black, in the scoring club's color, with the club's logo, **+1** and "GOAL". The fireworks go off around the logo and **+1**, above "GOAL". The other side's goals splash unless you turn off **Opponent scores too** in the Celebrations card. Two more splashes, up for about 7 seconds too:
 
 - **PENALTY GOAL**, with fireworks: a goal from the penalty spot, from ESPN's match details, with the logo and **+1**. Kicks in a shootout don't count.
 - **RED CARD**: a red card for either side, on a red screen, with the logo of the side that got it and no points. It shows whichever side gets the card, whatever **Opponent scores too** says.
 
 The logo says which club it was, so the words leave its abbreviation out. See [Splashes](/using/panel-sizes/#splashes).
-
-:::note[Coming in the next release]
-A splash stays up for about 7 seconds. A goal's fireworks go off around the logo and **+1**, above "GOAL".
-:::
 
 Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
 

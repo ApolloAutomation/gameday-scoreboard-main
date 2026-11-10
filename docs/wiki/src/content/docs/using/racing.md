@@ -41,11 +41,7 @@ A sprint's result shows "Sprint final". Only the race gets the winner's gold and
 
 ## The race final
 
-The top row says "Final" in gold and the winner's name turns gold. When the panel sees the race end, the winner's name fills the screen with fireworks for 4 seconds, like "ANTONELLI WINS!". On a single panel a name longer than 10 letters is cut to fit its line. The ticker says who won, then places 2 to 10 and, once known, the next race with its days.
-
-:::note[Coming in the next release]
-The winner's splash stays up for about 7 seconds. On a single 64x64 panel more of its fireworks show, since none go off past the panel's edge.
-:::
+The top row says "Final" in gold and the winner's name turns gold. When the panel sees the race end, the winner's name fills the screen with fireworks for about 7 seconds, like "ANTONELLI WINS!". On a single 64x64 panel every burst goes off inside the panel, so none is cut off at its edge. On a single panel a name longer than 10 letters is cut to fit its line. The ticker says who won, then places 2 to 10 and, once known, the next race with its days.
 
 The final stays up for a day after the race's start, or until ESPN moves on to the next race if that's sooner. Then the board shows the next race's name and days, like "Mexico City GP" over "Oct 30-Nov 1". If the panel can't read the series' schedule after a final, the final stays up and the panel tries again within minutes, rather than saying there's no race to come.
 
