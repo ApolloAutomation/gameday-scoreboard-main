@@ -200,8 +200,15 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    and Last Play for Home Assistant and draws the board with `board_draw`
    (`board_view.cpp`) into the widgets of `pages/gameday-live.yaml`, then
    runs the page scripts its result asks for. Logos come from
-   `logo_cache.cpp` (48 decoded 32x32 logos, least recently used out), and a
-   board with new logos waits up to 3.5 s for them.
+   `logo_cache.cpp` (128 decoded 32x32 logos, least recently used out), and a
+   board with new logos waits up to 3.5 s for them. A logo a card on screen
+   or held back needs downloads before a next card's head start
+   (`logo_job_before`); a prefetch from the fetch task that finds the cache
+   full goes to the main loop, which makes room (`want`). The memo in
+   `logo_lru.h` remembers per logo URL that its dark variant is missing, so
+   the plain one is asked for first, or that it has no logo at all, which
+   then isn't asked for again for 6 hours. A side whose logo isn't in shows
+   its badge in the logo's place (`board_logos`).
 
 The boot cache (`startup.h`) keeps the next game in flash for a day so a
 restart can skip the team read.
@@ -227,7 +234,11 @@ scores rotation's card for it half a loop from the main board's
 watched games (`rot_pick`, `rot_card`, `rot_ticker`). The setting is its own
 16-byte blob (`SplitPrefs`, `gameday_split_v1`) and the `split` and
 `splitteam` set keys. `emit_a2_` builds the area's `UpdateFields` and draws
-them; `a2_tick_` turns the rotation, ends a big play's stay and starts or
+them, keeping the card before up while a card with new logos waits up to
+3.5 s for them (`LogoHold`), after which the held card's turn starts over;
+the next card with logos (`scores_next_logos`, or the rotation's next
+`rot_pick`) downloads its logos while the card before it is up. `a2_tick_`
+turns the rotation, ends a big play's stay and starts or
 stops the scores reads for the area. Its reads go in the board's gaps
 (`start_gap_job_`, in order: the area's own team poll or a big play's game
 (`start_a2_job_`), the scores (`start_side_job_`, one league a read), then

@@ -197,6 +197,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   }
   // Team logos for the board (gameday-common.yaml, gd_show_logos)
   LogoCache &logos() { return this->logos_; }
+  // Board's logos, or badges where missing
+  void show_logos();
   void set_time(time::RealTimeClock *time) { this->time_ = time; }
   // Registers the hotspot handler first, before any setup().
   void set_web_server_base(web_server_base::WebServerBase *base);
@@ -813,6 +815,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // The logos on the board, and an update with new ones waiting for them
   // (hold_for_logos_) since logo_hold_ms_.
   std::string shown_team_logo_, shown_opp_logo_;
+  bool shown_badge_[2]{};
   uint32_t logo_hold_ms_{0};
   bool logo_held_{false};
   // Turns f into the off-season clock card when the board has nothing to
@@ -1243,6 +1246,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot &jump_game_() const { return this->idle_snaps_[2]; }
   uint32_t a2_splash_ms_{0};
   std::string a2_logo_[2];
+  bool a2_badge_[2]{};
+  // A new card waiting for these logos
+  ::espn::LogoHold a2_hold_;
+  std::string a2_hold_logo_[2];
   ::espn::AreaView a2_compute_() const;
   // Draws if bound; updates split_now and split_n.
   void emit_a2_(const ::espn::Splash &splash);

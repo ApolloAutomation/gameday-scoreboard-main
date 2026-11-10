@@ -184,6 +184,40 @@ void test_rotation() {
   PCHECK(c.play_id.empty() && c.down_distance.empty() && c.soc.goals.empty());
 }
 
+// The card whose logos download during this one
+void test_next_logos() {
+  auto card = [](RecapKind k) {
+    RecapCard c;
+    c.kind = k;
+    return c;
+  };
+  const std::vector<RecapCard> cards = {card(RecapKind::HEADER),       card(RecapKind::FINAL), card(RecapKind::FINAL),
+                                        card(RecapKind::LATER_HEADER), card(RecapKind::LATER), card(RecapKind::NEXT)};
+  PCHECK(scores_next_logos(cards, 0, false) == 1);
+  PCHECK(scores_next_logos(cards, 1, false) == 2);
+  PCHECK(scores_next_logos(cards, 2, false) == 4);  // past the header
+  PCHECK(scores_next_logos(cards, 4, false) == 1);  // around past two
+  // Half a loop from the board's card
+  PCHECK(scores_next_logos(cards, 0, true) == 4);
+  PCHECK(scores_next_logos(cards, 1, true) == 1);
+  // Only its own card has logos: that one again
+  const std::vector<RecapCard> one = {card(RecapKind::HEADER), card(RecapKind::FINAL)};
+  PCHECK(scores_next_logos(one, 1, false) == 1);
+  PCHECK(scores_next_logos({card(RecapKind::HEADER), card(RecapKind::NEXT)}, 0, false) == -1);
+  PCHECK(scores_next_logos({}, 0, false) == -1);
+  PCHECK(scores_next_logos({card(RecapKind::FINAL)}, 0, true) == -1);
+
+  // The rotation's next card after the one going up now
+  const uint8_t nhl = (uint8_t) League::NHL;
+  std::vector<WatchGame> games = {game("1", nhl, GameState::IN), game("2", nhl, GameState::IN),
+                                  game("3", nhl, GameState::IN)};
+  const int now = rot_pick(games, nhl, "1", 0, "");
+  PCHECK(now == 1);
+  PCHECK(rot_pick(games, nhl, games[(size_t) now].event_id, 0, "") == 2);
+  // Never the board's game
+  PCHECK(rot_pick(games, nhl, "1", nhl, "3") == 1 && rot_pick(games, nhl, "2", nhl, "3") == 0);
+}
+
 std::string rot_clock(uint8_t league, uint8_t period, const char *clock, Half half = Half::NONE, uint8_t reg = 4) {
   WatchGame w = game("9", league, GameState::IN);
   w.period = period;
@@ -413,6 +447,7 @@ int run_split_tests(int &total_checks) {
   test_split_area();
   test_area_view();
   test_scores_step();
+  test_next_logos();
   test_a2_poll();
   test_rotation();
   test_rot_clock();

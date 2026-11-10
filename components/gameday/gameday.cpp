@@ -1340,6 +1340,9 @@ void GamedayComponent::loop() {
   }
   if (this->logo_held_ && this->logo_hold_done_())
     this->draw_(this->last_fields_);
+  if (this->a2_hold_.on && this->a2_hold_.over(this->logos_.waiting(this->a2_hold_logo_[0]),
+                                               this->logos_.waiting(this->a2_hold_logo_[1]), millis()))
+    this->emit_a2_({});
   if (millis() - this->auto_update_ms_ >= AUTO_UPDATE_TICK) {
     this->auto_update_ms_ = millis();
     this->auto_update_tick_();
@@ -3787,8 +3790,8 @@ void GamedayComponent::apply_job_() {
     const ::espn::LiveGame &g = j.live[pick[random_uint32() % pick.size()]];
     ESP_LOGI(TAG, "Following %s @ %s", g.away_abbr.c_str(), g.home_abbr.c_str());
     // Both logos download while the game is read, so its board can go up whole.
-    this->logos_.prefetch(::espn::team_logo_url((League) g.league, g.away_id, g.away_abbr.c_str()));
-    this->logos_.prefetch(::espn::team_logo_url((League) g.league, g.home_id, g.home_abbr.c_str()));
+    this->logos_.want(::espn::team_logo_url((League) g.league, g.away_id, g.away_abbr.c_str()));
+    this->logos_.want(::espn::team_logo_url((League) g.league, g.home_id, g.home_abbr.c_str()));
     this->live_none_ = false;
     this->live_fallback_ = false;
     this->recap_on_ = false;
@@ -4407,8 +4410,8 @@ void GamedayComponent::start_visit_(const ::espn::WatchAlert &a, uint8_t league)
   s.league = league;
   s.event_id = a.event_id;
   s.kickoff_epoch = (int64_t) this->time_->timestamp_now();
-  this->logos_.prefetch(::espn::team_logo_url((League) league, a.away_id, a.away_abbr.c_str()));
-  this->logos_.prefetch(::espn::team_logo_url((League) league, a.home_id, a.home_abbr.c_str()));
+  this->logos_.want(::espn::team_logo_url((League) league, a.away_id, a.away_abbr.c_str()));
+  this->logos_.want(::espn::team_logo_url((League) league, a.home_id, a.home_abbr.c_str()));
   this->schedule_next_(0);  // its first poll now, which puts up the splash
 }
 
@@ -4516,6 +4519,10 @@ void GamedayComponent::set_split_team(uint8_t league, uint32_t id) {
   this->split_pref_.save(&this->split_prefs_);
   this->a2_set_team_();
   ESP_LOGI(TAG, "Second team: %s", this->a2_team_.empty() ? "none" : this->a2_team_[0].team->abbr);
+  if (!this->a2_team_.empty()) {
+    const ::espn::Team *t = this->a2_team_[0].team;
+    this->logos_.want(::espn::team_logo_url(t->league, t->espn_id, t->abbr));
+  }
   this->a2_reset_();
   this->emit_a2_({});
   this->rebuild_state_(&this->last_fields_);
@@ -4741,26 +4748,47 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   }
 #ifdef USE_LVGL
   AreaView *av = area_view();
-  if (v == ::espn::AreaView::NONE || av == nullptr)
+  if (v == ::espn::AreaView::NONE || av == nullptr) {
+    this->a2_hold_ = {};
     return;
+  }
   UpdateFields f;
   this->a2_fields_(v, splash, f);
+  const bool clock = v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE;
+  // The card before stays up until these logos arrive
+  const bool fresh = !clock && f.splash_text.empty() &&
+                     (f.team_logo != this->a2_logo_[0] || f.opponent_logo != this->a2_logo_[1]);
+  const uint32_t now = millis();
+  const uint32_t since = this->a2_hold_.since;
+  const ::espn::HoldStep step = this->a2_hold_.step(fresh, fresh && this->logos_.waiting(f.team_logo),
+                                                    fresh && this->logos_.waiting(f.opponent_logo), now);
+  if (step == ::espn::HoldStep::WAIT) {
+    this->a2_hold_logo_[0] = f.team_logo;
+    this->a2_hold_logo_[1] = f.opponent_logo;
+    return;
+  }
+  if (step == ::espn::HoldStep::DRAW_LATE) {
+    ESP_LOGD(TAG, "Second area held %u ms for its logos", (unsigned) (now - since));
+    // A held card still gets its whole turn
+    if (v == ::espn::AreaView::LIVE && !this->jump_.active && this->rot_ms_ != 0)
+      this->rot_ms_ = now | 1;
+    if (v == ::espn::AreaView::SCORES && this->recap_step_ms_ != 0)
+      this->recap_step_ms_ = now == 0 ? 1 : now;
+  }
   if (!f.splash_text.empty()) {
     ESP_LOGI(TAG, "Second area splash: %s", f.splash_text.c_str());
     this->a2_splash_ms_ = millis() == 0 ? 1 : millis();
   }
-  const bool clock = v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE;
   const UpdateFields &m = this->last_fields_;
-  // Cached logos, or none while downloading (badge shows).
-  image::Image *team_logo = nullptr, *opp_logo = nullptr;
-  if (!clock && !f.splash_text.empty()) {
-    team_logo = this->logos_.get(f.team_logo);
-    opp_logo = this->logos_.get(f.opponent_logo);
-  }
+  // Cached logos; a missing one shows its badge
+  image::Image *team_logo = clock ? nullptr : this->logos_.get(f.team_logo);
+  image::Image *opp_logo = clock ? nullptr : this->logos_.get(f.opponent_logo);
   const DrawResult r = area_draw(*av, f, clock, m.clock, clock_card_date(this->split_area().main_w, !m.next_line.empty()),
                                  team_logo, opp_logo);
   this->a2_logo_[0] = clock ? std::string() : f.team_logo;
   this->a2_logo_[1] = clock ? std::string() : f.opponent_logo;
+  this->a2_badge_[0] = f.team_badge;
+  this->a2_badge_[1] = f.opponent_badge;
   this->a2_show_logos_();
   if (r.ticker_changed || r.clock_card)
     this->fire_action_("a2");  // the ticker's scroll time and the clock (gameday-common.yaml)
@@ -4779,7 +4807,7 @@ void GamedayComponent::a2_show_logos_() {
     return;
   this->logos_.pin_a2(this->a2_logo_[0], this->a2_logo_[1]);
   image::Image *team = this->logos_.get(this->a2_logo_[0]), *opp = this->logos_.get(this->a2_logo_[1]);
-  area_logos(*av, team, opp);
+  board_logos(av->game, team, opp, this->a2_badge_);
   splash_logos(av->game, team, opp);
 #endif
 }
@@ -4844,8 +4872,8 @@ void GamedayComponent::a2_tick_() {
         const int k = ::espn::rot_pick(this->watch_, w.league, w.event_id, this->mode_league_(), mg.event_id);
         if (k >= 0 && k != i) {
           const ::espn::WatchGame &n = this->watch_[k];
-          this->logos_.prefetch(::espn::team_logo_url((League) n.league, n.away_id, n.away_abbr));
-          this->logos_.prefetch(::espn::team_logo_url((League) n.league, n.home_id, n.home_abbr));
+          this->logos_.want(::espn::team_logo_url((League) n.league, n.away_id, n.away_abbr));
+          this->logos_.want(::espn::team_logo_url((League) n.league, n.home_id, n.home_abbr));
         }
       }
       this->rot_ms_ = now | 1;
@@ -5609,8 +5637,21 @@ void GamedayComponent::draw_(const UpdateFields &f) {
   }
   this->shown_team_logo_ = f.team_logo;
   this->shown_opp_logo_ = f.opponent_logo;
+  this->shown_badge_[0] = f.team_badge;
+  this->shown_badge_[1] = f.opponent_badge;
   for (auto &cb : this->callbacks_)
     cb(f);
+}
+
+void GamedayComponent::show_logos() {
+  this->logos_.pin(this->shown_team_logo_, this->shown_opp_logo_);
+  image::Image *team = this->logos_.get(this->shown_team_logo_), *opp = this->logos_.get(this->shown_opp_logo_);
+#ifdef USE_LVGL
+  if (BoardView *v = board_view()) {
+    board_logos(*v, team, opp, this->shown_badge_);
+    splash_logos(*v, team, opp);
+  }
+#endif
 }
 
 // The off-season clock (offseason.h): the saved team between seasons (in My
@@ -6022,12 +6063,12 @@ void GamedayComponent::recap_card_(size_t step, bool side, GameSnapshot &card, s
 static void recap_prefetch(LogoCache &logos, const std::vector<::espn::RecapDay> &days, const ::espn::RecapCard &c) {
   if (c.kind == ::espn::RecapKind::FINAL) {
     const ::espn::Final &f = days[c.day].finals[c.final];
-    logos.prefetch(::espn::team_logo_url((League) f.league, f.away_id, f.away_abbr.c_str()));
-    logos.prefetch(::espn::team_logo_url((League) f.league, f.home_id, f.home_abbr.c_str()));
+    logos.want(::espn::team_logo_url((League) f.league, f.away_id, f.away_abbr.c_str()));
+    logos.want(::espn::team_logo_url((League) f.league, f.home_id, f.home_abbr.c_str()));
   } else if (c.kind == ::espn::RecapKind::LATER) {
     const ::espn::Pending &p = days[c.day].later[c.final];
-    logos.prefetch(::espn::team_logo_url((League) p.league, p.away_id, p.away_abbr.c_str()));
-    logos.prefetch(::espn::team_logo_url((League) p.league, p.home_id, p.home_abbr.c_str()));
+    logos.want(::espn::team_logo_url((League) p.league, p.away_id, p.away_abbr.c_str()));
+    logos.want(::espn::team_logo_url((League) p.league, p.home_id, p.home_abbr.c_str()));
   }
 }
 
@@ -6042,13 +6083,12 @@ void GamedayComponent::recap_show_() {
   }
   if (this->a2_scores_ || this->a2_view_ == ::espn::AreaView::SCORES)
     this->emit_a2_({});
-  const size_t n = this->recap_cards_.size();
-  if (n == 0)
-    return;
-  if (main)
-    recap_prefetch(this->logos_, this->recap_days_, this->recap_cards_[(this->recap_step_ + 1) % n]);
-  const int a2 = ::espn::scores_step(this->recap_step_ + 1, n, main);
-  if (this->a2_scores_ && a2 >= 0)
+  // Next cards' logos download during this one
+  const int next = main ? ::espn::scores_next_logos(this->recap_cards_, this->recap_step_, false) : -1;
+  if (next >= 0)
+    recap_prefetch(this->logos_, this->recap_days_, this->recap_cards_[next]);
+  const int a2 = this->a2_scores_ ? ::espn::scores_next_logos(this->recap_cards_, this->recap_step_, main) : -1;
+  if (a2 >= 0)
     recap_prefetch(this->logos_, this->recap_days_, this->recap_cards_[a2]);
 }
 

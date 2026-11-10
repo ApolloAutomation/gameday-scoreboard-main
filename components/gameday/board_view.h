@@ -81,6 +81,8 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);
 // Logos nullptr while downloading; the splash shows badges
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo = nullptr,
                       image::Image *opp_logo = nullptr);
+// Logo, or its badge when missing or badge set
+void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]);
 // Swaps a splash badge for its newly loaded logo
 void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo);
 // card_date: the card's second line shows the date
@@ -106,7 +108,6 @@ void area_layout(AreaView &a, bool on, int x, int y, int w, int h, Sizes sizes);
 // main_clock, main_date: what the main board's clock shows
 DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date,
                      image::Image *team_logo = nullptr, image::Image *opp_logo = nullptr);
-void area_logos(AreaView &a, image::Image *team, image::Image *opp);
 void area_hide_splash(AreaView &a);
 
 }  // namespace esphome::gameday

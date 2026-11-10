@@ -334,10 +334,10 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   for (int i = 0; i < 2; i++) {
     const bool none = abbr[i].empty();
     show(v.logo[i], !none && !badge[i]);
-    if (none || !badge[i]) {
-      show(v.badge[i], false);
+    show(v.badge[i], !none && badge[i]);
+    // Styled anyway, for a logo that never comes
+    if (none)
       continue;
-    }
     const ::espn::BadgeStyle st = ::espn::badge_style(color[i], ring[i]);
     if (v.badge[i] != nullptr) {
       lv_obj_set_style_bg_color(v.badge[i], lv_color_hex(st.fill), 0);
@@ -346,7 +346,6 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     }
     put_changed(v.badge_lbl[i], abbr[i].c_str());
     put_color(v.badge_lbl[i], st.dark_text ? 0x000000 : 0xFFFFFF);
-    show(v.badge[i], true);
   }
   put_text(v.score[0], std::to_string(f.team_score).c_str());
   put_text(v.score[1], std::to_string(f.opponent_score).c_str());
@@ -578,6 +577,24 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   return r;
 }
 
+void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]) {
+  image::Image *const img[2] = {team, opp};
+  for (int i = 0; i < 2; i++) {
+    if (v.logo[i] == nullptr)
+      continue;
+    image::Image *src = img[i] != nullptr ? img[i] : v.blank;
+    if (src != nullptr)
+      ::lv_image_set_src(v.logo[i], src->get_lv_image_dsc());
+    // A side board_draw left out stays hidden
+    if (v.badge[i] == nullptr ||
+        (lv_obj_has_flag(v.logo[i], LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(v.badge[i], LV_OBJ_FLAG_HIDDEN)))
+      continue;
+    const bool use_badge = badge[i] || img[i] == nullptr;
+    show(v.logo[i], !use_badge);
+    show(v.badge[i], use_badge);
+  }
+}
+
 void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo) {
   if (v.splash == nullptr || lv_obj_has_flag(v.splash, LV_OBJ_FLAG_HIDDEN))
     return;
@@ -748,13 +765,6 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
     r.big_splash = false;
   }
   return r;
-}
-
-void area_logos(AreaView &a, image::Image *team, image::Image *opp) {
-  image::Image *img[2] = {team != nullptr ? team : a.blank, opp != nullptr ? opp : a.blank};
-  for (int i = 0; i < 2; i++)
-    if (a.game.logo[i] != nullptr && img[i] != nullptr)
-      ::lv_image_set_src(a.game.logo[i], img[i]->get_lv_image_dsc());
 }
 
 void area_hide_splash(AreaView &a) { show(a.game.splash, false); }

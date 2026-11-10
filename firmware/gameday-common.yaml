@@ -353,21 +353,10 @@ script:
                   u->check();
                 #endif
 
-  # Point both logo slots at the cached logos. A logo that is still
-  # downloading shows blank until the logo_ready action runs this again.
-  # A failed download is retried by the cache itself on a later board update.
+  # Cached logos, or badges until logo_ready reruns this
   - id: gd_show_logos
     then:
-      - lambda: |-
-          auto &logos = id(gameday_ctl).logos();
-          logos.pin(id(gd_team_logo_url), id(gd_opp_logo_url));
-          image::Image *team = logos.get(id(gd_team_logo_url));
-          image::Image *opp = logos.get(id(gd_opp_logo_url));
-          lv_image_set_src(id(gd_team_logo_img), team != nullptr ? team : id(gd_logo_blank));
-          lv_image_set_src(id(gd_opp_logo_img), opp != nullptr ? opp : id(gd_logo_blank));
-          // Swap a splash's badge for the logo just loaded
-          if (gameday::BoardView *v = gameday::board_view())
-            gameday::splash_logos(*v, team, opp);
+      - lambda: 'id(gameday_ctl).show_logos();'
 
   # Bluetooth back on, but not for every two second blip. Bringing Bluedroid
   # up and down is a large internal-RAM alloc and free each time, and that
@@ -552,15 +541,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'true'
-  # The logos the board wants right now, from the latest board update.
-  - id: gd_team_logo_url
-    type: std::string
-    restore_value: no
-    initial_value: '""'
-  - id: gd_opp_logo_url
-    type: std::string
-    restore_value: no
-    initial_value: '""'
   # Seconds the panel has been off its saved network, counted only once it has
   # been on that network at least once this boot. Not restored, and neither is
   # gd_ever_connected: the panel that comes back from the offline restart has
@@ -735,8 +715,6 @@ gameday:
           }
         }
         id(gd_board).execute();
-        id(gd_team_logo_url) = x.team_logo;
-        id(gd_opp_logo_url) = x.opponent_logo;
         id(gd_show_logos).execute();
 
 lvgl_page_manager:

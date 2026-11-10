@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "recap.h"
 #include "set_request.h"
 #include "watch.h"
 
@@ -142,6 +143,19 @@ inline int scores_step(size_t step, size_t cards, bool main_shows) {
   if (cards == 0 || (main_shows && cards < 2))
     return -1;
   return (int) ((step + (main_shows ? cards / 2 : 0)) % cards);
+}
+
+// The area's next card with logos, skipping headers; -1 none
+inline int scores_next_logos(const std::vector<RecapCard> &cards, size_t step, bool main_shows) {
+  const size_t n = cards.size();
+  for (size_t k = 1; k <= n; k++) {
+    const int s = scores_step(step + k, n, main_shows);
+    if (s < 0)
+      return -1;
+    if (cards[(size_t) s].kind == RecapKind::FINAL || cards[(size_t) s].kind == RecapKind::LATER)
+      return s;
+  }
+  return -1;
 }
 
 // Every 15 s while the main game is live too.

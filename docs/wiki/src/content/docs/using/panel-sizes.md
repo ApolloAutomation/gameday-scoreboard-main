@@ -76,6 +76,12 @@ One or two panels have no second area, and the device page doesn't offer one. Wi
 - **Minor league teams.** A [minor league baseball](/using/minor-league-baseball/), [AHL or ECHL](/using/minor-league-hockey/) team can be the second team. Its games come from MLB or HockeyTech, as on the board, and while that service fails or refuses the panel the second area waits it out on its own while the board and the rest go on. **Rotating live games** leaves minor league baseball, AHL and ECHL games out, since it checks other games on ESPN only. **Today's scores** includes their leagues when you follow them, as the idle display's **Scores** does.
 - If the second area's reads keep failing, its ticker says **not updating** until one comes through. Home Assistant's Game Status and Last Play stay on the board's game.
 
+:::note[Coming in the next release]
+**Logos come up with the score.** The second area keeps its card up until the next card's logos have downloaded, for up to about 3.5 seconds, the way the board does, and the next card still gets its whole turn. The panel starts downloading the next card's logos while the card before it is up, in **Today's scores**, **Rotating live games** and for the second team, and keeps many more logos than before, so a loop of scores or live games downloads each logo once. A logo the board or the second area needs right now downloads before ones for later cards.
+
+A team with no logo at ESPN, like some smaller college teams, shows its abbreviation on a badge in its color, on the board and in the second area, and the panel doesn't ask ESPN for that logo again for a few hours. A logo still downloading after the wait shows the badge too, until the logo comes in.
+:::
+
 ## Splashes
 
 A score's or a big play's splash shows the logo of the team it's about, with the points the team gained and the play's words. The logo sits on a black tile with round corners, so it stands out on a flash in the team's own color too. Overtime and basketball's final show both teams' logos, and a turnover, a red card, a lead change and the victory splash show the logo with no points. A golf or racing winner's splash has no logo: the winner's name with fireworks.
