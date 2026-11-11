@@ -31,6 +31,8 @@ template<class S> static uint32_t url_key(const S &url) { return ::espn::logo_ke
 
 void LogoCache::setup() {
   this->lock_ = xSemaphoreCreateMutex();
+  this->decoder_.emplace(runtime_image::PNG, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL, nullptr,
+                         false, LOGO_SIZE, LOGO_SIZE);
   this->entries_.reserve(MAX_LOGOS);
   this->slots_.reserve(MAX_LOGOS);
   this->memo_.reserve(::espn::kLogoMemoCap);
@@ -319,17 +321,16 @@ bool LogoCache::download_(const std::string &url, Bytes &body, int &code, bool &
   return true;
 }
 
-// Decodes into the entry itself, so the image object lives in PSRAM with it.
+// Shared decoder; the entry keeps a copy of the pixels.
 // Safe without the lock: the entry is DOWNLOADED until the caller marks it
 // READY, so nothing draws it and nothing drops it.
-bool LogoCache::decode_(std::optional<runtime_image::RuntimeImage> &image, const Bytes &body) {
-  image.emplace(runtime_image::PNG, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL, nullptr, false,
-                LOGO_SIZE, LOGO_SIZE);
-  bool ok = image->begin_decode(body.size());
+bool LogoCache::decode_(Entry &e, const Bytes &body) {
+  runtime_image::RuntimeImage &d = *this->decoder_;
+  bool ok = d.begin_decode(body.size());
   size_t offset = 0;
   while (ok && offset < body.size()) {
     // feed_data takes a non-const pointer but only reads it.
-    int used = image->feed_data(const_cast<uint8_t *>(body.data()) + offset, body.size() - offset);
+    int used = d.feed_data(const_cast<uint8_t *>(body.data()) + offset, body.size() - offset);
     if (used < 0) {
       ESP_LOGW(TAG, "Logo decode error: %s", runtime_image::decode_error_to_string(used));
       ok = false;
@@ -339,9 +340,16 @@ bool LogoCache::decode_(std::optional<runtime_image::RuntimeImage> &image, const
     offset += (size_t) used;
   }
   if (ok)
-    ok = image->end_decode();
-  if (!ok)
-    image.reset();
+    ok = d.end_decode();
+  const uint8_t *px = d.get_data_start();
+  const int w = d.get_width(), h = d.get_height();
+  ok = ok && px != nullptr;
+  if (ok) {
+    e.pixels.assign(px, px + d.get_buffer_size(w, h));
+    e.image.emplace(e.pixels.data(), w, h, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
+  }
+  // Frees its pixels and ends a failed decode
+  d.release();
   return ok;
 }
 
@@ -371,7 +379,7 @@ bool LogoCache::loop() {
     if (job == nullptr)
       return ready;
     // Only the main loop drops entries, so job stays valid without the lock.
-    bool ok = this->decode_(job->image, body);
+    bool ok = this->decode_(*job, body);
     Locked guard(this->lock_);
     if (ok) {
       job->state = State::READY;
