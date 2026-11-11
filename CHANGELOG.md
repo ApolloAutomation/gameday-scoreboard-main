@@ -14,6 +14,13 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.2
+
+Panels no longer restart after a few hours on a busy day.
+
+- Team logos take far less memory, so a panel following several leagues with Today's scores, or rotating through many live games, no longer runs out of memory and restarts after a few hours. Logos still come up with the score.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.1
 
 The second area's games come up with their logos, Large clock size reaches the game clock and the Clock page, and splashes stay up longer with room around their words.
