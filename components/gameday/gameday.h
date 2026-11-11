@@ -424,7 +424,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
 #endif
   void apply_set_(const std::vector<std::pair<std::string, std::string>> &kv);
   void rebuild_state_(const UpdateFields *f);  // main loop only
-  std::string current_state_json_();
+  // PSRAM, so a long document cannot split internal RAM
+  using StateJson = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
+  StateJson current_state_json_();
   // The "health" object, read live on each GET /gameday/state (HTTP task).
   std::string health_json_();
   ::espn::Restart start_reason_{::espn::Restart::NONE};
@@ -449,7 +451,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   int8_t wifi_rssi_{0};  // the last sample
   uint32_t wifi_reason_seen_{0};  // wifi_reason_seq when the link last came up
   std::mutex state_mutex_;
-  std::string state_json_{"{}"};
+  StateJson state_json_{"{}"};
   UpdateFields last_fields_;
   web_server_base::WebServerBase *base_{nullptr};
   panel_layout::PanelLayout *panels_{nullptr};

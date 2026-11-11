@@ -6861,13 +6861,17 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["name"] = (const char *) p.name;
   }
   doc["playermax"] = ::espn::kPlayerSlots;
-  std::string out;
-  serializeJson(doc, out);
+  // Straight into PSRAM, twice the room if it didn't fit
+  StateJson out(this->state_json_.size() + 1024, '\0');
+  size_t n;
+  while ((n = serializeJson(doc, &out[0], out.size())) >= out.size())
+    out.resize(out.size() * 2);
+  out.resize(n);
   std::lock_guard<std::mutex> lock(this->state_mutex_);
   this->state_json_ = std::move(out);
 }
 
-std::string GamedayComponent::current_state_json_() {
+GamedayComponent::StateJson GamedayComponent::current_state_json_() {
   std::lock_guard<std::mutex> lock(this->state_mutex_);
   return this->state_json_;
 }
@@ -7014,7 +7018,7 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
   char buf[AsyncWebServerRequest::URL_BUF_SIZE];
   StringRef url = request->url_to(buf);
   if (url == StringRef("/gameday/state") && request->method() == HTTP_GET) {
-    std::string body = this->current_state_json_();
+    StateJson body = this->current_state_json_();
     // The cached document is rebuilt on changes; the health and Wi-Fi
     // numbers move all the time, so they go in fresh at its end.
     if (body.size() >= 2 && body.back() == '}') {
