@@ -8,19 +8,35 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2494560,
+      "flash": 2516000,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2494560,
+      "flash": 2516000,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2471024,
+      "flash": 2492608,
       "static_ram": 172568
     }
   },
   "host": {
+    "box_mlb_final": {
+      "heap": 2000,
+      "json": 18400
+    },
+    "box_nba_live": {
+      "heap": 2000,
+      "json": 17000
+    },
+    "box_nfl_final": {
+      "heap": 2000,
+      "json": 34800
+    },
+    "box_nhl_final": {
+      "heap": 2000,
+      "json": 30500
+    },
     "golf_calendar": {
       "heap": 1600,
       "json": 15985

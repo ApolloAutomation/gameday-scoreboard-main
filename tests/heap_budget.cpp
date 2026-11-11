@@ -19,6 +19,7 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "props.h"
 #include "watch.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
@@ -152,6 +153,21 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
+// A box score read for player props: eight players watched.
+static void box_read(const char *name, const std::string &file, Sport sport, std::initializer_list<uint32_t> ids) {
+  std::string json = slurp("fixtures/" + file);
+  PlayerWatch w;
+  for (uint32_t id : ids)
+    if (w.n < PlayerWatch::kMax)
+      w.ids[w.n++] = id;
+  measure(name, [&] {
+    BoxCutter cut;
+    StringReader in(json, &cut);
+    std::vector<BoxLine> lines;
+    return parse_box(in, sport, w, lines) && !lines.empty();
+  });
+}
+
 // Every game marked on, so each is read in full.
 static void watch_day(const char *name, const std::string &file, League league) {
   std::string json;
@@ -226,6 +242,15 @@ int main() {
   event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
                 {199680, 205448, 1, 2, 3, 4, 5, 6});
 
+  // Finals have the most rows a box score has.
+  box_read("box_nfl_final", "summary_nfl_final.json", Sport::FOOTBALL,
+           {4360310, 4882093, 4432620, 4686361, 3043078, 3916433, 4038441, 3116365});
+  box_read("box_nba_live", "summary_nba_live.json", Sport::BASKETBALL,
+           {4431680, 4433137, 4592691, 4701230, 1, 2, 3, 4});
+  box_read("box_mlb_final", "summary_mlb_final.json", Sport::BASEBALL,
+           {5149101, 5080761, 4917869, 35013, 33481, 40810, 42584, 4679983});
+  box_read("box_nhl_final", "summary_nhl_final.json", Sport::HOCKEY,
+           {3114732, 4319858, 4587845, 4024833, 4587943, 3114766, 4755690, 4272888});
   watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
   watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
   watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);

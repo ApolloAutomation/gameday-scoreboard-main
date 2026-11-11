@@ -258,6 +258,46 @@ the scorebar and the day for four minutes and the game centre's clock for one
 | `ht_day_echl_20261107.json` | The ECHL's Saturday: 13 finals, three in overtime, and RC @ IDH postponed |
 | `ht_day_echl_20261110.json` | The ECHL's Tuesday, read two days ahead: two games to come, one at 10:30 AM Eastern |
 
+Player props, recorded 2026-11-10 between 02:21 and 02:31 UTC (Monday Night
+Football and the NBA's Monday night) and from the weekend's finals, with a
+`curl/8.0` User-Agent. The game read the panel already makes
+(`.../scoreboard/<event id>`, 8 to 30 KB) names only leaders: football's
+game has one passing, one rushing and one receiving leader in all
+(`event_nfl_live.json`, BUF @ MIN at 8:44 of the 2nd), basketball and
+baseball each team's few leaders, hockey each team's goals, assists and
+points leaders, and soccer every goal's scorer. Every player's line is in
+the game's summary (`.../summary?event=<id>`), whose first member is its
+box score (MLB's opens with an empty `notes`): every player's stats by
+category, with ESPN's stat keys. ESPN ignores `Range` there and sends it
+chunked, so the panel stops reading at the box score's end. "Trimmed" keeps
+the members up to `boxscore`, then `format` and `gameInfo` (so the stop is
+tested), and drops each athlete's `links`, `headshot`, `positions`, `uid` and
+`guid`, and each team's `statistics` and `details` in `boxscore.teams`;
+nothing the panel reads changes. The sizes are of the summary as ESPN sent
+it, and where its box score ended in it:
+
+| File | Source | Whole | Box score ends |
+| --- | --- | --- | --- |
+| `event_nfl_live.json` | `football/nfl/scoreboard/401873051`, BUF @ MIN, 8:44 2nd: three leaders for the game | 9,825 | |
+| `summary_nfl_live.json` | `football/nfl/summary?event=401873051`, the same moment: Allen 5/12, 43 yards, an interception. Trimmed | 336,990 | 40,753 |
+| `summary_nfl_final.json` | `football/nfl/summary?event=401873037`, JAX @ BAL, Final: rushing and receiving touchdowns, a kicker's 15 points, a running back's -3 passing yards. Trimmed | 573,031 | 56,425 |
+| `summary_ncaa_final.json` | `football/college-football/summary?event=401858291`, MIA @ ND, Final. Trimmed | 494,276 | 47,173 |
+| `summary_nba_live.json` | `basketball/nba/summary?event=401909952`, LAL @ ATL, 1:10 4th. Trimmed | 416,655 | 24,422 |
+| `summary_nba_final.json` | `basketball/nba/summary?event=401909953`, CLE @ CHA, Final: two players who didn't play (`didNotPlay`, no stats). Trimmed | 372,153 | 23,170 |
+| `summary_mcbb_final.json` | `basketball/mens-college-basketball/summary?event=401906759`, OAK @ ALA, Final. Trimmed | 420,885 | 27,958 |
+| `summary_mlb_final.json` | `baseball/mlb/summary?event=401908046`, MIL @ TB, 2026-10-28, World Series final: batting and pitching (innings as "5.2"); doubles and triples only by last name in each team's `details`. Trimmed | 935,243 | 187,012 |
+| `summary_nhl_live.json` | `hockey/nhl/summary?event=401892680`, NYR @ EDM, 10:59 2nd: forwards, defenses and goalies; `S` is shots on goal and `SOG` shootout goals. Trimmed | 279,730 | 47,211 |
+| `summary_nhl_final.json` | `hockey/nhl/summary?event=401892662`, FLA @ WSH, Final. Trimmed | 499,272 | 47,231 |
+
+Not committed, for the record: a WNBA final's summary (401918297) is the NBA's
+shape, 478,267 bytes with the box score ending at 22,802. Soccer's box score
+has team stats only: its players' stats are in `rosters`, from byte 84,854
+of 444,829 (MLS, 761934) and 78,469 of 409,150 (Premier League, 401879244),
+about 170 KB long. ESPN's per-athlete statistics
+(`sports.core.api.espn.com/.../competitors/<team>/roster/<athlete>/statistics/0`)
+are 20 to 24 KB a player, and `cdn.espn.com/core/<league>/boxscore` puts
+the box score after 500 KB of news and plays.
+
 Not from ESPN: `set_cases.json` is a table of `POST /gameday/set` requests and
 the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device

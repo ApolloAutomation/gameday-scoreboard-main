@@ -35,6 +35,7 @@
 #include "idle.h"
 #include "offseason.h"
 #include "players.h"
+#include "props.h"
 #include "recap.h"
 #include "poll_timing.h"
 #include "set_request.h"
@@ -423,7 +424,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
 #endif
   void apply_set_(const std::vector<std::pair<std::string, std::string>> &kv);
   void rebuild_state_(const UpdateFields *f);  // main loop only
-  std::string current_state_json_();
+  // PSRAM, so a long document cannot split internal RAM
+  using StateJson = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
+  StateJson current_state_json_();
   // The "health" object, read live on each GET /gameday/state (HTTP task).
   std::string health_json_();
   ::espn::Restart start_reason_{::espn::Restart::NONE};
@@ -448,7 +451,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   int8_t wifi_rssi_{0};  // the last sample
   uint32_t wifi_reason_seen_{0};  // wifi_reason_seq when the link last came up
   std::mutex state_mutex_;
-  std::string state_json_{"{}"};
+  StateJson state_json_{"{}"};
   UpdateFields last_fields_;
   web_server_base::WebServerBase *base_{nullptr};
   panel_layout::PanelLayout *panels_{nullptr};
@@ -638,6 +641,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     std::unique_ptr<GameSnapshot> today_final;
     // Favorite players as of the job's start.
     ::espn::PlayerBlob players{};
+    // Player props as of the job's start.
+    ::espn::PropBlob props{};
+    // A box score read for player props, in a gap.
+    bool need_box{false};
+    bool box_final{false};  // started after the game's final
+    bool box_ok{false};
+    uint8_t box_league{0};
+    uint32_t box_event{0};
+    ::espn::PlayerWatch box_watch;
+    std::vector<::espn::BoxLine> box_lines;
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -1125,6 +1138,36 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // nullptr when the panel holds no game for b.
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
   void bets_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
+  // Player props: followed like bets, numbers from box scores.
+  ESPPreferenceObject props_pref_;
+  ::espn::PropBlob props_{};
+  void set_prop_(uint8_t slot, ::espn::Prop p);
+  void remove_prop_(uint8_t slot);
+  void props_changed_();
+  // True when a done prop was dropped.
+  bool props_tick_();
+  const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
+  // Half units, kPropNoValue when no number yet.
+  int prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const;
+  void props_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
+  // A game's box score while a prop waits.
+  struct BoxGame {
+    uint8_t league{0};
+    uint32_t event{0};
+    uint32_t tried_ms{0};  // last read started, 0 none
+    uint32_t final_ms{0};  // game first seen final, 0 not yet
+    uint8_t fails{0};      // failed reads in a row
+    bool read{false};
+    bool final_read{false};
+    std::vector<::espn::BoxLine> lines;
+  };
+  std::vector<BoxGame> box_;
+  uint32_t box_check_ms_{0};
+  ::espn::BoxTimes box_times_;
+  bool start_box_job_(uint32_t now, uint32_t due);
+  void run_box_job_();
+  void apply_box_job_();
+  void box_failed_(uint32_t took_ms);
   ESPPreferenceObject players_pref_;
   ::espn::PlayerBlob players_{};
   void set_player_(const ::espn::SetOp &op);

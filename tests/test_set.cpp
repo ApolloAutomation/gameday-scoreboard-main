@@ -68,6 +68,7 @@ struct Settings {
       nightbri{kNightBrightnessDefault};
   bool night{false};
   Bet bets[kBetSlots]{};
+  Prop props[kPropSlots]{};
   FavPlayer players[kPlayerSlots]{};
 };
 constexpr int kFavMax = 16;
@@ -179,6 +180,24 @@ void load(Settings &s, JsonObjectConst o) {
         printf("FAIL set_cases.json: a start bet doesn't parse: %s\n", value.c_str());
     }
   }
+  if (o["props"].is<JsonArrayConst>()) {
+    for (auto &p : s.props)
+      p = Prop{};
+    for (JsonObjectConst j : o["props"].as<JsonArrayConst>()) {
+      std::string side = j["side"] | "";
+      std::string value = std::to_string(j["slot"] | 0) + "," + (j["l"] | "") + "," + std::to_string(j["id"] | 0u) +
+                          "," + std::to_string(j["team"] | 0u) + "," + (j["name"] | "") + "," + (j["stat"] | "") +
+                          "," + side + ",";
+      if (side != "yes")
+        value += bet_points(j["half"] | 0, false);
+      uint8_t slot = 0;
+      Prop p{};
+      if (parse_prop(value, slot, p) && slot >= 1)
+        s.props[slot - 1] = p;
+      else
+        printf("FAIL set_cases.json: a start prop doesn't parse: %s\n", value.c_str());
+    }
+  }
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
   if (o["players"].is<JsonArrayConst>()) {
@@ -274,6 +293,8 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::STANDING: s.standing = op.value; break;
     case SetKind::BET: bet_put(s.bets, op.slot, op.bet); break;  // as set_bet_ does
     case SetKind::BET_DEL: s.bets[op.slot - 1] = Bet{}; break;
+    case SetKind::PROP: prop_put(s.props, op.slot, op.prop); break;  // as set_prop_ does
+    case SetKind::PROP_DEL: s.props[op.slot - 1] = Prop{}; break;
     case SetKind::WATCH:
       s.watch = op.on;
       if (!op.on)
@@ -372,6 +393,21 @@ void state_doc(const Settings &s, JsonDocument &doc) {
     o["id"] = b.team_id;
     o["type"] = bet_type_key(b);
     o["half"] = b.line;
+  }
+  JsonArray props = doc["props"].to<JsonArray>();
+  for (int i = 0; i < kPropSlots; i++) {
+    const Prop &p = s.props[i];
+    if (prop_empty(p))
+      continue;
+    JsonObject o = props.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["l"] = league_key((League) p.league);
+    o["id"] = p.athlete;
+    o["team"] = p.team_id;
+    o["name"] = std::string(p.name, strnlen(p.name, sizeof(p.name)));
+    o["stat"] = kPropStats[p.stat].key;
+    o["side"] = prop_side_key(p);
+    o["half"] = p.line;
   }
   doc["watch"] = s.watch;
   doc["watchstay"] = s.watchstay;
@@ -600,7 +636,8 @@ void test_parse_set() {
     bool known = parse_set(key, "1", op, kFavMax) || parse_set(key, "nfl:6", op, kFavMax) ||
                  parse_set(key, "", op, kFavMax) || parse_set(key, "07:00", op, kFavMax) ||
                  parse_set(key, "1,nfl,6,ml,", op, kFavMax) || parse_set(key, "nfl,3918298,2,ALLEN", op, kFavMax) ||
-                 parse_set(key, "nfl,3918298", op, kFavMax);
+                 parse_set(key, "nfl,3918298", op, kFavMax) ||
+                 parse_set(key, "0,nfl,3918298,2,ALLEN,td,yes,", op, kFavMax);
     SCHECK(known, "kSetKeys has %s but parse_set refuses every value", key);
   }
 }

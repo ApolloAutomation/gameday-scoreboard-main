@@ -65,19 +65,6 @@ inline bool has_word(const std::string &s, const char *word) {
   return false;
 }
 
-// "8:27" is 5070, "12.3" is 123; -1 otherwise.
-inline int clock_tenths(const std::string &c) {
-  if (c.empty() || !isdigit((unsigned char) c[0]))
-    return -1;
-  char *end = nullptr;
-  const long a = strtol(c.c_str(), &end, 10);
-  if (*end == ':') {
-    const long s = isdigit((unsigned char) end[1]) ? strtol(end + 1, nullptr, 10) : -1;
-    return a < 1000 && s >= 0 && s < 60 ? (int) (a * 60 + s) * 10 : -1;
-  }
-  return a < 100000 ? (int) a * 10 + (*end == '.' && isdigit((unsigned char) end[1]) ? end[1] - '0' : 0) : -1;
-}
-
 // ESPN edits play words and resends plays; prefer ids.
 inline bool new_play(const GameSnapshot &prev, const GameSnapshot &cur) {
   if (!prev.play_id.empty() && !cur.play_id.empty())

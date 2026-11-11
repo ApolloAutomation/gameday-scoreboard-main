@@ -116,13 +116,13 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `gameday.h` hold `GamedayComponent` (the main loop logic, the fetch task,
   the HTTP routes, preferences). The parsing and game logic are pure C++ with
   no ESPHome includes, so the host tests compile them directly:
-  `espn_parse.cpp/.h`, `espn_parse_impl.h`, `sport_baseball.cpp`,
+  `espn_parse.cpp/.h`, `espn_parse_impl.h`, `box_score.cpp`, `sport_baseball.cpp`,
   `sport_basketball.cpp`, `sport_hockey.cpp`, `sport_soccer.cpp`,
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `players.h`, `split.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `props.h`, `split.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
@@ -368,6 +368,31 @@ pass no `PlayerWatch`, so a favorite player never starts a visit, and
 `watching_()` counts neither the final's bit nor the Favorite player bit
 as a big play switched on. `watch_back_prev` leaves a favorite's score
 from while the board was away unsplashed, as it does the team's.
+
+**Player props.** The owner types props in on the device page (`prop=`,
+`propdel=`, slot 0 the first empty), picking the player from a roster the
+browser reads, or from the favorite players: over or under a half-point
+line on one stat, or a yes prop. `props.h` holds up to eight `Prop`
+records in their own blob (`PropBlob`, `gameday_props_v1`) and the stats
+(`kPropStats`: each a sum of up to three box score columns, its "atoms",
+which `build_web.py` copies into the bundle). A prop ties to its player's
+team's game the way a bet does (`bet_tie`, shared with `bet_observe`), on
+the same games (`props_tick_`, run from `bets_tick_`). Its numbers come from
+the game's summary (`summary_url`), read in the board's gaps
+(`start_box_job_`, before the scores and the watcher): once a minute while
+the game is live and once 30 s after the final, never while it doesn't fit
+before the board's next read. The summary opens with its box score (25 KB
+for basketball, about 190 KB for baseball, out of 250 to 950 KB), so a
+`BoxCutter` on the `ContainerReader` ends the input there, closing the root,
+and `parse_box` keeps the lines of the league's prop players only
+(`box_score.cpp`, `BoxLine`, by ESPN's stat keys). The live number, the
+pace (`game_progress`, `prop_status`) and the ticker words
+(`prop_ticker`) are worked out each time; the final's read grades the
+props (`prop_grade`, VOID for a player the box score never lists) and the
+result stays until midnight. Soccer reads no box score: its anytime goal
+counts the game read's goals, whose scorers' ids the read keeps when a
+soccer prop is in the league (`prop_watch_add`). The state document lists
+every prop with its number (`v`, half units) and status.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a
 team row in `teams.h` with ESPN's league id, but none of the team machinery
@@ -667,6 +692,7 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   `tests/fixtures`), `golden_football.cpp`, `test_set.cpp` (the settings
   table), `test_alerts.cpp` (every big-play alert, and that each splash fits
   the panel's lines on one to four panels), `test_bets.cpp` (manual bets),
+  `test_props.cpp` (player props and box score reads),
   `test_watch.cpp` (the big-play watcher: which games, big plays from day
   scoreboards, when a read may run, when the board switches and goes back),
   `test_players.cpp` (favorite players) and `test_networks.cpp`

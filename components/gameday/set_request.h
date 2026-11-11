@@ -8,6 +8,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "bets.h"
 #include "idle.h"
 #include "leagues.h"
+#include "props.h"
 #include "startup.h"
 #include "teams.h"
 #include "timezones.h"
@@ -30,7 +32,8 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "autoupd",   "count",      "match",     "beta",     "alerts",     "alertfav",
                                     "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
                                     "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
-                                    "betdel",    "bet",        "playerdel", "player",   "splitteam",  "split"};
+                                    "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
+                                    "splitteam", "split"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -70,6 +73,7 @@ inline int clamp_watch_stay_seconds(int seconds) {
 // Name max: one splash line on one panel.
 constexpr int kPlayerSlots = 8;
 constexpr int kPlayerNameMax = 10;
+static_assert(kPropNameMax == kPlayerNameMax, "a prop names its player as favorites do");
 
 inline int clamp_lockon_minutes(int minutes) {
   return minutes < kLockonMinMinutes ? kLockonMinMinutes : minutes > kLockonMaxMinutes ? kLockonMaxMinutes : minutes;
@@ -234,6 +238,8 @@ enum class SetKind : uint8_t {
   NIGHT_BRI,    // value, 1 to 255
   BET,          // slot (0 first empty), bet: a manual bet
   BET_DEL,      // slot: empties it
+  PROP,         // slot (0 first empty), prop: a player prop bet
+  PROP_DEL,     // slot: empties it
   WATCH,        // on, switch to big plays in other games
   WATCHSTAY,    // value, seconds on the big play's game
   WATCHMINE,    // on, a favorite's big play can preempt the team
@@ -262,6 +268,7 @@ struct SetOp {
   std::vector<TeamRef> teams;
   std::vector<std::string> refused;  // favs entries left out, for the log
   Bet bet;                           // BET: what was bet, with no game yet
+  Prop prop{};                       // PROP: the prop, with no game yet
   uint32_t athlete{0};               // PLAYER, PLAYER_DEL: ESPN's athlete id
   std::string name;                  // PLAYER: the panel's name for the player (clean_player_name)
 };
@@ -390,6 +397,36 @@ inline bool parse_bet(const std::string &v, uint8_t &slot, Bet &b) {
   b.type = (uint8_t) BetType::TOTAL;
   b.side = (uint8_t) (type == "over" ? BetSide::OVER : BetSide::UNDER);
   return parse_bet_line(f[4], false, b.line);
+}
+
+// prop=0,nfl,3918298,2,ALLEN,passyds,over,250.5; ESPN rosters only.
+inline bool parse_prop(const std::string &v, uint8_t &slot, Prop &p) {
+  std::string f[8];
+  size_t n = 0;
+  if (!split_fields(v, f, 8, n) || n != 8 || f[0].size() != 1 || f[0][0] < '0' || f[0][0] > '0' + kPropSlots)
+    return false;
+  slot = (uint8_t) (f[0][0] - '0');
+  p = Prop{};
+  const LeagueInfo *info = league_by_key(f[1].c_str());
+  if (info == nullptr || is_board_sport(info->sport) || info->source != Source::ESPN ||
+      !parse_espn_id(f[2], p.athlete) || !parse_espn_id(f[3], p.team_id) ||
+      !known_team((uint8_t) info->league, p.team_id))
+    return false;
+  const std::string name = clean_player_name(f[4]);
+  const int stat = prop_stat_by_key(f[5], info->sport);
+  if (name.empty() || stat < 0)
+    return false;
+  p.league = (uint8_t) info->league;
+  p.stat = (uint8_t) stat;
+  strncpy(p.name, name.c_str(), kPropNameMax);
+  if (kPropStats[stat].yes) {
+    p.side = (uint8_t) PropSide::YES;
+    return f[6] == "yes" && f[7].empty();
+  }
+  if (f[6] != "over" && f[6] != "under")
+    return false;
+  p.side = (uint8_t) (f[6] == "over" ? PropSide::OVER : PropSide::UNDER);
+  return parse_bet_line(f[7], false, p.line);
 }
 
 // Decodes one key=value from the request. False when the key is unknown or
@@ -563,6 +600,17 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   if (k == "betdel") {
     op.kind = SetKind::BET_DEL;
     return parse_bet_slot(v, op.slot);
+  }
+  if (k == "prop") {
+    op.kind = SetKind::PROP;
+    return parse_prop(v, op.slot, op.prop);
+  }
+  if (k == "propdel") {
+    op.kind = SetKind::PROP_DEL;
+    if (v.size() != 1 || v[0] < '1' || v[0] > '0' + kPropSlots)
+      return false;
+    op.slot = (uint8_t) (v[0] - '0');
+    return true;
   }
   if (k == "watch")
     return on(SetKind::WATCH);
