@@ -3,6 +3,7 @@ const TEAMS=[["nfl",22,"ARI","Arizona Cardinals"],["nfl",1,"ATL","Atlanta Falcon
 const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["US Mountain","America/Denver"],["US Arizona","America/Phoenix"],["US Pacific","America/Los_Angeles"],["US Alaska","America/Anchorage"],["US Hawaii","Pacific/Honolulu"],["Canada Atlantic","America/Halifax"],["Canada Newfoundland","America/St_Johns"],["Mexico City","America/Mexico_City"],["UK and Ireland","Europe/London"],["Central Europe","Europe/Berlin"],["Australia Eastern","Australia/Sydney"],["UTC","UTC"]];
 const FOLD="AAAAAA*CEEEEIIIIDNOOOOOxOUUUUY**aaaaaa*ceeeeiiiidnooooo/ouuuuy*yAaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIi**JjKkkLlLlLlLlLlNnNnNnnNnOoOoOo**RrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
 const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","307":"ij","338":"OE","339":"oe","536":"S","537":"s","538":"T","539":"t","8211":"-","8212":"-","8216":"'","8217":"'","8220":"\"","8221":"\""};
+const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","PASS TD",false],["football","cmp","CMP",false],["football","int","INT",false],["football","rushyds","RUSH YDS",false],["football","rushatt","RUSH ATT",false],["football","recyds","REC YDS",false],["football","rec","REC",false],["football","rryds","RUSH+REC YDS",false],["football","td","ANY TD",true],["football","tackles","TACKLES",false],["football","sacks","SACKS",false],["football","kickpts","KICK PTS",false],["basketball","pts","PTS",false],["basketball","reb","REB",false],["basketball","ast","AST",false],["basketball","threes","3PM",false],["basketball","stl","STL",false],["basketball","blk","BLK",false],["basketball","pra","PTS+REB+AST",false],["basketball","pr","PTS+REB",false],["basketball","pa","PTS+AST",false],["basketball","ra","REB+AST",false],["baseball","hits","HITS",false],["baseball","runs","RUNS",false],["baseball","rbi","RBI",false],["baseball","hrr","H+R+RBI",false],["baseball","hr","HR",true],["baseball","k","K",false],["baseball","hitsallowed","HITS ALLOWED",false],["baseball","er","ER",false],["baseball","outs","OUTS",false],["hockey","pts","PTS",false],["hockey","goal","ANY GOAL",true],["hockey","ast","AST",false],["hockey","sog","SOG",false],["hockey","blk","BLK",false],["hockey","saves","SAVES",false],["soccer","goal","ANY GOAL",true]];
 // Game Day Scoreboard device page.
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
@@ -262,13 +263,19 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
       </details>
       <details class="card betcard" id="betCard" hidden>
         <summary><h2>Bets</h2><span class="peek sum" id="betSum"></span></summary>
-        <p class="hint">Bets you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering during the game, and the result after the final until midnight. The panel follows bets only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
+        <p class="hint">Bets and player props you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering or on track during the game, and the result after the final until midnight. The panel follows them only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
         <div id="betList"></div>
         <div class="sub">Add a bet</div>
-        <div class="ctl"><label>Team<small>For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
+        <div class="ctl" id="betTeamRow"><label>Team<small id="betTeamHint">For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
         <div class="ctl"><label for="betType">Bet</label><select id="betType">
-          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
+          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option><option value="prop">Player prop</option>
         </select></div>
+        <div id="propRows" hidden>
+          <div class="ctl"><label for="propPick">Player<small id="propPickHint"></small></label><div class="proppick"><select id="propPick"></select><button type="button" class="btn" id="propFavs" aria-pressed="false">Favorite players</button></div></div>
+          <div class="ctl"><label for="propStat">Stat</label><select id="propStat"></select></div>
+          <div class="ctl" id="propSideRow"><label for="propSide">Pick</label><select id="propSide"><option value="over">Over</option><option value="under">Under</option></select></div>
+          <p class="hint">While the game is on, the panel reads its box score from ESPN about once a minute, and once more after the final to settle the prop.</p>
+        </div>
         <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
           <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
           <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
@@ -1526,7 +1533,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
         const t = teamById(g.league, s.id);
         const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
         // Player picks need an ESPN roster
-        b.disabled = !t || (pickPlayer && !fromEspn(t[0]));
+        b.disabled = !t || ((pickPlayer || pickProp) && !fromEspn(t[0]));
         b.title = t ? "Follow the " + t[3] : "Not in the team list";
         const img = el("img");
         img.loading = "lazy";
@@ -1594,20 +1601,43 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     return vs + score;
   };
   const betChip = (b, text) => el("span", "bet " + betTone(b.st), text);
+  const PROP_WORDS = { on_track: "ON TRACK", off_track: "OFF TRACK", hit: "HIT", not_yet: "NOT YET", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
+  const propTone = (st) => (st === "on_track" || st === "hit" || st === "won" ? "good" : st === "off_track" || st === "lost" ? "bad" : PROP_WORDS[st] ? "even" : "");
+  // As the ticker: the line, the player's number, the word
+  const propText = (p) => p.text + (p.v !== undefined && p.side !== "yes" ? " " + betPoints(p.v, false) : "")
+    + (PROP_WORDS[p.st] ? " " + PROP_WORDS[p.st] : "");
+  const propGame = (p) => {
+    const t = teamById(p.l, p.team);
+    const abbr = t ? t[2] : "";
+    if (!p.ev) return "Starts when the panel shows a " + abbr + " game";
+    const vs = abbr + " vs " + (p.oa || "?") + " \u00b7 ";
+    const n = p.v !== undefined && p.side !== "yes" ? betPoints(p.v, false) : "";
+    if (p.st === "pre") return vs + (p.kick * 1000 > Date.now() ? kickLabel(p.kick) : "Waiting for the start");
+    if (p.st === "unread") return vs + "Started, not on the panel right now";
+    if (p.st === "void") return vs + "Void: postponed, or the player didn't play";
+    if (p.st === "won" || p.st === "lost" || p.st === "push") return vs + "Final" + (n ? ", " + n : "");
+    return vs + (n ? n + " so far" : "Live");
+  };
   const renderBets = () => {
     const card = $("#betCard");
     // Firmware from before bets sends none.
     card.hidden = !S || S.bets === undefined;
     const list = (S && S.bets) || [];
+    const props = (S && S.props) || [];
     // The board: the bets on its game.
-    const on = game && game.id && game.s !== "NOT_FOUND" ? list.filter((b) => b.ev === String(game.id)) : [];
+    const live = game && game.id && game.s !== "NOT_FOUND";
+    const on = live ? list.filter((b) => b.ev === String(game.id)) : [];
+    const propsOn = live ? props.filter((p) => p.ev === String(game.id)) : [];
     const line = $("#betline");
     line.textContent = "";
     for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
-    line.hidden = !on.length;
+    for (const p of propsOn) line.appendChild(el("span", "bet " + propTone(p.st), propText(p)));
+    line.hidden = !on.length && !propsOn.length;
     if (card.hidden) return;
-    $("#betSum").textContent = list.length ? list.length + " of " + (S.betmax || 8) : "";
-    const sig = JSON.stringify(list);
+    renderPropForm();
+    $("#betSum").textContent = [list.length ? list.length + " of " + (S.betmax || 8) : "",
+      props.length ? props.length + (props.length > 1 ? " props" : " prop") : ""].filter(Boolean).join(" \u00b7 ");
+    const sig = JSON.stringify([list, props]);
     if (sig === betDrawn) return;
     betDrawn = sig;
     const host = $("#betList");
@@ -1633,7 +1663,28 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
       row.appendChild(x);
       host.appendChild(row);
     }
-    if (!list.length) host.appendChild(el("p", "hint", "No bets yet."));
+    for (const pr of props) {
+      const row = el("div", "ctl betrow proprow");
+      const t = teamById(pr.l, pr.team);
+      const img = el("img");
+      img.alt = "";
+      img.loading = "lazy";
+      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
+      row.appendChild(img);
+      const name = el("label", null, pr.text);
+      name.appendChild(el("small", null, propGame(pr)));
+      row.appendChild(name);
+      if (PROP_WORDS[pr.st]) row.appendChild(el("span", "bet " + propTone(pr.st), PROP_WORDS[pr.st]));
+      const x = el("button", "betdel", "\u2715");
+      x.title = "Remove " + pr.text;
+      x.setAttribute("aria-label", x.title);
+      x.onclick = () => setGD({ propdel: pr.slot }).then((ok) => ok && toast("Removed " + pr.text));
+      row.appendChild(x);
+      host.appendChild(row);
+    }
+    if (!list.length && !props.length) host.appendChild(el("p", "hint", "No bets yet."));
     if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
   };
   const typedSign = (v) => {
@@ -1645,19 +1696,26 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     const t = teamByKey(betTeam);
     $("#betTeam").textContent = t ? t[3] : "Pick a team";
     const type = $("#betType").value;
+    $("#betTeamHint").textContent = type === "prop" ? "The player's team. Minor league teams have no player props."
+      : "For a total, either team in the game";
     $("#betLineRow").hidden = type === "ml";
     $("#betSign").hidden = type !== "spread";
     signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
     $("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
       : "Total points in the game, like 47.5";
     $("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
+    renderPropForm();
   };
   const betSay = (t) => {
     $("#betMsg").textContent = t;
     $("#betMsg").hidden = !t;
   };
-  $("#betTeam").onclick = () => openPicker(false, true);
-  $("#betType").onchange = () => { betSay(""); renderBetForm(); };
+  $("#betTeam").onclick = () => openPicker(false, true, false, false, $("#betType").value === "prop");
+  $("#betType").onchange = () => {
+    betSay("");
+    renderBetForm();
+    if ($("#betType").value === "prop") loadPropRoster();
+  };
   $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
   // Typed sign and buttons stay in sync both ways
   $("#betLine").oninput = () => {
@@ -1676,6 +1734,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   });
   $("#betAdd").onclick = () => {
     if (!S) return;
+    if ($("#betType").value === "prop") return addProp();
     const t = teamByKey(betTeam);
     if (!t) return betSay("Pick the team first.");
     const type = $("#betType").value;
@@ -1707,6 +1766,162 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     $("#betLine").value = "";
     betSign = "";
     renderBetForm();
+  };
+
+  // ---- player props: a roster's player, or a favorite --------------------------
+  const PROP_NAMES = {
+    "football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
+    "football:int": "Interceptions thrown", "football:rushyds": "Rushing yards", "football:rushatt": "Rushing attempts",
+    "football:recyds": "Receiving yards", "football:rec": "Receptions", "football:rryds": "Rushing and receiving yards",
+    "football:td": "Anytime touchdown", "football:tackles": "Tackles", "football:sacks": "Sacks",
+    "football:kickpts": "Kicking points",
+    "basketball:pts": "Points", "basketball:reb": "Rebounds", "basketball:ast": "Assists", "basketball:threes": "Threes made",
+    "basketball:stl": "Steals", "basketball:blk": "Blocks", "basketball:pra": "Points, rebounds and assists",
+    "basketball:pr": "Points and rebounds", "basketball:pa": "Points and assists", "basketball:ra": "Rebounds and assists",
+    "baseball:hits": "Hits", "baseball:runs": "Runs", "baseball:rbi": "RBIs", "baseball:hrr": "Hits, runs and RBIs",
+    "baseball:hr": "Home run", "baseball:k": "Pitcher's strikeouts", "baseball:hitsallowed": "Hits allowed",
+    "baseball:er": "Earned runs allowed", "baseball:outs": "Pitcher's outs",
+    "hockey:pts": "Points", "hockey:goal": "Anytime goal", "hockey:ast": "Assists", "hockey:sog": "Shots on goal",
+    "hockey:blk": "Blocked shots", "hockey:saves": "Goalie's saves",
+    "soccer:goal": "Anytime goal",
+  };
+  let propFavs = false;     // the list is the favorite players
+  let propRoster = [];      // the bet team's players
+  let propRosterFor = "";
+  let propPending = [];     // posted, not yet listed by the panel
+  const sameProp = (a, b) => a.l === b.l && a.id === b.id && a.stat === b.stat && a.side === b.side && a.half === b.half;
+  // PROP_STATS rows: [sport, key, panel label, yes prop]
+  const statsFor = (lg) => (lg ? PROP_STATS.filter((st) => st[0] === sportOf(lg)) : []);
+  const propPlayers = () => {
+    if (propFavs) {
+      return ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).map((pl) => {
+        const t = teamById(pl.l, pl.team);
+        return { l: pl.l, id: pl.id, team: pl.team, panel: pl.name, label: pl.name + (t ? " \u00b7 " + t[3] : "") };
+      });
+    }
+    const t = teamByKey(betTeam);
+    if (!t || propRosterFor !== betTeam) return [];
+    return propRoster.map((a) => ({ l: t[0], id: a.id, team: t[1], panel: a.panel,
+      label: a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : "") }));
+  };
+  const fillSelect = (sel, items) => {
+    const sig = JSON.stringify(items);
+    if (sel.dataset.sig === sig) return;
+    const was = sel.value;
+    sel.dataset.sig = sig;
+    sel.textContent = "";
+    for (const [value, text] of items) {
+      const o = el("option", null, text);
+      o.value = value;
+      sel.appendChild(o);
+    }
+    if (items.some((it) => it[0] === was)) sel.value = was;
+  };
+  const pickedPlayer = () => propPlayers().find((pl) => pl.l + ":" + pl.id === $("#propPick").value);
+  const renderPropForm = () => {
+    const prop = $("#betType").value === "prop";
+    $("#propRows").hidden = !prop;
+    $("#betTeamRow").hidden = prop && propFavs;
+    if (!prop) return;
+    const favs = ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).length;
+    setOn($("#propFavs"), propFavs, "aria-pressed");
+    $("#propFavs").disabled = !favs && !propFavs;
+    const list = propPlayers();
+    fillSelect($("#propPick"), list.map((pl) => [pl.l + ":" + pl.id, pl.label]));
+    const t = teamByKey(betTeam);
+    $("#propPickHint").textContent = propFavs
+      ? (list.length ? "Your favorite players, from every team" : "No favorite players yet. Add them in the Favorite players card.")
+      : !favs ? "From the team's roster" : "From the team's roster, or tap Favorite players";
+    const pl = pickedPlayer();
+    const lg = pl ? pl.l : !propFavs && t && fromEspn(t[0]) ? t[0] : "";
+    fillSelect($("#propStat"), statsFor(lg).map((st) => [st[1], PROP_NAMES[st[0] + ":" + st[1]] || st[2]]));
+    const st = statsFor(lg).find((x) => x[1] === $("#propStat").value);
+    const yes = !!(st && st[3]);
+    $("#propSideRow").hidden = yes;
+    $("#betLineRow").hidden = yes;
+    $("#betSign").hidden = true;
+    $("#betLineHint").textContent = "The sportsbook's line for the stat, like 24.5. A whole number can push";
+    $("#betLine").placeholder = "24.5";
+  };
+  const loadPropRoster = async () => {
+    const t = teamByKey(betTeam);
+    propRosterFor = betTeam;
+    propRoster = [];
+    renderPropForm();
+    if (!t || propFavs) return;
+    if (!fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+    betSay("Reading the " + t[3] + " roster from ESPN\u2026");
+    const list = await readRoster(t);
+    if (propRosterFor !== betTeam) return;  // another team was picked meanwhile
+    betSay(list && list.length ? "" : rosterSays(t, list));
+    propRoster = list || [];
+    renderPropForm();
+  };
+  $("#propFavs").onclick = () => {
+    propFavs = !propFavs;
+    betSay("");
+    renderPropForm();
+    if (!propFavs) loadPropRoster();
+  };
+  $("#propPick").onchange = () => { betSay(""); renderPropForm(); };
+  $("#propStat").onchange = () => { betSay(""); renderPropForm(); };
+  // A prop's line has no sign; half numbers only
+  const propHalf = (raw) => {
+    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+    if (!v) return "Type the line, like 24.5.";
+    if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like 24.5.";
+    const m = /^(\d+)(?:\.(\d+))?$/.exec(v);
+    if (!m) return "That isn't a number. Type it like 24.5.";
+    const frac = (m[2] || "").replace(/0+$/, "");
+    if (frac && frac !== "5") return "Lines go in whole or half numbers, like 6 or 6.5.";
+    const half = Number(m[1]) * 2 + (frac ? 1 : 0);
+    if (!half) return "A line is more than 0.";
+    if (half > 1999) return "The panel takes lines up to 999.5.";
+    return half;
+  };
+  const addProp = async () => {
+    const t = teamByKey(betTeam);
+    const pl = pickedPlayer();
+    if (!pl) {
+      if (propFavs) return betSay("Pick one of your favorite players.");
+      if (t && !fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+      return betSay(t ? "Pick the player first." : "Pick the team first.");
+    }
+    const st = statsFor(pl.l).find((x) => x[1] === $("#propStat").value);
+    if (!st) return betSay("Pick the stat.");
+    const side = st[3] ? "yes" : $("#propSide").value;
+    const half = st[3] ? 0 : propHalf($("#betLine").value);
+    if (typeof half === "string") {
+      betSay(half);
+      $("#betLine").focus();
+      return;
+    }
+    // A favorite's saved team may be stale
+    const home = propFavs ? teamById(pl.l, pl.team) : null;
+    if (home) {
+      if (!rosters[keyOf(home)]) betSay("Checking the " + home[3] + " roster on ESPN\u2026");
+      const r = await readRoster(home);
+      betSay("");
+      if (r && r.length && !r.some((a) => a.id === pl.id)) {
+        return betSay(pl.panel + " isn't on the " + home[3] + " roster at ESPN now. Turn off Favorite players and pick their new team.");
+      }
+    }
+    const list = S.props || [];
+    propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));
+    const want = { l: pl.l, id: pl.id, stat: st[1], side, half };
+    if (list.concat(propPending).some((p) => sameProp(p, want))) return betSay("You have that prop already.");
+    const max = S.propmax || 8;
+    if (list.length + propPending.length >= max) return betSay("All " + max + " props are in use. Remove one first.");
+    betSay("");
+    const mine = { ...want, at: Date.now() };
+    propPending.push(mine);
+    const line = st[3] ? "" : betPoints(half, false);
+    const label = pl.panel + (st[3] ? " " + st[2] : (side === "under" ? " U " : " O ") + line + " " + st[2]);
+    setGD({ prop: [0, pl.l, pl.id, pl.team, pl.panel, st[1], side, line].join(",") }).then((ok) => {
+      if (!ok) propPending = propPending.filter((x) => x !== mine);
+      else toast("Added " + label);
+    });
+    $("#betLine").value = "";
   };
   renderBetForm();
 
@@ -1764,6 +1979,28 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     $("#playerMsg").textContent = t;
     $("#playerMsg").hidden = !t;
   };
+  // A team's players by last name; null if unread
+  const rosters = {};
+  const readRoster = async (t) => {
+    if (rosters[keyOf(t)]) return rosters[keyOf(t)];
+    let list = null;
+    try {
+      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      list = rosterAthletes(await r.json());
+    } catch (_) {
+      return null;
+    }
+    const names = panelNames(list);
+    const out = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
+      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
+      .filter((a) => a.panel)
+      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+    if (out.length) rosters[keyOf(t)] = out;
+    return out;
+  };
+  const rosterSays = (t, list) => (list ? "ESPN lists no players for the " + t[3] + " right now."
+    : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
   const loadRoster = async (key) => {
     const t = teamByKey(key);
     if (!t) return;
@@ -1771,26 +2008,14 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     roster = [];
     renderPlayerForm();
     playerSay("Reading the " + t[3] + " roster from ESPN\u2026");
-    let list = null;
-    try {
-      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      list = rosterAthletes(await r.json());
-    } catch (_) {
-      list = null;
-    }
+    const list = await readRoster(t);
     if (rosterFor !== key) return;  // another team was picked meanwhile
     if (!list || !list.length) {
-      playerSay(list ? "ESPN lists no players for the " + t[3] + " right now."
-        : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
+      playerSay(rosterSays(t, list));
       renderPlayerForm();
       return;
     }
-    const names = panelNames(list);
-    roster = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
-      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
-      .filter((a) => a.panel)
-      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+    roster = list;
     playerSay("");
     renderPlayerForm();
   };
@@ -1898,6 +2123,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   let pickBet = false;
   let pickPlayer = false;
   let pickSplit = false;
+  let pickProp = false;
   const choose = (t) => {
     if (pickSplit) {
       if (S && refKey(S.team) === keyOf(t)) {
@@ -1911,7 +2137,9 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
       loadRoster(playerTeam);
     } else if (pickBet) {
       betTeam = keyOf(t);
+      betSay("");
       renderBetForm();
+      if (pickProp) loadPropRoster();
     } else if (pickFav) addFav(t);
     else {
       setGD({ team: keyOf(t) });
@@ -1932,7 +2160,7 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
     // one by its tab's name too.
     // Search matches a MiLB team's level, like "double-a"
     const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
-    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
+    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !((pickPlayer || pickProp) && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1970,17 +2198,18 @@ const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","
   // A dialog: Tab stays inside it, and closing hands focus back to the
   // button that opened it.
   let pickerFrom = null;
-  const openPicker = async (fav, bet = false, player = false, split = false) => {
+  const openPicker = async (fav, bet = false, player = false, split = false, prop = false) => {
     pickFav = fav;
     pickBet = bet;
     pickPlayer = player;
     pickSplit = split;
+    pickProp = prop;
     pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player || prop ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
     const cur = split && S && S.splitteam && S.splitteam.id ? teamByKey(refKey(S.splitteam))
       : player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
     const team = fav || bet || player || split;
-    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
+    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || ((player || prop) && !fromEspn(lg)));
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf/Racing only for My team; players need ESPN leagues
     tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });

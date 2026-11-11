@@ -79,6 +79,10 @@ std::string event_url(League league, const std::string &event_id) {
   return site_base(league) + "/scoreboard/" + event_id;
 }
 
+std::string summary_url(League league, const std::string &event_id) {
+  return site_base(league) + "/summary?event=" + event_id;
+}
+
 // A cup lives next to its league: soccer/eng.1 -> soccer/uefa.champions.
 static std::string comp_base(League league, const char *comp_slug) {
   const LeagueInfo *l = league_info(league);

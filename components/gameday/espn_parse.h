@@ -2,7 +2,9 @@
 // binary can compile this file directly.
 #pragma once
 
+#include <cctype>
 #include <climits>
+#include <cstdlib>
 #include <cstdint>
 #include <ctime>
 #include <string>
@@ -209,7 +211,7 @@ struct Racing {
 
 // Empty watch keeps reads unchanged; ESPN ids fit 32 bits.
 struct PlayerWatch {
-  static constexpr int kMax = 8;  // equals kPlayerSlots (set_request.h)
+  static constexpr int kMax = 16;  // favorite players and prop players
   uint32_t ids[kMax]{};
   uint8_t n{0};
   bool has(uint32_t id) const {
@@ -218,6 +220,16 @@ struct PlayerWatch {
         return true;
     return false;
   }
+};
+
+// Box score columns kept per player (props.h names them).
+constexpr int kBoxAtoms = 14;
+
+// One player's box score, half units; played false: no stats.
+struct BoxLine {
+  uint32_t athlete{0};
+  bool played{false};
+  int16_t v[kBoxAtoms]{};
 };
 
 // team is 0 when ESPN didn't say.
@@ -427,6 +439,8 @@ inline int64_t scan_day_shift(League league) {
 // up to 260 KB (NFL) or 750 KB (college). A LeagueInfo::per_event league
 // polls this.
 std::string event_url(League league, const std::string &event_id);
+// The game's summary; the panel reads only its box score.
+std::string summary_url(League league, const std::string &event_id);
 // One day's scoreboard for finding a team's next game (Eastern date of
 // day_epoch). College football and men's college basketball read the team's
 // conference only (130 KB for the SEC's Saturday, 835 KB for every FBS game).
@@ -770,6 +784,20 @@ std::string board_card_text(const GameSnapshot &g, bool wide, const std::string 
 std::string board_event_name(Sport sport, const std::string &name, size_t max);
 
 namespace detail {
+
+// "8:27" is 5070, "12.3" is 123; -1 otherwise.
+inline int clock_tenths(const std::string &c) {
+  if (c.empty() || !isdigit((unsigned char) c[0]))
+    return -1;
+  char *end = nullptr;
+  const long a = strtol(c.c_str(), &end, 10);
+  if (*end == ':') {
+    const long s = isdigit((unsigned char) end[1]) ? strtol(end + 1, nullptr, 10) : -1;
+    return a < 1000 && s >= 0 && s < 60 ? (int) (a * 60 + s) * 10 : -1;
+  }
+  return a < 100000 ? (int) a * 10 + (*end == '.' && isdigit((unsigned char) end[1]) ? end[1] - '0' : 0) : -1;
+}
+
 // UTC calendar date without libc; m and d 1-based.
 void civil_from_epoch(int64_t epoch, int &y, int &m, int &d);
 // Ticker helpers shared by the sport files.

@@ -7,7 +7,8 @@ routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
   POST /gameday/set      only the keys in SET_KEYS; 400 when none match (player= and
-                         playerdel= keep the favorite players in their slots, as players.h does)
+                         playerdel= keep the favorite players in their slots, as players.h does,
+                         and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
@@ -30,7 +31,8 @@ Started by playwright.config.js. Run by hand with `python mock_device.py 8765`
 and open http://127.0.0.1:8765/.
 
 The set keys, their limits and the Live auto pick come from
-components/gameday/set_request.h, and the bet limits from bets.h. `python mock_device.py --selftest` runs
+components/gameday/set_request.h, the bet limits from bets.h, and the prop
+limits and stats from props.h. `python mock_device.py --selftest` runs
 tests/fixtures/set_cases.json, the table the firmware's host tests also
 check, through apply_set, so the mock can't drift from the panel.
 """
@@ -75,7 +77,13 @@ SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kSetKeys\[\] = \{(.*?)\};", 
 LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w+) = (\d+);",
                                              SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
-                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
+                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/props.h").read_text(encoding="utf-8"))}
+# props.h's kPropStats: (sport, key) to (label, yes)
+PROP_STATS = {(sport.lower(), key): (label, yes == "true") for key, label, sport, yes in re.findall(
+    r'\{"(\w+)",\s*"([^"]+)",\s*Sport::(\w+),\s*(true|false),',
+    (REPO / "components/gameday/props.h").read_text(encoding="utf-8"))}
+SPORT_OF = dict(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(\w+)', LEAGUES_H))
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
 # 2x2 needs max_rows 2 and max_cols at least 4
 COMMON = (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8")
@@ -128,6 +136,8 @@ INITIAL = {
     "espn_kb": 412, "espn_reads": 23,
     # Manual bets (bets.h): filled slots only, and capacity
     "bets": [], "betmax": LIMITS["kBetSlots"],
+    # Player props (props.h): filled slots only, and capacity
+    "props": [], "propmax": LIMITS["kPropSlots"],
     # Favorite players (players.h): filled slots in slot order
     "players": [], "playermax": LIMITS["kPlayerSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
@@ -407,6 +417,51 @@ def put_bet(slot, doc):
     STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
 
 
+def parse_prop(v):
+    """parse_prop() (set_request.h): (slot, entry) or None. Slot 0 is the first empty one."""
+    f = v.split(",")
+    if len(f) != 8 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kPropSlots"]):
+        return None
+    lg, athlete, team_id, name = f[1], espn_id(f[2]), espn_id(f[3]), clean_player_name(f[4])
+    if lg not in LEAGUES or lg in BOARD or lg in NOT_ESPN or athlete is None or team_id is None \
+            or (lg, team_id) not in TEAMS or not name:
+        return None
+    stat = PROP_STATS.get((SPORT_OF[lg].lower(), f[5]))
+    if stat is None:
+        return None
+    if stat[1]:
+        side, half = ("yes", 0) if f[6] == "yes" and f[7] == "" else (None, None)
+    elif f[6] in ("over", "under"):
+        side, half = f[6], bet_line(f[7], False)
+    else:
+        side, half = None, None
+    if side is None or half is None:
+        return None
+    return int(f[0]), prop_doc(0, lg, athlete, team_id, name, f[5], side, half)
+
+
+def prop_doc(slot, lg, athlete, team_id, name, stat, side, half):
+    """One "props" entry of rebuild_state_(), for a prop with no game yet."""
+    label = PROP_STATS[(SPORT_OF[lg].lower(), stat)][0]
+    text = name + " " + label if side == "yes" else name + (" U " if side == "under" else " O ") + \
+        bet_points(half, False) + " " + label
+    return {"slot": slot, "l": lg, "id": athlete, "team": team_id, "name": name, "stat": stat, "side": side,
+            "half": half, "text": text, "st": "waiting"}
+
+
+def put_prop(slot, doc):
+    """prop_put() (props.h): the slot's entry, slot 0 the first empty one, nothing when all are in use."""
+    if slot == 0 and doc:
+        used = {e["slot"] for e in STATE.get("props", [])}
+        slot = next((i for i in range(1, LIMITS["kPropSlots"] + 1) if i not in used), 0)
+        if not slot:
+            return
+    if doc:
+        doc["slot"] = slot
+    keep = [e for e in STATE.get("props", []) if e["slot"] != slot]
+    STATE["props"] = sorted(keep + ([doc] if doc else []), key=lambda e: e["slot"])
+
+
 def clean_player_name(v):
     """clean_player_name() (set_request.h): capitals, digits, spaces and . ' - only, spaces at either end
     dropped and a run inside made one, cut to kPlayerNameMax and a cut never left ending in a space or
@@ -553,6 +608,13 @@ def apply_set(kv):
             bet = parse_bet(v)
             if bet:
                 put_bet(bet[0], bet_on_board(bet_doc(*bet)))
+        elif k == "propdel":
+            if len(v) == 1 and "1" <= v <= str(LIMITS["kPropSlots"]):
+                put_prop(int(v), None)
+        elif k == "prop":
+            got = parse_prop(v)
+            if got:
+                put_prop(*got)
         elif k == "watchstay":
             # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
             STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
@@ -621,6 +683,8 @@ def selftest():
         if key == "bets":
             # As entered; game and status are the firmware's
             return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
+        if key == "props":
+            return [{k: e[k] for k in ("slot", "l", "id", "team", "name", "stat", "side", "half")} for e in value]
         return value
 
     bad = 0
@@ -638,6 +702,8 @@ def selftest():
         if not start.pop("board", True):
             start["game"] = {"s": "NOT_FOUND"}
         start["bets"] = [bet_doc(b["slot"], b["l"], b["id"], b["type"], b["half"]) for b in start.get("bets", [])]
+        start["props"] = [prop_doc(e["slot"], e["l"], e["id"], e["team"], e["name"], e["stat"], e["side"], e["half"])
+                          for e in start.get("props", [])]
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league

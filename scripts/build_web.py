@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Bundle the device web page: team table (from teams.h) + app.js -> bundle.js.
 
-The bundle also gets the timezone list (timezones.h) and the table the
+The bundle also gets the timezone list (timezones.h), the table the
 firmware folds accented letters to plain ASCII with (sport_soccer.cpp's
 kFold and fold_special), so the page names a favorite player the way the
-panel reads ESPN's words.
+panel reads ESPN's words, and the player prop stats (props.h's kPropStats:
+sport, key, the panel's label and whether it is a yes prop).
 
 TEAMS rows are [league key, id, abbr, name], and a minor league baseball team's
 has its level (11 Triple-A to 14 Single-A) fifth, an AHL or ECHL team's its
@@ -42,6 +43,8 @@ SOURCE_RE = re.compile(r"\{League::(\w+),[^}\n]*Source::(?:MLB_STATS|HOCKEYTECH)
 TZ_H = ROOT / "components" / "gameday" / "timezones.h"
 TZ_RE = re.compile(r'\{"([^"]+)",\s*"([^"]+)",\s*"([^"]+)"\}')
 SOCCER_CPP = ROOT / "components" / "gameday" / "sport_soccer.cpp"
+PROPS_H = ROOT / "components" / "gameday" / "props.h"
+PROP_RE = re.compile(r'\{"(\w+)",\s*"([^"]+)",\s*Sport::(\w+),\s*(true|false),')
 
 
 def fold_tables(cpp):
@@ -108,7 +111,12 @@ def main():
     fold, special = fold_tables(SOCCER_CPP.read_text(encoding="utf-8"))
     folds = ("const FOLD=" + json.dumps(fold) + ";\nconst FOLD2=" +
              json.dumps({str(cp): v for cp, v in sorted(special.items())}, separators=(",", ":")) + ";\n")
-    page = header + teams + tz + folds + app_js
+    stats = [[sport.lower(), key, label, yes == "true"] for key, label, sport, yes in PROP_RE.findall(
+        PROPS_H.read_text(encoding="utf-8"))]
+    if len(stats) < 10:
+        raise SystemExit("props.h's kPropStats looks truncated")
+    props = "const PROP_STATS=" + json.dumps(stats, separators=(",", ":")) + ";\n"
+    page = header + teams + tz + folds + props + app_js
     BUNDLE.write_text(page, encoding="utf-8", newline="\n")
     print(f"wrote {BUNDLE} ({BUNDLE.stat().st_size} bytes, {len(rows)} teams)")
     demo = page.replace("from teams.h and app.js", "from teams.h, app.js and demo.js", 1)

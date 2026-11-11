@@ -128,9 +128,9 @@ inline uint32_t bet_event_id(const std::string &id) {
   return n > UINT32_MAX ? 0 : (uint32_t) n;
 }
 
-// A total's team_id may be either side.
-inline bool bet_in_game(const Bet &b, const BetGame &g) {
-  return !bet_empty(b) && g.event != 0 && b.league == g.league && (b.team_id == g.team_id || b.team_id == g.opp_id);
+// A total's team_id may be either side; props share it.
+template<typename T> inline bool bet_in_game(const T &b, const BetGame &g) {
+  return b.team_id != 0 && g.event != 0 && b.league == g.league && (b.team_id == g.team_id || b.team_id == g.opp_id);
 }
 
 // g's score from the bet's team's side.
@@ -156,19 +156,16 @@ inline int bet_margin(const Bet &b, int us, int them) {
 }
 
 // Games ended before the bet was placed can't be it.
-inline bool bet_game_open(const Bet &b, const BetGame &g) {
+template<typename T> inline bool bet_game_open(const T &b, const BetGame &g) {
   return !((g.phase == BetPhase::FINAL || g.phase == BetPhase::OFF) && (b.placed == 0 || g.kickoff < b.placed));
 }
 
-// A later game read first yields to an earlier one.
-inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
-  if (!bet_in_game(b, g))
-    return false;
-  bool changed = false;
+// False unless g is b's game; marks moves in changed.
+template<typename T> inline bool bet_tie(T &b, const BetGame &g, int64_t now, bool &changed) {
   bool tied = false;
   if (b.event != g.event) {
-    bool earlier = b.event != 0 && b.result == (uint8_t) BetResult::NONE && !b.moved && b.kickoff != 0 &&
-                   now < (int64_t) b.kickoff && g.kickoff > 0 && g.kickoff < (int64_t) b.kickoff;
+    bool earlier = b.event != 0 && b.result == 0 && !b.moved && b.kickoff != 0 && now < (int64_t) b.kickoff &&
+                   g.kickoff > 0 && g.kickoff < (int64_t) b.kickoff;
     if ((b.event != 0 && !earlier) || !bet_game_open(b, g))
       return false;
     b.event = g.event;
@@ -184,6 +181,16 @@ inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight)
     b.kickoff = kick;
     changed = true;
   }
+  return true;
+}
+
+// A later game read first yields to an earlier one.
+inline bool bet_observe(Bet &b, const BetGame &g, int64_t now, int64_t midnight) {
+  if (!bet_in_game(b, g))
+    return false;
+  bool changed = false;
+  if (!bet_tie(b, g, now, changed))
+    return false;
   if (g.phase != BetPhase::FINAL)
     return changed;
   int us = 0, them = 0;

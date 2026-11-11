@@ -33,7 +33,11 @@
     "3 today's scores, 4 clock and date), one digit and nothing else; splitteam its team, never a",
     "golf tour, a racing series or the panel's own team, \"none\" or \"\" clearing it.",
     "clocksize and textsize are Clock size and Text size, 0 Normal or 1 Large, one digit and",
-    "nothing else."
+    "nothing else.",
+    "props lists the player prop bets by slot as entered: slot, league, ESPN athlete id, team id,",
+    "the panel's name, the stat's key, side (over, under or yes) and the line in half points (0 for",
+    "a yes prop). prop= into slot 0 takes the first empty slot and with every slot in use changes",
+    "nothing; propdel=<slot> empties one. ESPN leagues only, as for favorite players."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -43,7 +47,7 @@
     "final": false, "alerts": 1048575, "alertfav": false, "watch": true, "watchstay": 60, "watchmine": false,
     "visit": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
-    "bets": [], "players": [], "split": 0, "splitteam": "", "clocksize": 0, "textsize": 0
+    "bets": [], "props": [], "players": [], "split": 0, "splitteam": "", "clocksize": 0, "textsize": 0
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -406,6 +410,24 @@
     {"name": "night brightness never goes dark", "set": [["nightbri", "0"]], "expect": {"nightbri": 1}},
     {"name": "night brightness above 255 clamps down", "set": [["nightbri", "400"]], "expect": {"nightbri": 255}},
     {"name": "the idle display and night hours in one request", "set": [["nightbri", "12"], ["night", "1"], ["idledim", "8"], ["idle", "4"]], "expect": {"idle": 4, "idledim": 8, "night": true, "nightbri": 12}},
-    {"name": "the idle display keeps the follow pin", "start": {"mode": 5, "follow": true}, "set": [["idle", "1"], ["night", "1"]], "expect": {"follow": true, "idle": 1, "night": true}}
+    {"name": "the idle display keeps the follow pin", "start": {"mode": 5, "follow": true}, "set": [["idle", "1"], ["night", "1"]], "expect": {"follow": true, "idle": 1, "night": true}},
+    {"name": "an over prop goes in the first empty slot", "set": [["prop", "0,nfl,3918298,2,Allen,passyds,over,250.5"]], "expect": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}]}},
+    {"name": "an under with a whole line", "set": [["prop", "4,nba,4431680,1,OKONGWU,reb,under,9"]], "expect": {"props": [{"slot": 4, "l": "nba", "id": 4431680, "team": 1, "name": "OKONGWU", "stat": "reb", "side": "under", "half": 18}]}},
+    {"name": "a yes prop has no line", "set": [["prop", "0,nfl,4882093,30,TUTEN,td,yes,"]], "expect": {"props": [{"slot": 1, "l": "nfl", "id": 4882093, "team": 30, "name": "TUTEN", "stat": "td", "side": "yes", "half": 0}]}},
+    {"name": "soccer takes anytime goal", "set": [["prop", "0,epl,280555,359,SAKA,goal,yes,"]], "expect": {"props": [{"slot": 1, "l": "epl", "id": 280555, "team": 359, "name": "SAKA", "stat": "goal", "side": "yes", "half": 0}]}},
+    {"name": "the same key is the sport's own stat", "set": [["prop", "0,nhl,3114727,6,DRAISAITL,pts,over,1.5"]], "expect": {"props": [{"slot": 1, "l": "nhl", "id": 3114727, "team": 6, "name": "DRAISAITL", "stat": "pts", "side": "over", "half": 3}]}},
+    {"name": "a stat from another sport is refused", "set": [["prop", "0,nfl,3918298,2,ALLEN,pts,over,20.5"]], "expect": {"props": []}},
+    {"name": "a yes stat with over is refused", "set": [["prop", "0,nfl,3918298,2,ALLEN,td,over,0.5"]], "expect": {"props": []}},
+    {"name": "an over with no line is refused", "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,"]], "expect": {"props": []}},
+    {"name": "a quarter-point line is refused", "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,250.25"]], "expect": {"props": []}},
+    {"name": "a line past 999.5 is refused", "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,1000"]], "expect": {"props": []}},
+    {"name": "a minor league player is refused", "set": [["prop", "0,milb,1,234,SMITH,hits,over,0.5"]], "expect": {"props": []}},
+    {"name": "a player on a team the league lacks is refused", "set": [["prop", "0,nfl,3918298,999,ALLEN,passyds,over,250.5"]], "expect": {"props": []}},
+    {"name": "a name the panel cannot show is refused", "set": [["prop", "0,nfl,3918298,2,A+B,passyds,over,250.5"]], "expect": {"props": []}},
+    {"name": "propdel empties a slot", "start": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}]}, "set": [["propdel", "1"]], "expect": {"props": []}},
+    {"name": "propdel past the last slot is refused", "start": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}]}, "set": [["propdel", "9"]], "expect": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}]}},
+    {"name": "a ninth prop changes nothing", "start": {"props": [{"slot": 1, "l": "nba", "id": 1001, "team": 1, "name": "P1", "stat": "pts", "side": "over", "half": 41}, {"slot": 2, "l": "nba", "id": 1002, "team": 1, "name": "P2", "stat": "pts", "side": "over", "half": 41}, {"slot": 3, "l": "nba", "id": 1003, "team": 1, "name": "P3", "stat": "pts", "side": "over", "half": 41}, {"slot": 4, "l": "nba", "id": 1004, "team": 1, "name": "P4", "stat": "pts", "side": "over", "half": 41}, {"slot": 5, "l": "nba", "id": 1005, "team": 1, "name": "P5", "stat": "pts", "side": "over", "half": 41}, {"slot": 6, "l": "nba", "id": 1006, "team": 1, "name": "P6", "stat": "pts", "side": "over", "half": 41}, {"slot": 7, "l": "nba", "id": 1007, "team": 1, "name": "P7", "stat": "pts", "side": "over", "half": 41}, {"slot": 8, "l": "nba", "id": 1008, "team": 1, "name": "P8", "stat": "pts", "side": "over", "half": 41}]}, "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,250.5"]], "expect": {"props": [{"slot": 1, "l": "nba", "id": 1001, "team": 1, "name": "P1", "stat": "pts", "side": "over", "half": 41}, {"slot": 2, "l": "nba", "id": 1002, "team": 1, "name": "P2", "stat": "pts", "side": "over", "half": 41}, {"slot": 3, "l": "nba", "id": 1003, "team": 1, "name": "P3", "stat": "pts", "side": "over", "half": 41}, {"slot": 4, "l": "nba", "id": 1004, "team": 1, "name": "P4", "stat": "pts", "side": "over", "half": 41}, {"slot": 5, "l": "nba", "id": 1005, "team": 1, "name": "P5", "stat": "pts", "side": "over", "half": 41}, {"slot": 6, "l": "nba", "id": 1006, "team": 1, "name": "P6", "stat": "pts", "side": "over", "half": 41}, {"slot": 7, "l": "nba", "id": 1007, "team": 1, "name": "P7", "stat": "pts", "side": "over", "half": 41}, {"slot": 8, "l": "nba", "id": 1008, "team": 1, "name": "P8", "stat": "pts", "side": "over", "half": 41}]}},
+    {"name": "propdel then prop in one request fills the freed slot", "start": {"props": [{"slot": 1, "l": "nba", "id": 1001, "team": 1, "name": "P1", "stat": "pts", "side": "over", "half": 41}, {"slot": 2, "l": "nba", "id": 1002, "team": 1, "name": "P2", "stat": "pts", "side": "over", "half": 41}]}, "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,250.5"], ["propdel", "1"]], "expect": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}, {"slot": 2, "l": "nba", "id": 1002, "team": 1, "name": "P2", "stat": "pts", "side": "over", "half": 41}]}},
+    {"name": "a prop keeps the bets and favorite players", "start": {"bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}]}, "set": [["prop", "0,nfl,3918298,2,ALLEN,passyds,over,250.5"]], "expect": {"props": [{"slot": 1, "l": "nfl", "id": 3918298, "team": 2, "name": "ALLEN", "stat": "passyds", "side": "over", "half": 501}], "bets": [{"slot": 1, "l": "nfl", "id": 2, "type": "spread", "half": -7}], "players": []}}
   ]
 }

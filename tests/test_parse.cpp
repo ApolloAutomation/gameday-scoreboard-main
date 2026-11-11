@@ -3635,6 +3635,7 @@ int run_alert_tests(int &checks);
 int run_bet_tests(int &checks);
 int run_watch_tests(int &checks);
 int run_player_tests(int &checks);
+int run_prop_tests(int &checks);
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
@@ -9199,6 +9200,7 @@ int main() {
   failures += run_bet_tests(checks);
   failures += run_watch_tests(checks);
   failures += run_player_tests(checks);
+  failures += run_prop_tests(checks);
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
