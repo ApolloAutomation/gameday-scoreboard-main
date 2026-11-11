@@ -82,8 +82,9 @@ class LogoCache {
     static void operator delete(void *p) { heap_caps_free(p); }
 
     Url url;
-    Bytes body;  // the PNG, from the task to the main loop
-    std::optional<runtime_image::RuntimeImage> image;
+    Bytes body;    // the PNG, from the task to the main loop
+    Bytes pixels;  // the decoded logo, RGB565 then alpha
+    std::optional<image::Image> image;
     State state{State::QUEUED};
     uint8_t prio{::espn::LOGO_NOW};
     uint32_t seq{0};   // queue order within a priority
@@ -97,7 +98,7 @@ class LogoCache {
   void run_();
   // code: the HTTP status, 0 for no answer
   bool download_(const std::string &url, Bytes &body, int &code, bool &throttled, uint32_t &retry_after_ms);
-  bool decode_(std::optional<runtime_image::RuntimeImage> &image, const Bytes &body);
+  bool decode_(Entry &e, const Bytes &body);
   void make_room_(uint32_t now);  // now: millis()
   void start_task_();
   bool pinned_url_(std::string_view url) const;
@@ -110,6 +111,8 @@ class LogoCache {
   void queue_(Entry &e, uint8_t prio, uint32_t now);
 
   http_request::HttpRequestComponent *http_{nullptr};
+  // One PNG decoder (~44 KB) shared by every logo
+  std::optional<runtime_image::RuntimeImage> decoder_;
   // Guards entries_, memo_, pending_ and every Entry's state and body.
   SemaphoreHandle_t lock_{nullptr};
   std::vector<std::unique_ptr<Entry>, PsramAllocator<std::unique_ptr<Entry>>> entries_;
