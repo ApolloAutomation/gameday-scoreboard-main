@@ -11,8 +11,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
+#include <pngle.h>
+
 #include "esphome/components/http_request/http_request.h"
-#include "esphome/components/runtime_image/runtime_image.h"
+#include "esphome/components/image/image.h"
 #include "logo_lru.h"
 
 namespace esphome::gameday {
@@ -38,8 +40,7 @@ template<class T> struct PsramAllocator {
 
 // Team logos, downloaded and decoded once, then kept in PSRAM until the
 // panel restarts. Downloads run on their own task so a slow logo server can
-// only delay a logo, never the main loop. Decoding stays on the main loop
-// because ESPHome's PNG decoder feeds the main loop's watchdog.
+// only delay a logo, never the main loop. Decoding runs there too.
 //
 // Everything a logo allocates goes to PSRAM, not just its pixels. Plain new
 // and malloc only use internal RAM in this build, so the PNG download and
@@ -72,8 +73,7 @@ class LogoCache {
   // On-screen row logos by logo_key; keeps the last set.
   void pin_icons(const uint32_t *keys, size_t n);
   bool busy() const { return this->task_running_; }
-  // Decodes finished downloads and retries failed logos that are on screen.
-  // True when at least one logo became ready.
+  // Retries on-screen failed logos; true when one became ready.
   // failed: one failed or proved unreadable instead.
   bool loop(bool &failed);
   // Logo bytes downloaded since boot, any task.
@@ -83,13 +83,12 @@ class LogoCache {
   using Bytes = std::vector<uint8_t, PsramAllocator<uint8_t>>;
   using Url = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
 
-  enum class State : uint8_t { QUEUED, LOADING, DOWNLOADED, READY, FAILED };
+  enum class State : uint8_t { QUEUED, LOADING, READY, FAILED };
   struct Entry {
     static void *operator new(size_t size) { return psram_alloc(size); }
     static void operator delete(void *p) { heap_caps_free(p); }
 
     Url url;
-    Bytes body;    // the PNG, from the task to the main loop
     Bytes pixels;  // the decoded logo, RGB565 then alpha
     std::optional<image::Image> image;
     State state{State::QUEUED};
@@ -107,8 +106,13 @@ class LogoCache {
   void run_();
   // code: the HTTP status, 0 for no answer
   bool download_(const std::string &url, Bytes &body, int &code, bool &throttled, uint32_t &retry_after_ms);
-  // 1 decoded, 0 failed, -1 unreadable as an icon
-  int decode_(Entry &e, const Bytes &body);
+  struct Decoded {
+    Bytes pixels;
+    int w{0}, h{0};
+    uint32_t src_w{0}, src_h{0};
+  };
+  // Logo task only. 1 decoded, 0 failed, -1 unreadable icon
+  int decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out);
   void make_room_(uint32_t now);  // now: millis()
   void start_task_();
   bool pinned_url_(std::string_view url) const;
@@ -121,9 +125,9 @@ class LogoCache {
   void queue_(Entry &e, uint8_t prio, uint32_t now);
 
   http_request::HttpRequestComponent *http_{nullptr};
-  // One PNG decoder (~44 KB) shared by every logo
-  std::optional<runtime_image::RuntimeImage> decoder_;
-  // Guards entries_, memo_, pending_ and every Entry's state and body.
+  // One PNG decoder (~44 KB), the logo task's
+  pngle_t *png_{nullptr};
+  // Guards entries_, memo_, pending_ and every Entry's state.
   SemaphoreHandle_t lock_{nullptr};
   std::vector<std::unique_ptr<Entry>, PsramAllocator<std::unique_ptr<Entry>>> entries_;
   std::vector<::espn::LogoSlot, PsramAllocator<::espn::LogoSlot>> slots_;  // scratch space for make_room_
@@ -136,8 +140,8 @@ class LogoCache {
   uint8_t icon_pin_n_[2]{};
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
-  std::atomic<bool> downloaded_{false};
-  std::atomic<bool> failed_{false};  // a download failed since loop()
+  std::atomic<bool> loaded_{false};
+  std::atomic<bool> failed_{false};  // a logo failed since loop()
   std::atomic<bool> pending_any_{false};
   std::atomic<uint32_t> bytes_downloaded_{0};
 };
