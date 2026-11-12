@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -146,10 +147,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       }
       case SetKind::BET_DEL:
         require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
+        require(v == std::to_string(op.slot), "a slot is plain decimal", k, v);
         break;
       case SetKind::PROP: {
         // Slot 0 is the first empty one (prop_put).
         require(op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        require(v.compare(0, v.find(','), std::to_string(op.slot)) == 0, "a slot is plain decimal", k, v);
         require(prop_valid(op.prop), "the prop isn't one the panel can keep", k, v);
         prop_label(op.prop);
         Prop blob[kPropSlots]{};
@@ -159,13 +162,24 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       }
       case SetKind::PROP_DEL:
         require(op.slot >= 1 && op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        require(v == std::to_string(op.slot), "a slot is plain decimal", k, v);
         break;
       case SetKind::PLAYER: {
         const FavPlayer fp = make_player(op.team.league, op.athlete, op.team.id, op.name);
         require(player_valid(fp), "the player isn't one the panel can keep", k, v);
         require(op.name.size() <= (size_t) kPlayerNameMax, "the name is longer than the blob holds", k, v);
-        FavPlayer list[kPlayerSlots]{};
-        require(player_put(list, fp) == 1, "the player went nowhere", k, v);
+        // Fifteen others: it takes slot 16, a seventeenth none.
+        PlayerBlob all{};
+        for (uint32_t i = 1; i < (uint32_t) kPlayerSlots; i++)
+          all.players[i - 1] = make_player(op.team.league, i == op.athlete ? 1000 : i, op.team.id, op.name);
+        require(player_put(all.players, fp) == kPlayerSlots, "the player went nowhere", k, v);
+        FavPlayer extra = fp;
+        extra.athlete = op.athlete == 2000 ? 2001 : 2000;
+        require(player_put(all.players, extra) == 0, "a seventeenth player found a slot", k, v);
+        PlayerBlob joined{};
+        player_half_put(joined, 0, player_half(all, 0));
+        player_half_put(joined, 1, player_half(all, 1));
+        require(memcmp(&joined, &all, sizeof(all)) == 0, "the saved halves lose a player", k, v);
         break;
       }
       case SetKind::PLAYER_DEL:

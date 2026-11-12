@@ -1,6 +1,7 @@
 // Favorite players; reads nothing extra from ESPN; host-tested.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -23,11 +24,33 @@ struct FavPlayer {
 };
 static_assert(sizeof(FavPlayer) == 20, "FavPlayer is the saved blob's layout: keep its size");
 
-// Resizing fails to load and loses every saved player.
+// Saved as two halves of v2026.11.3's eight.
+constexpr int kPlayerHalfSlots = 8;
+static_assert(kPlayerSlots == 2 * kPlayerHalfSlots, "favorite players save as two halves");
+
+// A saved half; resizing it loses those players.
+struct PlayerHalf {
+  FavPlayer players[kPlayerHalfSlots];
+};
+static_assert(sizeof(PlayerHalf) == 160, "PlayerHalf is a saved blob: keep its size");
+
+// Half 0 holds slots 1-8, half 1 slots 9-16.
 struct PlayerBlob {
   FavPlayer players[kPlayerSlots];
 };
-static_assert(sizeof(PlayerBlob) == 160, "PlayerBlob is the saved blob: keep its size");
+
+inline PlayerHalf player_half(const PlayerBlob &b, int h) {
+  PlayerHalf out;
+  std::copy_n(b.players + h * kPlayerHalfSlots, kPlayerHalfSlots, out.players);
+  return out;
+}
+
+inline void player_half_put(PlayerBlob &b, int h, const PlayerHalf &half) {
+  std::copy_n(half.players, kPlayerHalfSlots, b.players + h * kPlayerHalfSlots);
+}
+
+// The saved half's bit for 0-based slot i.
+inline uint8_t player_half_bit(int i) { return (uint8_t) (1u << (i / kPlayerHalfSlots)); }
 
 inline bool player_empty(const FavPlayer &p) { return p.athlete == 0; }
 
@@ -39,6 +62,13 @@ inline bool player_valid(const FavPlayer &p) {
     return false;
   const std::string n(p.name);
   return !n.empty() && clean_player_name(n) == n;
+}
+
+// Empties slots from newer firmware or unknown leagues.
+inline void players_loaded(PlayerBlob &b) {
+  for (auto &p : b.players)
+    if (!player_empty(p) && !player_valid(p))
+      p = FavPlayer{};
 }
 
 inline FavPlayer make_player(uint8_t league, uint32_t athlete, uint32_t team_id, const std::string &name) {
@@ -67,21 +97,46 @@ inline uint8_t player_put(FavPlayer *list, const FavPlayer &p) {
   return (uint8_t) (free_slot + 1);
 }
 
-inline bool player_drop(FavPlayer *list, uint8_t league, uint32_t athlete) {
+// Returns the emptied 1-based slot, or 0.
+inline uint8_t player_drop(FavPlayer *list, uint8_t league, uint32_t athlete) {
   for (int i = 0; i < kPlayerSlots; i++)
     if (!player_empty(list[i]) && list[i].league == league && list[i].athlete == athlete) {
       list[i] = FavPlayer{};
-      return true;
+      return (uint8_t) (i + 1);
     }
-  return false;
+  return 0;
+}
+
+// A read's copy of whom it may watch, by league.
+struct WatchRoster {
+  uint32_t ids[PlayerWatch::kMax]{};
+  uint8_t leagues[PlayerWatch::kMax]{};
+  uint8_t n{0};
+};
+
+// Favorites in slot order, then soccer prop players.
+inline WatchRoster watch_roster(const FavPlayer *list, const Prop *props) {
+  WatchRoster r;
+  for (int i = 0; i < kPlayerSlots; i++)
+    if (!player_empty(list[i])) {
+      r.ids[r.n] = list[i].athlete;
+      r.leagues[r.n++] = list[i].league;
+    }
+  // Other sports read their box score instead.
+  for (int i = 0; i < kPropSlots; i++)
+    if (!prop_empty(props[i]) && league_sport((League) props[i].league) == Sport::SOCCER) {
+      r.ids[r.n] = props[i].athlete;
+      r.leagues[r.n++] = props[i].league;
+    }
+  return r;
 }
 
 // n 0 leaves the read unchanged.
-inline PlayerWatch player_watch(const FavPlayer *list, uint8_t league) {
+inline PlayerWatch roster_watch(const WatchRoster &r, uint8_t league) {
   PlayerWatch w;
-  for (int i = 0; i < kPlayerSlots; i++)
-    if (!player_empty(list[i]) && list[i].league == league && w.n < PlayerWatch::kMax)
-      w.ids[w.n++] = list[i].athlete;
+  for (uint8_t i = 0; i < r.n; i++)
+    if (r.leagues[i] == league && !w.has(r.ids[i]) && w.n < PlayerWatch::kMax)
+      w.ids[w.n++] = r.ids[i];
   return w;
 }
 

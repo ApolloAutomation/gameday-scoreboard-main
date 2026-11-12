@@ -208,9 +208,9 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       <div class="stepper"><label for="rotate">Switch every</label><select id="rotate">${ROTATE_OPTIONS}</select></div>
     </div>
     <div class="teambar favbar" id="favbar" hidden>
-      <div class="cur"><div><div class="name" id="favName">Cycling through your favorites</div><div class="lg">A favorite's game takes the panel near kickoff. When two overlap, the slot order or Alternate below decides.</div></div></div>
+      <div class="cur"><div><div class="name" id="favName">Cycling through your favorites</div><div class="lg">A favorite's game takes the panel near the start of the game. When two overlap, the slot order or Alternate below decides.</div></div></div>
       <div class="favctls">
-        <div class="stepper"><label for="lockon">Take over</label><input type="number" id="lockon" min="5" max="120" step="1"><span>min before kickoff</span></div>
+        <div class="stepper"><label for="lockon">Take over</label><input type="number" id="lockon" min="5" max="120" step="1"><span>min before the start of the game</span></div>
         <div class="stepper"><label for="release">After the final</label><select id="release">
           <option value="30">30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option>
           <option value="600">10 min</option><option value="900">15 min</option><option value="1800">30 min</option><option value="3600">60 min</option>
@@ -280,17 +280,17 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <p class="hint">Bets and player props you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering or on track during the game, and the result after the final until midnight. The panel follows them only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
         <div id="betList"></div>
         <div class="sub">Add a bet</div>
-        <div class="ctl" id="betTeamRow"><label>Team<small id="betTeamHint">For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
+        <div class="ctl drop" id="betTeamRow"><label>Team<small id="betTeamHint">For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
         <div class="ctl"><label for="betType">Bet</label><select id="betType">
           <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option><option value="prop">Player prop</option>
         </select></div>
         <div id="propRows" hidden>
-          <div class="ctl"><label for="propPick">Player<small id="propPickHint"></small></label><div class="proppick"><select id="propPick"></select><button type="button" class="btn" id="propFavs" aria-pressed="false">Favorite players</button></div></div>
+          <div class="ctl drop"><label for="propPick">Player<small id="propPickHint"></small></label><div class="proppick"><select id="propPick"></select><button type="button" class="btn" id="propFavs" aria-pressed="false">Favorite players</button></div></div>
           <div class="ctl"><label for="propStat">Stat</label><select id="propStat"></select></div>
           <div class="ctl" id="propSideRow"><label for="propSide">Pick</label><select id="propSide"><option value="over">Over</option><option value="under">Under</option></select></div>
           <p class="hint">While the game is on, the panel reads its box score from ESPN about once a minute, and once more after the final to settle the prop.</p>
         </div>
-        <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
+        <div class="ctl drop" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
           <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
           <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
         <p class="betmsg" id="betMsg" role="alert" hidden></p>
@@ -2135,7 +2135,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));
     const want = { l: pl.l, id: pl.id, stat: st[1], side, half };
     if (list.concat(propPending).some((p) => sameProp(p, want))) return betSay("You have that prop already.");
-    const max = S.propmax || 8;
+    const max = S.propmax;
     if (list.length + propPending.length >= max) return betSay("All " + max + " props are in use. Remove one first.");
     betSay("");
     const mine = { ...want, at: Date.now() };
@@ -2263,7 +2263,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   // A read after the ack without them: slots were full
   const settlePlayers = () => {
     const list = S.players || [];
-    const max = S.playermax || 8;
+    const max = S.playermax;
     playerPending = playerPending.filter((p) => {
       if (list.some((pl) => pl.l === p.l && pl.id === p.id)) {
         toast("Added " + p.name);
@@ -2289,7 +2289,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     if (card.hidden) return;
     settlePlayers();
     const list = S.players || [];
-    $("#playerSum").textContent = list.length ? list.length + " of " + (S.playermax || 8) : "";
+    $("#playerSum").textContent = list.length ? list.length + " of " + S.playermax : "";
     const sig = JSON.stringify(list);
     if (sig === playerDrawn) return;
     playerDrawn = sig;
@@ -2326,7 +2326,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const a = roster.find((x) => String(x.id) === $("#playerPick").value);
     if (!t || !a) return playerSay("Pick the player first.");
     const list = S.players || [];
-    const max = S.playermax || 8;
+    const max = S.playermax;
     const same = (pl) => pl.l === t[0] && pl.id === a.id;
     // Pending posts count: no double posts or overfilled slots
     if (playerPending.some(same)) return;

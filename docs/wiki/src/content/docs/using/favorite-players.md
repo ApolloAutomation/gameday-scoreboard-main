@@ -7,6 +7,10 @@ sidebar:
 
 Pick the players you follow, from any team in the football, baseball, basketball, hockey and soccer leagues the panel knows. While one of their games is on the board, the ticker shows their stat line whenever ESPN lists them among the game's leaders, and when they score, the celebration says their name, like **ALLEN TOUCHDOWN**. The panel keeps up to eight players. Golf tours and racing series have no players to pick, and neither do minor league baseball, AHL or ECHL teams: the rosters come from ESPN, which doesn't carry those leagues.
 
+:::note[Coming in the next release]
+The panel keeps up to 16 favorite players.
+:::
+
 ## Adding a player
 
 1. Open the [device page](/using/device-page/) and find the **Favorite players** card.
@@ -17,6 +21,10 @@ Pick the players you follow, from any team in the football, baseball, basketball
 The card says **Added** once the panel has the player, and lists your players with their team. To take one off, tap the remove button (✕) next to them.
 
 If the roster can't be read, the card says **Couldn't read the** team's **roster from ESPN** and asks you to check the internet connection of the phone or computer you're using: the roster comes straight from ESPN to your browser, not through the panel. The card also says so when a player is a favorite already, or when all eight are in use: **All 8 players are in use. Remove one first.** That includes a player added from another phone or computer a moment before, which the card may not have listed yet.
+
+:::note[Coming in the next release]
+The panel keeps 16 players, so once all 16 are in use the card says **All 16 players are in use. Remove one first.**
+:::
 
 ### The name on the panel
 

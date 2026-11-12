@@ -184,7 +184,9 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
 }
 
 size_t players(const GameSnapshot &prev, const GameSnapshot &g, uint8_t league) {
-  static const uint32_t kIds[] = {4870883, 5079684, 4917849, 4396909, 4431671, 280555, 3918298, 199680};
+  static const uint32_t kIds[] = {4870883, 5079684, 4917849, 4396909, 4431671, 280555, 3918298, 199680,
+                                  4431680, 5080761, 3114727, 4882093, 4433137, 3916433, 3899937, 218522};
+  static_assert(sizeof(kIds) / sizeof(kIds[0]) == kPlayerSlots, "an id per slot");
   FavPlayer list[kPlayerSlots]{};
   for (int i = 0; i < kPlayerSlots; i++)
     list[i] = make_player(league, kIds[i], i % 2 ? g.team_id : g.opp_id, i % 2 ? "B. TKACHUK" : "CONNOR");
@@ -643,6 +645,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     PlayerWatch w;
     for (uint32_t id : {3918298u, 4431680u, 5080761u, 3114727u, 4882093u})
       w.ids[w.n++] = id;
+    for (uint32_t id = 9000; w.n < PlayerWatch::kMax; id++)
+      w.ids[w.n++] = id;
     BoxCutter cut;
     StringReader in(json, &cut);
     std::vector<BoxLine> lines;
@@ -912,7 +916,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         FavPlayer list[kPlayerSlots]{};
         list[0] = make_player((uint8_t) l.league, 4917849, p.team_id, "MESA JR.");
         list[1] = make_player((uint8_t) l.league, 4396909, p.team_id, "NESMITH");
-        const PlayerWatch w = player_watch(list, (uint8_t) l.league);
+        // Every slot full: soccer props join the watch.
+        Prop props[kPropSlots]{};
+        for (int i = 0; i < kPropSlots; i++) {
+          if (i >= 2)
+            list[i] = make_player((uint8_t) l.league, 8000 + i, p.team_id, "FAV");
+          props[i].athlete = i == 0 ? 280555 : 8100 + i;
+          props[i].league = (uint8_t) l.league;
+        }
+        const PlayerWatch w = roster_watch(watch_roster(list, props), (uint8_t) l.league);
         GameSnapshot f;
         ChunkReader r5(data, size, chunk);
         if (parse_event(r5, sport, p.team_id, f, p.event_id, &w)) {

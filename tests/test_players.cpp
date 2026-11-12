@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -58,9 +59,15 @@ struct List {
   }
 };
 
+// A game read's watch: favorites only, no props.
+PlayerWatch watch_of(const FavPlayer *list, uint8_t league) {
+  static const Prop none[kPropSlots]{};
+  return roster_watch(watch_roster(list, none), league);
+}
+
 GameSnapshot read_json(const std::string &json, Sport sport, uint32_t team, const List &list, uint8_t league) {
   GameSnapshot s;
-  const PlayerWatch w = player_watch(list.p, league);
+  const PlayerWatch w = watch_of(list.p, league);
   PCHECK(parse_event_str(json, sport, team, s, "", &w));
   return s;
 }
@@ -108,18 +115,19 @@ void test_list() {
   PCHECK(list[0].team_id == 12);
   // The same id in another league is someone else.
   PCHECK(player_put(list, make_player(NBA, 3918298, 16, "ALLEN")) == 3);
-  PCHECK(player_drop(list, NFL, 15847) && player_empty(list[1]));
-  PCHECK(!player_drop(list, NFL, 15847));
+  PCHECK(player_drop(list, NFL, 15847) == 2 && player_empty(list[1]));
+  PCHECK(player_drop(list, NFL, 15847) == 0);
   PCHECK(player_put(list, make_player(NHL, 3114727, 27, "O'NEIL")) == 2);  // the freed slot
   for (uint32_t id = 10; player_put(list, make_player(NFL, id, 2, "X")) != 0; id++) {
   }
-  PCHECK(player_put(list, make_player(NFL, 99, 2, "NINTH")) == 0);
+  PCHECK(!player_empty(list[0]) && !player_empty(list[kPlayerSlots - 1]));
+  PCHECK(player_put(list, make_player(NFL, 99, 2, "LAST")) == 0);
   PCHECK(player_put(list, make_player(NFL, 3918298, 2, "ALLEN")) == 1);  // a player in a full list
   // The watch for a game read: the league's favorites only.
-  PlayerWatch w = player_watch(list, NBA);
+  PlayerWatch w = watch_of(list, NBA);
   PCHECK(w.n == 1 && w.ids[0] == 3918298 && w.has(3918298) && !w.has(15847) && !w.has(0));
-  PCHECK(player_watch(list, MLB).n == 0);
-  PCHECK(player_watch(list, NFL).n == 6);
+  PCHECK(watch_of(list, MLB).n == 0);
+  PCHECK(watch_of(list, NFL).n == kPlayerSlots - 2);
 
   // Bad blobs from flash are emptied at boot.
   FavPlayer bad = allen;
@@ -154,7 +162,103 @@ void test_list() {
   bad = allen;
   bad.athlete = 0;
   PCHECK(!player_valid(bad) && player_empty(bad));
-  PCHECK(sizeof(PlayerBlob) == 160);
+  PCHECK(sizeof(PlayerHalf) == 160 && sizeof(PlayerHalf) == kPlayerHalfSlots * sizeof(FavPlayer));
+}
+
+// Two saved halves: slots 1-8 under v2026.11.3's key.
+void test_halves() {
+  PlayerBlob b{};
+  for (int i = 0; i < kPlayerSlots; i++)
+    PCHECK(player_put(b.players, make_player(NFL, 1001 + i, 2, "P")) == i + 1);
+  PCHECK(player_put(b.players, make_player(NFL, 2000, 2, "LAST")) == 0);
+  const PlayerHalf lo = player_half(b, 0), hi = player_half(b, 1);
+  PCHECK(lo.players[0].athlete == 1001 && lo.players[7].athlete == 1008);
+  PCHECK(hi.players[0].athlete == 1009 && hi.players[7].athlete == 1016);
+  PlayerBlob joined{};
+  player_half_put(joined, 1, hi);
+  player_half_put(joined, 0, lo);
+  PCHECK(memcmp(&joined, &b, sizeof(b)) == 0);
+  // No second half saved yet: slots 9-16 stay empty.
+  PlayerBlob first{};
+  player_half_put(first, 0, lo);
+  PCHECK(memcmp(first.players, b.players, sizeof(lo)) == 0);
+  for (int i = kPlayerHalfSlots; i < kPlayerSlots; i++)
+    PCHECK(player_empty(first.players[i]));
+  // v2026.11.3's eight-slot blob is the first half, byte for byte.
+  FavPlayer old[8]{};
+  old[3] = make_player(NFL, 3918298, 2, "ALLEN");
+  PlayerHalf saved{};
+  static_assert(sizeof(old) == sizeof(saved), "the old blob's size");
+  memcpy(&saved, old, sizeof(old));
+  PlayerBlob upgraded{};
+  player_half_put(upgraded, 0, saved);
+  PCHECK(upgraded.players[3].athlete == 3918298 && player_valid(upgraded.players[3]));
+  PCHECK(player_half_bit(0) == 1 && player_half_bit(7) == 1 && player_half_bit(8) == 2 && player_half_bit(15) == 2);
+  // The first free slot, across the halves.
+  PCHECK(player_drop(b.players, NFL, 1012) == 12);
+  PCHECK(player_put(b.players, make_player(NFL, 2000, 2, "NEW")) == 12);
+  PCHECK(player_drop(b.players, NFL, 1003) == 3 && player_drop(b.players, NFL, 1014) == 14);
+  PCHECK(player_put(b.players, make_player(NFL, 2001, 2, "NEW")) == 3);
+  PCHECK(player_put(b.players, make_player(NFL, 2002, 2, "NEW")) == 14);
+  // Bad slots in either half are emptied at boot.
+  b.players[1].team_id = 99999;
+  b.players[12].league = (uint8_t) League::PGA;
+  players_loaded(b);
+  PCHECK(player_empty(b.players[1]) && player_empty(b.players[12]));
+  PCHECK(!player_empty(b.players[0]) && !player_empty(b.players[11]) && !player_empty(b.players[15]));
+}
+
+// Sixteen favorites and sixteen soccer props in one read.
+void test_roster() {
+  FavPlayer list[kPlayerSlots]{};
+  Prop props[kPropSlots]{};
+  for (int i = 0; i < kPlayerSlots; i++)
+    list[i] = make_player(EPL, 5000 + i, 359, "FAV");
+  for (int i = 0; i < kPropSlots; i++) {
+    props[i].athlete = 6000 + i;
+    props[i].league = EPL;
+  }
+  WatchRoster r = watch_roster(list, props);
+  PCHECK(r.n == PlayerWatch::kMax);
+  PlayerWatch w = roster_watch(r, EPL);
+  PCHECK(w.n == PlayerWatch::kMax && w.ids[0] == 5000 && w.ids[15] == 5015 && w.ids[16] == 6000 && w.ids[31] == 6015);
+  PCHECK(roster_watch(r, NFL).n == 0);
+  // A prop on a favorite counts once.
+  props[0].athlete = 5003;
+  w = roster_watch(watch_roster(list, props), EPL);
+  PCHECK(w.n == PlayerWatch::kMax - 1 && w.ids[16] == 6001);
+  // The same id in another league is another player.
+  props[1].league = (uint8_t) League::MLS;
+  props[1].athlete = 5004;
+  r = watch_roster(list, props);
+  PCHECK(roster_watch(r, EPL).n == PlayerWatch::kMax - 2);
+  PCHECK(roster_watch(r, (uint8_t) League::MLS).n == 1 && roster_watch(r, (uint8_t) League::MLS).ids[0] == 5004);
+  // Other sports' props read their box score instead.
+  Prop nfl[kPropSlots]{};
+  for (int i = 0; i < kPropSlots; i++) {
+    nfl[i].athlete = 7000 + i;
+    nfl[i].league = NFL;
+  }
+  PCHECK(roster_watch(watch_roster(list, nfl), NFL).n == 0);
+  const FavPlayer none[kPlayerSlots]{};
+  PCHECK(watch_roster(none, nfl).n == 0);
+
+  // The game read keeps every scorer with the watch full.
+  GameSnapshot epl;
+  w = roster_watch(watch_roster(list, props), EPL);
+  w.ids[w.n - 1] = 280555;
+  PCHECK(parse_event_str(slurp("fixtures/event_epl_final.json"), Sport::SOCCER, 359, epl, "", &w));
+  PCHECK(epl.soc.goals.size() == 2 && epl.soc.goals[1].athlete == 280555);
+  // Sixteen favorites in one basketball game: the league's leaders.
+  FavPlayer nba[kPlayerSlots]{};
+  const uint32_t kNba[] = {4396909, 4017837, 5106060, 4594268, 3032976, 4432816, 4431671};
+  for (int i = 0; i < kPlayerSlots; i++)
+    nba[i] = make_player(NBA, i < 7 ? kNba[i] : 9000 + i, 16, "FAV");
+  const PlayerWatch bw = watch_of(nba, NBA);
+  PCHECK(bw.n == kPlayerSlots);
+  GameSnapshot g;
+  PCHECK(parse_event_str(slurp("fixtures/event_nba_live.json"), Sport::BASKETBALL, 16, g, "", &bw));
+  PCHECK(!g.leaders.empty() && g.leaders.size() <= 16);
 }
 
 void test_names() {
@@ -793,6 +897,8 @@ void test_splash_fits() {
 
 int run_player_tests(int &total_checks) {
   test_list();
+  test_halves();
+  test_roster();
   test_names();
   test_read();
   test_stat_lines();

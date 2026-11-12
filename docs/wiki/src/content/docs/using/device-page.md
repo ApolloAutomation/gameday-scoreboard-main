@@ -46,7 +46,7 @@ While the panel follows a game it doesn't switch to big plays in other games, or
 
 In My team, the **Up next** list shows the next three games after the one on the board, with the opponent, the day and time (in your browser's time) and the TV channel. It appears for football and soccer teams, and for minor league baseball, AHL and ECHL teams. MLB, NBA, WNBA, men's college basketball and NHL season schedules are too large for the panel to read, so those teams have no Up next list.
 
-In Favorite teams, the list has one row per favorite: the live score, the final, or the next kickoff and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add a favorite.
+In Favorite teams, the list has one row per favorite: the live score, the final, or the next game's start time and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add a favorite.
 
 ## Choosing a team
 
@@ -86,7 +86,7 @@ The settings, in the order the page shows them:
 | **Change team** | Opens the team chooser. Shown in My team. |
 | Leagues (Live games) | The leagues Live games picks from. Until you pick, it follows the leagues of your team and favorites. **Back to automatic** goes back to that. |
 | **Switch every** (Live games) | Moves to another game in progress after this long: **30 s**, or every minute from 1 to 30. A new panel starts at 1 minute. |
-| **Take over** (Favorite teams) | How many minutes before kickoff a favorite's game takes the panel, 5 to 120. Starts at 15. |
+| **Take over** (Favorite teams) | How early a favorite's game takes the panel: 5 to 120 minutes before the start of the game. Starts at 15. |
 | **After the final** (Favorite teams) | How long a favorite's final stays up before the playlist moves on, 30 seconds to 60 minutes. Starts at 30 seconds. |
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them, every 30 seconds or every 1 to 30 minutes, from the list next to it. |
 | **Ticker speed** (Panel) | How fast the ticker scrolls, 1 to 10. |
@@ -109,13 +109,17 @@ The settings, in the order the page shows them:
 | Ticker: **Pre-game odds and TV** | The line, over/under and TV channel before the start, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it. Racing: the TV channel. |
 | **Opponent scores too** and the celebration switches | Which splashes show. See [Celebrations](#celebrations). |
 | **Discovery**, **Unpair remote** | Pairs and unpairs a WizMote remote. See [WizMote remote](/using/remote/). |
-| Timezone (Setup) | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
+| Timezone (Setup) | Used for game times and the clock. The page sets it from your browser unless you choose one by hand. |
 | **Show how to connect when the panel starts** (Setup) | After it joins Wi-Fi, the panel shows a QR code that opens this page, at the panel's IP address, then the page address: for about 18 seconds on a panel with a team, and on a new panel for 45 seconds or until you pick a team. Then the IP address and `.local` name lead the ticker for 30 seconds. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready and the address is in the ticker only. Turn it off and a panel with a team goes straight to the scoreboard, with no address in the ticker. A new panel still shows the QR code, without the address. |
 | Matrix (Setup) | Click the picture that matches your panel: **One 64x64 panel**, **One 128x64 panel** (or two 64x64 side by side), **Three wide**, **Four wide** or **Two rows of two**. The page asks before it restarts the panel with the new layout. See [Panel sizes and layouts](/using/panel-sizes/). |
 | **How the rows are mounted** (Setup) | On two rows of two only: **Bottom row upside down**, **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-the-panels). |
 | **Install updates automatically** (Device) | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
+
+:::note[Coming in the next release]
+The panel keeps up to 16 favorite players, and up to 16 player props besides the eight bets.
+:::
 
 **Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).
 
@@ -195,6 +199,10 @@ If a place can't be found, the card says so: try a town and state, or a ZIP code
 ## The Favorite players card
 
 The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
+
+:::note[Coming in the next release]
+The card lists up to 16 favorite players.
+:::
 
 ## The Bets card
 

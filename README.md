@@ -16,7 +16,7 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 
 ## What it does
 
-- Next-game card while you wait: both logos, season records, kickoff day and time in your timezone, and a ticker with the betting line, over/under, TV network and venue
+- Next-game card while you wait: both logos, season records, the game's day and start time in your timezone, and a ticker with the betting line, over/under, TV network and venue
 - Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance and where the ball is (one switch) and the last play (another); the clock keeps its own row and never goes in the ticker
 - Full-screen splashes in the scoring team's color, with its logo and the points it gained, for touchdowns, field goals, extra points, 2-point conversions, safeties, interceptions and fumble recoveries, the opponent's acknowledged in theirs, and a victory splash on a win; each kind has its own switch
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs, grand slams, walk-offs, goals and buzzer beaters get the fireworks too, and red cards, late lead changes and overtime get splashes of their own
@@ -69,7 +69,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | --- | --- |
 | Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every 30 seconds to 30 minutes |
 | Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team, every Division I men's college basketball team, every Triple-A to Single-A minor league baseball team and every AHL and ECHL team, a tab per league, plus an "On now" tab. The Golf tab has the PGA Tour and the LPGA Tour and the Racing tab Formula 1 and the NASCAR Cup Series, each followed like a team |
-| Timezone | Follows the browser's zone unless you pick one by hand; used for kickoff times |
+| Timezone | Follows the browser's zone unless you pick one by hand; used for game times |
 | Ticker: game situation, last play, odds and TV | Choose what scrolls along the bottom. Game situation is down and distance in football, the count and outs in baseball, and goals, cards and stats in soccer |
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
 | Favorites | Up to 16 teams in priority order. "Only today's games" keeps the playlist to the favorites playing today. The first four are the numbered buttons on a WizMote remote |
