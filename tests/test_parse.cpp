@@ -3636,11 +3636,16 @@ int run_bet_tests(int &checks);
 int run_watch_tests(int &checks);
 int run_player_tests(int &checks);
 int run_prop_tests(int &checks);
+int run_flight_tests(int &checks);
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
 int run_layout_tests(int &checks);
 int run_app_tests(int &checks);
+int run_f1_tests(int &checks);
+int run_app_f1_tests(int &checks);
+int run_market_tests(int &checks);
+int run_markets_app_tests(int &checks);
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -9218,11 +9223,16 @@ int main() {
   failures += run_watch_tests(checks);
   failures += run_player_tests(checks);
   failures += run_prop_tests(checks);
+  failures += run_flight_tests(checks);
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
   failures += run_layout_tests(checks);
   failures += run_app_tests(checks);
+  failures += run_f1_tests(checks);
+  failures += run_app_f1_tests(checks);
+  failures += run_market_tests(checks);
+  failures += run_markets_app_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

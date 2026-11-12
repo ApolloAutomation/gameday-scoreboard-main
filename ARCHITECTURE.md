@@ -121,8 +121,11 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
+  `source_markets.cpp/.h` (stock and crypto quotes), `markets.h`, `markets_view.h`,
+  `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
+  `flights.cpp/.h`, `flight_airlines.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
@@ -282,16 +285,89 @@ and `app_main_dim` is Off or dim for it. A display reads in the board's
 gaps (`start_app_job_`, after the area's own reads) only while it's on
 screen, at its `poll_ms`, each read fitted with `AppTimes`, on its own
 `Source` and `HostWait`; `open_` sends its method, body and headers
-(`AppRequest`) and tells its hosts apart (`url_source`). Its `parse` runs
-on the fetch task over an `AppStream`, `apply` on the main loop, and
-`frame` fills an `AppFrame` (the leaderboard's title, six rows and ticker,
-and one polyline) that `app_fields_` turns into the board's leaderboard
-fields: `gd_board` and a `line` widget on the board, `RowsView` and its line
-in the second area (`area_build`). Its own set keys go after `kSetKeys`, its
+(`AppRequest`) and tells its hosts apart (`url_source`). On the fetch task
+the body goes through Game Day's own JSON reader (`ContainerReader`), so a
+display adds no second reader to flash: either it gives a `filter` and the
+component reads the body as one document for its `parse_doc`, or its
+`parse` streams an `AppStream`, looking ahead with `peek` and reading each
+value with `json`. Once per read, before `apply` on the main loop, `ended`
+hands it an `AppResult`: its host's HTTP status (0 when that host wasn't
+read), whether it refused the panel and its Retry-After. A failed read
+backs off the display's `HostWait`, unless `failed` asks for another host
+now (the wait ends at once) or the display backs off each of its hosts
+itself (`own_backoff`: the failure is timed and logged, the shared wait
+left alone). Each read then rebuilds the state document
+(`rebuild_state_`). `frame` fills an `AppFrame`: the leaderboard's title,
+six rows (at the display's own columns and colors if it gives them,
+`BoardLines::cols`, `pos_color` and `detail_color`) and ticker, one
+polyline, and up to 40 labels the display places itself (`AppText`).
+`app_fields_` turns it into the board's leaderboard fields: `gd_board`
+(laid out by `rows_put`, which lays out golf's and racing's leaderboards
+too), a `line` widget and a pool of labels made on first use (`put_texts`)
+on the board, `RowsView`, its line and its own pool in the second area
+(`area_build`). `app_env` gives displays the panel's local time
+(`app_local`), timezone and firmware version, and `tz_miles` and
+`tz_fahrenheit` the units it reads in: miles, mph and feet in the US and UK
+time zones, Fahrenheit in the US ones alone. Its own set keys go after `kSetKeys`, its
 settings in their own blob, its state under its key, its host's status in
 the health block. Game Day's own reads, splashes and Home Assistant's
 sensors carry on whatever the areas show; its splash shows only where Game
 Day is on screen.
+
+**The F1 display.** `F1App` (`app_f1.h`) reads ESPN's F1 header (the running
+order, and the weekend's sessions as a backup schedule), Jolpica's next race,
+standings and last result, ESPN's circuit facts and lap record, and the
+weather at the circuit from Open-Meteo, one read per `request` by priority
+(`next_read`), each kind due from its last good read (`f1_poll_ms`,
+`f1_header_poll_ms`, 30 s on track). Each host (`F1Host`) backs off on its
+own; Jolpica or Open-Meteo failing three times or refusing the panel moves
+to its backup (the header's schedule, or ESPN's calendar after the race,
+with the standings kept and aged; MET Norway's forecast) until a try after
+30 minutes, doubling to 6 hours, answers. `frame` shows the order alone on
+track, else rotates the cards (`rotation`, 10 s each, the weather 8 s) by
+the clock, laid into the leaderboard's columns at 64, 128 and wider with one
+ticker for the whole rotation, and redraws only when its card or countdown
+changes. The data and frame text come from `f1.h`; the circuit outlines
+are `circuits.h`, generated by `scripts/build_circuits.py` from F1DB.
+
+**Stocks and crypto.** `markets.h` holds the owner's up to 8
+symbols (`MarketBlob`, 100 bytes: a stock, an index or a coin each, kept
+packed, with the slot whose sparkline shows) and their checks
+(`parse_market_symbol` guesses the kind: `BTC` is a coin, `SPX` the S&P
+500, `BRK/B` the class B share), the read URLs, the `MarketQuote` each read
+fills (the price, the last close or the UTC day's open, the session's times,
+64 sparkline buckets of a byte each), the market's state from those times
+(pre-market, open, after hours, closed, `FRI CLOSE` after a weekend) and the
+price, change and percent text cut to fit. Every source is keyless: one
+Yahoo `v7/finance/spark` read carries every symbol and its sparkline; Kraken's
+`Ticker` (the coins it lists) and Nasdaq's `quote/watchlist` (US stocks,
+ETFs and two indexes) fill in when it fails. Both Yahoo and Nasdaq want a
+browser's User-Agent (`kMarketsUserAgent`). `source_markets.cpp` parses each
+with a filter into the slots it names. `markets_view.h` lays out the rows
+(`market_geom`: symbol and price or percent on one panel, price and percent
+on two, change too on three and four), the 64x64 one-symbol card
+(`market_card`), the sparkline's points (`market_spark`) and the ticker with
+its colored moves (`market_ticker`, the bets' green and red). `app_markets.h`
+makes it the `Display::MARKETS` app: its list is the app's prefs blob, edited
+by `mkt`, `mktdel` and `mktmove` (`markets_set`, which starts from the
+defaults SPY, AAPL, BTC and ETH while nothing is saved), its quotes follow
+their symbols when the list changes, and `MarketFeed` picks each read's host:
+Yahoo until two failures or a refusal, then Kraken and Nasdaq back to back
+(`App::failed` ends the shared wait for the switch) with Yahoo retried after
+10 or 30 minutes, doubling to an hour. `market_merge` keeps the day's
+sparkline under a backup's price. `markets_frame` lays the rows into the
+leaderboard's labels at its own columns (`BoardLines::cols`, with place and
+detail colors; `rows_cells` and `rows_put` in `board_view.cpp` place them on
+the board and in the second area), turns the sparkline to the next charted
+symbol and its page every 8 s and flips one panel's value between price and
+percent every 4 s. `busy` is a listed market's regular session.
+
+**The Flight Tracker.** `FlightsApp` (`app_flights.h`) reads Flightradar24's
+feed for a box around home, falling back to adsb.fi and adsb.lol
+(`feed_pick`), or the owner's receiver first, and looks up routes from
+adsb.im or adsbdb; each host backs off on its own (`own_backoff`). The
+plane reads, route checks and frames are `flights.h`, the airline names
+`flight_airlines.h`, generated by `scripts/build_airlines.py`.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -721,8 +797,13 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   `test_watch.cpp` (the big-play watcher: which games, big plays from day
   scoreboards, when a read may run, when the board switches and goes back),
   `test_players.cpp` (favorite players), `test_apps.cpp` (the display
-  picker, its frame helpers and a stand-in display) and `test_networks.cpp`
-  (saved networks).
+  picker, its frame helpers and a stand-in display), `test_f1.cpp` (the F1
+  data core), `test_app_f1.cpp` (the F1 display's reads, failover and
+  screens), `test_markets.cpp` (stock and crypto symbols, quotes, text and
+  frames), `test_markets_app.cpp` (the Stocks & Crypto display's list,
+  failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
+  feeds, sources and failover, routes, screens, settings and the display's
+  reads) and `test_networks.cpp` (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.

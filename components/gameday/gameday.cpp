@@ -191,6 +191,9 @@ class ContainerReader {
     return copied;
   }
 
+  // A display's parse looks ahead; never with a cutter.
+  int peek() { return this->fill_() ? static_cast<unsigned char>(this->buf_[this->pos_]) : -1; }
+
   size_t total() const { return this->total_; }
   // A summary's read ends after its box score.
   void cut(::espn::BoxCutter *c) { this->cut_ = c; }
@@ -228,6 +231,12 @@ class ReaderStream final : public ::espn::AppStream {
   explicit ReaderStream(ContainerReader &r) : r_(r) {}
   int read() override { return this->r_.read(); }
   size_t readBytes(char *dst, size_t n) override { return this->r_.readBytes(dst, n); }
+  int peek() override { return this->r_.peek(); }
+  // The board's own reader: no second copy in flash.
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, this->r_, DeserializationOption::Filter(filter),
+                           DeserializationOption::NestingLimit(nesting));
+  }
 
  private:
   ContainerReader &r_;
@@ -2353,7 +2362,7 @@ bool GamedayComponent::idle_update_() {
   const bool app_busy = this->app_busy_(shown);
   const ::espn::MainView mv = ::espn::main_view(shown, this->demo_playing_(), s.night, app_busy);
   if (mv != ::espn::MainView::GAMEDAY)
-    s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, app_busy, in.area2_busy);
+    s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, this->app_lit_(shown), in.area2_busy);
   const bool main_changed = mv != this->main_view_;
   this->main_view_ = mv;
   const ::espn::IdleView v = this->idle_effective_(s.view);
@@ -2838,6 +2847,7 @@ void GamedayComponent::auto_update_tick_() {
 }
 
 void GamedayComponent::apply_timezone_() {
+  ::espn::app_env().tz = this->prefs_.tz_index;
 #ifdef GAMEDAY_TZ_PARSED
   // ESPHome 2026.9+: no POSIX parser on the device, hand the clock the
   // pre-parsed rules (scripts/build_timezones.py keeps the table in step).
@@ -5670,6 +5680,11 @@ void GamedayComponent::end_jump_() {
 
 void GamedayComponent::apps_setup_() {
   ::espn::AppSlots &slots = ::espn::app_slots();
+  ::espn::AppEnv &env = ::espn::app_env();
+  env.local = [](int64_t t) { return ESPTime::from_epoch_local((time_t) t).to_c_tm(); };
+  env.version = App.get_comment().c_str();
+  if (!env.version.empty() && env.version[0] == 'v')
+    env.version.erase(0, 1);
   ::espn::register_apps(slots);
   this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
@@ -5694,6 +5709,11 @@ bool GamedayComponent::app_busy_(::espn::Display d) const {
   return a != nullptr && this->clock_set_() && a->busy((int64_t) this->time_->timestamp_now());
 }
 
+bool GamedayComponent::app_lit_(::espn::Display d) const {
+  const ::espn::App *a = d == ::espn::Display::GAMEDAY ? nullptr : ::espn::app_slots().get(d);
+  return a != nullptr && this->clock_set_() && a->lit((int64_t) this->time_->timestamp_now());
+}
+
 bool GamedayComponent::app_on_screen_(::espn::Display d) const {
   if (d == ::espn::Display::GAMEDAY)
     return false;
@@ -5701,6 +5721,15 @@ bool GamedayComponent::app_on_screen_(::espn::Display d) const {
     return true;
   ::espn::Display a;
   return this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d;
+}
+
+bool GamedayComponent::app_night_(::espn::Display d) const {
+  if (d == ::espn::Display::GAMEDAY)
+    return false;
+  if (this->main_view_ == ::espn::MainView::CLOCK && this->main_display_() == d)
+    return true;
+  ::espn::Display a;
+  return ::espn::area_clock(this->a2_view_) && ::espn::area_app(this->a2_show_(), a) && a == d;
 }
 
 void GamedayComponent::apps_tick_() {
@@ -5718,14 +5747,14 @@ void GamedayComponent::apps_tick_() {
     }
     const uint32_t every = a->redraw_ms();
     if (on && every != 0 && now - this->app_drawn_ms_[i] >= every)
-      this->app_redraw_(d);
+      this->app_redraw_(d, true);
   }
 }
 
-void GamedayComponent::app_redraw_(::espn::Display d) {
+void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
   this->app_drawn_ms_[(int) d] = millis() | 1;
   if (this->main_view_ == ::espn::MainView::APP && this->main_display_() == d)
-    this->draw_main_app_();
+    this->draw_main_app_(timed);
   ::espn::Display a;
   if (this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d)
     this->emit_a2_({});
@@ -5764,15 +5793,22 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   cells(fr.rows.detail, f.board_detail);
   f.board_value_color = std::move(fr.rows.value_color);
   f.board_name_color = std::move(fr.rows.name_color);
+  f.board_pos_color = std::move(fr.rows.pos_color);
+  f.board_detail_color = std::move(fr.rows.detail_color);
+  f.board_cols = std::move(fr.rows.cols);
   f.line = ::espn::app_line_xy(fr.line, w, h);
   f.line_color = fr.line.color;
+  f.texts = std::move(fr.texts);
+  for (::espn::AppText &t : f.texts)
+    t.text = panel_text(t.text);
 }
 
-void GamedayComponent::draw_main_app_() {
+void GamedayComponent::draw_main_app_(bool quiet) {
   if (this->main_app_ == nullptr)
     return;
   UpdateFields &af = *this->main_app_;
   af = UpdateFields{};
+  af.quiet = quiet;
   const ::espn::Display d = this->main_display_();
   if (this->main_view_ == ::espn::MainView::CLOCK) {
     af.game_state = "NOT_FOUND";
@@ -5799,9 +5835,12 @@ int GamedayComponent::start_app_job_(uint32_t now, uint32_t due) {
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];
     const ::espn::Display d = (::espn::Display) i;
-    if (a == nullptr || !this->app_on_screen_(d) ||
-        this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
-        !::espn::app_due(now, this->app_last_ms_[i], a->poll_ms(tnow)))
+    if (a == nullptr)
+      continue;
+    const bool on = this->app_on_screen_(d);
+    const uint32_t every = on ? a->poll_ms(tnow) : this->app_night_(d) ? a->night_poll_ms(tnow) : 0;
+    if ((!on && every == 0) || this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
+        !::espn::app_due(now, this->app_last_ms_[i], every))
       continue;
     if (!::espn::watch_read_fits(now, due, this->app_times_.expect(d))) {
       this->app_times_.skip(d);
@@ -5833,7 +5872,14 @@ void GamedayComponent::run_app_job_() {
     return;
   ContainerReader reader(container, this->espn_bytes_);
   ReaderStream in(reader);
-  j.app_ok = a->parse(in, j.app_now);
+  JsonDocument filter(::espn::detail::json_allocator());
+  if (a->filter(filter)) {
+    // One document, through the stream's same reader.
+    JsonDocument doc(::espn::detail::json_allocator());
+    j.app_ok = !in.json(doc, filter, 40) && a->parse_doc(doc.as<JsonObjectConst>(), j.app_now);
+  } else {
+    j.app_ok = a->parse(in, j.app_now);
+  }
   container->end();
   ESP_LOGD(TAG, "%s: %s (%u bytes)", ::espn::display_name((::espn::Display) j.app), j.app_ok ? "read" : "not read",
            (unsigned) reader.total());
@@ -5844,7 +5890,19 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   this->app_times_.took(d, took_ms, false);
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
-  const uint32_t ms = this->host_wait_[(size_t) src].fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+  ::espn::App *a = ::espn::app_slots().get(d);
+  if (a != nullptr && a->own_backoff()) {
+    ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
+    return;
+  }
+  const bool other = a != nullptr && a->failed(h.throttled);
+  ::espn::HostWait &w = this->host_wait_[(size_t) src];
+  uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+  if (other) {
+    // Its backup host, without the wait
+    w.end_wait();
+    ms = 0;
+  }
   ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
            (unsigned) (ms / 1000));
 }
@@ -5857,14 +5915,19 @@ void GamedayComponent::apply_app_job_() {
     this->app_last_ms_[j.app] = 0;  // read again for the new settings
     return;
   }
+  const ::espn::Source src = ::espn::display_source(d);
+  const Job::HostJob &h = j.host[(size_t) src];
+  a->ended(h.read ? ::espn::AppResult{this->host_status_[(size_t) src].load(), h.throttled, h.retry_after_ms}
+                  : ::espn::AppResult{});
   if (j.app_ok) {
     this->app_times_.took(d, j.took_ms, true);
-    this->host_wait_[(size_t) ::espn::display_source(d)].clear();
+    this->host_wait_[(size_t) src].clear();
   } else {
     this->app_failed_(d, j.took_ms);
   }
   a->apply(j.app_ok, j.app_now);
   this->app_redraw_(d);
+  this->rebuild_state_(&this->last_fields_);  // the page's copy too
 }
 
 // A display's own key: false when none takes it.
@@ -6959,7 +7022,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["name"] = ::espn::display_name(d);
     o["split"] = (int) ::espn::split_of_display(d);
     if (slots.app[i] != nullptr)
-      slots.app[i]->state(doc[::espn::display_key(d)].to<JsonObject>());
+      slots.app[i]->state(doc[::espn::display_key(d)].to<JsonObject>(),
+                          this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0);
   }
 
   JsonObject game = doc["game"].to<JsonObject>();

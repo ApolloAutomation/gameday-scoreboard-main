@@ -9,6 +9,10 @@ Every panel serves its own web page. Open it in a browser on any phone or comput
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; and a team's roster when you add a favorite player, from ESPN. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
+:::note[Coming in the next release]
+When you look up a town or a ZIP code for the [Flight Tracker](/using/flights/)'s home, your browser asks Open-Meteo's place search for it.
+:::
+
 ## The live board
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.
@@ -72,9 +76,17 @@ The page puts what you change most at the top, and folds the rest away. From the
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
 3. The cards: **Panel**, **Favorites**, **Favorite players** and **Bets**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
 
+:::note[Coming in the next release]
+A **Stocks & Crypto** card comes after the Bets card when your panel's firmware has that display. It starts open while the main board or the second area shows Stocks & Crypto. See [The Stocks & Crypto card](#the-stocks--crypto-card).
+:::
+
 Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites**, **Favorite players** and **Bets** start open when they hold anything, with how many beside the name, like **3 of 16**, and folded while they're empty.
 
 The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
+
+:::note[Coming in the next release]
+The **Flight Tracker** card comes after **Panel**, with what's in it beside its name, like the place you set, or **No location yet**. See [The Flight Tracker card](#the-flight-tracker-card).
+:::
 
 The settings, in the order the page shows them:
 
@@ -119,6 +131,10 @@ The settings, in the order the page shows them:
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+**Showing** in the Panel card also lists the other displays your panel's firmware has: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).
+:::
+
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
 **Switch every** and the time next to **Alternate** are one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
@@ -137,6 +153,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 | --- | --- |
 | **Shows** | **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date**, and on three and four wide **Nothing: the board fills the row**, where those start. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
+
+:::note[Coming in the next release]
+**Shows** also lists **F1**, **Stocks & Crypto** and **Flight Tracker** when your panel's firmware has them, and while the main board shows one of them, **Game Day**: the scoreboard, in the second area. The line under **Shows** then says **Showing F1.**, **Showing Stocks & Crypto.**, **Showing Flight Tracker.** or **Showing Game Day.**, or, when the main board shows that display already, why the area shows the clock instead, like **The main board shows F1, so this shows the clock.** See [The second area](/using/panel-sizes/#the-second-area).
+:::
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game** or **No other live games: showing the clock**. See [The second area](/using/panel-sizes/#the-second-area).
 
@@ -177,6 +197,23 @@ A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel
 
 The Time line in the Setup card names the panel's timezone. While it follows your browser, opening the page from a browser in another zone moves the panel to that zone. Tap **choose manually** to pick one from the list instead; the page then leaves it alone until you tap **follow this browser**. The list covers the US zones (Eastern, Central, Mountain, Arizona, Pacific, Alaska and Hawaii), Canada Atlantic and Newfoundland, Mexico City, UK and Ireland, Central Europe, Australia Eastern and UTC. A new panel starts on US Central.
 
+## The Flight Tracker card
+
+:::note[Coming in the next release]
+The **Flight Tracker** card sets up the [Flight Tracker](/using/flights/):
+
+| Setting | What it does |
+| --- | --- |
+| **Home location** | Type a town, a ZIP or postal code, or a latitude and longitude like **40.64, -73.78**, then tap **Find** or press Enter. A town or a code lists the places found; tap the right one. The panel keeps the latitude and longitude and the place's name. |
+| **Planes near** | The spot the panel has, with **Clear** to remove it. |
+| **Within** | How far from home a plane can be: 5, 10, 15, 25, 50 or 100 miles in the US and UK time zones, or 5, 10, 25, 50, 100 or 150 km elsewhere. A new panel starts at 10 miles. |
+| **Your own receiver** | Optional: an ADS-B receiver on your network, then **Save**. For tar1090 its address is enough, like **192.168.1.50**; for PiAware or another receiver, its aircraft.json address, like `http://192.168.1.50/skyaware/data/aircraft.json`. Save it empty to stop using it. See [Your own receiver](/using/flights/#your-own-receiver). |
+
+The line at the bottom says what the panel is doing: **Looking for planes.**, how many planes are nearby and where they came from, like **12 planes nearby, from Flightradar24.**, or **Can't reach the flight data right now.** While the Flight Tracker is off the panel it says it isn't reading planes, rather than an old count. Until you choose the Flight Tracker, it says to choose it under **Showing**; when you have and the night hours' clock is up instead, it says so.
+
+If a place can't be found, the card says so: try a town and state, or a ZIP code. If the place search can't be reached, type the latitude and longitude instead.
+:::
+
 ## The Favorite players card
 
 The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
@@ -187,6 +224,12 @@ The **Bets** card comes after the Favorite players card. It starts open while it
 
 :::note[Coming in the next release]
 The kind of bet has a fifth choice, **Player prop**. Pick the player's team, and your browser reads its roster from ESPN; or tap **Favorite players** to list just your favorite players, from every team. Then pick the player, the **Stat** (the ones for the player's sport), **Over** or **Under** and the line, like 24.5, and tap **Add bet**. A yes prop, like an anytime touchdown, has no side or line. Minor league, AHL and ECHL teams are left out of the chooser for a prop, since ESPN has no rosters or box scores for them. The card lists props after the bets, with the player's number so far, and the number beside the card's name counts them too, like **2 of 8 · 1 prop**. See [Player props](/using/bets/#player-props).
+:::
+
+## The Stocks & Crypto card
+
+:::note[Coming in the next release]
+The **Stocks & Crypto** card comes after the Bets card when your panel's firmware has that display. It lists the symbols the display shows, up to eight, each with its price and the day's change in green or red, its kind and whether its market is open, and **▲**, **▼** and **✕** to move it or remove it. The number beside the card's name says how many are in use, like **4 of 8**, with **the starting list** while it's still SPY, AAPL, BTC and ETH. To add one, type it under **Symbol**, like **AAPL**, **^GSPC** or **BTC**, pick its **Kind** if it's a symbol that's both a coin and a stock, and tap **Add symbol**. The line under **Symbol** says what the panel will save before you add it, and a symbol Yahoo Finance doesn't list says so once the panel has read it. A line under the hint says when the panel is reading Kraken and Nasdaq while Yahoo Finance is out, or, when nothing listed is on them, that the prices wait for Yahoo Finance. Whether a market is open is as of now, and when the prices are more than half an hour old, because the display isn't on screen, a line says when they were read. **▲**, **▼** and **✕** wait until the panel has made the change, so a double tap acts once. See [Stocks & Crypto](/using/markets/).
 :::
 
 ## The Device card

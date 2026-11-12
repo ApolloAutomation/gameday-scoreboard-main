@@ -6,7 +6,8 @@ the entities the page builds controls from, and the gameday component's
 routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
-  POST /gameday/set      only the keys in SET_KEYS; 400 when none match (player= and
+  POST /gameday/set      only the keys in SET_KEYS, then each listed display's own (Stocks &
+                         Crypto's, the Flight Tracker's); 400 when none match (player= and
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
@@ -109,6 +110,72 @@ DISPLAY_KEYS = dict(re.findall(r"case Display::(\w+):\s*return \"(\w+)\";",
 DISPLAY_NAMES = dict(re.findall(r"case Display::(\w+):\s*return \"([^\"]+)\";",
                                 APPS_H[APPS_H.index("display_name("):APPS_H.index("kGameDayOnly")]))
 SPLIT_GAMEDAY = int(re.search(r"GAMEDAY = (\d+)", SET_H)[1])
+# The Flight Tracker's own keys and limits (app_flights.h, app_flights.cpp)
+FLIGHTS_H = (REPO / "components/gameday/app_flights.h").read_text(encoding="utf-8")
+FLIGHTS_CPP = (REPO / "components/gameday/app_flights.cpp").read_text(encoding="utf-8")
+FLIGHT_SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kFlightSetKeys\[\] = \{(.*?)\};", FLIGHTS_H, re.S).group(1)))
+FLIGHTS_ID = int(DISPLAY_IDS["FLIGHTS"])
+FLIGHT_MAX = {k: int(v) for k, v in zip(("km", "nm", "mi"), re.search(
+    r"radius_max\(DistUnit u\) \{ return u == DistUnit::KM \? (\d+) : u == DistUnit::NM \? (\d+) : (\d+);",
+    FLIGHTS_CPP).groups())}
+FLIGHT_LIMITS = {k: int(v) for k, v in re.findall(r"static const \w+ (k\w+) = (\d+);", FLIGHTS_H)}
+COORDS_RE = re.compile(r"[ \t]*([+-]?)([0-9]{1,3})(?:\.([0-9]*))?(?:[ \t]*,[ \t]*|[ \t]+)"
+                       r"([+-]?)([0-9]{1,3})(?:\.([0-9]*))?[ \t]*\Z")
+
+
+def flights_doc():
+    """prefs_state(): the Flight Tracker's settings, as a fresh panel has them."""
+    return {"home": "", "place": "", "radius": FLIGHT_LIMITS["kRadiusDefault"], "radius_unit": "mi",
+            "receiver": "", "units": "imperial"}
+
+
+def parse_coords(v):
+    """parse_coords(): two decimals, digit by digit, to four places; None when refused."""
+    m = COORDS_RE.match(v)
+    if not m:
+        return None
+    out = []
+    for sign, whole, frac, top in ((m[1], m[2], m[3], 900000), (m[4], m[5], m[6], 1800000)):
+        e4 = (int(whole) * 100000 + int(((frac or "") + "00000")[:5]) + 5) // 10
+        if e4 > top:
+            return None
+        out.append(-e4 if sign == "-" else e4)
+    return None if out == [0, 0] else out
+
+
+def coord_text(e4):
+    return "-" * (e4 < 0) + "%d.%04d" % divmod(abs(e4), 10000)
+
+
+def flights_set(k, v):
+    """prefs_set() for one of the Flight Tracker's keys."""
+    f = STATE.setdefault("flights", flights_doc())
+    if k == "flyhome":
+        if v in ("", "none"):
+            f["home"], f["place"] = "", ""
+        elif parse_coords(v):
+            f["home"] = ",".join(coord_text(x) for x in parse_coords(v))
+    elif k == "flyplace":
+        b = bytes(c for c in v.encode() if c >= 0x20 and c != 0x7F)
+        n = min(len(b), FLIGHT_LIMITS["kPlaceMax"])
+        while 0 < n < len(b) and b[n] & 0xC0 == 0x80:
+            n -= 1
+        f["place"] = b[:n].decode()
+    elif k == "flyradius":
+        m = re.fullmatch(r"([0-9]{1,3})(mi|km|nm)?", v, re.ASCII)
+        if m and int(m[1]) >= 1:
+            unit = m[2] or "mi"
+            f["radius"], f["radius_unit"] = min(int(m[1]), FLIGHT_MAX[unit]), unit
+    elif k == "flyreceiver":
+        v = "" if v == "none" else v
+        if len(v) <= FLIGHT_LIMITS["kReceiverMax"] and all(0x20 < ord(c) < 0x7F for c in v):
+            f["receiver"] = v
+
+
+def set_keys():
+    """handle_set_()'s keys: kSetKeys, then each display's the firmware has."""
+    ids = display_ids()
+    return SET_KEYS + (MARKET_KEYS if MARKETS in ids else ()) + (FLIGHT_SET_KEYS if FLIGHTS_ID in ids else ())
 
 
 def display_doc(d):
@@ -120,6 +187,137 @@ def display_doc(d):
 
 def display_ids():
     return {d["id"] for d in STATE.get("displays") or [display_doc(0)]}
+
+
+# Stocks & Crypto's keys, coins, indexes and defaults (app_markets.h).
+APP_MARKETS_H = (REPO / "components/gameday/app_markets.h").read_text(encoding="utf-8")
+MARKETS_H = (REPO / "components/gameday/markets.h").read_text(encoding="utf-8")
+MARKETS = int(DISPLAY_IDS["MARKETS"])
+MARKET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kMarketSetKeys\[\] = \{(.*?)\};", APP_MARKETS_H, re.S).group(1)))
+MARKET_SLOTS = int(re.search(r"kMarketSlots = (\d+);", MARKETS_H)[1])
+MARKET_SYM_MAX = int(re.search(r"kMarketSymMax = (\d+);", MARKETS_H)[1])
+MARKET_COINS = set(re.findall(r'\{"(\w+)", "[\w-]+", "\w+"\}', MARKETS_H))
+MARKET_INDEX_ROWS = re.findall(r'\{"(\w+)", "\^(\w+)", "\w*", (true|false)\}', MARKETS_H)
+MARKET_INDEX_GUESS = {sym: guess == "true" for sym, _, guess in MARKET_INDEX_ROWS}
+MARKET_INDEX_YAHOO = {sym: yahoo for sym, yahoo, _ in MARKET_INDEX_ROWS}
+MARKET_ALIAS = dict(re.findall(r'if \(s == "(\w+)"\)\s*return "(\w+)";', MARKETS_H))
+MARKET_DEFAULTS = re.findall(r'"(\w+)"', re.search(r"for \(const char \*t : \{(.*?)\}\)", APP_MARKETS_H).group(1))
+MARKET_KINDS = ("stock", "index", "crypto")
+# Saved (symbol, kind) pairs; empty shows the defaults
+MARKET_LIST = []
+# Made-up quotes for the page: price, change, percent, direction, state
+FAKE_QUOTES = {"SPY": ("672.04", "-1.30", "-0.19%", -1, "closed"), "AAPL": ("355.63", "+7.12", "+2.04%", 1, "closed"),
+               "BTC": ("73,738.65", "-186.54", "-0.25%", -1, "always"), "ETH": ("3,201.17", "+12.40", "+0.39%", 1, "always"),
+               "TSLA": ("402.10", "0.00", "0.00%", 0, "closed")}
+
+
+def market_ok(s, kind):
+    """market_symbol_valid() (markets.h)."""
+    alnum = lambda c: "A" <= c <= "Z" or "0" <= c <= "9"
+    if not s or len(s) > MARKET_SYM_MAX:
+        return False
+    if kind != "stock":
+        return all(alnum(c) for c in s)
+    if not alnum(s[0]) or not alnum(s[-1]):
+        return False
+    return all(alnum(c) or (c in ".-=" and alnum(s[i])) for i, c in enumerate(s[1:]))
+
+
+def parse_market_symbol(text, kind):
+    """parse_market_symbol() (markets.h): (symbol, kind) or None; kind "" guesses."""
+    s = ""
+    for c in text:
+        if c == " ":
+            continue
+        s += c.upper() if "a" <= c <= "z" else c
+        if len(s.encode()) > 16:
+            return None
+    if s.startswith("$"):
+        s = s[1:]
+    if s.startswith("^"):
+        if kind not in ("", "index"):
+            return None
+        s, kind = s[1:], "index"
+    coin_ok = kind in ("", "crypto")
+    if coin_ok and len(s) > 4 and s[-4:] in ("-USD", "/USD"):
+        s, kind = s[:-4], "crypto"
+    if coin_ok:
+        s = MARKET_ALIAS.get(s, s)
+        if kind == "" and s in MARKET_COINS:
+            kind = "crypto"
+    if kind == "":
+        kind = "index" if MARKET_INDEX_GUESS.get(s) else "stock"
+    if kind == "stock":
+        s = s.replace("/", ".")
+        if len(s) >= 3 and s[-2] == "-" and "A" <= s[-1] <= "Z":
+            s = s[:-2] + "." + s[-1]
+    return (s, kind) if market_ok(s, kind) else None
+
+
+def market_same(a, b):
+    """market_same() (markets.h): two names for one index match."""
+    if a[1] != b[1]:
+        return False
+    return a[0] == b[0] or (a[1] == "index" and a[0] in MARKET_INDEX_YAHOO and
+                            MARKET_INDEX_YAHOO[a[0]] == MARKET_INDEX_YAHOO.get(b[0]))
+
+
+def market_slot(v, free_ok=False):
+    """parse_market_slot() (markets.h): one ASCII digit, 0 only when free_ok."""
+    return int(v) if len(v) == 1 and ("0" if free_ok else "1") <= v <= str(MARKET_SLOTS) else None
+
+
+def markets_shown():
+    return list(MARKET_LIST) if MARKET_LIST else [parse_market_symbol(t, "") for t in MARKET_DEFAULTS]
+
+
+def markets_set(k, v):
+    """markets_set() (app_markets.h): edits the list shown."""
+    was = markets_shown()
+    work = list(was)
+    if k == "mkt":
+        f = v.split(",")
+        if len(f) < 2 or len(f) > 3 or market_slot(f[0], True) is None or (len(f) == 3 and f[2] not in ("",) + MARKET_KINDS):
+            return
+        got = parse_market_symbol(f[1], f[2] if len(f) == 3 else "")
+        if not got:
+            return
+        slot = market_slot(f[0], True)
+        if not any(market_same(x, got) for x in work):
+            if slot == 0 or slot > len(work):
+                if len(work) == MARKET_SLOTS:
+                    return
+                work.append(got)
+            else:
+                work[slot - 1] = got
+    elif k == "mktdel":
+        slot = market_slot(v)
+        if slot is None or slot > len(work):
+            return
+        del work[slot - 1]
+    elif k == "mktmove":
+        a, comma, b = v.partition(",")
+        a, b = market_slot(a), market_slot(b) if comma else None
+        if a is None or b is None or a > len(work) or b > len(work):
+            return
+        work.insert(b - 1, work.pop(a - 1))
+    if work != was:
+        MARKET_LIST[:] = work
+
+
+def markets_doc():
+    """MarketsApp::state(), with made-up quotes for known symbols."""
+    syms = []
+    for i, (sym, kind) in enumerate(markets_shown()):
+        o = {"slot": i + 1, "sym": sym, "kind": kind}
+        if sym in FAKE_QUOTES:
+            price, chg, pct, d, st = FAKE_QUOTES[sym]
+            o.update({"price": price, "chg": chg, "pct": pct, "dir": d, "st": st})
+        else:
+            o["miss"] = True
+        syms.append(o)
+    return {"syms": syms, "max": MARKET_SLOTS, "defaults": not MARKET_LIST, "src": STATE.get("markets_src", "yahoo"),
+            "read": STATE.get("markets_read") or int(time.time())}
 
 
 def team(lg, tid):
@@ -210,6 +408,8 @@ ENTITIES = [
 ]
 FIRMWARE = next(e for e in ENTITIES if e["name"] == "Firmware")
 INITIAL["displays"] = [display_doc(0)]
+# Flight Tracker settings; resets may add status and planes
+INITIAL["flights"] = flights_doc()
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -229,6 +429,8 @@ def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
+    if isinstance(overrides.get("flights"), dict):
+        STATE["flights"] = {**flights_doc(), **overrides["flights"]}
     # rotate and rotatesec are one setting
     if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
         STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
@@ -238,6 +440,8 @@ def reset_state(overrides):
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
+    saved = STATE.pop("markets", None) or []
+    MARKET_LIST[:] = [(m["sym"], m["kind"]) for m in saved]
     players = STATE.get("players") or []
     PLAYER_SLOTS[:] = [players[i] if i < len(players) else None for i in range(LIMITS["kPlayerSlots"])]
 
@@ -329,6 +533,9 @@ def split_doc():
             if d != 0 and d != STATE.get("display", 0) else "clock"
     if show == 1 and not STATE.get("split_n"):
         now = "clock"
+    # A display at night: the date under the board's clock
+    if show > SPLIT_GAMEDAY and now not in ("", "clock") and STATE.get("night_now"):
+        now = "date"
     STATE["split_now"] = now
     if show == 1:
         STATE.setdefault("split_n", 0)
@@ -344,8 +551,17 @@ def state_doc():
     if "display" in STATE:
         STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
                                     "gameday")
+        # main_view(): the night hours' clock over a display
+        if STATE.get("night_now") and STATE["display"] != 0:
+            STATE["display_now"] = "clock"
+    if isinstance(STATE.get("flights"), dict):
+        # tz_miles(): the US and UK zones are imperial
+        tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
+        STATE["flights"]["units"] = "imperial" if tz.startswith(("US ", "UK ")) else "metric"
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
+    if MARKETS in display_ids():
+        STATE["markets"] = markets_doc()
     return STATE
 
 
@@ -553,6 +769,11 @@ def drop_player(lg, pid):
             PLAYER_SLOTS[i] = None
 
 
+def set_pairs(q):
+    """handle_set_(): kSetKeys, then each display's own keys, in order."""
+    return [(k, q[k]) for k in set_keys() if k in q]
+
+
 def apply_set(kv):
     """GamedayComponent::apply_set_ through set_request.h's parse_set."""
     for k, v in kv:
@@ -704,6 +925,10 @@ def apply_set(kv):
                 STATE[k] = "%02d:%02d" % divmod(minute, 60)
         elif k == "nightbri":
             STATE["nightbri"] = clamp(atoi(v), "kNightBriMin", "kNightBriMax")
+        elif k in MARKET_KEYS:
+            markets_set(k, v)
+        elif k in FLIGHT_SET_KEYS:
+            flights_set(k, v)
 
 
 def selftest():
@@ -723,6 +948,9 @@ def selftest():
             return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
         if key == "props":
             return [{k: e[k] for k in ("slot", "l", "id", "team", "name", "stat", "side", "half")} for e in value]
+        if key == "markets":
+            # As listed; quotes are the panel's
+            return [{k: m[k] for k in ("slot", "sym", "kind")} for m in (value or {}).get("syms", [])]
         return value
 
     bad = 0
@@ -746,7 +974,7 @@ def selftest():
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league
-        kv = [(k, v) for key in SET_KEYS for k, v in case["set"] if k == key]
+        kv = [(k, v) for key in set_keys() for k, v in case["set"] if k == key]
         status = 200 if kv else 400
         if kv:
             apply_set(kv)
@@ -912,7 +1140,7 @@ class Handler(BaseHTTPRequestHandler):
             LOG.append({"path": u.path, "q": q})
             if "set" in FAIL:
                 return self._send(500, "text/plain", "")
-            kv = [(k, q[k]) for k in SET_KEYS if k in q]
+            kv = set_pairs(q)
             if not kv:
                 return self._json(400, {"error": "nothing to set"})
             apply_set(kv)

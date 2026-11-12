@@ -53,6 +53,8 @@ struct BoardView {
   // Another display's polyline, over the leaderboard; its points
   lv_obj_t *line{nullptr};
   lv_point_precise_t line_pts[::espn::kAppLinePoints]{};
+  // Another display's labels, made on first use
+  lv_obj_t *text[::espn::kAppTexts]{};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout
@@ -109,6 +111,10 @@ struct RowsView {
   lv_obj_t *pos[kRowsCount]{}, *name[kRowsCount]{}, *value[kRowsCount]{}, *detail[kRowsCount]{};
   bool wide{false};
 };
+
+// Places, fills and colors kRowsCount rows of leaderboard cells
+void rows_put(lv_obj_t *const *pos, lv_obj_t *const *name, lv_obj_t *const *value, lv_obj_t *const *detail, int w,
+              const UpdateFields &f);
 
 // Second area (split.h): no pips or diamond; fireworks when free
 struct AreaView {

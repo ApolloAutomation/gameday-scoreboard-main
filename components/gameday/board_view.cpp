@@ -295,6 +295,41 @@ void put_line(BoardView &v, const UpdateFields &f) {
 #endif
 }
 
+// Each label in order; hidden past the frame's
+void put_texts(BoardView &v, const UpdateFields &f) {
+  const size_t n = f.board ? std::min(f.texts.size(), ::espn::kAppTexts) : 0;
+  for (size_t i = 0; i < ::espn::kAppTexts; i++) {
+    lv_obj_t *&l = v.text[i];
+    if (i >= n) {
+      if (l == nullptr)
+        break;
+      show(l, false);
+      continue;
+    }
+    if (l == nullptr) {
+      if (v.board == nullptr || v.f8 == nullptr)
+        return;
+      l = plain_label(v.board, v.f8, LV_OPA_COVER);
+    }
+    const ::espn::AppText &t = f.texts[i];
+    const lv_font_t *font = font_of(v, t.font);
+    if (lv_obj_get_style_text_font(l, LV_PART_MAIN) != font)
+      lv_obj_set_style_text_font(l, font, 0);
+    if (lv_obj_get_style_x(l, LV_PART_MAIN) != t.x || lv_obj_get_style_y(l, LV_PART_MAIN) != t.y)
+      lv_obj_set_pos(l, t.x, t.y);
+    if (lv_obj_get_style_width(l, LV_PART_MAIN) != t.w)
+      lv_obj_set_width(l, t.w);
+    const lv_text_align_t align = t.align == ::espn::AppAlign::RIGHT    ? LV_TEXT_ALIGN_RIGHT
+                                  : t.align == ::espn::AppAlign::CENTER ? LV_TEXT_ALIGN_CENTER
+                                                                        : LV_TEXT_ALIGN_LEFT;
+    if (lv_obj_get_style_text_align(l, LV_PART_MAIN) != align)
+      lv_obj_set_style_text_align(l, align, 0);
+    put_color(l, t.color);
+    put_changed(l, t.text.c_str());
+    show(l, true);
+  }
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -548,6 +583,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   }
   show(v.board, f.board);
   put_line(v, f);
+  put_texts(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -890,27 +926,11 @@ void put_y(lv_obj_t *o, int y) {
 }
 
 // gd_board's drawing, for the area's labels
-void rows_draw(RowsView &r, const UpdateFields &f) {
-  auto at = [](const std::vector<std::string> &v, int i) { return i < (int) v.size() ? v[i].c_str() : ""; };
+void rows_draw(RowsView &r, const UpdateFields &f, int w) {
   put_changed(r.title, f.board_title.c_str());
   put_changed(r.status, f.board_status.c_str());
   put_color(r.status, f.board_status_color);
-  const RowsGeom g = rows_geom(r.wide ? 128 : 64);
-  for (int i = 0; i < kRowsCount; i++) {
-    if (!r.wide) {
-      // One panel: the value, or its room for the names
-      put_width(r.name[i], f.board_value_narrow ? g.name.w : g.name_no_value);
-      show(r.value[i], f.board_value_narrow);
-    }
-    put_changed(r.pos[i], at(f.board_pos, i));
-    put_changed(r.name[i], at(f.board_name, i));
-    put_changed(r.value[i], at(f.board_value, i));
-    put_changed(r.detail[i], at(f.board_detail, i));
-    if (i < (int) f.board_value_color.size())
-      put_color(r.value[i], (uint32_t) f.board_value_color[i]);
-    if (i < (int) f.board_name_color.size())
-      put_color(r.name[i], (uint32_t) f.board_name_color[i]);
-  }
+  rows_put(r.pos, r.name, r.value, r.detail, w, f);
 }
 
 bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &text) {
@@ -931,6 +951,42 @@ bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &te
 }
 
 }  // namespace
+
+void rows_put(lv_obj_t *const *pos, lv_obj_t *const *name, lv_obj_t *const *value, lv_obj_t *const *detail, int w,
+              const UpdateFields &f) {
+  auto at = [](const std::vector<std::string> &v, int i) { return i < (int) v.size() ? v[i].c_str() : ""; };
+  auto tint = [](const std::vector<int> &v, int i) { return i < (int) v.size() ? (uint32_t) v[i] : 0xA0A0A0u; };
+  const RowsCells c = rows_cells(w, f.board_value_narrow, f.board_cols);
+  // Leaderboards dim place and detail; displays don't
+  static const lv_opa_t kOpa[4] = {191, 230, LV_OPA_COVER, 191};
+  for (int i = 0; i < kRowsCount; i++) {
+    lv_obj_t *const cell[4] = {pos[i], name[i], value[i], detail[i]};
+    for (int k = 0; k < 4; k++) {
+      lv_obj_t *o = cell[k];
+      if (o == nullptr)
+        continue;
+      const Spot &at_k = c.cell[k];
+      show(o, at_k.w > 0);
+      if (at_k.w > 0 && lv_obj_get_style_x(o, LV_PART_MAIN) != at_k.x)
+        lv_obj_set_x(o, at_k.x);
+      if (at_k.w > 0 && lv_obj_get_style_width(o, LV_PART_MAIN) != at_k.w)
+        lv_obj_set_width(o, at_k.w);
+      const lv_opa_t opa = c.own ? (lv_opa_t) LV_OPA_COVER : kOpa[k];
+      if (lv_obj_get_style_text_opa(o, LV_PART_MAIN) != opa)
+        lv_obj_set_style_text_opa(o, opa, 0);
+    }
+    put_changed(pos[i], at(f.board_pos, i));
+    put_changed(name[i], at(f.board_name, i));
+    put_changed(value[i], at(f.board_value, i));
+    put_changed(detail[i], at(f.board_detail, i));
+    put_color(pos[i], tint(f.board_pos_color, i));
+    put_color(detail[i], tint(f.board_detail_color, i));
+    if (i < (int) f.board_value_color.size())
+      put_color(value[i], (uint32_t) f.board_value_color[i]);
+    if (i < (int) f.board_name_color.size())
+      put_color(name[i], (uint32_t) f.board_name_color[i]);
+  }
+}
 
 DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date,
                      image::Image *team_logo, image::Image *opp_logo) {
@@ -961,7 +1017,7 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   const GameGeom g = game_geom(a.w, v.sizes.text, v.sizes.clock);
   // Leaderboards fit only spleen_8, on the last row
   if (f.board)
-    rows_draw(a.rows, f);
+    rows_draw(a.rows, f, a.w);
   r.ticker_changed = f.board ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
                              : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {

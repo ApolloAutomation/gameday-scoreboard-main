@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <new>
 #include <string>
 #include <utility>
@@ -13,6 +14,7 @@
 
 #include <ArduinoJson.h>
 
+#include "board_layout.h"
 #include "espn_parse.h"
 #include "health.h"
 #include "idle.h"
@@ -21,6 +23,7 @@
 #include "recap.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
+#include "timezones.h"
 
 namespace espn {
 
@@ -105,6 +108,20 @@ struct AppLine {
   uint32_t color{0xFFFFFF};
 };
 
+// Most labels a frame places itself (the views' pool).
+constexpr size_t kAppTexts = 40;
+
+enum class AppAlign : uint8_t { LEFT = 0, CENTER, RIGHT };
+
+// A label at an area-local spot, clipped to w.
+struct AppText {
+  int16_t x{0}, y{0}, w{0};
+  esphome::gameday::BoardFont font{esphome::gameday::BoardFont::S8};
+  AppAlign align{AppAlign::LEFT};
+  uint32_t color{0xFFFFFF};
+  std::string text;
+};
+
 // The leaderboard's shape: title, status, up to kAppRows rows.
 struct AppFrame {
   BoardLines rows;
@@ -112,10 +129,13 @@ struct AppFrame {
   std::string ticker;
   std::vector<esphome::gameday::TickerSpan> spans;
   AppLine line;
+  std::vector<AppText> texts;  // drawn over the rows
 };
 
-// Rows or a line to draw, else the message.
-inline bool app_frame_board(const AppFrame &f) { return !f.rows.name.empty() || f.line.pts.size() >= 2; }
+// Rows, labels or a line to draw, else the message.
+inline bool app_frame_board(const AppFrame &f) {
+  return !f.rows.name.empty() || !f.texts.empty() || f.line.pts.size() >= 2;
+}
 
 // Keeps the first and last, evenly between.
 inline std::vector<AppPoint> app_line_thin(const std::vector<AppPoint> &pts, size_t max) {
@@ -142,7 +162,13 @@ inline void app_frame_trim(AppFrame &f) {
   cut(f.rows.detail);
   cut(f.rows.value_color);
   cut(f.rows.name_color);
+  cut(f.rows.pos_color);
+  cut(f.rows.detail_color);
+  if (f.rows.cols.size() != 8)
+    f.rows.cols.clear();
   f.line.pts = app_line_thin(f.line.pts, kAppLinePoints);
+  if (f.texts.size() > kAppTexts)
+    f.texts.resize(kAppTexts);
 }
 
 // Flat x, y pairs clipped to the area.
@@ -225,6 +251,10 @@ class AppStream {
   virtual ~AppStream() = default;
   virtual int read() = 0;
   virtual size_t readBytes(char *dst, size_t n) = 0;
+  // The next character, left unread; -1 at the end.
+  virtual int peek() = 0;
+  // One value from here, through the board's JSON reader.
+  virtual DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) = 0;
 };
 
 // A whole body in memory, for host tests.
@@ -237,6 +267,10 @@ class AppTextStream final : public AppStream {
     memcpy(dst, this->text_.data() + this->at_, take);
     this->at_ += take;
     return take;
+  }
+  int peek() override { return this->at_ < this->text_.size() ? (unsigned char) this->text_[this->at_] : -1; }
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, *this, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(nesting));
   }
 
  private:
@@ -319,6 +353,47 @@ struct AppTimes {
 
 enum class AppSet : uint8_t { REFUSED = 0, SAME, CHANGED };
 
+// How one read ended: its host's answer, if read.
+struct AppResult {
+  int status{0};  // HTTP status, 0 unread or no answer
+  bool refused{false};  // 403 or 429
+  uint32_t retry_after_ms{0};
+};
+
+// What displays need from the panel; the component sets it.
+struct AppEnv {
+  struct tm (*local)(int64_t epoch){nullptr};  // null reads UTC
+  uint8_t tz{0};  // index into kTimezones
+  std::string version;  // the firmware's, "2026.11.2"
+};
+
+inline AppEnv &app_env() {
+  static AppEnv e;
+  return e;
+}
+
+// US and UK zones: miles, mph and feet.
+inline bool tz_miles(int tz) {
+  if (tz < 0 || (size_t) tz >= kTimezoneCount)
+    return false;
+  return strncmp(kTimezones[tz].name, "US ", 3) == 0 || strncmp(kTimezones[tz].name, "UK ", 3) == 0;
+}
+
+// US zones alone: Fahrenheit.
+inline bool tz_fahrenheit(int tz) {
+  return tz >= 0 && (size_t) tz < kTimezoneCount && strncmp(kTimezones[tz].name, "US ", 3) == 0;
+}
+
+// Panel-local time; UTC until the component sets it.
+inline struct tm app_local(int64_t epoch) {
+  if (app_env().local != nullptr)
+    return app_env().local(epoch);
+  const time_t t = (time_t) epoch;
+  struct tm out {};
+  gmtime_r(&t, &out);
+  return out;
+}
+
 // Main loop only, except parse (the fetch task).
 class App {
  public:
@@ -337,21 +412,35 @@ class App {
   // CHANGED saves prefs and drops a read in flight.
   virtual AppSet set(const std::string & /*key*/, const std::string & /*value*/) { return AppSet::REFUSED; }
   // Its object in the state document, under display_key.
-  virtual void state(JsonObject /*out*/) const {}
+  virtual void state(JsonObject /*out*/, int64_t /*now*/) const {}
 
   // On screen in some area now, or not.
   virtual void shown(bool /*on*/) {}
   // Keeps it up through night hours and Off or dim.
   virtual bool busy(int64_t /*now*/) const { return false; }
+  // Off or dim alone; busy unless overridden.
+  virtual bool lit(int64_t now) const { return this->busy(now); }
 
   // From one read's start to the next; 0 is now.
   virtual uint32_t poll_ms(int64_t now) const = 0;
+  // Picked, but the night clock shows: 0 never reads.
+  virtual uint32_t night_poll_ms(int64_t /*now*/) const { return 0; }
   // The next read; false for none now.
   virtual bool request(int64_t now, AppRequest &out) = 0;
   // Fetch task: into its own result, in PSRAM.
-  virtual bool parse(AppStream &in, int64_t now) = 0;
+  virtual bool parse(AppStream & /*in*/, int64_t /*now*/) { return false; }
+  // Fetch task: a filter for one document; false streams it.
+  virtual bool filter(JsonDocument & /*f*/) { return false; }
+  // Fetch task: that document, in place of parse.
+  virtual bool parse_doc(JsonObjectConst /*root*/, int64_t /*now*/) { return false; }
+  // Once per read, before apply; status 0 unread.
+  virtual void ended(const AppResult & /*r*/) {}
+  // True: it backs off each host itself.
+  virtual bool own_backoff() const { return false; }
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
+  // Refused is 403 or 429; true reads another host now.
+  virtual bool failed(bool /*refused*/) { return false; }
   // A w by h area's frame.
   virtual void frame(int w, int h, int64_t now, AppFrame &out) const = 0;
   // Redraws this often on its own; 0 after reads only.

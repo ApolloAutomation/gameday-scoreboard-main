@@ -15,6 +15,8 @@ using namespace espn;
 using esphome::gameday::rows_geom;
 using esphome::gameday::rows_y;
 using esphome::gameday::RowsGeom;
+using esphome::gameday::rows_cells;
+using esphome::gameday::RowsCells;
 
 namespace {
 
@@ -126,6 +128,11 @@ void test_area_views() {
   ACHECK(area_view(in) == AreaView::CLOCK);
   in.app_busy = true;
   ACHECK(area_view(in) == AreaView::APP);
+  // Under the board's night clock: the date, still the night clock.
+  in.app_busy = false;
+  in.main_clock = true;
+  ACHECK(area_view(in) == AreaView::DATE && area_clock(AreaView::DATE) && area_clock(AreaView::CLOCK));
+  ACHECK(!area_clock(AreaView::APP) && !area_clock(AreaView::NONE));
   // The old choices ignore the displays.
   in = AreaInputs{};
   in.show = SplitShow::CLOCK;
@@ -204,6 +211,22 @@ void test_rows_geom() {
   const RowsGeom four = rows_geom(256);
   ACHECK(four.pos.x == 66 && four.detail.x == 158 && four.title.w == 252);
   ACHECK(rows_y(0) == 8 && rows_y(5) == 48);
+  // Golf and racing keep the leaderboard's own cells.
+  const RowsCells golf = rows_cells(64, true, {});
+  ACHECK(!golf.own && golf.cell[0].x == 0 && golf.cell[1].w == 35 && golf.cell[2].x == 49 && golf.cell[2].w == 15);
+  ACHECK(golf.cell[3].w == 0);
+  const RowsCells race = rows_cells(64, false, {});
+  ACHECK(race.cell[1].w == 52 && race.cell[2].w == 0 && race.cell[3].w == 0);
+  const RowsCells wide = rows_cells(128, false, {});
+  ACHECK(wide.cell[0].x == 2 && wide.cell[1].w == 55 && wide.cell[2].w == 15 && wide.cell[3].x == 94);
+  ACHECK(wide.cell[3].w == 30 && rows_cells(256, true, {}).cell[3].x == 158);
+}
+
+void test_units() {
+  // US and UK: miles and mph; US alone: Fahrenheit.
+  ACHECK(tz_miles(0) && tz_fahrenheit(0) && tz_miles(6) && tz_fahrenheit(6));
+  ACHECK(tz_miles(10) && !tz_fahrenheit(10));
+  ACHECK(!tz_miles(7) && !tz_fahrenheit(7) && !tz_miles(13) && !tz_miles(-1) && !tz_fahrenheit(200));
 }
 
 void test_hosts() {
@@ -274,7 +297,7 @@ class TestApp final : public App {
     this->saved.unit = u;
     return AppSet::CHANGED;
   }
-  void state(JsonObject out) const override { out["v"] = this->value; }
+  void state(JsonObject out, int64_t /*now*/) const override { out["v"] = this->value; }
   void shown(bool on) override { this->on_screen = on; }
   uint32_t poll_ms(int64_t) const override { return this->got ? 60000 : 0; }
   bool request(int64_t, AppRequest &out) override {
@@ -322,6 +345,7 @@ void test_app_slots() {
   ACHECK(url_source("https://api.example.com/v1", hosts, n) == Source::MARKETS);
   ACHECK(app_for_key(slots, "testunit") == Display::MARKETS && app_for_key(slots, "split") == Display::GAMEDAY);
   ACHECK(app_hosts(slots, hosts, 0) == 0);
+  ACHECK(!a.lit(0));  // busy's answer by default
 
   // Through the interface, as the firmware runs it.
   ACHECK(a.set("testunit", "1") == AppSet::CHANGED && a.set("testunit", "1") == AppSet::SAME);
@@ -344,7 +368,7 @@ void test_app_slots() {
   ACHECK(app_frame_board(f) && f.rows.value[0] == "42" && f.line.pts.size() == 3);
   ACHECK(app_line_xy(f.line, 128, 64).size() == 6);
   JsonDocument doc;
-  a.state(doc[display_key(a.id())].to<JsonObject>());
+  a.state(doc[display_key(a.id())].to<JsonObject>(), 0);
   ACHECK(doc["markets"]["v"].as<int>() == 42);
 }
 
@@ -373,6 +397,7 @@ int run_app_tests(int &total_checks) {
   test_area_views();
   test_frame_helpers();
   test_rows_geom();
+  test_units();
   test_hosts();
   test_timing();
   test_app_slots();

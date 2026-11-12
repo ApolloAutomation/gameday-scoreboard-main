@@ -122,6 +122,7 @@ struct UpdateFields {
   // recorder isn't writing a row every poll or every playlist card.
   std::string ha_status_text;
   std::string ha_last_play;
+  bool quiet{false};  // a timed redraw: nothing to publish
   // The off-season clock (offseason.h) on the no-game screen, in team_color.
   // next_line is the next game for a wide board, its kickoff on a second
   // line; empty when none is known, and the page shows the date instead.
@@ -143,9 +144,14 @@ struct UpdateFields {
   bool board_value_narrow{true};
   std::vector<std::string> board_pos, board_name, board_value, board_detail;
   std::vector<int> board_value_color, board_name_color;
+  // Another display's cell colors and columns (espn::BoardLines)
+  std::vector<int> board_pos_color, board_detail_color;
+  std::vector<int16_t> board_cols;
   // Another display's polyline over the board: x, y pairs.
   std::vector<int16_t> line;
   uint32_t line_color{0xFFFFFF};
+  // Another display's own labels over the board.
+  std::vector<::espn::AppText> texts;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -1363,14 +1369,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     return ::espn::display_effective(this->split_prefs_.display, ::espn::app_slots().mask());
   }
   bool app_busy_(::espn::Display d) const;
+  bool app_lit_(::espn::Display d) const;
   bool app_on_screen_(::espn::Display d) const;
+  bool app_night_(::espn::Display d) const;
   void apps_setup_();
   // Per second: shown changes and timed redraws.
   void apps_tick_();
-  void app_redraw_(::espn::Display d);
+  void app_redraw_(::espn::Display d, bool timed = false);
   // A frame into fields the board or area draws.
   void app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const;
-  void draw_main_app_();
+  void draw_main_app_(bool quiet = false);
   // 1 started, -1 doesn't fit before due, 0 none.
   int start_app_job_(uint32_t now, uint32_t due);
   void run_app_job_();

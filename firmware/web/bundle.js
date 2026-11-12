@@ -4,6 +4,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
 const FOLD="AAAAAA*CEEEEIIIIDNOOOOOxOUUUUY**aaaaaa*ceeeeiiiidnooooo/ouuuuy*yAaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIi**JjKkkLlLlLlLlLlNnNnNnnNnOoOoOo**RrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
 const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","307":"ij","338":"OE","339":"oe","536":"S","537":"s","538":"T","539":"t","8211":"-","8212":"-","8216":"'","8217":"'","8220":"\"","8221":"\""};
 const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","PASS TD",false],["football","cmp","CMP",false],["football","int","INT",false],["football","rushyds","RUSH YDS",false],["football","rushatt","RUSH ATT",false],["football","recyds","REC YDS",false],["football","rec","REC",false],["football","rryds","RUSH+REC YDS",false],["football","td","ANY TD",true],["football","tackles","TACKLES",false],["football","sacks","SACKS",false],["football","kickpts","KICK PTS",false],["basketball","pts","PTS",false],["basketball","reb","REB",false],["basketball","ast","AST",false],["basketball","threes","3PM",false],["basketball","stl","STL",false],["basketball","blk","BLK",false],["basketball","pra","PTS+REB+AST",false],["basketball","pr","PTS+REB",false],["basketball","pa","PTS+AST",false],["basketball","ra","REB+AST",false],["baseball","hits","HITS",false],["baseball","runs","RUNS",false],["baseball","rbi","RBI",false],["baseball","hrr","H+R+RBI",false],["baseball","hr","HR",true],["baseball","k","K",false],["baseball","hitsallowed","HITS ALLOWED",false],["baseball","er","ER",false],["baseball","outs","OUTS",false],["hockey","pts","PTS",false],["hockey","goal","ANY GOAL",true],["hockey","ast","AST",false],["hockey","sog","SOG",false],["hockey","blk","BLK",false],["hockey","saves","SAVES",false],["soccer","goal","ANY GOAL",true]];
+const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK","AVAX","SHIB","XLM","BCH","ATOM","TRX","UNI","SUI","PEPE","POL","TON"],"indexes":["SPX","GSPC","DJI","DJIA","IXIC","NASDAQ","NDX","RUT","VIX"],"yahoo":{"SPX":"GSPC","GSPC":"GSPC","DJI":"DJI","DJIA":"DJI","DOW":"DJI","IXIC":"IXIC","NASDAQ":"IXIC","COMP":"IXIC","NDX":"NDX","RUT":"RUT","VIX":"VIX"},"alias":{"XBT":"BTC","XDG":"DOGE","MATIC":"POL"}};
 // Game Day Scoreboard device page.
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
@@ -244,6 +245,19 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
           </div>
         </div>
       </details>
+      <details class="card flightcard" id="flightCard" hidden>
+        <summary><h2>Flight Tracker</h2><span class="peek sum" id="flightSum"></span></summary>
+        <p class="hint">The planes in the sky near a spot you pick: the nearest one's flight, airline, route, type, height, speed and how far away it is, taking turns with a list of the nearest. Choose Flight Tracker under Showing, or for the second area.</p>
+        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it.</small></label></div>
+        <div class="flightrow"><input id="flightWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="flightFind">Find</button></div>
+        <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
+        <p class="betmsg" id="flightMsg" role="alert" hidden></p>
+        <div class="ctl" id="flightHomeRow" hidden><label>Planes near<small id="flightHome"></small></label><button class="btn" id="flightClear">Clear</button></div>
+        <div class="ctl"><label for="flightRadius">Within<small>How far from home a plane can be.</small></label><select id="flightRadius"></select></div>
+        <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
+        <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
+        <p class="hint" id="flightNow" role="status"></p>
+      </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
         <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
@@ -281,6 +295,19 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
           <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
         <p class="betmsg" id="betMsg" role="alert" hidden></p>
         <button class="btn primary" id="betAdd">Add bet</button>
+      </details>
+      <details class="card betcard" id="mktCard" hidden>
+        <summary><h2>Stocks &amp; Crypto</h2><span class="peek sum" id="mktSum"></span></summary>
+        <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Behind the night hours' clock it still checks every 10 minutes for an open, unless only coins are listed. Nothing to sign up for.</p>
+        <p class="hint" id="mktSrc" hidden>Yahoo Finance isn't answering, so the panel is reading coins from Kraken and US stocks and funds from Nasdaq for now, and tries Yahoo Finance again every so often. Anything else keeps its last price until then.</p>
+        <p class="hint" id="mktRetry" hidden>Yahoo Finance isn't answering, and nothing listed is on Kraken or Nasdaq, so the prices keep their last value until the panel tries Yahoo Finance again.</p>
+        <p class="hint" id="mktOld" hidden></p>
+        <div id="mktList"></div>
+        <div class="sub">Add a symbol</div>
+        <div class="ctl"><label for="mktSym">Symbol<small id="mktHint"></small></label><input id="mktSym" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="AAPL"></div>
+        <div class="ctl"><label for="mktKind">Kind<small>Auto knows the big coins and indexes. Pick one for a symbol that's both, like SOL or COMP.</small></label><select id="mktKind"><option value="">Auto</option><option value="stock">Stock or fund</option><option value="index">Index</option><option value="crypto">Crypto</option></select></div>
+        <p class="betmsg" id="mktMsg" role="alert" hidden></p>
+        <button class="btn primary" id="mktAdd">Add symbol</button>
       </details>
       </div>
       <div class="col">
@@ -463,7 +490,7 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
   const renderFolds = () => {
     if (!S || foldsSet) return;
     foldsSet = true;
-    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets };
+    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets, mktCard: showsMarkets() ? [1] : [] };
     for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
   };
   const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
@@ -525,6 +552,7 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
     split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
+    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String,
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -1042,7 +1070,9 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
       $("#nightbriVal").textContent = String(S.nightbri || 1);
     }
     const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
-    $("#idleNow").textContent = S.dark ? "The panel is dark until a game you follow starts."
+    const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
+    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
+    $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
         : S.night_now ? "In the night hours." : "";
   };
@@ -1824,6 +1854,145 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
     renderBetForm();
   };
 
+  // ---- Stocks & Crypto: the display's symbols ---------------------------------
+  const MKT_ID = 2;  // apps.h's Display::MARKETS, by number
+  const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
+  const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
+  const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };
+  const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
+  let mktDrawn = null;
+  let mktPending = [];  // posted, not yet listed by the panel
+  let mktLock = 0;      // a move or remove's post time
+  const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
+  // parse_market_symbol (markets.h): [symbol, kind], or null
+  const mktParse = (text, kind) => {
+    let s = "";
+    for (const c of text) {
+      if (c === " ") continue;
+      s += c >= "a" && c <= "z" ? c.toUpperCase() : c;
+      if (new TextEncoder().encode(s).length > 16) return null;
+    }
+    if (s.startsWith("$")) s = s.slice(1);
+    if (s.startsWith("^")) {
+      if (kind && kind !== "index") return null;
+      s = s.slice(1);
+      kind = "index";
+    }
+    const coinOk = !kind || kind === "crypto";
+    if (coinOk && s.length > 4 && /[-/]USD$/.test(s)) {
+      s = s.slice(0, -4);
+      kind = "crypto";
+    }
+    if (coinOk) {
+      s = MARKETS.alias[s] || s;
+      if (!kind && MARKETS.coins.includes(s)) kind = "crypto";
+    }
+    if (!kind) kind = MARKETS.indexes.includes(s) ? "index" : "stock";
+    if (kind === "stock") {
+      s = s.replace(/\//g, ".");
+      if (/^.+-[A-Z]$/.test(s)) s = s.slice(0, -2) + "." + s.slice(-1);
+    }
+    const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
+    return s.length <= 10 && ok.test(s) ? [s, kind] : null;
+  };
+  // market_same (markets.h): SPX and GSPC are one index
+  const mktSame = (a, b) => a.kind === b.kind && (a.sym === b.sym
+    || (a.kind === "index" && !!MARKETS.yahoo[a.sym] && MARKETS.yahoo[a.sym] === MARKETS.yahoo[b.sym]));
+  const renderMarkets = () => {
+    const card = $("#mktCard");
+    card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
+    if (card.hidden) return;
+    const m = S.markets;
+    const list = m.syms || [];
+    $("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
+    $("#mktSrc").hidden = m.src !== "backup";
+    $("#mktRetry").hidden = m.src !== "retry";
+    // Off screen, nothing reads them
+    const old = m.read && Date.now() / 1000 - m.read > 30 * 60;
+    $("#mktOld").hidden = !old;
+    if (old) $("#mktOld").textContent = "Prices as of " + new Date(m.read * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) + ". The panel reads them only while Stocks & Crypto is up.";
+    const sig = JSON.stringify(list);
+    // Slots stay old until the panel has the tap
+    if (mktLock && sig === mktDrawn && stateLeft <= mktLock + APPLY_MS) return;
+    const unlock = mktLock !== 0;
+    mktLock = 0;
+    if (sig === mktDrawn && !unlock) return;
+    mktDrawn = sig;
+    const host = $("#mktList");
+    const focused = host.contains(document.activeElement);
+    host.textContent = "";
+    list.forEach((sy, i) => {
+      const row = el("div", "ctl betrow mktrow");
+      const name = el("label", null, sy.sym);
+      name.appendChild(el("small", null, sy.miss ? "Yahoo Finance doesn't know this symbol"
+        : [MKT_KIND[sy.kind], MKT_ST[sy.st]].filter(Boolean).join(" \u00b7 ")));
+      row.appendChild(name);
+      if (sy.price) row.appendChild(el("span", "bet " + (sy.dir > 0 ? "good" : sy.dir < 0 ? "bad" : ""), sy.price + (sy.pct ? " " + sy.pct : "")));
+      const tools = el("span", "mkttools");
+      const button = (text, label, on, params, done) => {
+        const b = el("button", "betdel", text);
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.disabled = !on;
+        b.onclick = () => {
+          mktLock = Infinity;
+          host.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+          setGD(params).then((ok) => {
+            mktLock = ok ? Date.now() : 0;
+            if (!ok) { mktDrawn = null; renderMarkets(); }
+            if (ok && done) toast(done);
+          });
+        };
+        tools.appendChild(b);
+      };
+      button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
+      button("\u25bc", "Move " + sy.sym + " down", i < list.length - 1, { mktmove: sy.slot + "," + (sy.slot + 1) });
+      button("\u2715", "Remove " + sy.sym, true, { mktdel: sy.slot }, "Removed " + sy.sym);
+      row.appendChild(tools);
+      host.appendChild(row);
+    });
+    if (focused && !host.contains(document.activeElement)) $("#mktSym").focus();
+  };
+  const mktSay = (t) => {
+    $("#mktMsg").textContent = t;
+    $("#mktMsg").hidden = !t;
+  };
+  // What the panel will save, as it's typed
+  const mktPreview = () => {
+    const raw = $("#mktSym").value;
+    const got = raw.trim() ? mktParse(raw, $("#mktKind").value) : null;
+    $("#mktHint").textContent = !raw.trim() ? MKT_HINT
+      : got ? "Saves as " + got[0] + ", " + MKT_AS[got[1]] : "Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD";
+  };
+  mktPreview();
+  $("#mktSym").oninput = () => { mktSay(""); mktPreview(); };
+  $("#mktKind").onchange = () => { mktSay(""); mktPreview(); };
+  $("#mktSym").onkeydown = (ev) => { if (ev.key === "Enter") $("#mktAdd").click(); };
+  $("#mktAdd").onclick = () => {
+    if (!S || !S.markets) return;
+    const raw = $("#mktSym").value;
+    if (!raw.trim()) return mktSay("Type a symbol, like AAPL or BTC.");
+    const got = mktParse(raw, $("#mktKind").value);
+    if (!got) return mktSay($("#mktKind").value && /^\s*\^/.test(raw) ? "A ^ symbol is an index. Set Kind to Index or Auto."
+      : "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+    const list = S.markets.syms || [];
+    // Count pending posts so a double tap adds once
+    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => mktSame(sy, p)));
+    const dup = list.concat(mktPending).find((sy) => mktSame(sy, { sym: got[0], kind: got[1] }));
+    if (dup) return mktSay(dup.sym + " is in the list already.");
+    const max = S.markets.max || 8;
+    if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
+    mktSay("");
+    const mine = { sym: got[0], kind: got[1], at: Date.now() };
+    mktPending.push(mine);
+    setGD({ mkt: "0," + got[0] + "," + got[1] }).then((ok) => {
+      if (!ok) mktPending = mktPending.filter((p) => p !== mine);
+      else toast("Added " + got[0]);
+    });
+    $("#mktSym").value = "";
+    mktPreview();
+  };
+
   // ---- player props: a roster's player, or a favorite --------------------------
   const PROP_NAMES = {
     "football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
@@ -2491,9 +2660,129 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
     splashTimer = setTimeout(() => n.classList.remove("on"), 3000);
   };
 
+  // ---- the Flight Tracker card (components/gameday/app_flights.h) -----------
+  const FLIGHTS_ID = 3;
+  const FLIGHT_SOURCES = { fr24: "Flightradar24", adsbfi: "adsb.fi", adsblol: "adsb.lol", receiver: "your receiver" };
+  const FLIGHT_RADII = { imperial: [5, 10, 15, 25, 50, 100], metric: [5, 10, 25, 50, 100, 150] };
+  const COORDS = /^\s*([+-]?\d{1,3}(?:\.\d*)?)\s*(?:,\s*|\s+)([+-]?\d{1,3}(?:\.\d*)?)\s*$/;
+  // The panel's settings, or a post not shown yet
+  const flightNow = () => {
+    const f = (S && S.flights) || {};
+    const r = S && S.flyradius !== undefined ? /^(\d+)([a-z]*)$/.exec(S.flyradius) : null;
+    return {
+      ...f,
+      home: S && S.flyhome !== undefined ? (S.flyhome === "none" ? "" : S.flyhome) : f.home || "",
+      place: S && S.flyplace !== undefined ? S.flyplace : f.place || "",
+      radius: r ? Number(r[1]) : f.radius,
+      radius_unit: r ? r[2] || "mi" : f.radius_unit,
+      receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
+    };
+  };
+  const flightMsg = (t) => { const m = $("#flightMsg"); m.textContent = t || ""; m.hidden = !t; };
+  const setHome = (lat, lon, place) => {
+    flightMsg("");
+    $("#flightPicks").hidden = true;
+    $("#flightWhere").value = "";
+    setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+  };
+  const findPlace = async () => {
+    const q = $("#flightWhere").value.trim();
+    const picks = $("#flightPicks");
+    picks.hidden = true;
+    if (!q) { flightMsg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+    const c = COORDS.exec(q);
+    if (c) {
+      const lat = Number(c[1]), lon = Number(c[2]);
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+        flightMsg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+        return;
+      }
+      setHome(lat, lon, "");
+      return;
+    }
+    flightMsg("Looking it up...");
+    let found = [];
+    try {
+      // Open-Meteo's place search: keyless, from this browser.
+      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      found = ((await r.json()).results || []).filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
+    } catch (_) {
+      flightMsg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+      return;
+    }
+    if (!found.length) { flightMsg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+    const label = (p) => [p.name, p.admin1, p.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
+    if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+    flightMsg("");
+    picks.innerHTML = "";
+    for (const p of found) {
+      const b = el("button", "btn", label(p));
+      b.onclick = () => setHome(p.latitude, p.longitude, label(p));
+      picks.append(b);
+    }
+    picks.hidden = false;
+  };
+  $("#flightFind").onclick = findPlace;
+  $("#flightWhere").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+  $("#flightClear").onclick = () => setGD({ flyhome: "none" });
+  $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
+  const saveRx = () => {
+    const v = $("#flightRx").value.trim();
+    if (/\s/.test(v) || v.length > 95) { flightMsg("A receiver's address has no spaces, like 192.168.1.50."); return; }
+    flightMsg("");
+    setGD({ flyreceiver: v || "none" });
+  };
+  $("#flightRxSave").onclick = saveRx;
+  $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+  let flightRadii = "";
+  const renderFlights = () => {
+    const card = $("#flightCard");
+    card.hidden = !S || !S.flights || !((S.displays || []).some((d) => d.id === FLIGHTS_ID));
+    if (card.hidden) return;
+    const f = flightNow();
+    const where = f.home ? (f.place ? f.place + " (" + f.home.replace(",", ", ") + ")" : f.home.replace(",", ", ")) : "";
+    $("#flightSum").textContent = f.home ? f.place || f.home.replace(",", ", ") : "No location yet";
+    $("#flightHomeRow").hidden = !f.home;
+    $("#flightHome").textContent = where;
+    const unit = f.units === "metric" ? "km" : "mi";
+    const opts = FLIGHT_RADII[f.units === "metric" ? "metric" : "imperial"].map((n) => [n + unit, n + " " + unit]);
+    const cur = f.radius + (f.radius_unit || "mi");
+    if (!opts.some((o) => o[0] === cur)) opts.push([cur, f.radius + " " + (f.radius_unit || "mi")]);
+    const key = opts.map((o) => o[0]).join("|");
+    const sel = $("#flightRadius");
+    if (flightRadii !== key) {
+      flightRadii = key;
+      sel.innerHTML = "";
+      for (const [v, t] of opts) sel.add(new Option(t, v));
+    }
+    if (document.activeElement !== sel) sel.value = cur;
+    const rx = $("#flightRx");
+    if (document.activeElement !== rx) rx.value = f.receiver;
+    const n = Number(f.planes) || 0;
+    const from = FLIGHT_SOURCES[f.source] || "";
+    // Near the 180th meridian it skips Flightradar24
+    const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
+    const shown = S.display_now === "flights" || S.split_now === "flights";
+    const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
+    const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
+    let line = !f.home ? "Set a home location to see the planes near it."
+      : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
+        : f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
+          + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
+          : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
+            : "Looking for planes.";
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+      line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
+    else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
+    $("#flightNow").textContent = line;
+  };
+
   const renderAll = () => {
     renderBoard();
     renderBets();
+    renderMarkets();
+    renderFlights();
     renderPlayers();
     renderUpNext();
     renderSplash();
