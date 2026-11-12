@@ -12,7 +12,7 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [The device page](/using/device-page/): the live board, the team chooser and every setting.
 - [Show: My team, Favorite teams, Live games](/using/modes/): what the panel follows and what it shows when nothing is on.
 - [Favorite teams](/using/favorites/): up to 16 teams in priority order.
-- [Favorite players](/using/favorite-players/): up to eight players, with their stat line in the ticker and their name on the celebration when they score.
+- [Favorite players](/using/favorite-players/): up to 16 players, with their stat line in the ticker and their name on the celebration when they score.
 - [Football: NFL and college](/using/football/)
 - [Baseball: MLB](/using/baseball/)
 - [Baseball: minor leagues](/using/minor-league-baseball/): Triple-A, Double-A, High-A and Single-A.
@@ -34,7 +34,3 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [The F1 display](/using/f1/): the running order during a session, the next session's countdown, the circuit, the weather there, the championships and the last race, on the main board or in the second area.
 - [Stocks & Crypto](/using/markets/): up to eight stocks, funds, indexes and coins, on the main board or in the second area.
 - [Flight Tracker](/using/flights/): the planes flying near a spot you pick, on the main board or in the second area.
-
-:::note[Coming in the next release]
-The panel keeps up to 16 [favorite players](/using/favorite-players/).
-:::
