@@ -23,6 +23,7 @@
 #include "watch.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
+#include "source_markets.h"
 
 using namespace espn;
 
@@ -388,6 +389,32 @@ int main() {
       std::vector<Pending> pending;
       int64_t next = 0;
       return parse_ht_day(json, live, &next, &finals, &pending);
+    });
+  }
+
+  // Eight symbols in one Yahoo read, then the fallbacks.
+  {
+    MarketBlob list{};
+    for (const char *t : {"AAPL", "SPY", "^GSPC", "BRK.B", "BTC", "ETH", "DOGE", "SHIB"}) {
+      MarketSymbol s{};
+      parse_market_symbol(t, MarketKind::NONE, s);
+      market_put(list, 0, s);
+    }
+    const int64_t now = parse_iso8601_z("2026-11-12T04:07Z");
+    std::string json = slurp("fixtures/markets_yahoo_spark.json");
+    measure("markets_yahoo_spark", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_yahoo_quotes(json, list, q) == 8;
+    });
+    std::string kraken = slurp("fixtures/markets_kraken_ticker.json");
+    measure("markets_kraken", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_kraken_quotes(kraken, list, now, q) == 4;
+    });
+    std::string nasdaq = slurp("fixtures/markets_nasdaq_watchlist.json");
+    measure("markets_nasdaq", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_nasdaq_quotes(nasdaq, list, now, q) == 3;
     });
   }
 

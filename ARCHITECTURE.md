@@ -121,6 +121,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `sport_golf.cpp`, `sport_racing.cpp`, `alerts.h`, `watch.h`,
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
+  `source_markets.cpp/.h` (stock and crypto quotes), `markets.h`, `markets_view.h`,
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -292,6 +293,25 @@ settings in their own blob, its state under its key, its host's status in
 the health block. Game Day's own reads, splashes and Home Assistant's
 sensors carry on whatever the areas show; its splash shows only where Game
 Day is on screen.
+
+**Stocks and crypto (not drawn yet).** `markets.h` holds the owner's up to 8
+symbols (`MarketBlob`, 100 bytes: a stock, an index or a coin each, kept
+packed, with the slot whose sparkline shows) and their checks
+(`parse_market_symbol` guesses the kind: `BTC` is a coin, `SPX` the S&P
+500, `BRK/B` the class B share), the read URLs, the `MarketQuote` each read
+fills (the price, the last close or the UTC day's open, the session's times,
+64 sparkline buckets of a byte each), the market's state from those times
+(pre-market, open, after hours, closed, `FRI CLOSE` after a weekend) and the
+price, change and percent text cut to fit. Every source is keyless: one
+Yahoo `v7/finance/spark` read carries every symbol and its sparkline; Kraken's
+`Ticker` (the coins it lists) and Nasdaq's `quote/watchlist` (US stocks,
+ETFs and two indexes) fill in when it fails. Both Yahoo and Nasdaq want a
+browser's User-Agent (`kMarketsUserAgent`). `source_markets.cpp` parses each
+with a filter into the slots it names. `markets_view.h` lays out the rows
+(`market_geom`: symbol and price or percent on one panel, price and percent
+on two, change too on three and four), the 64x64 one-symbol card
+(`market_card`), the sparkline's points (`market_spark`) and the ticker with
+its colored moves (`market_ticker`, the bets' green and red).
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -721,7 +741,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   `test_watch.cpp` (the big-play watcher: which games, big plays from day
   scoreboards, when a read may run, when the board switches and goes back),
   `test_players.cpp` (favorite players), `test_apps.cpp` (the display
-  picker, its frame helpers and a stand-in display) and `test_networks.cpp`
+  picker, its frame helpers and a stand-in display), `test_markets.cpp`
+  (stock and crypto symbols, quotes, text and frames) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

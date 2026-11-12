@@ -303,3 +303,25 @@ the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device
 page's mock, so the two answer the same way. Add a case there when a set key
 or its limits change.
+
+Stocks and crypto quotes, recorded 2026-11-12 04:07Z (11:07 PM Eastern on
+Wednesday 2026-11-11, after the US close and four hours into the UTC day the
+crypto prices count from). Yahoo answers `curl/8.0` and an empty User-Agent
+with 429 and Nasdaq never answers them, so these were read with
+`User-Agent: Mozilla/5.0`. Whole, as sent:
+
+| File | Source |
+| --- | --- |
+| `markets_yahoo_spark.json` | `https://query1.finance.yahoo.com/v7/finance/spark?symbols=AAPL,SPY,%5EGSPC,BRK-B,BTC-USD,ETH-USD,DOGE-USD,SHIB-USD&range=1d&interval=5m`: eight symbols in one read, listed in Yahoo's own order (ETH first). Stocks have Wednesday's 79 five-minute closes; coins have the UTC day's so far, and SHIB skips bars with no trade. SHIB's price is `4.35e-06` |
+| `markets_yahoo_spark_unknown.json` | `...spark?symbols=ZZZZQ,%5EIXIC&range=1d&interval=5m`: an unknown symbol is left out of the answer |
+| `markets_yahoo_spark_none.json` | `...spark?symbols=ZZZZQ&range=1d&interval=5m`: no known symbol, HTTP 404 with this body |
+| `markets_yahoo_chart_aapl.json` | `https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1d&interval=5m`: one symbol, the same meta and closes plus open, high, low and volume |
+| `markets_kraken_ticker.json` | `https://api.kraken.com/0/public/Ticker?pair=BTCUSD,ETHUSD,DOGEUSD,SHIBUSD,SOLUSD`: keyed by Kraken's own names (`XXBTZUSD`, `XDGUSD`); `c[0]` is the last trade and `o` the UTC day's open, both strings |
+| `markets_kraken_unknown.json` | `...Ticker?pair=BTCUSD,FOOUSD`: one unknown pair fails the whole read |
+| `markets_nasdaq_watchlist.json` | `https://api.nasdaq.com/api/quote/watchlist?symbol=aapl%7Cstocks&symbol=aapl%7Cetf&symbol=spy%7Cstocks&symbol=spy%7Cetf&symbol=brk.b%7Cstocks&symbol=brk.b%7Cetf&symbol=comp%7Cindex`: each symbol asked as a stock and as an ETF, since Nasdaq answers only the right one; prices are text (`"$355.63"`, `"25,466.19"`) |
+
+Not committed: Stooq's CSV quotes (`https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv`)
+answered 404 and its download page a JavaScript check, Coinbase's
+`/products/BTC-USD/stats` answers one product a read, and CoinGecko's
+keyless `simple/price` answered but names coins by id (`bitcoin`), not
+symbol.
