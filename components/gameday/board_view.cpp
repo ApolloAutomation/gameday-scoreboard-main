@@ -330,6 +330,116 @@ void put_texts(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Each logo in order; hidden past the frame's
+void put_icons(BoardView &v, const UpdateFields &f) {
+  const size_t n = f.board ? std::min((size_t) f.icon_n, ::espn::kAppIcons) : 0;
+  for (size_t i = 0; i < ::espn::kAppIcons; i++) {
+    lv_obj_t *&o = v.icon[i];
+    if (i >= n) {
+      if (o == nullptr)
+        break;
+      show(o, false);
+      continue;
+    }
+    if (o == nullptr) {
+      if (v.board == nullptr)
+        return;
+      o = lv_image_create(v.board);
+      lv_obj_remove_style_all(o);
+    }
+    const lv_image_dsc_t *src = f.icon_img[i]->get_lv_image_dsc();
+    if (lv_image_get_src(o) != src)
+      ::lv_image_set_src(o, src);
+    const int16_t x = f.icon_xy[2 * i], y = f.icon_xy[2 * i + 1];
+    if (lv_obj_get_style_x(o, LV_PART_MAIN) != x || lv_obj_get_style_y(o, LV_PART_MAIN) != y)
+      lv_obj_set_pos(o, x, y);
+    show(o, true);
+  }
+}
+
+// Team logo screen's logos, or its abbreviation
+void logo_show(BoardView &v, image::Image *img) {
+  if (v.logo_abbr == nullptr)
+    return;
+  const LogoScreenGeom g = logo_screen_geom(v.w);
+  const int off = logo_obj_offset(g.logo_px);
+  for (int i = 0; i < 2; i++) {
+    lv_obj_t *o = v.logo_img[i];
+    const bool on = img != nullptr && i < g.logos;
+    if (on) {
+      ::lv_image_set_src(o, img->get_lv_image_dsc());
+      lv_image_set_scale(o, (uint32_t) logo_scale(g.logo_px));
+      put_pos(o, g.logo_x[i] + off, g.logo_y + off);
+    }
+    show(o, on);
+  }
+  put_pos(v.logo_abbr, g.logo_x[0], g.logo_y + (g.logo_px - font_rows(BoardFont::S16)) / 2);
+  put_width(v.logo_abbr, g.logo_px);
+  show(v.logo_abbr, img == nullptr);
+}
+
+void logo_hide(BoardView &v) {
+  for (lv_obj_t *o : v.logo_img)
+    show(o, false);
+  show(v.logo_abbr, false);
+  show(v.logo_name, false);
+  for (lv_obj_t *o : v.logo_line)
+    show(o, false);
+}
+
+// Made on first use: most panels never show it
+void logo_build(BoardView &v) {
+  for (lv_obj_t *&img : v.logo_img) {
+    img = lv_image_create(v.no_game);
+    lv_obj_remove_style_all(img);
+    // Doubled pixels stay crisp
+    lv_image_set_antialias(img, false);
+    lv_obj_add_flag(img, LV_OBJ_FLAG_HIDDEN);
+  }
+  v.logo_abbr = plain_label(v.no_game, v.f16, LV_OPA_COVER);
+  v.logo_name = plain_label(v.no_game, v.f12, LV_OPA_COVER);
+  for (lv_obj_t *&l : v.logo_line)
+    l = plain_label(v.no_game, v.f8, LV_OPA_COVER);
+}
+
+void logo_draw(BoardView &v, const UpdateFields &f, image::Image *img) {
+  if (f.logo_screen && v.logo_name == nullptr && v.no_game != nullptr && &v == page_view)
+    logo_build(v);
+  if (!f.logo_screen || v.logo_name == nullptr) {
+    logo_hide(v);
+    return;
+  }
+  show(v.msg, false);
+  const LogoScreenGeom g = logo_screen_geom(v.w);
+  const std::string abbr = panel_text(f.team_abbr);
+  put_font(v.logo_name, font_of(v, g.name_font));
+  place(v.logo_name, g.name);
+  put_changed(v.logo_name, ::espn::logo_name(panel_text(f.message), abbr, spot_chars(g.name, g.name_font)).c_str());
+  put_color(v.logo_name, f.team_color);
+  show(v.logo_name, true);
+  put_changed(v.logo_abbr, abbr.c_str());
+  put_color(v.logo_abbr, f.team_color);
+  // Opponent, when, then a shorter when
+  std::string part[3];
+  size_t at = 0;
+  for (int i = 0; i < 3 && at <= f.next_line.size(); i++) {
+    const size_t nl = f.next_line.find('\n', at);
+    part[i] = panel_text(f.next_line.substr(at, nl == std::string::npos ? std::string::npos : nl - at));
+    at = nl == std::string::npos ? f.next_line.size() + 1 : nl + 1;
+  }
+  const size_t fit = spot_chars(g.line[0], g.line_font);
+  const std::string text[2] = {part[0], part[1].size() <= fit ? part[1] : part[2]};
+  // The address ticker takes 64 wide's bottom line
+  const bool ticker_row = f.join_line && v.w < 128;
+  for (int i = 0; i < 2; i++) {
+    put_font(v.logo_line[i], font_of(v, g.line_font));
+    place(v.logo_line[i], g.line[i]);
+    put_changed(v.logo_line[i], text[i].c_str());
+    show(v.logo_line[i], !text[i].empty() && !(i == 1 && ticker_row));
+  }
+  logo_show(v, img);
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -584,6 +694,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   show(v.board, f.board);
   put_line(v, f);
   put_texts(v, f);
+  put_icons(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -616,6 +727,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     show(v.clock_sub, false);
     show(v.clock_ampm, false);
   }
+  logo_draw(v, f, team_logo);
   // No room for records on a single panel
   show(v.rec[0], wide);
   show(v.rec[1], wide);
@@ -766,6 +878,8 @@ void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool
     show(v.logo[i], !use_badge);
     show(v.badge[i], use_badge);
   }
+  if (v.logo_name != nullptr && !lv_obj_has_flag(v.logo_name, LV_OBJ_FLAG_HIDDEN))
+    logo_show(v, team);
 }
 
 void splash_logos(BoardView &v, image::Image *team_logo, image::Image *opp_logo) {

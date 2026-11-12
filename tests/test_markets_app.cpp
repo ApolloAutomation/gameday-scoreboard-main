@@ -8,11 +8,24 @@
 
 #include "app_markets.h"
 #include "board_layout.h"
+#include "logo_icon.h"
 #include "source_markets.h"
 
 using namespace espn;
 
 namespace {
+
+std::string logo_url(const MarketSymbol &s, uint8_t k) {
+  char buf[160];
+  const size_t n = market_logo_url(s.sym, s.kind, k, buf, sizeof buf);
+  return std::string(buf, n);
+}
+
+std::string icon_url(const AppIcon &ic, uint8_t k) {
+  char buf[160];
+  const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, k, buf, sizeof buf) : 0;
+  return std::string(buf, n);
+}
 
 int checks = 0;
 int failures = 0;
@@ -196,7 +209,11 @@ void test_frames() {
   AppFrame f;
   markets_frame(b, q, 128, 64, card_at(0), f);
   app_frame_trim(f);
-  KCHECK(f.rows.cols == std::vector<int16_t>({0, 0, 0, 30, 30, 50, 80, 48}), "128 columns");
+  KCHECK(f.rows.cols == std::vector<int16_t>({0, 0, 9, 30, 39, 49, 88, 40}), "128 columns, logos first");
+  KCHECK(f.icons.size() == 3 && f.icons[0].x == 0 && f.icons[0].y == 8 && f.icons[2].y == 32 &&
+             f.icons[0].px == kMarketLogoPx && icon_url(f.icons[0], 2).size() > 0 && icon_url(f.icons[0], 3).empty() &&
+             icon_url(f.icons[2], 0).find("/symbol/BRK-B?") != std::string::npos,
+         "a logo a row, none for ^GSPC");
   KCHECK(f.rows.name.size() == 4 && f.rows.name[0] == "AAPL" && f.rows.name[3] == "BRK.B", "page one");
   KCHECK(f.rows.title == "MARKETS 1/2" && f.rows.status == "CLOSED", "%s | %s", f.rows.title.c_str(),
          f.rows.status.c_str());
@@ -218,7 +235,8 @@ void test_frames() {
   const int64_t even = t - (t / kMarketAltSeconds) % 2 * kMarketAltSeconds;
   markets_frame(b, q, 64, 64, even, one);
   markets_frame(b, q, 64, 64, even + kMarketAltSeconds, flip);
-  KCHECK(one.rows.cols == std::vector<int16_t>({0, 0, 0, 30, 30, 34, 0, 0}), "64 columns");
+  KCHECK(one.rows.cols == std::vector<int16_t>({0, 0, 0, 30, 30, 34, 0, 0}) && one.icons.empty(),
+         "64 columns: BRK.B too long for logos");
   KCHECK(one.rows.value[0] == "355.63" && flip.rows.value[0] == "+2.04%", "%s then %s", one.rows.value[0].c_str(),
          flip.rows.value[0].c_str());
   KCHECK(one.rows.value_color[0] == (int) kMarketUp && one.rows.title.empty() && one.rows.status == "CLOSED",
@@ -228,7 +246,9 @@ void test_frames() {
   // Three panels: change too; four: the line beside six rows.
   AppFrame three, four;
   markets_frame(b, q, 192, 64, card_at(0), three);
-  KCHECK(three.rows.cols == std::vector<int16_t>({41, 55, 1, 40, 96, 50, 146, 45}), "192 columns");
+  KCHECK(three.rows.cols == std::vector<int16_t>({50, 55, 10, 40, 105, 46, 151, 40}) && three.icons.size() == 3 &&
+             three.icons[0].x == 1,
+         "192 columns");
   KCHECK(three.rows.pos[0] == "355.63" && three.rows.value[0] == "+7.12" && three.rows.detail[0] == "+2.04%",
          "price, change, percent");
   KCHECK(three.rows.pos_color[0] == (int) kMarketFlat && three.rows.value_color[0] == (int) kMarketUp, "colors");
@@ -261,7 +281,7 @@ void test_frames() {
   // The board's cells: a display's own, or the leaderboard's.
   using esphome::gameday::rows_cells;
   const auto own = rows_cells(128, true, f.rows.cols);
-  KCHECK(own.own && own.cell[0].w == 0 && own.cell[3].x == 80 && own.cell[3].w == 48, "own columns");
+  KCHECK(own.own && own.cell[0].w == 0 && own.cell[3].x == 88 && own.cell[3].w == 40, "own columns");
   const auto golf = rows_cells(64, true, {});
   KCHECK(!golf.own && golf.cell[1].w == 35 && golf.cell[2].w == 15 && golf.cell[3].w == 0, "golf on one panel");
   const auto racing = rows_cells(64, false, {});
@@ -393,6 +413,121 @@ void test_app() {
   KCHECK(!read_body(b, junk_body, kNow), "not JSON");
 }
 
+
+void test_logos() {
+  MarketSymbol aapl{}, btc{}, gspc{}, fx{}, googl{};
+  KCHECK(parse_market_symbol("AAPL", MarketKind::NONE, aapl) && parse_market_symbol("BTC", MarketKind::NONE, btc) &&
+             parse_market_symbol("^GSPC", MarketKind::NONE, gspc) &&
+             parse_market_symbol("EURUSD=X", MarketKind::NONE, fx) &&
+             parse_market_symbol("GOOGL", MarketKind::NONE, googl),
+         "parsed");
+  KCHECK(logo_url(aapl, 0) == "https://assets.parqet.com/logos/symbol/AAPL?format=png&size=32" &&
+             logo_url(aapl, 1) == "https://companiesmarketcap.com/img/company-logos/64/AAPL.png" &&
+             logo_url(aapl, 2) == "https://financialmodelingprep.com/image-stock/AAPL.png" && logo_url(aapl, 3).empty(),
+         "a stock's three hosts");
+  KCHECK(logo_url(btc, 0) == "https://assets.parqet.com/logos/crypto/BTC?format=png&size=32" &&
+             logo_url(btc, 1) == "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/btc.png" &&
+             logo_url(btc, 2) == "https://assets.coincap.io/assets/icons/btc@2x.png" && logo_url(btc, 3).empty(),
+         "a coin's three hosts");
+  KCHECK(logo_url(gspc, 0).empty() && logo_url(fx, 0).empty(), "indexes and pairs: none");
+  MarketSymbol brk{}, shop{};
+  KCHECK(parse_market_symbol("BRK.B", MarketKind::NONE, brk) && parse_market_symbol("SHOP.TO", MarketKind::NONE, shop),
+         "parsed");
+  KCHECK(logo_url(brk, 0) == "https://assets.parqet.com/logos/symbol/BRK-B?format=png&size=32" &&
+             logo_url(brk, 1) == "https://companiesmarketcap.com/img/company-logos/64/BRK-B.png" &&
+             logo_url(brk, 2) == "https://financialmodelingprep.com/image-stock/BRK.B.png",
+         "a class share: BRK-B, as Yahoo writes it");
+  KCHECK(logo_url(shop, 0) == "https://assets.parqet.com/logos/symbol/SHOP.TO?format=png&size=32",
+         "an exchange suffix stays");
+  char tiny[24];
+  KCHECK(market_logo_url("AAPL", (uint8_t) MarketKind::STOCK, 0, tiny, sizeof tiny) == 0, "too long: none");
+
+  MarketBlob b = market_defaults();
+  KCHECK(market_logos_fit(b, 64) && market_logos_fit(b, 128), "the defaults fit one panel");
+  market_put(b, 0, googl);
+  KCHECK(!market_logos_fit(b, 64) && market_logos_fit(b, 192), "GOOGL: wider boards only");
+  MarketBlob ix{};
+  market_put(ix, 0, gspc);
+  KCHECK(!market_logos_fit(ix, 256), "indexes alone keep today's columns");
+
+  // Logos never crowd a column off the board.
+  for (int w : {64, 128, 192, 256})
+    for (bool spark : {false, true}) {
+      const MarketGeom g = market_geom(w, 64, true, spark, true);
+      const MarketCol cols[] = {g.logo, g.sym, g.price, g.change, g.pct};
+      int end = 0;
+      for (const MarketCol &c : cols) {
+        if (c.w == 0)
+          continue;
+        KCHECK(c.x >= end && c.x + c.w <= w, "%d wide: column at %d", w, c.x);
+        end = c.x + c.w;
+      }
+      KCHECK(g.logo.w == kMarketLogoCol && (!g.spark || g.spark_x == 0 || g.spark_x >= end), "%d wide: logo column",
+             w);
+    }
+  KCHECK(market_geom(128, 128, true, true, true).rows == 4 && market_geom(128, 128, true, false, true).rows == 7,
+         "the tall board's rows");
+
+  MarketQuote q[kMarketSlots];
+  AppFrame one;
+  markets_frame(market_defaults(), q, 64, 64, kNow, one);
+  KCHECK(one.icons.size() == 4 && one.rows.cols == std::vector<int16_t>({0, 0, 9, 21, 30, 34, 0, 0}) &&
+             icon_url(one.icons[2], 0).find("/crypto/BTC?") != std::string::npos,
+         "one panel: SPY, AAPL, BTC, ETH get logos");
+
+  // Shrinking: a red square stays red and solid.
+  std::vector<uint8_t> red(logo_icon_bytes(32, 32));
+  for (int i = 0; i < 32 * 32; i++)
+    logo_px_put(red.data(), 32 * 32, i, 255, 0, 0, 255);
+  std::vector<uint8_t> small = logo_icon_shrink(red.data(), 32, 32, 7);
+  int r, g, bl, a;
+  logo_px_get(small.data(), 49, 24, r, g, bl, a);
+  KCHECK(small.size() == logo_icon_bytes(7, 7) && r > 240 && g == 0 && bl == 0 && a == 255, "red %d %d %d %d", r, g,
+         bl, a);
+  KCHECK(!logo_icon_lift(small.data(), 7, 7), "bright logos stay");
+
+  // A black mark on clear goes white; navy brightens.
+  std::vector<uint8_t> mark(logo_icon_bytes(32, 32));
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 32; x++)
+      logo_px_put(mark.data(), 32 * 32, y * 32 + x, 0, 0, 0, x >= 8 && x < 24 ? 255 : 0);
+  small = logo_icon_shrink(mark.data(), 32, 32, 7);
+  logo_px_get(small.data(), 49, 0, r, g, bl, a);
+  KCHECK(a == 0, "clear stays clear");
+  KCHECK(logo_icon_lift(small.data(), 7, 7), "dark lifted");
+  logo_px_get(small.data(), 49, 3 * 7 + 3, r, g, bl, a);
+  KCHECK(r > 240 && g > 240 && bl > 240 && a == 255, "white %d %d %d %d", r, g, bl, a);
+  std::vector<uint8_t> navy(logo_icon_bytes(7, 7));
+  for (int i = 0; i < 49; i++)
+    logo_px_put(navy.data(), 49, i, 0, 0, 110, i % 7 < 3 ? 255 : 0);
+  KCHECK(logo_icon_lift(navy.data(), 7, 7), "a navy mark brightened");
+  logo_px_get(navy.data(), 49, 0, r, g, bl, a);
+  KCHECK(bl > 200 && r == 0 && g == 0, "still blue %d %d %d", r, g, bl);
+  std::vector<uint8_t> gray(logo_icon_bytes(7, 7));
+  for (int i = 0; i < 49; i++)
+    logo_px_put(gray.data(), 49, i, 40, 40, 40, i % 7 < 3 ? 255 : 0);
+  KCHECK(logo_icon_lift(gray.data(), 7, 7), "a dark gray mark flipped");
+  logo_px_get(gray.data(), 49, 0, r, g, bl, a);
+  KCHECK(r > 200 && g > 200 && bl > 200, "light %d %d %d", r, g, bl);
+
+  // Square tiles keep their ground: white on black stays.
+  std::vector<uint8_t> tile(logo_icon_bytes(7, 7));
+  for (int i = 0; i < 49; i++) {
+    const int v = i == 24 ? 255 : 0;
+    logo_px_put(tile.data(), 49, i, v, v, v, 255);
+  }
+  KCHECK(!logo_icon_lift(tile.data(), 7, 7), "a black tile with a white mark stays");
+  for (int i = 0; i < 49; i++) {
+    const int v = i == 24 ? 90 : 0;
+    logo_px_put(tile.data(), 49, i, v, v, v, 255);
+  }
+  KCHECK(logo_icon_lift(tile.data(), 7, 7), "a dim gray mark brightened");
+  logo_px_get(tile.data(), 49, 24, r, g, bl, a);
+  int r0, g0, b0, a0;
+  logo_px_get(tile.data(), 49, 0, r0, g0, b0, a0);
+  KCHECK(r > 200 && r0 == 0 && a0 == 255, "%d, its ground still black %d", r, r0);
+}
+
 }
 
 int run_markets_app_tests(int &total_checks) {
@@ -401,6 +536,7 @@ int run_markets_app_tests(int &total_checks) {
   test_merge();
   test_frames();
   test_app();
+  test_logos();
   total_checks += checks;
   return failures;
 }

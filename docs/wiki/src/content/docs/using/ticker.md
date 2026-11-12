@@ -5,13 +5,13 @@ sidebar:
   order: 10
 ---
 
-The ticker is the line that scrolls along the bottom of the panel. It carries what doesn't fit on the board: the kickoff time and odds before a game, the situation and the last play during it, and the result after.
+The ticker is the line that scrolls along the bottom of the panel. It carries what doesn't fit on the board: the start time and odds before a game, the situation and the last play during it, and the result after.
 
 ## What it shows
 
 | When | What scrolls |
 | --- | --- |
-| Before the game | The kickoff day and time in the panel's timezone, the odds and TV channel, the venue, and each sport's extras: a bowl or playoff name in football, the probable pitchers in baseball, the playoff series in basketball and hockey, form and the cup stage in soccer. |
+| Before the game | The game's day and start time in the panel's timezone, the odds and TV channel, the venue, and each sport's extras: a bowl or playoff name in football, the probable pitchers in baseball, the playoff series in basketball and hockey, form and the cup stage in soccer. |
 | During the game | The game situation and the last play, each with its own switch. |
 | At a break | Halftime in football, the hits and errors between half innings in baseball, the series or records in basketball and hockey, and the goals, cards and stats at half time in soccer. |
 | After the final | "Final" with the records, or the sport's result line, like hits and errors in baseball or the goals in soccer. |

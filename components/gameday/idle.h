@@ -12,8 +12,8 @@
 namespace espn {
 
 // Saved as a byte; 0 is the pre-choice behavior.
-enum class IdleShow : uint8_t { NEXT = 0, CLOCK = 1, SCORES = 2, TODAY = 3, OFF = 4 };
-constexpr int kIdleCount = 5;
+enum class IdleShow : uint8_t { NEXT = 0, CLOCK = 1, SCORES = 2, TODAY = 3, OFF = 4, LOGO = 5 };
+constexpr int kIdleCount = 6;
 
 constexpr int kDayMinutes = 24 * 60;
 // Defaults; night hours stay off until the owner enables.
@@ -23,7 +23,7 @@ constexpr int kNightEndDefault = 7 * 60;
 constexpr int kNightBrightnessDefault = 20;
 
 // Views map to offseason.h (CLOCK) and recap.h (SCORES).
-enum class IdleView : uint8_t { BOARD = 0, CLOCK, SCORES, TODAY };
+enum class IdleView : uint8_t { BOARD = 0, CLOCK, SCORES, TODAY, LOGO };
 
 struct IdleState {
   IdleView view{IdleView::BOARD};
@@ -70,6 +70,9 @@ inline IdleState idle_choice(uint8_t show, bool night) {
       break;
     case IdleShow::TODAY:
       s.view = IdleView::TODAY;
+      break;
+    case IdleShow::LOGO:
+      s.view = night ? IdleView::CLOCK : IdleView::LOGO;
       break;
     case IdleShow::OFF:
       s.view = IdleView::CLOCK;
@@ -321,9 +324,84 @@ inline const char *idle_view_key(IdleView v) {
       return "scores";
     case IdleView::TODAY:
       return "today";
+    case IdleView::LOGO:
+      return "logo";
     default:
       return "";
   }
+}
+
+// Team logo: the soonest upcoming favorite, else the first.
+inline int logo_fav_pick(const std::vector<int64_t> &kickoffs, int64_t now) {
+  if (kickoffs.empty())
+    return -1;
+  int pick = 0;
+  int64_t best = 0;
+  for (size_t i = 0; i < kickoffs.size(); i++)
+    if (kickoffs[i] > now && (best == 0 || kickoffs[i] < best)) {
+      best = kickoffs[i];
+      pick = (int) i;
+    }
+  return pick;
+}
+
+inline bool logo_word_is(const std::string &w, const char *const *words, size_t n) {
+  for (size_t i = 0; i < n; i++)
+    if (w == words[i])
+      return true;
+  return false;
+}
+
+// Name, club name, nickname, two-word nickname, then abbreviation.
+inline std::string logo_name(const std::string &name, const std::string &abbr, size_t fit) {
+  static const char *const kSuffix[] = {"FC", "SC", "CF", "AFC"};
+  static const char *const kShared[] = {"United", "City", "CITY"};
+  if (name.size() <= fit)
+    return name;
+  std::string base = name;
+  size_t sp = base.rfind(' ');
+  if (sp != std::string::npos && logo_word_is(base.substr(sp + 1), kSuffix, 4)) {
+    base.resize(sp);
+    if (base.size() <= fit)
+      return base;
+    sp = base.rfind(' ');
+  }
+  if (sp != std::string::npos) {
+    const std::string last = base.substr(sp + 1);
+    if (last.size() >= 4 && last.size() <= fit && !logo_word_is(last, kShared, 3))
+      return last;
+    // "Red Sox", not "Sox"
+    const size_t sp2 = sp > 0 ? base.rfind(' ', sp - 1) : std::string::npos;
+    if (last.size() < 4 && sp2 != std::string::npos && base.size() - sp2 - 1 <= fit)
+      return base.substr(sp2 + 1);
+  }
+  return abbr.size() <= fit ? abbr : abbr.substr(0, fit);
+}
+
+// "W 24-17" or "T 10-10"; won settles level scores.
+inline std::string result_text(int us, int them, bool won = false) {
+  char buf[24];
+  const char c = us > them ? 'W' : us < them ? 'L' : won ? 'W' : 'T';
+  snprintf(buf, sizeof(buf), "%c %d-%d", c, us, them);
+  return buf;
+}
+
+// Under the logo: opponent, then when or the result.
+struct LogoLines {
+  std::string top, bottom;
+};
+inline LogoLines logo_lines(const GameSnapshot &g, const std::string &when) {
+  LogoLines l;
+  if (!g.valid || g.opp_abbr.empty() || (g.state != GameState::PRE && g.state != GameState::POST))
+    return l;
+  l.top = (g.team_home ? "vs " : "at ") + g.opp_abbr;
+  if (g.state != GameState::POST)
+    l.bottom = when;
+  else if (g.completed)
+    l.bottom = result_text(g.team_score, g.opp_score, g.team_winner);
+  else
+    l.bottom = g.short_detail;  // ESPN's "Postponed" or "Canceled"
+  return l;
 }
 
 }  // namespace espn

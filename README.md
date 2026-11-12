@@ -16,7 +16,7 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 
 ## What it does
 
-- Next-game card while you wait: both logos, season records, kickoff day and time in your timezone, and a ticker with the betting line, over/under, TV network and venue
+- Next-game card while you wait: both logos, season records, the game's day and start time in your timezone, and a ticker with the betting line, over/under, TV network and venue
 - Live scoreboard at kickoff: scores, the game clock and quarter in large type under them, down and distance beneath that (red in the red zone), abbreviations in team colors with the team holding the ball in gold, records under the logos, timeout pips, and a scrolling ticker with the down and distance and where the ball is (one switch) and the last play (another); the clock keeps its own row and never goes in the ticker
 - Full-screen splashes in the scoring team's color, with its logo and the points it gained, for touchdowns, field goals, extra points, 2-point conversions, safeties, interceptions and fumble recoveries, the opponent's acknowledged in theirs, and a victory splash on a win; each kind has its own switch
 - Each sport has its own board: the inning, count, outs and a small diamond of the runners in baseball; the minute, stoppage time, latest goal and red cards in soccer; the period and clock in hockey and basketball, with the playoff series when there is one. Home runs, grand slams, walk-offs, goals and buzzer beaters get the fireworks too, and red cards, late lead changes and overtime get splashes of their own
@@ -25,11 +25,11 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - Racing: follow Formula 1 or the NASCAR Cup Series like a team, with the race weekend's next session and its start time, the latest session's order with car numbers and gaps, the race winner's splash, and the next race between weekends
 - Lingers on the final (half an hour, ten minutes for baseball), then looks up the next game
 - Live games: follows a random game in progress in the leagues you choose and moves on when it ends, or every 30 seconds to 30 minutes
-- An idle display for when none of your games is on (the next game, a clock, today's scores, your team's game today with a countdown, or off or dim), and night hours with their own brightness
+- An idle display for when none of your games is on (the next game, a clock, today's scores, your team's game today with a countdown, your team's logo big with its next game or last result, or off or dim), and night hours with their own brightness
 - College teams' ranks, and a pro team's seed or place in place of its record if you like
-- Favorite players' stat lines in the ticker while they lead their game, and their name on the celebration when they score
-- Bets and player props you type in by hand, with whether each is covering or on track during the game and won or lost after, scrolling in green, red or gold; the panel never connects to a sportsbook
-- Other displays in place of the scoreboard: F1 (the running order during a session, then the next session's countdown, the circuit, the weather there, both championships and the last race), Stocks & Crypto (up to eight stocks, funds, indexes or coins with the day's change and chart) and the Flight Tracker (the planes flying near a spot you pick). None needs an account or a key. Stocks & Crypto, the Flight Tracker and F1's schedule and weather fall back to a backup source on their own; F1's running order waits for ESPN
+- Up to 16 favorite players, with their stat lines in the ticker while they lead their game and their name on the celebration when they score
+- Up to eight bets and 16 player props you type in by hand, with whether each is covering or on track during the game and won or lost after, scrolling in green, red or gold; the panel never connects to a sportsbook
+- Other displays in place of the scoreboard: F1 (the running order during a session, then the next session's countdown, the circuit, the weather there, both championships and the last race), Stocks & Crypto (up to eight stocks, funds, indexes or coins with their logos, the day's change and chart) and the Flight Tracker (the planes flying near a spot you pick). None needs an account or a key. Stocks & Crypto, the Flight Tracker and F1's schedule and weather fall back to a backup source on their own; F1's running order waits for ESPN
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football, soccer, minor league baseball, the AHL and the ECHL, and holds every setting
 - Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
@@ -69,7 +69,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | --- | --- |
 | Show | My team, Favorite teams, or Live games: a game in progress picked at random from the leagues you choose, switching every 30 seconds to 30 minutes |
 | Team | All 32 NFL teams, every FBS college football team, every MLB, NBA, WNBA, NHL, MLS and Premier League team, every Division I men's college basketball team, every Triple-A to Single-A minor league baseball team and every AHL and ECHL team, a tab per league, plus an "On now" tab. The Golf tab has the PGA Tour and the LPGA Tour and the Racing tab Formula 1 and the NASCAR Cup Series, each followed like a team |
-| Timezone | Follows the browser's zone unless you pick one by hand; used for kickoff times |
+| Timezone | Follows the browser's zone unless you pick one by hand; used for game times |
 | Ticker: game situation, last play, odds and TV | Choose what scrolls along the bottom. Game situation is down and distance in football, the count and outs in baseball, and goals, cards and stats in soccer |
 | Opponent scores too | Turn the opponent's scoring splashes off if you only want yours |
 | Favorites | Up to 16 teams in priority order. "Only today's games" keeps the playlist to the favorites playing today. The first four are the numbered buttons on a WizMote remote |
@@ -108,7 +108,7 @@ The parser and game logic have host tests: `make -C tests` (needs g++). The devi
 
 - ESPN's API is unofficial and can change without notice. The device sends a curl-style User-Agent because ESPN's edge rejects unfamiliar ones. The MLB Stats API, which the panel reads for minor league baseball, is public but undocumented in the same way, and so is HockeyTech's feed, which it reads for the AHL and the ECHL with the public site keys the leagues' own websites send (the `hockeytech_*` substitutions in `firmware/gameday-common.yaml`).
 - All HTTPS requests (ESPN, logos, firmware updates) are certificate-verified against the ESP-IDF bundle. If ESPN ever moves to a certificate authority outside that bundle, fetches will fail until a rebuild.
-- Team logos are ESPN's (minor league baseball teams' are MLB's, AHL and ECHL teams' HockeyTech's) and are fetched at runtime, not bundled.
+- Team logos are ESPN's (minor league baseball teams' are MLB's, AHL and ECHL teams' HockeyTech's) and are fetched at runtime, not bundled. So are the Stocks & Crypto logos, from Parqet, companiesmarketcap.com and Financial Modeling Prep for stocks and funds, and Parqet, the cryptocurrency-icons set on GitHub and CoinCap for coins.
 - Fetching runs on its own task, so the panel animation keeps going while a document downloads.
 
 ### On your network

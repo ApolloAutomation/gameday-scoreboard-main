@@ -2596,6 +2596,10 @@ test("the idle display posts its choice, shows the dim level for Off or dim, and
   await idle.selectOption("3");
   await expectSet(request, { idle: "3" });
   await expect(page.locator("#idleHint")).toContainText("countdown");
+  await idle.selectOption("5");
+  await expectSet(request, { idle: "5" });
+  await expect(page.locator("#idleHint")).toContainText("logo");
+  await expect(page.locator("#idleDimRow")).toBeHidden();
   await idle.selectOption("4");
   await expectSet(request, { idle: "4" });
   await expect(page.locator("#idleDimRow")).toBeVisible();
@@ -2667,6 +2671,9 @@ test("the idle display says what the panel shows now, and hides on firmware with
                                     { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
+  await reset(request, { idle: 5, idle_view: "logo" });
+  await page.reload();
+  await expect(page.locator("#idleNow")).toHaveText("Showing your team's logo until a game you follow starts.");
   await reset(request, { idle: 2, idle_view: "" });
   await page.reload();
   await expect(page.locator("#idleCtls")).toBeVisible();
@@ -3503,37 +3510,76 @@ test("the Favorite players card says when ESPN's roster can't be read, and tells
 });
 
 test("a full Favorite players card says to remove one first", async ({ page, request }) => {
-  const eight = Array.from({ length: 8 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
-  await reset(request, { players: eight });
+  const sixteen = Array.from({ length: 16 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
+  await reset(request, { players: sixteen });
   await page.route("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster", (route) => route.fulfill({ json: BILLS_ROSTER }));
   await page.goto("/");
-  await expect(page.locator("#playerList .playerrow label")).toHaveCount(8);
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(16);
+  await expect(page.locator("#playerSum")).toHaveText("16 of 16");
   await pickPlayerTeam(page, "Buffalo Bills");
   await page.locator("#playerAdd").click();
-  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  await expect(page.locator("#playerMsg")).toHaveText("All 16 players are in use. Remove one first.");
   await sleep(300);
   expect((await sets(request)).filter((q) => q.player)).toEqual([]);
 });
 
-const SEVEN = Array.from({ length: 7 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
+const FIFTEEN = Array.from({ length: 15 }, (_, i) => ({ l: "nfl", id: 1001 + i, team: 2, name: "P" + (i + 1) }));
+const FIFTEEN_NAMES = FIFTEEN.map((pl) => pl.name);
 const BILLS_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/2/roster";
+// Seventeen teammates: one more than the panel keeps
+const SQUAD = ["Adams", "Baker", "Clark", "Davis", "Evans", "Foster", "Green", "Hill", "Irwin", "Jones",
+  "King", "Lewis", "Moore", "Nash", "Owens", "Price", "Quinn"];
+const SQUAD_ROSTER = { athletes: SQUAD.map((last, i) => ({ id: String(5001 + i), firstName: "Sam", lastName: last,
+  displayName: "Sam " + last, jersey: String(i + 1), position: { abbreviation: "WR" } })) };
+
+test("the Favorite players card fills all 16 slots, and the next player takes a removed one's slot", async ({ page, request }) => {
+  test.setTimeout(60000);  // sixteen posts, each waiting for a re-read
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: SQUAD_ROSTER }));
+  await page.goto("/");
+  await pickPlayerTeam(page, "Buffalo Bills");
+  for (let i = 0; i < 16; i++) {
+    await page.locator("#playerPick").selectOption(String(5001 + i));
+    await page.locator("#playerAdd").click();
+    await expect(page.locator("#playerList .playerrow label")).toHaveCount(i + 1);
+  }
+  await expect(page.locator("#playerSum")).toHaveText("16 of 16");
+  const names = SQUAD.slice(0, 16).map((last) => last.toUpperCase());
+  expect((await sets(request)).filter((q) => q.player).map((q) => q.player))
+    .toEqual(names.map((name, i) => `nfl,${5001 + i},2,${name}`));
+  await page.locator("#playerPick").selectOption("5017");
+  await page.locator("#playerAdd").click();
+  await expect(page.locator("#playerMsg")).toHaveText("All 16 players are in use. Remove one first.");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.player)).toHaveLength(16);
+  // The 12th goes; the next add fills its slot
+  await page.getByRole("button", { name: "Remove LEWIS" }).click();
+  await expectSet(request, { playerdel: "nfl,5012" });
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(15);
+  await page.locator("#playerAdd").click();
+  await expectSet(request, { player: "nfl,5017,2,QUINN" });
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(16);
+  names[11] = "QUINN";
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(names);
+  await expect(page.locator("#playerList .playerrow label").nth(11)).toContainText("QUINN");
+});
 
 test("a player posted counts until the panel lists them, so two quick adds can't both take the last slot", async ({ page, request }) => {
-  await reset(request, { players: SEVEN });
+  await reset(request, { players: FIFTEEN });
   await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
   await page.goto("/");
-  await expect(page.locator("#playerList .playerrow label")).toHaveCount(7);
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(15);
   await pickPlayerTeam(page, "Buffalo Bills");
   await page.locator("#playerPick").selectOption("3918298");
   await page.locator("#playerAdd").click();
   await page.locator("#playerPick").selectOption("4379399");
   await page.locator("#playerAdd").click();
-  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  await expect(page.locator("#playerMsg")).toHaveText("All 16 players are in use. Remove one first.");
   // "Added" once the panel lists him.
   await expect(page.locator("#toast")).toHaveText("Added Josh Allen");
-  await expect(page.locator("#playerList .playerrow label")).toHaveCount(8);
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(16);
   expect((await sets(request)).filter((q) => q.player)).toEqual([{ player: "nfl,3918298,2,ALLEN" }]);
-  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "ALLEN"]);
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual([...FIFTEEN_NAMES, "ALLEN"]);
 });
 
 test("a double tap on Add player posts the player once", async ({ page, request }) => {
@@ -3550,7 +3596,7 @@ test("a double tap on Add player posts the player once", async ({ page, request 
 });
 
 test("a player the panel didn't keep is never shown as added", async ({ page, request }) => {
-  await reset(request, { players: SEVEN });
+  await reset(request, { players: FIFTEEN });
   // Another page took the last slot; ours reads stale state
   let stale = null;
   await page.route("**/gameday/state*", async (route) => {
@@ -3563,17 +3609,17 @@ test("a player the panel didn't keep is never shown as added", async ({ page, re
   });
   await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
   await page.goto("/");
-  await expect(page.locator("#playerList .playerrow label")).toHaveCount(7);
+  await expect(page.locator("#playerList .playerrow label")).toHaveCount(15);
   await pickPlayerTeam(page, "Buffalo Bills");
   stale = await deviceState(request);
   await request.post("/gameday/set?player=" + encodeURIComponent("nfl,4379399,2,COOK"));
   await page.locator("#playerPick").selectOption("3918298");
   await page.locator("#playerAdd").click();
   await expectSet(request, { player: "nfl,3918298,2,ALLEN" });
-  await expect(page.locator("#playerMsg")).toHaveText("All 8 players are in use. Remove one first.");
+  await expect(page.locator("#playerMsg")).toHaveText("All 16 players are in use. Remove one first.");
   await expect(page.locator("#playerList .playerrow label").last()).toContainText("COOK");
   expect(await page.locator("#toast").textContent()).not.toBe("Added Josh Allen");
-  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "COOK"]);
+  expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual([...FIFTEEN_NAMES, "COOK"]);
 });
 
 // ---- player props ----
@@ -3641,6 +3687,67 @@ test("the Bets card adds a player prop on a player from the team's roster", asyn
   await page.locator("#betType").selectOption("spread");
   await expect(page.locator("#propRows")).toBeHidden();
   await expect(page.locator("#betSign")).toBeVisible();
+});
+
+test("the Bets card fills all 16 prop slots, removes slot 12 and fills it again", async ({ page, request }) => {
+  test.setTimeout(60000);  // sixteen posts, each waiting for a re-read
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await pickPropTeam(page, "Buffalo Bills");
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  const line = (i) => 200 + i + ".5";
+  for (let i = 0; i < 16; i++) {
+    await page.locator("#betLine").fill(line(i));
+    await page.locator("#betAdd").click();
+    await expect(page.locator("#betList .proprow")).toHaveCount(i + 1);
+  }
+  await expect(page.locator("#betSum")).toHaveText("16 props");
+  const slots = Array.from({ length: 16 }, (_, i) => i + 1);
+  expect((await sets(request)).filter((q) => q.prop).map((q) => q.prop))
+    .toEqual(slots.map((_, i) => "0,nfl,3918298,2,ALLEN,passyds,over," + line(i)));
+  expect((await deviceState(request)).props.map((p) => p.slot)).toEqual(slots);
+  await page.locator("#betLine").fill("300.5");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText("All 16 props are in use. Remove one first.");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.prop)).toHaveLength(16);
+  // Slot 12 empties, then the next prop refills it
+  await page.getByRole("button", { name: "Remove ALLEN O 211.5 PASS YDS" }).click();
+  await expectSet(request, { propdel: "12" });
+  await expect(page.locator("#betList .proprow")).toHaveCount(15);
+  expect((await deviceState(request)).props.map((p) => p.slot)).toEqual(slots.filter((s) => s !== 12));
+  await page.locator("#betLine").fill("300.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,300.5" });
+  await expect(page.locator("#betList .proprow")).toHaveCount(16);
+  const props = (await deviceState(request)).props;
+  expect(props.map((p) => p.slot)).toEqual(slots);
+  expect(props.find((p) => p.slot === 12).text).toBe("ALLEN O 300.5 PASS YDS");
+});
+
+test("on a 375 px phone the prop's player list spans the card under its label", async ({ page, request }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await pickPropTeam(page, "Buffalo Bills");
+  await page.locator("#propPick").selectOption("nfl:2576623");
+  const box = (sel) => page.locator(sel).boundingBox();
+  const row = await box("#propRows > .ctl:first-of-type");
+  const label = await box("label[for=propPick]");
+  const pick = await box("#propPick");
+  const favs = await box("#propFavs");
+  expect(label.width).toBeGreaterThan(row.width * 0.9);
+  expect(pick.width).toBeGreaterThan(row.width * 0.9);
+  expect(pick.y).toBeGreaterThanOrEqual(label.y + label.height);
+  expect(favs.y).toBeGreaterThanOrEqual(pick.y + pick.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 
 test("the Favorite players button narrows the prop's players to the favorites, across teams", async ({ page, request }) => {
@@ -3926,7 +4033,7 @@ test.describe("cards that fold", () => {
     await expect.poll(() => isOpen(page, "betCard")).toBe(true);
     await expect(page.locator("#betSum")).toHaveText("1 of 8");
     expect(await isOpen(page, "playerCard")).toBe(true);
-    await expect(page.locator("#playerSum")).toHaveText("1 of 8");
+    await expect(page.locator("#playerSum")).toHaveText("1 of 16");
     expect(await isOpen(page, "favCard")).toBe(false);
     // Folding a card posts nothing to the panel.
     expect(await sets(request)).toEqual([]);

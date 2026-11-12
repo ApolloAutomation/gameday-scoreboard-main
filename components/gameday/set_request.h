@@ -103,7 +103,7 @@ inline int clamp_watch_stay_seconds(int seconds) {
   return s / 10 * 10;
 }
 // Name max: one splash line on one panel.
-constexpr int kPlayerSlots = 8;
+constexpr int kPlayerSlots = 16;
 constexpr int kPlayerNameMax = 10;
 static_assert(kPropNameMax == kPlayerNameMax, "a prop names its player as favorites do");
 
@@ -379,12 +379,26 @@ inline bool parse_player(const std::string &v, bool del, SetOp &op) {
   return !op.name.empty();
 }
 
+// One or two digits, no leading 0; free_ok takes 0.
+inline bool parse_slot(const std::string &v, int max, bool free_ok, uint8_t &slot) {
+  if (v.empty() || v.size() > 2 || (v.size() == 2 && v[0] == '0'))
+    return false;
+  int n = 0;
+  for (char c : v) {
+    if (c < '0' || c > '9')
+      return false;
+    n = n * 10 + (c - '0');
+  }
+  if (n < (free_ok ? 0 : 1) || n > max)
+    return false;
+  slot = (uint8_t) n;
+  return true;
+}
+static_assert(kBetSlots <= 99 && kPropSlots <= 99, "slots travel as two digits at most");
+
 // With free_ok, 0 means the first empty slot.
 inline bool parse_bet_slot(const std::string &v, uint8_t &slot, bool free_ok = false) {
-  if (v.size() != 1 || v[0] < (free_ok ? '0' : '1') || v[0] > '0' + kBetSlots)
-    return false;
-  slot = (uint8_t) (v[0] - '0');
-  return true;
+  return parse_slot(v, kBetSlots, free_ok, slot);
 }
 
 // bet=1,nfl,2,spread,-3.5; slot 0 is the first empty.
@@ -436,9 +450,8 @@ inline bool parse_bet(const std::string &v, uint8_t &slot, Bet &b) {
 inline bool parse_prop(const std::string &v, uint8_t &slot, Prop &p) {
   std::string f[8];
   size_t n = 0;
-  if (!split_fields(v, f, 8, n) || n != 8 || f[0].size() != 1 || f[0][0] < '0' || f[0][0] > '0' + kPropSlots)
+  if (!split_fields(v, f, 8, n) || n != 8 || !parse_slot(f[0], kPropSlots, true, slot))
     return false;
-  slot = (uint8_t) (f[0][0] - '0');
   p = Prop{};
   const LeagueInfo *info = league_by_key(f[1].c_str());
   if (info == nullptr || is_board_sport(info->sport) || info->source != Source::ESPN ||
@@ -640,10 +653,7 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
   }
   if (k == "propdel") {
     op.kind = SetKind::PROP_DEL;
-    if (v.size() != 1 || v[0] < '1' || v[0] > '0' + kPropSlots)
-      return false;
-    op.slot = (uint8_t) (v[0] - '0');
-    return true;
+    return parse_slot(v, kPropSlots, false, op.slot);
   }
   if (k == "watch")
     return on(SetKind::WATCH);

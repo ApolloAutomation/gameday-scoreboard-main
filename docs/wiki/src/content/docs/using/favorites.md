@@ -1,6 +1,6 @@
 ---
 title: "Favorite teams"
-description: "Follow up to 16 teams from any league in priority order, with the panel cycling through the ones playing and locking on to a game near kickoff."
+description: "Follow up to 16 teams from any league in priority order, with the panel cycling through the ones playing and locking on to a game shortly before it starts."
 sidebar:
   order: 4
 ---
@@ -31,11 +31,11 @@ The bar under the mode buttons on the device page says **Cycling through your fa
 
 ## When a game is on
 
-A favorite's game takes the panel, or locks on, from a set time before kickoff until a set time after the final. The bar says **Locked on** and the team's name.
+A favorite's game takes the panel, or locks on, from a set time before the start of the game until a set time after the final. The bar says **Locked on** and the team's name.
 
 | Setting | What it does | Starts at |
 | --- | --- | --- |
-| **Take over** | How many minutes before kickoff the game takes the panel, 5 to 120. A game with no kickoff time yet locks on once it starts. | 15 minutes |
+| **Take over** | How many minutes before the start of the game it takes the panel, 5 to 120. A game with no start time yet locks on once it starts. | 15 minutes |
 | **After the final** | How long the final stays up before the playlist comes back, 30 seconds to 60 minutes. | 30 seconds |
 | **Two games at once** | **Stick with the higher team** shows the favorite higher in your list. **Alternate** switches between the games every 30 seconds, or every 1 to 30 minutes, as set in the list next to it. | Alternate on a new panel |
 
@@ -61,6 +61,6 @@ Buttons 1 to 4 on a paired WizMote jump to your first four favorites. In Favorit
 
 ## On the device page
 
-The **Up next** list on the device page has one row per favorite: the live score, the final, or the next kickoff and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
+The **Up next** list on the device page has one row per favorite: the live score, the final, or the next game's start time and TV channel. The row the panel is showing is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add the team.
 
 If none of your favorites has any game scheduled, the board shows a clock in your first favorite's colors. See [Show: My team, Favorite teams, Live games](/using/modes/#when-your-team-has-no-game-coming).

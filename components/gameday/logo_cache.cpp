@@ -1,9 +1,12 @@
 #include "logo_cache.h"
 
+#include <algorithm>
+
 #include "esphome/components/runtime_image/image_decoder.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#include "logo_icon.h"
 #include "logo_lru.h"
 #include "psram_tasks.h"
 
@@ -39,7 +42,7 @@ void LogoCache::setup() {
   this->pending_.reserve(MAX_PENDING);
 }
 
-LogoCache::Entry *LogoCache::find_(const std::string &url) {
+LogoCache::Entry *LogoCache::find_(std::string_view url) {
   for (auto &e : this->entries_) {
     if (std::string_view(e->url) == url)
       return e.get();
@@ -62,7 +65,7 @@ void LogoCache::queue_(Entry &e, uint8_t prio, uint32_t now) {
   this->start_task_();
 }
 
-LogoCache::Entry *LogoCache::add_(const std::string &url, uint8_t prio, uint32_t now) {
+LogoCache::Entry *LogoCache::add_(std::string_view url, uint8_t prio, uint32_t now) {
   auto e = std::make_unique<Entry>();
   e->url.assign(url.data(), url.size());
   e->used_ms = now;
@@ -72,7 +75,7 @@ LogoCache::Entry *LogoCache::add_(const std::string &url, uint8_t prio, uint32_t
   return p;
 }
 
-image::Image *LogoCache::get(const std::string &url) {
+image::Image *LogoCache::get(std::string_view url, uint8_t icon) {
   if (url.empty() || this->lock_ == nullptr)
     return nullptr;
   Locked guard(this->lock_);
@@ -80,7 +83,7 @@ image::Image *LogoCache::get(const std::string &url) {
   Entry *e = this->find_(url);
   if (e == nullptr) {
     this->make_room_(now);
-    this->add_(url, ::espn::LOGO_NOW, now);
+    this->add_(url, ::espn::LOGO_NOW, now)->icon = icon;
     return nullptr;
   }
   e->used_ms = now;
@@ -109,7 +112,15 @@ void LogoCache::want(const std::string &url) {
     this->queue_(*e, ::espn::LOGO_NEXT, now);
 }
 
-bool LogoCache::waiting(const std::string &url) {
+bool LogoCache::ready(std::string_view url) {
+  if (url.empty() || this->lock_ == nullptr)
+    return false;
+  Locked guard(this->lock_);
+  Entry *e = this->find_(url);
+  return e != nullptr && e->state == State::READY;
+}
+
+bool LogoCache::waiting(std::string_view url) {
   if (url.empty() || this->lock_ == nullptr || this->get(url) != nullptr)
     return false;
   Locked guard(this->lock_);
@@ -168,7 +179,26 @@ bool LogoCache::pinned_url_(std::string_view url) const {
     if (!p.empty() && p == url)
       return true;
   }
+  if (this->icon_pin_n_[0] == 0 && this->icon_pin_n_[1] == 0)
+    return false;
+  const uint32_t key = url_key(url);
+  for (int s = 0; s < 2; s++)
+    for (uint8_t i = 0; i < this->icon_pin_n_[s]; i++)
+      if (this->icon_pins_[s][i] == key)
+        return true;
   return false;
+}
+
+void LogoCache::pin_icons(const uint32_t *keys, size_t n) {
+  n = std::min(n, ICON_PINS);
+  if (this->lock_ == nullptr ||
+      (n == this->icon_pin_n_[0] && std::equal(keys, keys + n, this->icon_pins_[0])))
+    return;
+  Locked guard(this->lock_);
+  std::copy(this->icon_pins_[0], this->icon_pins_[0] + ICON_PINS, this->icon_pins_[1]);
+  this->icon_pin_n_[1] = this->icon_pin_n_[0];
+  std::copy(keys, keys + n, this->icon_pins_[0]);
+  this->icon_pin_n_[0] = (uint8_t) n;
 }
 
 // Main loop. A failed logo still on screen is asked for again on its own, so
@@ -344,7 +374,12 @@ bool LogoCache::decode_(Entry &e, const Bytes &body) {
   const uint8_t *px = d.get_data_start();
   const int w = d.get_width(), h = d.get_height();
   ok = ok && px != nullptr;
-  if (ok) {
+  if (ok && e.icon > 0) {
+    const std::vector<uint8_t> small = ::espn::logo_icon_shrink(px, w, h, e.icon);
+    e.pixels.assign(small.begin(), small.end());
+    ::espn::logo_icon_lift(e.pixels.data(), e.icon, e.icon);
+    e.image.emplace(e.pixels.data(), e.icon, e.icon, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
+  } else if (ok) {
     e.pixels.assign(px, px + d.get_buffer_size(w, h));
     e.image.emplace(e.pixels.data(), w, h, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
   }

@@ -13,8 +13,10 @@
 
 namespace espn {
 
-// Blob size: changing it loses every saved prop.
-constexpr int kPropSlots = 8;
+// Saved as two halves of v2026.11.3's eight.
+constexpr int kPropSlots = 16;
+constexpr int kPropHalfSlots = 8;
+static_assert(kPropSlots == 2 * kPropHalfSlots, "props save as two halves");
 constexpr int kPropNameMax = 10;
 // Half units: lines from 0.5 to 999.5.
 constexpr int kPropMaxLineHalf = kBetMaxTotalHalf;
@@ -126,10 +128,29 @@ struct Prop {
 };
 static_assert(sizeof(Prop) == 48, "Prop is the saved blob's layout: keep its size");
 
+// A saved half; resizing it loses those props.
+struct PropHalf {
+  Prop props[kPropHalfSlots];
+};
+static_assert(sizeof(PropHalf) == 384, "PropHalf is a saved blob: keep its size");
+
+// Half 0 holds slots 1-8, half 1 slots 9-16.
 struct PropBlob {
   Prop props[kPropSlots];
 };
-static_assert(sizeof(PropBlob) == 384, "PropBlob is the saved blob: keep its size");
+
+inline PropHalf prop_half(const PropBlob &b, int h) {
+  PropHalf out;
+  std::copy_n(b.props + h * kPropHalfSlots, kPropHalfSlots, out.props);
+  return out;
+}
+
+inline void prop_half_put(PropBlob &b, int h, const PropHalf &half) {
+  std::copy_n(half.props, kPropHalfSlots, b.props + h * kPropHalfSlots);
+}
+
+// The saved half's bit for 0-based slot i.
+inline uint8_t prop_half_bit(int i) { return (uint8_t) (1u << (i / kPropHalfSlots)); }
 
 inline bool prop_empty(const Prop &p) { return p.athlete == 0; }
 
@@ -405,15 +426,6 @@ inline int soccer_goals(const GameSnapshot &g, uint32_t athlete) {
     if (goal.athlete == athlete && !goal.own_goal && soccer_regulation(goal.clock))
       n += 2;
   return n;
-}
-
-// Soccer prop players join the game read's watch.
-inline void prop_watch_add(PlayerWatch &w, const Prop *props, uint8_t league) {
-  if (league_sport((League) league) != Sport::SOCCER)
-    return;
-  for (int i = 0; i < kPropSlots; i++)
-    if (!prop_empty(props[i]) && props[i].league == league && !w.has(props[i].athlete) && w.n < PlayerWatch::kMax)
-      w.ids[w.n++] = props[i].athlete;
 }
 
 // The prop players a box score read keeps.

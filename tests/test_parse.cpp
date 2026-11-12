@@ -8558,6 +8558,78 @@ static void test_idle_state() {
   CHECK(idle_state(in).view == IdleView::BOARD);
   CHECK(std::string(idle_view_key(IdleView::BOARD)).empty());
   CHECK_EQ(std::string(idle_view_key(IdleView::TODAY)), std::string("today"));
+  // Team logo: the logo by day, the clock at night.
+  in.minute = 12 * 60;
+  CHECK(view(IdleShow::LOGO).view == IdleView::LOGO && !view(IdleShow::LOGO).dim);
+  CHECK_EQ(std::string(idle_view_key(IdleView::LOGO)), std::string("logo"));
+  in.minute = 23 * 60;
+  CHECK(view(IdleShow::LOGO).view == IdleView::CLOCK && view(IdleShow::LOGO).night);
+  in.busy = true;
+  CHECK(view(IdleShow::LOGO).view == IdleView::BOARD);  // the game takes over
+  in.busy = false;
+  in.minute = 12 * 60;
+  // Favorites: the soonest upcoming, else the first.
+  CHECK_EQ(logo_fav_pick({}, 100), -1);
+  CHECK_EQ(logo_fav_pick({0, 0}, 100), 0);
+  CHECK_EQ(logo_fav_pick({0, 900, 500, 50}, 100), 2);
+  CHECK_EQ(logo_fav_pick({50, 0}, 100), 0);  // only a past kickoff: the first
+  // The name fits, else the nickname, else the abbreviation.
+  CHECK_EQ(logo_name("Chicago Bears", "CHI", 16), std::string("Chicago Bears"));
+  CHECK_EQ(logo_name("Chicago Bears", "CHI", 10), std::string("Bears"));
+  CHECK_EQ(logo_name("Tampa Bay Buccaneers", "TB", 9), std::string("TB"));
+  CHECK_EQ(logo_name("Arsenal", "ARS", 10), std::string("Arsenal"));
+  CHECK_EQ(logo_name("Name ", "AB", 3), std::string("AB"));
+  // Club words never stand alone as the name.
+  CHECK_EQ(logo_name("Seattle Sounders FC", "SEA", 10), std::string("Sounders"));
+  CHECK_EQ(logo_name("Seattle Sounders FC", "SEA", 16), std::string("Seattle Sounders"));
+  CHECK_EQ(logo_name("Charlotte FC", "CLT", 10), std::string("Charlotte"));
+  CHECK_EQ(logo_name("Charlotte FC", "CLT", 16), std::string("Charlotte FC"));
+  CHECK_EQ(logo_name("Boston Red Sox", "BOS", 10), std::string("Red Sox"));
+  CHECK_EQ(logo_name("Boston Red Sox", "BOS", 16), std::string("Boston Red Sox"));
+  CHECK_EQ(logo_name("Manchester City", "MNC", 10), std::string("MNC"));
+  CHECK_EQ(logo_name("Manchester City", "MNC", 16), std::string("Manchester City"));
+  CHECK_EQ(logo_name("Manchester United", "MAN", 16), std::string("MAN"));
+  CHECK_EQ(logo_name("Orlando City SC", "ORL", 10), std::string("ORL"));
+  CHECK_EQ(logo_name("New York City FC", "NYC", 10), std::string("NYC"));
+  CHECK_EQ(logo_name("Chicago Sky", "CHI", 10), std::string("CHI"));
+  CHECK_EQ(result_text(24, 17), std::string("W 24-17"));
+  CHECK_EQ(result_text(17, 24), std::string("L 17-24"));
+  CHECK_EQ(result_text(2, 2), std::string("T 2-2"));
+  CHECK_EQ(result_text(1, 1, true), std::string("W 1-1"));  // won on penalties
+  CHECK_EQ(result_text(1, 1, false), std::string("T 1-1"));
+  {
+    GameSnapshot g;
+    CHECK(logo_lines(g, "Sun 1:00 PM").top.empty());  // no game: name only
+    g.valid = true;
+    g.state = GameState::PRE;
+    g.opp_abbr = "DAL";
+    g.team_home = true;
+    LogoLines l = logo_lines(g, "Sun 1:00 PM");
+    CHECK_EQ(l.top, std::string("vs DAL"));
+    CHECK_EQ(l.bottom, std::string("Sun 1:00 PM"));
+    g.team_home = false;
+    g.state = GameState::POST;
+    g.team_score = 17;
+    g.opp_score = 24;
+    g.completed = true;
+    l = logo_lines(g, "");
+    CHECK_EQ(l.top, std::string("at DAL"));
+    CHECK_EQ(l.bottom, std::string("L 17-24"));
+    g.team_score = g.opp_score = 1;
+    g.team_winner = true;
+    CHECK_EQ(logo_lines(g, "").bottom, std::string("W 1-1"));
+    // Postponed or suspended: ESPN's words, not a score
+    g.completed = false;
+    g.team_winner = false;
+    g.short_detail = "Postponed";
+    l = logo_lines(g, "");
+    CHECK_EQ(l.top, std::string("at DAL"));
+    CHECK_EQ(l.bottom, std::string("Postponed"));
+    g.short_detail.clear();
+    CHECK(logo_lines(g, "").bottom.empty());
+    g.state = GameState::IN;
+    CHECK(logo_lines(g, "").top.empty());
+  }
 
   // Before the first board: a 3 AM restart stays dark.
   in.board_ready = false;

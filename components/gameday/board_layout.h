@@ -698,4 +698,61 @@ inline SplashLayout splash_layout(int w, int h, int tiles, const std::string &po
   return L;
 }
 
+// ---- the idle Team logo screen ----------------------------------------------
+
+// Logo boxes, then the name and two lines.
+struct LogoScreenGeom {
+  int16_t logo_x[2];
+  int16_t logo_y;
+  int16_t logo_px;  // 32, or the 32 px logo doubled
+  uint8_t logos;    // 2 mirrors it on a 256 wide board
+  Spot name;
+  BoardFont name_font;
+  Spot line[2];
+  BoardFont line_font;
+};
+
+inline LogoScreenGeom logo_screen_geom(int w) {
+  LogoScreenGeom g{};
+  if (w < 128) {
+    g.logos = 1;
+    g.logo_px = kLogoPx;
+    g.logo_x[0] = (int16_t) ((w - kLogoPx) / 2);
+    g.logo_y = 1;
+    g.name = Spot{0, 34, (int16_t) w};
+    g.name_font = BoardFont::S12;
+    g.line[0] = Spot{0, 47, (int16_t) w};
+    g.line[1] = Spot{0, 56, (int16_t) w};
+    g.line_font = BoardFont::S8;
+    return g;
+  }
+  g.logo_px = 2 * kLogoPx;
+  g.logos = w >= 256 ? 2 : 1;
+  g.logo_x[0] = 0;
+  g.logo_x[1] = (int16_t) (w - g.logo_px);
+  g.logo_y = 0;
+  if (w < 192) {
+    const int16_t cw = (int16_t) (w - g.logo_px);
+    g.name = Spot{g.logo_px, 15, cw};
+    g.name_font = BoardFont::S12;
+    g.line[0] = Spot{g.logo_px, 31, cw};
+    g.line[1] = Spot{g.logo_px, 41, cw};
+    g.line_font = BoardFont::S8;
+    return g;
+  }
+  const int16_t cw = (int16_t) (w - g.logo_px * g.logos);
+  g.name = Spot{g.logo_px, 11, cw};
+  g.name_font = BoardFont::S16;
+  g.line[0] = Spot{g.logo_px, 28, cw};
+  g.line[1] = Spot{g.logo_px, 41, cw};
+  g.line_font = BoardFont::S12;
+  return g;
+}
+
+inline size_t spot_chars(const Spot &s, BoardFont f) { return (size_t) (s.w / font_px(f)); }
+
+// A 32 px image scaled about its center.
+inline int logo_obj_offset(int logo_px) { return (logo_px - kLogoPx) / 2; }
+inline int logo_scale(int logo_px) { return 256 * logo_px / kLogoPx; }
+
 }  // namespace esphome::gameday

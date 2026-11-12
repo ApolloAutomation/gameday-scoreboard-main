@@ -80,7 +80,7 @@ Favorites, the timezone, the ticker switches, the celebrations, the Live games l
 Game Status changes when a game starts, when someone scores and when it ends, not on every play, so it makes a good trigger and keeps your history small. Some ideas:
 
 - Flash the room lights or play a sound when Game Status changes during your team's game.
-- Turn the panel on before kickoff and off at bedtime with **Power**, or turn **Brightness** down at night.
+- Turn the panel on before game time and off at bedtime with **Power**, or turn **Brightness** down at night.
 - Switch **Team** or **Mode** for the evening's game.
 - Install updates on your own schedule with the **Firmware** entity.
 
