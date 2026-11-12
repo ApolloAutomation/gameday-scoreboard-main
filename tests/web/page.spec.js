@@ -2596,6 +2596,10 @@ test("the idle display posts its choice, shows the dim level for Off or dim, and
   await idle.selectOption("3");
   await expectSet(request, { idle: "3" });
   await expect(page.locator("#idleHint")).toContainText("countdown");
+  await idle.selectOption("5");
+  await expectSet(request, { idle: "5" });
+  await expect(page.locator("#idleHint")).toContainText("logo");
+  await expect(page.locator("#idleDimRow")).toBeHidden();
   await idle.selectOption("4");
   await expectSet(request, { idle: "4" });
   await expect(page.locator("#idleDimRow")).toBeVisible();
@@ -2667,6 +2671,9 @@ test("the idle display says what the panel shows now, and hides on firmware with
                                     { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
+  await reset(request, { idle: 5, idle_view: "logo" });
+  await page.reload();
+  await expect(page.locator("#idleNow")).toHaveText("Showing your team's logo until a game you follow starts.");
   await reset(request, { idle: 2, idle_view: "" });
   await page.reload();
   await expect(page.locator("#idleCtls")).toBeVisible();

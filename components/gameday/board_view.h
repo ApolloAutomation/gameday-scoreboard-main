@@ -50,6 +50,11 @@ struct BoardView {
   lv_obj_t *tile_img[2]{};
   lv_obj_t *tile_lbl[2]{};
   lv_obj_t *splash_pts{nullptr};
+  // The idle Team logo screen, made on first use
+  lv_obj_t *logo_img[2]{};
+  lv_obj_t *logo_abbr{nullptr};  // while the logo downloads, or has none
+  lv_obj_t *logo_name{nullptr};
+  lv_obj_t *logo_line[2]{};
   // Another display's polyline, over the leaderboard; its points
   lv_obj_t *line{nullptr};
   lv_point_precise_t line_pts[::espn::kAppLinePoints]{};

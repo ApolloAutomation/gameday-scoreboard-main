@@ -2349,9 +2349,77 @@ int64_t GamedayComponent::today_since_() const {
       if (team == nullptr || ::espn::is_leaderboard(team->league))
         return IdleView::CLOCK;
       return IdleView::TODAY;
+    case IdleView::LOGO:
+      return this->logo_team_(nullptr) != nullptr ? IdleView::LOGO : IdleView::CLOCK;
     default:
       return v;
   }
+}
+
+// Favorites: the one up next, else the first.
+const ::espn::Team *GamedayComponent::logo_team_(const GameSnapshot **game, std::string *color) const {
+  const ::espn::Team *team = nullptr;
+  const GameSnapshot *g = nullptr;
+  const Schedule *sched = nullptr;
+  if (this->favorites_mode_()) {
+    if (this->fav_.empty())
+      return nullptr;
+    std::vector<int64_t> kicks;
+    for (const auto &e : this->fav_)
+      kicks.push_back(e.game.valid && e.game.state == GameState::PRE ? e.game.kickoff_epoch : 0);
+    const int64_t now = this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0;
+    const FavEntry &e = this->fav_[::espn::logo_fav_pick(kicks, now)];
+    team = e.team;
+    g = &e.game;
+    sched = &e.sched;
+  } else {
+    team = this->current_team_();
+    sched = &this->schedule_;
+    // Live games' board is another game's
+    if (!this->live_mode_() || this->live_fallback_)
+      g = &this->game_;
+  }
+  if (team == nullptr || ::espn::is_leaderboard(team->league))
+    return nullptr;
+  if (g != nullptr && !g->valid)
+    g = nullptr;
+  if (game != nullptr)
+    *game = g;
+  // The game's color, else the team endpoint's
+  if (color != nullptr)
+    *color = g != nullptr && !g->team_color.empty() ? g->team_color : sched->team_color;
+  return team;
+}
+
+bool GamedayComponent::logo_fields_(UpdateFields &f) {
+  const GameSnapshot *g = nullptr;
+  std::string color;
+  const ::espn::Team *team = this->logo_team_(&g, &color);
+  if (team == nullptr)
+    return false;
+  f.game_state = "NOT_FOUND";
+  f.logo_screen = true;
+  f.team_abbr = team->abbr;
+  f.message = team->name;
+  f.team_logo = ::espn::team_logo_url(team->league, team->espn_id, team->abbr);
+  f.team_color = ::espn::clock_color(true, ::espn::parse_color(color));
+  if (g == nullptr || !this->clock_set_())
+    return true;
+  std::string when, day;
+  if (g->state == GameState::PRE && g->kickoff_epoch > 0) {
+    const int64_t at = g->time_tbd ? ::espn::tbd_day_epoch(g->kickoff_epoch) : g->kickoff_epoch;
+    struct tm kick = ESPTime::from_epoch_local((time_t) at).to_c_tm();
+    struct tm now = this->time_->now().to_c_tm();
+    when = ::espn::kickoff_label(kick, now, g->time_tbd);
+    day = ::espn::day_label(kick, now);
+    // Game day counts down instead
+    if (day == "Today" && !g->time_tbd)
+      when = day = ::espn::countdown_text(g->kickoff_epoch - (int64_t) this->time_->timestamp_now());
+  }
+  const ::espn::LogoLines l = ::espn::logo_lines(*g, when);
+  if (!l.top.empty())
+    f.next_line = l.top + "\n" + l.bottom + "\n" + (g->state == GameState::POST ? l.bottom : day);
+  return true;
 }
 
 std::vector<League> GamedayComponent::side_leagues_() const {
@@ -2442,7 +2510,9 @@ void GamedayComponent::idle_tick_() {
   this->apps_tick_();
   if (!redraw && before != this->idle_)
     this->rebuild_state_(&this->last_fields_);  // the page's night_now and dark
-  if (this->idle_view_ == ::espn::IdleView::TODAY && this->time_ != nullptr) {
+  // Their countdowns tick each minute.
+  const bool ticks = this->idle_view_ == ::espn::IdleView::TODAY || this->idle_view_ == ::espn::IdleView::LOGO;
+  if (ticks && this->time_ != nullptr) {
     ESPTime t = this->time_->now();
     const int minute = t.is_valid() ? t.hour * 60 + t.minute : -1;
     if (minute != this->idle_minute_) {
@@ -6240,6 +6310,8 @@ void GamedayComponent::idle_fields_(UpdateFields &f) {
       v = ::espn::IdleView::CLOCK;  // no game today
     }
   }
+  if (v == ::espn::IdleView::LOGO && !this->logo_fields_(out))
+    v = ::espn::IdleView::CLOCK;
   if (v == ::espn::IdleView::CLOCK) {
     out.game_state = "NOT_FOUND";
     this->clock_fields_(out, true);
