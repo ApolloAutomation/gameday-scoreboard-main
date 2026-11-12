@@ -446,7 +446,7 @@
 
     {"name": "idle display: the scores", "set": [["idle", "2"]], "expect": {"idle": 2}},
     {"name": "idle display: off or dim", "set": [["idle", "4"]], "expect": {"idle": 4}},
-    {"name": "idle past the choices is refused", "start": {"idle": 1}, "set": [["idle", "5"]], "expect": {"idle": 1}},
+    {"name": "idle past the choices is refused", "start": {"idle": 1}, "set": [["idle", "6"]], "expect": {"idle": 1}},
     {"name": "a negative idle is refused", "start": {"idle": 3}, "set": [["idle", "-1"]], "expect": {"idle": 3}},
     {"name": "idle reads like atoi", "set": [["idle", "3x"]], "expect": {"idle": 3}},
     {"name": "idle as text is the next game", "start": {"idle": 2}, "set": [["idle", "clock"]], "expect": {"idle": 0}},

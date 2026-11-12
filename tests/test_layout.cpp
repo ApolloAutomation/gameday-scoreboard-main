@@ -512,6 +512,51 @@ void test_large_text() {
   }
 }
 
+// Team logo screen: inside the board, nothing overlaps.
+void test_logo_screen() {
+  using esphome::gameday::kLogoPx;
+  using esphome::gameday::logo_obj_offset;
+  using esphome::gameday::logo_scale;
+  using esphome::gameday::logo_screen_geom;
+  using esphome::gameday::LogoScreenGeom;
+  using esphome::gameday::spot_chars;
+  for (int w : {64, 128, 192, 256}) {
+    const LogoScreenGeom g = logo_screen_geom(w);
+    LCHECK(g.logos == (w >= 256 ? 2 : 1));
+    LCHECK(g.logo_px == (w >= 128 ? 2 * kLogoPx : kLogoPx));
+    LCHECK(g.logo_y >= 0 && g.logo_y + g.logo_px <= kBoardRows);
+    for (int i = 0; i < g.logos; i++)
+      LCHECK(g.logo_x[i] >= 0 && g.logo_x[i] + g.logo_px <= w);
+    LCHECK(logo_obj_offset(g.logo_px) * 2 + kLogoPx == g.logo_px);
+    LCHECK(logo_scale(g.logo_px) == (w >= 128 ? 512 : 256));
+    const struct {
+      esphome::gameday::Spot s;
+      BoardFont f;
+    } rows[] = {{g.name, g.name_font}, {g.line[0], g.line_font}, {g.line[1], g.line_font}};
+    int prev_end = w < 128 ? g.logo_y + g.logo_px - 1 : -1;
+    for (const auto &r : rows) {
+      LCHECK(r.s.x >= 0 && r.s.x + r.s.w <= w);
+      // Beside the logos on a wide board
+      if (w >= 128) {
+        LCHECK(r.s.x >= g.logo_x[0] + g.logo_px);
+        if (g.logos == 2)
+          LCHECK(r.s.x + r.s.w <= g.logo_x[1]);
+      }
+      LCHECK(r.s.y + font_ink_top(r.f) > prev_end);
+      prev_end = r.s.y + font_desc_bottom(r.f);
+      LCHECK(prev_end < kBoardRows);
+    }
+    // "vs DAL", "in 2h 15m" and a nickname always fit
+    LCHECK(spot_chars(g.line[0], g.line_font) >= 9);
+    LCHECK(spot_chars(g.name, g.name_font) >= 10);
+    // Wide boards fit "Sun 1:00 PM" and "Chicago Bears"
+    if (w >= 192) {
+      LCHECK(spot_chars(g.line[1], g.line_font) >= 14);
+      LCHECK(spot_chars(g.name, g.name_font) >= 13);
+    }
+  }
+}
+
 void test_clock_card() {
   using esphome::gameday::clock_card_geom;
   using esphome::gameday::ClockCardGeom;
@@ -960,6 +1005,7 @@ int run_layout_tests(int &total_checks) {
   test_clock_page();
   test_large_text();
   test_clock_card();
+  test_logo_screen();
   test_lower_sizes();
   test_game_clock();
   test_clock_standing();

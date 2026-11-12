@@ -172,7 +172,7 @@
           <div id="idleCtls" hidden>
             <div class="ctl"><label for="idle">Idle display<small id="idleHint"></small></label><select id="idle">
               <option value="0">Next game</option><option value="1">Clock</option><option value="2">Scores</option>
-              <option value="3">My team today</option><option value="4">Off or dim</option>
+              <option value="3">My team today</option><option value="4">Off or dim</option><option value="5">Team logo</option>
             </select></div>
             <div class="ctl" id="idleDimRow" hidden><label for="idledim">Dim to<small>0 turns the screen off. Power stays on.</small></label><input type="range" id="idledim" min="0" max="255" step="1"><span class="val" id="idledimVal" aria-hidden="true"></span></div>
             <p class="hint" id="idleNow" role="status"></p>
@@ -1029,6 +1029,7 @@
     "Recent final scores and the games still to come today, for your team's and your favorites' leagues.",
     "On game day the matchup with a countdown to the start, then the final until midnight. Other days, the clock.",
     "The panel goes dark, or as dim as you set below, without turning it off.",
+    "Your team's logo, big, in its colors, with its name and its next game or last result. In Favorite teams, the one playing next.",
   ];
   const idleSelect = $("#idle");
   idleSelect.onchange = () => setGD({ idle: idleSelect.value });
@@ -1062,7 +1063,7 @@
       nightBri.value = S.nightbri || 1;
       $("#nightbriVal").textContent = String(S.nightbri || 1);
     }
-    const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
+    const now = { clock: "the clock", scores: "recent scores", today: "today's game", logo: "your team's logo" }[S.idle_view];
     const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
     const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
     $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."

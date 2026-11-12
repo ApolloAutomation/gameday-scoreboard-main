@@ -707,13 +707,13 @@ gameday:
           - text_sensor.template.publish:
               id: gd_last_play_sensor
               state: !lambda 'return x.ha_last_play;'
-    # Splash shows cached logos, or badges while downloading
+    # Splash and Team logo screen show cached logos
     - lambda: |-
         if (gameday::board_view() == nullptr)
           id(tt_bind_view).execute();
         if (gameday::BoardView *v = gameday::board_view()) {
           image::Image *team_logo = nullptr, *opp_logo = nullptr;
-          if (!x.splash_text.empty()) {
+          if (!x.splash_text.empty() || x.logo_screen) {
             team_logo = id(gameday_ctl).logos().get(x.team_logo);
             opp_logo = id(gameday_ctl).logos().get(x.opponent_logo);
           }

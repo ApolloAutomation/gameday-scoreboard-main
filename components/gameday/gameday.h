@@ -139,6 +139,8 @@ struct UpdateFields {
   bool board_card{false};
   // Post-join address line leads the status text.
   bool join_line{false};
+  // Team logo screen; next_line: opponent, when, short when
+  bool logo_screen{false};
   std::string board_title, board_status;
   uint32_t board_status_color{0xFFFFFF};
   bool board_value_narrow{true};
@@ -881,6 +883,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void idle_fields_(UpdateFields &f);
   // nullptr means show the clock.
   const GameSnapshot *today_game_() const;
+  // nullptr means show the clock; game may be nullptr.
+  const ::espn::Team *logo_team_(const GameSnapshot **game, std::string *color = nullptr) const;
+  bool logo_fields_(UpdateFields &f);
   // Night hours need the team's card for the clock.
   bool live_recap_() const {
     return this->current_team_() == nullptr ||

@@ -119,6 +119,10 @@ The settings, in the order the page shows them:
 
 :::note[Coming in the next release]
 The panel keeps up to 16 favorite players, and up to 16 player props besides the eight bets.
+
+**Idle display** also lists **Team logo**: your team's logo, big, with its name and its next game or last result. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+
+**Night hours** show the clock in place of **Team logo** too.
 :::
 
 **Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).

@@ -347,7 +347,7 @@ INITIAL = {
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
     # A big-play visit, and whether Follow still applies
     "visit": False, "visit_follow": False,
-    # idle_view is "", "clock", "scores" or "today" (idle.h)
+    # idle_view is "", "clock", "scores", "today" or "logo" (idle.h)
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
     # split 0-8 (split.h); state_doc() derives split_at, split_now
