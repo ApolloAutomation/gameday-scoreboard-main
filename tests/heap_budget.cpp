@@ -158,7 +158,7 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
-// A box score read for player props: eight players watched.
+// Box score read: one player per prop slot.
 static void box_read(const char *name, const std::string &file, Sport sport, std::initializer_list<uint32_t> ids) {
   std::string json = slurp("fixtures/" + file);
   PlayerWatch w;
@@ -192,7 +192,7 @@ static void watch_day(const char *name, const std::string &file, League league) 
   });
 }
 
-// ids: the favorites, those in the game first.
+// ids in the game; filler ids fill the watch.
 static void event_players(const char *name, const std::string &file, Sport sport,
                           std::initializer_list<uint32_t> ids) {
   std::string json = slurp("fixtures/" + file);
@@ -206,6 +206,8 @@ static void event_players(const char *name, const std::string &file, Sport sport
   for (uint32_t id : ids)
     if (w.n < PlayerWatch::kMax)
       w.ids[w.n++] = id;
+  for (uint32_t id = 1; w.n < PlayerWatch::kMax; id++)
+    w.ids[w.n++] = id;
   measure(name, [&] {
     GameSnapshot g;
     return parse_event(json, sport, team, g, event_id, &w);
@@ -237,25 +239,29 @@ int main() {
   event("poll_nba_event", "event_nba_live.json", Sport::BASKETBALL);
   event("poll_nhl_event", "event_nhl_live.json", Sport::HOCKEY);
   event("poll_soccer_event", "event_soccer_second_half.json", Sport::SOCCER);
-  // Worst case: eight favorites, as many leaders as ESPN lists.
+  // Worst case: a full watch, every ESPN leader.
   event_players("poll_ncaa_event_players", "event_ncaa_live.json", Sport::FOOTBALL,
-                {4870883, 5122157, 4879999, 5079684, 1, 2, 3, 4});
+                {4870883, 5122157, 4879999, 5079684});
   event_players("poll_mlb_event_players", "event_mlb_hr.json", Sport::BASEBALL,
-                {4917849, 40960, 4867424, 33912, 40576, 1, 2, 3});
+                {4917849, 40960, 4867424, 33912, 40576});
   event_players("poll_nba_event_players", "event_nba_live.json", Sport::BASKETBALL,
-                {4396909, 4017837, 5106060, 4594268, 3032976, 4432816, 4431671, 1});
+                {4396909, 4017837, 5106060, 4594268, 3032976, 4432816, 4431671});
   event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
-                {199680, 205448, 1, 2, 3, 4, 5, 6});
+                {199680, 205448});
 
   // Finals have the most rows a box score has.
   box_read("box_nfl_final", "summary_nfl_final.json", Sport::FOOTBALL,
-           {4360310, 4882093, 4432620, 4686361, 3043078, 3916433, 4038441, 3116365});
+           {4360310, 4882093, 4432620, 4686361, 3043078, 3916433, 4038441, 3116365, 2576336, 4362619, 4686248,
+            4430539, 4917427, 4879194, 4911851, 4685415});
   box_read("box_nba_live", "summary_nba_live.json", Sport::BASKETBALL,
-           {4431680, 4433137, 4592691, 4701230, 1, 2, 3, 4});
+           {4431680, 4433137, 4592691, 4701230, 4433136, 3907498, 3945274, 4278077, 4278580, 5060631, 4277811,
+            5113969, 3155535, 4596528, 1, 2});
   box_read("box_mlb_final", "summary_mlb_final.json", Sport::BASEBALL,
-           {5149101, 5080761, 4917869, 35013, 33481, 40810, 42584, 4679983});
+           {5149101, 5080761, 4917869, 35013, 33481, 40810, 42584, 4679983, 31283, 39895, 41179, 4417795, 4313442,
+            42987, 40456, 4917865});
   box_read("box_nhl_final", "summary_nhl_final.json", Sport::HOCKEY,
-           {3114732, 4319858, 4587845, 4024833, 4587943, 3114766, 4755690, 4272888});
+           {3114732, 4319858, 4587845, 4024833, 4587943, 3114766, 4755690, 4272888, 3946, 3149633, 3939856,
+            4233877, 4894702, 3114722, 4845286, 4024854});
   watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
   watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
   watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);

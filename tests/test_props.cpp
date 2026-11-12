@@ -2,11 +2,13 @@
 #include <ArduinoJson.h>
 
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "players.h"
 #include "props.h"
 #include "set_request.h"
 
@@ -231,7 +233,14 @@ void test_parse_prop() {
       "0,nfl,0,2,ALLEN,passyds,over,250.5",           // no athlete id
       "0,nfl,3918298,2,,passyds,over,250.5",          // no name given
       "0,nfl,3918298,2,AL<b>,passyds,over,250.5",     // a name the panel can't show
-      "9,nfl,3918298,2,ALLEN,passyds,over,250.5",     // past the last slot
+      "17,nfl,3918298,2,ALLEN,passyds,over,250.5",    // past the last slot
+      "99,nfl,3918298,2,ALLEN,passyds,over,250.5",    // far past it
+      "100,nfl,3918298,2,ALLEN,passyds,over,250.5",   // a three-digit slot
+      "01,nfl,3918298,2,ALLEN,passyds,over,250.5",    // a leading zero
+      "00,nfl,3918298,2,ALLEN,passyds,over,250.5",    // zero, written twice
+      "+9,nfl,3918298,2,ALLEN,passyds,over,250.5",    // a plus sign first
+      " 9,nfl,3918298,2,ALLEN,passyds,over,250.5",    // a leading space
+      ",nfl,3918298,2,ALLEN,passyds,over,250.5",      // no slot at all
       "0,milb,1,234,SMITH,hits,over,0.5",             // a minor league team
       "0,ahl,1,324,SMITH,pts,over,0.5",               // a HockeyTech league team
       "0,pga,1,1,SMITH,pts,over,0.5",                 // a golf tour
@@ -240,10 +249,13 @@ void test_parse_prop() {
   };
   for (const char *v : refused)
     RCHECK(!parse_set("prop", v, op, 4), "prop=%s is refused", v);
-  RCHECK(parse_set("propdel", "8", op, 4) && op.kind == SetKind::PROP_DEL && op.slot == 8, "propdel 8");
-  RCHECK(!parse_set("propdel", "0", op, 4) && !parse_set("propdel", "9", op, 4) && !parse_set("propdel", "", op, 4) &&
-             !parse_set("propdel", "11", op, 4),
-         "propdel takes one slot");
+  for (int slot = 1; slot <= kPropSlots; slot++) {
+    const std::string v = std::to_string(slot);
+    RCHECK(parse_set("propdel", v, op, 4) && op.kind == SetKind::PROP_DEL && op.slot == slot, "propdel %d", slot);
+    RCHECK(parse_set("prop", v + ",nfl,3918298,2,ALLEN,td,yes,", op, 4) && op.slot == slot, "prop into slot %d", slot);
+  }
+  for (const char *v : {"0", "17", "99", "100", "", "01", "00", "09", "+1", "-1", " 1", "1 ", "1a", "x"})
+    RCHECK(!parse_set("propdel", v, op, 4), "propdel=%s is refused", v);
   int del_at = -1, prop_at = -1, at = 0;
   for (const char *key : kSetKeys) {
     if (std::string(key) == "propdel")
@@ -452,6 +464,80 @@ void test_store() {
          "bad slots read back are emptied");
 }
 
+// Two saved halves: slots 1-8 under v2026.11.3's key.
+void test_halves() {
+  PropBlob b{};
+  Prop p = prop("0,nba,4431680,1,OKONGWU,reb,under,9");
+  for (int i = 0; i < kPropSlots; i++) {
+    p.athlete = 1001 + i;
+    RCHECK(prop_put(b.props, 0, p) == i + 1, "slot %d", i + 1);
+  }
+  RCHECK(prop_put(b.props, 0, p) == 0 && prop_put(b.props, kPropSlots + 1, p) == 0, "a seventeenth is refused");
+  const PropHalf lo = prop_half(b, 0), hi = prop_half(b, 1);
+  RCHECK(lo.props[0].athlete == 1001 && lo.props[7].athlete == 1008, "the first half is slots 1-8");
+  RCHECK(hi.props[0].athlete == 1009 && hi.props[7].athlete == 1016, "the second half is slots 9-16");
+  PropBlob joined{};
+  prop_half_put(joined, 1, hi);
+  prop_half_put(joined, 0, lo);
+  RCHECK(memcmp(&joined, &b, sizeof(b)) == 0, "the halves join back to every slot");
+  PropBlob first{};
+  prop_half_put(first, 0, lo);
+  bool empty = true;
+  for (int i = kPropHalfSlots; i < kPropSlots; i++)
+    empty = empty && prop_empty(first.props[i]);
+  RCHECK(memcmp(first.props, b.props, sizeof(lo)) == 0 && empty, "no second half saved: slots 9-16 stay empty");
+  // v2026.11.3's eight-slot blob is the first half, byte for byte.
+  Prop old[8]{};
+  old[5] = prop("0,nfl,3918298,2,ALLEN,passyds,over,250.5");
+  static_assert(sizeof(old) == sizeof(PropHalf), "the old blob's size");
+  PropHalf saved{};
+  memcpy(&saved, old, sizeof(old));
+  PropBlob upgraded{};
+  prop_half_put(upgraded, 0, saved);
+  props_loaded(upgraded);
+  RCHECK(upgraded.props[5].athlete == 3918298 && upgraded.props[5].line == 501, "an update keeps slots 1-8");
+  RCHECK(prop_half_bit(0) == 1 && prop_half_bit(7) == 1 && prop_half_bit(8) == 2 && prop_half_bit(15) == 2,
+         "each slot's half");
+  // The first free slot, across the halves.
+  b.props[11] = Prop{};
+  RCHECK(prop_put(b.props, 0, p) == 12, "a free slot in the second half");
+  b.props[2] = Prop{};
+  b.props[13] = Prop{};
+  RCHECK(prop_put(b.props, 0, p) == 3 && prop_put(b.props, 0, p) == 14, "the first half's free slot first");
+  RCHECK(prop_put(b.props, 16, prop("0,nfl,3918298,2,ALLEN,td,yes,")) == 16 && b.props[15].league == NFL,
+         "slot 16 is replaced");
+  b.props[12].stat = 0;  // football's passing yards on an NBA player
+  b.props[15].name[0] = 'a';
+  props_loaded(b);
+  RCHECK(prop_empty(b.props[12]) && prop_empty(b.props[15]) && !prop_empty(b.props[8]) && !prop_empty(b.props[14]),
+         "bad slots in the second half are emptied too");
+}
+
+// Sixteen props on sixteen players of one game.
+void test_sixteen_box() {
+  static const uint32_t kIds[] = {4360310, 2576336, 4882093, 4362619, 3916433, 4432620, 4686248, 4430539,
+                                  4917427, 4879194, 4911851, 4685415, 4576129, 3050073, 4240610, 4572704};
+  static_assert(sizeof(kIds) / sizeof(kIds[0]) == kPropSlots, "a player per slot");
+  Prop props[kPropSlots]{};
+  for (int i = 0; i < kPropSlots; i++) {
+    props[i] = prop("0,nfl,3918298,2,ALLEN,td,yes,");
+    props[i].athlete = kIds[i];
+  }
+  const PlayerWatch w = prop_box_watch(props, NFL);
+  RCHECK(w.n == kPropSlots, "the box read watches all sixteen");
+  const std::string json = slurp("fixtures/summary_nfl_final.json");
+  BoxCutter cut;
+  StringReader in(json, &cut);
+  std::vector<BoxLine> lines;
+  RCHECK(parse_box(in, Sport::FOOTBALL, w, lines), "the final parses");
+  RCHECK(lines.size() == (size_t) kPropSlots, "a line for each: %zu", lines.size());
+  for (int i = 0; i < kPropSlots; i++)
+    RCHECK(box_line(lines, kIds[i]) != nullptr, "slot %d's player", i + 1);
+  // Two props on one player: one line.
+  props[15].athlete = kIds[0];
+  RCHECK(prop_box_watch(props, NFL).n == kPropSlots - 1, "one player watched once");
+}
+
 void test_progress() {
   auto read = [](const char *file, Sport sport, uint8_t league) {
     const std::string json = slurp(file);
@@ -475,13 +561,18 @@ void test_progress() {
   RCHECK(read("fixtures/event_wnba_ot.json", Sport::BASKETBALL, (uint8_t) League::WNBA) == 1000, "overtime");
 }
 
+// A game read's watch: props only, no favorites.
+PlayerWatch read_watch(const Prop *props, uint8_t league) {
+  static const FavPlayer none[kPlayerSlots]{};
+  return roster_watch(watch_roster(none, props), league);
+}
+
 void test_soccer() {
   const std::string json = slurp("fixtures/event_epl_final.json");
-  PlayerWatch w;
   Prop props[kPropSlots]{};
   props[0] = prop("0,epl,280555,359,SAKA,goal,yes,");
   props[1] = prop("0,nfl,3918298,2,ALLEN,td,yes,");
-  prop_watch_add(w, props, EPL);
+  const PlayerWatch w = read_watch(props, EPL);
   RCHECK(w.n == 1 && w.ids[0] == 280555, "soccer prop players join the game read");
   GameSnapshot g;
   RCHECK(parse_event(json, Sport::SOCCER, 359, g, "", &w), "the final parses");
@@ -498,15 +589,12 @@ void test_soccer() {
   et[0] = prop("0,epl,45843,359,EARLY,goal,yes,");
   et[1] = prop("0,epl,233937,359,LATE,goal,yes,");
   et[2] = prop("0,epl,332394,359,LATER,goal,yes,");
-  PlayerWatch ew;
-  prop_watch_add(ew, et, EPL);
+  const PlayerWatch ew = read_watch(et, EPL);
   GameSnapshot a;
   RCHECK(parse_event(aet, Sport::SOCCER, 202, a, "", &ew), "the extra-time final parses");
   RCHECK(soccer_goals(a, 45843) == 2, "29' counts");
   RCHECK(soccer_goals(a, 233937) == 0 && soccer_goals(a, 332394) == 0, "92' and 103' in extra time don't");
-  PlayerWatch nfl;
-  prop_watch_add(nfl, props, NFL);
-  RCHECK(nfl.n == 0, "other sports read their box score instead");
+  RCHECK(read_watch(props, NFL).n == 0, "other sports read their box score instead");
   const PlayerWatch bw = prop_box_watch(props, NFL);
   RCHECK(bw.n == 1 && bw.ids[0] == 3918298, "the box read keeps the league's prop players");
 }
@@ -538,6 +626,8 @@ int run_prop_tests(int &total_checks) {
   test_grade_box();
   test_box_timing();
   test_store();
+  test_halves();
+  test_sixteen_box();
   test_progress();
   test_soccer();
   test_color();

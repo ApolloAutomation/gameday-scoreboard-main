@@ -412,16 +412,23 @@ void GamedayComponent::setup() {
   if (!this->bets_pref_.load(&this->bets_.blob))
     this->bets_.blob = ::espn::BetBlob{};
   this->bets_.loaded();
-  this->props_pref_ = global_preferences->make_preference<::espn::PropBlob>(fnv1_hash("gameday_props_v1"));
-  if (!this->props_pref_.load(&this->props_))
-    this->props_ = ::espn::PropBlob{};
+  // Slots 1-8 keep v2026.11.3's key; a failed half stays empty.
+  static const char *const PROP_KEYS[2] = {"gameday_props_v1", "gameday_props2_v1"};
+  static const char *const PLAYER_KEYS[2] = {"gameday_players_v1", "gameday_players2_v1"};
+  this->props_ = ::espn::PropBlob{};
+  this->players_ = ::espn::PlayerBlob{};
+  for (int h = 0; h < 2; h++) {
+    this->props_pref_[h] = global_preferences->make_preference<::espn::PropHalf>(fnv1_hash(PROP_KEYS[h]));
+    ::espn::PropHalf props{};
+    if (this->props_pref_[h].load(&props))
+      ::espn::prop_half_put(this->props_, h, props);
+    this->players_pref_[h] = global_preferences->make_preference<::espn::PlayerHalf>(fnv1_hash(PLAYER_KEYS[h]));
+    ::espn::PlayerHalf players{};
+    if (this->players_pref_[h].load(&players))
+      ::espn::player_half_put(this->players_, h, players);
+  }
   ::espn::props_loaded(this->props_);
-  this->players_pref_ = global_preferences->make_preference<::espn::PlayerBlob>(fnv1_hash("gameday_players_v1"));
-  if (!this->players_pref_.load(&this->players_))
-    this->players_ = ::espn::PlayerBlob{};
-  for (auto &p : this->players_.players)
-    if (!::espn::player_empty(p) && !::espn::player_valid(p))
-      p = ::espn::FavPlayer{};
+  ::espn::players_loaded(this->players_);
 #ifdef GAMEDAY_BETA_CHANNEL
   // Before the update entity's first check, which waits for the main loop.
   this->beta_pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("gameday_beta_v1"));
@@ -948,8 +955,7 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   int index = cup >= 0 ? cup : refresh >= 0 ? refresh : this->fav_shown_;
   FavEntry &e = this->fav_[index];
   this->new_job_();
-  j.players = this->players_;
-  j.props = this->props_;
+  j.roster = ::espn::watch_roster(this->players_.players, this->props_.props);
   j.team = e.team;
   j.our_id = e.team->espn_id;
   j.fav_index = index;
@@ -1205,18 +1211,23 @@ void GamedayComponent::set_player_(const ::espn::SetOp &op) {
   }
   ESP_LOGI(TAG, "Favorite player %u: %s %s (%u)", (unsigned) at, ::espn::league_key((League) p.league), p.name,
            (unsigned) p.athlete);
-  this->players_changed_();
+  this->players_changed_(::espn::player_half_bit(at - 1));
 }
 
 void GamedayComponent::remove_player_(uint8_t league, uint32_t athlete) {
-  if (!::espn::player_drop(this->players_.players, league, athlete))
+  const uint8_t at = ::espn::player_drop(this->players_.players, league, athlete);
+  if (at == 0)
     return;
   ESP_LOGI(TAG, "Favorite player %s %u removed", ::espn::league_key((League) league), (unsigned) athlete);
-  this->players_changed_();
+  this->players_changed_(::espn::player_half_bit(at - 1));
 }
 
-void GamedayComponent::players_changed_() {
-  this->players_pref_.save(&this->players_);
+void GamedayComponent::players_changed_(uint8_t halves) {
+  for (int h = 0; h < 2; h++)
+    if ((halves >> h) & 1) {
+      const ::espn::PlayerHalf half = ::espn::player_half(this->players_, h);
+      this->players_pref_[h].save(&half);
+    }
   if (this->game_.valid)
     this->emit_({});  // the ticker drops a removed player's line now
   else
@@ -1337,7 +1348,7 @@ void GamedayComponent::set_prop_(uint8_t slot, ::espn::Prop p) {
     return;
   }
   ESP_LOGI(TAG, "Prop %u: %s %s", (unsigned) at, ::espn::league_key((League) p.league), ::espn::prop_label(p).c_str());
-  this->props_changed_();
+  this->props_changed_(::espn::prop_half_bit(at - 1));
 }
 
 void GamedayComponent::remove_prop_(uint8_t slot) {
@@ -1345,11 +1356,19 @@ void GamedayComponent::remove_prop_(uint8_t slot) {
     return;
   ESP_LOGI(TAG, "Prop %u removed", (unsigned) slot);
   this->props_.props[slot - 1] = ::espn::Prop{};
-  this->props_changed_();
+  this->props_changed_(::espn::prop_half_bit(slot - 1));
 }
 
-void GamedayComponent::props_changed_() {
-  this->props_pref_.save(&this->props_);
+void GamedayComponent::save_props_(uint8_t halves) {
+  for (int h = 0; h < 2; h++)
+    if ((halves >> h) & 1) {
+      const ::espn::PropHalf half = ::espn::prop_half(this->props_, h);
+      this->props_pref_[h].save(&half);
+    }
+}
+
+void GamedayComponent::props_changed_(uint8_t halves) {
+  this->save_props_(halves);
   this->props_tick_();
   if (this->game_.valid)
     this->emit_({});  // the ticker gets it now
@@ -1365,18 +1384,21 @@ bool GamedayComponent::props_tick_() {
     return false;
   const int64_t now = (int64_t) this->time_->timestamp_now();
   const int64_t midnight = this->next_midnight_(now);
-  bool changed = false;
+  uint8_t dirty = 0;  // prop_half_bit of each changed slot
   // tie false: only props tied already update.
   auto take = [&](const GameSnapshot &snap, uint8_t league, bool tie) {
     ::espn::BetGame g;
     if (!this->bet_game_(snap, league, g))
       return;
-    for (auto &p : this->props_.props) {
-      changed |= tie ? ::espn::prop_observe(p, g, now, midnight) : ::espn::prop_update(p, g, now, midnight);
+    for (int i = 0; i < ::espn::kPropSlots; i++) {
+      ::espn::Prop &p = this->props_.props[i];
+      bool changed = tie ? ::espn::prop_observe(p, g, now, midnight) : ::espn::prop_update(p, g, now, midnight);
       // Soccer grades from the game's own goals.
       if (g.phase == ::espn::BetPhase::FINAL && p.event == g.event && p.league == g.league &&
           p.result == (uint8_t) ::espn::PropResult::NONE && ::espn::league_sport((League) p.league) == ::espn::Sport::SOCCER)
         changed |= ::espn::prop_grade(p, true, ::espn::soccer_goals(snap, p.athlete), now, midnight);
+      if (changed)
+        dirty |= ::espn::prop_half_bit(i);
     }
   };
   take(this->game_, this->board_league_(), !this->visit_.active);
@@ -1388,13 +1410,13 @@ bool GamedayComponent::props_tick_() {
   if (this->jump_.active)
     take(this->jump_game_(), this->jump_.league, false);
   bool gone = false;
-  for (auto &p : this->props_.props)
-    if (::espn::prop_expired(p, now)) {
-      p = ::espn::Prop{};
+  for (int i = 0; i < ::espn::kPropSlots; i++)
+    if (::espn::prop_expired(this->props_.props[i], now)) {
+      this->props_.props[i] = ::espn::Prop{};
+      dirty |= ::espn::prop_half_bit(i);
       gone = true;
     }
-  if (changed || gone)
-    this->props_pref_.save(&this->props_);
+  this->save_props_(dirty);
   return gone;
 }
 
@@ -1551,15 +1573,17 @@ void GamedayComponent::apply_box_job_() {
       // Graded on the final's numbers only.
       const int64_t tnow = (int64_t) this->time_->timestamp_now();
       const int64_t midnight = this->next_midnight_(tnow);
-      bool graded = false;
-      for (auto &p : this->props_.props) {
+      uint8_t graded = 0;  // prop_half_bit of each graded slot
+      for (int i = 0; i < ::espn::kPropSlots; i++) {
+        ::espn::Prop &p = this->props_.props[i];
         if (::espn::prop_empty(p) || p.league != b.league || p.event != b.event ||
             p.result != (uint8_t) ::espn::PropResult::NONE)
           continue;
-        graded |= ::espn::prop_grade_box(p, b.lines, tnow, midnight);
+        if (::espn::prop_grade_box(p, b.lines, tnow, midnight))
+          graded |= ::espn::prop_half_bit(i);
       }
-      if (graded) {
-        this->props_pref_.save(&this->props_);
+      if (graded != 0) {
+        this->save_props_(graded);
         if (::espn::bet_event_id(this->game_.event_id) == j.box_event) {
           this->emit_({});  // WON or LOST shows now
           return;
@@ -3347,8 +3371,7 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   ContainerReader reader(container, this->espn_bytes_);
   GameSnapshot g;
   // Keeps favorite players' leader lines and last-play athletes.
-  ::espn::PlayerWatch watch = ::espn::player_watch(this->job_.players.players, (uint8_t) league);
-  ::espn::prop_watch_add(watch, this->job_.props.props, (uint8_t) league);
+  const ::espn::PlayerWatch watch = ::espn::roster_watch(this->job_.roster, (uint8_t) league);
   bool ok = per_event ? ::espn::parse_event(reader, info->sport, this->our_id_(), g, schedule.event_id, &watch)
                       : ::espn::parse_scoreboard(reader, schedule.event_id, this->our_id_(), g);
   container->end();
@@ -3572,8 +3595,7 @@ GamedayComponent::Job &GamedayComponent::new_job_() {
 void GamedayComponent::start_job_() {
   uint32_t now = millis();
   Job &j = this->new_job_();
-  j.players = this->players_;
-  j.props = this->props_;
+  j.roster = ::espn::watch_roster(this->players_.players, this->props_.props);
   j.team = this->current_team_();
   j.mode = this->effective_mode_();
   j.scan_leagues = this->scan_leagues_();
@@ -5392,8 +5414,7 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
     this->new_job_();
     j.generation = this->a2_gen_;
     j.a2 = A2_JUMP;
-    j.players = this->players_;
-    j.props = this->props_;
+    j.roster = ::espn::watch_roster(this->players_.players, this->props_.props);
     j.our_id = this->jump_.away_id;
     j.schedule.valid = true;
     j.schedule.league = this->jump_.league;
@@ -5440,8 +5461,7 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
   j.generation = this->a2_gen_;
   j.a2 = A2_TEAM;
   j.mode = this->effective_mode_();
-  j.players = this->players_;
-  j.props = this->props_;
+  j.roster = ::espn::watch_roster(this->players_.players, this->props_.props);
   j.team = e.team;
   j.our_id = e.team->espn_id;
   j.schedule = e.sched;

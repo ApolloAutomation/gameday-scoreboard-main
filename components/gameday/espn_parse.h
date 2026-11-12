@@ -211,7 +211,7 @@ struct Racing {
 
 // Empty watch keeps reads unchanged; ESPN ids fit 32 bits.
 struct PlayerWatch {
-  static constexpr int kMax = 16;  // favorite players and prop players
+  static constexpr int kMax = 32;  // favorite players and prop players
   uint32_t ids[kMax]{};
   uint8_t n{0};
   bool has(uint32_t id) const {

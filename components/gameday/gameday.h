@@ -656,10 +656,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
-    // Favorite players as of the job's start.
-    ::espn::PlayerBlob players{};
-    // Player props as of the job's start.
-    ::espn::PropBlob props{};
+    // Favorite and soccer prop players at the job's start.
+    ::espn::WatchRoster roster;
     // A box score read for player props, in a gap.
     bool need_box{false};
     bool box_final{false};  // started after the game's final
@@ -1163,11 +1161,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
   void bets_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
   // Player props: followed like bets, numbers from box scores.
-  ESPPreferenceObject props_pref_;
+  // One per saved half (prop_half_bit).
+  ESPPreferenceObject props_pref_[2];
   ::espn::PropBlob props_{};
   void set_prop_(uint8_t slot, ::espn::Prop p);
   void remove_prop_(uint8_t slot);
-  void props_changed_();
+  void save_props_(uint8_t halves);
+  void props_changed_(uint8_t halves);
   // True when a done prop was dropped.
   bool props_tick_();
   const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
@@ -1192,11 +1192,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void run_box_job_();
   void apply_box_job_();
   void box_failed_(uint32_t took_ms);
-  ESPPreferenceObject players_pref_;
+  // One per saved half (player_half_bit).
+  ESPPreferenceObject players_pref_[2];
   ::espn::PlayerBlob players_{};
   void set_player_(const ::espn::SetOp &op);
   void remove_player_(uint8_t league, uint32_t athlete);
-  void players_changed_();
+  void players_changed_(uint8_t halves);
   // e.g. "ALLEN 21/34, 241 YDS"
   std::vector<std::string> player_lines_(const GameSnapshot &g) const {
     return this->player_lines_(g, this->board_league_());

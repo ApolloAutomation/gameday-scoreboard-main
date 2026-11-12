@@ -438,12 +438,17 @@ the bets are tied to already (`WatchJob::bet_events`, `WatchJob::bets`):
 those bets keep their details and take a result, but no read ties a bet to
 a game or moves one.
 
-**Favorite players.** The owner picks up to eight players on the device
+**Favorite players.** The owner picks up to 16 players on the device
 page, from a team roster the browser reads from ESPN (`player=`,
 `playerdel=`); the panel never reads rosters. `players.h` keeps them in
-their own blob (`PlayerBlob`, `gameday_players_v1`). A game read
-(`fetch_game_`) passes `parse_event` a `PlayerWatch`, the favorites' ids
-in that game's league from the job's copy of the list. With none, the
+`PlayerBlob`, saved as two 8-slot halves (`PlayerHalf`): slots 1-8 under
+v2026.11.3's key (`gameday_players_v1`), so an update keeps them, and slots
+9-16 under `gameday_players2_v1`; a change saves only the half it touched
+(`player_half_bit`). A job takes a `WatchRoster` at its start
+(`watch_roster`: the favorites' ids and leagues, then the soccer prop
+players'), and a game read (`fetch_game_`) passes `parse_event` a
+`PlayerWatch` of the roster's ids in that game's league (`roster_watch`,
+each id once). With none, the
 filter and the parse are as before; with any, the read also keeps the
 last play's id, points and athletes, ESPN's leaders (football's for the
 game, basketball's per team, baseball's both) for the favorites only, and
@@ -473,8 +478,10 @@ from while the board was away unsplashed, as it does the team's.
 **Player props.** The owner types props in on the device page (`prop=`,
 `propdel=`, slot 0 the first empty), picking the player from a roster the
 browser reads, or from the favorite players: over or under a half-point
-line on one stat, or a yes prop. `props.h` holds up to eight `Prop`
-records in their own blob (`PropBlob`, `gameday_props_v1`) and the stats
+line on one stat, or a yes prop. `props.h` holds up to 16 `Prop`
+records in `PropBlob`, saved as two 8-slot halves (`PropHalf`) the way the
+favorite players are (`gameday_props_v1` for slots 1-8,
+`gameday_props2_v1` for 9-16, `prop_half_bit`), and the stats
 (`kPropStats`: each a sum of up to three box score columns, its "atoms",
 which `build_web.py` copies into the bundle). A prop ties to its player's
 team's game the way a bet does (`bet_tie`, shared with `bet_observe`), on
@@ -492,7 +499,7 @@ pace (`game_progress`, `prop_status`) and the ticker words
 props (`prop_grade`, VOID for a player the box score never lists) and the
 result stays until midnight. Soccer reads no box score: its anytime goal
 counts the game read's goals, whose scorers' ids the read keeps when a
-soccer prop is in the league (`prop_watch_add`). The state document lists
+soccer prop is in the league (the job's `WatchRoster`). The state document lists
 every prop with its number (`v`, half units) and status.
 
 **Golf.** A golf tour (`League::PGA`, `League::LPGA`, `Sport::GOLF`) is a

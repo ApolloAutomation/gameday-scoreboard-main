@@ -604,10 +604,18 @@ def bet_line(v, spread):
     return half if 1 <= half <= LIMITS["kBetMaxTotalHalf"] else None
 
 
+def parse_slot(v, top, free_ok):
+    """parse_slot() (set_request.h): slot 1 to top, 0 with free_ok."""
+    if not re.fullmatch(r"[0-9]{1,2}", v, re.ASCII) or (len(v) == 2 and v[0] == "0"):
+        return None
+    n = int(v)
+    return n if (0 if free_ok else 1) <= n <= top else None
+
+
 def parse_bet(v):
     """parse_bet() (set_request.h): (slot, league, team id, type, half) or None. Slot 0 is the first empty one."""
     f = v.split(",")
-    if len(f) != 5 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kBetSlots"]):
+    if len(f) != 5 or parse_slot(f[0], LIMITS["kBetSlots"], True) is None:
         return None
     lg, tid, kind, line = f[1], f[2], f[3], f[4]
     if lg not in LEAGUES or lg in BOARD or not re.fullmatch(r"\d{1,10}", tid, re.ASCII) or (lg, int(tid)) not in TEAMS:
@@ -669,7 +677,8 @@ def put_bet(slot, doc):
 def parse_prop(v):
     """parse_prop() (set_request.h): (slot, entry) or None. Slot 0 is the first empty one."""
     f = v.split(",")
-    if len(f) != 8 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kPropSlots"]):
+    slot = parse_slot(f[0], LIMITS["kPropSlots"], True)
+    if len(f) != 8 or slot is None:
         return None
     lg, athlete, team_id, name = f[1], espn_id(f[2]), espn_id(f[3]), clean_player_name(f[4])
     if lg not in LEAGUES or lg in BOARD or lg in NOT_ESPN or athlete is None or team_id is None \
@@ -686,7 +695,7 @@ def parse_prop(v):
         side, half = None, None
     if side is None or half is None:
         return None
-    return int(f[0]), prop_doc(0, lg, athlete, team_id, name, f[5], side, half)
+    return slot, prop_doc(0, lg, athlete, team_id, name, f[5], side, half)
 
 
 def prop_doc(slot, lg, athlete, team_id, name, stat, side, half):
@@ -856,15 +865,17 @@ def apply_set(kv):
             if re.match(r"\s*[+-]?\d", v, re.ASCII) and 0 <= atoi(v) < 1 << LIMITS["kAlertBits"]:
                 STATE["alerts"] = atoi(v)
         elif k == "betdel":
-            if len(v) == 1 and "1" <= v <= str(LIMITS["kBetSlots"]):
-                put_bet(int(v), None)
+            slot = parse_slot(v, LIMITS["kBetSlots"], False)
+            if slot is not None:
+                put_bet(slot, None)
         elif k == "bet":
             bet = parse_bet(v)
             if bet:
                 put_bet(bet[0], bet_on_board(bet_doc(*bet)))
         elif k == "propdel":
-            if len(v) == 1 and "1" <= v <= str(LIMITS["kPropSlots"]):
-                put_prop(int(v), None)
+            slot = parse_slot(v, LIMITS["kPropSlots"], False)
+            if slot is not None:
+                put_prop(slot, None)
         elif k == "prop":
             got = parse_prop(v)
             if got:
