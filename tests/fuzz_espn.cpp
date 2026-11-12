@@ -15,6 +15,7 @@
 
 #include "captive.h"
 #include "espn_parse.h"
+#include "app_f1.h"
 #include "f1.h"
 #include "logo_lru.h"
 #include "panel_text.h"
@@ -469,6 +470,10 @@ size_t f1(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
   F1Weather wx;
   ChunkReader r8(data, size, chunk);
   parse_f1_weather(r8, wx);
+  F1Weather met;
+  ChunkReader r9(data, size, chunk);
+  if (parse_met_weather(r9, now, met) == 1 && !met.valid)
+    abort();
   if (sched.n > kF1Sessions || drivers.n > kF1Keep || teams.n > kF1Keep || res.n > kF1Keep)
     abort();
   if (have_live)
@@ -494,6 +499,51 @@ size_t f1(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
     n += f1_poll_ms(r, sched, now);
   n += f1_weather_url(sched.lat_e4, sched.lon_e4).size() + f1_circuit_url(facts.record_athlete).size();
   return n;
+}
+
+// The F1 display fed the input as every read.
+size_t f1_app(const uint8_t *data, size_t size, int64_t now) {
+  F1App a;
+  for (int i = 0; i < 12; i++) {
+    AppRequest rq;
+    if (!a.request(now, rq))
+      break;
+    JsonDocument filter, doc;
+    const bool ok = a.filter(filter) &&
+                    !deserializeJson(doc, (const char *) data, size, DeserializationOption::Filter(filter),
+                                     DeserializationOption::NestingLimit(40)) &&
+                    a.parse_doc(doc.as<JsonObjectConst>(), now);
+    a.ended(AppResult{ok ? 200 : 500, false, 0});
+    a.apply(ok, now);
+  }
+  auto glyphs = [](const std::string &s) {
+    size_t n = 0;
+    for (char c : s)
+      n += ((unsigned char) c & 0xC0) != 0x80;
+    return n;
+  };
+  size_t n = 0;
+  for (int w : {64, 128, 192, 256})
+    for (int64_t t = now; t < now + 60; t += 7) {
+      AppFrame f;
+      a.frame(w, 64, t, f);
+      const BoardLines &b = f.rows;
+      const bool wide = w >= 128;
+      if (b.name.size() > 6 || b.pos.size() != b.name.size() || b.value.size() != b.name.size() ||
+          b.detail.size() != b.name.size() || glyphs(b.status) > (wide ? (size_t) (w - 2) / 5 : 12) ||
+          (wide && !b.title.empty() &&
+           glyphs(b.title) + glyphs(b.status) + (b.status.empty() ? 0 : 1) > (size_t) (w - 2) / 5))
+        abort();
+      for (size_t i = 0; i < b.name.size(); i++)
+        if (glyphs(b.pos[i]) > 2 || glyphs(b.name[i]) > (wide ? 11 : b.value_narrow ? 7 : 10) ||
+            glyphs(b.value[i]) > 3 || glyphs(b.detail[i]) > 6)
+          abort();
+      for (const AppPoint &p : f.line.pts)
+        if (p.x < 0 || p.x >= w || p.y < 8 || p.y >= 56)
+          abort();
+      n += f.ticker.size() + esphome::gameday::ticker_markup(esphome::gameday::panel_text(f.ticker), f.spans).size();
+    }
+  return n + a.poll_ms(now) + (a.busy(now) ? 1 : 0);
 }
 
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
@@ -615,6 +665,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   sink = sink + f1(data, size, chunk, now);
+  sink = sink + f1_app(data, size, now);
 
   {
     // A racing series: its header, then the calendar for the next race weekend

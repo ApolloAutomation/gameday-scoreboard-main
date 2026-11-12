@@ -215,6 +215,15 @@ above:
 | `openmeteo_vegas.json` | `https://api.open-meteo.com/v1/forecast?latitude=36.1147&longitude=-115.173&current=temperature_2m,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_hours=3`: clear |
 | `openmeteo_monaco.json` | The same at 43.7347, 7.4206: rain (code 61), 0.2 mm, 100% chance |
 
+The F1 display's weather backup, MET Norway's compact forecast, recorded
+2026-11-12 at 05:04 UTC with the User-Agent
+`GameDayScoreboard/2026.11.2 github.com/ApolloAutomation/gameday-scoreboard-main`:
+
+| File | Source |
+| --- | --- |
+| `met_vegas.json` | `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=36.1750&lon=-115.1364`: clear, 90 hours from 04:00 UTC. Whole, 40 KB |
+| `met_monaco.json` | The same at 43.7347, 7.4206: heavy rain, 2.4 mm in the first hour. Trimmed to its first six hours |
+
 Minor league baseball, from the MLB Stats API's schedule endpoint
 (`https://statsapi.mlb.com/api/v1/schedule`), recorded 2026-11-08 between
 22:50 and 23:30 UTC with a `curl/8.0` User-Agent, each with the exact query

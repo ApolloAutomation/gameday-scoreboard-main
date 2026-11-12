@@ -19,6 +19,7 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "app_f1.h"
 #include "f1.h"
 #include "props.h"
 #include "watch.h"
@@ -344,6 +345,13 @@ int main() {
     measure("f1_weather", [&] {
       F1Weather w;
       return parse_f1_weather(json, w) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/met_vegas.json");
+    measure("f1_met_weather", [&] {
+      F1Weather w;
+      return parse_met_weather(json, parse_iso8601_z("2026-11-12T05:04:00Z"), w) == 1;
     });
   }
   {
