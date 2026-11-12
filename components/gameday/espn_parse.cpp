@@ -400,7 +400,7 @@ Splash decide_splash(const GameSnapshot &prev, const GameSnapshot &cur, bool opp
   if (p.type != Alert::NONE &&
       (win.text.empty() || p.type == Alert::WALK_OFF || p.type == Alert::BUZZER_BEATER)) {
     Splash s = big_play_splash(p, cur, neutral, wide);
-    splash_anim(s, p.type, cur);
+    splash_anim(s, p.type, prev, cur, p.side);
     return s;
   }
   return win;

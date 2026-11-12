@@ -48,7 +48,8 @@ void render(const std::string &dir, AnimKind kind, int w, int h, const Kit2 &kit
 
 int main(int argc, char **argv) {
   const std::string dir = argc > 1 ? argv[1] : "build/review";
-  for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN})
+  for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN,
+                     AnimKind::SOCCER_GOAL})
     for (const auto &s : kSceneScreens) {
       for (const Kit2 &kit : kReviewKits)
         render(dir, k, s[0], s[1], kit, false);

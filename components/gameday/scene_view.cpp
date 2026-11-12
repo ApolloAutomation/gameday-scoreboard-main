@@ -14,6 +14,8 @@ namespace esphome::gameday {
 namespace {
 
 const char *const TAG = "gameday.scene";
+// After a stall this long, the whole frame redraws
+constexpr uint32_t kResyncMs = 180;
 
 struct SceneState {
   lv_obj_t *canvas{nullptr};
@@ -69,8 +71,13 @@ void tick(lv_timer_t *) {
     return;
   }
   ::espn::PxBox boxes[2 * ::espn::kSceneBoxes];
-  int n = ::espn::scene_boxes(s.sc, s.t_prev, boxes);
-  n += ::espn::scene_boxes(s.sc, t, boxes + n);
+  int n = 0;
+  if (t - s.t_prev > kResyncMs) {
+    boxes[n++] = ::espn::PxBox{0, 0, s.w, s.h};
+  } else {
+    n = ::espn::scene_boxes(s.sc, s.t_prev, boxes);
+    n += ::espn::scene_boxes(s.sc, t, boxes + n);
+  }
   // Overlapping boxes merge, so no pixel draws twice
   for (int i = 0; i < n; i++)
     for (int j = i + 1; j < n; j++)
@@ -135,7 +142,7 @@ bool ensure(lv_obj_t *screen, int w, int h) {
 
 bool scene_play(lv_obj_t *host, const ::espn::AnimArgs &a, uint32_t color, uint32_t other, uint32_t seed,
                 void (*done)()) {
-  if (host == nullptr || a.kind == ::espn::AnimKind::NONE)
+  if (host == nullptr || ::espn::scene_ms(a.kind) == 0)
     return false;
   lv_obj_t *screen = lv_obj_get_screen(host);
   // Another page, or the guard's: no scene

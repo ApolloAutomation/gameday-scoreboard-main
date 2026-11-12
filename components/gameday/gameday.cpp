@@ -2088,10 +2088,12 @@ void GamedayComponent::try_anim_(const std::string &play) {
     return;
   }
   ::espn::AnimArgs a;
-  a.kind = play == "run"   ? ::espn::AnimKind::TD_RUN
-           : play == "ret" ? ::espn::AnimKind::TD_RETURN
-           : play == "hr"  ? ::espn::AnimKind::HOME_RUN
-                           : ::espn::AnimKind::TD_PASS;
+  a.kind = play == "run"      ? ::espn::AnimKind::TD_RUN
+           : play == "ret"    ? ::espn::AnimKind::TD_RETURN
+           : play == "hr"     ? ::espn::AnimKind::HOME_RUN
+           : play == "soccer" ? ::espn::AnimKind::SOCCER_GOAL
+           : play == "hockey" ? ::espn::AnimKind::HOCKEY_GOAL
+                              : ::espn::AnimKind::TD_PASS;
   if (a.kind == ::espn::AnimKind::HOME_RUN) {
     a.dist = 410;
     a.flags = 3 << ::espn::kAnimFieldShift;
@@ -6459,7 +6461,8 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
       f.splash_side = 1;
     f.splash_lead = splash.lead;
     f.splash_points = splash.points;
-    f.splash_anim = splash.anim;
+    // A scene needs to know whose play it was
+    f.splash_anim = f.splash_side == 0 || f.splash_side == 1 ? splash.anim : 0;
     f.splash_anim_dist = splash.anim_dist;
     // The board's right team scores leftward
     f.splash_anim_flags = (uint8_t) ((splash.anim_flags & ~::espn::kAnimMirror) |

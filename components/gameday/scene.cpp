@@ -13,6 +13,13 @@ constexpr int kEzDim = 30;
 constexpr uint32_t kPost = 0xE8C820, kRail = 0x2A2A2A, kShadow = 0x041A08;
 constexpr uint32_t kBall[3] = {0xB0602A, 0xD08040, 0x8A4A1C};
 constexpr uint32_t kSkin[3][2] = {{0xF1C27D, 0xC68642}, {0xC68642, 0x8D5524}, {0x8D5524, 0x5C3A1E}};
+constexpr uint32_t kHair[4] = {0x8A5A30, 0x5C3A1E, 0xC8A050, 0x3C2A1C};
+constexpr uint32_t kPitchLine = 0x8AA88A, kMesh = 0x8C8C8C, kGoalFrame = 0xF0F0F0;
+// Keepers wear the first of these clear of both kits
+constexpr uint32_t kKeeperKits[] = {0xF0D020, 0xF07818, 0x30C8E8, 0xD040D0};
+// Goal scenes: the play, then the word
+constexpr uint32_t kSoccerMs = 3000, kWordMs = 1800;
+constexpr uint32_t kShotMs = 850, kNetMs = 2050, kSlideMs = 2100;
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 int lerp(int a, int b, int num, int den) { return den <= 0 ? b : a + (b - a) * clampi(num, 0, den) / den; }
@@ -61,10 +68,42 @@ void palette(uint16_t pal[16], const Kit &k, uint32_t seed) {
     pal[i] = rgb565(rgb[i]);
 }
 
+// Soccer: H hair, P shorts in the trim, B gloves
+void palette_soccer(uint16_t pal[16], const Kit &k, uint32_t seed) {
+  palette(pal, k, seed);
+  pal[6] = rgb565(kHair[hash32(seed * 7 + 3) % 4]);
+  pal[7] = rgb565(k.trim);
+  pal[11] = rgb565(0xF0F0F0);
+}
+
+// Letters: J fill, T shade; hi is the white flash
+void palette_word(uint16_t pal[16], uint16_t hi[16], const Kit &k) {
+  const uint32_t shade = dist(k.trim, k.jersey) > 120 ? k.trim : dim_rgb(k.jersey, 50);
+  for (int i = 0; i < 16; i++)
+    pal[i] = hi[i] = 0;
+  pal[4] = rgb565(k.jersey);
+  pal[5] = rgb565(shade);
+  hi[4] = rgb565(0xFFFFFF);
+  hi[5] = rgb565(k.jersey);
+}
+
+bool greenish(uint32_t c) {
+  const int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+  return g > r + 24 && g > b + 24;
+}
+
+uint32_t keeper_rgb(uint32_t a, uint32_t b) {
+  for (uint32_t c : kKeeperKits)
+    if (dist(c, a) >= 200 && dist(c, b) >= 200 && !greenish(c))
+      return c;
+  return dist(0xF0D020, a) + dist(0xF0D020, b) > dist(0xD040D0, a) + dist(0xD040D0, b) ? 0xF0D020 : 0xD040D0;
+}
+
 struct Actor {
   const Sprite *spr{nullptr};
   int x{0}, y{0};
   bool def{false}, flip{false};
+  bool keeper{false};
 };
 
 struct Stage {
@@ -80,6 +119,10 @@ struct Stage {
   int ball_px{0};      // a baseball's size, 0 a football
   bool spark{false};   // bat meets ball
   bool caption{false};
+  int ball_kind{0};    // 1 a soccer ball, else as ball_px says
+  int spin{0};         // the ball's frame
+  int net_amp{0}, net_y{0};  // the net's bulge and where
+  bool in_net{false};  // the ball behind the mesh
 };
 
 const Sprite &run_frame(uint32_t t) { return kSprRun[(t / 100) % 4]; }
@@ -98,7 +141,12 @@ int on_stage(const StageGeom &g, int x) { return clampi(x, 7 * g.s, g.w - 9 * g.
 
 void add(Stage &st, const Sprite &spr, int x, int y, bool def, bool flip = false) {
   if (st.n < 4)
-    st.actors[st.n++] = Actor{&spr, x, y, def, flip};
+    st.actors[st.n++] = Actor{&spr, x, y, def, flip, false};
+}
+
+void add_keeper(Stage &st, const Sprite &spr, int x, int y) {
+  if (st.n < 4)
+    st.actors[st.n++] = Actor{&spr, x, y, true, true, true};
 }
 
 int pass_span(const Scene &sc) {
@@ -334,6 +382,133 @@ PxBox caption_box(const Scene &sc) {
   return PxBox{(int16_t) ((sc.g.w - w) / 2), (int16_t) (4 * s), (int16_t) w, (int16_t) (5 * s)};
 }
 
+// The net's back at row y, before any bulge
+int net_back(const StageGeom &g, int y) {
+  return g.roof_x + (g.back_x - g.roof_x) * (y - g.bar_y) / (g.feet_y - g.bar_y);
+}
+
+// How far the back bulges at row y
+int net_push(const StageGeom &g, const Stage &st, int y) {
+  const int r = 8 * g.s, dy = abs(y - st.net_y);
+  return st.net_amp == 0 || dy >= r ? 0 : st.net_amp * (r - dy) / r;
+}
+
+// A ripple from the hit: out, back, out again
+int ripple_at(const StageGeom &g, uint32_t t, uint32_t from) {
+  static const int kSteps[] = {2, 4, 5, 4, 2, 0, 1, 3, 2, 1};
+  if (t < from)
+    return 0;
+  const uint32_t k = (t - from) / 66;
+  return k < sizeof(kSteps) / sizeof(kSteps[0]) ? kSteps[k] * g.s : 0;
+}
+
+int kick_x(const StageGeom &g) { return on_stage(g, std::max(16 * g.s, g.w * 16 / 100)); }
+
+// The shot: a rising drive into the top corner
+void shot_at(const Scene &sc, uint32_t t, int &x, int &y) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, U = (int) (kNetMs - kShotMs);
+  const int x0 = kick_x(g) + s, y0 = g.feet_y - 2 * s;
+  const int y1 = g.bar_y + 5 * s, x1 = net_back(g, y1) - s;
+  const int u = clampi((int) t - (int) kShotMs, 0, U);
+  x = x0 + (x1 - x0) * u / U;
+  y = y0 + (y1 - y0) * u / U - (int) (4LL * 8 * s * u * (U - u) / ((long long) U * U));
+}
+
+int keeper_x(const StageGeom &g) { return g.goal_x - 7 * g.s; }
+
+// The dive peaks as the ball passes his hands
+uint32_t dive_ms(const Scene &sc) {
+  const StageGeom &g = sc.g;
+  int x0, x1, y;
+  shot_at(sc, kShotMs, x0, y);
+  shot_at(sc, kNetMs, x1, y);
+  const int hands = keeper_x(g) - 8 * g.s;
+  const int u = x1 > x0 ? clampi((hands - x0) * 1000 / (x1 - x0), 0, 1000) : 1000;
+  return kShotMs + (kNetMs - kShotMs) * (uint32_t) u / 1000 - 250;
+}
+
+void stage_soccer(const Scene &sc, uint32_t t, Stage &st) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, feet = g.feet_y, kx = kick_x(g), sx = kx - 5 * s;
+  const int x0 = on_stage(g, sx - 26 * s);
+  // Keeper: set, then a dive under the ball
+  const int kp = keeper_x(g);
+  const uint32_t dive = dive_ms(sc);
+  if (t < dive) {
+    add_keeper(st, kSprKpr[SPR_KPR_SET], kp, feet);
+  } else {
+    const int u = std::min((int) (t - dive), 500);
+    const int x = clampi(lerp(kp + 2 * s, kp - 3 * s, u, 500), 12 * s, g.w - 13 * s);
+    const int up = 3 * s * (500 - u) / 500 + (int) (4LL * 7 * s * u * (500 - u) / (500 * 500));
+    add_keeper(st, kSprKpr[SPR_KPR_DIVE], x, feet - up);
+  }
+  // A defender chases, a step too late
+  if (g.w >= 128) {
+    const int d1 = on_stage(g, sx - 13 * s), d0 = on_stage(g, x0 - 14 * s);
+    if (t < kShotMs)
+      add(st, kSprSoc[(t / 100 + 2) % 4], lerp(d0, d1, (int) t, (int) kShotMs), feet, true);
+    else
+      add(st, kSprSoc[SPR_SOC_STAND], d1, feet, true);
+  }
+  // Striker: runs onto it, strikes, slides on his knees
+  const int slide = clampi(g.w / 6, 8 * s, 30 * s);
+  int x = sx;
+  const Sprite *me = &kSprSoc[SPR_SOC_STAND];
+  if (t < 750) {
+    x = lerp(x0, sx, (int) t, 750);
+    me = &kSprSoc[(t / 100) % 4];
+  } else if (t < kShotMs) {
+    me = &kSprSoc[SPR_SOC_PLANT];
+  } else if (t < kShotMs + 300) {
+    me = &kSprSoc[SPR_SOC_KICK];
+  } else if (t >= kSlideMs && t < kSlideMs + 400) {
+    const int u = (int) (t - kSlideMs);
+    x = sx + slide - slide * (400 - u) * (400 - u) / (400 * 400);
+    me = &kSprSoc[SPR_SOC_SLIDE];
+  } else if (t >= kSlideMs) {
+    x = sx + slide;
+    me = &kSprSoc[((t - kSlideMs) / 300) % 2 ? SPR_SOC_SLIDE : SPR_SOC_CHEER];
+  }
+  add(st, *me, x, feet, false);
+  st.hero_x = x;
+  // The ball: rolls in, flies, bulges the net, drops
+  st.ball = true;
+  st.ball_kind = 1;
+  if (t < kShotMs) {
+    const int u = std::min((int) t, 750);
+    st.bx = lerp(x0 + 9 * s, kx, 750 * 750 - (750 - u) * (750 - u), 750 * 750);
+    st.by = feet - 2 * s;
+    st.spin = (st.bx / (2 * s)) & 3;
+    return;
+  }
+  if (t < kNetMs) {
+    shot_at(sc, t, st.bx, st.by);
+    st.spin = (int) ((t / 50) & 3);
+    st.shadow_x = st.bx;
+    if (g.w >= 128)
+      for (int k = 1; k <= 2; k++)
+        if (t >= kShotMs + 50u * k) {
+          shot_at(sc, t - 50 * k, st.trail_x[k - 1], st.trail_y[k - 1]);
+          st.trails = k;
+        }
+    st.in_net = st.bx > g.goal_x + s;
+    return;
+  }
+  int x1, y1;
+  shot_at(sc, kNetMs, x1, y1);
+  const int u = std::min((int) (t - kNetMs), 500), rest = feet - 2 * s;
+  st.bx = lerp(x1, (g.goal_x + g.back_x) / 2 + s, u, 500);
+  if (u < 300)
+    st.by = y1 + (rest - y1) * u * u / (300 * 300);
+  else
+    st.by = rest - (int) (4LL * 3 * s * (u - 300) * (500 - u) / (200 * 200));
+  st.spin = u < 500 ? (int) ((t / 80) & 3) : 0;
+  st.in_net = true;
+  st.net_amp = ripple_at(g, t, kNetMs);
+  st.net_y = y1;
+}
+
 void stage_at(const Scene &sc, uint32_t t, Stage &st) {
   switch (sc.args.kind) {
     case AnimKind::TD_PASS:
@@ -348,9 +523,81 @@ void stage_at(const Scene &sc, uint32_t t, Stage &st) {
     case AnimKind::HOME_RUN:
       stage_hr(sc, t, st);
       break;
+    case AnimKind::SOCCER_GOAL:
+      stage_soccer(sc, t, st);
+      break;
     default:
       break;
   }
+}
+
+// ---- The GOAL word ----
+
+uint32_t play_ms(AnimKind k) { return k == AnimKind::SOCCER_GOAL ? kSoccerMs : 0; }
+
+struct WordAt {
+  int n{0}, x0{0}, y0{0}, step{0};
+  uint32_t t0{0};
+};
+
+WordAt word_of(const Scene &sc) {
+  WordAt w;
+  const StageGeom &g = sc.g;
+  w.n = word_letters(g);
+  w.x0 = (g.w - (w.n * 10 - 1) * g.s) / 2;
+  w.y0 = (g.crowd_y - 16 * g.s) / 2;
+  w.step = std::min(90, 900 / w.n);
+  w.t0 = play_ms(sc.args.kind);
+  return w;
+}
+
+constexpr uint32_t kPopMs = 66, kWordWinMs = 200, kPulseMs = 1150;
+
+// 0 hidden, 1 settled, 2 and 3 popping in
+int letter_state(const WordAt &w, int i, uint32_t t) {
+  const uint32_t at = w.t0 + (uint32_t) (i * w.step);
+  if (t < at)
+    return 0;
+  if (t - at < kPopMs / 2)
+    return 3;
+  return t - at < kPopMs ? 2 : 1;
+}
+
+// White steps of the closing pulse
+bool word_white(const WordAt &w, uint32_t t) {
+  if (t < w.t0 + kPulseMs)
+    return false;
+  const uint32_t k = (t - w.t0 - kPulseMs) / 100;
+  return k == 0 || k == 2;
+}
+
+bool word_pulsing(const WordAt &w, uint32_t t) { return t >= w.t0 + kPulseMs && t < w.t0 + kPulseMs + 300; }
+
+PxBox letter_box(const StageGeom &g, const WordAt &w, int i, int j) {
+  const int s = g.s;
+  return PxBox{(int16_t) (w.x0 + i * 10 * s), (int16_t) (w.y0 - 2 * s), (int16_t) (((j - i) * 10 + 9) * s),
+               (int16_t) (18 * s)};
+}
+
+// What changed in the word near t, on the picture
+PxBox word_box(const Scene &sc, uint32_t t) {
+  if (play_ms(sc.args.kind) == 0)
+    return PxBox{};
+  const WordAt w = word_of(sc);
+  if (t < w.t0)
+    return PxBox{};
+  if (word_pulsing(w, t))
+    return letter_box(sc.g, w, 0, w.n - 1);
+  int i0 = -1, i1 = -1;
+  for (int i = 0; i < w.n; i++) {
+    const uint32_t at = w.t0 + (uint32_t) (i * w.step);
+    if (t >= at && t - at < kWordWinMs) {
+      if (i0 < 0)
+        i0 = i;
+      i1 = i;
+    }
+  }
+  return i0 < 0 ? PxBox{} : letter_box(sc.g, w, i0, i1);
 }
 
 PxBox ball_box(const StageGeom &g, int x, int y) {
@@ -381,11 +628,47 @@ uint32_t park_rgb(const Scene &sc, int lx, int y) {
   return floordiv(u, g.stripe) & 1 ? kTurfB : kTurfA;
 }
 
-uint32_t bg_rgb(const Scene &sc, int lx, int y, int pulse) {
+// Pitch: a goal box, the goal line and the net
+uint32_t pitch_rgb(const Scene &sc, int lx, int y, const Stage &st) {
   const StageGeom &g = sc.g;
-  const int s = g.s;
+  const int s = g.s, post = g.goal_x;
+  if (lx >= post && lx < post + s && y >= g.bar_y && y < g.feet_y + s)
+    return kGoalFrame;
+  if (y >= g.bar_y && y < g.bar_y + s && lx >= post && lx <= g.roof_x)
+    return kGoalFrame;
+  uint32_t c;
+  if (y < g.crowd_y) {
+    c = 0;
+  } else if (y < g.field_y) {
+    c = y == g.field_y - 1 ? kRail : crowd_rgb(sc, lx, y);
+  } else {
+    const int u = lx - floordiv(g.feet_y - y, 3 * s), box = post - clampi(g.w / 6, 12 * s, 40 * s);
+    const bool line = (u >= post && u < post + s) || (u >= box && u < box + s && y >= g.field_y + 2 * s) ||
+                      (y >= g.field_y + 2 * s && y < g.field_y + 3 * s && u >= box && u < post);
+    c = line ? kPitchLine : floordiv(u, g.stripe) & 1 ? kTurfB : kTurfA;
+  }
+  if (y <= g.bar_y || y > g.feet_y || lx <= post)
+    return c;
+  // Inside the net, stretched where it bulges
+  const int edge0 = net_back(g, y), edge = edge0 + net_push(g, st, y);
+  if (lx > edge)
+    return c;
+  if (lx == edge)
+    return kMesh;
+  const int ux = post + (lx - post) * (edge0 - post) / (edge - post);
+  const int mx = (ux - post) / s, my = (y - g.bar_y) / s;
+  if (((mx + my) & 3) == 0 || ((mx - my + 4096) & 3) == 0)
+    return kMesh;
+  return dim_rgb(c, 45);
+}
+
+uint32_t bg_rgb(const Scene &sc, int lx, int y, const Stage &st) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, pulse = st.pulse;
   if (sc.args.kind == AnimKind::HOME_RUN)
     return park_rgb(sc, lx, y);
+  if (sc.args.kind == AnimKind::SOCCER_GOAL)
+    return pitch_rgb(sc, lx, y, st);
   // Goal post at the end line, uprights into the sky
   const int post = g.w - 3 * s, bar_y = g.crowd_y - 2 * s;
   if (lx >= post && lx < post + s && y >= bar_y && y < g.field_y + 6 * s)
@@ -408,6 +691,43 @@ uint32_t bg_rgb(const Scene &sc, int lx, int y, int pulse) {
   if (back % (2 * g.stripe) < s)
     return kTurfLine;
   return floordiv(back, g.stripe) & 1 ? kTurfB : kTurfA;
+}
+
+// The spinning ball, hidden by the net's mesh
+void soccer_ball(Px565 &p, const Scene &sc, const Stage &st) {
+  const Sprite &b = kSprSball[st.spin & 3];
+  const int s = sc.g.s;
+  const PxBox box = sprite_box(b, st.bx, st.by, s, false);
+  for (int sy = 0; sy < b.h; sy++)
+    for (int sx = 0; sx < b.w; sx++) {
+      const int i = sy * b.w + sx;
+      const uint8_t v = (b.px[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+      if (v == 0)
+        continue;
+      const int x = box.x + sx * s, y = box.y + sy * s;
+      if (st.in_net && pitch_rgb(sc, x, y, st) == kMesh)
+        continue;
+      p.fill(x, y, s, s, sc.off[v]);
+    }
+}
+
+// Left to right even when mirrored
+void draw_word(Px565 &p, const Scene &sc, uint32_t t) {
+  if (play_ms(sc.args.kind) == 0 || t < play_ms(sc.args.kind))
+    return;
+  const WordAt w = word_of(sc);
+  const bool m = p.mirror, white = word_white(w, t);
+  p.mirror = false;
+  const int s = sc.g.s;
+  for (int i = 0; i < w.n; i++) {
+    const int k = letter_state(w, i, t);
+    if (k == 0)
+      break;
+    const uint16_t *pal = white || k >= 2 ? sc.word_hi : sc.word;
+    const int lift = k >= 2 ? (k - 1) * s : 0;
+    px_sprite(p, kSprWord[word_glyph(i, w.n)], w.x0 + i * 10 * s, w.y0 - lift, pal, s, false);
+  }
+  p.mirror = m;
 }
 
 }  // namespace
@@ -463,6 +783,14 @@ Kit kit_against(const Kit &mine, uint32_t primary, uint32_t alt) {
   return k;
 }
 
+int word_letters(const StageGeom &g) { return clampi((g.w - 2 * g.s) / (10 * g.s), 4, 40); }
+
+int word_glyph(int i, int n) {
+  const int rest = n - 1, l = std::max(1, rest * 25 / 100), a = std::max(1, rest * 30 / 100);
+  const int o = rest - a - l;
+  return i <= 0 ? 0 : i <= o ? 1 : i <= o + a ? 2 : 3;
+}
+
 Scene scene_make(const AnimArgs &a, int w, int h, uint32_t color, uint32_t alt, uint32_t other, uint32_t other_alt,
                  uint32_t seed) {
   Scene sc;
@@ -475,6 +803,20 @@ Scene scene_make(const AnimArgs &a, int w, int h, uint32_t color, uint32_t alt, 
   const Kit def = kit_against(off, other, other_alt);
   palette(sc.off, off, seed);
   palette(sc.def, def, seed + 1);
+  if (a.kind == AnimKind::SOCCER_GOAL) {
+    StageGeom &g = sc.g;
+    const int s = g.s, d = clampi(w / s / 14, 7, 14) * s;
+    g.back_x = (int16_t) (w - 2 * s);
+    g.goal_x = (int16_t) (g.back_x - d);
+    g.roof_x = (int16_t) (g.goal_x + d / 2);
+    g.bar_y = (int16_t) (g.feet_y - 28 * s);
+    g.ez = (int16_t) (w - g.goal_x);
+    palette_soccer(sc.off, off, seed);
+    palette_soccer(sc.def, def, seed + 1);
+    Kit k{keeper_rgb(off.jersey, def.jersey), 0x202020, 0};
+    palette_soccer(sc.keeper, k, seed + 2);
+  }
+  palette_word(sc.word, sc.word_hi, off);
   sc.ez_rgb = off.jersey;
   sc.crowd_a = dim_rgb(off.jersey, 40);
   sc.crowd_b = dim_rgb(def.jersey, 40);
@@ -491,6 +833,8 @@ uint32_t scene_ms(AnimKind k) {
       return 3000;
     case AnimKind::HOME_RUN:
       return 3600;
+    case AnimKind::SOCCER_GOAL:
+      return kSoccerMs + kWordMs;
     default:
       return 0;
   }
@@ -509,7 +853,12 @@ int scene_boxes(const Scene &sc, uint32_t t, PxBox *out) {
     const Actor &a = st.actors[i];
     out[n++] = px_phys(frame, sprite_box(*a.spr, a.x, a.y, s, a.flip));
   }
-  if (st.ball && st.ball_px > 0) {
+  if (st.ball && st.ball_kind == 1) {
+    PxBox b = sprite_box(kSprSball[0], st.bx, st.by, s, false);
+    for (int k = 0; k < st.trails; k++)
+      b = box_join(b, PxBox{(int16_t) st.trail_x[k], (int16_t) st.trail_y[k], (int16_t) s, (int16_t) s});
+    out[n++] = px_phys(frame, b);
+  } else if (st.ball && st.ball_px > 0) {
     out[n++] = px_phys(frame, PxBox{(int16_t) (st.bx - 3 * s), (int16_t) (st.by - 3 * s), (int16_t) (7 * s),
                                     (int16_t) (7 * s)});
   } else if (st.ball) {
@@ -526,6 +875,10 @@ int scene_boxes(const Scene &sc, uint32_t t, PxBox *out) {
   if (st.pulse != kEzDim)
     out[n++] = px_phys(frame, PxBox{(int16_t) (sc.g.goal_x - sc.g.h / 3), sc.g.field_y, (int16_t) (sc.g.ez + sc.g.h / 3),
                                     (int16_t) (sc.g.h - sc.g.field_y)});
+  if (st.net_amp != 0)
+    out[n++] = px_phys(frame, PxBox{sc.g.goal_x, (int16_t) (st.net_y - 8 * s),
+                                    (int16_t) (sc.g.back_x - sc.g.goal_x + 6 * s), (int16_t) (16 * s + 1)});
+  out[n++] = word_box(sc, t);
   int m = 0;
   for (int i = 0; i < n; i++)
     if (!out[i].empty())
@@ -540,17 +893,22 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
   const PxBox c = box_clip(p.clip, PxBox{0, 0, p.w, p.h});
   for (int y = c.y; y < c.y + c.h; y++)
     for (int x = c.x; x < c.x + c.w; x++)
-      p.px[y * p.stride + x] = rgb565(bg_rgb(sc, p.mirror ? p.w - 1 - x : x, y, st.pulse));
+      p.px[y * p.stride + x] = rgb565(bg_rgb(sc, p.mirror ? p.w - 1 - x : x, y, st));
   const int s = sc.g.s;
   if (st.shadow_x >= 0)
     p.fill(st.shadow_x - s, sc.g.feet_y + s, 3 * s, s, rgb565(kShadow));
   for (int i = 0; i < st.n; i++)
     if (st.actors[i].def)
-      px_sprite(p, *st.actors[i].spr, st.actors[i].x, st.actors[i].y, sc.def, s, st.actors[i].flip);
+      px_sprite(p, *st.actors[i].spr, st.actors[i].x, st.actors[i].y, st.actors[i].keeper ? sc.keeper : sc.def, s,
+                st.actors[i].flip);
   for (int i = 0; i < st.n; i++)
     if (!st.actors[i].def)
       px_sprite(p, *st.actors[i].spr, st.actors[i].x, st.actors[i].y, sc.off, s, st.actors[i].flip);
-  if (st.ball && st.ball_px > 0) {
+  if (st.ball && st.ball_kind == 1) {
+    for (int k = st.trails - 1; k >= 0; k--)
+      p.fill(st.trail_x[k], st.trail_y[k], s, s, rgb565(k ? 0x404040 : 0x808080));
+    soccer_ball(p, sc, st);
+  } else if (st.ball && st.ball_px > 0) {
     const int d = st.ball_px, x = st.bx - d / 2, y = st.by - d / 2;
     p.fill(x, y, d, d, rgb565(0xF0F0F0));
     if (d >= 3 * s) {
@@ -581,6 +939,7 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
     const PxBox b = caption_box(sc);
     px_text(p, b.x, b.y, text, rgb565(0xFFD000), s);
   }
+  draw_word(p, sc, t);
 }
 
 ScenePose scene_pose(const Scene &sc, uint32_t t) {
@@ -589,6 +948,11 @@ ScenePose scene_pose(const Scene &sc, uint32_t t) {
   ScenePose r;
   r.hero_x = (int16_t) st.hero_x;
   r.ball_free = st.ball;
+  if (play_ms(sc.args.kind) != 0 && t >= play_ms(sc.args.kind)) {
+    const WordAt w = word_of(sc);
+    r.word = letter_box(sc.g, w, 0, w.n - 1);
+    r.flash = word_pulsing(w, t);
+  }
   if (st.ball) {
     r.ball_x = (int16_t) st.bx;
     r.ball_y = (int16_t) st.by;

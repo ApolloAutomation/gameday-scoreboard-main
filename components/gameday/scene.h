@@ -9,7 +9,7 @@
 
 namespace espn {
 
-constexpr uint32_t kAnimMaxMs = 3600;
+constexpr uint32_t kAnimMaxMs = 4800;
 constexpr uint32_t kSceneFrameMs = 33;
 constexpr int kSceneBoxes = 10;
 
@@ -19,6 +19,8 @@ struct StageGeom {
   int16_t crowd_y{0}, field_y{0}, feet_y{0};
   int16_t ez{0}, goal_x{0};
   int16_t stripe{4};
+  // A goal's net, side on: goal_x is its post
+  int16_t bar_y{0}, roof_x{0}, back_x{0};
 };
 StageGeom stage_geom(int w, int h);
 
@@ -33,7 +35,9 @@ Kit kit_against(const Kit &mine, uint32_t primary, uint32_t alt);
 struct Scene {
   AnimArgs args{};
   StageGeom g{};
-  uint16_t off[16]{}, def[16]{};
+  uint16_t off[16]{}, def[16]{}, keeper[16]{};
+  // The GOAL word, and its white flash
+  uint16_t word[16]{}, word_hi[16]{};
   uint32_t ez_rgb{0}, crowd_a{0}, crowd_b{0};
   uint32_t seed{0};
 };
@@ -52,7 +56,12 @@ struct ScenePose {
   int16_t ball_x{-1}, ball_y{-1};
   int16_t hero_x{0};
   bool ball_free{false};
+  bool flash{false};  // a whole-word flash: a big redraw
+  PxBox word{};       // on the picture, never mirrored
 };
+// GOAL's letter count, and glyph i: 0 G to 3 L
+int word_letters(const StageGeom &g);
+int word_glyph(int i, int n);
 ScenePose scene_pose(const Scene &sc, uint32_t t);
 
 }  // namespace espn

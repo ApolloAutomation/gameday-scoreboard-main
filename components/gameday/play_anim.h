@@ -11,8 +11,8 @@
 
 namespace espn {
 
-enum class AnimKind : uint8_t { NONE, TD_PASS, TD_RUN, TD_RETURN, FIELD_GOAL, HOME_RUN };
-constexpr int kAnimKinds = 6;
+enum class AnimKind : uint8_t { NONE, TD_PASS, TD_RUN, TD_RETURN, FIELD_GOAL, HOME_RUN, SOCCER_GOAL, HOCKEY_GOAL };
+constexpr int kAnimKinds = 8;
 
 // AnimArgs.flags bits
 constexpr uint8_t kAnimMirror = 1;  // the board's right team scored
@@ -107,14 +107,44 @@ inline int homer_field(const std::string &low) {
   return w.compare(0, 6, "center") == 0 ? 3 : 0;
 }
 
+// Pinned on side (0 team, 1 opponent); no shootouts
+inline bool goal_known(const GameSnapshot &prev, const GameSnapshot &cur, int side) {
+  if (side != 0 && side != 1)
+    return false;
+  const int mine = side ? score_gain(prev.opp_score, cur.opp_score) : score_gain(prev.team_score, cur.team_score);
+  const int other = side ? score_gain(prev.team_score, cur.team_score) : score_gain(prev.opp_score, cur.opp_score);
+  if (mine <= 0)
+    return false;
+  if (cur.sport == Sport::SOCCER) {
+    const Soccer &f = cur.soc;
+    if (f.team_shootout >= 0 || f.opp_shootout >= 0 || f.status.find("SHOOTOUT") != std::string::npos)
+      return false;
+    // The newest goal names the side it counts for
+    if (f.goals.size() > prev.soc.goals.size())
+      return f.goals.back().ours == (side == 0);
+    return other == 0;
+  }
+  if (cur.sport == Sport::HOCKEY)
+    return !(cur.period >= 5 && !cur.nhl.playoffs) && other == 0;
+  return false;
+}
+
 }  // namespace detail
 
 // AnimArgs.flags bits 3-5: the home run's field, detail::homer_field
 constexpr int kAnimFieldShift = 3;
 
-// mirror: the scoring side is the board's right team
-inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur) {
+// mirror: the board's right team scored; goals need prev, side
+inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur, const GameSnapshot *prev = nullptr,
+                        int side = -1) {
   AnimArgs r;
+  if (a == Alert::SOCCER_GOAL || a == Alert::PENALTY_GOAL || a == Alert::HOCKEY_GOAL) {
+    if (prev == nullptr || !detail::goal_known(*prev, cur, side))
+      return r;
+    r.kind = a == Alert::HOCKEY_GOAL ? AnimKind::HOCKEY_GOAL : AnimKind::SOCCER_GOAL;
+    r.flags = mirror ? kAnimMirror : 0;
+    return r;
+  }
   if (a == Alert::HOME_RUN || a == Alert::GRAND_SLAM || (a == Alert::WALK_OFF && detail::home_run(cur))) {
     const std::string low = detail::anim_lower(cur.last_play);
     r.kind = AnimKind::HOME_RUN;
@@ -143,15 +173,15 @@ inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur) {
 }
 
 // A splash plays the scene of its alert
-inline void splash_anim(Splash &s, Alert a, const GameSnapshot &cur) {
-  const AnimArgs r = anim_of(a, false, cur);
+inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const GameSnapshot &cur, AlertSide side) {
+  const AnimArgs r = anim_of(a, false, cur, &prev, side == AlertSide::TEAM ? 0 : side == AlertSide::OPP ? 1 : -1);
   s.anim = (uint8_t) r.kind;
   s.anim_dist = r.dist;
   s.anim_flags = r.flags;
 }
 
 inline const char *anim_name(AnimKind k) {
-  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr"};
+  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr", "soccer", "hockey"};
   return (int) k < kAnimKinds ? kNames[(int) k] : "none";
 }
 

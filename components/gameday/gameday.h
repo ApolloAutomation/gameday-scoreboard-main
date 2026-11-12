@@ -203,7 +203,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|hr; qc: the factory check, firmware/pages/qc.yaml;
+//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|hr|soccer|hockey;
+//                                    qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
 //                                    names only (components/saved_networks)

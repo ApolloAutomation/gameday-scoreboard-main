@@ -52,6 +52,14 @@ The logo says which club it was, so the words leave its abbreviation out. See [S
 
 Goals, penalty goals and red cards each have a switch in the Celebrations card. With **Penalty goal** off, a penalty shows as a goal. See [Celebrations](/using/device-page/#celebrations).
 
+### Goal animation
+
+:::note[Coming in the next release]
+Before a goal's or a penalty goal's splash, the panel plays the goal across the whole screen for about 3 seconds, in pixel art, with players in the scoring club's colors under the stadium lights: the striker runs onto the ball and shoots, the ball spins across the panel past the diving keeper into the top corner, and the net bulges where it hits while the striker slides on his knees. Then a long **GOOOOAAALLL** grows in letter by letter across the top in the club's colors, with a flash at the end. The word stretches to fit: GOOOAL on a single panel, and more O's, A's and L's on wider setups, up to 25 letters on four panels in a row.
+
+The scoring club always shoots toward its own side of the board, so a goal by the club on the right goes right to left. Then the splash shows for its usual 7 seconds. An own goal plays for the club it counts for. Kicks in a shootout get no animation, and neither does a goal the panel can't pin on one club, like two goals, one for each side, between two reads. **Play animations** in the Celebrations card turns it off, and **Try it** there plays one now. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 At full time a win gets a victory splash with fireworks, your logo and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.
 
 A goal, a penalty goal or a red card in another match can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those matches about every 45 seconds, from the league's day of matches, so a favorite's cup match, like one in the Champions League, isn't watched. See [Big plays in other games](/using/modes/#big-plays-in-other-games).

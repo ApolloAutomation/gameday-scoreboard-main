@@ -97,6 +97,9 @@ bool greenish(uint32_t c) {
   const int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
   return g > r + 24 && g > b + 24 && g < 0xD8;
 }
+uint32_t rgb888(uint16_t c) {
+  return ((uint32_t) ((c >> 11) & 31) << 19) | ((uint32_t) ((c >> 5) & 63) << 10) | ((uint32_t) (c & 31) << 3);
+}
 
 void test_kits() {
   std::vector<uint32_t> colors = {0x000000, 0x010101, 0x0A0A0A, 0x002244, 0x004C54, 0x125740, 0x203731, 0x00FF00,
@@ -111,6 +114,16 @@ void test_kits() {
       PCHECK(!dark(d.jersey) && !greenish(d.jersey));
       PCHECK(d.jersey != k.jersey);
     }
+  // Soccer: a keeper apart from both, letters lit on black
+  for (uint32_t c : colors)
+    for (uint32_t other : {0xFFFFFFu, 0xF0D020u, 0x30C8E8u, 0xD040D0u, 0xF07818u, 0x000000u}) {
+      AnimArgs a;
+      a.kind = AnimKind::SOCCER_GOAL;
+      const Scene sc = scene_make(a, 128, 64, c, 0, other, 0, 3);
+      const uint32_t keeper = rgb888(sc.keeper[4]);
+      PCHECK(sc.keeper[4] != sc.off[4] && sc.keeper[4] != sc.def[4] && !greenish(keeper) && !dark(keeper));
+      PCHECK(!dark(rgb888(sc.word[4])) && sc.word_hi[4] == rgb565(0xFFFFFF));
+    }
 }
 
 std::string slurp(const char *path) {
@@ -120,13 +133,122 @@ std::string slurp(const char *path) {
   return ss.str();
 }
 
-bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, int w, int h) {
-  for (int y = 0; y < h; y++)
+GameSnapshot read_event(const char *path, Sport sport, uint32_t team) {
+  GameSnapshot s;
+  PCHECK(parse_event_str(slurp(path), sport, team, s));
+  return s;
+}
+
+AnimKind anim_kind(const GameSnapshot &prev, const GameSnapshot &cur) {
+  return (AnimKind) decide_splash(prev, cur, true).anim;
+}
+
+void test_goal_classifier() {
+  // ARS @ SUN: the penalty at 90'+7' (test_alerts.cpp)
+  GameSnapshot end = read_event("fixtures/event_epl_final.json", Sport::SOCCER, 359);
+  PCHECK(end.soc.goals.size() == 2 && end.soc.goals.back().penalty);
+  end.state = GameState::IN;
+  end.completed = false;
+  GameSnapshot before = end;
+  before.soc.goals.pop_back();
+  before.team_score -= 1;
+  const Splash pen = decide_splash(before, end, true);
+  PCHECK(pen.text == "PENALTY GOAL!" && pen.anim == (uint8_t) AnimKind::SOCCER_GOAL);
+  PCHECK(decide_splash(before, end, true, false, kAlertsAll & ~alert_bit(Alert::PENALTY_GOAL)).anim ==
+         (uint8_t) AnimKind::SOCCER_GOAL);
+  PCHECK((anim_of(Alert::SOCCER_GOAL, true, end, &before, 0).flags & kAnimMirror) != 0);
+  // An own goal plays for the side it counts for
+  GameSnapshot own = end;
+  own.soc.goals.back().own_goal = true;
+  own.soc.goals.back().penalty = false;
+  PCHECK(anim_kind(before, own) == AnimKind::SOCCER_GOAL);
+  GameSnapshot theirs = before;
+  theirs.opp_score += 1;
+  SoccerGoal og;
+  og.ours = false;
+  og.own_goal = true;
+  theirs.soc.goals.push_back(og);
+  PCHECK(decide_splash(before, theirs, true).text == "SUN GOAL" && anim_kind(before, theirs) == AnimKind::SOCCER_GOAL);
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, theirs, &before, 1).kind == AnimKind::SOCCER_GOAL);
+  // The newest goal is the other side's: no scene
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, theirs, &before, 0).kind == AnimKind::NONE);
+  GameSnapshot ours_said = end;
+  ours_said.soc.goals.back().ours = false;
+  PCHECK(anim_kind(before, ours_said) == AnimKind::NONE);
+  // Both scored between reads, no goal words: no scene
+  GameSnapshot both = before;
+  both.team_score += 1;
+  both.opp_score += 1;
+  PCHECK(decide_splash(before, both, true).text == "GOAL!" && anim_kind(before, both) == AnimKind::NONE);
+  // Never a shootout, nor without the read or side
+  GameSnapshot so = end;
+  so.soc.team_shootout = 3;
+  so.soc.opp_shootout = 2;
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, so, &before, 0).kind == AnimKind::NONE);
+  GameSnapshot so_status = end;
+  so_status.soc.status = "STATUS_SHOOTOUT";
+  PCHECK(anim_of(Alert::PENALTY_GOAL, false, so_status, &before, 0).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, end).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, end, &before, -1).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::SOCCER_GOAL, false, before, &before, 0).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::RED_CARD, false, end, &before, 0).kind == AnimKind::NONE);
+
+  // COL @ WPG (test_alerts.cpp)
+  GameSnapshot prev = read_event("fixtures/event_nhl_live.json", Sport::HOCKEY, 28);
+  GameSnapshot goal = prev;
+  goal.team_score += 1;
+  PCHECK(anim_kind(prev, goal) == AnimKind::HOCKEY_GOAL);
+  GameSnapshot col = prev;
+  col.opp_score += 1;
+  PCHECK(decide_splash(prev, col, true).text == "COL GOAL" && anim_kind(prev, col) == AnimKind::HOCKEY_GOAL);
+  GameSnapshot two = goal;
+  two.opp_score += 1;
+  PCHECK(anim_kind(prev, two) == AnimKind::NONE);
+  // The shootout is period 5, but 2OT in the playoffs
+  GameSnapshot so0 = prev, so1 = goal;
+  so0.period = so1.period = 5;
+  PCHECK(anim_of(Alert::HOCKEY_GOAL, false, so1, &so0, 0).kind == AnimKind::NONE);
+  so0.nhl.playoffs = so1.nhl.playoffs = true;
+  PCHECK(anim_of(Alert::HOCKEY_GOAL, false, so1, &so0, 0).kind == AnimKind::HOCKEY_GOAL);
+  PCHECK(std::string(anim_name(AnimKind::SOCCER_GOAL)) == "soccer" &&
+         std::string(anim_name(AnimKind::HOCKEY_GOAL)) == "hockey");
+}
+
+// G, then O's, A's and L's; longer when wider
+void test_word() {
+  int prev_n = 0;
+  for (const auto &s : kSceneScreens) {
+    const StageGeom g = stage_geom(s[0], s[1]);
+    const int n = word_letters(g);
+    PCHECK(n >= 6 && (n * 10 - 1) * g.s <= g.w);
+    if (g.s == 1) {
+      PCHECK(n > prev_n);
+      prev_n = n;
+    }
+    int counts[4] = {0, 0, 0, 0}, last = 0;
+    for (int i = 0; i < n; i++) {
+      const int k = word_glyph(i, n);
+      PCHECK(k >= last);
+      last = k;
+      counts[k]++;
+    }
+    PCHECK(counts[0] == 1 && counts[1] >= counts[2] && counts[2] >= 1 && counts[3] >= 1);
+  }
+  PCHECK(word_letters(stage_geom(256, 64)) >= 24);
+}
+
+// Text rows in band aren't mirrored: equal there
+bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, int w, int h, PxBox band = PxBox{}) {
+  for (int y = 0; y < h; y++) {
+    const bool text = !band.empty() && y >= band.y && y < band.y + band.h;
     for (int x = 0; x < w; x++)
-      if (a[(size_t) y * w + x] != b[(size_t) y * w + w - 1 - x])
+      if (a[(size_t) y * w + x] != b[(size_t) y * w + (text ? x : w - 1 - x)])
         return false;
+  }
   return true;
 }
+
+bool goal_kind(AnimKind k) { return k == AnimKind::SOCCER_GOAL || k == AnimKind::HOCKEY_GOAL; }
 
 // Every frame as the panel draws it, checked
 uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) {
@@ -154,7 +276,8 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
       inc = full;
     } else {
       const int px = scene_step(inc, sc, ts[i - 1], t);
-      const bool pulse = px > limit && scene_pose(sc, t).hero_x >= sc.g.goal_x - 16 * sc.g.s;
+      const bool flash = scene_pose(sc, t).flash || scene_pose(sc, ts[i - 1]).flash;
+      const bool pulse = px > limit && (flash || (!goal_kind(kind) && scene_pose(sc, t).hero_x >= sc.g.goal_x - 16 * sc.g.s));
       if (px > limit && !pulse) {
         small = false;
         printf("  %s %dx%d t=%u: %d dirty px\n", anim_name(kind), w, h, t, px);
@@ -166,7 +289,7 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
     }
     if (i % 7 == 0 && !hr) {
       scene_full(mir, scm, t);
-      if (!mirrored(full, mir, w, h))
+      if (!mirrored(full, mir, w, h, scene_pose(sc, t).word))
         mirror_ok = false;
     }
     hash = fnv1a(hash, full);
@@ -175,9 +298,16 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
   PCHECK(small);
   PCHECK(mirror_ok);
   PCHECK(scene_ms(kind) <= kAnimMaxMs);
-  // Ends in the end zone, or over the fence
+  // Ends in the end zone, the net, or beyond
   const ScenePose end = scene_pose(sc, scene_ms(kind));
-  if (!hr) {
+  if (goal_kind(kind)) {
+    PCHECK(end.ball_free && end.ball_x > sc.g.goal_x && end.ball_x < sc.g.back_x);
+    PCHECK(end.ball_y > sc.g.bar_y && end.ball_y <= sc.g.feet_y);
+    PCHECK(end.hero_x >= 7 * sc.g.s && end.hero_x + 9 * sc.g.s <= w);
+    // The word fills the width, in the dark above
+    PCHECK(!end.word.empty() && end.word.x >= 0 && end.word.x + end.word.w <= w);
+    PCHECK(end.word.w >= w - 12 * sc.g.s && end.word.y + end.word.h <= sc.g.crowd_y);
+  } else if (!hr) {
     PCHECK(end.hero_x >= sc.g.goal_x);
     PCHECK(end.hero_x + 9 * sc.g.s <= w);
   }
@@ -202,7 +332,8 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
 
 int test_goldens() {
   std::ostringstream o;
-  for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN})
+  for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN,
+                     AnimKind::SOCCER_GOAL})
     for (const auto &s : kSceneScreens)
       for (const Kit2 &kit : kReviewKits) {
         int frames = 0;
@@ -260,6 +391,8 @@ void test_geometry() {
 
 int run_picture_tests(int &total_checks) {
   test_classifier();
+  test_goal_classifier();
+  test_word();
   test_kits();
   test_geometry();
   failures += test_goldens();

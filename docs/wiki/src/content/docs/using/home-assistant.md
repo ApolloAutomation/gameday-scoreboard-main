@@ -57,7 +57,7 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **Last Play** | ESPN's latest play. Empty for a golf tour or a racing series, and for a minor league baseball, AHL or ECHL team, since the panel gets no plays from MLB or HockeyTech. |
 | **Firmware** | The firmware update, so Home Assistant shows when a new release is out. |
 | **Install Updates Automatically** | The same switch as on the device page. See [Firmware updates](/using/updates/). |
-| **Play Animations** | Coming in the next release: the Celebrations card's switch for the pixel-art play before a touchdown's or a home run's splash. See [Play animations](/using/football/#play-animations). |
+| **Play Animations** | Coming in the next release: the Celebrations card's switch for the pixel-art play before a touchdown's, a home run's or a soccer goal's splash. See [Play animations](/using/football/#play-animations). |
 | **Check for Updates**, **Refresh Now**, **Reboot** | The device page's buttons. |
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |

@@ -110,7 +110,7 @@ The logo is the one the panel already has for the board. If it hasn't downloaded
 - **Fireworks beside the logo.** A splash with fireworks shows them around the logo and the points, above the words, so the words stay easy to read: across the whole width of a single panel or a 128x64 one, across the middle of three or four panels in a row, and on two rows of two in up to 64 rows above the words. On a single panel or a 128x64 one, and in a second area, the points sit on a patch of black, as the logo sits on its tile, so a burst never crosses them. Only when the words leave too little room above and below them, as three lines across the middle of three or four panels do, do the fireworks go behind them. In the second area they show whenever the board isn't using them; see [The second area](#the-second-area).
 
 :::note[Coming in the next release]
-A touchdown's or a home run's splash can start with a short pixel-art play across the whole setup: every panel of three or four in a row, and all four of two rows of two, with bigger players. The splash then stays its full 7 seconds. See [Play animations](/using/football/#play-animations).
+A touchdown's, a home run's or a soccer goal's splash can start with a short pixel-art play across the whole setup: every panel of three or four in a row, and all four of two rows of two, with bigger players. A goal's long GOOOAAALLL gets more letters the wider the setup is. The splash then stays its full 7 seconds. See [Play animations](/using/football/#play-animations) and [soccer goals](/using/soccer/#goal-animation).
 :::
 
 ## Changing the layout

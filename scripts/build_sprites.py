@@ -9,7 +9,9 @@ The art lives as ASCII in firmware/art/sprites/*.txt:
 
 A frame's name is "<set>.<pose>"; frames of a set keep their file order. The
 anchor is the point placed on the ground, on a row that holds a foot pixel
-(slot 8). Pixels pack at 4 bits, two a byte, high nibble first.
+(slot 8). A frame that ends in "float" (a ball, a letter) has no ground, so
+its anchor is only checked to be inside it. Pixels pack at 4 bits, two a
+byte, high nibble first.
 
     python3 scripts/build_sprites.py            write the header
     python3 scripts/build_sprites.py --check    fail when the header is stale
@@ -42,12 +44,14 @@ def parse(text, name="art"):
             continue
         if line.startswith("@frame "):
             parts = line.split()
-            if len(parts) != 5 or parts[3] != "anchor" or "." not in parts[1]:
-                raise SystemExit(f"{where}: expected '@frame set.pose WxH anchor x,y'")
+            floats = len(parts) == 6 and parts[5] == "float"
+            if len(parts) not in (5, 6) or (len(parts) == 6 and not floats) or parts[3] != "anchor" or \
+                    "." not in parts[1]:
+                raise SystemExit(f"{where}: expected '@frame set.pose WxH anchor x,y [float]'")
             w, h = (int(v) for v in parts[2].split("x"))
             ax, ay = (int(v) for v in parts[4].split(","))
             cur = {"set": parts[1].split(".")[0], "pose": parts[1].split(".", 1)[1], "w": w, "h": h,
-                   "ax": ax, "ay": ay, "rows": [], "where": where}
+                   "ax": ax, "ay": ay, "rows": [], "where": where, "float": floats}
             frames.append(cur)
             continue
         if not line:
@@ -65,7 +69,7 @@ def parse(text, name="art"):
             raise SystemExit(f"{f['where']}: the pixels aren't {f['w']}x{f['h']}")
         if f["w"] > 255 or f["h"] > 255 or not (0 <= f["ax"] < f["w"] and 0 <= f["ay"] < f["h"]):
             raise SystemExit(f"{f['where']}: the anchor is outside the frame")
-        if FOOT_SLOT not in f["rows"][f["ay"]]:
+        if not f["float"] and FOOT_SLOT not in f["rows"][f["ay"]]:
             raise SystemExit(f"{f['where']}: the anchor's row has no foot pixel")
     return frames
 
@@ -128,9 +132,13 @@ def selftest():
     f = parse(art)[0]
     assert unpack(pack(f), 3, 2) == f["rows"], "round trip"
     assert pack(f) == bytes([0x04, 0x08, 0x98]), pack(f)
+    ball = parse("@legend .osdJTHPKbwBGMxy\n@frame b.a 2x2 anchor 1,1 float\nxy\nyx\n")[0]
+    assert ball["float"] and pack(ball) == bytes([0xEF, 0xFE]), pack(ball)
     for bad in ("@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 1,0\n.J.\nKbK\n",
                 "@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 1,1\n.J.\nKb\n",
-                "@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 1,1\n.Z.\nKbK\n"):
+                "@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 1,1\n.Z.\nKbK\n",
+                "@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 1,1 floats\n.J.\nKbK\n",
+                "@legend .osdJTHPKbwBGMxy\n@frame t.a 3x2 anchor 3,1 float\n.J.\nKbK\n"):
         try:
             parse(bad)
         except SystemExit:
