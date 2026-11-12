@@ -34,6 +34,8 @@ int f1_header_schedule(JsonObjectConst root, const F1Live &live, F1Schedule &out
 F1Schedule f1_calendar_schedule(const GolfNext &next);
 // US and UK: mph and miles; US alone: Fahrenheit.
 F1Units f1_units_for_tz(uint8_t tz);
+// Whole words in max: "Spa-Francorchamps" is "Spa".
+std::string f1_short_name(const std::string &name, size_t max);
 // left, then right flush to chars.
 std::string f1_cell(const std::string &left, const std::string &right, size_t chars);
 // "45m", "5h", "3d".
@@ -133,6 +135,7 @@ class F1App final : public App {
   Host inflight_host_{HOST_ESPN};
   int32_t req_lat_{0}, req_lon_{0};
   uint32_t facts_try_{0}, athlete_try_{0};  // the ids last asked for
+  uint8_t stale_reads_{0};
   std::string cal_after_;
   int64_t cal_after_start_{0};
   int64_t last_[kReads]{};

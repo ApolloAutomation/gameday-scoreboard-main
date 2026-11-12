@@ -720,8 +720,8 @@ void test_timing() {
   FCHECK(f1_poll_ms(F1Read::LAST_RESULTS, s, race + 9 * 3600) == 360 * min, "then back to slow");
   FCHECK(f1_poll_ms(F1Read::NEXT, s, fp1) == 360 * min && f1_poll_ms(F1Read::NEXT, s, race + 60) == 30 * min,
          "the next race moves on after the race");
-  FCHECK(f1_poll_ms(F1Read::CIRCUIT, s, fp1) == 24 * 60 * min && f1_poll_ms(F1Read::DRIVERS, F1Schedule{}, 0) == 60 * min,
-         "circuits daily, standings hourly with no schedule");
+  FCHECK(f1_poll_ms(F1Read::CIRCUIT, s, fp1) == 24 * 60 * min && f1_poll_ms(F1Read::DRIVERS, F1Schedule{}, 0) == 360 * min,
+         "circuits daily, standings every 6 hours with no schedule");
   F1Live live = live_of("fixtures/racing_header_f1_live.json");
   FCHECK(f1_header_poll_ms(live, live.snap.race.session_start + 600) == 30 * 1000, "a race every 30 seconds");
 

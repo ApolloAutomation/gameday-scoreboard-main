@@ -378,7 +378,9 @@ int64_t F1App::due_(Read r, int64_t now) const {
     case Read::CONSTRUCTORS:
     case Read::RESULTS: {
       static const F1Read kRead[] = {F1Read::NEXT, F1Read::DRIVERS, F1Read::CONSTRUCTORS, F1Read::LAST_RESULTS};
-      int64_t at = after(f1_poll_ms(kRead[i - 1], this->sched_, now));
+      // Off season: the header's last weekend, not none.
+      const F1Schedule &s = r == Read::NEXT ? this->sched_ : this->schedule(now);
+      int64_t at = after(f1_poll_ms(kRead[i - 1], s, now));
       if (jolpica.backup())
         at = later(at, jolpica.out_until);
       return later(at, jolpica.wait_until);
@@ -398,7 +400,8 @@ int64_t F1App::due_(Read r, int64_t now) const {
     }
     case Read::WEATHER: {
       int32_t lat, lon;
-      if (!this->weather_place_(now, lat, lon))
+      // Shown only before the weekend ends.
+      if (weekend_over(this->schedule(now), now) || !this->weather_place_(now, lat, lon))
         return kNever;
       const F1Host &om = this->host_[HOST_OPEN_METEO];
       const F1Host &h = om.backup() && now < om.out_until ? this->host_[HOST_MET] : om;
@@ -606,6 +609,12 @@ void F1App::apply(bool ok, int64_t now) {
   this->ok_[(int) r] = now;
   switch (r) {
     case Read::HEADER:
+      // An edge's older copy: kept out, twice at most.
+      if (racing_read_is_older(this->live_.snap, this->p_live_.snap) && this->stale_reads_ < 2) {
+        this->stale_reads_++;
+        break;
+      }
+      this->stale_reads_ = 0;
       this->live_ = this->p_live_;
       this->head_sched_ = this->p_sched_;
       f1_live_codes(this->live_, this->drivers_);
@@ -730,6 +739,15 @@ static void add_row(AppFrame &f, const std::string &pos, const std::string &name
   b.detail.push_back(detail);
   b.name_color.push_back((int) name_color);
   b.value_color.push_back((int) value_color);
+}
+
+std::string f1_short_name(const std::string &name, size_t max) {
+  if (glyphs(name) <= max)
+    return name;
+  const size_t dash = name.find('-');
+  if (name.find(' ') == std::string::npos && dash != std::string::npos && dash <= max)
+    return name.substr(0, dash);
+  return detail::whole_words(name, max);
 }
 
 // The status cell; 12 centered characters on one panel.
@@ -865,7 +883,7 @@ void F1App::circuit_frame_(int w, int h, int64_t now, AppFrame &out) const {
     const size_t room = title_room(out, w);
     out.rows.title = glyphs(full) <= room ? full : glyphs(brief) <= room ? brief : detail::whole_words(full, room);
   } else {
-    put_status(out, w, glyphs(full) <= 12 ? full : brief, kWhite);
+    put_status(out, w, glyphs(full) <= 12 ? full : f1_short_name(brief, 12), kWhite);
   }
   const esphome::gameday::RowsGeom g = esphome::gameday::rows_geom(w);
   // Right of the facts; one panel's whole board.

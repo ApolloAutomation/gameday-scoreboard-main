@@ -101,7 +101,7 @@ uint32_t f1_poll_ms(F1Read read, const F1Schedule &s, int64_t now) {
       // Jolpica posts results an hour after the flag.
       if (race > 0 && now >= race + 90 * 60 && now <= race + 8 * kHour)
         return 15 * kMinuteMs;
-      return weekend || !s.valid ? 60 * kMinuteMs : 360 * kMinuteMs;
+      return weekend ? 60 * kMinuteMs : 360 * kMinuteMs;
     case F1Read::WEATHER:
       return weekend ? 15 * kMinuteMs : 180 * kMinuteMs;
     case F1Read::CIRCUIT:

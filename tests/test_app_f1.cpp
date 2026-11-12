@@ -63,6 +63,7 @@ const int kWidths[] = {64, 128, 192, 256};
 // A stand-in network: fixtures by URL, some hosts down.
 struct Net {
   std::string header = "fixtures/f1_header_vegas_pre.json";
+  std::string next_body;  // set: next.json's answer
   std::set<std::string> down;
   int status = 500;
   bool refused = false;
@@ -119,7 +120,8 @@ bool serve(F1App &a, int64_t now, Net &net) {
     a.apply(false, now);
     return true;
   }
-  const bool ok = read_body(a, slurp(fixture_for(rq.url, net)), now);
+  const bool next = !net.next_body.empty() && rq.url.find("next.json") != std::string::npos;
+  const bool ok = read_body(a, next ? net.next_body : slurp(fixture_for(rq.url, net)), now);
   a.ended(AppResult{200, false, 0});
   a.apply(ok, now);
   return true;
@@ -211,6 +213,21 @@ void test_helpers() {
   PCHECK_EQ(f1_age_text(45 * 60), "45m");
   PCHECK_EQ(f1_age_text(5 * 3600 + 10), "5h");
   PCHECK_EQ(f1_age_text(3 * 86400), "3d");
+}
+
+void test_short_name() {
+  PCHECK_EQ(f1_short_name("Spa-Francorchamps", 12), "Spa");
+  PCHECK_EQ(f1_short_name("Hermanos Rodriguez", 12), "Hermanos");
+  PCHECK_EQ(f1_short_name("Gilles Villeneuve", 12), "Gilles");
+  PCHECK_EQ(f1_short_name("Red Bull Ring", 12), "Red Bull");
+  PCHECK_EQ(f1_short_name("Enzo e Dino Ferrari", 12), "Enzo e Dino");
+  PCHECK_EQ(f1_short_name("Las Vegas", 12), "Las Vegas");
+  for (const CircuitInfo &c : kCircuits) {
+    const std::string n = f1_short_name(c.name, 12);
+    PCHECK(glyphs(n) <= 12 && std::string(c.name).compare(0, n.size(), n) == 0, "%s: %s", c.name, n.c_str());
+    PCHECK(n.size() == strlen(c.name) || c.name[n.size()] == ' ' || c.name[n.size()] == '-', "%s: whole words: %s",
+           c.name, n.c_str());
+  }
 }
 
 void test_met() {
@@ -514,7 +531,22 @@ void test_live() {
       }
   PCHECK(matched >= 5, "codes matched: %d", matched);
 
-  // A red flag leads the ticker in red.
+  // An edge's older copy keeps the order, twice at most.
+  std::string older = slurp("fixtures/racing_header_f1_live.json");
+  const size_t lap = older.find("\"period\":34");
+  PCHECK(lap != std::string::npos, "the live lap");
+  older.replace(lap, 11, "\"period\":32");
+  for (int i = 0; i < 3; i++) {
+    AppRequest orq;
+    PCHECK(a.request(t + 31 + i * 31, orq), "a header read %d", i);
+    PCHECK(read_body(a, older, t + 31 + i * 31), "parses %d", i);
+    a.ended(AppResult{200, false, 0});
+    a.apply(true, t + 31 + i * 31);
+    AppFrame of;
+    a.frame(128, 64, t + 31 + i * 31, of);
+    PCHECK_EQ(of.rows.status, i < 2 ? "Lap 34/56" : "Lap 32/56");
+  }
+
   std::string red = slurp("fixtures/racing_header_f1_live.json");
   const size_t at_period = red.find("\"period\":34");
   PCHECK(at_period != std::string::npos, "the live session");
@@ -538,6 +570,13 @@ void test_live() {
   settle(c, after, fin);
   PCHECK(c.rotation(after, list, 8) >= 2 && list[0] == F1Screen::LIVE, "the final's order, then the rest");
   PCHECK(c.rotation(at("2026-10-27T02:00:00Z"), list, 8) >= 1 && list[0] != F1Screen::LIVE, "gone a day on");
+  // An older live copy after the flag doesn't bring it back.
+  AppRequest crq;
+  PCHECK(c.request(after + 3600, crq), "a header read after the flag");
+  PCHECK(read_body(c, slurp("fixtures/racing_header_f1_live.json"), after + 3600), "parses");
+  c.ended(AppResult{200, false, 0});
+  c.apply(true, after + 3600);
+  PCHECK(c.live().snap.race.phase == RacePhase::FINAL && !c.busy(after + 3600), "still the final");
 }
 
 void test_failover() {
@@ -661,6 +700,33 @@ void test_failover() {
   }
 }
 
+void test_off_season() {
+  app_env().tz = 13;
+  F1App a;
+  Net net;
+  net.header = "fixtures/racing_header_f1_final.json";
+  net.next_body = R"({"MRData":{"RaceTable":{"season":"2026","Races":[]}}})";
+  int64_t now = at("2026-12-20T00:00:00Z");
+  const int64_t end = now + 24 * 3600;
+  settle(a, now, net);
+  const size_t first = net.asked.size();
+  while (now < end) {
+    int64_t when;
+    if (a.next_read(now, when) == F1App::Read::NONE || when >= end)
+      break;
+    now = when > now ? when : now;
+    serve(a, now, net);
+  }
+  int standings = 0, weather = 0;
+  for (size_t i = first; i < net.asked.size(); i++) {
+    const std::string &u = net.asked[i].url;
+    standings += u.find("driverStandings") != std::string::npos;
+    weather += u.find("open-meteo") != std::string::npos || u.find("met.no") != std::string::npos;
+  }
+  PCHECK(standings <= 4, "standings every 6 hours off season: %d", standings);
+  PCHECK(weather == 0, "no weather off season: %d", weather);
+}
+
 void test_nothing() {
   F1App a;
   Net net;
@@ -684,12 +750,14 @@ void test_nothing() {
 
 int run_app_f1_tests(int &total_checks) {
   test_helpers();
+  test_short_name();
   test_met();
   test_header_schedule();
   test_host();
   test_reads_and_screens();
   test_live();
   test_failover();
+  test_off_season();
   test_nothing();
   app_env() = AppEnv{};
   total_checks += checks;
