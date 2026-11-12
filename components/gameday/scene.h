@@ -62,7 +62,7 @@ struct ScenePose {
   bool flash{false};  // a whole-word flash: a big redraw
   PxBox word{};       // on the picture, never mirrored
 };
-// GOAL's letter count, and glyph i: 0 G to 3 L
+// Word length; glyph i: 0 G to 3 L
 int word_letters(const StageGeom &g);
 int word_glyph(int i, int n);
 ScenePose scene_pose(const Scene &sc, uint32_t t);

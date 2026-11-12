@@ -18,7 +18,8 @@ void render(const std::string &dir, AnimKind kind, int w, int h, const Kit2 &kit
     a.dist = (int16_t) feet;
     a.flags = 4 << kAnimFieldShift;
   }
-  const Scene sc = scene_make(a, w, h, kit.color, kit.alt, kit.other, kit.other_alt, 7);
+  // The panel has no alternate colors
+  const Scene sc = scene_make(a, w, h, kit.color, 0, kit.other, 0, 7);
   std::vector<uint16_t> buf((size_t) w * h);
   GifWriter g;
   g.w = w;
