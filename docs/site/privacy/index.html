@@ -40,13 +40,14 @@
 
   <div class="card">
     <h2>The short version</h2>
-    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores, to MLB for minor league baseball scores, to HockeyTech for AHL and ECHL scores, and to GitHub for firmware updates. That's the whole picture.</p>
+    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores, to MLB for minor league baseball scores, to HockeyTech for AHL and ECHL scores, to GitHub for firmware updates, and, if you turn on the Flight Tracker, to flight data services for the planes near the spot you pick. That's the whole picture.</p>
   </div>
 
   <div class="card">
     <h2>What the panel does</h2>
     <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. For a minor league baseball team it asks MLB's public stats service (statsapi.mlb.com) instead, and downloads that team's logos from MLB's image server (midfield.mlbstatic.com). For an AHL or ECHL team it asks HockeyTech (lscluster.hockeytech.com), the stats service those leagues use for their own websites, sending the league's public site key as their sites do, and downloads that team's logos from HockeyTech's logo server (assets.leaguestat.com). It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked and a request for the current schedule.</p>
-    <p>The panel's own web page, opened in your browser, asks ESPN for today's games, team logos and a team's roster when you add a favorite player, MLB for today's minor league games and their logos, HockeyTech's logo server for AHL and ECHL logos, and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it.</p>
+    <p>If you turn on the Flight Tracker display, the panel keeps the home location you give it and, about every 20 seconds while the display is on screen, asks Flightradar24's public live map feed (data-cloud.flightradar24.com) for the planes in a box around it. If Flightradar24 doesn't answer, it asks adsb.fi (opendata.adsb.fi) or adsb.lol (api.adsb.lol) instead, sending the center of that spot rounded to about a kilometer and the distance you chose. With those two it looks up the routes of the airline flights it shows from adsb.im (adsb.im) or adsbdb (api.adsbdb.com), sending their callsigns and positions, not your location. If you give it the address of your own ADS-B receiver, it reads that on your network first. None of these needs an account or a key.</p>
+    <p>The panel's own web page, opened in your browser, asks ESPN for today's games, team logos and a team's roster when you add a favorite player, MLB for today's minor league games and their logos, HockeyTech's logo server for AHL and ECHL logos, and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it. When you type a town or a postal code for the Flight Tracker's home, the page sends it to Open-Meteo's place search (geocoding-api.open-meteo.com) to find its latitude and longitude; a latitude and longitude typed in goes straight to the panel.</p>
   </div>
 
   <div class="card">
@@ -62,7 +63,7 @@
   <div class="card">
     <h2>What we don't do</h2>
     <p>No accounts. No analytics or crash reporting. No advertising. The app and the panel collect nothing, so there's nothing to sell or share.</p>
-    <p>Like any website, ESPN, MLB, HockeyTech and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
+    <p>Like any website, ESPN, MLB, HockeyTech, GitHub (which hosts this site and the firmware updates) and, with the Flight Tracker, Flightradar24, adsb.fi, adsb.lol, adsb.im, adsbdb and Open-Meteo see the IP address a request comes from. We don't receive or keep any of that.</p>
   </div>
 
   <div class="card">

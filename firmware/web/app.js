@@ -238,6 +238,19 @@
           </div>
         </div>
       </details>
+      <details class="card flightcard" id="flightCard" hidden>
+        <summary><h2>Flight Tracker</h2><span class="peek sum" id="flightSum"></span></summary>
+        <p class="hint">The planes in the sky near a spot you pick: the nearest one's flight, airline, route, type, height, speed and how far away it is, taking turns with a list of the nearest. Choose Flight Tracker under Showing, or for the second area.</p>
+        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it.</small></label></div>
+        <div class="flightrow"><input id="flightWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="flightFind">Find</button></div>
+        <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
+        <p class="betmsg" id="flightMsg" role="alert" hidden></p>
+        <div class="ctl" id="flightHomeRow" hidden><label>Planes near<small id="flightHome"></small></label><button class="btn" id="flightClear">Clear</button></div>
+        <div class="ctl"><label for="flightRadius">Within<small>How far from home a plane can be.</small></label><select id="flightRadius"></select></div>
+        <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: the address of an ADS-B receiver on your network (tar1090, PiAware or readsb), like 192.168.1.50. The panel reads it first.</small></label></div>
+        <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
+        <p class="hint" id="flightNow" role="status"></p>
+      </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
         <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
@@ -519,6 +532,7 @@
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
     split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
+    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String,
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -2485,9 +2499,122 @@
     splashTimer = setTimeout(() => n.classList.remove("on"), 3000);
   };
 
+  // ---- the Flight Tracker card (components/gameday/app_flights.h) -----------
+  const FLIGHTS_ID = 3;
+  const FLIGHT_SOURCES = { fr24: "Flightradar24", adsbfi: "adsb.fi", adsblol: "adsb.lol", receiver: "your receiver" };
+  const FLIGHT_RADII = { imperial: [5, 10, 15, 25, 50, 100], metric: [5, 10, 25, 50, 100, 150] };
+  const COORDS = /^\s*([+-]?\d{1,3}(?:\.\d*)?)\s*(?:,\s*|\s+)([+-]?\d{1,3}(?:\.\d*)?)\s*$/;
+  // The panel's settings, or a post not shown yet
+  const flightNow = () => {
+    const f = (S && S.flights) || {};
+    const r = S && S.flyradius !== undefined ? /^(\d+)([a-z]*)$/.exec(S.flyradius) : null;
+    return {
+      ...f,
+      home: S && S.flyhome !== undefined ? (S.flyhome === "none" ? "" : S.flyhome) : f.home || "",
+      place: S && S.flyplace !== undefined ? S.flyplace : f.place || "",
+      radius: r ? Number(r[1]) : f.radius,
+      radius_unit: r ? r[2] || "mi" : f.radius_unit,
+      receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
+    };
+  };
+  const flightMsg = (t) => { const m = $("#flightMsg"); m.textContent = t || ""; m.hidden = !t; };
+  const setHome = (lat, lon, place) => {
+    flightMsg("");
+    $("#flightPicks").hidden = true;
+    $("#flightWhere").value = "";
+    setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+  };
+  const findPlace = async () => {
+    const q = $("#flightWhere").value.trim();
+    const picks = $("#flightPicks");
+    picks.hidden = true;
+    if (!q) { flightMsg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+    const c = COORDS.exec(q);
+    if (c) {
+      const lat = Number(c[1]), lon = Number(c[2]);
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+        flightMsg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+        return;
+      }
+      setHome(lat, lon, "");
+      return;
+    }
+    flightMsg("Looking it up...");
+    let found = [];
+    try {
+      // Open-Meteo's place search: keyless, from this browser.
+      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      found = ((await r.json()).results || []).filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
+    } catch (_) {
+      flightMsg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+      return;
+    }
+    if (!found.length) { flightMsg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+    const label = (p) => [p.name, p.admin1, p.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
+    if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+    flightMsg("");
+    picks.innerHTML = "";
+    for (const p of found) {
+      const b = el("button", "btn", label(p));
+      b.onclick = () => setHome(p.latitude, p.longitude, label(p));
+      picks.append(b);
+    }
+    picks.hidden = false;
+  };
+  $("#flightFind").onclick = findPlace;
+  $("#flightWhere").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+  $("#flightClear").onclick = () => setGD({ flyhome: "none" });
+  $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
+  const saveRx = () => {
+    const v = $("#flightRx").value.trim();
+    if (/\s/.test(v) || v.length > 95) { flightMsg("A receiver's address has no spaces, like 192.168.1.50."); return; }
+    flightMsg("");
+    setGD({ flyreceiver: v || "none" });
+  };
+  $("#flightRxSave").onclick = saveRx;
+  $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+  let flightRadii = "";
+  const renderFlights = () => {
+    const card = $("#flightCard");
+    card.hidden = !S || !S.flights || !((S.displays || []).some((d) => d.id === FLIGHTS_ID));
+    if (card.hidden) return;
+    const f = flightNow();
+    const where = f.home ? (f.place ? f.place + " (" + f.home.replace(",", ", ") + ")" : f.home.replace(",", ", ")) : "";
+    $("#flightSum").textContent = f.home ? f.place || f.home.replace(",", ", ") : "No location yet";
+    $("#flightHomeRow").hidden = !f.home;
+    $("#flightHome").textContent = where;
+    const unit = f.units === "metric" ? "km" : "mi";
+    const opts = FLIGHT_RADII[f.units === "metric" ? "metric" : "imperial"].map((n) => [n + unit, n + " " + unit]);
+    const cur = f.radius + (f.radius_unit || "mi");
+    if (!opts.some((o) => o[0] === cur)) opts.push([cur, f.radius + " " + (f.radius_unit || "mi")]);
+    const key = opts.map((o) => o[0]).join("|");
+    const sel = $("#flightRadius");
+    if (flightRadii !== key) {
+      flightRadii = key;
+      sel.innerHTML = "";
+      for (const [v, t] of opts) sel.add(new Option(t, v));
+    }
+    if (document.activeElement !== sel) sel.value = cur;
+    const rx = $("#flightRx");
+    if (document.activeElement !== rx) rx.value = f.receiver;
+    const n = Number(f.planes) || 0;
+    const from = FLIGHT_SOURCES[f.source] || "";
+    const backup = f.source === "adsbfi" || f.source === "adsblol";
+    let line = !f.home ? "Set a home location to see the planes near it."
+      : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
+        : f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
+          + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
+          : "Looking for planes.";
+    const shown = S.display_now === "flights" || S.split_now === "flights";
+    if (f.home && !shown) line += " Choose Flight Tracker under Showing to put it on the panel.";
+    $("#flightNow").textContent = line;
+  };
+
   const renderAll = () => {
     renderBoard();
     renderBets();
+    renderFlights();
     renderPlayers();
     renderUpNext();
     renderSplash();

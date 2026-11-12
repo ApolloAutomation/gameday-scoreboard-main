@@ -31,3 +31,7 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [Wi-Fi](/using/wifi/): saved networks, the hotspot and `.local` names.
 - [Home Assistant (optional)](/using/home-assistant/): adding the panel to Home Assistant.
 - [Brightness, panel on and off, and the clock](/using/brightness-and-clock/): night hours, and the clock and text sizes too.
+
+:::note[Coming in the next release]
+- [Flight Tracker](/using/flights/): the planes flying near a spot you pick, in place of the scoreboard or beside it.
+:::

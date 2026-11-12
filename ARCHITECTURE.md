@@ -122,7 +122,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`,
+  `flights.cpp/.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
@@ -283,11 +284,19 @@ gaps (`start_app_job_`, after the area's own reads) only while it's on
 screen, at its `poll_ms`, each read fitted with `AppTimes`, on its own
 `Source` and `HostWait`; `open_` sends its method, body and headers
 (`AppRequest`) and tells its hosts apart (`url_source`). Its `parse` runs
-on the fetch task over an `AppStream`, `apply` on the main loop, and
-`frame` fills an `AppFrame` (the leaderboard's title, six rows and ticker,
-and one polyline) that `app_fields_` turns into the board's leaderboard
-fields: `gd_board` and a `line` widget on the board, `RowsView` and its line
-in the second area (`area_build`). Its own set keys go after `kSetKeys`, its
+on the fetch task over an `AppStream`, whose `json` parses through the
+board's own `ContainerReader` so a display adds no second JSON reader to
+flash, `apply` on the main loop, and `frame` fills an `AppFrame` (the
+leaderboard's title, six rows and ticker, one polyline, and up to 40 labels
+placed by the display itself) that `app_fields_` turns into the board's
+leaderboard fields: `gd_board`, a `line` widget and a pool of labels made
+on first use (`put_texts`) on the board, `RowsView`, its line and its own
+pool in the second area (`area_build`). A display with several hosts can
+back each off itself (`own_backoff`, told each read's status by
+`answered`) instead of the display's one `HostWait`, and hears the panel's
+time zone (`zone`). The Flight Tracker (`app_flights.cpp`) reads
+Flightradar24's feed, falling back to adsb.fi and adsb.lol (`feed_pick`)
+with routes from adsb.im or adsbdb, or the owner's receiver first. Its own set keys go after `kSetKeys`, its
 settings in their own blob, its state under its key, its host's status in
 the health block. Game Day's own reads, splashes and Home Assistant's
 sensors carry on whatever the areas show; its splash shows only where Game
@@ -721,8 +730,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   `test_watch.cpp` (the big-play watcher: which games, big plays from day
   scoreboards, when a read may run, when the board switches and goes back),
   `test_players.cpp` (favorite players), `test_apps.cpp` (the display
-  picker, its frame helpers and a stand-in display) and `test_networks.cpp`
-  (saved networks).
+  picker, its frame helpers and a stand-in display), `test_flights.cpp` (the
+  Flight Tracker: its feeds, sources and failover, routes, screens, settings
+  and the display's reads) and `test_networks.cpp` (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.
