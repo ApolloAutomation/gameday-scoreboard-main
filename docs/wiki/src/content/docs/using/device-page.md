@@ -159,6 +159,10 @@ They all start on. The sport pages say what each one shows: [football](/using/fo
 
 **Favorite players: Scores** shows whatever sports you follow, and names a favorite player who scores in place of the team's splash for that play. It works on its own, whatever the sport's switches and **Opponent scores too** say. See [Favorite players](/using/favorite-players/#the-celebration).
 
+:::note[Coming in the next release]
+**Play animations**, the first switch in the card, plays a short pixel-art play across the whole panel before a touchdown's, a home run's or a goal's splash: the quarterback's pass flying into the end zone, the run in, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL. The splash follows for its usual 7 seconds. It starts on, and Home Assistant has it too, as **Play Animations**. **Try it** under it plays one on the panel now, in your team's colors, with no splash, while the Scoreboard page is up: **Pass**, **Run**, **Home run**, **Goal (soccer)** or **Goal (hockey)**. See [Play animations](/using/football/#play-animations), [home runs](/using/baseball/#runs-home-runs-grand-slams-and-walk-offs), [soccer goals](/using/soccer/#goal-animation) and [hockey goals](/using/hockey/#goal-animation).
+:::
+
 **Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game.
 
 Three more controls under it are for big plays in other games:

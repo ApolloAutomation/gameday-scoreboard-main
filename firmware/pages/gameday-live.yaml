@@ -58,7 +58,7 @@ script:
   - id: tt_hide_splash
     mode: restart
     then:
-      - delay: !lambda 'return ::espn::kSplashMs;'
+      - delay: !lambda 'return gameday::splash_stay_ms();'
       - lambda: |-
           if (gameday::BoardView *v = gameday::board_view())
             gameday::board_hide_splash(*v);

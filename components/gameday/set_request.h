@@ -31,7 +31,7 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "play",      "odds",       "opp",       "panels",   "wiring",     "bootaddr",
                                     "lockon",    "release",    "collide",   "favs",     "today",      "live",
                                     "autoupd",   "count",      "match",     "beta",     "alerts",     "alertfav",
-                                    "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
+                                    "anim",      "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
                                     "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
                                     "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
                                     "display",   "splitteam",  "split"};
@@ -282,6 +282,7 @@ enum class SetKind : uint8_t {
   CLOCK_SIZE,   // value, 0 Normal or 1 Large: the clock's digits
   TEXT_SIZE,    // value, 0 Normal or 1 Large: the ticker's letters
   MAIN_DISPLAY, // value, apps.h's Display: what the main area shows
+  ANIM,         // on, play animations before big plays' splashes
 };
 
 struct TeamRef {
@@ -616,6 +617,8 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::FOLLOW);
   if (k == "alertfav")
     return on(SetKind::ALERTFAV);
+  if (k == "anim")
+    return on(SetKind::ANIM);
   if (k == "idle") {
     op.kind = SetKind::IDLE;
     op.value = read_int(v);

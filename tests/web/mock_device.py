@@ -10,7 +10,8 @@ routes with the response shapes from components/gameday/gameday.cpp:
                          Crypto's, the Flight Tracker's); 400 when none match (player= and
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
-  POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
+  POST /gameday/action   400 without do=, 404 for a name the firmware does not know
+                         (anim takes play=pass|run|ret|hr|soccer|hockey);
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
   POST /gameday/wifi     forget=<ssid>; 404 when it is not saved
@@ -341,7 +342,7 @@ INITIAL = {
     # Clock size and Text size: 0 Normal, 1 Large.
     "clocksize": 0, "textsize": 0,
     # Big-play alert types on, as bit (type - 1).
-    "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False,
+    "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False, "anim": True,
     # The big-play watcher (components/gameday/watch.h): stay in seconds.
     "watch": True, "watchstay": 60, "watchmine": False,
     "misses": 0, "captive": False, "stale_s": 4, "fallback": False, "recap": False, "follow": False,
@@ -855,7 +856,7 @@ def apply_set(kv):
                 STATE["tz"], STATE["tz_name"] = i, TZS[i]
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
-        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "watch",
+        elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "anim", "watch",
                    "watchmine"):
             STATE[k] = v == "1"
             if k == "watch" and v != "1":
@@ -1161,7 +1162,7 @@ class Handler(BaseHTTPRequestHandler):
             LOG.append({"path": u.path, "q": q})
             if not q.get("do"):
                 return self._json(400, {"error": "do is required"})
-            if q["do"] not in ("refresh", "qc", "power_ok"):
+            if q["do"] not in ("refresh", "qc", "power_ok", "anim"):
                 return self._json(404, {"error": "unknown action"})
             if q["do"] == "power_ok" and STATE.get("health"):
                 STATE["health"]["power"] = "ok"

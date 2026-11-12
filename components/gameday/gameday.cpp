@@ -15,6 +15,8 @@
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "board_view.h"
+#include "scene.h"
+#include "scene_view.h"
 #include "psram_tasks.h"
 #include "timezones.h"
 #include "timezones_parsed.h"
@@ -2075,6 +2077,42 @@ void GamedayComponent::set_alerts(uint32_t on) {
   this->save_prefs9_();
 }
 
+// The page's Try it: a scene alone, no splash
+void GamedayComponent::try_anim_(const std::string &play) {
+#ifdef USE_LVGL
+  BoardView *v = board_view();
+  if (v == nullptr || v->splash == nullptr)
+    return;
+  if (scene_playing()) {
+    ESP_LOGI(TAG, "Play animation: one is already playing");
+    return;
+  }
+  ::espn::AnimArgs a;
+  a.kind = play == "run"      ? ::espn::AnimKind::TD_RUN
+           : play == "ret"    ? ::espn::AnimKind::TD_RETURN
+           : play == "hr"     ? ::espn::AnimKind::HOME_RUN
+           : play == "soccer" ? ::espn::AnimKind::SOCCER_GOAL
+           : play == "hockey" ? ::espn::AnimKind::HOCKEY_GOAL
+                              : ::espn::AnimKind::TD_PASS;
+  if (a.kind == ::espn::AnimKind::HOME_RUN) {
+    a.dist = 410;
+    a.flags = 3 << ::espn::kAnimFieldShift;
+  }
+  const UpdateFields &f = this->last_fields_;
+  if (!scene_play(v->splash, a, f.team_color, f.opponent_color, millis(), nullptr))
+    ESP_LOGI(TAG, "Play animation: shows on the Scoreboard page only");
+#endif
+}
+
+void GamedayComponent::set_anim(bool on) {
+  const uint8_t flags = on ? (this->prefs9_.flags & ~ALERT9_NOANIM) : (this->prefs9_.flags | ALERT9_NOANIM);
+  if (flags == this->prefs9_.flags)
+    return;
+  this->prefs9_.flags = flags;
+  this->save_prefs9_();
+  ESP_LOGI(TAG, "Play animations: %s", on ? "on" : "off");
+}
+
 void GamedayComponent::set_alerts_favorites_only(bool on) {
   const uint8_t flags = on ? (this->prefs9_.flags | ALERT9_FAV) : (this->prefs9_.flags & ~ALERT9_FAV);
   if (flags == this->prefs9_.flags)
@@ -2456,7 +2494,7 @@ bool GamedayComponent::idle_update_() {
   in.board_ready = this->board_ready_;
   in.connected = network::is_connected();
   // The idle display waits for a splash, a win's too
-  in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_);
+  in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_, this->splash_stay_ms_);
   in.area2_busy = this->a2_busy_();
   ::espn::IdleState s = ::espn::idle_state(in);
   // Another display on the main area: its own busy decides.
@@ -6220,12 +6258,17 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
 
   // No Game Day splash while another display has the board.
+  if (this->main_view_ != ::espn::MainView::GAMEDAY || !this->anim_on())
+    f.splash_anim = 0;
   if (!f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY) {
-    ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
+    ESP_LOGI(TAG, "Splash: %s%s%s", f.splash_text.c_str(), f.splash_anim ? ", scene " : "",
+             f.splash_anim ? ::espn::anim_name((::espn::AnimKind) f.splash_anim) : "");
     this->splash_ms_ = millis() == 0 ? 1 : millis();
+    f.splash_seq = this->splash_ms_;
+    this->splash_stay_ms_ = ::espn::kSplashMs + ::espn::scene_ms((::espn::AnimKind) f.splash_anim);
     // A 2x2's bottom half waits under it
     if (this->a2_covered_(this->splash_ms_))
-      this->set_timeout("a2_uncover", ::espn::kSplashMs, [this]() { this->a2_uncovered_(); });
+      this->set_timeout("a2_uncover", this->splash_stay_ms_, [this]() { this->a2_uncovered_(); });
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
@@ -6422,6 +6465,12 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
       f.splash_side = 1;
     f.splash_lead = splash.lead;
     f.splash_points = splash.points;
+    // A scene needs to know whose play it was
+    f.splash_anim = f.splash_side == 0 || f.splash_side == 1 ? splash.anim : 0;
+    f.splash_anim_dist = splash.anim_dist;
+    // The board's right team scores leftward
+    f.splash_anim_flags = (uint8_t) ((splash.anim_flags & ~::espn::kAnimMirror) |
+                                     (f.splash_side == 1 ? ::espn::kAnimMirror : 0));
   }
 
   TickerOptions opts;
@@ -7080,6 +7129,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["opp"] = this->opponent_splashes();
   doc["alerts"] = this->alerts_on();
   doc["alertfav"] = this->alerts_favorites_only();
+  doc["anim"] = this->anim_on();
   doc["watch"] = this->watch_on();
   doc["watchstay"] = this->watch_stay_ms() / 1000;
   doc["watchmine"] = this->watch_from_mine();
@@ -7628,7 +7678,8 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
       request->send(400, "application/json", "{\"error\":\"do is required\"}");
       return;
     }
-    bool known = name == "refresh" || name == "qc" || name == "power_ok";
+    bool known = name == "refresh" || name == "qc" || name == "power_ok" || name == "anim";
+    const std::string play = request->arg("play");
 #ifdef GAMEDAY_DEMO
     known = known || name == "demo" || name == "demo_stop";
 #endif
@@ -7636,9 +7687,11 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
       request->send(404, "application/json", "{\"error\":\"unknown action\"}");
       return;
     }
-    this->defer([this, name]() {
+    this->defer([this, name, play]() {
       if (name == "refresh")
         this->refresh_now();
+      else if (name == "anim")
+        this->try_anim_(play);
       else if (name == "power_ok")
         this->clear_power_cap();
 #ifdef GAMEDAY_DEMO
@@ -7821,6 +7874,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::ALERTS:
         this->set_alerts(op.mask);
+        break;
+      case ::espn::SetKind::ANIM:
+        this->set_anim(op.on);
         break;
       case ::espn::SetKind::ALERTFAV:
         this->set_alerts_favorites_only(op.on);

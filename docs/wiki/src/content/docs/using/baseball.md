@@ -51,6 +51,10 @@ The logo says whose run it was, so the other side's splash leaves its abbreviati
 
 A home run, a grand slam and a walk-off get fireworks on black with the words in the team's color, the fireworks around the logo and the runs, above the words. Other runs flash the screen in the team's color. The other side's splashes need **Opponent scores too** on.
 
+:::note[Coming in the next release]
+Before a home run's, a grand slam's or a home run walk-off's splash, the panel plays the home run across the whole screen for about 3.5 seconds, in pixel art with players in the team's colors: the pitch, the swing, and the ball flying over the outfield wall while the outfielder leaps for it and misses. The batter flips his bat and starts his trot. When ESPN says how far it went, the ball lands just past the wall, in the stands, or leaves the screen for the longest ones, and the distance shows at the top, like **401 FT**, with where it went, like **RIGHT CENTER**, on three or four panels in a row. Then the splash shows for its usual 7 seconds. A home run told from the score alone, in another game, plays without a distance. **Play animations** in the Celebrations card turns them off. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
 
 When your team wins, a victory splash with fireworks shows your logo and "WINS".

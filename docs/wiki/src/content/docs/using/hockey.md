@@ -35,6 +35,14 @@ Goal splashes have their own switch in the Celebrations card. See [Celebrations]
 
 Every goal splashes the same way. ESPN's words for a goal don't say whether it came on a power play or into an empty net, and the number after the scorer's name counts goals this season, not this game, so there is no power play goal, empty net goal or hat trick splash.
 
+### Goal animation
+
+:::note[Coming in the next release]
+Before a goal's splash, the panel plays the goal across the whole screen for about 3 seconds, in pixel art, with skaters in the scoring team's colors on a white rink with its blue and red lines and the blue crease: a skater carries the puck in, winds up and slaps it, the puck streaks across the ice over the goalie's stacked pads into the net, the net shakes and the red goal light behind it flashes, and the skater raises his stick. Then a long **GOOOOAAALLL** grows in letter by letter across the top in the team's colors, with a flash at the end, while the goal light keeps flashing. The word stretches to fit: GOOOAL on a single panel, and in letters twice as big on two rows of two; more O's, A's and L's on 128x64 and on three or four panels in a row.
+
+The scoring team always shoots from its own side of the board toward the other side, so a goal by the team on the right goes right to left. A team whose color would vanish on the ice plays in a darker shade of it. Then the splash shows for its usual 7 seconds. A shootout attempt gets no animation, and neither does a goal the panel can't pin on one team, like a goal for each side between two reads. **Play animations** in the Celebrations card turns it off, and **Try it** there plays one now. See [Celebrations](/using/device-page/#celebrations).
+:::
+
 When your team wins, a victory splash with fireworks shows your logo and "WINS".
 
 A goal in another hockey game can take the board for a minute, with **Switch to big plays in other games** on, for either team. The panel checks those games about every 45 seconds. See [Big plays in other games](/using/modes/#big-plays-in-other-games).

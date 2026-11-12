@@ -881,6 +881,23 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await sw("Favorite teams only").click();
   await expectSet(request, { alertfav: "1" });
   await expect(sw("Favorite teams only")).toBeChecked();
+  // Play animations: on by default
+  await expect(sw("Play animations")).toBeChecked();
+  await sw("Play animations").click();
+  await expectSet(request, { anim: "0" });
+  await expect(sw("Play animations")).not.toBeChecked();
+  await page.locator("#animTryRow").getByRole("button", { name: "Run", exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("run");
+  await page.locator("#animTryRow").getByRole("button", { name: "Goal (soccer)" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("soccer");
+  await page.locator("#animTryRow").getByRole("button", { name: "Goal (hockey)" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("hockey");
 
   // A Yankees panel with an Arsenal and a Pacers favorite.
   await reset(request, {
@@ -947,11 +964,13 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   for (const h of await heads.all()) await expect(h).toHaveCSS("margin-top", "14px");
 
   // Firmware from before alerts: no switches, no Favorite teams only.
-  await reset(request, { alerts: null, alertfav: null });
+  await reset(request, { alerts: null, alertfav: null, anim: null });
   await page.reload();
   await expect(sw("Opponent scores too")).toBeVisible();
   await expect(page.locator("#alertCtls")).toBeHidden();
   await expect(page.locator("#alertFavRow")).toBeHidden();
+  await expect(page.locator("#animRow")).toBeHidden();
+  await expect(page.locator("#animTryRow")).toBeHidden();
 });
 
 test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {

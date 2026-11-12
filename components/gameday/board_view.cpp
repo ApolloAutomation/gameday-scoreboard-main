@@ -16,6 +16,7 @@
 #include "gameday.h"
 #include "logo_lru.h"
 #include "panel_text.h"
+#include "scene_view.h"
 #include "setup_qr.h"
 
 static_assert(LV_TXT_COLOR_CMD[0] == esphome::gameday::kRecolorCmd, "__init__.py defines LV_TXT_COLOR_CMD");
@@ -643,6 +644,47 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   }
 }
 
+namespace {
+
+// The scene's splash: its fireworks wait for the scene's end
+uint32_t scene_seq = 0;
+uint32_t stay_ms = ::espn::kSplashMs;
+bool fx_wait = false;
+Spot fx_wait_at{};
+int16_t fx_wait_h = 0;
+uint32_t fx_wait_color = 0;
+
+void scene_reveal() {
+  BoardView *m = page_view;
+  if (m == nullptr || !fx_wait)
+    return;
+  fx_wait = false;
+  if (m->splash == nullptr || lv_obj_has_flag(m->splash, LV_OBJ_FLAG_HIDDEN))
+    return;
+  if (!fx_start(m->splash, FxHost::BOARD, fx_wait_at, fx_wait_h))
+    splash_paint(*m, false, fx_wait_color);
+}
+
+// A redraw of the same splash never replays it
+bool splash_scene(BoardView &v, const UpdateFields &f) {
+  if (f.splash_seq != 0 && f.splash_seq == scene_seq)
+    return scene_playing();
+  scene_seq = f.splash_seq;
+  scene_stop();
+  fx_wait = false;
+  bool on = false;
+  if (f.splash_anim != 0 && f.splash_seq != 0) {
+    const bool opp = f.splash_side == 1;
+    const ::espn::AnimArgs a{(::espn::AnimKind) f.splash_anim, f.splash_anim_dist, f.splash_anim_flags};
+    on = scene_play(v.splash, a, opp ? f.opponent_color : f.team_color, opp ? f.team_color : f.opponent_color,
+                    f.splash_seq, scene_reveal);
+  }
+  stay_ms = ::espn::kSplashMs + (on ? ::espn::scene_ms((::espn::AnimKind) f.splash_anim) : 0);
+  return on;
+}
+
+}  // namespace
+
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo, image::Image *opp_logo) {
   DrawResult r;
   const int W = v.w;
@@ -912,13 +954,21 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     const SplashBox sb = splash_box(W, v.splash_h);
     r.fx = L.logos ? L.fx : Spot{(int16_t) sb.fx_x, (int16_t) sb.band_y, (int16_t) std::min(W, kFxPx)};
     r.fx_h = L.logos ? L.fx_h : (int16_t) kBoardRows;
-    bool fx = false;
+    bool fx = false, wait = false;
     if (&v == page_view) {
-      fx = r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
+      const bool scene = splash_scene(v, f);
+      wait = scene && r.big_splash;
+      if (wait) {
+        fx_wait = true;
+        fx_wait_at = r.fx;
+        fx_wait_h = r.fx_h;
+        fx_wait_color = f.splash_color;
+      }
+      fx = !scene && r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
       if (!fx)
         fx_stop(FxHost::BOARD);
     }
-    splash_paint(v, fx, f.splash_color);
+    splash_paint(v, fx || wait, f.splash_color);
     show(v.splash, true);
     r.splash = true;
   } else if (logos_key(f) != v.tile_logos) {
@@ -928,7 +978,13 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   return r;
 }
 
+uint32_t splash_stay_ms() { return stay_ms; }
+
 void board_hide_splash(BoardView &v) {
+  if (&v == page_view) {
+    scene_stop();
+    fx_wait = false;
+  }
   show(v.splash, false);
   fx_stop(FxHost::BOARD);
 }
