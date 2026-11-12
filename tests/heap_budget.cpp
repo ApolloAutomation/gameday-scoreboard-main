@@ -11,6 +11,7 @@
 //   make -C tests heap
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <new>
 #include <sstream>
@@ -19,9 +20,14 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "app_f1.h"
+#include "f1.h"
+#include "flights.h"
+#include "props.h"
 #include "watch.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
+#include "source_markets.h"
 
 using namespace espn;
 
@@ -152,6 +158,21 @@ static void event(const char *name, const std::string &file, Sport sport) {
   });
 }
 
+// A box score read for player props: eight players watched.
+static void box_read(const char *name, const std::string &file, Sport sport, std::initializer_list<uint32_t> ids) {
+  std::string json = slurp("fixtures/" + file);
+  PlayerWatch w;
+  for (uint32_t id : ids)
+    if (w.n < PlayerWatch::kMax)
+      w.ids[w.n++] = id;
+  measure(name, [&] {
+    BoxCutter cut;
+    StringReader in(json, &cut);
+    std::vector<BoxLine> lines;
+    return parse_box(in, sport, w, lines) && !lines.empty();
+  });
+}
+
 // Every game marked on, so each is read in full.
 static void watch_day(const char *name, const std::string &file, League league) {
   std::string json;
@@ -226,6 +247,15 @@ int main() {
   event_players("poll_soccer_event_players", "event_soccer_second_half.json", Sport::SOCCER,
                 {199680, 205448, 1, 2, 3, 4, 5, 6});
 
+  // Finals have the most rows a box score has.
+  box_read("box_nfl_final", "summary_nfl_final.json", Sport::FOOTBALL,
+           {4360310, 4882093, 4432620, 4686361, 3043078, 3916433, 4038441, 3116365});
+  box_read("box_nba_live", "summary_nba_live.json", Sport::BASKETBALL,
+           {4431680, 4433137, 4592691, 4701230, 1, 2, 3, 4});
+  box_read("box_mlb_final", "summary_mlb_final.json", Sport::BASEBALL,
+           {5149101, 5080761, 4917869, 35013, 33481, 40810, 42584, 4679983});
+  box_read("box_nhl_final", "summary_nhl_final.json", Sport::HOCKEY,
+           {3114732, 4319858, 4587845, 4024833, 4587943, 3114766, 4755690, 4272888});
   watch_day("watch_nfl_day", "scoreboard_nfl.json", League::NFL);
   watch_day("watch_mlb_day", "day_mlb_20261012.json", League::MLB);
   watch_day("watch_soccer_day", "day_bra_20261012.json", League::MLS);
@@ -261,6 +291,70 @@ int main() {
     measure("racing_calendar", [&] {
       GolfNext n;
       return parse_racing_calendar(json, parse_iso8601_z("2026-11-02T12:00Z"), std::string("202611010020"), 0, n) == 1;
+    });
+  }
+  // The F1 display's reads, each at its largest.
+  {
+    std::string json = slurp("fixtures/racing_header_f1_final.json");
+    measure("f1_live_header", [&] {
+      F1Live live;
+      return parse_f1_live(json, live) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_next.json");
+    measure("f1_next", [&] {
+      F1Schedule s;
+      return parse_f1_race(json, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_driver_standings.json");
+    measure("f1_driver_standings", [&] {
+      F1Standings s;
+      return parse_f1_standings(json, true, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_constructor_standings.json");
+    measure("f1_constructor_standings", [&] {
+      F1Standings s;
+      return parse_f1_standings(json, false, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_last_results.json");
+    measure("f1_last_results", [&] {
+      F1Results r;
+      return parse_f1_results(json, r) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/f1_circuit_vegas.json");
+    measure("f1_circuit", [&] {
+      F1CircuitFacts c;
+      return parse_f1_circuit(json, c) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/f1_athlete_verstappen.json");
+    measure("f1_athlete", [&] {
+      F1Athlete a;
+      return parse_f1_athlete(json, a) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/openmeteo_monaco.json");
+    measure("f1_weather", [&] {
+      F1Weather w;
+      return parse_f1_weather(json, w) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/met_vegas.json");
+    measure("f1_met_weather", [&] {
+      F1Weather w;
+      return parse_met_weather(json, parse_iso8601_z("2026-11-12T05:04:00Z"), w) == 1;
     });
   }
   {
@@ -365,6 +459,86 @@ int main() {
       return parse_ht_day(json, live, &next, &finals, &pending);
     });
   }
+
+  // Eight symbols in one Yahoo read, then the fallbacks.
+  {
+    MarketBlob list{};
+    for (const char *t : {"AAPL", "SPY", "^GSPC", "BRK.B", "BTC", "ETH", "DOGE", "SHIB"}) {
+      MarketSymbol s{};
+      parse_market_symbol(t, MarketKind::NONE, s);
+      market_put(list, 0, s);
+    }
+    const int64_t now = parse_iso8601_z("2026-11-12T04:07Z");
+    std::string json = slurp("fixtures/markets_yahoo_spark.json");
+    measure("markets_yahoo_spark", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_yahoo_quotes(json, list, q) == 8;
+    });
+    std::string kraken = slurp("fixtures/markets_kraken_ticker.json");
+    measure("markets_kraken", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_kraken_quotes(kraken, list, now, q) == 4;
+    });
+    std::string nasdaq = slurp("fixtures/markets_nasdaq_watchlist.json");
+    measure("markets_nasdaq", [&] {
+      MarketQuote q[kMarketSlots];
+      return parse_nasdaq_quotes(nasdaq, list, now, q) == 3;
+    });
+  }
+  // Flight Tracker: each read at its largest.
+  flights::set_json_allocator(&json_alloc);
+  {
+    flights::Home home;
+    home.lat = 40.64;
+    home.lon = -73.78;
+    home.radius_nm = 25;
+    std::string json = slurp("fixtures/flights_adsbfi_jfk.json");
+    measure("flights_adsbfi", [&] {
+      flights::Nearby n;
+      return flights::parse_aircraft(json, home, n) && n.n == flights::kNear;
+    });
+    // A receiver's whole list: ten copies, memory still flat.
+    const size_t a = json.find('['), z = json.rfind(']');
+    std::string big = json.substr(0, a + 1);
+    for (int i = 0; i < 10; i++)
+      big += (i ? "," : "") + json.substr(a + 1, z - a - 1);
+    big += json.substr(z);
+    measure("flights_receiver_570", [&] {
+      flights::Nearby n;
+      return flights::parse_aircraft(big, home, n) && n.total == 570;
+    });
+    std::string routes = slurp("fixtures/flights_routeset_jfk.json");
+    const char *cs[] = {"JBU1407", "LOT5N", "UAL2495", "JBU416", "CNS482", "AAL1070", "UAL1263", "UPS1125"};
+    flights::RouteAsk ask;
+    for (const char *c : cs)
+      strcpy(ask.callsign[ask.n++], c);
+    flights::RouteCache cache;
+    measure("flights_routeset", [&] { return flights::parse_routeset(routes, ask, cache, 1); });
+    std::string db = slurp("fixtures/flights_adsbdb_ual755.json");
+    measure("flights_adsbdb", [&] { return flights::parse_adsbdb(db, "UAL755", cache, 1); });
+    // Flightradar24's feed, ten times over: flat too.
+    std::string fr24 = slurp("fixtures/flights_fr24_nyc.json");
+    std::string fr24_big = "{";
+    for (int i = 0; i < 10; i++)
+      fr24_big += (i ? "," : "") + fr24.substr(1, fr24.rfind('}') - 1);
+    fr24_big += "}";
+    flights::Home nyc = home;
+    nyc.lat = 40.71;
+    nyc.lon = -74.01;
+    measure("flights_fr24_340", [&] {
+      flights::Nearby n;
+      return flights::parse_fr24(fr24_big, nyc, 1794457500, n) && n.total == 340;
+    });
+    flights::Nearby n;
+    flights::parse_aircraft(json, home, n);
+    measure("flights_frame_256", [&] {
+      flights::FrameOpts o;
+      o.w = 256;
+      const flights::Frame f = flights::flight_frame(n, &cache, o, 1);
+      return !f.items.empty() && !f.ticker.empty();
+    });
+  }
+  flights::set_json_allocator(nullptr);
 
   printf("\n}\n");
   set_json_allocator(nullptr);

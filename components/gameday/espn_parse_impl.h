@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <utility>
 
@@ -433,8 +434,63 @@ int racing_next_from_doc(JsonObjectConst root, int64_t now_epoch, const std::str
 void fill_game_filter(JsonObject ev, Sport sport);
 bool game_from_event(JsonObjectConst ev, Sport sport, uint32_t our_team_id, GameSnapshot &out);
 DayGame day_game(JsonObjectConst ev);
+// Box score reads (box_score.cpp): watched players' lines only.
+void fill_box_filter(JsonDocument &f);
+bool box_from_doc(JsonObjectConst root, Sport sport, const PlayerWatch &w, std::vector<BoxLine> &out);
 
 }  // namespace detail
+
+// Ends a summary right after its root "boxscore" member.
+class BoxCutter {
+ public:
+  // Each byte read, in order (box_score.cpp).
+  void feed(char c);
+  bool cut() const { return this->state_ != READ; }
+  // Once cut: '}' to close the root, then the end.
+  int tail() {
+    if (this->state_ == DONE)
+      return -1;
+    this->state_ = DONE;
+    return '}';
+  }
+  size_t used() const { return this->used_; }
+
+ private:
+  enum State : uint8_t { READ, CLOSE, DONE };
+  size_t used_{0};
+  uint16_t depth_{0};
+  State state_{READ};
+  bool str_{false}, esc_{false}, key_{false}, want_key_{false}, box_{false};
+  uint8_t len_{0};
+  char name_[9]{};
+};
+
+// Reads a string like a socket, for host tests.
+class StringReader {
+ public:
+  explicit StringReader(const std::string &s, BoxCutter *cut = nullptr) : s_(s), cut_(cut) {}
+  int read() {
+    if (this->cut_ != nullptr && this->cut_->cut())
+      return this->cut_->tail();
+    if (this->at_ >= this->s_.size())
+      return -1;
+    const char c = this->s_[this->at_++];
+    if (this->cut_ != nullptr)
+      this->cut_->feed(c);
+    return (unsigned char) c;
+  }
+  size_t readBytes(char *buf, size_t n) {
+    size_t i = 0;
+    for (int c; i < n && (c = this->read()) >= 0; i++)
+      buf[i] = (char) c;
+    return i;
+  }
+
+ private:
+  const std::string &s_;
+  BoxCutter *cut_;
+  size_t at_{0};
+};
 
 // Must be set before any parse runs, since the fetch task reads it unlocked.
 inline void set_json_allocator(ArduinoJson::Allocator *allocator) { detail::json_allocator_slot() = allocator; }
@@ -708,6 +764,19 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
   if (watch)
     detail::players_from_event(doc.as<JsonObjectConst>(), *players, sport, out);
   return true;
+}
+
+// A summary's box score; the reader's BoxCutter ends it.
+template<typename TReader>
+bool parse_box(TReader &input, Sport sport, const PlayerWatch &w, std::vector<BoxLine> &out) {
+  JsonDocument filter(detail::json_allocator());
+  detail::fill_box_filter(filter);
+  JsonDocument doc(detail::json_allocator());
+  DeserializationError err = deserializeJson(doc, input, DeserializationOption::Filter(filter),
+                                              DeserializationOption::NestingLimit(40));
+  if (err)
+    return false;
+  return detail::box_from_doc(doc.as<JsonObjectConst>(), sport, w, out);
 }
 
 // A golf tour's scoreboard header (header_url). 1: the tour's event in

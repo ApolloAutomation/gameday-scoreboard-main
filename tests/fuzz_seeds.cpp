@@ -13,8 +13,12 @@
 #include <sstream>
 #include <string>
 
+#include "app_f1.h"
 #include "espn_parse.h"
+#include "f1.h"
+#include "flights.h"
 #include "source_hockeytech.h"
+#include "source_markets.h"
 #include "source_mlbstats.h"
 
 using namespace espn;
@@ -61,6 +65,27 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_ht_team_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_ht_game_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_ht_day_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_box_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_live_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_race_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_standings_filter(f, true); },
+      [](JsonDocument &f) { espn::detail::fill_f1_standings_filter(f, false); },
+      [](JsonDocument &f) { espn::detail::fill_f1_results_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_circuit_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_athlete_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_weather_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_met_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_yahoo_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_kraken_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_nasdaq_filter(f); },
+      [](JsonDocument &f) {
+        JsonDocument plane;
+        flights::fill_aircraft_filter(plane);
+        f["ac"].add(plane);
+        f["aircraft"].add(plane);
+      },
+      [](JsonDocument &f) { flights::fill_routeset_filter(f); },
+      [](JsonDocument &f) { flights::fill_adsbdb_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;
@@ -76,9 +101,17 @@ int main(int argc, char **argv) {
       JsonArray events = doc["events"];
       while (events.size() > kMaxEvents)
         events.remove(kMaxEvents);
+      JsonArray hours = doc["properties"]["timeseries"];  // MET Norway's forecast
+      while (hours.size() > kMaxEvents)
+        hours.remove(kMaxEvents);
       JsonArray dates = doc["dates"];  // an MLB Stats schedule's
       while (dates.size() > kMaxEvents)
         dates.remove(kMaxEvents);
+      for (const char *list : {"ac", "aircraft"}) {
+        JsonArray planes = doc[list];
+        while (planes.size() > kMaxEvents)
+          planes.remove(kMaxEvents);
+      }
       for (const char *list : {"Scorebar", "Gamesbydate"}) {  // HockeyTech's two game lists
         JsonArray games = doc["SiteKit"][list];
         while (games.size() > kMaxEvents)
@@ -92,6 +125,14 @@ int main(int argc, char **argv) {
           << out;
       espn_seeds++;
     }
+  }
+
+  // Flightradar24's feed has no filter: its fixtures as they are.
+  for (const auto &e : fs::directory_iterator(fixtures)) {
+    if (e.path().filename().string().rfind("flights_fr24", 0) != 0)
+      continue;
+    std::ofstream(espn_out / e.path().filename(), std::ios::binary) << slurp(e.path());
+    espn_seeds++;
   }
 
   // fuzz_espn also reads its input line by line as response headers and as

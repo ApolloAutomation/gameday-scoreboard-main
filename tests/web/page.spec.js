@@ -2661,6 +2661,12 @@ test("the idle display says what the panel shows now, and hides on firmware with
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a game you follow starts.");
   await expect(page.locator("#idleDimRow")).toBeVisible();
+  // Another display on the board: what lights it
+  await reset(request, { idle: 4, idle_view: "clock", dark: true, display: 3,
+                         displays: [{ id: 0, key: "gameday", name: "Game Day", split: 5 },
+                                    { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
+  await page.reload();
+  await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
   await reset(request, { idle: 2, idle_view: "" });
   await page.reload();
   await expect(page.locator("#idleCtls")).toBeVisible();
@@ -2749,6 +2755,283 @@ test("the second area posts its choice, and its team from the chooser, a minor l
   await expectSet(request, { split: "4" });
   await expect(page.locator("#splitTeamRow")).toBeHidden();
   expect((await deviceState(request)).splitteam.id).toBe(21);
+});
+
+// A firmware with displays besides Game Day lists them (apps.h).
+const DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 1, key: "f1", name: "F1", split: 6 },
+  { id: 2, key: "markets", name: "Stocks & Crypto", split: 7 },
+];
+
+test("Showing and the second area offer only the displays the firmware lists", async ({ page, request }) => {
+  await reset(request, { panels: 4 });
+  await page.goto("/");
+  const showing = page.getByRole("combobox", { name: "Showing" });
+  await expect(showing.locator("option")).toHaveText(["Scoreboard", "Clock"]);
+  const choices = page.locator("#split option");
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date"]);
+
+  await reset(request, { panels: 4, displays: DISPLAYS });
+  await page.reload();
+  await expect(showing.locator("option")).toHaveText(["Scoreboard", "Clock", "F1", "Stocks & Crypto"]);
+  await expect(showing).toHaveValue("Scoreboard");
+  // Game Day is offered once the main board shows another.
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date", "F1", "Stocks & Crypto"]);
+  await showing.selectOption({ label: "F1" });
+  await expectSet(request, { display: "1" });
+  await expect(showing).toHaveValue("display:1");
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date", "Game Day", "F1", "Stocks & Crypto"]);
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  await split.selectOption({ label: "Game Day" });
+  await expectSet(request, { split: "5" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Game Day.");
+  await split.selectOption({ label: "Stocks & Crypto" });
+  await expectSet(request, { split: "7" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Stocks & Crypto.");
+  expect((await deviceState(request)).split_now).toBe("markets");
+  // Back to the scoreboard on the main board.
+  await showing.selectOption("Scoreboard");
+  await expectSet(request, { display: "0" });
+  await expect(showing).toHaveValue("Scoreboard");
+  const st = await deviceState(request);
+  expect([st.display, st.display_now, st.split]).toEqual([0, "gameday", 7]);
+});
+
+// The Stocks & Crypto card (components/gameday/app_markets.h).
+const mktRows = (page) => page.locator("#mktList .mktrow > label");
+
+test("the Stocks & Crypto card shows only with the display, and the starting list", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#mktCard")).toBeHidden();
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.reload();
+  await expect(page.locator("#mktCard")).toBeVisible();
+  await expect(page.locator("#mktSum")).toHaveText("4 of 8 \u00b7 the starting list");
+  await expect(mktRows(page)).toHaveText(["SPYStock or fund \u00b7 Closed", "AAPLStock or fund \u00b7 Closed",
+                                          "BTCCrypto", "ETHCrypto"]);
+  const aapl = page.locator("#mktList .mktrow").nth(1);
+  await expect(aapl.locator(".bet")).toHaveText("355.63 +2.04%");
+  await expect(aapl.locator(".bet")).toHaveClass(/good/);
+  await expect(page.locator("#mktList .mktrow").nth(0).locator(".bet")).toHaveClass(/bad/);
+  await expect(page.getByRole("button", { name: "Move SPY up" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Move ETH down" })).toBeDisabled();
+  await expect(page.locator("#mktSrc")).toBeHidden();
+  await expect(page.locator("#mktOld")).toBeHidden();
+  await reset(request, { displays: DISPLAYS, display: 2, markets_src: "backup" });
+  await page.reload();
+  await expect(page.locator("#mktSrc")).toBeVisible();
+  await expect(page.locator("#mktRetry")).toBeHidden();
+  // Indexes alone: no backup, and prices hours old
+  await reset(request, { displays: DISPLAYS, display: 2, markets_src: "retry", markets_read: Math.floor(Date.now() / 1000) - 3 * 3600 });
+  await page.reload();
+  await expect(page.locator("#mktRetry")).toBeVisible();
+  await expect(page.locator("#mktSrc")).toBeHidden();
+  await expect(page.locator("#mktOld")).toHaveText(/^Prices as of .+\. The panel reads them only while Stocks & Crypto is up\.$/);
+});
+
+test("the Stocks & Crypto card adds, moves and removes symbols", async ({ page, request }) => {
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.goto("/");
+  const sym = page.locator("#mktSym");
+  await expect(page.locator("#mktHint")).toHaveText("Like AAPL, SPY, ^GSPC for the S&P 500, or BTC");
+  await sym.fill("tsla");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as TSLA, a stock or fund");
+  await sym.press("Enter");
+  await expectSet(request, { mkt: "0,TSLA,stock" });
+  await expect(mktRows(page)).toHaveCount(5);
+  await expect(page.locator("#mktSum")).toHaveText("5 of 8");
+  await expect(sym).toHaveValue("");
+  await page.getByRole("button", { name: "Move TSLA up" }).click();
+  await expectSet(request, { mktmove: "5,4" });
+  await expect(mktRows(page).nth(3)).toHaveText(/^TSLA/);
+  // A double tap removes one symbol, not two
+  await page.getByRole("button", { name: "Remove SPY" }).dblclick();
+  await expectSet(request, { mktdel: "1" });
+  await expect(mktRows(page).first()).toHaveText(/^AAPL/);
+  expect((await sets(request)).filter((q) => q.mktdel !== undefined)).toHaveLength(1);
+  await expect(page.getByRole("button", { name: "Remove AAPL" })).toBeEnabled();
+  // Read the way the panel reads them
+  await sym.fill("brk/b");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as BRK.B, a stock or fund");
+  await sym.fill("^gspc");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as GSPC, an index");
+  await sym.fill("sol");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as SOL, a coin, in US dollars");
+  await page.locator("#mktKind").selectOption("stock");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as SOL, a stock or fund");
+  await page.locator("#mktAdd").click();
+  await expectSet(request, { mkt: "0,SOL,stock" });
+  // A symbol Yahoo Finance doesn't list says so
+  await page.locator("#mktKind").selectOption("");
+  await sym.fill("zzzzq");
+  await page.locator("#mktAdd").click();
+  await expectSet(request, { mkt: "0,ZZZZQ,stock" });
+  await expect(page.locator("#mktList .mktrow", { hasText: "ZZZZQ" }).locator("small"))
+    .toHaveText("Yahoo Finance doesn't know this symbol");
+  const st = await deviceState(request);
+  expect(st.markets.syms.map((x) => x.sym)).toEqual(["AAPL", "BTC", "TSLA", "ETH", "SOL", "ZZZZQ"]);
+  expect(st.markets.defaults).toBe(false);
+});
+
+test("the Stocks & Crypto card says what's wrong with a symbol before posting it", async ({ page, request }) => {
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.goto("/");
+  const msg = page.locator("#mktMsg");
+  const add = page.locator("#mktAdd");
+  await add.click();
+  await expect(msg).toHaveText("Type a symbol, like AAPL or BTC.");
+  await page.locator("#mktSym").fill("AA!PL");
+  await expect(page.locator("#mktHint")).toHaveText("Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD");
+  await add.click();
+  await expect(msg).toHaveText("The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+  await page.locator("#mktSym").fill("aapl");
+  await expect(msg).toBeHidden();
+  await add.click();
+  await expect(msg).toHaveText("AAPL is in the list already.");
+  await page.locator("#mktSym").fill("^btc");
+  await page.locator("#mktKind").selectOption("crypto");
+  await add.click();
+  await expect(msg).toHaveText("A ^ symbol is an index. Set Kind to Index or Auto.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+  // Another name for a listed index
+  await reset(request, { displays: DISPLAYS, display: 2, markets: [{ sym: "SPX", kind: "index" }] });
+  await page.reload();
+  await page.locator("#mktSym").fill("^gspc");
+  await add.click();
+  await expect(msg).toHaveText("SPX is in the list already.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+  const full = ["SPY", "AAPL", "BTC", "ETH", "TSLA", "MSFT", "NVDA", "QQQ"].map((x) => ({ sym: x, kind: /BTC|ETH/.test(x) ? "crypto" : "stock" }));
+  await reset(request, { displays: DISPLAYS, display: 2, markets: full });
+  await page.reload();
+  await page.locator("#mktKind").selectOption("");
+  await page.locator("#mktSym").fill("doge");
+  await add.click();
+  await expect(msg).toHaveText("All 8 are in use. Remove one first.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+});
+
+// The Flight Tracker (app_flights.h) and Open-Meteo's place search.
+const FLIGHT_DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 3, key: "flights", name: "Flight Tracker", split: 8 },
+];
+const BROOKLYN = { results: [
+  { name: "Brooklyn", latitude: 40.6501, longitude: -73.94958, admin1: "New York", country: "United States" },
+  { name: "Brooklyn", latitude: 41.73361, longitude: -92.44546, admin1: "Iowa", country: "United States" },
+] };
+
+test("the Flight Tracker card finds a home by name and keeps the radius and receiver", async ({ page, request }) => {
+  await reset(request, {});
+  await page.goto("/");
+  await expect(page.locator("#flightCard")).toBeHidden();
+  await reset(request, { displays: FLIGHT_DISPLAYS });
+  let asked = "";
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => {
+    asked = new URL(route.request().url()).searchParams.get("name");
+    return route.fulfill({ json: BROOKLYN });
+  });
+  await page.reload();
+  const card = page.locator("#flightCard");
+  await expect(card).toBeVisible();
+  await expect(page.locator("#flightSum")).toHaveText("No location yet");
+  await expect(page.locator("#flightNow")).toHaveText("Set a home location to see the planes near it.");
+  await page.getByRole("textbox", { name: "Home location" }).fill("Brooklyn");
+  await page.getByRole("button", { name: "Find" }).click();
+  const picks = page.locator("#flightPicks button");
+  await expect(picks).toHaveText(["Brooklyn, New York, United States", "Brooklyn, Iowa, United States"]);
+  expect(asked).toBe("Brooklyn");
+  await picks.first().click();
+  await expectSet(request, { flyhome: "40.6501,-73.9496", flyplace: "Brooklyn, New York, United States" });
+  await expect(page.locator("#flightPicks")).toBeHidden();
+  await expect(page.locator("#flightHome")).toHaveText("Brooklyn, New York, United States (40.6501, -73.9496)");
+  await expect(page.locator("#flightSum")).toHaveText("Brooklyn, New York, United States");
+  await expect(page.locator("#flightNow")).toHaveText(
+    "Looking for planes. Choose Flight Tracker under Showing to put it on the panel.");
+
+  const radius = page.getByRole("combobox", { name: /^Within/ });
+  await expect(radius.locator("option")).toHaveText(["5 mi", "10 mi", "15 mi", "25 mi", "50 mi", "100 mi"]);
+  await expect(radius).toHaveValue("10mi");
+  await radius.selectOption({ label: "25 mi" });
+  await expectSet(request, { flyradius: "25mi" });
+  await expect(radius).toHaveValue("25mi");
+
+  await page.getByRole("textbox", { name: "Your own receiver" }).fill("my pi");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("#flightMsg")).toHaveText("A receiver's address has no spaces, like 192.168.1.50.");
+  await page.getByRole("textbox", { name: "Your own receiver" }).fill("192.168.1.50");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expectSet(request, { flyreceiver: "192.168.1.50" });
+  await expect(page.locator("#flightMsg")).toBeHidden();
+
+  await page.getByRole("combobox", { name: "Showing" }).selectOption({ label: "Flight Tracker" });
+  await expectSet(request, { display: "3" });
+  await expect(page.locator("#flightNow")).toHaveText("Looking for planes.");
+  const st = await deviceState(request);
+  expect(st.flights).toEqual({ home: "40.6501,-73.9496", place: "Brooklyn, New York, United States", radius: 25,
+                               radius_unit: "mi", receiver: "192.168.1.50", units: "imperial" });
+  expect(st.display_now).toBe("flights");
+
+  await page.locator("#flightClear").click();
+  await expectSet(request, { flyhome: "none" });
+  await expect(page.locator("#flightHomeRow")).toBeHidden();
+  expect((await deviceState(request)).flights.place).toBe("");
+});
+
+test("the Flight Tracker card takes a latitude and longitude and says where the planes come from", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS, tz: 11, display: 3,
+                         flights: { home: "48.1374,11.5755", place: "Munich", status: "ok", source: "adsbfi", planes: 12 } });
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.locator("#flightNow")).toHaveText("12 planes nearby, from adsb.fi while Flightradar24 is out.");
+  const radius = page.getByRole("combobox", { name: /^Within/ });
+  // Choices in the panel's units, plus the radius it has.
+  await expect(radius.locator("option")).toHaveText(["5 km", "10 km", "25 km", "50 km", "100 km", "150 km", "10 mi"]);
+  await expect(radius).toHaveValue("10mi");
+  const where = page.getByRole("textbox", { name: "Home location" });
+  await where.fill("95, 10");
+  await where.press("Enter");
+  await expect(page.locator("#flightMsg")).toHaveText("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+  await where.fill("51.5 -0.12");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expectSet(request, { flyhome: "51.5000,-0.1200", flyplace: "" });
+  await expect(page.locator("#flightHome")).toHaveText("51.5000, -0.1200");
+  await where.fill("Atlantis");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.locator("#flightMsg")).toHaveText(
+    "Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+
+  await reset(request, { displays: FLIGHT_DISPLAYS, split: 8, panels: 4,
+                         flights: { home: "48.1374,11.5755", status: "failing" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText(
+    "Can't reach the flight data right now. The panel keeps trying.");
+  await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+
+  // Near the 180th meridian adsb.fi is read on purpose
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3,
+                         flights: { home: "-16.4300,179.3800", status: "ok", source: "adsbfi", planes: 3, fr24: "skip" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText("3 planes nearby, from adsb.fi.");
+
+  // In the second area at night: the date under the board's clock
+  await reset(request, { displays: FLIGHT_DISPLAYS, split: 8, panels: 4, night_now: true,
+                         flights: { home: "48.1374,11.5755", status: "old", source: "fr24", planes: 12 } });
+  await page.reload();
+  expect((await deviceState(request)).split_now).toBe("date");
+  await expect(page.locator("#flightNow")).toHaveText("Not reading planes now: the panel reads them only while "
+    + "Flight Tracker is on it. The clock is up for the night hours, and Flight Tracker comes back after them.");
+
+  // Picked, with the night clock up and an old count
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3, night_now: true,
+                         flights: { home: "48.1374,11.5755", status: "old", source: "fr24", planes: 12 } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText("Not reading planes now: the panel reads them only while "
+    + "Flight Tracker is on it. The clock is up for the night hours, and Flight Tracker comes back after them.");
 });
 
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {
@@ -3291,6 +3574,211 @@ test("a player the panel didn't keep is never shown as added", async ({ page, re
   await expect(page.locator("#playerList .playerrow label").last()).toContainText("COOK");
   expect(await page.locator("#toast").textContent()).not.toBe("Added Josh Allen");
   expect((await deviceState(request)).players.map((pl) => pl.name)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "COOK"]);
+});
+
+// ---- player props ----
+const pickPropTeam = async (page, name) => {
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".sheet")).toHaveAttribute("aria-label", "Pick the player's team");
+  await page.locator("#q").fill(name);
+  await page.locator("#tiles .tile", { hasText: name }).click();
+  await expect(page.locator("#modal")).not.toHaveClass(/open/);
+  await expect(page.locator("#betTeam")).toHaveText(name);
+};
+
+test("the Bets card adds a player prop on a player from the team's roster", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#propRows")).toBeHidden();
+  await page.locator("#betType").selectOption("prop");
+  await expect(page.locator("#propRows")).toBeVisible();
+  await expect(page.locator("#betTeamHint")).toHaveText("The player's team. Minor league teams have no player props.");
+  // Minor league teams have no rosters on ESPN.
+  await page.locator("#betTeam").click();
+  await expect(page.locator(".tabs button", { hasText: "MiLB" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "AHL" })).toBeHidden();
+  await expect(page.locator(".tabs button", { hasText: "Golf" })).toBeHidden();
+  await page.getByRole("button", { name: "Close" }).click();
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(page.locator("#propPick option")).toHaveText([
+    "Josh Allen · QB #17", "Tyler Bass · PK #2", "James Cook · RB #4", "Marquez Valdes-Scantling · WR #11",
+  ]);
+  // Football's stats, in the page's words.
+  await expect(page.locator("#propStat option").first()).toHaveText("Passing yards");
+  await expect(page.locator("#propStat option", { hasText: "Anytime touchdown" })).toHaveCount(1);
+  await expect(page.locator("#propStat option", { hasText: "Rebounds" })).toHaveCount(0);
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await expect(page.locator("#betLine")).toHaveAttribute("inputmode", "decimal");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await expect(page.locator("#toast")).toHaveText("Added ALLEN O 250.5 PASS YDS");
+  await expect(page.locator("#betList .proprow label")).toContainText("ALLEN O 250.5 PASS YDS");
+  await expect(page.locator("#betList .proprow small")).toHaveText("Starts when the panel shows a BUF game");
+  await expect(page.locator("#betSum")).toHaveText("1 prop");
+  // A yes prop has no side or line.
+  await page.locator("#propPick").selectOption("nfl:4379399");
+  await page.locator("#propStat").selectOption("td");
+  await expect(page.locator("#propSideRow")).toBeHidden();
+  await expect(page.locator("#betLineRow")).toBeHidden();
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,td,yes," });
+  await expect(page.locator("#toast")).toHaveText("Added COOK ANY TD");
+  // An under on a whole number
+  await page.locator("#propStat").selectOption("rushyds");
+  await page.locator("#propSide").selectOption("under");
+  await page.locator("#betLine").fill("70");
+  await page.locator("#betLine").press("Enter");
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,rushyds,under,70" });
+  expect((await deviceState(request)).props.map((p) => p.slot)).toEqual([1, 2, 3]);
+  await page.getByRole("button", { name: "Remove COOK ANY TD" }).click();
+  await expectSet(request, { propdel: "2" });
+  await expect(page.locator("#betList .proprow label")).toHaveCount(2);
+  // Back to a spread: the prop's rows go.
+  await page.locator("#betType").selectOption("spread");
+  await expect(page.locator("#propRows")).toBeHidden();
+  await expect(page.locator("#betSign")).toBeVisible();
+});
+
+test("the Favorite players button narrows the prop's players to the favorites, across teams", async ({ page, request }) => {
+  await reset(request, { players: [ALLEN, { l: "nba", id: 4594268, team: 16, name: "EDWARDS" }] });
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  const favs = page.locator("#propFavs");
+  await expect(favs).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("#propPickHint")).toHaveText("From the team's roster, or tap Favorite players");
+  await favs.click();
+  await expect(favs).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#betTeamRow")).toBeHidden();
+  await expect(page.locator("#propPick option")).toHaveText(["ALLEN · Buffalo Bills", "EDWARDS · Minnesota Timberwolves"]);
+  // The stats follow the picked player's sport.
+  await page.locator("#propPick").selectOption("nba:4594268");
+  await expect(page.locator("#propStat option").first()).toHaveText("Points");
+  await page.locator("#propStat").selectOption("pra");
+  await page.locator("#propSide").selectOption("under");
+  await page.locator("#betLine").fill("40.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nba,4594268,16,EDWARDS,pra,under,40.5" });
+  await expect(page.locator("#toast")).toHaveText("Added EDWARDS U 40.5 PTS+REB+AST");
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await expect(page.locator("#propStat option").first()).toHaveText("Passing yards");
+  await page.locator("#propStat").selectOption("td");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,td,yes," });
+  // Off again: the team's roster.
+  await favs.click();
+  await expect(page.locator("#betTeamRow")).toBeVisible();
+  await expect(page.locator("#propPick option")).toHaveCount(0);
+});
+
+test("a favorite player no longer on their saved team's roster takes no prop", async ({ page, request }) => {
+  await reset(request, { players: [ALLEN] });
+  const traded = { ...BILLS_ROSTER, athletes: BILLS_ROSTER.athletes.map((g) => ({ ...g, items: g.items.filter((a) => a.id !== "3918298") })) };
+  let roster = traded;
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: roster }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await page.locator("#propFavs").click();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText(
+    "ALLEN isn't on the Buffalo Bills roster at ESPN now. Turn off Favorite players and pick their new team.");
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.prop)).toEqual([]);
+  // Back on the roster, on a fresh page
+  roster = BILLS_ROSTER;
+  await page.reload();
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await page.locator("#propFavs").click();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await expect(page.locator("#betMsg")).toBeHidden();
+});
+
+test("the Favorite players button waits for a favorite player", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await expect(page.locator("#propFavs")).toBeDisabled();
+  await expect(page.locator("#propPickHint")).toHaveText("From the team's roster");
+});
+
+test("the Bets card says what's wrong with a prop before posting it", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  const msg = page.locator("#betMsg");
+  // A minor league team has no players.
+  await page.locator("#betTeam").click();
+  await page.locator("#q").fill("triple-a durham");
+  await page.locator("#tiles .tile", { hasText: "Durham Bulls" }).click();
+  await page.locator("#betType").selectOption("prop");
+  await expect(msg).toHaveText("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(msg).toBeHidden();
+  await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Type the line, like 24.5.");
+  await expect(page.locator("#betLine")).toBeFocused();
+  for (const [line, says] of [["-10.5", "A prop's line has no + or -. Type it like 24.5."],
+    ["250.25", "Lines go in whole or half numbers, like 6 or 6.5."], ["lots", "That isn't a number. Type it like 24.5."],
+    ["0", "A line is more than 0."], ["1000", "The panel takes lines up to 999.5."]]) {
+    await page.locator("#betLine").fill(line);
+    await page.locator("#betAdd").click();
+    await expect(msg).toHaveText(says);
+  }
+  expect((await sets(request)).filter((q) => q.prop)).toEqual([]);
+  // A comma decimal, as comma-locale phones type it
+  await page.locator("#betLine").fill("250,5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
+  await page.locator("#betLine").fill("250.5");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("You have that prop already.");
+});
+
+test("the Bets card says when ESPN's roster can't be read for a prop", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ status: 500, body: "" }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await pickPropTeam(page, "Buffalo Bills");
+  await expect(page.locator("#betMsg")).toHaveText(
+    "Couldn't read the Buffalo Bills roster from ESPN. Check this device's internet connection and try again.");
+  await page.locator("#betAdd").click();
+  await expect(page.locator("#betMsg")).toHaveText("Pick the player first.");
+});
+
+test("a prop on the board's game shows its number and whether it's on track", async ({ page, request }) => {
+  const prop = { slot: 1, l: "nfl", id: 2577417, team: 6, name: "PRESCOTT", stat: "passyds", side: "over", half: 501,
+    text: "PRESCOTT O 250.5 PASS YDS", st: "on_track", v: 374, ev: "401772001", kick: 1792531500, oa: "PHI" };
+  const done = { slot: 2, l: "nfl", id: 2577417, team: 6, name: "PRESCOTT", stat: "td", side: "yes", half: 0,
+    text: "PRESCOTT ANY TD", st: "won", v: 2, ev: "401772000", kick: 1791926700, oa: "NYG" };
+  await reset(request, { game: { s: "IN", l: "nfl", ta: "DAL", ti: 6, ts: 14, oa: "PHI", oi: 21, os: 10, id: "401772001" },
+    props: [prop, done] });
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#betline .bet")).toHaveText(["PRESCOTT O 250.5 PASS YDS 187 ON TRACK"]);
+  await expect(page.locator("#betline .bet")).toHaveClass(/good/);
+  await expect(page.locator("#betList .proprow small")).toHaveText(["DAL vs PHI · 187 so far", "DAL vs NYG · Final"]);
+  await expect(page.locator("#betList .proprow .bet")).toHaveText(["ON TRACK", "WON"]);
+  await expect(page.locator("#betSum")).toHaveText("2 props");
 });
 
 // Folded letters, and teammates sharing a last name and initial

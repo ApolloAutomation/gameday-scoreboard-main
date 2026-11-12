@@ -238,6 +238,19 @@
           </div>
         </div>
       </details>
+      <details class="card flightcard" id="flightCard" hidden>
+        <summary><h2>Flight Tracker</h2><span class="peek sum" id="flightSum"></span></summary>
+        <p class="hint">The planes in the sky near a spot you pick: the nearest one's flight, airline, route, type, height, speed and how far away it is, taking turns with a list of the nearest. Choose Flight Tracker under Showing, or for the second area.</p>
+        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it.</small></label></div>
+        <div class="flightrow"><input id="flightWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="flightFind">Find</button></div>
+        <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
+        <p class="betmsg" id="flightMsg" role="alert" hidden></p>
+        <div class="ctl" id="flightHomeRow" hidden><label>Planes near<small id="flightHome"></small></label><button class="btn" id="flightClear">Clear</button></div>
+        <div class="ctl"><label for="flightRadius">Within<small>How far from home a plane can be.</small></label><select id="flightRadius"></select></div>
+        <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
+        <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
+        <p class="hint" id="flightNow" role="status"></p>
+      </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
         <p class="hint">Up to 16 teams from any league, not golf tours or racing series yet. In Favorite teams mode the order is the priority. Buttons 1 to 4 on a WizMote remote jump to the first four.</p>
@@ -257,18 +270,37 @@
       </details>
       <details class="card betcard" id="betCard" hidden>
         <summary><h2>Bets</h2><span class="peek sum" id="betSum"></span></summary>
-        <p class="hint">Bets you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering during the game, and the result after the final until midnight. The panel follows bets only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
+        <p class="hint">Bets and player props you've placed, typed in here by hand: the panel never connects to a sportsbook. The ticker says whether each one is covering or on track during the game, and the result after the final until midnight. The panel follows them only on games it's already showing: the game on the board, and in Favorite teams your favorites' games.</p>
         <div id="betList"></div>
         <div class="sub">Add a bet</div>
-        <div class="ctl"><label>Team<small>For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
+        <div class="ctl" id="betTeamRow"><label>Team<small id="betTeamHint">For a total, either team in the game</small></label><button class="btn" id="betTeam">Pick a team</button></div>
         <div class="ctl"><label for="betType">Bet</label><select id="betType">
-          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option>
+          <option value="spread">Point spread</option><option value="over">Total, over</option><option value="under">Total, under</option><option value="ml">Moneyline</option><option value="prop">Player prop</option>
         </select></div>
+        <div id="propRows" hidden>
+          <div class="ctl"><label for="propPick">Player<small id="propPickHint"></small></label><div class="proppick"><select id="propPick"></select><button type="button" class="btn" id="propFavs" aria-pressed="false">Favorite players</button></div></div>
+          <div class="ctl"><label for="propStat">Stat</label><select id="propStat"></select></div>
+          <div class="ctl" id="propSideRow"><label for="propSide">Pick</label><select id="propSide"><option value="over">Over</option><option value="under">Under</option></select></div>
+          <p class="hint">While the game is on, the panel reads its box score from ESPN about once a minute, and once more after the final to settle the prop.</p>
+        </div>
         <div class="ctl" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
           <span class="betsign" id="betSign" role="group" aria-label="Favorite or underdog"><button type="button" data-sign="-" aria-pressed="false" aria-label="Minus, the favorite">&minus;</button><button type="button" data-sign="+" aria-pressed="false" aria-label="Plus, the underdog">+</button></span>
           <input id="betLine" inputmode="decimal" autocomplete="off"></div></div>
         <p class="betmsg" id="betMsg" role="alert" hidden></p>
         <button class="btn primary" id="betAdd">Add bet</button>
+      </details>
+      <details class="card betcard" id="mktCard" hidden>
+        <summary><h2>Stocks &amp; Crypto</h2><span class="peek sum" id="mktSum"></span></summary>
+        <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Behind the night hours' clock it still checks every 10 minutes for an open, unless only coins are listed. Nothing to sign up for.</p>
+        <p class="hint" id="mktSrc" hidden>Yahoo Finance isn't answering, so the panel is reading coins from Kraken and US stocks and funds from Nasdaq for now, and tries Yahoo Finance again every so often. Anything else keeps its last price until then.</p>
+        <p class="hint" id="mktRetry" hidden>Yahoo Finance isn't answering, and nothing listed is on Kraken or Nasdaq, so the prices keep their last value until the panel tries Yahoo Finance again.</p>
+        <p class="hint" id="mktOld" hidden></p>
+        <div id="mktList"></div>
+        <div class="sub">Add a symbol</div>
+        <div class="ctl"><label for="mktSym">Symbol<small id="mktHint"></small></label><input id="mktSym" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="AAPL"></div>
+        <div class="ctl"><label for="mktKind">Kind<small>Auto knows the big coins and indexes. Pick one for a symbol that's both, like SOL or COMP.</small></label><select id="mktKind"><option value="">Auto</option><option value="stock">Stock or fund</option><option value="index">Index</option><option value="crypto">Crypto</option></select></div>
+        <p class="betmsg" id="mktMsg" role="alert" hidden></p>
+        <button class="btn primary" id="mktAdd">Add symbol</button>
       </details>
       </div>
       <div class="col">
@@ -451,7 +483,7 @@
   const renderFolds = () => {
     if (!S || foldsSet) return;
     foldsSet = true;
-    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets };
+    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets, mktCard: showsMarkets() ? [1] : [] };
     for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
   };
   const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
@@ -512,7 +544,8 @@
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
-    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}),
+    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
+    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String,
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -1030,7 +1063,9 @@
       $("#nightbriVal").textContent = String(S.nightbri || 1);
     }
     const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
-    $("#idleNow").textContent = S.dark ? "The panel is dark until a game you follow starts."
+    const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
+    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
+    $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
         : S.night_now ? "In the night hours." : "";
   };
@@ -1053,6 +1088,19 @@
     const show = Number(S.split) || 0;
     return S.split_at === "bottom" && show === 0 ? 4 : show;
   };
+  // The displays besides Game Day the firmware lists (apps.h)
+  const otherDisplays = () => ((S && S.displays) || []).filter((d) => d.id !== 0);
+  const displayName = (id) => (((S && S.displays) || []).find((d) => d.id === id) || {}).name || "";
+  const mainDisplay = () => Number((S && S.display) || 0);
+  // [value, label, hint]: old choices, Game Day, then displays
+  const splitOffered = (show) => {
+    const out = (S.split_at === "bottom" ? "1234" : "01234").split("").map((c) => [Number(c), ...SPLIT_CHOICES[c]]);
+    if (mainDisplay() !== 0 || show === 5)
+      out.push([5, "Game Day", "The scoreboard: your team's game, and what the main board would show, while the main board shows " + (displayName(mainDisplay()) || "another display") + "."]);
+    for (const d of otherDisplays())
+      out.push([d.split, d.name, d.name + ", while the main board shows something else. The clock when the main board shows it too."]);
+    return out;
+  };
   const splitSelect = $("#split");
   splitSelect.onchange = () => setGD({ split: splitSelect.value });
   $("#splitTeam").onclick = () => openPicker(false, false, false, true);
@@ -1063,14 +1111,15 @@
     if (show < 0) return;
     $("#splitTitle").textContent = SPLIT_TITLES[S.split_at] || "Second area";
     // Nothing is offered on three and four wide only.
-    const offered = S.split_at === "bottom" ? "1234" : "01234";
-    if (splitOptions !== offered) {
-      splitOptions = offered;
+    const offered = splitOffered(show);
+    const key = offered.map((o) => o[0] + o[1]).join("|");
+    if (splitOptions !== key) {
+      splitOptions = key;
       splitSelect.innerHTML = "";
-      for (const c of offered) splitSelect.add(new Option(SPLIT_CHOICES[c][0], c));
+      for (const [v, label] of offered) splitSelect.add(new Option(label, String(v)));
     }
     if (document.activeElement !== splitSelect) splitSelect.value = String(show);
-    $("#splitHint").textContent = SPLIT_CHOICES[show][1];
+    $("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
@@ -1080,6 +1129,8 @@
     if (now === "live") line = n === 1 ? "Showing the one other live game." : "Rotating " + n + " live games.";
     else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
     else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
+    else if (now === "game") line = "Showing Game Day.";
+    else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
     else if (now === "clock" || now === "date") {
       line = show === 2 && !t ? "Pick a team for it."
         : show === 2 ? "Showing the clock: " + t.abbr + " isn't on now, or is on the main board."
@@ -1087,6 +1138,9 @@
             : show === 3 ? "No scores yet: showing the clock."
               : "";
       if (now === "date" && show === 4) line = "The main board has the time, so this shows the date.";
+      if (show === 5) line = "The main board shows Game Day, so this shows the clock.";
+      if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
+        : "Showing the clock: the night hours, or nothing to show yet.";
     }
     $("#splitNow").textContent = line;
   };
@@ -1354,6 +1408,34 @@
       restart: "The panel is restarting into setup with everything erased, so this page won't reconnect." },
   ];
   const built = {};
+  // "Showing": the panel's pages, and each display the firmware lists
+  let showing = null;
+  const pageOf = () => (showing && (showing.ent.value || showing.ent.state)) || "";
+  const pickShowing = (v) => {
+    const page = pageOf();
+    if (v.startsWith("display:")) {
+      setGD({ display: v.slice(8) });
+      if (page !== "Scoreboard") post(showing.ent.id, "set", { option: "Scoreboard" });
+      return;
+    }
+    if (v === "Scoreboard" && mainDisplay() !== 0) setGD({ display: "0" });
+    if (v !== page) post(showing.ent.id, "set", { option: v });
+  };
+  const renderShowing = () => {
+    if (!showing) return;
+    const { sel, ent } = showing;
+    const opts = (ent.option || []).map((o) => [o, o]);
+    for (const d of otherDisplays()) opts.push(["display:" + d.id, d.name]);
+    const key = opts.map((o) => o[0]).join("|");
+    if (sel.dataset.key !== key) {
+      sel.dataset.key = key;
+      sel.innerHTML = "";
+      for (const [v, label] of opts) sel.add(new Option(label, v));
+    }
+    const page = pageOf();
+    const cur = page === "Scoreboard" && mainDisplay() !== 0 && otherDisplays().length ? "display:" + mainDisplay() : page;
+    if (document.activeElement !== sel) sel.value = cur;
+  };
 
   const buildControl = (def, e) => {
     const domain = domainOf(e);
@@ -1406,6 +1488,15 @@
       row.appendChild(val);
       host.appendChild(row);
       return { update(ev) { if (document.activeElement !== r) { r.value = ev.value; val.textContent = ev.value; } } };
+    }
+    if (domain === "select" && def.name === "Select Page") {
+      const s = el("select");
+      s.id = label.htmlFor = id;
+      row.appendChild(s);
+      host.appendChild(row);
+      showing = { sel: s, ent: e };
+      s.onchange = () => pickShowing(s.value);
+      return { update(ev) { showing.ent = ev; renderShowing(); } };
     }
     if (domain === "select") {
       const s = el("select");
@@ -1521,7 +1612,7 @@
         const t = teamById(g.league, s.id);
         const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
         // Player picks need an ESPN roster
-        b.disabled = !t || (pickPlayer && !fromEspn(t[0]));
+        b.disabled = !t || ((pickPlayer || pickProp) && !fromEspn(t[0]));
         b.title = t ? "Follow the " + t[3] : "Not in the team list";
         const img = el("img");
         img.loading = "lazy";
@@ -1589,20 +1680,43 @@
     return vs + score;
   };
   const betChip = (b, text) => el("span", "bet " + betTone(b.st), text);
+  const PROP_WORDS = { on_track: "ON TRACK", off_track: "OFF TRACK", hit: "HIT", not_yet: "NOT YET", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
+  const propTone = (st) => (st === "on_track" || st === "hit" || st === "won" ? "good" : st === "off_track" || st === "lost" ? "bad" : PROP_WORDS[st] ? "even" : "");
+  // As the ticker: the line, the player's number, the word
+  const propText = (p) => p.text + (p.v !== undefined && p.side !== "yes" ? " " + betPoints(p.v, false) : "")
+    + (PROP_WORDS[p.st] ? " " + PROP_WORDS[p.st] : "");
+  const propGame = (p) => {
+    const t = teamById(p.l, p.team);
+    const abbr = t ? t[2] : "";
+    if (!p.ev) return "Starts when the panel shows a " + abbr + " game";
+    const vs = abbr + " vs " + (p.oa || "?") + " \u00b7 ";
+    const n = p.v !== undefined && p.side !== "yes" ? betPoints(p.v, false) : "";
+    if (p.st === "pre") return vs + (p.kick * 1000 > Date.now() ? kickLabel(p.kick) : "Waiting for the start");
+    if (p.st === "unread") return vs + "Started, not on the panel right now";
+    if (p.st === "void") return vs + "Void: postponed, or the player didn't play";
+    if (p.st === "won" || p.st === "lost" || p.st === "push") return vs + "Final" + (n ? ", " + n : "");
+    return vs + (n ? n + " so far" : "Live");
+  };
   const renderBets = () => {
     const card = $("#betCard");
     // Firmware from before bets sends none.
     card.hidden = !S || S.bets === undefined;
     const list = (S && S.bets) || [];
+    const props = (S && S.props) || [];
     // The board: the bets on its game.
-    const on = game && game.id && game.s !== "NOT_FOUND" ? list.filter((b) => b.ev === String(game.id)) : [];
+    const live = game && game.id && game.s !== "NOT_FOUND";
+    const on = live ? list.filter((b) => b.ev === String(game.id)) : [];
+    const propsOn = live ? props.filter((p) => p.ev === String(game.id)) : [];
     const line = $("#betline");
     line.textContent = "";
     for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
-    line.hidden = !on.length;
+    for (const p of propsOn) line.appendChild(el("span", "bet " + propTone(p.st), propText(p)));
+    line.hidden = !on.length && !propsOn.length;
     if (card.hidden) return;
-    $("#betSum").textContent = list.length ? list.length + " of " + (S.betmax || 8) : "";
-    const sig = JSON.stringify(list);
+    renderPropForm();
+    $("#betSum").textContent = [list.length ? list.length + " of " + (S.betmax || 8) : "",
+      props.length ? props.length + (props.length > 1 ? " props" : " prop") : ""].filter(Boolean).join(" \u00b7 ");
+    const sig = JSON.stringify([list, props]);
     if (sig === betDrawn) return;
     betDrawn = sig;
     const host = $("#betList");
@@ -1628,7 +1742,28 @@
       row.appendChild(x);
       host.appendChild(row);
     }
-    if (!list.length) host.appendChild(el("p", "hint", "No bets yet."));
+    for (const pr of props) {
+      const row = el("div", "ctl betrow proprow");
+      const t = teamById(pr.l, pr.team);
+      const img = el("img");
+      img.alt = "";
+      img.loading = "lazy";
+      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+      if (src) img.src = src;
+      else img.style.visibility = "hidden";
+      row.appendChild(img);
+      const name = el("label", null, pr.text);
+      name.appendChild(el("small", null, propGame(pr)));
+      row.appendChild(name);
+      if (PROP_WORDS[pr.st]) row.appendChild(el("span", "bet " + propTone(pr.st), PROP_WORDS[pr.st]));
+      const x = el("button", "betdel", "\u2715");
+      x.title = "Remove " + pr.text;
+      x.setAttribute("aria-label", x.title);
+      x.onclick = () => setGD({ propdel: pr.slot }).then((ok) => ok && toast("Removed " + pr.text));
+      row.appendChild(x);
+      host.appendChild(row);
+    }
+    if (!list.length && !props.length) host.appendChild(el("p", "hint", "No bets yet."));
     if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
   };
   const typedSign = (v) => {
@@ -1640,19 +1775,26 @@
     const t = teamByKey(betTeam);
     $("#betTeam").textContent = t ? t[3] : "Pick a team";
     const type = $("#betType").value;
+    $("#betTeamHint").textContent = type === "prop" ? "The player's team. Minor league teams have no player props."
+      : "For a total, either team in the game";
     $("#betLineRow").hidden = type === "ml";
     $("#betSign").hidden = type !== "spread";
     signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
     $("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
       : "Total points in the game, like 47.5";
     $("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
+    renderPropForm();
   };
   const betSay = (t) => {
     $("#betMsg").textContent = t;
     $("#betMsg").hidden = !t;
   };
-  $("#betTeam").onclick = () => openPicker(false, true);
-  $("#betType").onchange = () => { betSay(""); renderBetForm(); };
+  $("#betTeam").onclick = () => openPicker(false, true, false, false, $("#betType").value === "prop");
+  $("#betType").onchange = () => {
+    betSay("");
+    renderBetForm();
+    if ($("#betType").value === "prop") loadPropRoster();
+  };
   $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
   // Typed sign and buttons stay in sync both ways
   $("#betLine").oninput = () => {
@@ -1671,6 +1813,7 @@
   });
   $("#betAdd").onclick = () => {
     if (!S) return;
+    if ($("#betType").value === "prop") return addProp();
     const t = teamByKey(betTeam);
     if (!t) return betSay("Pick the team first.");
     const type = $("#betType").value;
@@ -1702,6 +1845,301 @@
     $("#betLine").value = "";
     betSign = "";
     renderBetForm();
+  };
+
+  // ---- Stocks & Crypto: the display's symbols ---------------------------------
+  const MKT_ID = 2;  // apps.h's Display::MARKETS, by number
+  const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
+  const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
+  const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };
+  const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
+  let mktDrawn = null;
+  let mktPending = [];  // posted, not yet listed by the panel
+  let mktLock = 0;      // a move or remove's post time
+  const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
+  // parse_market_symbol (markets.h): [symbol, kind], or null
+  const mktParse = (text, kind) => {
+    let s = "";
+    for (const c of text) {
+      if (c === " ") continue;
+      s += c >= "a" && c <= "z" ? c.toUpperCase() : c;
+      if (new TextEncoder().encode(s).length > 16) return null;
+    }
+    if (s.startsWith("$")) s = s.slice(1);
+    if (s.startsWith("^")) {
+      if (kind && kind !== "index") return null;
+      s = s.slice(1);
+      kind = "index";
+    }
+    const coinOk = !kind || kind === "crypto";
+    if (coinOk && s.length > 4 && /[-/]USD$/.test(s)) {
+      s = s.slice(0, -4);
+      kind = "crypto";
+    }
+    if (coinOk) {
+      s = MARKETS.alias[s] || s;
+      if (!kind && MARKETS.coins.includes(s)) kind = "crypto";
+    }
+    if (!kind) kind = MARKETS.indexes.includes(s) ? "index" : "stock";
+    if (kind === "stock") {
+      s = s.replace(/\//g, ".");
+      if (/^.+-[A-Z]$/.test(s)) s = s.slice(0, -2) + "." + s.slice(-1);
+    }
+    const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
+    return s.length <= 10 && ok.test(s) ? [s, kind] : null;
+  };
+  // market_same (markets.h): SPX and GSPC are one index
+  const mktSame = (a, b) => a.kind === b.kind && (a.sym === b.sym
+    || (a.kind === "index" && !!MARKETS.yahoo[a.sym] && MARKETS.yahoo[a.sym] === MARKETS.yahoo[b.sym]));
+  const renderMarkets = () => {
+    const card = $("#mktCard");
+    card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
+    if (card.hidden) return;
+    const m = S.markets;
+    const list = m.syms || [];
+    $("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
+    $("#mktSrc").hidden = m.src !== "backup";
+    $("#mktRetry").hidden = m.src !== "retry";
+    // Off screen, nothing reads them
+    const old = m.read && Date.now() / 1000 - m.read > 30 * 60;
+    $("#mktOld").hidden = !old;
+    if (old) $("#mktOld").textContent = "Prices as of " + new Date(m.read * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) + ". The panel reads them only while Stocks & Crypto is up.";
+    const sig = JSON.stringify(list);
+    // Slots stay old until the panel has the tap
+    if (mktLock && sig === mktDrawn && stateLeft <= mktLock + APPLY_MS) return;
+    const unlock = mktLock !== 0;
+    mktLock = 0;
+    if (sig === mktDrawn && !unlock) return;
+    mktDrawn = sig;
+    const host = $("#mktList");
+    const focused = host.contains(document.activeElement);
+    host.textContent = "";
+    list.forEach((sy, i) => {
+      const row = el("div", "ctl betrow mktrow");
+      const name = el("label", null, sy.sym);
+      name.appendChild(el("small", null, sy.miss ? "Yahoo Finance doesn't know this symbol"
+        : [MKT_KIND[sy.kind], MKT_ST[sy.st]].filter(Boolean).join(" \u00b7 ")));
+      row.appendChild(name);
+      if (sy.price) row.appendChild(el("span", "bet " + (sy.dir > 0 ? "good" : sy.dir < 0 ? "bad" : ""), sy.price + (sy.pct ? " " + sy.pct : "")));
+      const tools = el("span", "mkttools");
+      const button = (text, label, on, params, done) => {
+        const b = el("button", "betdel", text);
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.disabled = !on;
+        b.onclick = () => {
+          mktLock = Infinity;
+          host.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+          setGD(params).then((ok) => {
+            mktLock = ok ? Date.now() : 0;
+            if (!ok) { mktDrawn = null; renderMarkets(); }
+            if (ok && done) toast(done);
+          });
+        };
+        tools.appendChild(b);
+      };
+      button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
+      button("\u25bc", "Move " + sy.sym + " down", i < list.length - 1, { mktmove: sy.slot + "," + (sy.slot + 1) });
+      button("\u2715", "Remove " + sy.sym, true, { mktdel: sy.slot }, "Removed " + sy.sym);
+      row.appendChild(tools);
+      host.appendChild(row);
+    });
+    if (focused && !host.contains(document.activeElement)) $("#mktSym").focus();
+  };
+  const mktSay = (t) => {
+    $("#mktMsg").textContent = t;
+    $("#mktMsg").hidden = !t;
+  };
+  // What the panel will save, as it's typed
+  const mktPreview = () => {
+    const raw = $("#mktSym").value;
+    const got = raw.trim() ? mktParse(raw, $("#mktKind").value) : null;
+    $("#mktHint").textContent = !raw.trim() ? MKT_HINT
+      : got ? "Saves as " + got[0] + ", " + MKT_AS[got[1]] : "Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD";
+  };
+  mktPreview();
+  $("#mktSym").oninput = () => { mktSay(""); mktPreview(); };
+  $("#mktKind").onchange = () => { mktSay(""); mktPreview(); };
+  $("#mktSym").onkeydown = (ev) => { if (ev.key === "Enter") $("#mktAdd").click(); };
+  $("#mktAdd").onclick = () => {
+    if (!S || !S.markets) return;
+    const raw = $("#mktSym").value;
+    if (!raw.trim()) return mktSay("Type a symbol, like AAPL or BTC.");
+    const got = mktParse(raw, $("#mktKind").value);
+    if (!got) return mktSay($("#mktKind").value && /^\s*\^/.test(raw) ? "A ^ symbol is an index. Set Kind to Index or Auto."
+      : "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+    const list = S.markets.syms || [];
+    // Count pending posts so a double tap adds once
+    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => mktSame(sy, p)));
+    const dup = list.concat(mktPending).find((sy) => mktSame(sy, { sym: got[0], kind: got[1] }));
+    if (dup) return mktSay(dup.sym + " is in the list already.");
+    const max = S.markets.max || 8;
+    if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
+    mktSay("");
+    const mine = { sym: got[0], kind: got[1], at: Date.now() };
+    mktPending.push(mine);
+    setGD({ mkt: "0," + got[0] + "," + got[1] }).then((ok) => {
+      if (!ok) mktPending = mktPending.filter((p) => p !== mine);
+      else toast("Added " + got[0]);
+    });
+    $("#mktSym").value = "";
+    mktPreview();
+  };
+
+  // ---- player props: a roster's player, or a favorite --------------------------
+  const PROP_NAMES = {
+    "football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
+    "football:int": "Interceptions thrown", "football:rushyds": "Rushing yards", "football:rushatt": "Rushing attempts",
+    "football:recyds": "Receiving yards", "football:rec": "Receptions", "football:rryds": "Rushing and receiving yards",
+    "football:td": "Anytime touchdown", "football:tackles": "Tackles", "football:sacks": "Sacks",
+    "football:kickpts": "Kicking points",
+    "basketball:pts": "Points", "basketball:reb": "Rebounds", "basketball:ast": "Assists", "basketball:threes": "Threes made",
+    "basketball:stl": "Steals", "basketball:blk": "Blocks", "basketball:pra": "Points, rebounds and assists",
+    "basketball:pr": "Points and rebounds", "basketball:pa": "Points and assists", "basketball:ra": "Rebounds and assists",
+    "baseball:hits": "Hits", "baseball:runs": "Runs", "baseball:rbi": "RBIs", "baseball:hrr": "Hits, runs and RBIs",
+    "baseball:hr": "Home run", "baseball:k": "Pitcher's strikeouts", "baseball:hitsallowed": "Hits allowed",
+    "baseball:er": "Earned runs allowed", "baseball:outs": "Pitcher's outs",
+    "hockey:pts": "Points", "hockey:goal": "Anytime goal", "hockey:ast": "Assists", "hockey:sog": "Shots on goal",
+    "hockey:blk": "Blocked shots", "hockey:saves": "Goalie's saves",
+    "soccer:goal": "Anytime goal",
+  };
+  let propFavs = false;     // the list is the favorite players
+  let propRoster = [];      // the bet team's players
+  let propRosterFor = "";
+  let propPending = [];     // posted, not yet listed by the panel
+  const sameProp = (a, b) => a.l === b.l && a.id === b.id && a.stat === b.stat && a.side === b.side && a.half === b.half;
+  // PROP_STATS rows: [sport, key, panel label, yes prop]
+  const statsFor = (lg) => (lg ? PROP_STATS.filter((st) => st[0] === sportOf(lg)) : []);
+  const propPlayers = () => {
+    if (propFavs) {
+      return ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).map((pl) => {
+        const t = teamById(pl.l, pl.team);
+        return { l: pl.l, id: pl.id, team: pl.team, panel: pl.name, label: pl.name + (t ? " \u00b7 " + t[3] : "") };
+      });
+    }
+    const t = teamByKey(betTeam);
+    if (!t || propRosterFor !== betTeam) return [];
+    return propRoster.map((a) => ({ l: t[0], id: a.id, team: t[1], panel: a.panel,
+      label: a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : "") }));
+  };
+  const fillSelect = (sel, items) => {
+    const sig = JSON.stringify(items);
+    if (sel.dataset.sig === sig) return;
+    const was = sel.value;
+    sel.dataset.sig = sig;
+    sel.textContent = "";
+    for (const [value, text] of items) {
+      const o = el("option", null, text);
+      o.value = value;
+      sel.appendChild(o);
+    }
+    if (items.some((it) => it[0] === was)) sel.value = was;
+  };
+  const pickedPlayer = () => propPlayers().find((pl) => pl.l + ":" + pl.id === $("#propPick").value);
+  const renderPropForm = () => {
+    const prop = $("#betType").value === "prop";
+    $("#propRows").hidden = !prop;
+    $("#betTeamRow").hidden = prop && propFavs;
+    if (!prop) return;
+    const favs = ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).length;
+    setOn($("#propFavs"), propFavs, "aria-pressed");
+    $("#propFavs").disabled = !favs && !propFavs;
+    const list = propPlayers();
+    fillSelect($("#propPick"), list.map((pl) => [pl.l + ":" + pl.id, pl.label]));
+    const t = teamByKey(betTeam);
+    $("#propPickHint").textContent = propFavs
+      ? (list.length ? "Your favorite players, from every team" : "No favorite players yet. Add them in the Favorite players card.")
+      : !favs ? "From the team's roster" : "From the team's roster, or tap Favorite players";
+    const pl = pickedPlayer();
+    const lg = pl ? pl.l : !propFavs && t && fromEspn(t[0]) ? t[0] : "";
+    fillSelect($("#propStat"), statsFor(lg).map((st) => [st[1], PROP_NAMES[st[0] + ":" + st[1]] || st[2]]));
+    const st = statsFor(lg).find((x) => x[1] === $("#propStat").value);
+    const yes = !!(st && st[3]);
+    $("#propSideRow").hidden = yes;
+    $("#betLineRow").hidden = yes;
+    $("#betSign").hidden = true;
+    $("#betLineHint").textContent = "The sportsbook's line for the stat, like 24.5. A whole number can push";
+    $("#betLine").placeholder = "24.5";
+  };
+  const loadPropRoster = async () => {
+    const t = teamByKey(betTeam);
+    propRosterFor = betTeam;
+    propRoster = [];
+    renderPropForm();
+    if (!t || propFavs) return;
+    if (!fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+    betSay("Reading the " + t[3] + " roster from ESPN\u2026");
+    const list = await readRoster(t);
+    if (propRosterFor !== betTeam) return;  // another team was picked meanwhile
+    betSay(list && list.length ? "" : rosterSays(t, list));
+    propRoster = list || [];
+    renderPropForm();
+  };
+  $("#propFavs").onclick = () => {
+    propFavs = !propFavs;
+    betSay("");
+    renderPropForm();
+    if (!propFavs) loadPropRoster();
+  };
+  $("#propPick").onchange = () => { betSay(""); renderPropForm(); };
+  $("#propStat").onchange = () => { betSay(""); renderPropForm(); };
+  // A prop's line has no sign; half numbers only
+  const propHalf = (raw) => {
+    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+    if (!v) return "Type the line, like 24.5.";
+    if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like 24.5.";
+    const m = /^(\d+)(?:\.(\d+))?$/.exec(v);
+    if (!m) return "That isn't a number. Type it like 24.5.";
+    const frac = (m[2] || "").replace(/0+$/, "");
+    if (frac && frac !== "5") return "Lines go in whole or half numbers, like 6 or 6.5.";
+    const half = Number(m[1]) * 2 + (frac ? 1 : 0);
+    if (!half) return "A line is more than 0.";
+    if (half > 1999) return "The panel takes lines up to 999.5.";
+    return half;
+  };
+  const addProp = async () => {
+    const t = teamByKey(betTeam);
+    const pl = pickedPlayer();
+    if (!pl) {
+      if (propFavs) return betSay("Pick one of your favorite players.");
+      if (t && !fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+      return betSay(t ? "Pick the player first." : "Pick the team first.");
+    }
+    const st = statsFor(pl.l).find((x) => x[1] === $("#propStat").value);
+    if (!st) return betSay("Pick the stat.");
+    const side = st[3] ? "yes" : $("#propSide").value;
+    const half = st[3] ? 0 : propHalf($("#betLine").value);
+    if (typeof half === "string") {
+      betSay(half);
+      $("#betLine").focus();
+      return;
+    }
+    // A favorite's saved team may be stale
+    const home = propFavs ? teamById(pl.l, pl.team) : null;
+    if (home) {
+      if (!rosters[keyOf(home)]) betSay("Checking the " + home[3] + " roster on ESPN\u2026");
+      const r = await readRoster(home);
+      betSay("");
+      if (r && r.length && !r.some((a) => a.id === pl.id)) {
+        return betSay(pl.panel + " isn't on the " + home[3] + " roster at ESPN now. Turn off Favorite players and pick their new team.");
+      }
+    }
+    const list = S.props || [];
+    propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));
+    const want = { l: pl.l, id: pl.id, stat: st[1], side, half };
+    if (list.concat(propPending).some((p) => sameProp(p, want))) return betSay("You have that prop already.");
+    const max = S.propmax || 8;
+    if (list.length + propPending.length >= max) return betSay("All " + max + " props are in use. Remove one first.");
+    betSay("");
+    const mine = { ...want, at: Date.now() };
+    propPending.push(mine);
+    const line = st[3] ? "" : betPoints(half, false);
+    const label = pl.panel + (st[3] ? " " + st[2] : (side === "under" ? " U " : " O ") + line + " " + st[2]);
+    setGD({ prop: [0, pl.l, pl.id, pl.team, pl.panel, st[1], side, line].join(",") }).then((ok) => {
+      if (!ok) propPending = propPending.filter((x) => x !== mine);
+      else toast("Added " + label);
+    });
+    $("#betLine").value = "";
   };
   renderBetForm();
 
@@ -1759,6 +2197,28 @@
     $("#playerMsg").textContent = t;
     $("#playerMsg").hidden = !t;
   };
+  // A team's players by last name; null if unread
+  const rosters = {};
+  const readRoster = async (t) => {
+    if (rosters[keyOf(t)]) return rosters[keyOf(t)];
+    let list = null;
+    try {
+      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      list = rosterAthletes(await r.json());
+    } catch (_) {
+      return null;
+    }
+    const names = panelNames(list);
+    const out = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
+      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
+      .filter((a) => a.panel)
+      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+    if (out.length) rosters[keyOf(t)] = out;
+    return out;
+  };
+  const rosterSays = (t, list) => (list ? "ESPN lists no players for the " + t[3] + " right now."
+    : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
   const loadRoster = async (key) => {
     const t = teamByKey(key);
     if (!t) return;
@@ -1766,26 +2226,14 @@
     roster = [];
     renderPlayerForm();
     playerSay("Reading the " + t[3] + " roster from ESPN\u2026");
-    let list = null;
-    try {
-      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      list = rosterAthletes(await r.json());
-    } catch (_) {
-      list = null;
-    }
+    const list = await readRoster(t);
     if (rosterFor !== key) return;  // another team was picked meanwhile
     if (!list || !list.length) {
-      playerSay(list ? "ESPN lists no players for the " + t[3] + " right now."
-        : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
+      playerSay(rosterSays(t, list));
       renderPlayerForm();
       return;
     }
-    const names = panelNames(list);
-    roster = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
-      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
-      .filter((a) => a.panel)
-      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+    roster = list;
     playerSay("");
     renderPlayerForm();
   };
@@ -1893,6 +2341,7 @@
   let pickBet = false;
   let pickPlayer = false;
   let pickSplit = false;
+  let pickProp = false;
   const choose = (t) => {
     if (pickSplit) {
       if (S && refKey(S.team) === keyOf(t)) {
@@ -1906,7 +2355,9 @@
       loadRoster(playerTeam);
     } else if (pickBet) {
       betTeam = keyOf(t);
+      betSay("");
       renderBetForm();
+      if (pickProp) loadPropRoster();
     } else if (pickFav) addFav(t);
     else {
       setGD({ team: keyOf(t) });
@@ -1927,7 +2378,7 @@
     // one by its tab's name too.
     // Search matches a MiLB team's level, like "double-a"
     const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
-    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !(pickPlayer && !fromEspn(t[0]))
+    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !((pickPlayer || pickProp) && !fromEspn(t[0]))
       && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
     if (!list.length) {
       tiles.appendChild(el("div", "none", "No team matches"));
@@ -1965,17 +2416,18 @@
   // A dialog: Tab stays inside it, and closing hands focus back to the
   // button that opened it.
   let pickerFrom = null;
-  const openPicker = async (fav, bet = false, player = false, split = false) => {
+  const openPicker = async (fav, bet = false, player = false, split = false, prop = false) => {
     pickFav = fav;
     pickBet = bet;
     pickPlayer = player;
     pickSplit = split;
+    pickProp = prop;
     pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player || prop ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
     const cur = split && S && S.splitteam && S.splitteam.id ? teamByKey(refKey(S.splitteam))
       : player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
     const team = fav || bet || player || split;
-    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || (player && !fromEspn(lg)));
+    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || ((player || prop) && !fromEspn(lg)));
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf/Racing only for My team; players need ESPN leagues
     tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
@@ -2201,9 +2653,129 @@
     splashTimer = setTimeout(() => n.classList.remove("on"), 3000);
   };
 
+  // ---- the Flight Tracker card (components/gameday/app_flights.h) -----------
+  const FLIGHTS_ID = 3;
+  const FLIGHT_SOURCES = { fr24: "Flightradar24", adsbfi: "adsb.fi", adsblol: "adsb.lol", receiver: "your receiver" };
+  const FLIGHT_RADII = { imperial: [5, 10, 15, 25, 50, 100], metric: [5, 10, 25, 50, 100, 150] };
+  const COORDS = /^\s*([+-]?\d{1,3}(?:\.\d*)?)\s*(?:,\s*|\s+)([+-]?\d{1,3}(?:\.\d*)?)\s*$/;
+  // The panel's settings, or a post not shown yet
+  const flightNow = () => {
+    const f = (S && S.flights) || {};
+    const r = S && S.flyradius !== undefined ? /^(\d+)([a-z]*)$/.exec(S.flyradius) : null;
+    return {
+      ...f,
+      home: S && S.flyhome !== undefined ? (S.flyhome === "none" ? "" : S.flyhome) : f.home || "",
+      place: S && S.flyplace !== undefined ? S.flyplace : f.place || "",
+      radius: r ? Number(r[1]) : f.radius,
+      radius_unit: r ? r[2] || "mi" : f.radius_unit,
+      receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
+    };
+  };
+  const flightMsg = (t) => { const m = $("#flightMsg"); m.textContent = t || ""; m.hidden = !t; };
+  const setHome = (lat, lon, place) => {
+    flightMsg("");
+    $("#flightPicks").hidden = true;
+    $("#flightWhere").value = "";
+    setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+  };
+  const findPlace = async () => {
+    const q = $("#flightWhere").value.trim();
+    const picks = $("#flightPicks");
+    picks.hidden = true;
+    if (!q) { flightMsg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+    const c = COORDS.exec(q);
+    if (c) {
+      const lat = Number(c[1]), lon = Number(c[2]);
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+        flightMsg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+        return;
+      }
+      setHome(lat, lon, "");
+      return;
+    }
+    flightMsg("Looking it up...");
+    let found = [];
+    try {
+      // Open-Meteo's place search: keyless, from this browser.
+      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      found = ((await r.json()).results || []).filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
+    } catch (_) {
+      flightMsg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+      return;
+    }
+    if (!found.length) { flightMsg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+    const label = (p) => [p.name, p.admin1, p.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
+    if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+    flightMsg("");
+    picks.innerHTML = "";
+    for (const p of found) {
+      const b = el("button", "btn", label(p));
+      b.onclick = () => setHome(p.latitude, p.longitude, label(p));
+      picks.append(b);
+    }
+    picks.hidden = false;
+  };
+  $("#flightFind").onclick = findPlace;
+  $("#flightWhere").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+  $("#flightClear").onclick = () => setGD({ flyhome: "none" });
+  $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
+  const saveRx = () => {
+    const v = $("#flightRx").value.trim();
+    if (/\s/.test(v) || v.length > 95) { flightMsg("A receiver's address has no spaces, like 192.168.1.50."); return; }
+    flightMsg("");
+    setGD({ flyreceiver: v || "none" });
+  };
+  $("#flightRxSave").onclick = saveRx;
+  $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+  let flightRadii = "";
+  const renderFlights = () => {
+    const card = $("#flightCard");
+    card.hidden = !S || !S.flights || !((S.displays || []).some((d) => d.id === FLIGHTS_ID));
+    if (card.hidden) return;
+    const f = flightNow();
+    const where = f.home ? (f.place ? f.place + " (" + f.home.replace(",", ", ") + ")" : f.home.replace(",", ", ")) : "";
+    $("#flightSum").textContent = f.home ? f.place || f.home.replace(",", ", ") : "No location yet";
+    $("#flightHomeRow").hidden = !f.home;
+    $("#flightHome").textContent = where;
+    const unit = f.units === "metric" ? "km" : "mi";
+    const opts = FLIGHT_RADII[f.units === "metric" ? "metric" : "imperial"].map((n) => [n + unit, n + " " + unit]);
+    const cur = f.radius + (f.radius_unit || "mi");
+    if (!opts.some((o) => o[0] === cur)) opts.push([cur, f.radius + " " + (f.radius_unit || "mi")]);
+    const key = opts.map((o) => o[0]).join("|");
+    const sel = $("#flightRadius");
+    if (flightRadii !== key) {
+      flightRadii = key;
+      sel.innerHTML = "";
+      for (const [v, t] of opts) sel.add(new Option(t, v));
+    }
+    if (document.activeElement !== sel) sel.value = cur;
+    const rx = $("#flightRx");
+    if (document.activeElement !== rx) rx.value = f.receiver;
+    const n = Number(f.planes) || 0;
+    const from = FLIGHT_SOURCES[f.source] || "";
+    // Near the 180th meridian it skips Flightradar24
+    const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
+    const shown = S.display_now === "flights" || S.split_now === "flights";
+    const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
+    const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
+    let line = !f.home ? "Set a home location to see the planes near it."
+      : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
+        : f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
+          + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
+          : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
+            : "Looking for planes.";
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+      line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
+    else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
+    $("#flightNow").textContent = line;
+  };
+
   const renderAll = () => {
     renderBoard();
     renderBets();
+    renderMarkets();
+    renderFlights();
     renderPlayers();
     renderUpNext();
     renderSplash();
@@ -2211,6 +2783,7 @@
     renderMode();
     renderSettings();
     renderSplit();
+    renderShowing();
     renderIdle();
     renderPanels();
     renderTime();

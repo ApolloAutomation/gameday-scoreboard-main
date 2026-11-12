@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 namespace espn {
 
@@ -197,6 +198,9 @@ inline int64_t boot_log_fault_ago(const BootLog &log, int64_t now, int64_t uptim
   return now - log.fault_at;
 }
 
+// The other displays' hosts (apps.h), each under its key.
+constexpr int kHealthApps = 3;
+
 // Everything the health block says, gathered by the caller.
 struct Health {
   int64_t uptime_s;
@@ -254,6 +258,20 @@ inline int health_json(char *buf, size_t size, const Health &h) {
                   "\"psram_kb\":%.1f%s%s,\"version\":\"%s\",\"built\":%lld,\"channel\":\"%s\"}",
                   (long long) h.uptime_s, restart_key(h.start), (unsigned) h.boots, fault, h.heap_kb, h.block_kb,
                   h.psram_kb, rssi, espn, h.version, (long long) h.built, h.channel);
+}
+
+// A display host's keys, on the heap: httpd's stack is small.
+inline void health_app_json(std::string &out, const char *key, int status, int64_t ago) {
+  if (key == nullptr || ago < 0)
+    return;
+  out += ",\"";
+  out += key;
+  out += "\":";
+  out += std::to_string(status);
+  out += ",\"";
+  out += key;
+  out += "_ago\":";
+  out += std::to_string((long long) ago);
 }
 
 }  // namespace espn

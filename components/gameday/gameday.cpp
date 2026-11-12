@@ -76,7 +76,7 @@ bool boot_was_planned() { return ::espn::boot_log_valid(boot_log) && boot_log.pl
 // curl's, which ESPN's edge accepts (poll_timing.h).
 static const char *const USER_AGENT = ::espn::kUserAgent;
 // Log names, indexed by Source.
-static const char *const HOST_NAMES[::espn::kSourceCount] = {"ESPN", "MLB", "HockeyTech"};
+static const char *const HOST_NAMES[::espn::kSourceCount] = {"ESPN", "MLB", "HockeyTech", "F1", "Markets", "Flights"};
 
 static const uint32_t MINUTE = 60 * 1000;
 static const uint32_t SCHEDULE_INTERVAL = 6 * 60 * MINUTE;
@@ -141,6 +141,9 @@ static const uint32_t SIDE_RETRY = 5 * MINUTE;
 static const uint32_t SIDE_AWAY_RESCAN = 2 * ::espn::kWatchStayMaxSeconds * 1000;
 // College days are 750 KB-1.4 MB: need this slack.
 static const uint32_t SIDE_COLLEGE_MS = 20 * 1000;
+// Box scores: a minute apart, the final's after ESPN's cache.
+static const uint32_t BOX_LIVE_MS = 60 * 1000;
+static const uint32_t BOX_FINAL_WAIT_MS = 30 * 1000;
 
 static const char *const MODE_OPTIONS[] = {"My team",       "Live NFL",       "Live college",
                                            "Live anything", "Favorite teams", "Live games"};
@@ -160,13 +163,23 @@ class ContainerReader {
   ContainerReader &operator=(const ContainerReader &) = delete;
 
   int read() {
+    if (this->cut_ != nullptr && this->cut_->cut())
+      return this->cut_->tail();
     if (!this->fill_())
       return -1;
-    return static_cast<unsigned char>(this->buf_[this->pos_++]);
+    const char c = this->buf_[this->pos_++];
+    if (this->cut_ != nullptr)
+      this->cut_->feed(c);
+    return static_cast<unsigned char>(c);
   }
 
   size_t readBytes(char *dst, size_t n) {
     size_t copied = 0;
+    if (this->cut_ != nullptr) {
+      for (int c; copied < n && (c = this->read()) >= 0; copied++)
+        dst[copied] = (char) c;
+      return copied;
+    }
     while (copied < n) {
       if (!this->fill_())
         break;
@@ -178,7 +191,12 @@ class ContainerReader {
     return copied;
   }
 
+  // A display's parse looks ahead; never with a cutter.
+  int peek() { return this->fill_() ? static_cast<unsigned char>(this->buf_[this->pos_]) : -1; }
+
   size_t total() const { return this->total_; }
+  // A summary's read ends after its box score.
+  void cut(::espn::BoxCutter *c) { this->cut_ = c; }
 
  private:
   bool fill_() {
@@ -204,6 +222,24 @@ class ContainerReader {
   size_t len_{0};
   size_t total_{0};
   bool eof_{false};
+  ::espn::BoxCutter *cut_{nullptr};
+};
+
+// A display's parse reads the same stream.
+class ReaderStream final : public ::espn::AppStream {
+ public:
+  explicit ReaderStream(ContainerReader &r) : r_(r) {}
+  int read() override { return this->r_.read(); }
+  size_t readBytes(char *dst, size_t n) override { return this->r_.readBytes(dst, n); }
+  int peek() override { return this->r_.peek(); }
+  // The board's own reader: no second copy in flash.
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, this->r_, DeserializationOption::Filter(filter),
+                           DeserializationOption::NestingLimit(nesting));
+  }
+
+ private:
+  ContainerReader &r_;
 };
 
 // ---- GamedaySelect ---------------------------------------------------------
@@ -370,11 +406,16 @@ void GamedayComponent::setup() {
   if (!this->split_pref_.load(&this->split_prefs_) || this->split_prefs_.show >= ::espn::kSplitCount)
     this->split_prefs_ = SplitPrefs{};
   this->a2_set_team_();
+  this->apps_setup_();
   // Own blob, so no other setting moves.
   this->bets_pref_ = global_preferences->make_preference<::espn::BetBlob>(fnv1_hash("gameday_bets_v1"));
   if (!this->bets_pref_.load(&this->bets_.blob))
     this->bets_.blob = ::espn::BetBlob{};
   this->bets_.loaded();
+  this->props_pref_ = global_preferences->make_preference<::espn::PropBlob>(fnv1_hash("gameday_props_v1"));
+  if (!this->props_pref_.load(&this->props_))
+    this->props_ = ::espn::PropBlob{};
+  ::espn::props_loaded(this->props_);
   this->players_pref_ = global_preferences->make_preference<::espn::PlayerBlob>(fnv1_hash("gameday_players_v1"));
   if (!this->players_pref_.load(&this->players_))
     this->players_ = ::espn::PlayerBlob{};
@@ -908,6 +949,7 @@ void GamedayComponent::start_fav_job_(uint32_t now) {
   FavEntry &e = this->fav_[index];
   this->new_job_();
   j.players = this->players_;
+  j.props = this->props_;
   j.team = e.team;
   j.our_id = e.team->espn_id;
   j.fav_index = index;
@@ -1222,7 +1264,7 @@ bool GamedayComponent::bets_tick_() {
     this->bets_.dirty = false;
     this->bets_pref_.save(&this->bets_.blob);
   }
-  return gone;
+  return this->props_tick_() || gone;
 }
 
 uint8_t GamedayComponent::board_league_() const {
@@ -1270,7 +1312,7 @@ const GameSnapshot *GamedayComponent::bet_snapshot_(const ::espn::Bet &b, ::espn
   return nullptr;
 }
 
-void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, std::string &out) const {
+void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, UpdateFields &f) const {
   ::espn::BetGame g;
   if (!this->clock_set_() || !this->bet_game_(game, league, g))
     return;
@@ -1278,10 +1320,254 @@ void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, st
   for (const auto &b : this->bets_.blob.bets) {
     if (::espn::bet_empty(b) || b.event != g.event || b.league != g.league)
       continue;
-    if (!out.empty())
-      out += " | ";
-    out += ::espn::bet_ticker(b, ::espn::bet_status(b, &g, now));
+    const ::espn::BetStatus st = ::espn::bet_status(b, &g, now);
+    std::string text = ::espn::bet_ticker(b, st);
+    f.status_text += (f.status_text.empty() ? "" : " | ") + text;
+    f.ticker_spans.push_back({std::move(text), ::espn::bet_color(st)});
   }
+}
+
+// ---- Player props (props.h) ----------------------------------------------------
+
+void GamedayComponent::set_prop_(uint8_t slot, ::espn::Prop p) {
+  p.placed = this->clock_set_() ? (uint32_t) this->time_->timestamp_now() : 0;
+  const uint8_t at = ::espn::prop_put(this->props_.props, slot, p);
+  if (at == 0) {
+    ESP_LOGW(TAG, "Prop %s ignored: all %d prop slots are in use", ::espn::prop_label(p).c_str(), ::espn::kPropSlots);
+    return;
+  }
+  ESP_LOGI(TAG, "Prop %u: %s %s", (unsigned) at, ::espn::league_key((League) p.league), ::espn::prop_label(p).c_str());
+  this->props_changed_();
+}
+
+void GamedayComponent::remove_prop_(uint8_t slot) {
+  if (slot < 1 || slot > ::espn::kPropSlots || ::espn::prop_empty(this->props_.props[slot - 1]))
+    return;
+  ESP_LOGI(TAG, "Prop %u removed", (unsigned) slot);
+  this->props_.props[slot - 1] = ::espn::Prop{};
+  this->props_changed_();
+}
+
+void GamedayComponent::props_changed_() {
+  this->props_pref_.save(&this->props_);
+  this->props_tick_();
+  if (this->game_.valid)
+    this->emit_({});  // the ticker gets it now
+  else
+    this->rebuild_state_(&this->last_fields_);
+}
+
+bool GamedayComponent::props_tick_() {
+  bool any = false;
+  for (const auto &p : this->props_.props)
+    any = any || !::espn::prop_empty(p);
+  if (!any || !this->clock_set_())
+    return false;
+  const int64_t now = (int64_t) this->time_->timestamp_now();
+  const int64_t midnight = this->next_midnight_(now);
+  bool changed = false;
+  // tie false: only props tied already update.
+  auto take = [&](const GameSnapshot &snap, uint8_t league, bool tie) {
+    ::espn::BetGame g;
+    if (!this->bet_game_(snap, league, g))
+      return;
+    for (auto &p : this->props_.props) {
+      changed |= tie ? ::espn::prop_observe(p, g, now, midnight) : ::espn::prop_update(p, g, now, midnight);
+      // Soccer grades from the game's own goals.
+      if (g.phase == ::espn::BetPhase::FINAL && p.event == g.event && p.league == g.league &&
+          p.result == (uint8_t) ::espn::PropResult::NONE && ::espn::league_sport((League) p.league) == ::espn::Sport::SOCCER)
+        changed |= ::espn::prop_grade(p, true, ::espn::soccer_goals(snap, p.athlete), now, midnight);
+    }
+  };
+  take(this->game_, this->board_league_(), !this->visit_.active);
+  if (this->favorites_mode_())
+    for (const auto &e : this->fav_)
+      take(e.game, (uint8_t) e.team->league, true);
+  if (this->a2_show_() == ::espn::SplitShow::TEAM && !this->a2_team_.empty())
+    take(this->a2_team_[0].game, (uint8_t) this->a2_team_[0].team->league, true);
+  if (this->jump_.active)
+    take(this->jump_game_(), this->jump_.league, false);
+  bool gone = false;
+  for (auto &p : this->props_.props)
+    if (::espn::prop_expired(p, now)) {
+      p = ::espn::Prop{};
+      gone = true;
+    }
+  if (changed || gone)
+    this->props_pref_.save(&this->props_);
+  return gone;
+}
+
+const GameSnapshot *GamedayComponent::game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const {
+  ::espn::Bet b{};
+  b.league = league;
+  b.event = event;
+  return this->bet_snapshot_(b, out);
+}
+
+int GamedayComponent::prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const {
+  if (g == nullptr)
+    return ::espn::kPropNoValue;
+  if (g->sport == ::espn::Sport::SOCCER)
+    return ::espn::soccer_goals(*g, p.athlete);
+  for (const BoxGame &b : this->box_) {
+    if (b.league != p.league || b.event != p.event || !b.read)
+      continue;
+    const ::espn::BoxLine *l = ::espn::box_line(b.lines, p.athlete);
+    return l != nullptr ? ::espn::prop_value(p, *l) : 0;
+  }
+  return ::espn::kPropNoValue;
+}
+
+void GamedayComponent::props_ticker_(const GameSnapshot &game, uint8_t league, UpdateFields &f) const {
+  ::espn::BetGame g;
+  if (!this->clock_set_() || !this->bet_game_(game, league, g))
+    return;
+  const int64_t now = (int64_t) this->time_->timestamp_now();
+  const int progress = ::espn::game_progress(game, league);
+  for (const auto &p : this->props_.props) {
+    if (::espn::prop_empty(p) || p.event != g.event || p.league != g.league)
+      continue;
+    const int v = this->prop_now_(p, &game);
+    const ::espn::PropStatus st = ::espn::prop_status(p, &g, v, progress, now);
+    std::string text = ::espn::prop_ticker(p, st, v);
+    f.status_text += (f.status_text.empty() ? "" : " | ") + text;
+    f.ticker_spans.push_back({std::move(text), ::espn::prop_color(st)});
+  }
+}
+
+// Each minute while live, then once after the final.
+bool GamedayComponent::start_box_job_(uint32_t now, uint32_t due) {
+  if (this->demo_playing_() || now - this->box_check_ms_ < 1000)
+    return false;
+  this->box_check_ms_ = now;
+  // Games no prop waits on leave the list.
+  auto waits = [this](const BoxGame &b) {
+    for (const auto &p : this->props_.props)
+      if (!::espn::prop_empty(p) && p.league == b.league && p.event == b.event &&
+          p.result == (uint8_t) ::espn::PropResult::NONE)
+        return true;
+    return false;
+  };
+  for (size_t i = this->box_.size(); i-- > 0;)
+    if (!waits(this->box_[i]))
+      this->box_.erase(this->box_.begin() + i);
+  for (const auto &p : this->props_.props) {
+    if (::espn::prop_empty(p) || p.event == 0 || p.result != (uint8_t) ::espn::PropResult::NONE ||
+        !::espn::prop_reads_box(::espn::league_sport((League) p.league)))
+      continue;
+    ::espn::BetGame g;
+    const bool shown = this->game_for_(p.league, p.event, g) != nullptr;
+    BoxGame *b = nullptr;
+    for (auto &x : this->box_)
+      if (x.league == p.league && x.event == p.event)
+        b = &x;
+    // A final seen once gets its read, shown or not.
+    if (!shown && (b == nullptr || b->final_ms == 0))
+      continue;
+    if (b == nullptr) {
+      if (this->box_.size() >= (size_t) ::espn::kPropSlots)
+        continue;
+      this->box_.emplace_back();
+      b = &this->box_.back();
+      b->league = p.league;
+      b->event = p.event;
+    }
+    const bool fin = !shown || g.phase == ::espn::BetPhase::FINAL;
+    if (fin && b->final_ms == 0)
+      b->final_ms = now | 1;
+    const uint32_t wait = ::espn::box_wait_ms(fin ? BOX_FINAL_WAIT_MS : BOX_LIVE_MS, b->fails);
+    if ((g.phase != ::espn::BetPhase::LIVE && !fin) ||
+        (fin && (b->final_read || now - b->final_ms < BOX_FINAL_WAIT_MS)) ||
+        (b->tried_ms != 0 && now - b->tried_ms < wait))
+      continue;
+    const ::espn::Sport sport = ::espn::league_sport((League) p.league);
+    if (!::espn::watch_read_fits(now, due, this->box_times_.expect(sport))) {
+      this->box_times_.skip(sport);
+      return false;  // the board's read comes first
+    }
+    this->box_times_.started(sport);
+    b->tried_ms = now | 1;
+    Job &j = this->new_job_();
+    j.need_box = true;
+    j.box_final = fin;
+    j.box_league = p.league;
+    j.box_event = p.event;
+    j.box_watch = ::espn::prop_box_watch(this->props_.props, p.league);
+    this->start_worker_();
+    return this->busy_;
+  }
+  return false;
+}
+
+// Worker task: a summary, up to its box score.
+void GamedayComponent::run_box_job_() {
+  Job &j = this->job_;
+  const League league = (League) j.box_league;
+  const std::string url = ::espn::summary_url(league, std::to_string(j.box_event));
+  ESP_LOGD(TAG, "Box score: %s", url.c_str());
+  auto container = this->open_(url);
+  if (container == nullptr)
+    return;
+  ContainerReader reader(container, this->espn_bytes_);
+  ::espn::BoxCutter cut;
+  reader.cut(&cut);
+  j.box_ok = ::espn::parse_box(reader, ::espn::league_sport(league), j.box_watch, j.box_lines);
+  container->end();
+  ESP_LOGI(TAG, "Box score: %u player(s)%s (%u bytes)", (unsigned) j.box_lines.size(), j.box_final ? ", final" : "",
+           (unsigned) reader.total());
+}
+
+// Also for a worker given up on.
+void GamedayComponent::box_failed_(uint32_t took_ms) {
+  const Job &j = this->job_;
+  this->box_times_.took(::espn::league_sport((League) j.box_league), took_ms, false);
+  for (auto &b : this->box_)
+    if (b.league == j.box_league && b.event == j.box_event && b.fails < UINT8_MAX)
+      b.fails++;
+}
+
+void GamedayComponent::apply_box_job_() {
+  Job &j = this->job_;
+  const uint32_t now = millis();
+  if (!j.box_ok) {
+    this->box_failed_(j.took_ms);
+    if (j.throttled) {
+      // ESPN refused: every gap read waits.
+      this->gap_hold_until_ = (now + std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE)) | 1;
+      this->watch_refused_(now);
+    }
+    return;
+  }
+  this->box_times_.took(::espn::league_sport((League) j.box_league), j.took_ms, true);
+  for (auto &b : this->box_)
+    if (b.league == j.box_league && b.event == j.box_event) {
+      b.fails = 0;
+      b.lines = std::move(j.box_lines);
+      b.read = true;
+      b.final_read = b.final_read || j.box_final;
+      if (!j.box_final)
+        break;
+      // Graded on the final's numbers only.
+      const int64_t tnow = (int64_t) this->time_->timestamp_now();
+      const int64_t midnight = this->next_midnight_(tnow);
+      bool graded = false;
+      for (auto &p : this->props_.props) {
+        if (::espn::prop_empty(p) || p.league != b.league || p.event != b.event ||
+            p.result != (uint8_t) ::espn::PropResult::NONE)
+          continue;
+        graded |= ::espn::prop_grade_box(p, b.lines, tnow, midnight);
+      }
+      if (graded) {
+        this->props_pref_.save(&this->props_);
+        if (::espn::bet_event_id(this->game_.event_id) == j.box_event) {
+          this->emit_({});  // WON or LOST shows now
+          return;
+        }
+      }
+      break;
+    }
+  this->rebuild_state_(&this->last_fields_);
 }
 
 // Not mktime: libc has no time zone here.
@@ -1326,6 +1612,9 @@ void GamedayComponent::dump_config() {
 #endif
 #ifdef GAMEDAY_BETA_CHANNEL
   ESP_LOGCONFIG(TAG, "  Follow beta: %s", this->follow_beta() ? "on" : "off");
+#endif
+#ifdef USE_LVGL
+  ESP_LOGCONFIG(TAG, "  Ticker colors: %s", ticker_colors_on() ? "on" : "off");
 #endif
 }
 
@@ -1430,7 +1719,12 @@ void GamedayComponent::loop() {
           if (!w.event_id.empty())
             ::espn::watch_failed(this->watch_, w.league, w.event_id);
         }
-        if (this->job_.side || this->job_.need_watch || this->job_.a2 != 0) {
+        if (this->job_.need_box)
+          this->box_failed_(deadline);
+        if (this->job_.app != 0)
+          this->app_failed_((::espn::Display) this->job_.app, deadline);
+        if (this->job_.side || this->job_.need_watch || this->job_.a2 != 0 || this->job_.need_box ||
+            this->job_.app != 0) {
           // Side reads wait as failed; the mode keeps its time.
           if (this->job_.side) {
             this->side_wait_since_ = now;
@@ -2062,7 +2356,15 @@ bool GamedayComponent::idle_update_() {
   // The idle display waits for a splash, a win's too
   in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_);
   in.area2_busy = this->a2_busy_();
-  const ::espn::IdleState s = ::espn::idle_state(in);
+  ::espn::IdleState s = ::espn::idle_state(in);
+  // Another display on the main area: its own busy decides.
+  const ::espn::Display shown = this->main_display_();
+  const bool app_busy = this->app_busy_(shown);
+  const ::espn::MainView mv = ::espn::main_view(shown, this->demo_playing_(), s.night, app_busy);
+  if (mv != ::espn::MainView::GAMEDAY)
+    s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, this->app_lit_(shown), in.area2_busy);
+  const bool main_changed = mv != this->main_view_;
+  this->main_view_ = mv;
   const ::espn::IdleView v = this->idle_effective_(s.view);
   // The owner's change lasts until the night hours end.
   const bool was_override = this->night_.on;
@@ -2071,7 +2373,7 @@ bool GamedayComponent::idle_update_() {
   // At night the clock needs the team's card back.
   const bool live_switch = s.night != this->idle_.night && this->live_mode_() && this->current_team_() != nullptr &&
                            this->idle_prefs_.idle == (uint8_t) ::espn::IdleShow::SCORES;
-  const bool changed = v != this->idle_view_;
+  const bool changed = v != this->idle_view_ || main_changed;
   this->idle_ = s;
   this->idle_view_ = v;
   const bool side = v == ::espn::IdleView::SCORES;
@@ -2092,9 +2394,13 @@ bool GamedayComponent::idle_update_() {
     else
       this->recap_cards_.clear();
   }
-  if (changed)
+  if (changed && !main_changed)
     ESP_LOGI(TAG, "Idle display: showing %s%s", v == ::espn::IdleView::BOARD ? "the board" : ::espn::idle_view_key(v),
              s.night ? " (night hours)" : "");
+  if (main_changed)
+    ESP_LOGI(TAG, "Main area: %s", mv == ::espn::MainView::CLOCK  ? "the clock (night hours)"
+                                   : mv == ::espn::MainView::APP ? ::espn::display_name(shown)
+                                                                 : "Game Day");
   if (light) {
     ESP_LOGI(TAG, "Brightness: %s", s.dim ? "idle dim" : s.night && !this->night_.on ? "night hours" : "the owner's");
     // Deferred: emit_ may be deep in fav_choose_.
@@ -2109,6 +2415,7 @@ void GamedayComponent::idle_tick_() {
   const ::espn::IdleState before = this->idle_;
   bool redraw = this->idle_update_();
   this->a2_tick_();
+  this->apps_tick_();
   if (!redraw && before != this->idle_)
     this->rebuild_state_(&this->last_fields_);  // the page's night_now and dark
   if (this->idle_view_ == ::espn::IdleView::TODAY && this->time_ != nullptr) {
@@ -2540,6 +2847,7 @@ void GamedayComponent::auto_update_tick_() {
 }
 
 void GamedayComponent::apply_timezone_() {
+  ::espn::app_env().tz = this->prefs_.tz_index;
 #ifdef GAMEDAY_TZ_PARSED
   // ESPHome 2026.9+: no POSIX parser on the device, hand the clock the
   // pre-parsed rules (scripts/build_timezones.py keeps the table in step).
@@ -2641,20 +2949,36 @@ bool GamedayComponent::live_leagues_changed_(const std::vector<League> &before) 
   return true;
 }
 
-std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::string &url) {
+std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::string &url,
+                                                                    const ::espn::AppRequest *app) {
   std::vector<http_request::Header> headers = {
       {"User-Agent", USER_AGENT},
       {"Accept", "application/json"},
   };
+  if (app != nullptr) {
+    for (const auto &h : app->headers) {
+      auto same = std::find_if(headers.begin(), headers.end(), [&h](const http_request::Header &x) {
+        return strcasecmp(x.name.c_str(), h.name.c_str()) == 0;
+      });
+      if (same != headers.end())
+        same->value = h.value;
+      else
+        headers.push_back({h.name, h.value});
+    }
+  }
   // Each host's answers and refusals are tracked apart.
-  const ::espn::Source src = ::espn::is_mlb_url(url)  ? ::espn::Source::MLB_STATS
-                             : ::espn::is_ht_url(url) ? ::espn::Source::HOCKEYTECH
-                                                      : ::espn::Source::ESPN;
+  ::espn::Source src = ::espn::url_source(url, this->app_hosts_, this->app_host_n_);
+  // A display's read never counts as ESPN's.
+  if (app != nullptr && src == ::espn::Source::ESPN)
+    src = ::espn::display_source((::espn::Display) this->job_.app);
   const bool espn = src == ::espn::Source::ESPN;
   Job::HostJob &side = this->job_.host[(size_t) src];
   (espn ? this->job_.read_espn : side.read) = true;
   this->espn_requests_++;
-  auto container = this->http_->get(url, headers, {"retry-after"});
+  const bool post = app != nullptr && !app->body.empty();
+  const std::vector<std::string> collect = {"retry-after"};
+  auto container = this->http_->start(url.c_str(), post ? "POST" : "GET", post ? app->body : std::string(), headers,
+                                      collect);
   (espn ? this->espn_status_ : this->host_status_[(size_t) src]) = container == nullptr ? 0 : container->status_code;
   (espn ? this->espn_answer_ms_ : this->host_answer_ms_[(size_t) src]) = millis() == 0 ? 1 : millis();
   if (container == nullptr) {
@@ -3023,7 +3347,8 @@ bool GamedayComponent::fetch_game_(const ::espn::Team *team, const Schedule &sch
   ContainerReader reader(container, this->espn_bytes_);
   GameSnapshot g;
   // Keeps favorite players' leader lines and last-play athletes.
-  const ::espn::PlayerWatch watch = ::espn::player_watch(this->job_.players.players, (uint8_t) league);
+  ::espn::PlayerWatch watch = ::espn::player_watch(this->job_.players.players, (uint8_t) league);
+  ::espn::prop_watch_add(watch, this->job_.props.props, (uint8_t) league);
   bool ok = per_event ? ::espn::parse_event(reader, info->sport, this->our_id_(), g, schedule.event_id, &watch)
                       : ::espn::parse_scoreboard(reader, schedule.event_id, this->our_id_(), g);
   container->end();
@@ -3248,6 +3573,7 @@ void GamedayComponent::start_job_() {
   uint32_t now = millis();
   Job &j = this->new_job_();
   j.players = this->players_;
+  j.props = this->props_;
   j.team = this->current_team_();
   j.mode = this->effective_mode_();
   j.scan_leagues = this->scan_leagues_();
@@ -3488,12 +3814,20 @@ void GamedayComponent::run_job_() {
     container->end();
     return;
   }
+  if (j.app != 0) {
+    this->run_app_job_();
+    return;
+  }
   if (j.need_board) {
     this->run_board_job_();
     return;
   }
   if (j.need_watch) {
     this->run_watch_job_();
+    return;
+  }
+  if (j.need_box) {
+    this->run_box_job_();
     return;
   }
   if (j.need_recap) {
@@ -3645,6 +3979,14 @@ void GamedayComponent::apply_job_() {
   }
   if (j.a2 != 0) {
     this->apply_a2_job_();  // own generation: main team changes don't affect it
+    return;
+  }
+  if (j.app != 0) {
+    this->apply_app_job_();
+    return;
+  }
+  if (j.need_box) {
+    this->apply_box_job_();  // keyed by game, not by team
     return;
   }
   if (j.generation != this->generation_) {
@@ -4486,7 +4828,11 @@ GameSnapshot GamedayComponent::board_prev_(const GameSnapshot &cur) {
 // ---- Split mode: the second area (split.h) -----------------------------------
 
 void GamedayComponent::set_split(int show) {
-  if (show < 0 || show >= ::espn::kSplitCount || show == this->split_prefs_.show)
+  if (!::espn::split_allowed(show, ::espn::app_slots().mask())) {
+    ESP_LOGW(TAG, "Second area: no display %d in this firmware", show);
+    return;
+  }
+  if (show == this->split_prefs_.show)
     return;
   const bool was_on = this->split_area().on;
   const bool was_rotating = this->rotation_on_();
@@ -4501,6 +4847,21 @@ void GamedayComponent::set_split(int show) {
   // Three or four wide, the board and area trade panels.
   if (was_on != this->split_area().on)
     this->fire_action_("layout");
+  this->emit_({});
+  this->emit_a2_({});
+}
+
+void GamedayComponent::set_display(int display) {
+  if (!::espn::display_has(::espn::app_slots().mask(), display)) {
+    ESP_LOGW(TAG, "No display %d in this firmware", display);
+    return;
+  }
+  if (display == this->split_prefs_.display)
+    return;
+  this->split_prefs_.display = (uint8_t) display;
+  this->split_pref_.save(&this->split_prefs_);
+  ESP_LOGI(TAG, "Main area: %s", ::espn::display_name((::espn::Display) display));
+  this->idle_update_();
   this->emit_({});
   this->emit_a2_({});
 }
@@ -4586,6 +4947,11 @@ static bool a2_team_on(const GameSnapshot &g, bool saw_live, uint32_t final_ms, 
 bool GamedayComponent::a2_busy_() const {
   if (this->jump_.active)
     return true;
+  ::espn::Display d;
+  if (this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), d))
+    return this->app_busy_(d);
+  if (this->a2_view_ == ::espn::AreaView::GAME)
+    return this->idle_busy_();
   if (this->a2_show_() != ::espn::SplitShow::TEAM || this->a2_team_.empty() || this->a2_team_main_())
     return false;
   const FavEntry &e = this->a2_team_[0];
@@ -4608,7 +4974,13 @@ uint8_t GamedayComponent::a2_league_() const {
   if (this->demo_playing_())
     in.show = ::espn::SplitShow::CLOCK;  // the demo plays on the main board only
   in.night = this->idle_.night;
-  in.main_clock = this->last_fields_.clock;
+  // What the board draws: its clock, or a display's.
+  in.main_clock = this->board_fields().clock;
+  in.main = this->main_display_();
+  in.displays = ::espn::app_slots().mask();
+  ::espn::Display d;
+  if (::espn::area_app(in.show, d))
+    in.app_busy = this->app_busy_(d);
   const bool main_scores = (this->recap_on_ && this->idle_view_ == ::espn::IdleView::BOARD) ||
                            this->idle_view_ == ::espn::IdleView::SCORES;
   in.scores = ::espn::scores_step(this->recap_step_, this->recap_cards_.size(), main_scores) >= 0;
@@ -4672,6 +5044,21 @@ std::string GamedayComponent::a2_clock_line_() const {
 
 void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &splash, UpdateFields &f) {
   using ::espn::AreaView;
+  if (v == AreaView::GAME) {
+    // The board's own fields; a splash only as it happens.
+    f = this->last_fields_;
+    if (!this->a2_take_splash_)
+      f.splash_text.clear();
+    if (f.sport == (uint8_t) ::espn::Sport::BASEBALL && f.game_state == "IN" && f.outs >= 0)
+      f.down_distance = (f.situation.empty() ? std::string() : f.situation + " ") + std::to_string(f.outs) + " OUT";
+    return;
+  }
+  if (v == AreaView::APP) {
+    ::espn::Display d;
+    if (::espn::area_app(this->a2_show_(), d))
+      this->app_fields_(d, this->split_area().w, this->split_area().h, f);
+    return;
+  }
   if (v == AreaView::CLOCK || v == AreaView::DATE) {
     f.status_text = this->a2_clock_line_();
     return;
@@ -4724,7 +5111,8 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
   } else {
     for (const std::string &line : this->player_lines_(*g, league))
       f.status_text += (f.status_text.empty() ? "" : " | ") + line;
-    this->bets_ticker_(*g, league, f.status_text);
+    this->bets_ticker_(*g, league, f);
+    this->props_ticker_(*g, league, f);
   }
   // No diamond in the area: outs go in text.
   if (f.sport == (uint8_t) ::espn::Sport::BASEBALL && g->state == GameState::IN && f.outs >= 0)
@@ -4763,7 +5151,9 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   }
   UpdateFields f;
   this->a2_fields_(v, splash, f);
-  const bool clock = v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE;
+  // Game Day's clock card shows as the area's clock.
+  const bool clock =
+      v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE || (v == ::espn::AreaView::GAME && f.clock);
   // The card before stays up until these logos arrive
   const bool fresh = !clock && f.splash_text.empty() &&
                      (f.team_logo != this->a2_logo_[0] || f.opponent_logo != this->a2_logo_[1]);
@@ -4788,7 +5178,7 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
     ESP_LOGI(TAG, "Second area splash: %s", f.splash_text.c_str());
     this->a2_splash_ms_ = millis() == 0 ? 1 : millis();
   }
-  const UpdateFields &m = this->last_fields_;
+  const UpdateFields &m = this->board_fields();
   // Cached logos; a missing one shows its badge
   image::Image *team_logo = clock ? nullptr : this->logos_.get(f.team_logo);
   image::Image *opp_logo = clock ? nullptr : this->logos_.get(f.opponent_logo);
@@ -4961,6 +5351,8 @@ void GamedayComponent::start_gap_job_(uint32_t due) {
   if (now - this->times_cycle_ms_ >= ::espn::kWatchCycleMs) {
     this->times_cycle_ms_ = now;
     this->watch_times_.cycle();  // the read times age whatever reads
+    this->box_times_.cycle();
+    this->app_times_.cycle();
   }
   if (!this->gap_ok_(now)) {
     // Reads from before a pause can't be compared.
@@ -4970,11 +5362,16 @@ void GamedayComponent::start_gap_job_(uint32_t due) {
   }
   if (this->board_ready_ && this->start_a2_job_(now, due) != 0)
     return;
+  // Another display on screen reads its own host.
+  if (this->start_app_job_(now, due) != 0)
+    return;
   if (!this->espn_gap_ok_(now)) {
     if (this->watch_key_last_ != 0 && !this->watch_reads_())
       this->watch_reset_();
     return;
   }
+  if (this->start_box_job_(now, due))
+    return;
   if (this->start_side_job_(now, due))
     return;
   this->start_watch_job_(due);
@@ -4996,6 +5393,7 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
     j.generation = this->a2_gen_;
     j.a2 = A2_JUMP;
     j.players = this->players_;
+    j.props = this->props_;
     j.our_id = this->jump_.away_id;
     j.schedule.valid = true;
     j.schedule.league = this->jump_.league;
@@ -5043,6 +5441,7 @@ int GamedayComponent::start_a2_job_(uint32_t now, uint32_t due) {
   j.a2 = A2_TEAM;
   j.mode = this->effective_mode_();
   j.players = this->players_;
+  j.props = this->props_;
   j.team = e.team;
   j.our_id = e.team->espn_id;
   j.schedule = e.sched;
@@ -5277,6 +5676,279 @@ void GamedayComponent::end_jump_() {
   this->rot_ms_ = 0;  // the rotation's next card now
 }
 
+// ---- Other displays (apps.h) -----------------------------------------------------
+
+void GamedayComponent::apps_setup_() {
+  ::espn::AppSlots &slots = ::espn::app_slots();
+  ::espn::AppEnv &env = ::espn::app_env();
+  env.local = [](int64_t t) { return ESPTime::from_epoch_local((time_t) t).to_c_tm(); };
+  env.version = App.get_comment().c_str();
+  if (!env.version.empty() && env.version[0] == 'v')
+    env.version.erase(0, 1);
+  ::espn::register_apps(slots);
+  this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
+  for (int i = 1; i < ::espn::kDisplayCount; i++) {
+    ::espn::App *a = slots.app[i];
+    if (a == nullptr)
+      continue;
+    const ::espn::Display d = (::espn::Display) i;
+    if (a->prefs() != nullptr && a->prefs_size() > 0) {
+      const std::string key = std::string("gameday_app_") + ::espn::display_key(d) + "_v1";
+      this->app_pref_[i] = global_preferences->make_preference(a->prefs_size(), fnv1_hash(key));
+      this->app_pref_[i].load((uint8_t *) a->prefs(), a->prefs_size());
+    }
+    a->setup();
+    ESP_LOGI(TAG, "Display: %s", ::espn::display_name(d));
+  }
+  if (slots.mask() != ::espn::kGameDayOnly)
+    this->main_app_ = new (psram_alloc(sizeof(UpdateFields))) UpdateFields();
+}
+
+bool GamedayComponent::app_busy_(::espn::Display d) const {
+  const ::espn::App *a = d == ::espn::Display::GAMEDAY ? nullptr : ::espn::app_slots().get(d);
+  return a != nullptr && this->clock_set_() && a->busy((int64_t) this->time_->timestamp_now());
+}
+
+bool GamedayComponent::app_lit_(::espn::Display d) const {
+  const ::espn::App *a = d == ::espn::Display::GAMEDAY ? nullptr : ::espn::app_slots().get(d);
+  return a != nullptr && this->clock_set_() && a->lit((int64_t) this->time_->timestamp_now());
+}
+
+bool GamedayComponent::app_on_screen_(::espn::Display d) const {
+  if (d == ::espn::Display::GAMEDAY)
+    return false;
+  if (this->main_view_ == ::espn::MainView::APP && this->main_display_() == d)
+    return true;
+  ::espn::Display a;
+  return this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d;
+}
+
+bool GamedayComponent::app_night_(::espn::Display d) const {
+  if (d == ::espn::Display::GAMEDAY)
+    return false;
+  if (this->main_view_ == ::espn::MainView::CLOCK && this->main_display_() == d)
+    return true;
+  ::espn::Display a;
+  return ::espn::area_clock(this->a2_view_) && ::espn::area_app(this->a2_show_(), a) && a == d;
+}
+
+void GamedayComponent::apps_tick_() {
+  const uint32_t now = millis();
+  const ::espn::AppSlots &slots = ::espn::app_slots();
+  for (int i = 1; i < ::espn::kDisplayCount; i++) {
+    ::espn::App *a = slots.app[i];
+    if (a == nullptr)
+      continue;
+    const ::espn::Display d = (::espn::Display) i;
+    const bool on = this->app_on_screen_(d);
+    if (on != this->app_shown_[i]) {
+      this->app_shown_[i] = on;
+      a->shown(on);
+    }
+    const uint32_t every = a->redraw_ms();
+    if (on && every != 0 && now - this->app_drawn_ms_[i] >= every)
+      this->app_redraw_(d, true);
+  }
+}
+
+void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
+  this->app_drawn_ms_[(int) d] = millis() | 1;
+  if (this->main_view_ == ::espn::MainView::APP && this->main_display_() == d)
+    this->draw_main_app_(timed);
+  ::espn::Display a;
+  if (this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d)
+    this->emit_a2_({});
+}
+
+void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const {
+  const ::espn::App *a = ::espn::app_slots().get(d);
+  ::espn::AppFrame fr;
+  if (a != nullptr)
+    a->frame(w, h, this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0, fr);
+  ::espn::app_frame_trim(fr);
+  f.team_timeouts = f.opponent_timeouts = -1;
+  f.status_text = std::move(fr.ticker);
+  f.ticker_spans = std::move(fr.spans);
+  if (!::espn::app_frame_board(fr)) {
+    // The words alone, centered, over the ticker.
+    f.game_state = "NOT_FOUND";
+    f.board_card = true;
+    f.next_line = panel_text(fr.message.empty() ? std::string(::espn::display_name(d)) : fr.message, true);
+    return;
+  }
+  f.game_state = "APP";
+  f.board = true;
+  f.board_title = panel_text(fr.rows.title);
+  f.board_status = panel_text(fr.rows.status);
+  f.board_status_color = fr.rows.status_color;
+  f.board_value_narrow = fr.rows.value_narrow;
+  auto cells = [](const std::vector<std::string> &in, std::vector<std::string> &out) {
+    out.clear();
+    for (const auto &c : in)
+      out.push_back(panel_text(c));
+  };
+  cells(fr.rows.pos, f.board_pos);
+  cells(fr.rows.name, f.board_name);
+  cells(fr.rows.value, f.board_value);
+  cells(fr.rows.detail, f.board_detail);
+  f.board_value_color = std::move(fr.rows.value_color);
+  f.board_name_color = std::move(fr.rows.name_color);
+  f.board_pos_color = std::move(fr.rows.pos_color);
+  f.board_detail_color = std::move(fr.rows.detail_color);
+  f.board_cols = std::move(fr.rows.cols);
+  f.line = ::espn::app_line_xy(fr.line, w, h);
+  f.line_color = fr.line.color;
+  f.texts = std::move(fr.texts);
+  for (::espn::AppText &t : f.texts)
+    t.text = panel_text(t.text);
+}
+
+void GamedayComponent::draw_main_app_(bool quiet) {
+  if (this->main_app_ == nullptr)
+    return;
+  UpdateFields &af = *this->main_app_;
+  af = UpdateFields{};
+  af.quiet = quiet;
+  const ::espn::Display d = this->main_display_();
+  if (this->main_view_ == ::espn::MainView::CLOCK) {
+    af.game_state = "NOT_FOUND";
+    this->clock_fields_(af, true);
+    af.clock = true;  // also during a visit, which skips it
+    af.board = af.board_card = false;
+  } else {
+    this->app_fields_(d, this->board_px_(), kBoardRows, af);
+    this->app_drawn_ms_[(int) d] = millis() | 1;
+  }
+  // Home Assistant keeps following Game Day.
+  af.ha_status_text = this->last_fields_.ha_status_text;
+  af.ha_last_play = this->last_fields_.ha_last_play;
+  this->logo_held_ = false;
+  this->draw_(af);
+}
+
+int GamedayComponent::start_app_job_(uint32_t now, uint32_t due) {
+  if (this->demo_playing_() || !this->clock_set_())
+    return 0;
+  const ::espn::AppSlots &slots = ::espn::app_slots();
+  const int64_t tnow = (int64_t) this->time_->timestamp_now();
+  int held = 0;
+  for (int i = 1; i < ::espn::kDisplayCount; i++) {
+    ::espn::App *a = slots.app[i];
+    const ::espn::Display d = (::espn::Display) i;
+    if (a == nullptr)
+      continue;
+    const bool on = this->app_on_screen_(d);
+    const uint32_t every = on ? a->poll_ms(tnow) : this->app_night_(d) ? a->night_poll_ms(tnow) : 0;
+    if ((!on && every == 0) || this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
+        !::espn::app_due(now, this->app_last_ms_[i], every))
+      continue;
+    if (!::espn::watch_read_fits(now, due, this->app_times_.expect(d))) {
+      this->app_times_.skip(d);
+      held = -1;  // the board's read comes first
+      continue;
+    }
+    Job &j = this->new_job_();
+    if (!a->request(tnow, j.app_req))
+      continue;
+    this->app_times_.started(d);
+    this->app_last_ms_[i] = now | 1;
+    j.generation = this->app_gen_[i];
+    j.app = (uint8_t) i;
+    j.app_now = tnow;
+    this->start_worker_();
+    return this->busy_ ? 1 : 0;
+  }
+  return held;
+}
+
+// Worker task: one read through the display's own parse.
+void GamedayComponent::run_app_job_() {
+  Job &j = this->job_;
+  ::espn::App *a = ::espn::app_slots().get((::espn::Display) j.app);
+  if (a == nullptr)
+    return;
+  auto container = this->open_(j.app_req.url, &j.app_req);
+  if (container == nullptr)
+    return;
+  ContainerReader reader(container, this->espn_bytes_);
+  ReaderStream in(reader);
+  JsonDocument filter(::espn::detail::json_allocator());
+  if (a->filter(filter)) {
+    // One document, through the stream's same reader.
+    JsonDocument doc(::espn::detail::json_allocator());
+    j.app_ok = !in.json(doc, filter, 40) && a->parse_doc(doc.as<JsonObjectConst>(), j.app_now);
+  } else {
+    j.app_ok = a->parse(in, j.app_now);
+  }
+  container->end();
+  ESP_LOGD(TAG, "%s: %s (%u bytes)", ::espn::display_name((::espn::Display) j.app), j.app_ok ? "read" : "not read",
+           (unsigned) reader.total());
+}
+
+// Also for a worker given up on.
+void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
+  this->app_times_.took(d, took_ms, false);
+  const ::espn::Source src = ::espn::display_source(d);
+  const Job::HostJob &h = this->job_.host[(size_t) src];
+  ::espn::App *a = ::espn::app_slots().get(d);
+  if (a != nullptr && a->own_backoff()) {
+    ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
+    return;
+  }
+  const bool other = a != nullptr && a->failed(h.throttled);
+  ::espn::HostWait &w = this->host_wait_[(size_t) src];
+  uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+  if (other) {
+    // Its backup host, without the wait
+    w.end_wait();
+    ms = 0;
+  }
+  ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
+           (unsigned) (ms / 1000));
+}
+
+void GamedayComponent::apply_app_job_() {
+  Job &j = this->job_;
+  const ::espn::Display d = (::espn::Display) j.app;
+  ::espn::App *a = ::espn::app_slots().get(d);
+  if (a == nullptr || j.generation != this->app_gen_[j.app]) {
+    this->app_last_ms_[j.app] = 0;  // read again for the new settings
+    return;
+  }
+  const ::espn::Source src = ::espn::display_source(d);
+  const Job::HostJob &h = j.host[(size_t) src];
+  a->ended(h.read ? ::espn::AppResult{this->host_status_[(size_t) src].load(), h.throttled, h.retry_after_ms}
+                  : ::espn::AppResult{});
+  if (j.app_ok) {
+    this->app_times_.took(d, j.took_ms, true);
+    this->host_wait_[(size_t) src].clear();
+  } else {
+    this->app_failed_(d, j.took_ms);
+  }
+  a->apply(j.app_ok, j.app_now);
+  this->app_redraw_(d);
+  this->rebuild_state_(&this->last_fields_);  // the page's copy too
+}
+
+// A display's own key: false when none takes it.
+bool GamedayComponent::app_set_(const std::string &key, const std::string &value) {
+  const ::espn::Display d = ::espn::app_for_key(::espn::app_slots(), key);
+  ::espn::App *a = ::espn::app_slots().get(d);
+  if (d == ::espn::Display::GAMEDAY || a == nullptr)
+    return false;
+  const ::espn::AppSet r = a->set(key, value);
+  if (r == ::espn::AppSet::REFUSED)
+    return false;
+  if (r == ::espn::AppSet::CHANGED) {
+    if (a->prefs() != nullptr && a->prefs_size() > 0)
+      this->app_pref_[(int) d].save((const uint8_t *) a->prefs(), a->prefs_size());
+    this->app_gen_[(int) d]++;  // a read in flight was for before
+    this->app_last_ms_[(int) d] = 0;
+    this->app_redraw_(d);
+  }
+  return true;
+}
+
 std::string GamedayComponent::no_game_why_() const {
   if (this->game_.valid || this->demo_playing_())
     return "";
@@ -5408,7 +6080,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
     }
   }
 
-  if (!f.splash_text.empty()) {
+  // No Game Day splash while another display has the board.
+  if (!f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY) {
     ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
     this->splash_ms_ = millis() == 0 ? 1 : millis();
     // A 2x2's bottom half waits under it
@@ -5417,12 +6090,23 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
+  // Before the area, which reads what the board shows.
+  const bool app_main = this->main_view_ != ::espn::MainView::GAMEDAY;
+  if (app_main)
+    this->draw_main_app_();
   // Second area: no duplicate clock or main game.
   if (this->a2_show_() != ::espn::SplitShow::OFF) {
     const ::espn::AreaView v = this->a2_compute_();
-    if (v != this->a2_view_ || v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE)
+    if (v != this->a2_view_ || v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE ||
+        v == ::espn::AreaView::GAME) {
+      // The area's Game Day takes the board's splash.
+      this->a2_take_splash_ = v == ::espn::AreaView::GAME;
       this->emit_a2_({});
+      this->a2_take_splash_ = false;
+    }
   }
+  if (app_main)
+    return;
   if (this->hold_for_logos_(f))
     return;
   this->draw_(f);
@@ -5656,11 +6340,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
+  f.ticker_spans.clear();
   // Players and bets only on the mode's own game.
   if (&g == &this->game_) {
     for (const std::string &line : this->player_lines_(g))
       f.status_text += (f.status_text.empty() ? "" : " | ") + line;
-    this->bets_ticker_(g, this->board_league_(), f.status_text);
+    this->bets_ticker_(g, this->board_league_(), f);
+    this->props_ticker_(g, this->board_league_(), f);
   }
 }
 
@@ -6311,11 +6997,34 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["split_at"] = this->panels_ != nullptr
                         ? ::espn::split_at_key(::espn::split_at(this->panels_->cols(), this->panels_->rows()))
                         : "";
-  doc["split_now"] = ::espn::area_view_key(this->a2_view_);
+  ::espn::Display area_d;
+  doc["split_now"] = this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), area_d)
+                         ? ::espn::display_key(area_d)
+                         : ::espn::area_view_key(this->a2_view_);
   JsonObject split_team = doc["splitteam"].to<JsonObject>();
   put_team(split_team, this->split_prefs_.team_league, this->split_prefs_.team_id);
   if (this->rotation_on_())
     doc["split_n"] = this->a2_n_doc_;
+  // The main area's display and those this firmware has.
+  const ::espn::AppSlots &slots = ::espn::app_slots();
+  doc["display"] = (int) this->main_display_();
+  doc["display_now"] = this->main_view_ == ::espn::MainView::CLOCK ? "clock"
+                       : this->main_view_ == ::espn::MainView::APP ? ::espn::display_key(this->main_display_())
+                                                                   : "gameday";
+  JsonArray displays = doc["displays"].to<JsonArray>();
+  for (int i = 0; i < ::espn::kDisplayCount; i++) {
+    if (!::espn::display_has(slots.mask(), i))
+      continue;
+    const ::espn::Display d = (::espn::Display) i;
+    JsonObject o = displays.add<JsonObject>();
+    o["id"] = i;
+    o["key"] = ::espn::display_key(d);
+    o["name"] = ::espn::display_name(d);
+    o["split"] = (int) ::espn::split_of_display(d);
+    if (slots.app[i] != nullptr)
+      slots.app[i]->state(doc[::espn::display_key(d)].to<JsonObject>(),
+                          this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0);
+  }
 
   JsonObject game = doc["game"].to<JsonObject>();
   game["s"] = g.valid ? ::espn::state_name(g.state) : "NOT_FOUND";
@@ -6536,6 +7245,37 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     }
   }
   doc["betmax"] = ::espn::kBetSlots;
+  // Player props, numbers as half units.
+  JsonArray props = doc["props"].to<JsonArray>();
+  for (uint8_t i = 0; i < ::espn::kPropSlots; i++) {
+    const ::espn::Prop &p = this->props_.props[i];
+    if (::espn::prop_empty(p))
+      continue;
+    JsonObject o = props.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["l"] = ::espn::league_key((League) p.league);
+    o["id"] = p.athlete;
+    o["team"] = p.team_id;
+    o["name"] = std::string(p.name, strnlen(p.name, sizeof(p.name)));
+    o["stat"] = ::espn::kPropStats[p.stat].key;
+    o["side"] = ::espn::prop_side_key(p);
+    o["half"] = p.line;
+    o["text"] = ::espn::prop_label(p);
+    ::espn::BetGame bg;
+    const GameSnapshot *gs = this->game_for_(p.league, p.event, bg);
+    const int v = p.result != (uint8_t) ::espn::PropResult::NONE ? p.final_half : this->prop_now_(p, gs);
+    const ::espn::PropStatus st = ::espn::prop_status(p, gs != nullptr ? &bg : nullptr, v,
+                                                      gs != nullptr ? ::espn::game_progress(*gs, p.league) : -1, tnow);
+    o["st"] = ::espn::prop_status_key(st);
+    if (v != ::espn::kPropNoValue && st != ::espn::PropStatus::VOID)
+      o["v"] = v;
+    if (p.event == 0)
+      continue;
+    o["ev"] = std::to_string(p.event);
+    o["kick"] = p.kickoff;
+    o["oa"] = ::espn::bet_team_abbr(p.league, p.opp_id);
+  }
+  doc["propmax"] = ::espn::kPropSlots;
   // Favorite players, in slot order.
   JsonArray players = doc["players"].to<JsonArray>();
   for (const auto &p : this->players_.players) {
@@ -6548,13 +7288,17 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["name"] = (const char *) p.name;
   }
   doc["playermax"] = ::espn::kPlayerSlots;
-  std::string out;
-  serializeJson(doc, out);
+  // Straight into PSRAM, twice the room if it didn't fit
+  StateJson out(this->state_json_.size() + 1024, '\0');
+  size_t n;
+  while ((n = serializeJson(doc, &out[0], out.size())) >= out.size())
+    out.resize(out.size() * 2);
+  out.resize(n);
   std::lock_guard<std::mutex> lock(this->state_mutex_);
   this->state_json_ = std::move(out);
 }
 
-std::string GamedayComponent::current_state_json_() {
+GamedayComponent::StateJson GamedayComponent::current_state_json_() {
   std::lock_guard<std::mutex> lock(this->state_mutex_);
   return this->state_json_;
 }
@@ -6599,17 +7343,24 @@ std::string GamedayComponent::health_json_() {
 #else
   h.channel = "none";
 #endif
-  char buf[::espn::kHealthJsonSize];
-  int n = ::espn::health_json(buf, sizeof(buf), h);
-  if (n <= 0 || n >= (int) sizeof(buf))
+  // On the heap: httpd's stack has little room left
+  std::string out(::espn::kHealthJsonSize, '\0');
+  const int n = ::espn::health_json(&out[0], out.size(), h);
+  if (n <= 0 || n >= (int) out.size())
     return "{}";
+  out.resize(n - 1);
+  for (int i = 0; i < ::espn::kHealthApps; i++) {
+    const ::espn::Display d = (::espn::Display) (i + 1);
+    const size_t src = (size_t) ::espn::display_source(d);
+    const uint32_t app_at = this->host_answer_ms_[src].load();
+    ::espn::health_app_json(out, ::espn::display_key(d), this->host_status_[src].load(),
+                            app_at == 0 ? -1 : (int64_t) ((millis() - app_at) / 1000));
+  }
   // The heat and power keys go in before its closing brace (guard.h)
   char guard[::espn::kGuardJsonSize];
   int g = ::espn::guard_json_keys(guard, sizeof(guard), this->heat_.last_c, this->heat_.step, this->power_log_);
-  if (g <= 0 || g >= (int) sizeof(guard))
-    return std::string(buf, n);
-  std::string out(buf, n - 1);
-  out.append(guard, g);
+  if (g > 0 && g < (int) sizeof(guard))
+    out.append(guard, g);
   out += '}';
   return out;
 }
@@ -6701,7 +7452,7 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
   char buf[AsyncWebServerRequest::URL_BUF_SIZE];
   StringRef url = request->url_to(buf);
   if (url == StringRef("/gameday/state") && request->method() == HTTP_GET) {
-    std::string body = this->current_state_json_();
+    StateJson body = this->current_state_json_();
     // The cached document is rebuilt on changes; the health and Wi-Fi
     // numbers move all the time, so they go in fresh at its end.
     if (body.size() >= 2 && body.back() == '}') {
@@ -6838,6 +7589,11 @@ void GamedayComponent::handle_set_(AsyncWebServerRequest *request) {
   for (const char *key : ::espn::kSetKeys)
     if (request->hasParam(key))
       kv.emplace_back(key, request->arg(key));
+  // Then each display's own, in its order.
+  for (const ::espn::App *a : ::espn::app_slots().app)
+    for (const char *const *k = a != nullptr ? a->set_keys() : nullptr; k != nullptr && *k != nullptr; k++)
+      if (request->hasParam(*k))
+        kv.emplace_back(*k, request->arg(*k));
   if (kv.empty()) {
     request->send(400, "application/json", "{\"error\":\"nothing to set\"}");
     return;
@@ -6851,7 +7607,10 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
   ::espn::SetOp op;
   for (const auto &p : kv) {
     if (!::espn::parse_set(p.first, p.second, op, FAV_MAX)) {
-      ESP_LOGW(TAG, "Ignoring %s=%s", p.first.c_str(), p.second.c_str());
+      if (!this->app_set_(p.first, p.second))
+        ESP_LOGW(TAG, "Ignoring %s=%s", p.first.c_str(), p.second.c_str());
+      else
+        dirty = true;
       continue;
     }
     switch (op.kind) {
@@ -6979,6 +7738,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
       case ::espn::SetKind::BET_DEL:
         this->remove_bet_(op.slot);
         break;
+      case ::espn::SetKind::PROP:
+        this->set_prop_(op.slot, op.prop);
+        break;
+      case ::espn::SetKind::PROP_DEL:
+        this->remove_prop_(op.slot);
+        break;
       case ::espn::SetKind::PLAYER:
         this->set_player_(op);
         break;
@@ -6994,6 +7759,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::SPLIT_TEAM:
         this->set_split_team(op.team.league, op.team.id);
+        break;
+      case ::espn::SetKind::MAIN_DISPLAY:
+        this->set_display(op.value);
         break;
       case ::espn::SetKind::WIRING:
         // Off a 2x2, no restart: the page needs new state.

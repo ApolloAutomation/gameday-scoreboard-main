@@ -372,9 +372,18 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .betsign { display: flex; gap: 4px; }
 .betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
 .betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
-#betAdd { margin-top: 8px; }
+#betAdd, #mktAdd { margin-top: 8px; }
+.mkttools { display: flex; gap: 4px; flex: none; }
+.mktrow .bet { flex: none; }
+.mkttools .betdel:disabled { opacity: .35; cursor: default; }
 /* Favorite players: board stat lines, card list, form */
 .playerline .bet { color: var(--text); white-space: normal; }
 .playerrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 #playerPick { max-width: 60%; }
 #playerAdd { margin-top: 8px; }
+/* Flight Tracker: find a home, the places found */
+.flightrow { display: flex; gap: 8px; margin: 0 0 8px; }
+.flightrow input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
+.flightrow input:focus { border-color: var(--accent); outline: none; }
+.flightpicks { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.flightpicks .btn { text-align: left; }

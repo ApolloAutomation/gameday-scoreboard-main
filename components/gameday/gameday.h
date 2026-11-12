@@ -21,6 +21,7 @@
 #include "esphome/core/preferences.h"
 
 #include "alerts.h"
+#include "apps.h"
 #include "auto_update.h"
 #include "badge.h"
 #include "bets.h"
@@ -34,7 +35,9 @@
 #include "hotspot.h"
 #include "idle.h"
 #include "offseason.h"
+#include "panel_text.h"
 #include "players.h"
+#include "props.h"
 #include "recap.h"
 #include "poll_timing.h"
 #include "set_request.h"
@@ -73,6 +76,7 @@ struct UpdateFields {
   std::string opponent_abbr;
   int opponent_score{0};
   std::string status_text;
+  std::vector<TickerSpan> ticker_spans;  // bets and props, in color
   std::string team_logo;
   std::string opponent_logo;
   int possession{0};
@@ -118,6 +122,7 @@ struct UpdateFields {
   // recorder isn't writing a row every poll or every playlist card.
   std::string ha_status_text;
   std::string ha_last_play;
+  bool quiet{false};  // a timed redraw: nothing to publish
   // The off-season clock (offseason.h) on the no-game screen, in team_color.
   // next_line is the next game for a wide board, its kickoff on a second
   // line; empty when none is known, and the page shows the date instead.
@@ -139,6 +144,14 @@ struct UpdateFields {
   bool board_value_narrow{true};
   std::vector<std::string> board_pos, board_name, board_value, board_detail;
   std::vector<int> board_value_color, board_name_color;
+  // Another display's cell colors and columns (espn::BoardLines)
+  std::vector<int> board_pos_color, board_detail_color;
+  std::vector<int16_t> board_cols;
+  // Another display's polyline over the board: x, y pairs.
+  std::vector<int16_t> line;
+  uint32_t line_color{0xFFFFFF};
+  // Another display's own labels over the board.
+  std::vector<::espn::AppText> texts;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -277,7 +290,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void show_join_address();
   // What the board is drawing: the fields of the on_update in progress, or
   // of the last one. gd_board reads its leaderboard from here.
-  const UpdateFields &board_fields() const { return this->last_fields_; }
+  const UpdateFields &board_fields() const {
+    return this->main_view_ != ::espn::MainView::GAMEDAY && this->main_app_ != nullptr ? *this->main_app_
+                                                                                        : this->last_fields_;
+  }
   // The Wi-Fi answered ESPN with a sign-in page (captive.h) and ESPN has not
   // answered since. The boot screen says so over the board (boot.yaml).
   bool captive() const { return this->captive_; }
@@ -344,6 +360,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void note_brightness();
   void set_split(int show);
   void set_split_team(uint8_t league, uint32_t id);
+  // The main area's display; refuses one the firmware lacks.
+  void set_display(int display);
   ::espn::SplitArea split_area() const {
     return this->panels_ != nullptr
                ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(), this->split_prefs_.show)
@@ -423,7 +441,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
 #endif
   void apply_set_(const std::vector<std::pair<std::string, std::string>> &kv);
   void rebuild_state_(const UpdateFields *f);  // main loop only
-  std::string current_state_json_();
+  // PSRAM, so a long document cannot split internal RAM
+  using StateJson = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
+  StateJson current_state_json_();
   // The "health" object, read live on each GET /gameday/state (HTTP task).
   std::string health_json_();
   ::espn::Restart start_reason_{::espn::Restart::NONE};
@@ -448,7 +468,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   int8_t wifi_rssi_{0};  // the last sample
   uint32_t wifi_reason_seen_{0};  // wifi_reason_seq when the link last came up
   std::mutex state_mutex_;
-  std::string state_json_{"{}"};
+  StateJson state_json_{"{}"};
   UpdateFields last_fields_;
   web_server_base::WebServerBase *base_{nullptr};
   panel_layout::PanelLayout *panels_{nullptr};
@@ -638,6 +658,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     std::unique_ptr<GameSnapshot> today_final;
     // Favorite players as of the job's start.
     ::espn::PlayerBlob players{};
+    // Player props as of the job's start.
+    ::espn::PropBlob props{};
+    // A box score read for player props, in a gap.
+    bool need_box{false};
+    bool box_final{false};  // started after the game's final
+    bool box_ok{false};
+    uint8_t box_league{0};
+    uint32_t box_event{0};
+    ::espn::PlayerWatch box_watch;
+    std::vector<::espn::BoxLine> box_lines;
     // No time server answer yet: read only the Date header of an ESPN reply.
     bool need_clock{false};
     int64_t clock_epoch{0};    // 0 when there was no reply or no usable date
@@ -649,6 +679,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     bool visit{false};
     // Second area's read: A2_TEAM or A2_JUMP.
     uint8_t a2{0};
+    // Another display's read (apps.h), by Display; 0 none.
+    uint8_t app{0};
+    bool app_ok{false};
+    int64_t app_now{0};
+    ::espn::AppRequest app_req;
     // Board's next read; later requests must fit before it.
     uint32_t deadline_ms{0};
     uint32_t event_ms{0}, day_ms{0};
@@ -786,7 +821,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Mode 4 with at least one favorite set; with none it behaves like My Team.
   bool favorites_mode_() const { return this->prefs2_.mode == (uint8_t) Mode::FAVORITES && !this->fav_.empty(); }
   uint32_t our_id_() const;  // team id the snapshot is oriented around
-  std::shared_ptr<http_request::HttpContainer> open_(const std::string &url);
+  // app: another display's read, its method and headers.
+  std::shared_ptr<http_request::HttpContainer> open_(const std::string &url, const ::espn::AppRequest *app = nullptr);
   void schedule_next_(uint32_t ms) { this->next_fetch_ms_ = millis() + ms; }
   uint32_t interval_for_phase_() const;
   uint32_t linger_ms_() const;  // how long a final stays up before the next game
@@ -941,10 +977,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     ::espn::Source s = ::espn::league_source(league);
     return s != ::espn::Source::ESPN ? this->host_wait_[(size_t) s].waiting(millis()) : this->backing_off_();
   }
+  // Game Day's hosts only; displays keep their own.
   bool other_host_failing_() const {
     bool failing = false;
-    for (const auto &w : this->host_wait_)
-      failing = failing || w.run.streak > 0;
+    for (size_t i = 1; i < ::espn::kGameSourceCount; i++)
+      failing = failing || this->host_wait_[i].run.streak > 0;
     return failing;
   }
   // 0 for ESPN (see backing_off_) or no wait.
@@ -955,7 +992,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // 0 when no other host's wait runs.
   uint32_t soonest_host_left_(uint32_t now) const {
     uint32_t best = 0;
-    for (size_t i = 1; i < ::espn::kSourceCount; i++) {
+    for (size_t i = 1; i < ::espn::kGameSourceCount; i++) {
       uint32_t left = this->host_wait_[i].left(now);
       if (left != 0 && (best == 0 || left < best))
         best = left;
@@ -1124,7 +1161,37 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool bet_game_(const GameSnapshot &g, uint8_t league, ::espn::BetGame &out) const;
   // nullptr when the panel holds no game for b.
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
-  void bets_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
+  void bets_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
+  // Player props: followed like bets, numbers from box scores.
+  ESPPreferenceObject props_pref_;
+  ::espn::PropBlob props_{};
+  void set_prop_(uint8_t slot, ::espn::Prop p);
+  void remove_prop_(uint8_t slot);
+  void props_changed_();
+  // True when a done prop was dropped.
+  bool props_tick_();
+  const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
+  // Half units, kPropNoValue when no number yet.
+  int prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const;
+  void props_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
+  // A game's box score while a prop waits.
+  struct BoxGame {
+    uint8_t league{0};
+    uint32_t event{0};
+    uint32_t tried_ms{0};  // last read started, 0 none
+    uint32_t final_ms{0};  // game first seen final, 0 not yet
+    uint8_t fails{0};      // failed reads in a row
+    bool read{false};
+    bool final_read{false};
+    std::vector<::espn::BoxLine> lines;
+  };
+  std::vector<BoxGame> box_;
+  uint32_t box_check_ms_{0};
+  ::espn::BoxTimes box_times_;
+  bool start_box_job_(uint32_t now, uint32_t due);
+  void run_box_job_();
+  void apply_box_job_();
+  void box_failed_(uint32_t took_ms);
   ESPPreferenceObject players_pref_;
   ::espn::PlayerBlob players_{};
   void set_player_(const ::espn::SetOp &op);
@@ -1195,7 +1262,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t show;
     uint8_t team_league;
     uint32_t team_id;     // 0 means no team
-    uint8_t spare[10];
+    uint8_t display;      // the main area's Display, 0 on older panels
+    uint8_t spare[9];
   } __attribute__((packed));
   static_assert(sizeof(SplitPrefs) == 16, "SplitPrefs keeps its size, or every setting in it resets");
   ESPPreferenceObject split_pref_;
@@ -1293,6 +1361,41 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t fav_gap_due_(uint32_t now) const;
   // Next known games, minus the main board's.
   std::string a2_clock_line_() const;
+  // The board's splash goes to the area's Game Day.
+  bool a2_take_splash_{false};
+
+  // ---- Other displays (apps.h) ----
+  ::espn::Display main_display_() const {
+    return ::espn::display_effective(this->split_prefs_.display, ::espn::app_slots().mask());
+  }
+  bool app_busy_(::espn::Display d) const;
+  bool app_lit_(::espn::Display d) const;
+  bool app_on_screen_(::espn::Display d) const;
+  bool app_night_(::espn::Display d) const;
+  void apps_setup_();
+  // Per second: shown changes and timed redraws.
+  void apps_tick_();
+  void app_redraw_(::espn::Display d, bool timed = false);
+  // A frame into fields the board or area draws.
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const;
+  void draw_main_app_(bool quiet = false);
+  // 1 started, -1 doesn't fit before due, 0 none.
+  int start_app_job_(uint32_t now, uint32_t due);
+  void run_app_job_();
+  void apply_app_job_();
+  void app_failed_(::espn::Display d, uint32_t took_ms);
+  bool app_set_(const std::string &key, const std::string &value);
+  ::espn::MainView main_view_{::espn::MainView::GAMEDAY};
+  UpdateFields *main_app_{nullptr};  // PSRAM: what the board draws then
+  ::espn::AppTimes app_times_;
+  uint32_t app_last_ms_[::espn::kDisplayCount]{};  // last read's start
+  uint32_t app_gen_[::espn::kDisplayCount]{};      // bumped by a settings change
+  uint32_t app_drawn_ms_[::espn::kDisplayCount]{};
+  bool app_shown_[::espn::kDisplayCount]{};
+  ESPPreferenceObject app_pref_[::espn::kDisplayCount];
+  static constexpr size_t APP_HOSTS = 8;
+  ::espn::AppHost app_hosts_[APP_HOSTS]{};
+  size_t app_host_n_{0};
 
   Schedule schedule_;
   uint32_t schedule_fetched_ms_{0};

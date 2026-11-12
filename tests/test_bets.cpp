@@ -340,6 +340,17 @@ void test_text() {
          "type keys");
 }
 
+void test_color() {
+  // As the device page's chips (app.js betTone)
+  BCHECK(bet_color(BetStatus::COVERING) == kBetGood && bet_color(BetStatus::WON) == kBetGood, "good");
+  BCHECK(bet_color(BetStatus::NOT_COVERING) == kBetBad && bet_color(BetStatus::LOST) == kBetBad, "bad");
+  BCHECK(bet_color(BetStatus::LEVEL) == kBetEven && bet_color(BetStatus::PUSH) == kBetEven &&
+             bet_color(BetStatus::VOID) == kBetEven,
+         "even");
+  BCHECK(bet_color(BetStatus::WAITING) == 0 && bet_color(BetStatus::PRE) == 0 && bet_color(BetStatus::UNREAD) == 0,
+         "no color before the game is read");
+}
+
 void test_event_id() {
   BCHECK(bet_event_id("401772001") == 401772001u, "an NFL id");
   BCHECK(bet_event_id("704512") == 704512u, "a soccer id");
@@ -457,6 +468,7 @@ int run_bet_tests(int &total_checks) {
   test_put();
   test_expire();
   test_text();
+  test_color();
   test_event_id();
   test_valid();
   test_parse_bet();

@@ -6,8 +6,10 @@ the entities the page builds controls from, and the gameday component's
 routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
-  POST /gameday/set      only the keys in SET_KEYS; 400 when none match (player= and
-                         playerdel= keep the favorite players in their slots, as players.h does)
+  POST /gameday/set      only the keys in SET_KEYS, then each listed display's own (Stocks &
+                         Crypto's, the Flight Tracker's); 400 when none match (player= and
+                         playerdel= keep the favorite players in their slots, as players.h does,
+                         and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
@@ -30,7 +32,8 @@ Started by playwright.config.js. Run by hand with `python mock_device.py 8765`
 and open http://127.0.0.1:8765/.
 
 The set keys, their limits and the Live auto pick come from
-components/gameday/set_request.h, and the bet limits from bets.h. `python mock_device.py --selftest` runs
+components/gameday/set_request.h, the bet limits from bets.h, and the prop
+limits and stats from props.h. `python mock_device.py --selftest` runs
 tests/fixtures/set_cases.json, the table the firmware's host tests also
 check, through apply_set, so the mock can't drift from the panel.
 """
@@ -75,7 +78,14 @@ SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kSetKeys\[\] = \{(.*?)\};", 
 LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w+) = (\d+);",
                                              SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
-                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8"))}
+                                             + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/props.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/apps.h").read_text(encoding="utf-8"))}
+# props.h's kPropStats: (sport, key) to (label, yes)
+PROP_STATS = {(sport.lower(), key): (label, yes == "true") for key, label, sport, yes in re.findall(
+    r'\{"(\w+)",\s*"([^"]+)",\s*Sport::(\w+),\s*(true|false),',
+    (REPO / "components/gameday/props.h").read_text(encoding="utf-8"))}
+SPORT_OF = dict(re.findall(r'\{League::\w+,\s*"(\w+)",[^}]*Sport::(\w+)', LEAGUES_H))
 FAV_MAX = int(re.search(r"FAV_MAX = (\d+);", (REPO / "components/gameday/gameday.h").read_text(encoding="utf-8"))[1])
 # 2x2 needs max_rows 2 and max_cols at least 4
 COMMON = (REPO / "firmware/gameday-common.yaml").read_text(encoding="utf-8")
@@ -91,6 +101,223 @@ def layout_ok(cols, rows):
         return 1 <= cols <= MAX_COLS
     return rows == 2 and rows <= MAX_ROWS and cols == 2 and cols * rows <= MAX_COLS
 FIXTURE = REPO / "tests/fixtures/set_cases.json"
+
+# apps.h's displays by id; split is 5 plus id.
+APPS_H = (REPO / "components/gameday/apps.h").read_text(encoding="utf-8")
+DISPLAY_IDS = dict(re.findall(r"(\w+) = (\d+)", re.search(r"enum class Display : uint8_t \{(.*?)\};", APPS_H).group(1)))
+DISPLAY_KEYS = dict(re.findall(r"case Display::(\w+):\s*return \"(\w+)\";",
+                               APPS_H[APPS_H.index("display_key("):APPS_H.index("display_name(")]))
+DISPLAY_NAMES = dict(re.findall(r"case Display::(\w+):\s*return \"([^\"]+)\";",
+                                APPS_H[APPS_H.index("display_name("):APPS_H.index("kGameDayOnly")]))
+SPLIT_GAMEDAY = int(re.search(r"GAMEDAY = (\d+)", SET_H)[1])
+# The Flight Tracker's own keys and limits (app_flights.h, app_flights.cpp)
+FLIGHTS_H = (REPO / "components/gameday/app_flights.h").read_text(encoding="utf-8")
+FLIGHTS_CPP = (REPO / "components/gameday/app_flights.cpp").read_text(encoding="utf-8")
+FLIGHT_SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kFlightSetKeys\[\] = \{(.*?)\};", FLIGHTS_H, re.S).group(1)))
+FLIGHTS_ID = int(DISPLAY_IDS["FLIGHTS"])
+FLIGHT_MAX = {k: int(v) for k, v in zip(("km", "nm", "mi"), re.search(
+    r"radius_max\(DistUnit u\) \{ return u == DistUnit::KM \? (\d+) : u == DistUnit::NM \? (\d+) : (\d+);",
+    FLIGHTS_CPP).groups())}
+FLIGHT_LIMITS = {k: int(v) for k, v in re.findall(r"static const \w+ (k\w+) = (\d+);", FLIGHTS_H)}
+COORDS_RE = re.compile(r"[ \t]*([+-]?)([0-9]{1,3})(?:\.([0-9]*))?(?:[ \t]*,[ \t]*|[ \t]+)"
+                       r"([+-]?)([0-9]{1,3})(?:\.([0-9]*))?[ \t]*\Z")
+
+
+def flights_doc():
+    """prefs_state(): the Flight Tracker's settings, as a fresh panel has them."""
+    return {"home": "", "place": "", "radius": FLIGHT_LIMITS["kRadiusDefault"], "radius_unit": "mi",
+            "receiver": "", "units": "imperial"}
+
+
+def parse_coords(v):
+    """parse_coords(): two decimals, digit by digit, to four places; None when refused."""
+    m = COORDS_RE.match(v)
+    if not m:
+        return None
+    out = []
+    for sign, whole, frac, top in ((m[1], m[2], m[3], 900000), (m[4], m[5], m[6], 1800000)):
+        e4 = (int(whole) * 100000 + int(((frac or "") + "00000")[:5]) + 5) // 10
+        if e4 > top:
+            return None
+        out.append(-e4 if sign == "-" else e4)
+    return None if out == [0, 0] else out
+
+
+def coord_text(e4):
+    return "-" * (e4 < 0) + "%d.%04d" % divmod(abs(e4), 10000)
+
+
+def flights_set(k, v):
+    """prefs_set() for one of the Flight Tracker's keys."""
+    f = STATE.setdefault("flights", flights_doc())
+    if k == "flyhome":
+        if v in ("", "none"):
+            f["home"], f["place"] = "", ""
+        elif parse_coords(v):
+            f["home"] = ",".join(coord_text(x) for x in parse_coords(v))
+    elif k == "flyplace":
+        b = bytes(c for c in v.encode() if c >= 0x20 and c != 0x7F)
+        n = min(len(b), FLIGHT_LIMITS["kPlaceMax"])
+        while 0 < n < len(b) and b[n] & 0xC0 == 0x80:
+            n -= 1
+        f["place"] = b[:n].decode()
+    elif k == "flyradius":
+        m = re.fullmatch(r"([0-9]{1,3})(mi|km|nm)?", v, re.ASCII)
+        if m and int(m[1]) >= 1:
+            unit = m[2] or "mi"
+            f["radius"], f["radius_unit"] = min(int(m[1]), FLIGHT_MAX[unit]), unit
+    elif k == "flyreceiver":
+        v = "" if v == "none" else v
+        if len(v) <= FLIGHT_LIMITS["kReceiverMax"] and all(0x20 < ord(c) < 0x7F for c in v):
+            f["receiver"] = v
+
+
+def set_keys():
+    """handle_set_()'s keys: kSetKeys, then each display's the firmware has."""
+    ids = display_ids()
+    return SET_KEYS + (MARKET_KEYS if MARKETS in ids else ()) + (FLIGHT_SET_KEYS if FLIGHTS_ID in ids else ())
+
+
+def display_doc(d):
+    """rebuild_state_()'s entry in displays for Display d."""
+    name = next(n for n, i in DISPLAY_IDS.items() if int(i) == d)
+    return {"id": d, "key": DISPLAY_KEYS.get(name, "gameday"), "name": DISPLAY_NAMES.get(name, "Game Day"),
+            "split": SPLIT_GAMEDAY + d}
+
+
+def display_ids():
+    return {d["id"] for d in STATE.get("displays") or [display_doc(0)]}
+
+
+# Stocks & Crypto's keys, coins, indexes and defaults (app_markets.h).
+APP_MARKETS_H = (REPO / "components/gameday/app_markets.h").read_text(encoding="utf-8")
+MARKETS_H = (REPO / "components/gameday/markets.h").read_text(encoding="utf-8")
+MARKETS = int(DISPLAY_IDS["MARKETS"])
+MARKET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kMarketSetKeys\[\] = \{(.*?)\};", APP_MARKETS_H, re.S).group(1)))
+MARKET_SLOTS = int(re.search(r"kMarketSlots = (\d+);", MARKETS_H)[1])
+MARKET_SYM_MAX = int(re.search(r"kMarketSymMax = (\d+);", MARKETS_H)[1])
+MARKET_COINS = set(re.findall(r'\{"(\w+)", "[\w-]+", "\w+"\}', MARKETS_H))
+MARKET_INDEX_ROWS = re.findall(r'\{"(\w+)", "\^(\w+)", "\w*", (true|false)\}', MARKETS_H)
+MARKET_INDEX_GUESS = {sym: guess == "true" for sym, _, guess in MARKET_INDEX_ROWS}
+MARKET_INDEX_YAHOO = {sym: yahoo for sym, yahoo, _ in MARKET_INDEX_ROWS}
+MARKET_ALIAS = dict(re.findall(r'if \(s == "(\w+)"\)\s*return "(\w+)";', MARKETS_H))
+MARKET_DEFAULTS = re.findall(r'"(\w+)"', re.search(r"for \(const char \*t : \{(.*?)\}\)", APP_MARKETS_H).group(1))
+MARKET_KINDS = ("stock", "index", "crypto")
+# Saved (symbol, kind) pairs; empty shows the defaults
+MARKET_LIST = []
+# Made-up quotes for the page: price, change, percent, direction, state
+FAKE_QUOTES = {"SPY": ("672.04", "-1.30", "-0.19%", -1, "closed"), "AAPL": ("355.63", "+7.12", "+2.04%", 1, "closed"),
+               "BTC": ("73,738.65", "-186.54", "-0.25%", -1, "always"), "ETH": ("3,201.17", "+12.40", "+0.39%", 1, "always"),
+               "TSLA": ("402.10", "0.00", "0.00%", 0, "closed")}
+
+
+def market_ok(s, kind):
+    """market_symbol_valid() (markets.h)."""
+    alnum = lambda c: "A" <= c <= "Z" or "0" <= c <= "9"
+    if not s or len(s) > MARKET_SYM_MAX:
+        return False
+    if kind != "stock":
+        return all(alnum(c) for c in s)
+    if not alnum(s[0]) or not alnum(s[-1]):
+        return False
+    return all(alnum(c) or (c in ".-=" and alnum(s[i])) for i, c in enumerate(s[1:]))
+
+
+def parse_market_symbol(text, kind):
+    """parse_market_symbol() (markets.h): (symbol, kind) or None; kind "" guesses."""
+    s = ""
+    for c in text:
+        if c == " ":
+            continue
+        s += c.upper() if "a" <= c <= "z" else c
+        if len(s.encode()) > 16:
+            return None
+    if s.startswith("$"):
+        s = s[1:]
+    if s.startswith("^"):
+        if kind not in ("", "index"):
+            return None
+        s, kind = s[1:], "index"
+    coin_ok = kind in ("", "crypto")
+    if coin_ok and len(s) > 4 and s[-4:] in ("-USD", "/USD"):
+        s, kind = s[:-4], "crypto"
+    if coin_ok:
+        s = MARKET_ALIAS.get(s, s)
+        if kind == "" and s in MARKET_COINS:
+            kind = "crypto"
+    if kind == "":
+        kind = "index" if MARKET_INDEX_GUESS.get(s) else "stock"
+    if kind == "stock":
+        s = s.replace("/", ".")
+        if len(s) >= 3 and s[-2] == "-" and "A" <= s[-1] <= "Z":
+            s = s[:-2] + "." + s[-1]
+    return (s, kind) if market_ok(s, kind) else None
+
+
+def market_same(a, b):
+    """market_same() (markets.h): two names for one index match."""
+    if a[1] != b[1]:
+        return False
+    return a[0] == b[0] or (a[1] == "index" and a[0] in MARKET_INDEX_YAHOO and
+                            MARKET_INDEX_YAHOO[a[0]] == MARKET_INDEX_YAHOO.get(b[0]))
+
+
+def market_slot(v, free_ok=False):
+    """parse_market_slot() (markets.h): one ASCII digit, 0 only when free_ok."""
+    return int(v) if len(v) == 1 and ("0" if free_ok else "1") <= v <= str(MARKET_SLOTS) else None
+
+
+def markets_shown():
+    return list(MARKET_LIST) if MARKET_LIST else [parse_market_symbol(t, "") for t in MARKET_DEFAULTS]
+
+
+def markets_set(k, v):
+    """markets_set() (app_markets.h): edits the list shown."""
+    was = markets_shown()
+    work = list(was)
+    if k == "mkt":
+        f = v.split(",")
+        if len(f) < 2 or len(f) > 3 or market_slot(f[0], True) is None or (len(f) == 3 and f[2] not in ("",) + MARKET_KINDS):
+            return
+        got = parse_market_symbol(f[1], f[2] if len(f) == 3 else "")
+        if not got:
+            return
+        slot = market_slot(f[0], True)
+        if not any(market_same(x, got) for x in work):
+            if slot == 0 or slot > len(work):
+                if len(work) == MARKET_SLOTS:
+                    return
+                work.append(got)
+            else:
+                work[slot - 1] = got
+    elif k == "mktdel":
+        slot = market_slot(v)
+        if slot is None or slot > len(work):
+            return
+        del work[slot - 1]
+    elif k == "mktmove":
+        a, comma, b = v.partition(",")
+        a, b = market_slot(a), market_slot(b) if comma else None
+        if a is None or b is None or a > len(work) or b > len(work):
+            return
+        work.insert(b - 1, work.pop(a - 1))
+    if work != was:
+        MARKET_LIST[:] = work
+
+
+def markets_doc():
+    """MarketsApp::state(), with made-up quotes for known symbols."""
+    syms = []
+    for i, (sym, kind) in enumerate(markets_shown()):
+        o = {"slot": i + 1, "sym": sym, "kind": kind}
+        if sym in FAKE_QUOTES:
+            price, chg, pct, d, st = FAKE_QUOTES[sym]
+            o.update({"price": price, "chg": chg, "pct": pct, "dir": d, "st": st})
+        else:
+            o["miss"] = True
+        syms.append(o)
+    return {"syms": syms, "max": MARKET_SLOTS, "defaults": not MARKET_LIST, "src": STATE.get("markets_src", "yahoo"),
+            "read": STATE.get("markets_read") or int(time.time())}
 
 
 def team(lg, tid):
@@ -123,11 +350,15 @@ INITIAL = {
     # idle_view is "", "clock", "scores" or "today" (idle.h)
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
-    # split 0-4 (split.h); state_doc() derives split_at, split_now
+    # split 0-8 (split.h); state_doc() derives split_at, split_now
     "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
+    # The main area's display and those the firmware has
+    "display": 0, "display_now": "gameday",
     "espn_kb": 412, "espn_reads": 23,
     # Manual bets (bets.h): filled slots only, and capacity
     "bets": [], "betmax": LIMITS["kBetSlots"],
+    # Player props (props.h): filled slots only, and capacity
+    "props": [], "propmax": LIMITS["kPropSlots"],
     # Favorite players (players.h): filled slots in slot order
     "players": [], "playermax": LIMITS["kPlayerSlots"],
     # GamedayComponent::health_json_(), added at the end of each read.
@@ -176,6 +407,9 @@ ENTITIES = [
     {"id": "button/Factory Reset", "domain": "button", "name": "Factory Reset", "state": ""},
 ]
 FIRMWARE = next(e for e in ENTITIES if e["name"] == "Firmware")
+INITIAL["displays"] = [display_doc(0)]
+# Flight Tracker settings; resets may add status and planes
+INITIAL["flights"] = flights_doc()
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -195,6 +429,8 @@ def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
+    if isinstance(overrides.get("flights"), dict):
+        STATE["flights"] = {**flights_doc(), **overrides["flights"]}
     # rotate and rotatesec are one setting
     if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
         STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
@@ -204,6 +440,8 @@ def reset_state(overrides):
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
+    saved = STATE.pop("markets", None) or []
+    MARKET_LIST[:] = [(m["sym"], m["kind"]) for m in saved]
     players = STATE.get("players") or []
     PLAYER_SLOTS[:] = [players[i] if i < len(players) else None for i in range(LIMITS["kPlayerSlots"])]
 
@@ -287,8 +525,17 @@ def split_doc():
     now = SPLIT_NOW.get(show, "")
     if show == 2 and not STATE.get("splitteam"):
         now = "clock"
+    # Game Day or a display the main board isn't showing
+    if show >= SPLIT_GAMEDAY:
+        d = show - SPLIT_GAMEDAY
+        now = "game" if d == 0 and STATE.get("display", 0) != 0 else \
+            next((x["key"] for x in STATE.get("displays") or [] if x["id"] == d), "clock") \
+            if d != 0 and d != STATE.get("display", 0) else "clock"
     if show == 1 and not STATE.get("split_n"):
         now = "clock"
+    # A display at night: the date under the board's clock
+    if show > SPLIT_GAMEDAY and now not in ("", "clock") and STATE.get("night_now"):
+        now = "date"
     STATE["split_now"] = now
     if show == 1:
         STATE.setdefault("split_n", 0)
@@ -301,8 +548,20 @@ def state_doc():
     if STATE.get("live_auto"):
         STATE["live"] = live_auto_leagues()
     split_doc()
+    if "display" in STATE:
+        STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
+                                    "gameday")
+        # main_view(): the night hours' clock over a display
+        if STATE.get("night_now") and STATE["display"] != 0:
+            STATE["display_now"] = "clock"
+    if isinstance(STATE.get("flights"), dict):
+        # tz_miles(): the US and UK zones are imperial
+        tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
+        STATE["flights"]["units"] = "imperial" if tz.startswith(("US ", "UK ")) else "metric"
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
+    if MARKETS in display_ids():
+        STATE["markets"] = markets_doc()
     return STATE
 
 
@@ -407,6 +666,51 @@ def put_bet(slot, doc):
     STATE["bets"] = sorted(keep + ([doc] if doc else []), key=lambda b: b["slot"])
 
 
+def parse_prop(v):
+    """parse_prop() (set_request.h): (slot, entry) or None. Slot 0 is the first empty one."""
+    f = v.split(",")
+    if len(f) != 8 or len(f[0]) != 1 or not "0" <= f[0] <= str(LIMITS["kPropSlots"]):
+        return None
+    lg, athlete, team_id, name = f[1], espn_id(f[2]), espn_id(f[3]), clean_player_name(f[4])
+    if lg not in LEAGUES or lg in BOARD or lg in NOT_ESPN or athlete is None or team_id is None \
+            or (lg, team_id) not in TEAMS or not name:
+        return None
+    stat = PROP_STATS.get((SPORT_OF[lg].lower(), f[5]))
+    if stat is None:
+        return None
+    if stat[1]:
+        side, half = ("yes", 0) if f[6] == "yes" and f[7] == "" else (None, None)
+    elif f[6] in ("over", "under"):
+        side, half = f[6], bet_line(f[7], False)
+    else:
+        side, half = None, None
+    if side is None or half is None:
+        return None
+    return int(f[0]), prop_doc(0, lg, athlete, team_id, name, f[5], side, half)
+
+
+def prop_doc(slot, lg, athlete, team_id, name, stat, side, half):
+    """One "props" entry of rebuild_state_(), for a prop with no game yet."""
+    label = PROP_STATS[(SPORT_OF[lg].lower(), stat)][0]
+    text = name + " " + label if side == "yes" else name + (" U " if side == "under" else " O ") + \
+        bet_points(half, False) + " " + label
+    return {"slot": slot, "l": lg, "id": athlete, "team": team_id, "name": name, "stat": stat, "side": side,
+            "half": half, "text": text, "st": "waiting"}
+
+
+def put_prop(slot, doc):
+    """prop_put() (props.h): the slot's entry, slot 0 the first empty one, nothing when all are in use."""
+    if slot == 0 and doc:
+        used = {e["slot"] for e in STATE.get("props", [])}
+        slot = next((i for i in range(1, LIMITS["kPropSlots"] + 1) if i not in used), 0)
+        if not slot:
+            return
+    if doc:
+        doc["slot"] = slot
+    keep = [e for e in STATE.get("props", []) if e["slot"] != slot]
+    STATE["props"] = sorted(keep + ([doc] if doc else []), key=lambda e: e["slot"])
+
+
 def clean_player_name(v):
     """clean_player_name() (set_request.h): capitals, digits, spaces and . ' - only, spaces at either end
     dropped and a run inside made one, cut to kPlayerNameMax and a cut never left ending in a space or
@@ -463,6 +767,11 @@ def drop_player(lg, pid):
     for i, p in enumerate(PLAYER_SLOTS):
         if p and (p["l"], p["id"]) == (lg, pid):
             PLAYER_SLOTS[i] = None
+
+
+def set_pairs(q):
+    """handle_set_(): kSetKeys, then each display's own keys, in order."""
+    return [(k, q[k]) for k in set_keys() if k in q]
 
 
 def apply_set(kv):
@@ -553,6 +862,13 @@ def apply_set(kv):
             bet = parse_bet(v)
             if bet:
                 put_bet(bet[0], bet_on_board(bet_doc(*bet)))
+        elif k == "propdel":
+            if len(v) == 1 and "1" <= v <= str(LIMITS["kPropSlots"]):
+                put_prop(int(v), None)
+        elif k == "prop":
+            got = parse_prop(v)
+            if got:
+                put_prop(*got)
         elif k == "watchstay":
             # Clamped, then kept in tens of seconds (clamp_watch_stay_seconds).
             STATE["watchstay"] = clamp(atoi(v), "kWatchStayMinSeconds", "kWatchStayMaxSeconds") // 10 * 10
@@ -574,9 +890,14 @@ def apply_set(kv):
             if 0 <= atoi(v) < WIRING_COUNT:
                 STATE["wiring"] = atoi(v)
         elif k == "split":
-            # One ASCII digit, 0 to kSplitCount - 1, nothing else.
-            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"]:
+            # One ASCII digit; never a display the firmware lacks.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"] and \
+                    (int(v) < SPLIT_GAMEDAY or int(v) - SPLIT_GAMEDAY in display_ids()):
                 STATE["split"] = int(v)
+        elif k == "display":
+            # One ASCII digit, a display the firmware has.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kDisplayCount"] and int(v) in display_ids():
+                STATE["display"] = int(v)
         elif k == "splitteam":
             # Never a golf tour, racing series or own team
             ref = parse_team_ref(v)
@@ -604,6 +925,10 @@ def apply_set(kv):
                 STATE[k] = "%02d:%02d" % divmod(minute, 60)
         elif k == "nightbri":
             STATE["nightbri"] = clamp(atoi(v), "kNightBriMin", "kNightBriMax")
+        elif k in MARKET_KEYS:
+            markets_set(k, v)
+        elif k in FLIGHT_SET_KEYS:
+            flights_set(k, v)
 
 
 def selftest():
@@ -621,6 +946,11 @@ def selftest():
         if key == "bets":
             # As entered; game and status are the firmware's
             return [{k: b[k] for k in ("slot", "l", "id", "type", "half")} for b in value]
+        if key == "props":
+            return [{k: e[k] for k in ("slot", "l", "id", "team", "name", "stat", "side", "half")} for e in value]
+        if key == "markets":
+            # As listed; quotes are the panel's
+            return [{k: m[k] for k in ("slot", "sym", "kind")} for m in (value or {}).get("syms", [])]
         return value
 
     bad = 0
@@ -630,6 +960,7 @@ def selftest():
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
         start["splitteam"] = to_team(start.get("splitteam", ""))
+        start["displays"] = [display_doc(d) for d in start.get("displays", [0])]
         # board false: nothing to follow; final true: game ended
         if start.get("visit"):
             start["visit_follow"] = start.get("board", True) and not start.get("final", False)
@@ -638,10 +969,12 @@ def selftest():
         if not start.pop("board", True):
             start["game"] = {"s": "NOT_FOUND"}
         start["bets"] = [bet_doc(b["slot"], b["l"], b["id"], b["type"], b["half"]) for b in start.get("bets", [])]
+        start["props"] = [prop_doc(e["slot"], e["l"], e["id"], e["team"], e["name"], e["stat"], e["side"], e["half"])
+                          for e in start.get("props", [])]
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league
-        kv = [(k, v) for key in SET_KEYS for k, v in case["set"] if k == key]
+        kv = [(k, v) for key in set_keys() for k, v in case["set"] if k == key]
         status = 200 if kv else 400
         if kv:
             apply_set(kv)
@@ -807,7 +1140,7 @@ class Handler(BaseHTTPRequestHandler):
             LOG.append({"path": u.path, "q": q})
             if "set" in FAIL:
                 return self._send(500, "text/plain", "")
-            kv = [(k, q[k]) for k in SET_KEYS if k in q]
+            kv = set_pairs(q)
             if not kv:
                 return self._json(400, {"error": "nothing to set"})
             apply_set(kv)

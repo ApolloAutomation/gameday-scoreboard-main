@@ -48,7 +48,7 @@ A golf tour or a racing series has its own schedule, like every minute during a 
 
 Nothing beyond the panel and its electricity. There's no subscription and no account. The scores come from ESPN's public feed, and the panel reads them itself over your Wi-Fi. Minor league baseball scores come from MLB's public stats service, and AHL and ECHL scores from HockeyTech, the stats service the two leagues use for their own websites, both free too.
 
-If your internet plan has a data cap, **Data used** in the Device card on the device page shows how much the panel has downloaded from all three since it started. **Switch to big plays in other games**, in the Celebrations card, can add the most; turn it off to save data. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
+If your internet plan has a data cap, **Data used** in the Device card on the device page shows how much the panel has downloaded from all three since it started, along with what F1, Stocks & Crypto and the Flight Tracker read. **Switch to big plays in other games**, in the Celebrations card, can add the most; turn it off to save data. See [Big plays in other games](/using/modes/#big-plays-in-other-games).
 
 ## Can I follow more than one team?
 

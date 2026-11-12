@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "app_markets.h"
+#include "app_flights.h"
 #include "panel_text.h"
 #include "players.h"
 #include "set_request.h"
@@ -27,8 +29,20 @@ void require(bool ok, const char *what, const std::string &k, const std::string 
 
 }  // namespace
 
+// What a saved list must stay: packed, valid, no repeats.
+void check_markets(const MarketList &l, const std::string &k, const std::string &v) {
+  MarketBlob tidy = l.blob;
+  market_tidy(tidy);
+  require(memcmp(&tidy, &l.blob, sizeof tidy) == 0, "the symbol list isn't tidy", k, v);
+  for (uint8_t i = 0; i < market_count(l.blob); i++)
+    require(!market_spark_url(l.blob).empty() && !market_yahoo_symbol(l.blob.syms[i]).empty(),
+            "a listed symbol has no Yahoo name", k, v);
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   std::string body((const char *) data, size);
+  MarketList markets;
+  const MarketBlob defaults = market_defaults();
   std::vector<uint8_t> fav_leagues;
   uint16_t mask = 0;
   uint8_t team_league = 0;
@@ -42,9 +56,22 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     std::string v = eq == std::string::npos ? std::string() : pair.substr(eq + 1);
     // The log line a refused value gets.
     esphome::gameday::panel_text(k + "=" + v);
+    // The Flight Tracker's keys, which apply_set_ hands to its display.
+    flights::Prefs fp;
+    if (flights::prefs_set(fp, k, v) != AppSet::REFUSED) {
+      const flights::Home h = flights::prefs_home(fp);
+      require(fp.lat_e4 == flights::kNoCoord || h.valid(), "the home is out of range", k, v);
+      require(h.radius_nm > 0 && h.radius_nm <= flights::kMaxRadiusNm, "the radius is past the query's", k, v);
+      require(strlen(fp.place) <= flights::kPlaceMax && strlen(fp.receiver) <= flights::kReceiverMax,
+              "a name runs past its field", k, v);
+    }
     SetOp op;
-    if (!parse_set(k, v, op, kFavMax))
+    if (!parse_set(k, v, op, kFavMax)) {
+      // app_set_: the Stocks & Crypto keys
+      if (markets_set(markets, defaults, k, v) == AppSet::CHANGED)
+        check_markets(markets, k, v);
       continue;
+    }
     switch (op.kind) {
       case SetKind::MODE:
         require(op.value >= 0 && op.value < kModeCount, "the mode is past MODE_OPTIONS", k, v);
@@ -120,6 +147,19 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       case SetKind::BET_DEL:
         require(op.slot >= 1 && op.slot <= kBetSlots, "the bet slot is past the blob", k, v);
         break;
+      case SetKind::PROP: {
+        // Slot 0 is the first empty one (prop_put).
+        require(op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        require(prop_valid(op.prop), "the prop isn't one the panel can keep", k, v);
+        prop_label(op.prop);
+        Prop blob[kPropSlots]{};
+        const uint8_t at = prop_put(blob, op.slot, op.prop);
+        require(at >= 1 && at <= kPropSlots && !prop_empty(blob[at - 1]), "the prop went nowhere", k, v);
+        break;
+      }
+      case SetKind::PROP_DEL:
+        require(op.slot >= 1 && op.slot <= kPropSlots, "the prop slot is past the blob", k, v);
+        break;
       case SetKind::PLAYER: {
         const FavPlayer fp = make_player(op.team.league, op.athlete, op.team.id, op.name);
         require(player_valid(fp), "the player isn't one the panel can keep", k, v);
@@ -130,6 +170,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       }
       case SetKind::PLAYER_DEL:
         require(op.athlete != 0 && op.team.league < kLeagueCount, "the player to drop is no player", k, v);
+        break;
+      case SetKind::MAIN_DISPLAY:
+        require(op.value >= 0 && op.value < kDisplayCount, "the display is past Display", k, v);
+        break;
+      case SetKind::SPLIT:
+        require(op.value >= 0 && op.value < kSplitCount, "the area's choice is past SplitShow", k, v);
         break;
       default:
         break;

@@ -1,0 +1,234 @@
+[
+  {
+    "_airport_codes_iata": "JFK-CDG",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      },
+      {
+        "alt_feet": 392.0,
+        "alt_meters": 119.48,
+        "countryiso2": "FR",
+        "iata": "CDG",
+        "icao": "LFPG",
+        "lat": 49.012798,
+        "location": "Paris",
+        "lon": 2.55,
+        "name": "Charles de Gaulle International Airport"
+      }
+    ],
+    "airline_code": "JBU",
+    "airport_codes": "KJFK-LFPG",
+    "callsign": "JBU1407",
+    "number": "1407",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "JFK-WAW",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      },
+      {
+        "alt_feet": 362.0,
+        "alt_meters": 110.34,
+        "countryiso2": "PL",
+        "iata": "WAW",
+        "icao": "EPWA",
+        "lat": 52.165699,
+        "location": "Warsaw",
+        "lon": 20.9671,
+        "name": "Warsaw Chopin Airport"
+      }
+    ],
+    "airline_code": "LOT",
+    "airport_codes": "KJFK-EPWA",
+    "callsign": "LOT5N",
+    "number": "5N",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "IAH-LGA",
+    "_airports": [
+      {
+        "alt_feet": 97.0,
+        "alt_meters": 29.57,
+        "countryiso2": "US",
+        "iata": "IAH",
+        "icao": "KIAH",
+        "lat": 29.9844,
+        "location": "Houston",
+        "lon": -95.3414,
+        "name": "George Bush Intercontinental Houston Airport"
+      },
+      {
+        "alt_feet": 21.0,
+        "alt_meters": 6.4,
+        "countryiso2": "US",
+        "iata": "LGA",
+        "icao": "KLGA",
+        "lat": 40.777199,
+        "location": "New York",
+        "lon": -73.872597,
+        "name": "La Guardia Airport"
+      }
+    ],
+    "airline_code": "UAL",
+    "airport_codes": "KIAH-KLGA",
+    "callsign": "UAL2495",
+    "number": "2495",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "SFO-JFK",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "SFO",
+        "icao": "KSFO",
+        "lat": 37.618999,
+        "location": "San Francisco",
+        "lon": -122.375,
+        "name": "San Francisco International Airport"
+      },
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      }
+    ],
+    "airline_code": "JBU",
+    "airport_codes": "KSFO-KJFK",
+    "callsign": "JBU416",
+    "number": "416",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "unknown",
+    "_airports": [],
+    "airline_code": "unknown",
+    "airport_codes": "unknown",
+    "callsign": "CNS482",
+    "number": "unknown"
+  },
+  {
+    "_airport_codes_iata": "CLT-LGA",
+    "_airports": [
+      {
+        "alt_feet": 748.0,
+        "alt_meters": 227.99,
+        "countryiso2": "US",
+        "iata": "CLT",
+        "icao": "KCLT",
+        "lat": 35.214001,
+        "location": "Charlotte",
+        "lon": -80.9431,
+        "name": "Charlotte Douglas International Airport"
+      },
+      {
+        "alt_feet": 21.0,
+        "alt_meters": 6.4,
+        "countryiso2": "US",
+        "iata": "LGA",
+        "icao": "KLGA",
+        "lat": 40.777199,
+        "location": "New York",
+        "lon": -73.872597,
+        "name": "La Guardia Airport"
+      }
+    ],
+    "airline_code": "AAL",
+    "airport_codes": "KCLT-KLGA",
+    "callsign": "AAL1070",
+    "number": "1070",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "ONT-DEN",
+    "_airports": [
+      {
+        "alt_feet": 944.0,
+        "alt_meters": 287.73,
+        "countryiso2": "US",
+        "iata": "ONT",
+        "icao": "KONT",
+        "lat": 34.056,
+        "location": "Ontario",
+        "lon": -117.600998,
+        "name": "Ontario International Airport"
+      },
+      {
+        "alt_feet": 5431.0,
+        "alt_meters": 1655.37,
+        "countryiso2": "US",
+        "iata": "DEN",
+        "icao": "KDEN",
+        "lat": 39.861698,
+        "location": "Denver",
+        "lon": -104.672997,
+        "name": "Denver International Airport"
+      }
+    ],
+    "airline_code": "UAL",
+    "airport_codes": "KONT-KDEN",
+    "callsign": "UAL1263",
+    "number": "1263",
+    "plausible": false
+  },
+  {
+    "_airport_codes_iata": "JFK-RFD",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      },
+      {
+        "alt_feet": 742.0,
+        "alt_meters": 226.16,
+        "countryiso2": "US",
+        "iata": "RFD",
+        "icao": "KRFD",
+        "lat": 42.1954,
+        "location": "Chicago/Rockford",
+        "lon": -89.097198,
+        "name": "Chicago Rockford International Airport"
+      }
+    ],
+    "airline_code": "UPS",
+    "airport_codes": "KJFK-KRFD",
+    "callsign": "UPS1125",
+    "number": "1125",
+    "plausible": true
+  }
+]
