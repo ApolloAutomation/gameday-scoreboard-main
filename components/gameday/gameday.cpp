@@ -5718,6 +5718,15 @@ bool GamedayComponent::app_on_screen_(::espn::Display d) const {
   return this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d;
 }
 
+bool GamedayComponent::app_night_(::espn::Display d) const {
+  if (d == ::espn::Display::GAMEDAY)
+    return false;
+  if (this->main_view_ == ::espn::MainView::CLOCK && this->main_display_() == d)
+    return true;
+  ::espn::Display a;
+  return this->a2_view_ == ::espn::AreaView::CLOCK && ::espn::area_app(this->a2_show_(), a) && a == d;
+}
+
 void GamedayComponent::apps_tick_() {
   const uint32_t now = millis();
   const ::espn::AppSlots &slots = ::espn::app_slots();
@@ -5733,14 +5742,14 @@ void GamedayComponent::apps_tick_() {
     }
     const uint32_t every = a->redraw_ms();
     if (on && every != 0 && now - this->app_drawn_ms_[i] >= every)
-      this->app_redraw_(d);
+      this->app_redraw_(d, true);
   }
 }
 
-void GamedayComponent::app_redraw_(::espn::Display d) {
+void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
   this->app_drawn_ms_[(int) d] = millis() | 1;
   if (this->main_view_ == ::espn::MainView::APP && this->main_display_() == d)
-    this->draw_main_app_();
+    this->draw_main_app_(timed);
   ::espn::Display a;
   if (this->a2_view_ == ::espn::AreaView::APP && ::espn::area_app(this->a2_show_(), a) && a == d)
     this->emit_a2_({});
@@ -5789,11 +5798,12 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     t.text = panel_text(t.text);
 }
 
-void GamedayComponent::draw_main_app_() {
+void GamedayComponent::draw_main_app_(bool quiet) {
   if (this->main_app_ == nullptr)
     return;
   UpdateFields &af = *this->main_app_;
   af = UpdateFields{};
+  af.quiet = quiet;
   const ::espn::Display d = this->main_display_();
   if (this->main_view_ == ::espn::MainView::CLOCK) {
     af.game_state = "NOT_FOUND";
@@ -5820,9 +5830,12 @@ int GamedayComponent::start_app_job_(uint32_t now, uint32_t due) {
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];
     const ::espn::Display d = (::espn::Display) i;
-    if (a == nullptr || !this->app_on_screen_(d) ||
-        this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
-        !::espn::app_due(now, this->app_last_ms_[i], a->poll_ms(tnow)))
+    if (a == nullptr)
+      continue;
+    const bool on = this->app_on_screen_(d);
+    const uint32_t every = on ? a->poll_ms(tnow) : this->app_night_(d) ? a->night_poll_ms(tnow) : 0;
+    if ((!on && every == 0) || this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
+        !::espn::app_due(now, this->app_last_ms_[i], every))
       continue;
     if (!::espn::watch_read_fits(now, due, this->app_times_.expect(d))) {
       this->app_times_.skip(d);
@@ -7004,7 +7017,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
     o["name"] = ::espn::display_name(d);
     o["split"] = (int) ::espn::split_of_display(d);
     if (slots.app[i] != nullptr)
-      slots.app[i]->state(doc[::espn::display_key(d)].to<JsonObject>());
+      slots.app[i]->state(doc[::espn::display_key(d)].to<JsonObject>(),
+                          this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0);
   }
 
   JsonObject game = doc["game"].to<JsonObject>();

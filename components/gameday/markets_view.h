@@ -141,10 +141,18 @@ struct MarketRow {
   bool spark{false};            // the sparkline's symbol
 };
 
+// "SHOP.TO" too long is "SHOP", never "SHOP.T".
+inline std::string market_sym_text(const std::string &sym, size_t max) {
+  if (sym.size() <= max)
+    return sym;
+  const size_t cut = sym.find_first_of(".=");
+  return sym.substr(0, cut != std::string::npos && cut > 0 && cut <= max ? cut : max);
+}
+
 // alt: two-column rows show percent, not price.
 inline MarketRow market_row(const MarketSymbol &s, const MarketQuote &q, const MarketGeom &g, int64_t now, bool alt) {
   MarketRow r;
-  r.sym = std::string(s.sym).substr(0, g.sym.chars());
+  r.sym = market_sym_text(s.sym, g.sym.chars());
   if (!q.valid) {
     r.price = "--";
     return r;
@@ -304,4 +312,4 @@ inline std::string market_ticker(const MarketBlob &b, const MarketQuote (&q)[kMa
   return line;
 }
 
-}  // namespace espn
+}

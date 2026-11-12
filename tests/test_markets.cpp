@@ -254,6 +254,16 @@ void test_list() {
   MCHECK(list.move(4, 1) && list.dirty, "a move does");
   list.dirty = false;
   MCHECK(!list.spark(5) && list.spark(2) && list.dirty && list.blob.spark == 2, "sparkline slot");
+
+  // One index by two names is one symbol.
+  MarketBlob ix{};
+  MCHECK(market_put(ix, 0, sym("SPX")) == 1 && market_put(ix, 0, sym("^GSPC")) == 1, "SPX is ^GSPC");
+  MCHECK(market_put(ix, 0, sym("DJIA")) == 2 && market_put(ix, 0, sym("DJI")) == 2, "DJIA is DJI");
+  MCHECK(market_put(ix, 0, sym("NASDAQ")) == 3 && market_put(ix, 0, sym("COMP", MarketKind::INDEX)) == 3 &&
+             market_put(ix, 0, sym("^IXIC")) == 3,
+         "the Composite");
+  MCHECK(market_put(ix, 0, sym("COMP")) == 4, "COMP the stock is another");
+  MCHECK_EQ(order(ix), "SPX DJIA NASDAQ COMP");
 }
 
 void test_urls() {
@@ -298,6 +308,13 @@ void test_yahoo() {
   MCHECK(aapl.spark[kSparkPoints - 1] == kSparkTop, "ends on the day's high");
   MCHECK_NEAR(q[2].price, 7619.38, 1e-2);
   MCHECK_NEAR(q[3].price, 588.24, 1e-3);
+  // An older save's two names for one index: both read.
+  MarketBlob dup{};
+  dup.syms[0] = market_symbol("SPX", MarketKind::INDEX);
+  dup.syms[1] = market_symbol("GSPC", MarketKind::INDEX);
+  MarketQuote tq[kMarketSlots];
+  MCHECK(parse_yahoo_quotes(json, dup, tq) == 1 && tq[0].valid && tq[1].valid && tq[0].price == tq[1].price,
+         "both slots");
   const MarketQuote &btc = q[4];
   MCHECK_NEAR(btc.price, 73738.65, 1e-2);
   MCHECK_NEAR(btc.prev, 73925.19, 1e-2);
@@ -444,6 +461,15 @@ void test_state() {
   MCHECK(market_poll_ms(stocks, q, kClose + 60) == kMarketShutPollMs, "after hours");
   MarketQuote unread[kMarketSlots];
   MCHECK(market_poll_ms(stocks, unread, kNow) == kMarketPollMs, "nothing read yet");
+  // A symbol Yahoo doesn't know rests with the rest.
+  MarketBlob typo = stocks;
+  market_put(typo, 0, sym("ZZZZQ"));
+  MarketQuote tq[kMarketSlots];
+  tq[0] = q[0];
+  tq[1] = q[1];
+  bool miss[kMarketSlots]{false, false, true};
+  MCHECK(market_poll_ms(typo, tq, kNow) == kMarketPollMs, "unknown and unread");
+  MCHECK(market_poll_ms(typo, tq, kNow, miss) == kMarketClosedPollMs, "unknown to Yahoo");
 
   MarketQuote mixed[kMarketSlots];
   mixed[0] = q[0];
@@ -479,13 +505,27 @@ void test_text() {
   };
   for (const P &p : prices)
     MCHECK_EQ(market_price_text(p.v, p.max), p.out);
+  // Too small for its column: a power of ten.
+  MCHECK_EQ(market_price_text(1.2e-5, 6), "1.2e-5");
+  MCHECK_EQ(market_price_text(1.2e-5, 5), "1e-5");
+  const std::string shib = market_price_text(4.35e-6, 6);
+  MCHECK(shib.size() <= 6 && shib.compare(0, 2, "4.") == 0 && shib.find("e-6") != std::string::npos, "%s",
+         shib.c_str());
+  MCHECK_EQ(market_change_text(-1.7e-7, 4.35e-6, 6), "-2e-7");
+  MCHECK_EQ(market_sym_text("SHOP.TO", 6), "SHOP");
+  MCHECK_EQ(market_sym_text("NESN.SW", 6), "NESN");
+  MCHECK_EQ(market_sym_text("EURUSD=X", 6), "EURUSD");
+  MCHECK_EQ(market_sym_text("005930.KS", 8), "005930");
+  MCHECK_EQ(market_sym_text("BRK.B", 6), "BRK.B");
+  MCHECK_EQ(market_sym_text("ABCDEFGHIJ", 6), "ABCDEF");
   MCHECK_EQ(market_change_text(7.12, 355.63, 10), "+7.12");
   MCHECK_EQ(market_change_text(-186.54, 73738.65, 10), "-186.54");
   MCHECK_EQ(market_change_text(-186.54, 73738.65, 4), "-187");
   MCHECK_EQ(market_change_text(1234.5, 52486.49, 9), "+1,234.50");
   MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 10), "-0.00025");
-  MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 6), "-0.0002");
-  MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 4), "-0.0002");
+  MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 7), "-0.0002");
+  MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 6), "-2e-4");
+  MCHECK_EQ(market_change_text(-0.00024604, 0.06726, 4), "-2e-4");
   MCHECK_EQ(market_change_text(0.000001, 0.06726, 10), "0.00000");
   MCHECK_EQ(market_change_text(0, 355.63, 10), "0.00");
   MCHECK_EQ(market_change_text(-0.004, 355.63, 10), "0.00");
@@ -729,7 +769,7 @@ void test_ticker() {
   MCHECK(market_ticker(b, q, kNow, nullptr) == line, "spans optional");
 }
 
-}  // namespace
+}
 
 int run_market_tests(int &total_checks) {
   test_symbols();

@@ -137,6 +137,13 @@ void test_feed() {
   MarketFeed g;
   KCHECK(!g.done(MarketSource::YAHOO, false, true, index, kNow) && g.next(index, kNow) == MarketSource::YAHOO,
          "an index alone stays on Yahoo");
+  // A refusal's Retry-After holds Yahoo longer.
+  MarketFeed r;
+  KCHECK(r.done(MarketSource::YAHOO, false, true, mixed, kNow, 50 * 60 * 1000) && r.retry_at == kNow + 50 * 60,
+         "Retry-After");
+  MarketFeed r2;
+  r2.done(MarketSource::YAHOO, false, true, mixed, kNow, 5 * 60 * 1000);
+  KCHECK(r2.retry_at == kNow + kMarketRefusedSeconds, "never shorter than the half hour");
   MarketBlob coins{};
   market_put(coins, 0, sym("ETH"));
   MarketFeed h;
@@ -281,7 +288,7 @@ void test_app() {
   KCHECK(!a.busy(kNow) && a.busy(open + 60) && !a.busy(open - 60), "the trading day");
 
   JsonDocument doc;
-  a.state(doc["markets"].to<JsonObject>());
+  a.state(doc["markets"].to<JsonObject>(), kNow);
   JsonObjectConst m = doc["markets"];
   KCHECK(m["syms"].size() == 5 && std::string(m["syms"][1]["sym"] | "") == "AAPL", "listed");
   KCHECK(std::string(m["syms"][1]["price"] | "") == "355.63" && std::string(m["syms"][1]["pct"] | "") == "+2.04%" &&
@@ -324,7 +331,7 @@ void test_app() {
   a.apply(true, kNow + 122);
   KCHECK(a.poll_ms(kNow + 122) == kMarketPollMs && a.feed().backup, "then the usual minute");
   doc.clear();
-  a.state(doc["markets"].to<JsonObject>());
+  a.state(doc["markets"].to<JsonObject>(), kNow + 122);
   KCHECK(std::string(doc["markets"]["src"] | "") == "backup" && doc["markets"]["syms"][4]["miss"].isNull(),
          "on the backups; only Yahoo says a symbol is unknown");
   KCHECK(a.request(kNow + 120 + kMarketRetrySeconds, req) && req.url.find("query1.finance.yahoo.com") != std::string::npos,
@@ -333,10 +340,41 @@ void test_app() {
   KCHECK(read_body(a, again_body, kNow + 720), "yahoo back");
   a.apply(true, kNow + 720);
   doc.clear();
-  a.state(doc["markets"].to<JsonObject>());
+  a.state(doc["markets"].to<JsonObject>(), kNow + 720);
   KCHECK(std::string(doc["markets"]["src"] | "") == "yahoo" && doc["markets"]["syms"][4]["miss"] == true &&
              !a.feed().backup,
          "Yahoo answers without ZZZZQ");
+
+  // The page's market state is now's, not the read's.
+  doc.clear();
+  a.state(doc["markets"].to<JsonObject>(), a.quote(1).open_at + 60);
+  KCHECK(std::string(doc["markets"]["syms"][1]["st"] | "") == "open", "open now");
+  KCHECK(a.poll_ms(kNow + 720) == kMarketPollMs && a.night_poll_ms(kNow) == kMarketClosedPollMs,
+         "under the night clock: every 10 minutes");
+  MarketsApp coins;
+  coins.setup();
+  for (const char *k : {"1", "1"})
+    coins.set("mktdel", k);
+  KCHECK(list_text(coins.symbols()) == "BTC:crypto,ETH:crypto" && coins.night_poll_ms(kNow) == 0,
+         "coins alone: no night reads");
+
+  // Indexes alone: no backup covers them.
+  MarketsApp ix;
+  ix.setup();
+  for (const char *k : {"0,^GSPC", "0,^DJI"})
+    ix.set("mkt", k);
+  for (const char *k : {"1", "1", "1", "1"})
+    ix.set("mktdel", k);
+  KCHECK(list_text(ix.symbols()) == "GSPC:index,DJI:index", "%s", list_text(ix.symbols()).c_str());
+  for (int i = 0; i < 2; i++) {
+    ix.request(kNow + i, req);
+    ix.ended(AppResult{500, false, 0});
+    ix.failed(false);
+    ix.apply(false, kNow + i);
+  }
+  doc.clear();
+  ix.state(doc["markets"].to<JsonObject>(), kNow + 2);
+  KCHECK(ix.feed().backup && std::string(doc["markets"]["src"] | "") == "retry", "Yahoo retried, no backup");
 
   // Never read: the ticker says why.
   MarketsApp b;
@@ -355,7 +393,7 @@ void test_app() {
   KCHECK(!read_body(b, junk_body, kNow), "not JSON");
 }
 
-}  // namespace
+}
 
 int run_markets_app_tests(int &total_checks) {
   test_set();

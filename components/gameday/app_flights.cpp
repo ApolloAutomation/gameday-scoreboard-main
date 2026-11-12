@@ -84,7 +84,7 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
   out.ticker = fr.ticker;
 }
 
-}  // namespace
+}
 
 // ---- Settings ----------------------------------------------------------------
 
@@ -250,12 +250,15 @@ espn::AppSet FlightsApp::set(const std::string &key, const std::string &value) {
     this->card_hex_[0] = '\0';
     for (size_t i = 0; i < kSources; i++)
       this->feed_.read_once[i] = false;
+    // A new receiver isn't held to the old one's waits.
+    if (strcmp(was.receiver, now.receiver) != 0)
+      this->feed_.wait[(size_t) Source::LOCAL].clear();
   }
   this->read_ = Read::NONE;  // the framework drops a read in flight
   return r;
 }
 
-void FlightsApp::state(JsonObject out) const {
+void FlightsApp::state(JsonObject out, int64_t now) const {
   prefs_state(this->prefs_, this->units_(), out);
   const bool failing = this->fails_ >= kNoDataFails;
   if (!prefs_home(this->prefs_).valid()) {
@@ -266,7 +269,8 @@ void FlightsApp::state(JsonObject out) const {
     out["status"] = failing ? "failing" : "waiting";
     return;
   }
-  out["status"] = failing ? "failing" : "ok";
+  // Not read lately: off screen, or failing.
+  out["status"] = failing ? "failing" : now != 0 && now - this->got_s_ > kOldS ? "old" : "ok";
   out["source"] = source_key(this->got_src_);
   const Nearby &n = this->near_;
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
@@ -295,7 +299,7 @@ FlightsApp::Next FlightsApp::next_(int64_t now) const {
   if (!home.valid())
     return n;
   const uint32_t now_ms = ms_of(now);
-  const FeedPick pick = feed_pick(this->feed_, this->prefs_.receiver[0] != '\0', now_ms);
+  const FeedPick pick = feed_pick(this->feed_, this->prefs_.receiver[0] != '\0', now_ms, !box_wraps(home));
   n.read = Read::POSITIONS;
   n.source = pick.source;
   n.in_ms = pick.in_ms;
@@ -496,4 +500,4 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
   put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
 }
 
-}  // namespace flights
+}

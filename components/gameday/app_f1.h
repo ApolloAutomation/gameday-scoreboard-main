@@ -71,7 +71,7 @@ class F1App final : public App {
   F1App();
   Display id() const override { return Display::F1; }
   const char *const *hosts() const override;
-  void state(JsonObject out) const override;
+  void state(JsonObject out, int64_t now) const override;
   bool busy(int64_t now) const override;
   uint32_t poll_ms(int64_t now) const override;
   bool request(int64_t now, AppRequest &out) override;

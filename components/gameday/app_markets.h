@@ -91,7 +91,7 @@ struct MarketFeed {
   }
 
   // After each read; true reads the next now.
-  bool done(MarketSource src, bool ok, bool refused, const MarketBlob &b, int64_t t) {
+  bool done(MarketSource src, bool ok, bool refused, const MarketBlob &b, int64_t t, uint32_t retry_after_ms = 0) {
     this->nasdaq = false;
     if (src != MarketSource::YAHOO) {
       if (refused)
@@ -115,6 +115,10 @@ struct MarketFeed {
     int64_t hold = refused ? kMarketRefusedSeconds : kMarketRetrySeconds;
     for (uint8_t i = 0; i < this->retries && hold < kMarketRetryCapSeconds; i++)
       hold *= 2;
+    // Never back to Yahoo before its Retry-After.
+    const int64_t asked = retry_after_ms / 1000;
+    if (hold < asked)
+      hold = asked;
     this->retry_at = t + (hold < kMarketRetryCapSeconds ? hold : kMarketRetryCapSeconds);
     return this->now = this->next(b, t) != MarketSource::YAHOO;
   }
@@ -174,13 +178,15 @@ class MarketsApp final : public App {
   void setup() override;
   const char *const *set_keys() const override { return kMarketSetKeys; }
   AppSet set(const std::string &key, const std::string &value) override;
-  void state(JsonObject out) const override;
+  void state(JsonObject out, int64_t now) const override;
   // A listed market's trading day, as a game is on
   bool busy(int64_t now) const override;
   uint32_t poll_ms(int64_t now) const override;
+  uint32_t night_poll_ms(int64_t now) const override;
   bool request(int64_t now, AppRequest &out) override;
   bool filter(JsonDocument &f) override;
   bool parse_doc(JsonObjectConst root, int64_t now) override;
+  void ended(const AppResult &r) override { this->retry_after_ms_ = r.retry_after_ms; }
   void apply(bool ok, int64_t now) override;
   bool failed(bool refused) override;
   void frame(int w, int h, int64_t now, AppFrame &out) const override;
@@ -206,7 +212,8 @@ class MarketsApp final : public App {
   int64_t asked_at_{0};
   MarketQuote read_[kMarketSlots];
   int64_t read_at_{0};  // the last good read
+  uint32_t retry_after_ms_{0};
   bool failing_{false};
 };
 
-}  // namespace espn
+}

@@ -64,7 +64,7 @@ class FlightsApp final : public espn::App {
   void setup() override;
   const char *const *set_keys() const override { return kFlightSetKeys; }
   espn::AppSet set(const std::string &key, const std::string &value) override;
-  void state(JsonObject out) const override;
+  void state(JsonObject out, int64_t now) const override;
   void shown(bool on) override;
   bool own_backoff() const override { return true; }
   void ended(const espn::AppResult &r) override {
@@ -123,4 +123,4 @@ class FlightsApp final : public espn::App {
   mutable int64_t screen_s_{0};
 };
 
-}  // namespace flights
+}

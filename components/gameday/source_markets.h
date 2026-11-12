@@ -24,7 +24,7 @@ template<typename TInput, typename F> int market_read(TInput &input, void (*fill
     return -1;
   return from(doc.as<JsonObjectConst>());
 }
-}  // namespace detail
+}
 
 // Yahoo's spark or chart: quotes found, -1 unreadable.
 template<typename TInput>
@@ -46,4 +46,4 @@ int parse_nasdaq_quotes(TInput &input, const MarketBlob &list, int64_t now, Mark
                              [&](JsonObjectConst root) { return detail::nasdaq_from_doc(root, list, now, out); });
 }
 
-}  // namespace espn
+}

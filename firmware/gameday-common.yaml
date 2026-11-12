@@ -697,12 +697,16 @@ gameday:
     # Published on every update, though the value often repeats: Home
     # Assistant only logs a change, and the device page takes each Game
     # Status event as its cue to re-read /gameday/state.
-    - text_sensor.template.publish:
-        id: gd_status_sensor
-        state: !lambda 'return x.ha_status_text;'
-    - text_sensor.template.publish:
-        id: gd_last_play_sensor
-        state: !lambda 'return x.ha_last_play;'
+    - if:
+        condition:
+          lambda: 'return !x.quiet;'
+        then:
+          - text_sensor.template.publish:
+              id: gd_status_sensor
+              state: !lambda 'return x.ha_status_text;'
+          - text_sensor.template.publish:
+              id: gd_last_play_sensor
+              state: !lambda 'return x.ha_last_play;'
     # Splash shows cached logos, or badges while downloading
     - lambda: |-
         if (gameday::board_view() == nullptr)

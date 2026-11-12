@@ -472,7 +472,7 @@ void test_reads_and_screens() {
   PCHECK(f.rows.status == "Last race" && !f.rows.detail[0].empty(), "the last race: %s", f.rows.detail[0].c_str());
 
   JsonDocument doc;
-  a.state(doc.to<JsonObject>());
+  a.state(doc.to<JsonObject>(), 0);
   PCHECK(std::string(doc["schedule"] | "") == "jolpica" && std::string(doc["weather"] | "") == "open-meteo" &&
              doc["standings_at"].as<int64_t>() == t0,
          "its state");
@@ -570,7 +570,7 @@ void test_live() {
   settle(c, after, fin);
   PCHECK(c.rotation(after, list, 8) >= 2 && list[0] == F1Screen::LIVE, "the final's order, then the rest");
   PCHECK(c.rotation(at("2026-10-27T02:00:00Z"), list, 8) >= 1 && list[0] != F1Screen::LIVE, "gone a day on");
-  // An older live copy after the flag doesn't bring it back.
+  // An older live copy can't undo the flag.
   AppRequest crq;
   PCHECK(c.request(after + 3600, crq), "a header read after the flag");
   PCHECK(read_body(c, slurp("fixtures/racing_header_f1_live.json"), after + 3600), "parses");
@@ -611,7 +611,7 @@ void test_failover() {
     frame_of(a, F1Screen::DRIVERS, now, 64, f);
     PCHECK(f.rows.status.find("Drivers ") == 0 && glyphs(f.rows.status) <= 12, "one panel: %s", f.rows.status.c_str());
     JsonDocument doc;
-    a.state(doc.to<JsonObject>());
+    a.state(doc.to<JsonObject>(), 0);
     PCHECK(std::string(doc["schedule"] | "") == "espn", "the state says so");
     // No Jolpica read until the wait is over.
     const int64_t back = a.host(F1App::HOST_JOLPICA).out_until;

@@ -292,7 +292,7 @@ class TestApp final : public App {
     this->saved.unit = u;
     return AppSet::CHANGED;
   }
-  void state(JsonObject out) const override { out["v"] = this->value; }
+  void state(JsonObject out, int64_t /*now*/) const override { out["v"] = this->value; }
   void shown(bool on) override { this->on_screen = on; }
   uint32_t poll_ms(int64_t) const override { return this->got ? 60000 : 0; }
   bool request(int64_t, AppRequest &out) override {
@@ -362,7 +362,7 @@ void test_app_slots() {
   ACHECK(app_frame_board(f) && f.rows.value[0] == "42" && f.line.pts.size() == 3);
   ACHECK(app_line_xy(f.line, 128, 64).size() == 6);
   JsonDocument doc;
-  a.state(doc[display_key(a.id())].to<JsonObject>());
+  a.state(doc[display_key(a.id())].to<JsonObject>(), 0);
   ACHECK(doc["markets"]["v"].as<int>() == 42);
 }
 

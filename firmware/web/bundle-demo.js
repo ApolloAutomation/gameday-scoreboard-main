@@ -254,7 +254,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <p class="betmsg" id="flightMsg" role="alert" hidden></p>
         <div class="ctl" id="flightHomeRow" hidden><label>Planes near<small id="flightHome"></small></label><button class="btn" id="flightClear">Clear</button></div>
         <div class="ctl"><label for="flightRadius">Within<small>How far from home a plane can be.</small></label><select id="flightRadius"></select></div>
-        <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: the address of an ADS-B receiver on your network (tar1090, PiAware or readsb), like 192.168.1.50. The panel reads it first.</small></label></div>
+        <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
         <p class="hint" id="flightNow" role="status"></p>
       </details>
@@ -300,6 +300,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <summary><h2>Stocks &amp; Crypto</h2><span class="peek sum" id="mktSum"></span></summary>
         <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Nothing to sign up for.</p>
         <p class="hint" id="mktSrc" hidden>Yahoo Finance isn't answering, so the panel is reading coins from Kraken and US stocks and funds from Nasdaq for now, and tries Yahoo Finance again every so often. Anything else keeps its last price until then.</p>
+        <p class="hint" id="mktRetry" hidden>Yahoo Finance isn't answering, and nothing listed is on Kraken or Nasdaq, so the prices keep their last value until the panel tries Yahoo Finance again.</p>
+        <p class="hint" id="mktOld" hidden></p>
         <div id="mktList"></div>
         <div class="sub">Add a symbol</div>
         <div class="ctl"><label for="mktSym">Symbol<small id="mktHint"></small></label><input id="mktSym" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="AAPL"></div>
@@ -1858,6 +1860,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
   let mktDrawn = null;
   let mktPending = [];  // posted, not yet listed by the panel
+  let mktLock = 0;      // a move or remove's post time
   const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
   // parse_market_symbol (markets.h): [symbol, kind], or null
   const mktParse = (text, kind) => {
@@ -1898,8 +1901,17 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const list = m.syms || [];
     $("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
     $("#mktSrc").hidden = m.src !== "backup";
+    $("#mktRetry").hidden = m.src !== "retry";
+    // Off screen, nothing reads them
+    const old = m.read && Date.now() / 1000 - m.read > 30 * 60;
+    $("#mktOld").hidden = !old;
+    if (old) $("#mktOld").textContent = "Prices as of " + new Date(m.read * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) + ". The panel reads them only while Stocks & Crypto is up.";
     const sig = JSON.stringify(list);
-    if (sig === mktDrawn) return;
+    // Slots stay old until the panel has the tap
+    if (mktLock && sig === mktDrawn && stateLeft <= mktLock + APPLY_MS) return;
+    const unlock = mktLock !== 0;
+    mktLock = 0;
+    if (sig === mktDrawn && !unlock) return;
     mktDrawn = sig;
     const host = $("#mktList");
     const focused = host.contains(document.activeElement);
@@ -1917,7 +1929,15 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         b.title = label;
         b.setAttribute("aria-label", label);
         b.disabled = !on;
-        b.onclick = () => setGD(params).then((ok) => ok && done && toast(done));
+        b.onclick = () => {
+          mktLock = Infinity;
+          host.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+          setGD(params).then((ok) => {
+            mktLock = ok ? Date.now() : 0;
+            if (!ok) { mktDrawn = null; renderMarkets(); }
+            if (ok && done) toast(done);
+          });
+        };
         tools.appendChild(b);
       };
       button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
@@ -2736,13 +2756,18 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const n = Number(f.planes) || 0;
     const from = FLIGHT_SOURCES[f.source] || "";
     const backup = f.source === "adsbfi" || f.source === "adsblol";
+    const shown = S.display_now === "flights" || S.split_now === "flights";
+    const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
+    const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
     let line = !f.home ? "Set a home location to see the planes near it."
       : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
         : f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
           + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
-          : "Looking for planes.";
-    const shown = S.display_now === "flights" || S.split_now === "flights";
-    if (f.home && !shown) line += " Choose Flight Tracker under Showing to put it on the panel.";
+          : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
+            : "Looking for planes.";
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock"))
+      line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
+    else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
     $("#flightNow").textContent = line;
   };
 

@@ -63,6 +63,8 @@ struct Bounds {
 };
 // A box around the rounded center, covering the radius.
 Bounds query_bounds(const Home &h);
+// Across the 180th meridian: Flightradar24's box can't wrap.
+bool box_wraps(const Home &h);
 std::string fr24_url(const Home &h);
 // Query center rounded to 0.01 degrees.
 std::string adsbfi_url(const Home &h);
@@ -88,7 +90,7 @@ uint32_t feed_gap_ms(const Feed &f, Source s);
 // Out after kFailoverStreak failures or a refusal.
 bool feed_out(const Feed &f, Source s, uint32_t now_ms);
 // Receiver, Flightradar24, adsb.fi, adsb.lol; each while earlier ones are out.
-FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms);
+FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms, bool fr24 = true);
 void feed_started(Feed &f, Source s, uint32_t now_ms);
 // status: HTTP status, 0 or less when never answered.
 void feed_done(Feed &f, Source s, int status, bool parsed, uint32_t retry_after_ms, uint32_t rnd, uint32_t now_ms);
@@ -173,6 +175,7 @@ inline void set_json_allocator(ArduinoJson::Allocator *a) { json_allocator_slot(
 ArduinoJson::Allocator *json_allocator();
 
 void fill_aircraft_filter(JsonDocument &f);
+inline bool emergency_squawk(uint16_t sq) { return sq == 7500 || sq == 7600 || sq == 7700; }
 // False when the plane is dropped.
 bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p);
 // One Flightradar24 flight array; now_s dates its position.

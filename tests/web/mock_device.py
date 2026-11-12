@@ -307,7 +307,7 @@ def markets_doc():
             o["miss"] = True
         syms.append(o)
     return {"syms": syms, "max": MARKET_SLOTS, "defaults": not MARKET_LIST, "src": STATE.get("markets_src", "yahoo"),
-            "read": 1794456439}
+            "read": STATE.get("markets_read") or int(time.time())}
 
 
 def team(lg, tid):
@@ -538,6 +538,9 @@ def state_doc():
     if "display" in STATE:
         STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
                                     "gameday")
+        # main_view(): the night hours' clock over a display
+        if STATE.get("night_now") and STATE["display"] != 0:
+            STATE["display_now"] = "clock"
     if isinstance(STATE.get("flights"), dict):
         # tz_miles(): the US and UK zones are imperial
         tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""

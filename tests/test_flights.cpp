@@ -204,10 +204,18 @@ void test_streaming() {
   Plane p;
   JsonDocument d;
   deserializeJson(d, "{\"hex\":\"~abc123\",\"flight\":\"TEST1  \",\"seen\":1.0}");
-  FCHECK(plane_from_json(d.as<JsonObjectConst>(), jfk(), p) && p.tier == Tier::NOPOS, "no position");
+  FCHECK(!plane_from_json(d.as<JsonObjectConst>(), jfk(), p), "no position: not nearby");
+  FCHECK(plane_from_json(d.as<JsonObjectConst>(), Home(), p) && p.tier == Tier::NOPOS, "no home: kept");
   FCHECK_EQ(p.hex, "abc123");
   deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"seen_pos\":90,\"seen\":1}");
-  FCHECK(plane_from_json(d.as<JsonObjectConst>(), jfk(), p) && p.tier == Tier::NOPOS, "an old position is none");
+  FCHECK(!plane_from_json(d.as<JsonObjectConst>(), jfk(), p), "an old position: not nearby");
+  // Only a real emergency shows red.
+  deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"squawk\":\"1200\",\"emergency\":\"lifeguard\"}");
+  FCHECK(plane_from_json(d.as<JsonObjectConst>(), jfk(), p) && !p.emergency, "lifeguard is routine");
+  deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"emergency\":\"minfuel\"}");
+  FCHECK(plane_from_json(d.as<JsonObjectConst>(), jfk(), p) && !p.emergency, "minfuel is routine");
+  deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"squawk\":\"1200\",\"emergency\":\"general\"}");
+  FCHECK(plane_from_json(d.as<JsonObjectConst>(), jfk(), p) && p.emergency, "general is one");
   deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"seen\":75}");
   FCHECK(!plane_from_json(d.as<JsonObjectConst>(), jfk(), p), "unheard for 75 s");
   deserializeJson(d, "{\"hex\":\"abc123\",\"lat\":40.7,\"lon\":-73.8,\"squawk\":\"7700\",\"alt_baro\":5000}");
@@ -715,6 +723,21 @@ void test_frames() {
     FCHECK(fg.ticker.find("Emergency 7700 N3240J") != std::string::npos, "the ticker says so: %s", fg.ticker.c_str());
     FCHECK(fg.ticker.rfind("14 planes on the ground", 0) == 0, "ground count first");
   }
+  g.planes[0].squawk = 1200;
+  FrameOpts og;
+  const Frame gen = flight_frame(g, nullptr, og, 100);
+  FCHECK(gen.ticker.find("Emergency N3240J") != std::string::npos, "no code, just the word: %s", gen.ticker.c_str());
+  g.planes[0].emergency = false;
+  FCHECK(flight_frame(g, nullptr, og, 100).ticker.find("Emergency") == std::string::npos, "none");
+
+  // Metric on one panel: 1,185 km/h fits as a number.
+  Nearby fast = read(file, jfk(1));
+  fast.planes[0].gs_kt = 640;
+  FrameOpts om;
+  om.w = 64;
+  om.units = units_metric();
+  const Frame ff = flight_frame(fast, nullptr, om, 100);
+  FCHECK(find_text(ff, "1185") != nullptr && find_text(ff, "1185km/") == nullptr, "the speed whole");
   FCHECK(flight_frame(Nearby(), nullptr, o, 0).items.empty(), "no planes, no frame");
 }
 
@@ -881,6 +904,19 @@ void test_fr24_url() {
   h.radius_nm = 250;
   const Bounds p = query_bounds(h);
   FCHECK(p.north == 90 && p.east == 180 && p.west == -180, "clamped at the pole: %f %f %f", p.north, p.east, p.west);
+  FCHECK(!box_wraps(h), "the pole's box is the whole way round");
+  Home labasa;
+  labasa.lat = -16.43;
+  labasa.lon = 179.38;
+  labasa.radius_nm = 87;
+  Home adak;
+  adak.lat = 51.88;
+  adak.lon = -176.64;
+  adak.radius_nm = 217;
+  FCHECK(box_wraps(labasa) && box_wraps(adak) && !box_wraps(nyc()), "across the 180th meridian");
+  Feed f;
+  FCHECK(feed_pick(f, false, 1000, false).source == Source::ADSBFI, "there, adsb.fi first");
+  FCHECK(feed_pick(f, true, 1000, false).source == Source::LOCAL, "after the receiver");
   FCHECK_EQ(source_name(Source::FR24), "Flightradar24");
   FCHECK_EQ(source_key(Source::FR24), "fr24");
   FCHECK_EQ(source_key(Source::LOCAL), "receiver");
@@ -1055,7 +1091,7 @@ void test_app() {
            "%d: card and list together: %s", w, frame_text(f).c_str());
   }
   JsonDocument d;
-  r.app.state(d.to<JsonObject>());
+  r.app.state(d.to<JsonObject>(), r.now);
   FCHECK(d["status"] == "ok" && d["source"] == "fr24" && d["planes"] == 27 && d["nearest"] == "SWA1678" &&
              d["units"] == "imperial" && d["radius"] == 28,
          "the page's view");
@@ -1132,6 +1168,44 @@ void test_app() {
   rx.app.frame(64, 64, rx.now, f);
   FCHECK(frame_text(f) == "Looking for|planes|", "%s", frame_text(f).c_str());
 
+  // A corrected receiver is read at once.
+  Reads fix;
+  fix.app.setup();
+  fix.app.set("flyhome", "40.64,-73.78");
+  fix.app.set("flyreceiver", "192.168.1.50");
+  for (int i = 0; i < 2000 && fix.app.feed().wait[(size_t) Source::LOCAL].run.streak < 4; i++) {
+    espn::AppRequest fq;
+    if (fix.app.request(fix.now, fq)) {
+      const bool rx_read = fq.url.find("192.168.1.50") != std::string::npos;
+      espn::AppTextStream in(fr24);
+      const bool ok = !rx_read && fix.app.parse(in, fix.now);
+      fix.app.ended(espn::AppResult{rx_read ? 404 : 200, false, 0});
+      fix.app.apply(ok, fix.now);
+    }
+    fix.now += 1;
+  }
+  FCHECK(fix.app.feed().wait[(size_t) Source::LOCAL].run.streak >= 4 &&
+             fix.app.feed().wait[(size_t) Source::LOCAL].waiting((uint32_t) ((uint64_t) fix.now * 1000u)),
+         "the wrong address waits");
+  fix.app.set("flyreceiver", "http://192.168.1.50/skyaware/data/aircraft.json");
+  FCHECK(fix.step(200, fi) && fix.last_url.find("skyaware") != std::string::npos,
+         "the new one now: %s", fix.last_url.c_str());
+
+  // Off screen for a while: the page hears it's old.
+  d.clear();
+  fix.app.state(d.to<JsonObject>(), fix.now);
+  FCHECK(d["status"] == "ok", "fresh");
+  d.clear();
+  fix.app.state(d.to<JsonObject>(), fix.now + FlightsApp::kOldS + 1);
+  FCHECK(d["status"] == "old", "old");
+
+  // Across the 180th meridian: adsb.fi, not a cut box.
+  Reads far;
+  far.app.setup();
+  far.app.set("flyhome", "-16.43,179.38");
+  far.app.set("flyradius", "100");
+  FCHECK(far.app.request(far.now, req) && req.url.find("adsb.fi") != std::string::npos, "%s", req.url.c_str());
+
   // An empty sky, and no answers at all.
   Reads none;
   none.app.setup();
@@ -1153,7 +1227,7 @@ void test_app() {
   none.app.frame(128, 64, none.now, f);
   FCHECK(frame_text(f) == "Can't reach flight data|", "%s", frame_text(f).c_str());
   d.clear();
-  none.app.state(d.to<JsonObject>());
+  none.app.state(d.to<JsonObject>(), none.now);
   FCHECK(d["status"] == "failing" && d["units"] == "metric", "the page hears it");
   espn::app_env().tz = 0;
 }

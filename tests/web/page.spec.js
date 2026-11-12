@@ -2815,9 +2815,17 @@ test("the Stocks & Crypto card shows only with the display, and the starting lis
   await expect(page.getByRole("button", { name: "Move SPY up" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Move ETH down" })).toBeDisabled();
   await expect(page.locator("#mktSrc")).toBeHidden();
+  await expect(page.locator("#mktOld")).toBeHidden();
   await reset(request, { displays: DISPLAYS, display: 2, markets_src: "backup" });
   await page.reload();
   await expect(page.locator("#mktSrc")).toBeVisible();
+  await expect(page.locator("#mktRetry")).toBeHidden();
+  // Indexes alone: no backup, and prices hours old
+  await reset(request, { displays: DISPLAYS, display: 2, markets_src: "retry", markets_read: Math.floor(Date.now() / 1000) - 3 * 3600 });
+  await page.reload();
+  await expect(page.locator("#mktRetry")).toBeVisible();
+  await expect(page.locator("#mktSrc")).toBeHidden();
+  await expect(page.locator("#mktOld")).toHaveText(/^Prices as of .+\. The panel reads them only while Stocks & Crypto is up\.$/);
 });
 
 test("the Stocks & Crypto card adds, moves and removes symbols", async ({ page, request }) => {
@@ -2835,9 +2843,12 @@ test("the Stocks & Crypto card adds, moves and removes symbols", async ({ page, 
   await page.getByRole("button", { name: "Move TSLA up" }).click();
   await expectSet(request, { mktmove: "5,4" });
   await expect(mktRows(page).nth(3)).toHaveText(/^TSLA/);
-  await page.getByRole("button", { name: "Remove SPY" }).click();
+  // A double tap removes one symbol, not two
+  await page.getByRole("button", { name: "Remove SPY" }).dblclick();
   await expectSet(request, { mktdel: "1" });
   await expect(mktRows(page).first()).toHaveText(/^AAPL/);
+  expect((await sets(request)).filter((q) => q.mktdel !== undefined)).toHaveLength(1);
+  await expect(page.getByRole("button", { name: "Remove AAPL" })).toBeEnabled();
   // Read the way the panel reads them
   await sym.fill("brk/b");
   await expect(page.locator("#mktHint")).toHaveText("Saves as BRK.B, a stock or fund");
@@ -2987,6 +2998,13 @@ test("the Flight Tracker card takes a latitude and longitude and says where the 
   await expect(page.locator("#flightNow")).toHaveText(
     "Can't reach the flight data right now. The panel keeps trying.");
   await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+
+  // Picked, with the night clock up and an old count
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3, night_now: true,
+                         flights: { home: "48.1374,11.5755", status: "old", source: "fr24", planes: 12 } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText("Not reading planes now: the panel reads them only while "
+    + "Flight Tracker is on it. The clock is up for the night hours, and Flight Tracker comes back after them.");
 });
 
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {

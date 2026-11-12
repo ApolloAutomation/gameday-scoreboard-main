@@ -134,8 +134,15 @@ inline bool market_symbol_valid(const MarketSymbol &s) {
   }
 }
 
+// Two names for one index are the same: SPX, GSPC.
 inline bool market_same(const MarketSymbol &a, const MarketSymbol &b) {
-  return a.kind == b.kind && strncmp(a.sym, b.sym, sizeof a.sym) == 0;
+  if (a.kind != b.kind)
+    return false;
+  if (strncmp(a.sym, b.sym, sizeof a.sym) == 0)
+    return true;
+  const MarketIndex *x = a.kind == (uint8_t) MarketKind::INDEX ? market_index(a.sym) : nullptr;
+  const MarketIndex *y = x != nullptr ? market_index(b.sym) : nullptr;
+  return y != nullptr && strcmp(x->yahoo, y->yahoo) == 0;
 }
 
 inline MarketSymbol market_symbol(const std::string &sym, MarketKind kind) {
@@ -560,10 +567,13 @@ constexpr uint32_t kMarketShutPollMs = 5 * 60 * 1000;
 constexpr uint32_t kMarketClosedPollMs = 10 * 60 * 1000;
 
 // Coins or open markets each minute; never past the open
-inline uint32_t market_poll_ms(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], int64_t now) {
+inline uint32_t market_poll_ms(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], int64_t now,
+                               const bool *miss = nullptr) {  // slots Yahoo left out
   uint32_t ms = kMarketClosedPollMs;
   for (uint8_t i = 0; i < market_count(b); i++) {
     const MarketState st = market_state(q[i], (MarketKind) b.syms[i].kind, now);
+    if (st == MarketState::UNKNOWN && miss != nullptr && miss[i])
+      continue;
     if (st == MarketState::OPEN || st == MarketState::ALWAYS || st == MarketState::UNKNOWN)
       return kMarketPollMs;
     if (st != MarketState::CLOSED && ms > kMarketShutPollMs)
@@ -672,6 +682,27 @@ inline std::string market_short(double v, bool sign) {
   return market_number(scaled, std::fabs(scaled) < 100 ? 1 : 0, false, sign) + unit;
 }
 
+// "4.3e-6": a tiny number in max, or the shortest.
+inline std::string market_tiny(double v, size_t max, bool sign) {
+  std::string out;
+  for (int k = 2; k >= 0; k--) {
+    char buf[32];
+    snprintf(buf, sizeof buf, "%.*e", k, std::fabs(v));
+    out = buf;
+    const size_t e = out.find('e');
+    if (e == std::string::npos)
+      return out;
+    std::string exp = out.substr(e + 1);
+    const bool neg = !exp.empty() && exp[0] == '-';
+    while (!exp.empty() && (exp[0] == '-' || exp[0] == '+' || (exp[0] == '0' && exp.size() > 1)))
+      exp.erase(0, 1);
+    out = (v < 0 ? "-" : sign ? "+" : "") + out.substr(0, e) + (neg ? "e-" : "e") + exp;
+    if (out.size() <= max)
+      break;
+  }
+  return out;
+}
+
 // Fuller forms first; the shortest when none fits.
 inline std::string market_fit(double v, int decimals, size_t max, bool sign) {
   std::string out = market_number(v, decimals, true, sign);
@@ -685,7 +716,7 @@ inline std::string market_fit(double v, int decimals, size_t max, bool sign) {
         break;
       out = s;
     }
-    return out;
+    return out.size() <= max || v == 0 ? out : market_tiny(v, max, sign);
   }
   for (int d : {decimals, 0})
     for (bool commas : {true, false}) {
@@ -767,4 +798,4 @@ inline std::string market_state_text(MarketState st, const MarketQuote &q, int64
   }
 }
 
-}  // namespace espn
+}

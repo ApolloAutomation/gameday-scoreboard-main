@@ -98,7 +98,7 @@ AppSet MarketsApp::set(const std::string &key, const std::string &value) {
   return r;
 }
 
-void MarketsApp::state(JsonObject out) const {
+void MarketsApp::state(JsonObject out, int64_t now) const {
   const MarketBlob &b = this->symbols();
   JsonArray syms = out["syms"].to<JsonArray>();
   for (uint8_t i = 0; i < market_count(b); i++) {
@@ -119,11 +119,13 @@ void MarketsApp::state(JsonObject out) const {
       o["pct"] = market_percent_text(market_percent(q), 8);
     }
     o["dir"] = market_dir(q);
-    o["st"] = market_state_key(market_state(q, (MarketKind) s.kind, this->read_at_));
+    o["st"] = market_state_key(market_state(q, (MarketKind) s.kind, now != 0 ? now : this->read_at_));
   }
   out["max"] = kMarketSlots;
   out["defaults"] = market_count(this->list_.blob) == 0;
-  out["src"] = this->feed_.backup ? "backup" : "yahoo";
+  // "retry": Yahoo is down and no backup covers these.
+  const bool covered = !market_kraken_url(b).empty() || !market_nasdaq_url(b).empty();
+  out["src"] = !this->feed_.backup ? "yahoo" : covered ? "backup" : "retry";
   if (this->read_at_ != 0)
     out["read"] = this->read_at_;
 }
@@ -137,7 +139,16 @@ bool MarketsApp::busy(int64_t now) const {
 }
 
 uint32_t MarketsApp::poll_ms(int64_t now) const {
-  return this->feed_.now ? 0 : market_poll_ms(this->symbols(), this->quotes_, now);
+  return this->feed_.now ? 0 : market_poll_ms(this->symbols(), this->quotes_, now, this->miss_);
+}
+
+// Under the night clock: watch for an open.
+uint32_t MarketsApp::night_poll_ms(int64_t /*now*/) const {
+  const MarketBlob &b = this->symbols();
+  for (uint8_t i = 0; i < market_count(b); i++)
+    if (b.syms[i].kind != (uint8_t) MarketKind::CRYPTO)
+      return kMarketClosedPollMs;
+  return 0;
 }
 
 bool MarketsApp::request(int64_t now, AppRequest &out) {
@@ -205,7 +216,7 @@ void MarketsApp::apply(bool ok, int64_t now) {
 
 bool MarketsApp::failed(bool refused) {
   this->failing_ = true;
-  return this->feed_.done(this->src_, false, refused, this->asked_, this->asked_at_);
+  return this->feed_.done(this->src_, false, refused, this->asked_, this->asked_at_, this->retry_after_ms_);
 }
 
 void MarketsApp::frame(int w, int h, int64_t now, AppFrame &out) const {
@@ -218,4 +229,4 @@ void MarketsApp::frame(int w, int h, int64_t now, AppFrame &out) const {
                                     : "Can't reach Yahoo Finance";
 }
 
-}  // namespace espn
+}

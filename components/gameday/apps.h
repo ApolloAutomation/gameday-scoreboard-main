@@ -412,7 +412,7 @@ class App {
   // CHANGED saves prefs and drops a read in flight.
   virtual AppSet set(const std::string & /*key*/, const std::string & /*value*/) { return AppSet::REFUSED; }
   // Its object in the state document, under display_key.
-  virtual void state(JsonObject /*out*/) const {}
+  virtual void state(JsonObject /*out*/, int64_t /*now*/) const {}
 
   // On screen in some area now, or not.
   virtual void shown(bool /*on*/) {}
@@ -421,6 +421,8 @@ class App {
 
   // From one read's start to the next; 0 is now.
   virtual uint32_t poll_ms(int64_t now) const = 0;
+  // Picked, but the night clock shows: 0 never reads.
+  virtual uint32_t night_poll_ms(int64_t /*now*/) const { return 0; }
   // The next read; false for none now.
   virtual bool request(int64_t now, AppRequest &out) = 0;
   // Fetch task: into its own result, in PSRAM.

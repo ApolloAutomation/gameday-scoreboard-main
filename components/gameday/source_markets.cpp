@@ -36,7 +36,7 @@ uint32_t epoch(JsonVariantConst v) {
   return n > 0 && n <= (long long) UINT32_MAX ? (uint32_t) n : 0;
 }
 
-}  // namespace
+}
 
 void fill_yahoo_filter(JsonDocument &f) {
   auto series = [](JsonObject r) {
@@ -71,11 +71,10 @@ namespace {
 bool yahoo_series(JsonObjectConst r, const MarketBlob &list, MarketQuote (&out)[kMarketSlots]) {
   JsonObjectConst meta = r["meta"];
   const std::string sym = text(meta, "symbol");
-  int slot = -1;
-  for (uint8_t i = 0; i < market_count(list) && slot < 0; i++)
-    if (same_text(market_yahoo_symbol(list.syms[i]), sym))
-      slot = i;
-  if (slot < 0)
+  bool listed = false;
+  for (uint8_t i = 0; i < market_count(list) && !listed; i++)
+    listed = same_text(market_yahoo_symbol(list.syms[i]), sym);
+  if (!listed)
     return false;
   MarketQuote q;
   q.price = number(meta["regularMarketPrice"]);
@@ -114,11 +113,14 @@ bool yahoo_series(JsonObjectConst r, const MarketBlob &list, MarketQuote (&out)[
   }
   market_spark_pack(q, v);
   q.valid = true;
-  out[slot] = q;
+  // Every slot it answers for
+  for (uint8_t i = 0; i < market_count(list); i++)
+    if (same_text(market_yahoo_symbol(list.syms[i]), sym))
+      out[i] = q;
   return true;
 }
 
-}  // namespace
+}
 
 int yahoo_from_doc(JsonObjectConst root, const MarketBlob &list, MarketQuote (&out)[kMarketSlots]) {
   JsonObjectConst spark = root["spark"], chart = root["chart"];
@@ -194,5 +196,5 @@ int nasdaq_from_doc(JsonObjectConst root, const MarketBlob &list, int64_t now, M
   return n;
 }
 
-}  // namespace detail
-}  // namespace espn
+}
+}

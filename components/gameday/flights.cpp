@@ -106,18 +106,35 @@ double round2(double v) {
 
 }
 
+namespace {
+
+// The box's half width in longitude; 180 all of it.
+double box_dlon(const Home &h) {
+  const double r = query_radius_nm(h) / 60.0;
+  const double c = cosf((float) rad(round2(h.lat)));
+  return c > r / 180.0 ? std::min(180.0, r / c) : 180.0;
+}
+
+}
+
 Bounds query_bounds(const Home &h) {
   Bounds b;
   const double lat = round2(h.lat), lon = round2(h.lon);
   // A nautical mile is a minute of latitude.
   const double r = query_radius_nm(h) / 60.0;
-  const double c = cosf((float) rad(lat));
-  const double dlon = c > r / 180.0 ? std::min(180.0, r / c) : 180.0;
+  const double dlon = box_dlon(h);
   b.north = std::min(90.0, lat + r);
   b.south = std::max(-90.0, lat - r);
   b.west = dlon >= 180.0 ? -180.0 : std::max(-180.0, lon - dlon);
   b.east = dlon >= 180.0 ? 180.0 : std::min(180.0, lon + dlon);
   return b;
+}
+
+bool box_wraps(const Home &h) {
+  if (!h.valid())
+    return false;
+  const double lon = round2(h.lon), dlon = box_dlon(h);
+  return dlon < 180.0 && (lon - dlon < -180.0 || lon + dlon > 180.0);
 }
 
 std::string fr24_url(const Home &h) {
@@ -197,10 +214,15 @@ bool feed_out(const Feed &f, Source s, uint32_t now_ms) {
   return w.waiting(now_ms) && (w.run.throttled || w.run.streak >= kFailoverStreak);
 }
 
-FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms) {
-  const Source order_all[] = {Source::LOCAL, Source::FR24, Source::ADSBFI, Source::ADSBLOL};
-  const Source *order = local ? order_all : order_all + 1;
-  const size_t n = local ? 4 : 3;
+FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms, bool fr24) {
+  Source order[kSources];
+  size_t n = 0;
+  if (local)
+    order[n++] = Source::LOCAL;
+  if (fr24)
+    order[n++] = Source::FR24;
+  order[n++] = Source::ADSBFI;
+  order[n++] = Source::ADSBLOL;
   FeedPick best;
   bool have = false;
   for (size_t i = 0; i < n; i++) {
@@ -510,10 +532,15 @@ bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p) {
   }
   const char *sq = o["squawk"] | "";
   p.squawk = (uint16_t) (strlen(sq) == 4 ? atoi(sq) : 0);
+  // Not lifeguard or minfuel: those are routine.
   const char *em = o["emergency"] | "none";
-  p.emergency = (em[0] != '\0' && strcmp(em, "none") != 0) || p.squawk == 7500 || p.squawk == 7600 ||
-                p.squawk == 7700;
+  p.emergency = emergency_squawk(p.squawk);
+  for (const char *e : {"general", "unlawful", "nordo", "downed"})
+    p.emergency = p.emergency || strcmp(em, e) == 0;
   const bool pos = number(o["lat"]) && number(o["lon"]) && (o["seen_pos"] | 0.0f) <= kStaleS;
+  // Unplaced, it can't be called nearby.
+  if (!pos && home.valid())
+    return false;
   if (pos && !place_plane(p, o["lat"].as<double>(), o["lon"].as<double>(), home))
     return false;
   p.tier = !pos ? Tier::NOPOS : ground ? Tier::GROUND : Tier::AIR;
@@ -564,7 +591,7 @@ bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p
   }
   const char *sq = f[6] | "";
   p.squawk = (uint16_t) (strlen(sq) == 4 ? atoi(sq) : 0);
-  p.emergency = p.squawk == 7500 || p.squawk == 7600 || p.squawk == 7700;
+  p.emergency = emergency_squawk(p.squawk);
   if (!place_plane(p, f[1].as<double>(), f[2].as<double>(), home))
     return false;
   p.tier = ground ? Tier::GROUND : Tier::AIR;
@@ -1230,7 +1257,9 @@ void compact(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   put(f, 0, 15, w, BoardFont::S8, Align::CENTER, kColAirline, fit_words(c.who, (size_t) w / 5));
   put(f, 0, 23, w, BoardFont::S8, Align::CENTER, c.route ? kColRoute : kColDim, c.sub);
   put(f, 1, 31, 25, BoardFont::S8, Align::LEFT, kColType, c.type_code);
-  put(f, 27, 31, w - 28, BoardFont::S8, Align::RIGHT, kColValue, c.speed_short);
+  // "1185km/h" too wide: the number alone.
+  const std::string bare = c.speed_short.substr(0, c.speed_short.find_first_not_of("0123456789"));
+  put(f, 27, 31, w - 28, BoardFont::S8, Align::RIGHT, kColValue, pick_fit(c.speed_short, bare, (size_t) (w - 28) / 5));
   put(f, 0, 39, w, BoardFont::S8, Align::CENTER, kColValue, c.alt_full);
   put(f, 0, 47, w, BoardFont::S8, Align::CENTER, kColDist, pick_fit(c.where_full, c.where_short, (size_t) w / 5));
   if (!o.ticker && n.n > 1)
@@ -1369,8 +1398,8 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
       if (!s.empty())
         one += (one.empty() ? "" : sep) + s;
     };
-    if (p.emergency && p.squawk != 0)
-      add("Emergency " + std::to_string(p.squawk), " ");
+    if (p.emergency)
+      add(emergency_squawk(p.squawk) ? "Emergency " + std::to_string(p.squawk) : "Emergency", " ");
     add(plane_label(p), " ");
     add(airline_name(p.callsign), " ");
     const char *cat = category_text(p.category);

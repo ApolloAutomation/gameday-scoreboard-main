@@ -683,7 +683,7 @@ bool F1App::busy(int64_t now) const {
   return false;
 }
 
-void F1App::state(JsonObject out) const {
+void F1App::state(JsonObject out, int64_t /*now*/) const {
   out["schedule"] = this->sched_.valid && !this->jolpica_out_() ? "jolpica" : "espn";
   out["weather"] = this->weather_backup_ ? "met-norway" : "open-meteo";
   if (this->ok_[(int) Read::DRIVERS] != 0)
