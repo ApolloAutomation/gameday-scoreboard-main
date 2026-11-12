@@ -32,7 +32,7 @@ template<typename TInput> int parse_met_weather(TInput &input, int64_t now, F1We
 int f1_header_schedule(JsonObjectConst root, const F1Live &live, F1Schedule &out);
 // ESPN's calendar's next weekend: first practice and race.
 F1Schedule f1_calendar_schedule(const GolfNext &next);
-// mph and miles in the US and UK; Fahrenheit US only.
+// US and UK: mph and miles; US alone: Fahrenheit.
 F1Units f1_units_for_tz(uint8_t tz);
 // left, then right flush to chars.
 std::string f1_cell(const std::string &left, const std::string &right, size_t chars);

@@ -15,6 +15,8 @@ using namespace espn;
 using esphome::gameday::rows_geom;
 using esphome::gameday::rows_y;
 using esphome::gameday::RowsGeom;
+using esphome::gameday::rows_cells;
+using esphome::gameday::RowsCells;
 
 namespace {
 
@@ -204,6 +206,22 @@ void test_rows_geom() {
   const RowsGeom four = rows_geom(256);
   ACHECK(four.pos.x == 66 && four.detail.x == 158 && four.title.w == 252);
   ACHECK(rows_y(0) == 8 && rows_y(5) == 48);
+  // Golf and racing keep the leaderboard's own cells.
+  const RowsCells golf = rows_cells(64, true, {});
+  ACHECK(!golf.own && golf.cell[0].x == 0 && golf.cell[1].w == 35 && golf.cell[2].x == 49 && golf.cell[2].w == 15);
+  ACHECK(golf.cell[3].w == 0);
+  const RowsCells race = rows_cells(64, false, {});
+  ACHECK(race.cell[1].w == 52 && race.cell[2].w == 0 && race.cell[3].w == 0);
+  const RowsCells wide = rows_cells(128, false, {});
+  ACHECK(wide.cell[0].x == 2 && wide.cell[1].w == 55 && wide.cell[2].w == 15 && wide.cell[3].x == 94);
+  ACHECK(wide.cell[3].w == 30 && rows_cells(256, true, {}).cell[3].x == 158);
+}
+
+void test_units() {
+  // US and UK: miles and mph; US alone: Fahrenheit.
+  ACHECK(tz_miles(0) && tz_fahrenheit(0) && tz_miles(6) && tz_fahrenheit(6));
+  ACHECK(tz_miles(10) && !tz_fahrenheit(10));
+  ACHECK(!tz_miles(7) && !tz_fahrenheit(7) && !tz_miles(13) && !tz_miles(-1) && !tz_fahrenheit(200));
 }
 
 void test_hosts() {
@@ -373,6 +391,7 @@ int run_app_tests(int &total_checks) {
   test_area_views();
   test_frame_helpers();
   test_rows_geom();
+  test_units();
   test_hosts();
   test_timing();
   test_app_slots();

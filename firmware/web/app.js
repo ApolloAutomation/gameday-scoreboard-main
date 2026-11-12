@@ -1844,7 +1844,7 @@
   };
 
   // ---- Stocks & Crypto: the display's symbols ---------------------------------
-  const MKT_ID = 2;  // apps.h's Display::MARKETS
+  const MKT_ID = 2;  // apps.h's Display::MARKETS, by number
   const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
   const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
   const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };

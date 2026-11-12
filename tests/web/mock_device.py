@@ -539,7 +539,7 @@ def state_doc():
         STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
                                     "gameday")
     if isinstance(STATE.get("flights"), dict):
-        # units_for_zone(): the US and UK zones are imperial
+        # tz_miles(): the US and UK zones are imperial
         tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
         STATE["flights"]["units"] = "imperial" if tz.startswith(("US ", "UK ")) else "metric"
     if "players" in STATE:

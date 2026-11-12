@@ -22,7 +22,7 @@ struct Prefs {
   int32_t lat_e4{kNoCoord};  // degrees times 10,000
   int32_t lon_e4{kNoCoord};
   uint16_t radius{kRadiusDefault};
-  uint8_t radius_unit{0};  // DistUnit
+  uint8_t radius_unit{0};  // a DistUnit, saved as a byte
   uint8_t spare0{0};
   char place[kPlaceMax + 1]{};
   char receiver[kReceiverMax + 1]{};

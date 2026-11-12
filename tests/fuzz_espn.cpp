@@ -5,7 +5,7 @@
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
-// Also runs the MLB Stats, HockeyTech, F1, market and flight parsers.
+// Also runs MLB Stats, HockeyTech, F1, market and flight parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>

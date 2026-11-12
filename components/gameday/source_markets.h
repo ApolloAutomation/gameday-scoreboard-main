@@ -26,8 +26,7 @@ template<typename TInput, typename F> int market_read(TInput &input, void (*fill
 }
 }  // namespace detail
 
-// Each returns quotes found, written to their slots; -1 unreadable.
-// Yahoo's spark (every symbol) or chart (one symbol) document.
+// Yahoo's spark or chart: quotes found, -1 unreadable.
 template<typename TInput>
 int parse_yahoo_quotes(TInput &input, const MarketBlob &list, MarketQuote (&out)[kMarketSlots]) {
   return detail::market_read(input, detail::fill_yahoo_filter,

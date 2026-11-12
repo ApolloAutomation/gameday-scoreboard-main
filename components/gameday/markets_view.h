@@ -282,7 +282,7 @@ inline MarketCard market_card(const MarketSymbol &s, const MarketQuote &q, int w
 
 // ---- the ticker line ------------------------------------------------------------
 
-// "AAPL 355.63 +7.12 +2.04% | BTC ..."; spans color the moves.
+// Each symbol, price and move; spans color the moves.
 inline std::string market_ticker(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], int64_t now,
                                  std::vector<esphome::gameday::TickerSpan> *spans) {
   std::string line;

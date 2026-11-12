@@ -319,7 +319,6 @@ class StrReader {
 
 }
 
-// A source has peek(), read() and json(doc, filter, nesting).
 // One plane at a time, so memory stays flat.
 template<typename S> bool parse_aircraft_from(S &in, const Home &home, Nearby &out) {
   out = Nearby();
