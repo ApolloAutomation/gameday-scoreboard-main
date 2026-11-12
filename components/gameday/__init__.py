@@ -232,6 +232,7 @@ async def to_code(config):
             )
         )
     runtime_image.enable_format("PNG")  # brings in pngle, which logo_cache.cpp drives
+    runtime_image.enable_format("JPEG")  # and JPEGDEC, for the Flight Tracker's photos
     cg.add(var.set_http(await cg.get_variable(config[CONF_HTTP_REQUEST_ID])))
     cg.add(var.set_time(await cg.get_variable(config[CONF_TIME_ID])))
     cg.add(

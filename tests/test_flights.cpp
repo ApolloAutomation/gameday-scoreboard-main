@@ -1113,6 +1113,14 @@ std::string frame_text(const espn::AppFrame &f) {
   return out;
 }
 
+// Planespotters' answer as it comes, with made-up names
+const char *const kSpotted =
+    "{\"photos\":[{\"id\":\"1592852\",\"thumbnail\":{\"src\":\"https:\\/\\/t.plnspttrs.net\\/05072\\/"
+    "1592852_29b08bc9ff_t.jpg\",\"size\":{\"width\":200,\"height\":133}},\"thumbnail_large\":{\"src\":"
+    "\"https:\\/\\/t.plnspttrs.net\\/05072\\/1592852_29b08bc9ff_280.jpg\",\"size\":{\"width\":420,"
+    "\"height\":280}},\"link\":\"https:\\/\\/www.planespotters.net\\/photo\\/1592852\\/n8766t?utm_source=api\","
+    "\"photographer\":\"A. Spotter\"}]}";
+
 void test_app() {
   const std::string fr24 = slurp(kFr24File);
   const std::string fi = slurp("fixtures/flights_adsbfi_jfk.json");
@@ -1153,6 +1161,57 @@ void test_app() {
                  ic.url(ic.key, ic.kind, 0, url, 8) == 0,
              "two sources at most, none unknown or cut");
     }
+  }
+  {
+    // A wide card drawn: its plane's photo comes next.
+    espn::app_env().version = "2026.11.5";
+    espn::AppRequest pr;
+    FCHECK(r.app.request(r.now, pr) && pr.url == "https://api.planespotters.net/pub/photos/hex/ac0fdc",
+           "Southwest's photo by its hex: %s", pr.url.c_str());
+    FCHECK(pr.headers.size() == 1 && pr.headers[0].name == "User-Agent" &&
+               pr.headers[0].value ==
+                   "GameDayScoreboard/2026.11.5 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)",
+           "with a way to reach us");
+    espn::AppTextStream in(kSpotted);
+    FCHECK(r.app.parse(in, r.now), "its answer");
+    r.app.ended(espn::AppResult{200, false, 0});
+    r.app.apply(true, r.now);
+    espn::AppFrame wide;
+    r.app.frame(256, 64, r.now, wide);
+    const espn::AppPhoto &ph = wide.photo;
+    FCHECK(ph.url == "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg" && ph.x == kPhotoX &&
+               ph.y == kPhotoY && ph.w == kPhotoW && ph.h == kPhotoH,
+           "the photo in the picture's spot: %s", ph.url.c_str());
+    FCHECK(wide.art.size() == 1, "the picture until it loads");
+    std::string t = wide.ticker;
+    t.insert(ph.at, ph.credit);
+    FCHECK(t.rfind("27 planes nearby | SWA1678 Southwest", 0) == 0 &&
+               t.find(" SW | Photo: A. Spotter | ") != std::string::npos,
+           "the credit after the card's plane: %s", t.c_str());
+    for (int w : {64, 128}) {
+      std::string words[2];
+      for (int s : {0, 8}) {
+        espn::AppFrame g;
+        r.app.shown(true);
+        r.app.frame(w, 64, r.now, g);
+        if (s > 0)
+          r.app.frame(w, 64, r.now + s, g = espn::AppFrame());
+        espn::app_frame_trim(g);
+        const bool list = s > 0;
+        FCHECK(g.photo.url.empty() == (w < 128) && (g.photo.w > 0) == (w >= 128 && !list),
+               "%d wide, %s: %s %d", w, list ? "the list" : "the card", g.photo.url.c_str(), g.photo.w);
+        words[list] = g.ticker;
+        words[list].insert(g.photo.at, g.photo.credit);
+      }
+      // Credited on both screens, so the ticker never jumps
+      FCHECK(words[0] == words[1] && (words[0].find("| Photo: A. Spotter |") == std::string::npos) == (w < 128),
+             "%d wide: %s / %s", w, words[0].c_str(), words[1].c_str());
+    }
+    FCHECK(!r.app.request(r.now + 1, pr) || pr.url.find("planespotters") == std::string::npos,
+           "one lookup a plane");
+    JsonDocument d;
+    r.app.state(d.to<JsonObject>(), r.now);
+    FCHECK(d["nearest_hex"] == "ac0fdc" && d["nearest_reg"] == "N8766T", "the page's photo lookup");
   }
   FCHECK(!r.app.request(r.now + 5, req), "not before");
   // Whole seconds against millis: due must read 0, not 20 s.
@@ -1331,11 +1390,194 @@ void test_app() {
 
 }
 
+// Planespotters' photos: keys, URLs, answers, the cache.
+void test_photo_parts() {
+  Plane p;
+  strcpy(p.hex, "ac0fdc");
+  strcpy(p.reg, "N8766T");
+  char key[9];
+  FCHECK(photo_key(p, key) && std::string(key) == "ac0fdc", "by hex: %s", key);
+  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/hex/ac0fdc");
+  p.anon = true;
+  FCHECK(photo_key(p, key) && std::string(key) == "N8766T", "a made-up hex: by registration");
+  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/reg/N8766T");
+  strcpy(p.reg, "g-euus");
+  FCHECK(photo_key(p, key) && std::string(key) == "G-EUUS", "upper case: %s", key);
+  FCHECK_EQ(photo_url("ABCDEF"), "https://api.planespotters.net/pub/photos/reg/ABCDEF");
+  for (const char *bad : {"", "N", "N12 34", "N1/2", "N1?x"}) {
+    strcpy(p.reg, bad);
+    FCHECK(!photo_key(p, key) && key[0] == '\0', "no key from \"%s\"", bad);
+  }
+  // Too long for the field: dropped, never cut
+  for (const char *reg : {"N123456789", "RA-890012", "RA-89001"}) {
+    const bool fits = strlen(reg) < sizeof(p.reg);
+    JsonDocument d;
+    deserializeJson(d, std::string("{\"hex\":\"~abc123\",\"seen\":1,\"r\":\"") + reg + "\"}");
+    FCHECK(plane_from_json(d.as<JsonObjectConst>(), Home(), p) && (std::string(p.reg) == reg) == fits &&
+               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
+           "%s from a receiver: \"%s\"", reg, p.reg);
+    deserializeJson(d, std::string("[\"\",40.7,-73.9,0,3000,200,\"\",\"\",\"B738\",\"") + reg + "\"," +
+                           std::to_string(kFr24Now) + ",\"\",\"\",\"\",0,0,\"\"]");
+    FCHECK(plane_from_fr24(d.as<JsonArrayConst>(), nyc(), kFr24Now, p) && (std::string(p.reg) == reg) == fits &&
+               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
+           "%s from Flightradar24: \"%s\"", reg, p.reg);
+  }
+  p.anon = false;
+  for (const char *hex : {"", "abc12", "00000g", "000000"}) {
+    strcpy(p.hex, hex);
+    FCHECK(!hex_usable(p), "not a hex: \"%s\"", hex);
+  }
+  FCHECK_EQ(photo_agent(""), "GameDayScoreboard/1.0 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
+
+  // What Planespotters answers
+  PlanePhoto ph;
+  FCHECK(parse_photo(kSpotted, ph) && ph.state == PhotoState::KNOWN, "a photo");
+  FCHECK_EQ(ph.url, "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg");
+  FCHECK_EQ(ph.by, "A. Spotter");
+  FCHECK(parse_photo("{\"photos\":[]}", ph) && ph.state == PhotoState::NONE && ph.url[0] == '\0', "none");
+  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://t.plnspttrs.net/1/2_t.jpg\"}}]}", ph) &&
+             ph.state == PhotoState::KNOWN && std::string(ph.url) == "https://t.plnspttrs.net/1/2_t.jpg" &&
+             ph.by[0] == '\0',
+         "the small one when it's all there is");
+  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"http://x.net/a.jpg\"}},"
+                     "{\"thumbnail_large\":{\"src\":\"https://x.net/b c.jpg\"}},"
+                     "{\"thumbnail_large\":{\"src\":\"https://x.net/c.jpg\"},\"photographer\":\"C\"}]}",
+                     ph) &&
+             std::string(ph.url) == "https://x.net/c.jpg" && std::string(ph.by) == "C",
+         "the first one fit to download: %s", ph.url);
+  const std::string longurl = "https://t.plnspttrs.net/" + std::string(kPhotoUrlMax, 'a') + ".jpg";
+  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"" + longurl + "\"}}]}", ph) &&
+             ph.state == PhotoState::NONE,
+         "too long to keep");
+  // A name cut on a whole letter, control characters out
+  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":"
+                     "\"Bj\\u00f6rn\\tSt\\u00e5hl AAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}",
+                     ph),
+         "a long name");
+  FCHECK_EQ(ph.by, "Bj\xc3\xb6rnSt\xc3\xa5hl " + std::string(18, 'A'));
+  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":\"" +
+                         std::string(30, 'A') + "\\u00f6\"}]}",
+                     ph) &&
+             std::string(ph.by) == std::string(30, 'A'),
+         "not half a letter: %s", ph.by);
+  for (const char *bad : {"{}", "[]", "{\"photos\":{}}", "{\"error\":\"no\"}", "nope", ""})
+    FCHECK(!parse_photo(bad, ph), "unreadable: %s", bad);
+
+  // The cache: photos a day, misses half that
+  PhotoCache c;
+  const uint32_t t0 = 1000000;
+  FCHECK(c.wants("ac0fdc", t0) && !c.wants("", t0) && !c.wants(nullptr, t0), "wants what it lacks");
+  PlanePhoto &k = c.put("ac0fdc", t0);
+  FCHECK(k.state == PhotoState::NONE, "a miss until told otherwise");
+  k.state = PhotoState::KNOWN;
+  c.put("N7QD", t0);
+  FCHECK(!c.wants("ac0fdc", t0 + kPhotoKnownS - 1) && c.wants("ac0fdc", t0 + kPhotoKnownS), "a photo for a day");
+  FCHECK(!c.wants("N7QD", t0 + kPhotoNoneS - 1) && c.wants("N7QD", t0 + kPhotoNoneS), "a miss for half of one");
+  FCHECK(c.find("ac0fdc", t0 + 10) != nullptr && c.find("ac0fdc", t0 + kPhotoKnownS) == nullptr, "found while fresh");
+  for (int i = 0; i < (int) kPhotoCache; i++) {
+    char hex[9];
+    snprintf(hex, sizeof hex, "a%05d", i);
+    c.put(hex, t0 + 100 + i);
+    c.find("ac0fdc", t0 + 100 + i);
+  }
+  FCHECK(c.find("ac0fdc", t0 + 200) != nullptr && c.find("a00000", t0 + 200) == nullptr && !c.wants("a00001", t0 + 200),
+         "full: the least used goes");
+}
+
+// The recording, its times moved on by shift seconds.
+std::string fr24_later(const std::string &json, int64_t shift) {
+  JsonDocument d;
+  deserializeJson(d, json);
+  for (JsonPair kv : d.as<JsonObject>())
+    if (kv.value().is<JsonArray>())
+      kv.value()[10] = kv.value()[10].as<int64_t>() + shift;
+  std::string out;
+  serializeJson(d, out);
+  return out;
+}
+
+// Lookups: wide cards only, once a plane, with waits.
+void test_photo_reads() {
+  const std::string fr24 = slurp(kFr24File);
+  Reads r;
+  r.app.setup();
+  r.app.set("flyhome", "40.71,-74.01");
+  r.app.set("flyradius", "28mi");
+  espn::app_env().tz = 0;
+  r.app.shown(true);
+  FCHECK(r.step(200, fr24), "planes");
+  // The panel a second at a time, lookups answered
+  std::vector<int64_t> asked;
+  int status = 503;
+  std::string body;
+  uint32_t retry_ms = 0;
+  // Until secs pass or `until` lookups were made
+  auto run = [&](int64_t secs, int w, size_t until = SIZE_MAX) {
+    for (int64_t end = r.now + secs; r.now < end && asked.size() < until; r.now++) {
+      espn::AppFrame f;
+      r.app.frame(w, 64, r.now, f);
+      espn::AppRequest q;
+      if (!r.app.request(r.now, q))
+        continue;
+      const bool photo = q.url.find("api.planespotters.net") != std::string::npos;
+      if (photo)
+        asked.push_back(r.now);
+      espn::AppTextStream in(photo ? body : fr24_later(fr24, r.now - kFr24Now));
+      const int st = photo ? status : q.url.find("flightradar24") != std::string::npos ? 200 : 404;
+      const bool ok = st == 200 && r.app.parse(in, r.now);
+      r.app.ended(espn::AppResult{st, espn::is_throttle_status(st), photo ? retry_ms : 0});
+      r.app.apply(ok, r.now);
+    }
+  };
+  run(120, 64);
+  FCHECK(asked.empty(), "64 wide: none");
+  const int64_t wide = r.now;
+  run(5, 128);
+  FCHECK(asked.size() == 1 && asked[0] - wide <= 1, "128 wide: at once");
+  // A server error: a wait, then again
+  run(60, 128, 2);
+  FCHECK(asked.size() == 2 && asked[1] - asked[0] >= 15 && asked[1] - asked[0] <= 31, "again after %d s",
+         asked.size() > 1 ? (int) (asked[1] - asked[0]) : -1);
+  // Refused: Retry-After kept
+  status = 429;
+  retry_ms = 900000;
+  r.now++;
+  run(1200, 128, 3);
+  run(1200, 128, 4);
+  FCHECK(asked.size() == 4 && asked[3] - asked[2] >= 900, "Retry-After kept: %d s",
+         asked.size() > 3 ? (int) (asked[3] - asked[2]) : -1);
+  // No photo: a miss, not asked again for hours
+  status = 200;
+  body = "{\"photos\":[]}";
+  retry_ms = 0;
+  const size_t n = asked.size();
+  run(3600, 128);
+  FCHECK(asked.size() <= n + 1, "a miss once: %zu", asked.size() - n);
+  espn::AppFrame g;
+  r.app.frame(256, 64, r.now, g);
+  FCHECK(g.photo.url.empty() && g.art.size() == 1, "the picture, no photo: %s %zu", g.photo.url.c_str(),
+         g.art.size());
+  FCHECK(r.app.photos().slots[0].state == PhotoState::NONE, "kept as a miss");
+  // Off screen: none until a wide card is drawn again
+  Reads s;
+  s.app.setup();
+  s.app.set("flyhome", "40.71,-74.01");
+  s.app.set("flyradius", "28mi");
+  s.app.shown(true);
+  FCHECK(s.step(200, fr24), "planes");
+  s.app.frame(192, 64, s.now, g);
+  s.app.shown(false);
+  espn::AppRequest q;
+  FCHECK(!s.app.request(s.now + 1, q) || q.url.find("planespotters") == std::string::npos, "off screen: none");
+}
+
 int run_flight_tests(int &total_checks) {
   test_fr24();
   test_fr24_url();
   test_prefs();
   test_app();
+  test_photo_parts();
+  test_photo_reads();
   test_adsbfi();
   test_ground_only();
   test_other_sources();

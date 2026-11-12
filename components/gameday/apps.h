@@ -157,6 +157,16 @@ struct AppArt {
 constexpr size_t kAppArt = 1;
 constexpr int kAppArtMaxW = 64, kAppArtMaxH = 24;
 
+// A boxed photo; it hides the art once loaded.
+struct AppPhoto {
+  int16_t x{0}, y{0};
+  uint8_t w{0}, h{0};  // 0: credited, not drawn
+  std::string url;  // empty when there is none
+  std::string credit;  // into the ticker at `at` once loaded
+  size_t at{0};
+};
+constexpr int kAppPhotoMaxW = 64, kAppPhotoMaxH = 32;
+
 // RGB565 then alpha, as runtime_image lays logos out.
 inline void app_art_paint(const AppArt &a, uint8_t *out) {
   const int n = a.w * a.h;
@@ -183,6 +193,7 @@ struct AppFrame {
   std::vector<AppIcon> icons;
   std::vector<AppArt> art;
   AppFill bar;
+  AppPhoto photo;
 };
 
 // Rows, labels, a line, logos or art, else the message.
@@ -230,6 +241,11 @@ inline void app_frame_trim(AppFrame &f) {
   if (!f.art.empty() && (f.art[0].bits == nullptr || f.art[0].w == 0 || f.art[0].h == 0 ||
                          f.art[0].w > kAppArtMaxW || f.art[0].h > kAppArtMaxH))
     f.art.clear();
+  AppPhoto &p = f.photo;
+  if (p.url.empty() || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH || p.at > f.ticker.size())
+    f.photo = AppPhoto();
+  else if (p.w == 0 || p.h == 0)
+    p.w = p.h = 0;
 }
 
 // Flat x, y pairs clipped to the area.

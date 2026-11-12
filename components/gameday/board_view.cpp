@@ -510,6 +510,27 @@ void put_art(BoardView &v, const UpdateFields &f) {
   show(v.art, true);
 }
 
+// The frame's photo, from the logo cache
+void put_photo(BoardView &v, const UpdateFields &f) {
+  if (!f.board || f.photo_img == nullptr) {
+    show(v.photo, false);
+    return;
+  }
+  if (v.photo == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.photo = lv_image_create(v.board);
+    lv_obj_remove_style_all(v.photo);
+  }
+  const lv_image_dsc_t *src = f.photo_img->get_lv_image_dsc();
+  if (lv_image_get_src(v.photo) != src)
+    ::lv_image_set_src(v.photo, src);
+  const int16_t x = f.photo_xy[0], y = f.photo_xy[1];
+  if (lv_obj_get_style_x(v.photo, LV_PART_MAIN) != x || lv_obj_get_style_y(v.photo, LV_PART_MAIN) != y)
+    lv_obj_set_pos(v.photo, x, y);
+  show(v.photo, true);
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -808,6 +829,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_texts(v, f);
   put_icons(v, f);
   put_art(v, f);
+  put_photo(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {

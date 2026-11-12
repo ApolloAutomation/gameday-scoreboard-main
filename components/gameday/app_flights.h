@@ -83,9 +83,10 @@ class FlightsApp final : public espn::App {
   const Nearby &nearby() const { return this->near_; }
   Source source() const { return this->got_src_; }
   const Feed &feed() const { return this->feed_; }
+  const PhotoCache &photos() const { return this->photos_; }
 
  private:
-  enum class Read : uint8_t { NONE = 0, POSITIONS, ROUTESET, ADSBDB };
+  enum class Read : uint8_t { NONE = 0, POSITIONS, ROUTESET, ADSBDB, PHOTO };
   struct Next {
     Read read{Read::NONE};
     Source source{Source::FR24};
@@ -96,6 +97,8 @@ class FlightsApp final : public espn::App {
   void lost_(uint32_t now_ms);
   uint32_t rnd_();
   Units units_() const { return units_for_zone(espn::app_env().tz); }
+  // The card plane's photo key; false for none wanted.
+  bool photo_ask_(int64_t now, char key[9]) const;
 
   Prefs prefs_;
   Feed feed_;
@@ -103,8 +106,13 @@ class FlightsApp final : public espn::App {
   Nearby pending_;  // the fetch task's
   mutable RouteCache routes_;
   RouteCache pending_routes_;
-  espn::HostWait im_wait_, db_wait_;
-  uint32_t im_last_ms_{0}, db_last_ms_{0};
+  espn::HostWait im_wait_, db_wait_, photo_wait_;
+  uint32_t im_last_ms_{0}, db_last_ms_{0}, photo_last_ms_{0};
+  mutable PhotoCache photos_;
+  PlanePhoto pending_photo_;  // the fetch task's
+  char photo_key_[9]{};       // the plane it is for
+  // A card 128 wide or more was drawn
+  mutable bool photo_room_{false};
   // The read in flight, as request() left it
   Read read_{Read::NONE};
   Source read_src_{Source::FR24};

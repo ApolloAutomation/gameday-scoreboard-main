@@ -125,7 +125,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
-  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
   downloads and decodes logos on its own task, never the main loop: some of
@@ -392,7 +392,26 @@ The card's airline is Flightradar24's airline field (`Plane::brand`, the
 paint on the plane), else the callsign's. `plane_art.cpp` holds the side
 views, ASCII art packed to 2 bits a pixel at compile time, and maps an
 ICAO type code, else the ADS-B category, to one of them; `put_art` in
-`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer.
+`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. On a card
+128 wide or more the card's plane also gets a photo: a read of
+Planespotters' API (`Read::PHOTO`, by hex, else registration, with a
+User-Agent naming the project) through the fetch task like the others, one
+a plane, kept in `PhotoCache` (a day, a miss 12 hours) behind its own
+`HostWait`. The frame's `AppPhoto` names the JPEG; `app_fields_` asks the
+logo cache for it (`LogoCache::photo`, an entry of its own keyed by URL
+and box, as logos are by URL and size), and once it loads it takes the
+picture's place and its credit goes into the ticker after the card's
+plane. Under 192 wide the list frame carries the photo without a box, so
+the credit stays in the ticker while the card and the list take turns and
+the ticker's text doesn't change every screen. The logo cache keeps at
+most four photos (`MAX_PHOTOS`): a new one replaces the oldest photo that
+is off screen and not downloading (`pick_photo_evict_in` in `logo_lru.h`),
+before any logo, so photos hold at most four of its 128 places.
+Planespotters' JPEGs are progressive, so the logo task decodes their first
+scan alone with JPEGDEC, at 1/8, keeps the whole width and at least 60% of
+the height, trimmed mostly from the bottom, scales that into the box and
+dims what matches each row's ends (`plane_photo.h`), resting like the PNG
+decoder.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -834,10 +853,11 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   screens), `test_markets.cpp` (stock and crypto symbols, quotes, text and
   frames), `test_markets_app.cpp` (the Stocks & Crypto display's list,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
-  feeds, sources and failover, routes, screens, settings and the display's
-  reads), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  feeds, sources and failover, routes, photo lookups, screens, settings and
+  the display's reads), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
-  decoding: size checks, fit, painting and rests) and `test_networks.cpp`
+  decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
+  (the photo's cut, scaling and lighting) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

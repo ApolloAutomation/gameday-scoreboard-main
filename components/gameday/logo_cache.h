@@ -17,6 +17,8 @@
 #include "esphome/components/image/image.h"
 #include "logo_lru.h"
 
+class JPEGDEC;  // only logo_cache.cpp sees its macros
+
 namespace esphome::gameday {
 
 // PSRAM first, internal RAM only if PSRAM is full. Aborts on failure, as
@@ -60,7 +62,17 @@ class LogoCache {
   // The decoded logo, or nullptr while it is still missing; a miss starts a download.
   // icon: a separate entry shrunk to that square, lifted.
   // mark: white edges cleared, unreadable ones fail.
-  image::Image *get(std::string_view url, uint8_t icon = 0, bool mark = false);
+  image::Image *get(std::string_view url, uint8_t icon = 0, bool mark = false) {
+    return this->get_(url, icon, mark, 0, 0);
+  }
+  // A JPEG photo fit into w by h; its own entry
+  image::Image *photo(std::string_view url, uint8_t w, uint8_t h) { return this->get_(url, 0, false, w, h); }
+  // That photo loaded at any box; never downloads.
+  bool photo_ready(std::string_view url);
+  // As waiting(), for photo(url, w, h).
+  bool photo_waiting(std::string_view url, uint8_t w, uint8_t h);
+  // Photo hosts get this User-Agent.
+  void set_photo_agent(const std::string &agent) { this->photo_agent_ = agent; }
   // Loaded already: never starts a download.
   bool ready(std::string_view url, uint8_t icon = 0);
   // True while the logo is still on its way. A miss starts it, as get() does;
@@ -89,7 +101,7 @@ class LogoCache {
     static void operator delete(void *p) { heap_caps_free(p); }
 
     Url url;
-    Bytes pixels;  // the decoded logo, RGB565 then alpha
+    Bytes pixels;  // the decoded logo, RGB565 then alpha; a photo's no alpha
     std::optional<image::Image> image;
     State state{State::QUEUED};
     uint8_t prio{::espn::LOGO_NOW};
@@ -97,6 +109,7 @@ class LogoCache {
     uint8_t fails{0};  // failures in a row, for the wait
     uint8_t icon{0};   // shrink to this square; 0 keeps 32
     bool mark{false};
+    uint8_t box_w{0}, box_h{0};  // a photo's box; 0 for logos
     uint32_t used_ms{0};
     uint32_t failed_ms{0};
     uint32_t wait_ms{0};  // how long after failed_ms to ask again
@@ -104,8 +117,10 @@ class LogoCache {
 
   static void task_(void *arg);
   void run_();
+  image::Image *get_(std::string_view url, uint8_t icon, bool mark, uint8_t box_w, uint8_t box_h);
   // code: the HTTP status, 0 for no answer
-  bool download_(const std::string &url, Bytes &body, int &code, bool &throttled, uint32_t &retry_after_ms);
+  bool download_(const std::string &url, bool photo, Bytes &body, int &code, bool &throttled,
+                 uint32_t &retry_after_ms);
   struct Decoded {
     Bytes pixels;
     int w{0}, h{0};
@@ -113,29 +128,34 @@ class LogoCache {
   };
   // Logo task only. 1 decoded, 0 failed, -1 unreadable icon
   int decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out);
+  // A JPEG photo's; -1 for one it can't read
+  int decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out);
   void make_room_(uint32_t now);  // now: millis()
+  void make_photo_room_(uint32_t now);
   void start_task_();
   bool pinned_url_(std::string_view url) const;
   void pin_at_(size_t at, const std::string &team, const std::string &opponent);
   void retry_pinned_(uint32_t now);
   void drain_pending_();
   // These three: caller holds the lock
-  Entry *find_(std::string_view url, uint8_t icon = 0);
+  Entry *find_(std::string_view url, uint8_t icon = 0, uint8_t box_w = 0, uint8_t box_h = 0);
   Entry *add_(std::string_view url, uint8_t prio, uint32_t now);
   void queue_(Entry &e, uint8_t prio, uint32_t now);
 
   http_request::HttpRequestComponent *http_{nullptr};
   // One PNG decoder (~44 KB), the logo task's
   pngle_t *png_{nullptr};
+  JPEGDEC *jpeg_{nullptr};  // and one JPEG decoder (~18 KB)
+  std::string photo_agent_;
   // Guards entries_, memo_, pending_ and every Entry's state.
   SemaphoreHandle_t lock_{nullptr};
   std::vector<std::unique_ptr<Entry>, PsramAllocator<std::unique_ptr<Entry>>> entries_;
-  std::vector<::espn::LogoSlot, PsramAllocator<::espn::LogoSlot>> slots_;  // scratch space for make_room_
+  std::vector<::espn::CacheSlot, PsramAllocator<::espn::CacheSlot>> slots_;  // scratch space for make_room_
   std::vector<::espn::LogoMemo, PsramAllocator<::espn::LogoMemo>> memo_;
   std::vector<Url, PsramAllocator<Url>> pending_;  // prefetches for the main loop
   uint32_t seq_{0};
   std::string pinned_[8];  // board pair, previous pair, then second area's two
-  static constexpr size_t ICON_PINS = 8;
+  static constexpr size_t ICON_PINS = 9;  // a display's eight logos and a photo
   uint32_t icon_pins_[2][ICON_PINS]{};  // this set, then the last
   uint8_t icon_pin_n_[2]{};
   uint32_t retry_check_ms_{0};

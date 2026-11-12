@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <vector>
 
+#include "flights.h"
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "board_view.h"
@@ -5823,6 +5824,7 @@ void GamedayComponent::apps_setup_() {
   env.version = App.get_comment().c_str();
   if (!env.version.empty() && env.version[0] == 'v')
     env.version.erase(0, 1);
+  this->logos_.set_photo_agent(::flights::photo_agent(env.version));
   ::espn::register_apps(slots);
   this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
@@ -5942,7 +5944,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.art = std::move(fr.art);
   f.bar = fr.bar;
   // A loaded source, else the first unfailed; one download each.
-  uint32_t shown[::espn::kAppIcons];
+  uint32_t shown[::espn::kAppIcons + 1];
   char url[160];
   f.icon_n = 0;
   for (const ::espn::AppIcon &ic : fr.icons) {
@@ -5977,7 +5979,28 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     if (gone >= 0 && (size_t) gone < f.texts.size())
       f.texts[gone].text.clear();
   }
-  this->logos_.pin_icons(shown, f.icon_n);
+  size_t pins = f.icon_n;
+  // The photo stands in for the art
+  const ::espn::AppPhoto &ph = fr.photo;
+  if (!ph.url.empty()) {
+    const bool boxed = ph.w > 0 && ph.h > 0;
+    image::Image *img = boxed ? this->logos_.photo(ph.url, ph.w, ph.h) : nullptr;
+    // Credited whenever loaded, drawn only when boxed
+    if (img != nullptr || (!boxed && this->logos_.photo_ready(ph.url))) {
+      if (ph.at <= f.status_text.size())
+        f.status_text.insert(ph.at, ph.credit);
+      shown[pins++] = ::espn::logo_key(ph.url.data(), ph.url.size());
+    }
+    if (img != nullptr) {
+      f.photo_img = img;
+      f.photo_xy[0] = (int16_t) (ph.x + (ph.w - img->get_width()) / 2);
+      f.photo_xy[1] = (int16_t) (ph.y + (ph.h - img->get_height()) / 2);
+      f.art.clear();
+    } else if (boxed && this->logos_.photo_waiting(ph.url, ph.w, ph.h)) {
+      this->icon_wait_ |= 1u << (int) d;
+    }
+  }
+  this->logos_.pin_icons(shown, pins);
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {

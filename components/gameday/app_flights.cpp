@@ -13,7 +13,8 @@ namespace flights {
 
 namespace {
 
-const char *const kHosts[] = {"flightradar24.com", "adsb.fi", "adsb.lol", "adsb.im", "adsbdb.com", nullptr};
+const char *const kHosts[] = {"flightradar24.com", "adsb.fi", "adsb.lol", "adsb.im", "adsbdb.com",
+                              "planespotters.net", nullptr};
 
 uint32_t ms_of(int64_t now) { return (uint32_t) ((uint64_t) now * 1000u); }
 
@@ -108,6 +109,13 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     ic.mark = true;
     out.icons.push_back(ic);
   }
+  out.photo.x = fr.photo.x;
+  out.photo.y = fr.photo.y;
+  out.photo.w = fr.photo.w;
+  out.photo.h = fr.photo.h;
+  out.photo.url = fr.photo.url;
+  out.photo.credit = fr.photo.credit;
+  out.photo.at = fr.photo.at;
   out.ticker = fr.ticker;
 }
 
@@ -305,8 +313,15 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
   out["source"] = source_key(this->got_src_);
   const Nearby &n = this->near_;
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
-  if (n.n > 0)
-    out["nearest"] = plane_label(n.planes[0]);
+  if (n.n == 0)
+    return;
+  // The card's plane: the device page shows its photo
+  const Plane &p = n.planes[this->card_ < n.n ? this->card_ : 0];
+  out["nearest"] = plane_label(p);
+  if (hex_usable(p))
+    out["nearest_hex"] = p.hex;
+  if (p.reg[0] != '\0')
+    out["nearest_reg"] = p.reg;
 }
 
 bool FlightsApp::lit(int64_t now) const {
@@ -317,6 +332,8 @@ void FlightsApp::shown(bool on) {
   if (on) {
     this->list_ = false;
     this->screen_s_ = 0;
+  } else {
+    this->photo_room_ = false;
   }
 }
 
@@ -340,28 +357,42 @@ FlightsApp::Next FlightsApp::next_(int64_t now) const {
   n.in_ms = pick.in_ms;
   if (this->got_s_ == 0 || n.in_ms == 0)
     return n;
-  // Routes for planes whose source has none.
-  const RouteAsk ask = route_asks(this->near_, this->routes_, (uint32_t) now);
-  if (ask.n == 0)
-    return n;
   auto after = [now_ms](const espn::HostWait &w, uint32_t last, uint32_t gap) {
     const uint32_t since = now_ms - last, due = last == 0 || since >= gap ? 0 : gap - since;
     return std::max(due, w.left(now_ms));
   };
-  if (!this->im_wait_.waiting(now_ms)) {
+  // Routes for planes whose source has none.
+  const RouteAsk ask = route_asks(this->near_, this->routes_, (uint32_t) now);
+  if (ask.n > 0 && !this->im_wait_.waiting(now_ms)) {
     const uint32_t t = after(this->im_wait_, this->im_last_ms_, kRoutesetGapMs);
     if (t < n.in_ms) {
       n.read = Read::ROUTESET;
       n.in_ms = t;
     }
-  } else {
+  } else if (ask.n > 0) {
     const uint32_t t = after(this->db_wait_, this->db_last_ms_, kAdsbdbGapMs);
     if (t < n.in_ms) {
       n.read = Read::ADSBDB;
       n.in_ms = t;
     }
   }
+  // Then the card plane's photo
+  char key[9];
+  if (this->photo_ask_(now, key)) {
+    const uint32_t t = after(this->photo_wait_, this->photo_last_ms_, kPhotoGapMs);
+    if (t < n.in_ms) {
+      n.read = Read::PHOTO;
+      n.in_ms = t;
+    }
+  }
   return n;
+}
+
+bool FlightsApp::photo_ask_(int64_t now, char key[9]) const {
+  const Nearby &n = this->near_;
+  if (!this->photo_room_ || n.n == 0 || this->got_s_ == 0 || now - this->got_s_ > kOldS)
+    return false;
+  return photo_key(n.planes[this->card_ < n.n ? this->card_ : 0], key) && this->photos_.wants(key, (uint32_t) now);
 }
 
 uint32_t FlightsApp::poll_ms(int64_t now) const {
@@ -387,6 +418,9 @@ void FlightsApp::lost_(uint32_t now_ms) {
       break;
     case Read::ADSBDB:
       this->db_wait_.fail(false, 0, this->rnd_(), now_ms);
+      break;
+    case Read::PHOTO:
+      this->photo_wait_.fail(false, 0, this->rnd_(), now_ms);
       break;
     default:
       break;
@@ -430,6 +464,13 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
       this->im_last_ms_ = now_ms | 1;
       this->pending_routes_ = this->routes_;
       break;
+    case Read::PHOTO:
+      this->photo_ask_(now, this->photo_key_);
+      out.url = photo_url(this->photo_key_);
+      out.headers.push_back({"User-Agent", photo_agent(espn::app_env().version)});
+      this->photo_last_ms_ = now_ms | 1;
+      this->pending_photo_ = PlanePhoto();
+      break;
     default: {
       const RouteAsk ask = route_asks(this->near_, this->routes_, (uint32_t) now);
       memcpy(this->db_callsign_, ask.callsign[0], sizeof(this->db_callsign_));
@@ -457,6 +498,8 @@ bool FlightsApp::parse(espn::AppStream &in, int64_t now) {
       return parse_routeset_from(in, this->ask_, this->pending_routes_, (uint32_t) now);
     case Read::ADSBDB:
       return parse_adsbdb_from(in, this->db_callsign_, this->pending_routes_, (uint32_t) now);
+    case Read::PHOTO:
+      return parse_photo_from(in, this->pending_photo_);
     default:
       return false;
   }
@@ -500,6 +543,22 @@ void FlightsApp::apply(bool ok, int64_t now) {
         this->db_wait_.fail(refused, this->retry_ms_, this->rnd_(), now_ms);
       }
       break;
+    case Read::PHOTO: {
+      // An answer but no photo is a miss too
+      const bool miss = !ok && (this->status_ == 200 || this->status_ == 400 || this->status_ == 404);
+      if (ok || miss) {
+        PlanePhoto &p = this->photos_.put(this->photo_key_, (uint32_t) now);
+        if (ok && this->pending_photo_.state == PhotoState::KNOWN) {
+          memcpy(p.url, this->pending_photo_.url, sizeof(p.url));
+          memcpy(p.by, this->pending_photo_.by, sizeof(p.by));
+          p.state = PhotoState::KNOWN;
+        }
+        this->photo_wait_.clear();
+      } else {
+        this->photo_wait_.fail(refused, this->retry_ms_, this->rnd_(), now_ms);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -535,6 +594,12 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
   }
   o.card = this->card_;
   o.list = w < 192 && this->list_;
+  char key[9];
+  if (w >= 128) {
+    this->photo_room_ = true;
+    if (photo_key(this->near_.planes[this->card_ < this->near_.n ? this->card_ : 0], key))
+      o.photo = this->photos_.find(key, (uint32_t) now);
+  }
   put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
 }
 
