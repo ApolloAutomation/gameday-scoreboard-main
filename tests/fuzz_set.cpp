@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "app_markets.h"
 #include "panel_text.h"
 #include "players.h"
 #include "set_request.h"
@@ -27,8 +28,20 @@ void require(bool ok, const char *what, const std::string &k, const std::string 
 
 }  // namespace
 
+// What a saved list must stay: packed, valid, no repeats.
+void check_markets(const MarketList &l, const std::string &k, const std::string &v) {
+  MarketBlob tidy = l.blob;
+  market_tidy(tidy);
+  require(memcmp(&tidy, &l.blob, sizeof tidy) == 0, "the symbol list isn't tidy", k, v);
+  for (uint8_t i = 0; i < market_count(l.blob); i++)
+    require(!market_spark_url(l.blob).empty() && !market_yahoo_symbol(l.blob.syms[i]).empty(),
+            "a listed symbol has no Yahoo name", k, v);
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   std::string body((const char *) data, size);
+  MarketList markets;
+  const MarketBlob defaults = market_defaults();
   std::vector<uint8_t> fav_leagues;
   uint16_t mask = 0;
   uint8_t team_league = 0;
@@ -43,8 +56,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     // The log line a refused value gets.
     esphome::gameday::panel_text(k + "=" + v);
     SetOp op;
-    if (!parse_set(k, v, op, kFavMax))
+    if (!parse_set(k, v, op, kFavMax)) {
+      // app_set_: the Stocks & Crypto keys
+      if (markets_set(markets, defaults, k, v) == AppSet::CHANGED)
+        check_markets(markets, k, v);
       continue;
+    }
     switch (op.kind) {
       case SetKind::MODE:
         require(op.value >= 0 && op.value < kModeCount, "the mode is past MODE_OPTIONS", k, v);

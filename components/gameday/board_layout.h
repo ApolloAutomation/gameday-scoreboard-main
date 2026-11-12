@@ -6,6 +6,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 namespace esphome::gameday {
 
@@ -461,6 +462,30 @@ inline RowsGeom rows_geom(int w) {
   g.detail = Spot{(int16_t) (bx + 94), 0, 30};
   g.name_no_value = 52;
   return g;
+}
+
+// Each row's place, name, value and detail; width 0 hidden.
+struct RowsCells {
+  Spot cell[4]{};  // their y is unused
+  bool own{false};  // another display's columns
+};
+
+// cols: another display's x, width pairs, else the leaderboard's.
+inline RowsCells rows_cells(int w, bool value_narrow, const std::vector<int16_t> &cols) {
+  RowsCells c;
+  if (cols.size() == 8) {
+    c.own = true;
+    for (int i = 0; i < 4; i++)
+      c.cell[i] = Spot{cols[2 * i], 0, (int16_t) (cols[2 * i + 1] > 0 ? cols[2 * i + 1] : 0)};
+    return c;
+  }
+  const RowsGeom g = rows_geom(w);
+  const bool value = g.wide || value_narrow;
+  c.cell[0] = g.pos;
+  c.cell[1] = Spot{g.name.x, 0, value ? g.name.w : g.name_no_value};
+  c.cell[2] = Spot{g.value.x, 0, (int16_t) (value ? g.value.w : 0)};
+  c.cell[3] = Spot{g.detail.x, 0, (int16_t) (g.wide ? g.detail.w : 0)};
+  return c;
 }
 
 // ---- a splash with its logo --------------------------------------------------

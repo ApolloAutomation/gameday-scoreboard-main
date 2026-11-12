@@ -5770,6 +5770,9 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   cells(fr.rows.detail, f.board_detail);
   f.board_value_color = std::move(fr.rows.value_color);
   f.board_name_color = std::move(fr.rows.name_color);
+  f.board_pos_color = std::move(fr.rows.pos_color);
+  f.board_detail_color = std::move(fr.rows.detail_color);
+  f.board_cols = std::move(fr.rows.cols);
   f.line = ::espn::app_line_xy(fr.line, w, h);
   f.line_color = fr.line.color;
 }
@@ -5859,7 +5862,15 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   this->app_times_.took(d, took_ms, false);
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
-  const uint32_t ms = this->host_wait_[(size_t) src].fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+  ::espn::App *a = ::espn::app_slots().get(d);
+  const bool other = a != nullptr && a->failed(h.throttled);
+  ::espn::HostWait &w = this->host_wait_[(size_t) src];
+  uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
+  if (other) {
+    // Its backup host, without the wait
+    w.end_wait();
+    ms = 0;
+  }
   ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
            (unsigned) (ms / 1000));
 }
@@ -5885,6 +5896,7 @@ void GamedayComponent::apply_app_job_() {
   }
   a->apply(j.app_ok, j.app_now);
   this->app_redraw_(d);
+  this->rebuild_state_(&this->last_fields_);  // the page's copy too
 }
 
 // A display's own key: false when none takes it.

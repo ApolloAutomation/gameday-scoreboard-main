@@ -77,6 +77,18 @@
       "heap": 1600,
       "json": 15985
     },
+    "markets_kraken": {
+      "heap": 1024,
+      "json": 5835
+    },
+    "markets_nasdaq": {
+      "heap": 1024,
+      "json": 6022
+    },
+    "markets_yahoo_spark": {
+      "heap": 1024,
+      "json": 29905
+    },
     "poll_golf_header": {
       "heap": 3000,
       "json": 18447

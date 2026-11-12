@@ -41,11 +41,13 @@
   <div class="card">
     <h2>The short version</h2>
     <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores, to MLB for minor league baseball scores, to HockeyTech for AHL and ECHL scores, to Jolpica and a weather service when it shows the F1 display, and to GitHub for firmware updates. That's the whole picture.</p>
+    <p>There's no account, no cloud service, and nothing tracking you. The app and the panel talk to each other over your home network, and the panel talks to ESPN for scores, to MLB for minor league baseball scores, to HockeyTech for AHL and ECHL scores, to Yahoo Finance, Kraken and Nasdaq for prices while it shows Stocks &amp; Crypto, and to GitHub for firmware updates. That's the whole picture.</p>
   </div>
 
   <div class="card">
     <h2>What the panel does</h2>
     <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. For a minor league baseball team it asks MLB's public stats service (statsapi.mlb.com) instead, and downloads that team's logos from MLB's image server (midfield.mlbstatic.com). For an AHL or ECHL team it asks HockeyTech (lscluster.hockeytech.com), the stats service those leagues use for their own websites, sending the league's public site key as their sites do, and downloads that team's logos from HockeyTech's logo server (assets.leaguestat.com). While it shows the F1 display, it also asks ESPN for the race weekend and the circuit's facts (site.api.espn.com and sports.core.api.espn.com), Jolpica, an open Formula 1 data service (api.jolpi.ca), for the schedule and the standings, and Open-Meteo (api.open-meteo.com), or MET Norway (api.met.no) when Open-Meteo can't be reached, for the weather at the circuit, sending the circuit's location, never yours. It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked and a request for the current schedule.</p>
+    <p>The panel asks ESPN's public site for your team's schedule and scores, and downloads team logos from ESPN's image servers. For a minor league baseball team it asks MLB's public stats service (statsapi.mlb.com) instead, and downloads that team's logos from MLB's image server (midfield.mlbstatic.com). For an AHL or ECHL team it asks HockeyTech (lscluster.hockeytech.com), the stats service those leagues use for their own websites, sending the league's public site key as their sites do, and downloads that team's logos from HockeyTech's logo server (assets.leaguestat.com). While it shows Stocks &amp; Crypto, it asks Yahoo Finance (query1.finance.yahoo.com) for the prices of the symbols you listed, and when Yahoo Finance can't be reached, Kraken (api.kraken.com) for coins and Nasdaq (api.nasdaq.com) for US stocks and funds. It checks this site for firmware updates every six hours. None of that carries any information about you, only the team you picked, the symbols you listed and a request for the current schedule or prices.</p>
     <p>The panel's own web page, opened in your browser, asks ESPN for today's games, team logos and a team's roster when you add a favorite player, MLB for today's minor league games and their logos, HockeyTech's logo server for AHL and ECHL logos, and GitHub for release notes, so those sites see your browser's address the way any website does. Nothing about you goes with it.</p>
   </div>
 
@@ -62,7 +64,7 @@
   <div class="card">
     <h2>What we don't do</h2>
     <p>No accounts. No analytics or crash reporting. No advertising. The app and the panel collect nothing, so there's nothing to sell or share.</p>
-    <p>Like any website, ESPN, MLB, HockeyTech and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
+    <p>Like any website, ESPN, MLB, HockeyTech, Yahoo Finance, Kraken, Nasdaq and GitHub (which hosts this site and the firmware updates) see the IP address a request comes from. We don't receive or keep any of that.</p>
   </div>
 
   <div class="card">

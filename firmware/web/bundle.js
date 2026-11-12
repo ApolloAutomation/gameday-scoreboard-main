@@ -4,6 +4,7 @@ const TZS=[["US Eastern","America/New_York"],["US Central","America/Chicago"],["
 const FOLD="AAAAAA*CEEEEIIIIDNOOOOOxOUUUUY**aaaaaa*ceeeeiiiidnooooo/ouuuuy*yAaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIi**JjKkkLlLlLlLlLlNnNnNnnNnOoOoOo**RrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
 const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","307":"ij","338":"OE","339":"oe","536":"S","537":"s","538":"T","539":"t","8211":"-","8212":"-","8216":"'","8217":"'","8220":"\"","8221":"\""};
 const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","PASS TD",false],["football","cmp","CMP",false],["football","int","INT",false],["football","rushyds","RUSH YDS",false],["football","rushatt","RUSH ATT",false],["football","recyds","REC YDS",false],["football","rec","REC",false],["football","rryds","RUSH+REC YDS",false],["football","td","ANY TD",true],["football","tackles","TACKLES",false],["football","sacks","SACKS",false],["football","kickpts","KICK PTS",false],["basketball","pts","PTS",false],["basketball","reb","REB",false],["basketball","ast","AST",false],["basketball","threes","3PM",false],["basketball","stl","STL",false],["basketball","blk","BLK",false],["basketball","pra","PTS+REB+AST",false],["basketball","pr","PTS+REB",false],["basketball","pa","PTS+AST",false],["basketball","ra","REB+AST",false],["baseball","hits","HITS",false],["baseball","runs","RUNS",false],["baseball","rbi","RBI",false],["baseball","hrr","H+R+RBI",false],["baseball","hr","HR",true],["baseball","k","K",false],["baseball","hitsallowed","HITS ALLOWED",false],["baseball","er","ER",false],["baseball","outs","OUTS",false],["hockey","pts","PTS",false],["hockey","goal","ANY GOAL",true],["hockey","ast","AST",false],["hockey","sog","SOG",false],["hockey","blk","BLK",false],["hockey","saves","SAVES",false],["soccer","goal","ANY GOAL",true]];
+const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK","AVAX","SHIB","XLM","BCH","ATOM","TRX","UNI","SUI","PEPE","POL","TON"],"indexes":["SPX","GSPC","DJI","DJIA","IXIC","NASDAQ","NDX","RUT","VIX"],"alias":{"XBT":"BTC","XDG":"DOGE","MATIC":"POL"}};
 // Game Day Scoreboard device page.
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
@@ -282,6 +283,17 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
         <p class="betmsg" id="betMsg" role="alert" hidden></p>
         <button class="btn primary" id="betAdd">Add bet</button>
       </details>
+      <details class="card betcard" id="mktCard" hidden>
+        <summary><h2>Stocks &amp; Crypto</h2><span class="peek sum" id="mktSum"></span></summary>
+        <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Nothing to sign up for.</p>
+        <p class="hint" id="mktSrc" hidden>Yahoo Finance isn't answering, so the panel is reading coins from Kraken and US stocks and funds from Nasdaq for now, and tries Yahoo Finance again every so often. Anything else keeps its last price until then.</p>
+        <div id="mktList"></div>
+        <div class="sub">Add a symbol</div>
+        <div class="ctl"><label for="mktSym">Symbol<small id="mktHint"></small></label><input id="mktSym" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="AAPL"></div>
+        <div class="ctl"><label for="mktKind">Kind<small>Auto knows the big coins and indexes. Pick one for a symbol that's both, like SOL or COMP.</small></label><select id="mktKind"><option value="">Auto</option><option value="stock">Stock or fund</option><option value="index">Index</option><option value="crypto">Crypto</option></select></div>
+        <p class="betmsg" id="mktMsg" role="alert" hidden></p>
+        <button class="btn primary" id="mktAdd">Add symbol</button>
+      </details>
       </div>
       <div class="col">
       <details class="card" id="tickerCard">
@@ -463,7 +475,7 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
   const renderFolds = () => {
     if (!S || foldsSet) return;
     foldsSet = true;
-    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets };
+    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets, mktCard: showsMarkets() ? [1] : [] };
     for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
   };
   const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
@@ -1824,6 +1836,123 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
     renderBetForm();
   };
 
+  // ---- Stocks & Crypto: the display's symbols ---------------------------------
+  const MKT_ID = 2;  // apps.h's Display::MARKETS
+  const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
+  const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
+  const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };
+  const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
+  let mktDrawn = null;
+  let mktPending = [];  // posted, not yet listed by the panel
+  const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
+  // parse_market_symbol (markets.h): [symbol, kind], or null
+  const mktParse = (text, kind) => {
+    let s = "";
+    for (const c of text) {
+      if (c === " ") continue;
+      s += c >= "a" && c <= "z" ? c.toUpperCase() : c;
+      if (new TextEncoder().encode(s).length > 16) return null;
+    }
+    if (s.startsWith("$")) s = s.slice(1);
+    if (s.startsWith("^")) {
+      if (kind && kind !== "index") return null;
+      s = s.slice(1);
+      kind = "index";
+    }
+    const coinOk = !kind || kind === "crypto";
+    if (coinOk && s.length > 4 && /[-/]USD$/.test(s)) {
+      s = s.slice(0, -4);
+      kind = "crypto";
+    }
+    if (coinOk) {
+      s = MARKETS.alias[s] || s;
+      if (!kind && MARKETS.coins.includes(s)) kind = "crypto";
+    }
+    if (!kind) kind = MARKETS.indexes.includes(s) ? "index" : "stock";
+    if (kind === "stock") {
+      s = s.replace(/\//g, ".");
+      if (/^.+-[A-Z]$/.test(s)) s = s.slice(0, -2) + "." + s.slice(-1);
+    }
+    const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
+    return s.length <= 10 && ok.test(s) ? [s, kind] : null;
+  };
+  const renderMarkets = () => {
+    const card = $("#mktCard");
+    card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
+    if (card.hidden) return;
+    const m = S.markets;
+    const list = m.syms || [];
+    $("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
+    $("#mktSrc").hidden = m.src !== "backup";
+    const sig = JSON.stringify(list);
+    if (sig === mktDrawn) return;
+    mktDrawn = sig;
+    const host = $("#mktList");
+    const focused = host.contains(document.activeElement);
+    host.textContent = "";
+    list.forEach((sy, i) => {
+      const row = el("div", "ctl betrow mktrow");
+      const name = el("label", null, sy.sym);
+      name.appendChild(el("small", null, sy.miss ? "Yahoo Finance doesn't know this symbol"
+        : [MKT_KIND[sy.kind], MKT_ST[sy.st]].filter(Boolean).join(" \u00b7 ")));
+      row.appendChild(name);
+      if (sy.price) row.appendChild(el("span", "bet " + (sy.dir > 0 ? "good" : sy.dir < 0 ? "bad" : ""), sy.price + (sy.pct ? " " + sy.pct : "")));
+      const tools = el("span", "mkttools");
+      const button = (text, label, on, params, done) => {
+        const b = el("button", "betdel", text);
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.disabled = !on;
+        b.onclick = () => setGD(params).then((ok) => ok && done && toast(done));
+        tools.appendChild(b);
+      };
+      button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
+      button("\u25bc", "Move " + sy.sym + " down", i < list.length - 1, { mktmove: sy.slot + "," + (sy.slot + 1) });
+      button("\u2715", "Remove " + sy.sym, true, { mktdel: sy.slot }, "Removed " + sy.sym);
+      row.appendChild(tools);
+      host.appendChild(row);
+    });
+    if (focused && !host.contains(document.activeElement)) $("#mktSym").focus();
+  };
+  const mktSay = (t) => {
+    $("#mktMsg").textContent = t;
+    $("#mktMsg").hidden = !t;
+  };
+  // What the panel will save, as it's typed
+  const mktPreview = () => {
+    const raw = $("#mktSym").value;
+    const got = raw.trim() ? mktParse(raw, $("#mktKind").value) : null;
+    $("#mktHint").textContent = !raw.trim() ? MKT_HINT
+      : got ? "Saves as " + got[0] + ", " + MKT_AS[got[1]] : "Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD";
+  };
+  mktPreview();
+  $("#mktSym").oninput = () => { mktSay(""); mktPreview(); };
+  $("#mktKind").onchange = () => { mktSay(""); mktPreview(); };
+  $("#mktSym").onkeydown = (ev) => { if (ev.key === "Enter") $("#mktAdd").click(); };
+  $("#mktAdd").onclick = () => {
+    if (!S || !S.markets) return;
+    const raw = $("#mktSym").value;
+    if (!raw.trim()) return mktSay("Type a symbol, like AAPL or BTC.");
+    const got = mktParse(raw, $("#mktKind").value);
+    if (!got) return mktSay($("#mktKind").value && /^\s*\^/.test(raw) ? "A ^ symbol is an index. Set Kind to Index or Auto."
+      : "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+    const list = S.markets.syms || [];
+    // Count pending posts so a double tap adds once
+    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => sy.sym === p.sym && sy.kind === p.kind));
+    if (list.concat(mktPending).some((sy) => sy.sym === got[0] && sy.kind === got[1])) return mktSay(got[0] + " is in the list already.");
+    const max = S.markets.max || 8;
+    if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
+    mktSay("");
+    const mine = { sym: got[0], kind: got[1], at: Date.now() };
+    mktPending.push(mine);
+    setGD({ mkt: "0," + got[0] + "," + got[1] }).then((ok) => {
+      if (!ok) mktPending = mktPending.filter((p) => p !== mine);
+      else toast("Added " + got[0]);
+    });
+    $("#mktSym").value = "";
+    mktPreview();
+  };
+
   // ---- player props: a roster's player, or a favorite --------------------------
   const PROP_NAMES = {
     "football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
@@ -2494,6 +2623,7 @@ const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","
   const renderAll = () => {
     renderBoard();
     renderBets();
+    renderMarkets();
     renderPlayers();
     renderUpNext();
     renderSplash();
