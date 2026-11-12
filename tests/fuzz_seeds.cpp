@@ -14,6 +14,7 @@
 #include <string>
 
 #include "espn_parse.h"
+#include "f1.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
 
@@ -62,6 +63,14 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_ht_game_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_ht_day_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_box_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_live_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_race_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_standings_filter(f, true); },
+      [](JsonDocument &f) { espn::detail::fill_f1_standings_filter(f, false); },
+      [](JsonDocument &f) { espn::detail::fill_f1_results_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_circuit_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_athlete_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_f1_weather_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;

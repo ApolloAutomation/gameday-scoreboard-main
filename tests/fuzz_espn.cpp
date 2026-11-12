@@ -5,7 +5,7 @@
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
-// Also runs the MLB Stats and HockeyTech parsers.
+// Also runs the MLB Stats, HockeyTech and F1 display parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -15,6 +15,7 @@
 
 #include "captive.h"
 #include "espn_parse.h"
+#include "f1.h"
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "players.h"
@@ -413,6 +414,88 @@ size_t racing(GameSnapshot g, const GolfNext &next, int64_t now) {
   return n;
 }
 
+// Every F1 frame part inside its column, at each width.
+static size_t f1_fits(const F1Frame &f) {
+  const F1Geom g = f1_geom(f.layout, f.width);
+  auto glyphs = [](const char *s) {
+    size_t n = 0;
+    for (; *s != '\0'; s++)
+      n += ((unsigned char) *s & 0xC0) != 0x80;
+    return n;
+  };
+  if (f.n > g.rows || glyphs(f.status.c_str()) > g.status.chars ||
+      glyphs(f.title.c_str()) + glyphs(f.status.c_str()) > g.status.chars || f.shape_n > kF1ShapeMax)
+    abort();
+  for (size_t i = 0; i < f.n; i++) {
+    const F1Row &r = f.rows[i];
+    if (glyphs(r.pos) > g.pos.chars || glyphs(r.name) > g.name.chars || glyphs(r.value) > g.value.chars ||
+        glyphs(r.detail) > g.detail.chars)
+      abort();
+  }
+  for (size_t i = 0; i < f.shape_n; i++)
+    if (f.shape[i].x < g.shape_x || f.shape[i].x >= g.shape_x + g.shape_w || f.shape[i].y < g.shape_y ||
+        f.shape[i].y >= g.shape_y + g.shape_h)
+      abort();
+  return f.ticker.size() + f.spans.size();
+}
+
+// The F1 display's reads and every frame they make.
+size_t f1(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
+  size_t n = 0;
+  const F1Units units[] = {F1Units{}, F1Units{true, true}};
+  F1Live live;
+  ChunkReader r1(data, size, chunk);
+  const bool have_live = parse_f1_live(r1, live) == 1;
+  F1Schedule sched;
+  ChunkReader r2(data, size, chunk);
+  const bool have_sched = parse_f1_race(r2, sched) == 1;
+  F1Standings drivers, teams;
+  ChunkReader r3(data, size, chunk);
+  parse_f1_standings(r3, true, drivers);
+  ChunkReader r4(data, size, chunk);
+  parse_f1_standings(r4, false, teams);
+  F1Results res;
+  ChunkReader r5(data, size, chunk);
+  parse_f1_results(r5, res);
+  F1CircuitFacts facts;
+  ChunkReader r6(data, size, chunk);
+  parse_f1_circuit(r6, facts);
+  F1Athlete ath;
+  ChunkReader r7(data, size, chunk);
+  if (parse_f1_athlete(r7, ath) == 1) {
+    memcpy(facts.record_code, ath.code, sizeof(ath.code));
+    memcpy(facts.record_name, ath.name, sizeof(ath.name));
+  }
+  F1Weather wx;
+  ChunkReader r8(data, size, chunk);
+  parse_f1_weather(r8, wx);
+  if (sched.n > kF1Sessions || drivers.n > kF1Keep || teams.n > kF1Keep || res.n > kF1Keep)
+    abort();
+  if (have_live)
+    f1_live_codes(live, drivers);
+  const CircuitInfo *c = have_sched ? circuit_for(sched) : circuit_by_espn(facts.espn_id);
+  if (c == nullptr && have_live)
+    c = circuit_by_name(live.snap.venue);
+  for (int w : {64, 128, 192, 256}) {
+    if (have_live)
+      n += f1_fits(f1_live_frame(live, w, "Today 2:00p"));
+    n += f1_fits(f1_next_frame(sched, now, panel_tm, w));
+    for (const F1Units &u : units) {
+      n += f1_fits(f1_circuit_frame(c, facts, u, w));
+      n += f1_fits(f1_weather_frame(wx, sched.locality, u, w));
+    }
+    n += f1_fits(f1_standings_frame(drivers, w)) + f1_fits(f1_standings_frame(teams, w));
+    n += f1_fits(f1_results_frame(res, w));
+  }
+  n += esphome::gameday::ticker_markup(esphome::gameday::panel_text(f1_standings_frame(drivers, 128).ticker),
+                                       f1_standings_frame(drivers, 128).spans)
+           .size();
+  for (F1Read r : {F1Read::NEXT, F1Read::DRIVERS, F1Read::LAST_RESULTS, F1Read::WEATHER, F1Read::CIRCUIT})
+    n += f1_poll_ms(r, sched, now);
+  n += f1_weather_url(sched.lat_e4, sched.lon_e4).size() + f1_circuit_url(facts.record_athlete).size();
+  return n;
+}
+
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
 
 }  // namespace
@@ -530,6 +613,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     else if (ahead == 1)
       sink = sink + golf(golf_next_snapshot(next), GolfNext{}, now);
   }
+
+  sink = sink + f1(data, size, chunk, now);
 
   {
     // A racing series: its header, then the calendar for the next race weekend
