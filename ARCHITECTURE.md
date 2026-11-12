@@ -127,8 +127,10 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
   `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
-  `wifi_history.h`, `logo_lru.h`, `logo_icon.h`. `logo_cache.cpp` downloads and decodes
-  logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
+  `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
+  downloads and decodes logos on its own task, never the main loop: some of
+  HockeyTech's "50x50" logos are 500 px PNGs that take about 2 s to decode.
+  `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
   board's LVGL widgets, `board_layout` places them for the board's width
   (the positions are `game_geom` in `board_layout.h`, which the host tests
   check) and `board_draw` draws one `UpdateFields` into them, its text
@@ -220,7 +222,11 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
    its badge in the logo's place (`board_logos`). Another display's small
    logos (an `AppIcon`: Stocks & Crypto's 7x7 row logos, the Flight
    Tracker's 16x16 airline logos) are the same cache's entries, shrunk to
-   a square at decode by `logo_icon.h`, a dark one lifted. An icon names
+   a square at decode by `logo_icon.h`, a dark one lifted. The logo task
+   does all of that decoding, every logo and icon, resting a tick every
+   10 ms and refusing a source over a megapixel (`logo_decode.h`); the
+   main loop only hears from `loop()` that a logo became ready or failed,
+   and nothing on the task touches LVGL. An icon names
    its sources through a URL function; `app_fields_` asks for the first not
    failed, one download at a time, pins the shown ones (`pin_icons`) and
    redraws a display that waited on one once it loads or fails, so a
@@ -830,7 +836,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
   feeds, sources and failover, routes, screens, settings and the display's
   reads), `test_plane_art.cpp` (plane pictures and kinds, airline logos
-  and the logo steps) and `test_networks.cpp` (saved networks).
+  and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
+  decoding: size checks, fit, painting and rests) and `test_networks.cpp`
+  (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
 - `make -C tests heap`: the memory each ESPN read takes, for the size budget.

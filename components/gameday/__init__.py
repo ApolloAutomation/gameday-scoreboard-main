@@ -231,7 +231,7 @@ async def to_code(config):
                 on_mirror(beta, conf[CONF_HOST]) if beta else cg.nullptr,
             )
         )
-    runtime_image.enable_format("PNG")  # logo_cache.cpp decodes ESPN's PNG logos
+    runtime_image.enable_format("PNG")  # brings in pngle, which logo_cache.cpp drives
     cg.add(var.set_http(await cg.get_variable(config[CONF_HTTP_REQUEST_ID])))
     cg.add(var.set_time(await cg.get_variable(config[CONF_TIME_ID])))
     cg.add(

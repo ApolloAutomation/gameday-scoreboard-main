@@ -14,7 +14,7 @@ all: build/test_parse build/test_networks
 	./build/test_parse
 	./build/test_networks
 
-TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp test_f1.cpp test_app_f1.cpp test_markets.cpp test_markets_app.cpp test_flights.cpp test_plane_art.cpp
+TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp test_f1.cpp test_app_f1.cpp test_markets.cpp test_markets_app.cpp test_flights.cpp test_plane_art.cpp test_logo_decode.cpp
 SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/box_score.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp ../components/gameday/source_mlbstats.cpp ../components/gameday/source_hockeytech.cpp ../components/gameday/f1.cpp ../components/gameday/f1_parse.cpp ../components/gameday/app_f1.cpp ../components/gameday/source_markets.cpp ../components/gameday/app_markets.cpp ../components/gameday/flights.cpp ../components/gameday/app_flights.cpp ../components/gameday/plane_art.cpp
 
 build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h) ../components/panel_layout/layouts.h
