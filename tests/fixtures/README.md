@@ -303,3 +303,27 @@ the settings they leave in `/gameday/state`. `test_set.cpp` runs it through
 `set_request.h`, and `tests/web/mock_device.py --selftest` through the device
 page's mock, so the two answer the same way. Add a case there when a set key
 or its limits change.
+
+Flight Tracker, recorded 2026-11-12 around 04:00 UTC with a `curl/8.0`
+User-Agent, around JFK (40.64, -73.78) and O'Hare (41.98, -87.90). Each
+file is the whole answer as sent:
+
+| File | Source |
+| --- | --- |
+| `flights_adsbfi_jfk.json` | `opendata.adsb.fi/api/v3/lat/40.64/lon/-73.78/dist/25`: 57 aircraft, 34 of them on the ground (`"alt_baro":"ground"`), callsigns like `00000000` and `.N950JT` (29,321 bytes) |
+| `flights_adsblol_jfk.json` | `api.adsb.lol/v2/point/40.64/-73.78/25`, seconds later: the same shape, no `desc`, `ownOp` or `year` (25,284 bytes) |
+| `flights_readsb_ord.json` | `opendata.adsb.fi/api/v2/lat/41.98/lon/-87.90/dist/10`: readsb's own API shape (`now` first, then `aircraft`, `resultCount`), as a receiver's `?circle=` answers (12,916 bytes) |
+| `flights_adsbfi_empty.json` | `opendata.adsb.fi/api/v3/lat/0/lon/-140/dist/10`: open ocean, `"ac":[]` |
+| `flights_routeset_jfk.json` | `POST http://adsb.im/api/0/routeset` for eight callsigns from the JFK read: plausible and implausible routes and one unknown (5,569 bytes) |
+| `flights_routeset_unknown.json` | The same for two unknown callsigns, NetJets (answered `null`), and two airline flights |
+| `flights_routeset_legs.json` | UAL755's four-stop route (RNO-SFO-IAD-BOS), DAL2064 and FIN16 |
+| `flights_routeset_far.json` | Positions far from the routes: `plausible` false |
+| `flights_adsbdb_ual755.json`, `flights_adsbdb_jbu1407.json` | `api.adsbdb.com/v0/callsign/<callsign>`: one origin and destination, no plausible flag |
+| `flights_adsbdb_aal1070.json` | adsbdb's route for AAL1070 is DFW-TPA while the plane was over New York (adsb.im had CLT-LGA) |
+| `flights_adsbdb_unknown.json` | adsbdb's 404 body for an unknown callsign |
+
+tar1090's and PiAware's `aircraft.json` have readsb's shape without `dst`,
+`dir`, `t` and `r`; `test_flights.cpp` strips those from
+`flights_readsb_ord.json` rather than keeping a separate file. adsb.im's
+routeset answers 403 over https unless approved; over plain http it
+answered these.
