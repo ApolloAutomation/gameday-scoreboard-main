@@ -41,9 +41,9 @@ void LogoCache::setup() {
   this->pending_.reserve(MAX_PENDING);
 }
 
-LogoCache::Entry *LogoCache::find_(std::string_view url) {
+LogoCache::Entry *LogoCache::find_(std::string_view url, uint8_t icon) {
   for (auto &e : this->entries_) {
-    if (std::string_view(e->url) == url)
+    if (e->icon == icon && std::string_view(e->url) == url)
       return e.get();
   }
   return nullptr;
@@ -79,7 +79,7 @@ image::Image *LogoCache::get(std::string_view url, uint8_t icon, bool mark) {
     return nullptr;
   Locked guard(this->lock_);
   uint32_t now = millis();
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon);
   if (e == nullptr) {
     this->make_room_(now);
     Entry *n = this->add_(url, ::espn::LOGO_NOW, now);
@@ -113,19 +113,19 @@ void LogoCache::want(const std::string &url) {
     this->queue_(*e, ::espn::LOGO_NEXT, now);
 }
 
-bool LogoCache::ready(std::string_view url) {
+bool LogoCache::ready(std::string_view url, uint8_t icon) {
   if (url.empty() || this->lock_ == nullptr)
     return false;
   Locked guard(this->lock_);
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon);
   return e != nullptr && e->state == State::READY;
 }
 
-bool LogoCache::waiting(std::string_view url) {
-  if (url.empty() || this->lock_ == nullptr || this->get(url) != nullptr)
+bool LogoCache::waiting(std::string_view url, uint8_t icon) {
+  if (url.empty() || this->lock_ == nullptr || this->get(url, icon) != nullptr)
     return false;
   Locked guard(this->lock_);
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon);
   return e != nullptr && e->state != State::FAILED;
 }
 

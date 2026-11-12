@@ -5902,6 +5902,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   for (::espn::AppText &t : f.texts)
     t.text = panel_text(t.text);
   f.art = std::move(fr.art);
+  f.bar = fr.bar;
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons];
   char url[160];
@@ -5912,10 +5913,11 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     uint8_t from = 0;
     size_t len;
     while ((len = ic.url(ic.key, ic.kind, from, url, sizeof url)) > 0 &&
-           !this->logos_.ready(std::string_view(url, len)))
+           !this->logos_.ready(std::string_view(url, len), ic.px))
       from++;
     if (len == 0)
       from = 0;
+    bool drawn = false;
     for (uint8_t k = from; (len = ic.url(ic.key, ic.kind, k, url, sizeof url)) > 0; k++) {
       const std::string_view u(url, len);
       image::Image *img = this->logos_.get(u, ic.px, ic.mark);
@@ -5924,16 +5926,18 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
         f.icon_xy[2 * f.icon_n] = ic.x;
         f.icon_xy[2 * f.icon_n + 1] = ic.y;
         shown[f.icon_n++] = ::espn::logo_key(url, len);
-        // The logo stands in for its label
-        if (ic.alt >= 0 && (size_t) ic.alt < f.texts.size())
-          f.texts[ic.alt].text.clear();
+        drawn = true;
         break;
       }
-      if (this->logos_.waiting(u)) {
+      if (this->logos_.waiting(u, ic.px)) {
         this->icon_wait_ |= 1u << (int) d;
         break;
       }
     }
+    // Drawn: its label goes; missing: its with text
+    const int8_t gone = drawn ? ic.alt : ic.with;
+    if (gone >= 0 && (size_t) gone < f.texts.size())
+      f.texts[gone].text.clear();
   }
   this->logos_.pin_icons(shown, f.icon_n);
 }

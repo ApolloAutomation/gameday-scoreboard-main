@@ -358,6 +358,26 @@ void put_icons(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// The box under the board's labels, made on first use
+void put_bar(BoardView &v, const UpdateFields &f) {
+  const ::espn::AppFill &b = f.bar;
+  const bool on = f.board && b.w > 0 && b.h > 0;
+  if (v.bar == nullptr) {
+    if (!on || v.board == nullptr)
+      return;
+    v.bar = plain_bar(v.board, b.color);
+    lv_obj_move_to_index(v.bar, 0);
+  }
+  if (on) {
+    if (lv_obj_get_style_x(v.bar, LV_PART_MAIN) != b.x || lv_obj_get_style_y(v.bar, LV_PART_MAIN) != b.y)
+      lv_obj_set_pos(v.bar, b.x, b.y);
+    if (lv_obj_get_style_width(v.bar, LV_PART_MAIN) != b.w || lv_obj_get_style_height(v.bar, LV_PART_MAIN) != b.h)
+      lv_obj_set_size(v.bar, b.w, b.h);
+    put_bg(v.bar, b.color);
+  }
+  show(v.bar, on);
+}
+
 // Team logo screen's logos, or its abbreviation
 void logo_show(BoardView &v, image::Image *img) {
   if (v.logo_abbr == nullptr)
@@ -741,6 +761,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     show(v.no_game, false);
   }
   show(v.board, f.board);
+  put_bar(v, f);
   put_line(v, f);
   put_texts(v, f);
   put_icons(v, f);

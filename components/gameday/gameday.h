@@ -154,6 +154,8 @@ struct UpdateFields {
   uint32_t line_color{0xFFFFFF};
   // Another display's own labels over the board.
   std::vector<::espn::AppText> texts;
+  // Another display's filled box, under the rows.
+  ::espn::AppFill bar;
   // Another display's loaded logos, with x, y pairs.
   image::Image *icon_img[::espn::kAppIcons]{};
   int16_t icon_xy[2 * ::espn::kAppIcons]{};

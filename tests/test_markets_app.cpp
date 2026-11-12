@@ -205,29 +205,33 @@ void test_frames() {
   std::string json = slurp("fixtures/markets_yahoo_spark.json");
   KCHECK(parse_yahoo_quotes(json, b, q) == 8, "eight");
 
-  // Two panels: symbol, price, percent; four rows over the line.
+  // Two panels: three rows over the logo and line.
   AppFrame f;
   markets_frame(b, q, 128, 64, card_at(0), f);
   app_frame_trim(f);
   KCHECK(f.rows.cols == std::vector<int16_t>({0, 0, 9, 30, 39, 49, 88, 40}), "128 columns, logos first");
-  KCHECK(f.icons.size() == 3 && f.icons[0].x == 0 && f.icons[0].y == 8 && f.icons[2].y == 32 &&
-             f.icons[0].px == kMarketLogoPx && icon_url(f.icons[0], 2).size() > 0 && icon_url(f.icons[0], 3).empty() &&
-             icon_url(f.icons[2], 0).find("/symbol/BRK-B?") != std::string::npos,
-         "a logo a row, none for ^GSPC");
-  KCHECK(f.rows.name.size() == 4 && f.rows.name[0] == "AAPL" && f.rows.name[3] == "BRK.B", "page one");
-  KCHECK(f.rows.title == "MARKETS 1/2" && f.rows.status == "CLOSED", "%s | %s", f.rows.title.c_str(),
+  KCHECK(f.icons.size() == 3 && f.icons[1].x == 0 && f.icons[1].y == 8 && f.icons[2].y == 16 &&
+             f.icons[1].px == kMarketLogoPx && icon_url(f.icons[1], 2).size() > 0 && icon_url(f.icons[1], 3).empty(),
+         "the big logo, then a logo a row, none for ^GSPC");
+  KCHECK(f.rows.name.size() == 3 && f.rows.name[0] == "AAPL" && f.rows.name[1] == "SPY", "page one");
+  KCHECK(f.rows.title == "MARKETS 1/3" && f.rows.status == "CLOSED", "%s | %s", f.rows.title.c_str(),
          f.rows.status.c_str());
   KCHECK(f.rows.value[0] == "355.63" && f.rows.detail[0] == "+2.04%", "%s %s", f.rows.value[0].c_str(),
          f.rows.detail[0].c_str());
   KCHECK(f.rows.detail_color[0] == (int) kMarketUp && f.rows.value_color[0] == (int) kMarketFlat, "colors");
   KCHECK(f.rows.name_color[0] == (int) kMarketFlat && f.rows.name_color[1] == (int) kMarketDim, "AAPL is charted");
-  KCHECK(in_box(f, 0, 41, 128, 14) && f.line.color == kMarketUp, "its line under the rows");
+  KCHECK(f.bar.y == 8 && f.bar.x == 0 && f.bar.w == 128 && f.bar.h == 8 && f.bar.color == kMarketBar,
+         "a bar behind AAPL's row");
+  KCHECK(in_box(f, 26, 33, 102, 22) && f.line.color == kMarketUp, "its line beside its logo");
   KCHECK(f.ticker.find("AAPL 355.63 +7.12 +2.04%") == 0 && !f.spans.empty(), "%s", f.ticker.c_str());
   AppFrame later;
   markets_frame(b, q, 128, 64, card_at(5), later);
-  KCHECK(later.rows.name.size() == 4 && later.rows.name[0] == "BTC" && later.rows.title == "MARKETS 2/2",
+  KCHECK(later.rows.name.size() == 3 && later.rows.name[0] == "BRK.B" && later.rows.title == "MARKETS 2/3",
          "the line moves on and its page with it");
-  KCHECK(later.rows.name_color[1] == (int) kMarketFlat && later.rows.name_color[0] == (int) kMarketDim, "ETH's line");
+  KCHECK(later.rows.name_color[2] == (int) kMarketFlat && later.rows.name_color[0] == (int) kMarketDim, "ETH's line");
+  KCHECK(later.bar.w > 0 && later.bar.y == 24, "the bar follows it");
+  KCHECK(icon_url(later.icons[0], 0).find("/color/eth.png") != std::string::npos && later.icons[0].px == kMarketFocusPx,
+         "ETH's logo big");
 
   // One panel: price, then percent.
   AppFrame one, flip;
@@ -235,28 +239,39 @@ void test_frames() {
   const int64_t even = t - (t / kMarketAltSeconds) % 2 * kMarketAltSeconds;
   markets_frame(b, q, 64, 64, even, one);
   markets_frame(b, q, 64, 64, even + kMarketAltSeconds, flip);
-  KCHECK(one.rows.cols == std::vector<int16_t>({0, 0, 0, 30, 30, 34, 0, 0}) && one.icons.empty(),
-         "64 columns: BRK.B too long for logos");
+  KCHECK(one.rows.cols == std::vector<int16_t>({0, 0, 0, 30, 30, 34, 0, 0}) && one.icons.size() == 1 &&
+             one.icons[0].px == kMarketFocusPx,
+         "64 columns: BRK.B too long for row logos, AAPL's big one stays");
   KCHECK(one.rows.value[0] == "355.63" && flip.rows.value[0] == "+2.04%", "%s then %s", one.rows.value[0].c_str(),
          flip.rows.value[0].c_str());
   KCHECK(one.rows.value_color[0] == (int) kMarketUp && one.rows.title.empty() && one.rows.status == "CLOSED",
          "colored value, status alone");
-  KCHECK(in_box(one, 0, 41, 64, 14), "line");
+  KCHECK(in_box(one, 26, 33, 38, 22) && one.bar.w == 64, "line and bar");
 
   // Three panels: change too; four: the line beside six rows.
   AppFrame three, four;
   markets_frame(b, q, 192, 64, card_at(0), three);
   KCHECK(three.rows.cols == std::vector<int16_t>({50, 55, 10, 40, 105, 46, 151, 40}) && three.icons.size() == 3 &&
-             three.icons[0].x == 1,
+             three.icons[0].x == 1 && three.icons[1].x == 1,
          "192 columns");
   KCHECK(three.rows.pos[0] == "355.63" && three.rows.value[0] == "+7.12" && three.rows.detail[0] == "+2.04%",
          "price, change, percent");
   KCHECK(three.rows.pos_color[0] == (int) kMarketFlat && three.rows.value_color[0] == (int) kMarketUp, "colors");
+  KCHECK(three.bar.x == 1 && three.bar.w == 190, "the bar spans the rows");
   markets_frame(b, q, 256, 64, card_at(7), four);
   app_frame_trim(four);
   KCHECK(four.rows.name.size() == 2 && four.rows.name[1] == "SHIB" && four.rows.title == "MARKETS 2/2",
          "six a page beside the line");
-  KCHECK(in_box(four, 194, 9, 60, 46), "the line at the side");
+  KCHECK(in_box(four, 194, 34, 60, 21), "the line at the side, under the logo");
+  KCHECK(four.bar.y == 16 && four.bar.w == 190, "SHIB's bar");
+  KCHECK(four.icons.size() == 3 && four.icons[0].x == 194 && four.icons[0].y == 8 &&
+             four.icons[0].px == kMarketFocusPx && four.icons[0].alt == 0 && four.icons[0].with == 1,
+         "its logo by the line, its name in its place until it draws");
+  KCHECK(four.texts.size() == 3 && four.texts[0].text == "SHIB" && four.texts[0].x == 194 && four.texts[0].w == 24 &&
+             four.texts[0].align == AppAlign::CENTER && four.texts[1].text == "SHIB" && four.texts[1].x == 220 &&
+             four.texts[1].font == esphome::gameday::BoardFont::S12 && four.texts[2].x == 220 &&
+             four.texts[2].y == 22 && four.texts[2].text == "-0.30%",
+         "its name and move beside it: %s", four.texts.size() > 2 ? four.texts[2].text.c_str() : "");
 
   // Nothing charted: six rows, pages in turn.
   MarketQuote flat[kMarketSlots];
@@ -270,7 +285,8 @@ void test_frames() {
                                        kMarketCardSeconds,
                 p1);
   KCHECK(p0.rows.name.size() == 6 && p1.rows.name.size() == 2 && p0.line.pts.empty(), "pages without a line");
-  KCHECK(p0.rows.name_color[1] == (int) kMarketFlat, "no row stands out");
+  KCHECK(p0.rows.name_color[1] == (int) kMarketFlat && p0.bar.w == 0, "no row stands out");
+  KCHECK(p0.icons.size() == 5 && p0.icons[0].px == kMarketLogoPx, "no big logo without a line");
 
   // Not read yet.
   MarketQuote none[kMarketSlots];
@@ -287,6 +303,106 @@ void test_frames() {
   const auto racing = rows_cells(64, false, {});
   KCHECK(racing.cell[1].w == 52 && racing.cell[2].w == 0, "racing's names take the value's room");
   KCHECK(rows_cells(256, true, {}).cell[3].x == 64 + 94, "centered rows");
+}
+
+// The charted symbol: its bar, its big logo, its line.
+void test_focus() {
+  // Every width: the square clear of rows, line and ticker
+  for (int w : {64, 128, 192, 256})
+    for (bool logos : {false, true}) {
+      const MarketGeom g = market_geom(w, 64, true, true, logos, true);
+      const int bottom = 56, rows_end = g.row_y + g.rows * kMarketRowPx;
+      const bool side = w >= 256;
+      KCHECK(g.focus_px == kMarketFocusPx && g.rows == (side ? 6 : 3), "w%d: rows %d", w, g.rows);
+      KCHECK(g.focus_x >= 0 && g.focus_x + g.focus_px <= w && g.focus_y + g.focus_px <= bottom, "w%d: square in", w);
+      KCHECK(g.list.x >= 0 && g.list.x + g.list.w <= w && g.list.w >= (w < 192 ? w : 190), "w%d: the bar's span", w);
+      KCHECK(g.spark_x + g.spark_w <= w && g.spark_y + g.spark_h <= bottom && g.spark_h >= 14 && g.spark_w >= 36,
+             "w%d: line box %d,%d %dx%d", w, g.spark_x, g.spark_y, g.spark_w, g.spark_h);
+      if (side) {
+        KCHECK(g.focus_x >= g.list.x + g.list.w && g.spark_y >= g.focus_y + g.focus_px, "w%d: logo over the line", w);
+        KCHECK(g.name_at.x >= g.focus_x + g.focus_px && g.name_at.x + 6 * kMarketCharPx <= w &&
+                   g.move_at.y >= g.name_at.y + 12 && g.move_at.y + 8 <= g.spark_y,
+               "w%d: name and move beside it", w);
+      } else {
+        KCHECK(g.focus_y >= rows_end && g.spark_x >= g.focus_x + g.focus_px && g.spark_y >= rows_end,
+               "w%d: logo left of the line, under the rows", w);
+        KCHECK(g.name_at.w == 0, "w%d: no name", w);
+      }
+      // Without a logo to show: the old layout
+      const MarketGeom plain = market_geom(w, 64, true, true, logos, false);
+      KCHECK(plain.focus_px == 0 && plain.rows == (side ? 6 : 4) && (side || plain.spark_x == 0), "w%d: plain", w);
+    }
+
+  MarketBlob b{};
+  for (const char *t : {"AAPL", "SPY", "^GSPC", "BRK.B", "BTC", "ETH", "DOGE", "SHIB"})
+    market_put(b, 0, sym(t));
+  MarketQuote q[kMarketSlots];
+  std::string json = slurp("fixtures/markets_yahoo_spark.json");
+  parse_yahoo_quotes(json, b, q);
+
+  // Each in turn: its row barred, its logo big
+  for (int w : {64, 128, 192, 256})
+    for (int n = 0; n < 8; n++) {
+      AppFrame f;
+      markets_frame(b, q, w, 64, card_at(n), f);
+      app_frame_trim(f);
+      const int rows = w >= 256 ? 6 : 3, at = n % rows;
+      const MarketGeom g = market_geom(w, 64, true, true, market_logos_fit(b, w), true);
+      KCHECK(f.bar.y == 8 + 8 * at && f.bar.h == kMarketRowPx && f.bar.x == g.list.x && f.bar.w == g.list.w,
+             "w%d n%d: the bar on row %d", w, n, at);
+      int lit = 0;
+      for (size_t i = 0; i < f.rows.name_color.size(); i++)
+        lit += f.rows.name_color[i] == (int) kMarketFlat ? 1 : 0;
+      KCHECK(lit == 1 && f.rows.name_color[at] == (int) kMarketFlat, "w%d n%d: one name lit", w, n);
+      const MarketSymbol &s = b.syms[n];
+      const bool has = market_has_logo(s.sym, s.kind), side = w >= 256;
+      // Its name in the square until the logo draws
+      KCHECK(!f.texts.empty() && f.texts[0].x == g.focus_x && f.texts[0].w >= g.focus_px &&
+                 f.texts[0].y > g.focus_y && f.texts[0].y + 8 <= g.focus_y + g.focus_px &&
+                 f.texts[0].align == AppAlign::CENTER && f.texts[0].text == market_sym_text(s.sym, 5),
+             "w%d n%d: %s in the square", w, n, f.texts.empty() ? "" : f.texts[0].text.c_str());
+      KCHECK(f.texts.size() == (size_t) (side ? (has ? 3 : 2) : 1), "w%d n%d: %d texts", w, n, (int) f.texts.size());
+      if (has) {
+        const AppIcon &big = f.icons[0];
+        KCHECK(big.px == kMarketFocusPx && big.x == g.focus_x && big.y == g.focus_y && strcmp(big.key, s.sym) == 0,
+               "w%d n%d: %s big", w, n, s.sym);
+        // The rows' own source, shrunk once at decode
+        KCHECK(icon_url(big, 0) == logo_url(s, 0), "w%d n%d: its URL", w, n);
+        KCHECK(big.alt == 0 && big.with == (side ? 1 : -1), "w%d n%d: name beside only on four", w, n);
+      } else {
+        KCHECK(f.icons.empty() || f.icons[0].px == kMarketLogoPx, "w%d: an index has no big logo", w);
+        KCHECK(!side || (f.texts[1].x == g.move_at.x && f.texts[1].text == "+1.31%"), "w%d: its move beside: %s", w,
+               side ? f.texts[1].text.c_str() : "");
+      }
+      KCHECK(f.icons.size() <= kAppIcons, "w%d n%d: icons fit", w, n);
+      for (size_t i = 1; i < f.icons.size(); i++)
+        KCHECK(f.icons[i].px == kMarketLogoPx && f.icons[i].x == g.logo.x, "w%d n%d: row logos small", w, n);
+    }
+
+  // Centered, in spleen 12 when it fits
+  using esphome::gameday::BoardFont;
+  AppFrame ix, brk, btc;
+  markets_frame(b, q, 128, 64, card_at(2), ix);
+  markets_frame(b, q, 128, 64, card_at(3), brk);
+  markets_frame(b, q, 128, 64, card_at(4), btc);
+  KCHECK(ix.texts[0].text == "GSPC" && ix.texts[0].font == BoardFont::S12 && ix.texts[0].x == 0 &&
+             ix.texts[0].y == 32 + 6 && ix.texts[0].w == 24,
+         "^GSPC: its name, centered");
+  KCHECK(btc.texts[0].text == "BTC" && btc.texts[0].font == BoardFont::S12 && btc.texts[0].w == 24 &&
+             btc.icons[0].alt == 0,
+         "BTC centered");
+  KCHECK(brk.texts[0].text == "BRK.B" && brk.texts[0].font == BoardFont::S8 && brk.texts[0].x == 0 &&
+             brk.texts[0].w == 25 && brk.texts[0].y == 40,
+         "five in spleen 8");
+  MarketBlob longs{};
+  for (const char *n : {"GOOGL", "SHOP.TO"})
+    market_put(longs, 0, sym(n));
+  MarketQuote lq[kMarketSlots];
+  lq[0] = lq[1] = q[0];
+  AppFrame g1;
+  markets_frame(longs, lq, 64, 64, card_at(1), g1);
+  KCHECK(g1.icons.size() == 1 && g1.icons[0].alt == 0 && g1.texts.size() == 1 && g1.texts[0].text == "SHOP",
+         "%s", g1.texts.empty() ? "" : g1.texts[0].text.c_str());
 }
 
 void test_app() {
@@ -425,8 +541,8 @@ void test_logos() {
              logo_url(aapl, 1) == "https://companiesmarketcap.com/img/company-logos/64/AAPL.png" &&
              logo_url(aapl, 2) == "https://financialmodelingprep.com/image-stock/AAPL.png" && logo_url(aapl, 3).empty(),
          "a stock's three hosts");
-  KCHECK(logo_url(btc, 0) == "https://assets.parqet.com/logos/crypto/BTC?format=png&size=32" &&
-             logo_url(btc, 1) == "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/btc.png" &&
+  KCHECK(logo_url(btc, 0) == "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/btc.png" &&
+             logo_url(btc, 1) == "https://assets.parqet.com/logos/crypto/BTC?format=png&size=32" &&
              logo_url(btc, 2) == "https://assets.coincap.io/assets/icons/btc@2x.png" && logo_url(btc, 3).empty(),
          "a coin's three hosts");
   KCHECK(logo_url(gspc, 0).empty() && logo_url(fx, 0).empty(), "indexes and pairs: none");
@@ -472,7 +588,7 @@ void test_logos() {
   AppFrame one;
   markets_frame(market_defaults(), q, 64, 64, kNow, one);
   KCHECK(one.icons.size() == 4 && one.rows.cols == std::vector<int16_t>({0, 0, 9, 21, 30, 34, 0, 0}) &&
-             icon_url(one.icons[2], 0).find("/crypto/BTC?") != std::string::npos,
+             icon_url(one.icons[2], 0).find("/color/btc.png") != std::string::npos,
          "one panel: SPY, AAPL, BTC, ETH get logos");
 
   // Shrinking: a red square stays red and solid.
@@ -535,6 +651,7 @@ int run_markets_app_tests(int &total_checks) {
   test_feed();
   test_merge();
   test_frames();
+  test_focus();
   test_app();
   test_logos();
   total_checks += checks;
