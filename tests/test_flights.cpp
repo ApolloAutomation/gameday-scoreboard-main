@@ -1067,6 +1067,9 @@ void test_app() {
   FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "next in 20 s: %u", r.app.poll_ms(r.now));
   FCHECK(r.app.lit(r.now) && !r.app.lit(r.now + FlightsApp::kOldS + 1), "planes keep Off or dim lit");
   FCHECK(!r.app.request(r.now + 5, req), "not before");
+  // Whole seconds against millis: due must read 0, not 20 s.
+  FCHECK(r.app.poll_ms(r.now + kFr24PollMs / 1000) == 0, "due at its time: %u",
+         r.app.poll_ms(r.now + kFr24PollMs / 1000));
 
   // Each width: the card, then the list, then the card.
   for (int w : {64, 128}) {

@@ -341,6 +341,9 @@ uint32_t FlightsApp::poll_ms(int64_t now) const {
   const Next n = this->next_(now);
   if (n.read == Read::NONE)
     return 60 * 1000;
+  // Due now: the panel's two clocks never line up
+  if (n.in_ms == 0)
+    return 0;
   const uint32_t since = this->last_req_s_ == 0 || now < this->last_req_s_ ? 0 : ms_of(now - this->last_req_s_);
   return since + std::min<uint32_t>(n.in_ms, 24u * 3600 * 1000);
 }
