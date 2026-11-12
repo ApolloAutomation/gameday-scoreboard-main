@@ -28,11 +28,12 @@ If you already use Home Assistant and want room lighting to celebrate too, [game
 - An idle display for when none of your games is on (the next game, a clock, today's scores, your team's game today with a countdown, or off or dim), and night hours with their own brightness
 - College teams' ranks, and a pro team's seed or place in place of its record if you like
 - Favorite players' stat lines in the ticker while they lead their game, and their name on the celebration when they score
-- Bets you type in by hand, with whether each is covering during the game and won or lost after; the panel never connects to a sportsbook
+- Bets and player props you type in by hand, with whether each is covering or on track during the game and won or lost after, scrolling in green, red or gold; the panel never connects to a sportsbook
+- Other displays in place of the scoreboard: F1 (the running order during a session, then the next session's countdown, the circuit, the weather there, both championships and the last race), Stocks & Crypto (up to eight stocks, funds, indexes or coins with the day's change and chart) and the Flight Tracker (the planes flying near a spot you pick). None needs an account or a key, and each falls back to a backup source on its own
 - A device page that mirrors the panel, celebrates with it, lists the next three games in football, soccer, minor league baseball, the AHL and the ECHL, and holds every setting
 - Up to 16 favorite teams from any league (not the golf tours or racing series, which can't be favorites yet), cycling through the ones playing today, with the first four on a WizMote remote's numbered buttons
 - Updates itself over WiFi from the device page when a new release is out, or on its own between 3 and 5 AM if you turn on Install updates automatically
-- Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting. Three or four panels and two rows of two can show a second area beside the board: the clock, today's scores, a second team's game or other live games
+- Adapts to one 64x64 panel (logos side by side, stacked scores), one 128x64 panel or two to four 64x64 side by side (logos at the edges, big scores, records and pips in the middle), or four 64x64 in two rows of two (the board on top, the time and a bigger ticker underneath); one firmware, the layout is a setting. Three or four panels and two rows of two can show a second area beside the board: the clock, today's scores, a second team's game, other live games or one of the other displays
 
 ## Hardware
 
@@ -62,7 +63,7 @@ Team changes take effect immediately and survive reboots. Wrong panel size? Clic
 
 ## The device page
 
-The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, and rosters from ESPN when you add a favorite player. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
+The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, rosters from ESPN when you add a favorite player or a player prop, and Open-Meteo's place search when you look up the Flight Tracker's home. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
 
 | Setting | What it does |
 | --- | --- |
@@ -76,7 +77,7 @@ The device serves its own page: a live board that mirrors the panel (logos, scor
 | Panels | One 64x64 panel, one 128x64 panel or two 64x64 side by side, three or four wide, or two rows of two (with how the rows are mounted). Changing it restarts the device after a confirm |
 | Firmware / Check for updates | The device checks this project's releases every 6 hours; an Install button appears on the page when a newer version exists and updates over WiFi |
 | Install updates automatically | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows |
-| Brightness, Panel on, Ticker speed, Showing | Panel brightness, panel on or off, ticker speed, scoreboard or clock page |
+| Brightness, Panel on, Ticker speed, Showing | Panel brightness, panel on or off, ticker speed, and the scoreboard, the clock page or another display: F1, Stocks & Crypto or Flight Tracker |
 | Refresh scores, Reboot | Re-fetch right away, restart |
 
 ## Home Assistant is optional

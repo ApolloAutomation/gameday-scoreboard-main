@@ -43,9 +43,9 @@ Turn on **Night hours** in the Panel card on the device page, and set **From** a
 
 If you change the brightness during the night hours, on the device page, in Home Assistant or with the remote's brightness buttons or **NIGHT**, your change holds until the hours end, and the next night starts at the night brightness again. The night hours never change your Brightness setting itself, and **Off or dim** stays darker than the night brightness when its level is lower. The panel needs the time of day for them, so after a power cut they start once its clock is set. A restart keeps the clock, so a restart in the night hours, like an automatic update's, comes back at the night brightness, or dark with **Off or dim**. Picking a new team or mode at night doesn't end your brightness change either.
 
-## Showing: the scoreboard or the clock
+## Showing: the scoreboard, the clock or another display
 
-**Showing** picks the page the panel shows: the **Scoreboard**, or a **Clock** page. The scoreboard is the page that follows your games; the clock page is a plain clock for when you want one. Home Assistant has the same choice as **Select Page**.
+**Showing** picks what the panel shows: the **Scoreboard**, a **Clock** page, or another display, [F1](/using/f1/), [Stocks & Crypto](/using/markets/) or [Flight Tracker](/using/flights/). The scoreboard is the page that follows your games; the clock page is a plain clock for when you want one. Home Assistant has the choice between the scoreboard and the clock page as **Select Page**.
 
 ### The off-season clock
 

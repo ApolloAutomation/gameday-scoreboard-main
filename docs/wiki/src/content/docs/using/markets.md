@@ -5,22 +5,17 @@ sidebar:
   order: 10.7
 ---
 
-:::note[Coming in the next release]
 **Stocks & Crypto** is a display the panel can show in place of the scoreboard, or in the second area beside it: up to eight stocks, funds, indexes or coins, each with its price and how far it's up or down today in green or red, a chart of the day for one of them at a time, and a ticker with every one. The prices come from Yahoo Finance, which needs no account, key or sign-up. When Yahoo Finance can't be reached, the panel reads coins from Kraken and US stocks from Nasdaq, which need none either.
-:::
 
 ## Showing it
 
-:::note[Coming in the next release]
 - **On the main board**: in the **Panel** card on the [device page](/using/device-page/), set **Showing** to **Stocks & Crypto**. **Scoreboard** brings your games back.
 - **In the second area**, on three or four panels in a row or two rows of two: set **Shows** in the Quick settings card to **Stocks & Crypto**. While the main board shows Stocks & Crypto, **Shows** offers **Game Day** too, which puts the scoreboard in the second area instead. See [The second area](/using/panel-sizes/#the-second-area).
 
 The panel keeps following your games while it shows Stocks & Crypto, and Home Assistant's Game Status and Last Play stay on them. A celebration shows only where the scoreboard is on screen.
-:::
 
 ## What the panel shows
 
-:::note[Coming in the next release]
 Each symbol gets a row: the symbol, then its price and the day's change in percent, green when it's up, red when it's down and white when it hasn't moved. A row goes gray when its price is more than half an hour old while its market is open: a stock nobody has traded lately, or any symbol while the panel can't get new prices. Coins trade around the clock, so theirs is always open. A symbol the panel has no price for yet shows **--**.
 
 | Board | Each row |
@@ -38,12 +33,10 @@ Each symbol gets a row: the symbol, then its price and the day's change in perce
 **Big and small numbers.** A price too long for its column loses its commas, then its cents, then shortens to thousands, like **73,738.65**, **73738.65**, **73,739** or **74K**. A price under a dollar shows up to four digits after the zeros, like **0.06726**, fewer when its column is narrow, and a price too small for its column shows as a power of ten, like **4.3e-6** for 0.00000435.
 
 **Which day.** A stock's change is from the last close. A coin's is from midnight UTC, the way Yahoo Finance and Kraken count a coin's day, so it starts near zero then. Before the open and after the close the panel shows the regular trading day's price: it doesn't show pre-market or after-hours trades.
-:::
 
 ## Choosing the symbols
 
-:::note[Coming in the next release]
-The **Stocks & Crypto** card on the device page holds the list, up to eight, in the order the panel shows them. It's there when your panel's firmware has the display. A new panel starts with **SPY**, **AAPL**, **BTC** and **ETH**; the card says **the starting list** beside its name until you change it, and removing every symbol brings those four back.
+The **Stocks & Crypto** card on the device page holds the list, up to eight, in the order the panel shows them. A new panel starts with **SPY**, **AAPL**, **BTC** and **ETH**; the card says **the starting list** beside its name until you change it, and removing every symbol brings those four back.
 
 To add one, type it under **Symbol** and tap **Add symbol**:
 
@@ -58,11 +51,9 @@ To add one, type it under **Symbol** and tap **Add symbol**:
 The card checks a symbol before it saves anything. The line under **Symbol** says what it will save, like **Saves as BRK.B, a stock or fund**, and a symbol it can't take says so, like **The panel can't read that symbol**, **AAPL is in the list already.** or **All 8 are in use. Remove one first.** The panel reads the new symbol right away. If Yahoo Finance doesn't list it, the card says **Yahoo Finance doesn't know this symbol** under it: check the spelling on Yahoo Finance's site and remove it.
 
 Each row has **▲** and **▼** to move it up or down, and **✕** to remove it; the buttons wait until the panel has made the change, so a double tap moves or removes once. Next to each symbol is its price and the day's change, in green or red, and under it its kind and whether its market is open now. When the prices are more than half an hour old, because the display isn't on screen, the card says when they were read. The list is saved on the panel, so it stays through a restart or an update.
-:::
 
 ## Where the prices come from
 
-:::note[Coming in the next release]
 The panel reads every symbol at once from Yahoo Finance, the prices and the day's charts together, only while Stocks & Crypto is on screen, or every 10 minutes while the night hours' clock takes its place:
 
 | When | How often |
@@ -77,13 +68,10 @@ Each read is about 20 KB for eight symbols, and up to about 70 KB late in the UT
 **When Yahoo Finance is out.** After two failed reads in a row, or as soon as Yahoo Finance turns the panel away, the panel reads coins from Kraken and US stocks and funds from Nasdaq, along with the Nasdaq Composite and the Nasdaq-100. It tries Yahoo Finance again after 10 minutes, or 30 when Yahoo Finance turned it away (longer if Yahoo Finance asked for a longer wait), and longer each time it still fails, up to an hour, and goes back to it as soon as it answers. The card says when the panel is on Kraken and Nasdaq, or, when nothing you listed is on them, that it's waiting to try Yahoo Finance again. Kraken has BTC, ETH, SOL, DOGE, XRP, ADA, LTC, DOT, LINK, AVAX, SHIB, XLM, BCH, ATOM, TRX, UNI, SUI, PEPE, POL and TON. Other indexes, other coins and stocks on other exchanges keep their last price until Yahoo Finance is back, and go gray once it's half an hour old while their market is open. The chart keeps the day so far and adds the new prices to it.
 
 Before the first price comes in, the ticker says **Reading prices**. If the reads keep failing before any price comes in, it says **Can't reach Yahoo Finance**, or **Can't reach Yahoo Finance, Kraken or Nasdaq** once the panel has tried those too. Check the panel's internet connection.
-:::
 
 ## Night hours and the idle display
 
-:::note[Coming in the next release]
 A listed stock or index market that's open counts as something on, the way a game you follow does:
 
 - In the [night hours](/using/brightness-and-clock/#night-hours) the main board shows the clock instead of Stocks & Crypto, unless a market you listed is open. The second area does the same. Behind the clock the panel still checks the prices every 10 minutes, so Stocks & Crypto comes back within about 10 minutes of an open.
 - With the **Idle display** on **Off or dim**, the panel stays dark or dim while Stocks & Crypto is on the main board and every market you listed is closed, and lights up for the open. A list of coins alone never lights it, so pick another idle display to watch coins.
-:::

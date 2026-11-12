@@ -5,15 +5,12 @@ sidebar:
   order: 10.8
 ---
 
-:::note[Coming in the next release]
 The Flight Tracker is a display the panel can show in place of the scoreboard: the planes in the sky near a spot you pick. Pick it for the main board under **Showing** in the Panel card on the device page, or for the [second area](/using/panel-sizes/#the-second-area) under **Shows**. There's nothing to sign up for: the flight data comes from free services that need no account or key.
 
 Home Assistant's entities keep following the scoreboard's game while the Flight Tracker is on the panel.
-:::
 
 ## Set it up
 
-:::note[Coming in the next release]
 The device page has a **Flight Tracker** card. It needs a home location before it shows any planes.
 
 1. Under **Home location**, type a town, a ZIP or postal code, or a latitude and longitude like **40.64, -73.78**, and tap **Find**.
@@ -26,11 +23,9 @@ The device page has a **Flight Tracker** card. It needs a home location before i
 The panel uses your time zone's units: in the US and UK time zones feet, mph and miles, and elsewhere meters, km/h and km.
 
 **Your own receiver** is optional: an ADS-B receiver on your home network. For tar1090 its address is enough, like **192.168.1.50**; for PiAware, give its whole aircraft.json address. See [Your own receiver](#your-own-receiver).
-:::
 
 ## What the panel shows
 
-:::note[Coming in the next release]
 The nearest plane's card has:
 
 - its callsign, like **DAL2503**, or its registration when it has no callsign, in red during an emergency (squawk 7500, 7600 or 7700, or an emergency the plane declares; an air ambulance's lifeguard flag or low fuel isn't one)
@@ -63,11 +58,9 @@ The panel shows a message instead of planes when it has none to show:
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes the Flight Tracker's place until they end, and the device page says so.
 
 With the **Idle display** on **Off or dim** and the Flight Tracker on the main board, the panel stays dark or dim while it has no planes to show within your **Within** distance, and lights up when one comes near. It keeps reading while it's dark, so a plane, not a game, lights it.
-:::
 
 ## Where the data comes from
 
-:::note[Coming in the next release]
 - **Flightradar24**: the panel reads Flightradar24's public live map feed about every 20 seconds while the Flight Tracker is on screen. It has each plane's route and flight number too. One read for the planes near a city is about 5 KB, about 1 MB an hour.
 - **adsb.fi, then adsb.lol**: when Flightradar24 fails twice in a row, or turns the panel away, the panel switches to adsb.fi on its own, and to adsb.lol if adsb.fi is out too. adsb.lol is read at most every 3 minutes. The panel goes back to Flightradar24 once its wait is over, longer each time it fails again, and as long as it asks when it turns the panel away. A read from adsb.fi is larger, about 30 KB for 50 planes, about 5 MB an hour.
 - **Routes**: for an airline flight whose source has no full route (adsb.fi, adsb.lol, your own receiver, and some Flightradar24 flights), the panel looks the route up from adsb.im, at most every 30 seconds, over plain HTTP, or from adsbdb while adsb.im is failing or turning the panel away. It shows a route only when it fits where the plane is and the way it's heading, and keeps each route for 3 hours.
@@ -75,11 +68,9 @@ With the **Idle display** on **Off or dim** and the Flight Tracker on the main b
 - **Near the 180th meridian**: Flightradar24's box can't reach across it, so for a home whose circle crosses it, like in Fiji, the panel reads adsb.fi first. The card's line then names adsb.fi without saying Flightradar24 is out.
 
 The card's line says which source the planes on the panel came from.
-:::
 
 ## Your own receiver
 
-:::note[Coming in the next release]
 With an ADS-B receiver on your network, the panel reads it first, every 10 seconds. When it fails twice in a row, the panel reads Flightradar24 and the backups above until the receiver answers again. A changed address is read right away.
 
 The receiver's file lists every plane it hears, some with no recent position; those aren't counted as nearby.
@@ -89,12 +80,9 @@ The receiver's file lists every plane it hears, some with no recent position; th
 - readsb's own API, an address with port 30152, `/re-api` or a `?` in it, gets the circle around your home added.
 
 The receiver's planes need no internet, but their routes still come from adsb.im or adsbdb.
-:::
 
 ## Your location
 
-:::note[Coming in the next release]
 The home location stays on the panel, to four decimal places (about 10 meters), with the place's name if you looked one up. Each read sends the flight data service a box around it, not the spot itself: the center is rounded to about a kilometer first, and the box reaches a little past your **Within** distance all around it. adsb.fi and adsb.lol get that rounded center and the distance. The panel still works out each plane's distance and direction from your exact spot. Route lookups send only the planes' callsigns and positions, over plain HTTP to adsb.im.
 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
-:::
