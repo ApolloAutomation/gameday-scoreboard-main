@@ -26,9 +26,7 @@ A name is at most 10 letters, one line of a single 64x64 panel's celebration, so
 
 If a player moves to another team, remove them and add them again from the new team's roster.
 
-:::note[Coming in the next release]
 Your favorite players are a shortcut for [player props](/using/bets/#player-props) too. In the **Bets** card, with **Player prop** chosen, tap **Favorite players** and the **Player** list shows just your favorite players, from every team, so you can bet on one without picking their team first. Before adding the prop, your browser checks that the player is still on the team you added them from; if they've moved, the card says so, and you pick their new team instead.
-:::
 
 ## The stat line
 
@@ -85,12 +83,8 @@ When the board goes back to its own game, a favorite player's score from while i
 
 ## Data and Home Assistant
 
-The panel reads nothing more from ESPN for favorite players: no rosters and no extra pages. It keeps a little more of each read it already makes of a game, and only while a favorite player is in that game's league, so a panel without favorite players reads and keeps exactly what it did before. The rosters are read by your browser, once, when you pick a team in the card.
+The panel reads nothing more from ESPN for favorite players: no rosters and no extra pages. It keeps a little more of each read it already makes of a game, and only while a favorite player is in that game's league, so a panel without favorite players reads and keeps exactly what it did before. The rosters are read by your browser, once, when you pick a team in the card. A [player prop](/using/bets/#player-props) does read more: while a game with a prop is on, the panel reads that game's box score about once a minute. The stat line above stays the one from ESPN's leaders, whether or not a prop is on the game.
 
 Home Assistant gets no new entities, and its **Game Status** leaves the stat lines out.
-
-:::note[Coming in the next release]
-Favorite players still read nothing more. A [player prop](/using/bets/#player-props) does: while a game with a prop is on, the panel reads that game's box score about once a minute. The stat line above stays the one from ESPN's leaders, whether or not a prop is on the game.
-:::
 
 Favorite players are saved on the panel, so they stay through a restart or an update.

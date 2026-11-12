@@ -8,15 +8,15 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2516000,
+      "flash": 2685400,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2516000,
+      "flash": 2685400,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2492608,
+      "flash": 2662150,
       "static_ram": 172568
     }
   },
@@ -37,9 +37,81 @@
       "heap": 2000,
       "json": 30500
     },
+    "f1_athlete": {
+      "heap": 1024,
+      "json": 5519
+    },
+    "f1_circuit": {
+      "heap": 1144,
+      "json": 6420
+    },
+    "f1_constructor_standings": {
+      "heap": 1024,
+      "json": 6635
+    },
+    "f1_driver_standings": {
+      "heap": 1024,
+      "json": 11123
+    },
+    "f1_last_results": {
+      "heap": 1024,
+      "json": 16913
+    },
+    "f1_live_header": {
+      "heap": 1509,
+      "json": 77752
+    },
+    "f1_met_weather": {
+      "heap": 1024,
+      "json": 40800
+    },
+    "f1_next": {
+      "heap": 1088,
+      "json": 7520
+    },
+    "f1_weather": {
+      "heap": 1024,
+      "json": 5812
+    },
+    "flights_adsbdb": {
+      "heap": 1024,
+      "json": 5921
+    },
+    "flights_adsbfi": {
+      "heap": 1024,
+      "json": 6482
+    },
+    "flights_fr24_340": {
+      "heap": 1024,
+      "json": 5292
+    },
+    "flights_frame_256": {
+      "heap": 4096,
+      "json": 1024
+    },
+    "flights_receiver_570": {
+      "heap": 1024,
+      "json": 6482
+    },
+    "flights_routeset": {
+      "heap": 1024,
+      "json": 6401
+    },
     "golf_calendar": {
       "heap": 1600,
       "json": 15985
+    },
+    "markets_kraken": {
+      "heap": 1024,
+      "json": 5835
+    },
+    "markets_nasdaq": {
+      "heap": 1024,
+      "json": 6022
+    },
+    "markets_yahoo_spark": {
+      "heap": 1024,
+      "json": 29905
     },
     "poll_golf_header": {
       "heap": 3000,

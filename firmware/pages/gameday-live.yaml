@@ -46,7 +46,8 @@ script:
             const char *t = lv_label_get_text(l);
             const lv_font_t *font = lv_obj_get_style_text_font(l, LV_PART_MAIN);
             lv_point_t sz;
-            lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            const lv_text_flag_t flag = lv_label_get_recolor(l) ? LV_TEXT_FLAG_RECOLOR : LV_TEXT_FLAG_NONE;
+            lv_text_get_size(&sz, t ? t : "", font, 0, 0, LV_COORD_MAX, flag);
             const int32_t gap = 3 * lv_font_get_glyph_width(font, ' ', ' ');
             const uint32_t ms = gameday::ticker_scroll_ms(sz.x, gap, sp);
             // Only when it changes: setting the style restarts the scroll.
@@ -110,6 +111,7 @@ script:
           v.clock_sub = id(gd_clock_sub_lbl);
           v.splash = id(tt_splash);
           v.splash_lbl = id(tt_splash_lbl);
+          v.line = id(gd_board_line)->obj;
           v.fx = id(tt_fx_canvas);
           v.fx_run = [](bool on) {
             if (on)
@@ -228,10 +230,6 @@ script:
             if (cur == nullptr || text != cur)
               lv_label_set_text(lbl, text.c_str());
           };
-          const std::string blank;
-          auto at = [&blank](const std::vector<std::string> &v, int i) -> const std::string & {
-            return i < (int) v.size() ? v[i] : blank;
-          };
           put(id(gd_board_title_lbl), f.board_title);
           put(id(gd_board_status_lbl), f.board_status);
           lv_obj_set_style_text_color(id(gd_board_status_lbl), lv_color_hex(f.board_status_color), 0);
@@ -243,25 +241,8 @@ script:
                                  id(gd_board_value4), id(gd_board_value5), id(gd_board_value6)};
           lv_obj_t *gdetail[6] = {id(gd_board_detail1), id(gd_board_detail2), id(gd_board_detail3),
                                   id(gd_board_detail4), id(gd_board_detail5), id(gd_board_detail6)};
-          const bool one = id(gameday_ctl).split_area().main_w < 128;
-          for (int i = 0; i < 6; i++) {
-            if (one) {
-              // Golf's score column, or racing's names in its room
-              lv_obj_set_width(gname[i], f.board_value_narrow ? 35 : 52);
-              if (f.board_value_narrow)
-                lv_obj_clear_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
-              else
-                lv_obj_add_flag(gvalue[i], LV_OBJ_FLAG_HIDDEN);
-            }
-            put(gpos[i], at(f.board_pos, i));
-            put(gname[i], at(f.board_name, i));
-            put(gvalue[i], at(f.board_value, i));
-            put(gdetail[i], at(f.board_detail, i));
-            if (i < (int) f.board_value_color.size())
-              lv_obj_set_style_text_color(gvalue[i], lv_color_hex((uint32_t) f.board_value_color[i]), 0);
-            if (i < (int) f.board_name_color.size())
-              lv_obj_set_style_text_color(gname[i], lv_color_hex((uint32_t) f.board_name_color[i]), 0);
-          }
+          // The sport's columns on one panel, or another display's own.
+          gameday::rows_put(gpos, gname, gvalue, gdetail, id(gameday_ctl).split_area().main_w, f);
 
   # The off-season clock's time, and the date when that line has no next
   # game, in the panel's time zone. A label is only rewritten when its text
@@ -722,6 +703,13 @@ lvgl:
               - label:
                   id: gd_board_detail6
                   text: ""
+              # Another display's polyline, drawn by board_view.cpp
+              - line:
+                  id: gd_board_line
+                  points:
+                    - 0, 0
+                    - 1, 0
+                  hidden: true
 
         # Second area (split.h); its ticker clears the guard line
         - obj:

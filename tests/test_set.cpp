@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "app_flights.h"
+#include "app_markets.h"
 #include "follow.h"
 #include "players.h"
 #include "set_request.h"
@@ -52,6 +54,9 @@ struct Settings {
   TeamRef team;
   TeamRef splitteam;
   int split{0};
+  // The main area's display, and the ones the firmware has
+  int display{0};
+  uint8_t displays{kGameDayOnly};
   int clocksize{0}, textsize{0};
   uint8_t team_league{0};
   // rotatesec: Switch every, in seconds.
@@ -70,6 +75,9 @@ struct Settings {
   Bet bets[kBetSlots]{};
   Prop props[kPropSlots]{};
   FavPlayer players[kPlayerSlots]{};
+  MarketList markets;  // the Stocks & Crypto list (app_markets.h)
+  // The Flight Tracker's own (app_flights.h)
+  flights::Prefs flights;
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 4;
@@ -134,6 +142,12 @@ void load(Settings &s, JsonObjectConst o) {
   num("standing", s.standing);
   num("watchstay", s.watchstay);
   num("split", s.split);
+  num("display", s.display);
+  if (o["displays"].is<JsonArrayConst>()) {
+    s.displays = 0;
+    for (auto d : o["displays"].as<JsonArrayConst>())
+      s.displays |= (uint8_t) (1u << d.as<int>());
+  }
   num("clocksize", s.clocksize);
   num("textsize", s.textsize);
   int collide = s.collide ? 1 : 0;
@@ -200,6 +214,28 @@ void load(Settings &s, JsonObjectConst o) {
   }
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
+  if (o["markets"].is<JsonArrayConst>()) {
+    s.markets = MarketList{};
+    for (JsonObjectConst m : o["markets"].as<JsonArrayConst>()) {
+      MarketKind kind = MarketKind::NONE;
+      market_kind_by_key(m["kind"] | "", kind);
+      if (market_put(s.markets.blob, 0, market_symbol(m["sym"] | "", kind)) == 0)
+        printf("FAIL set_cases.json: a start symbol doesn't fit: %s\n", m["sym"] | "");
+    }
+  }
+  if (o["flights"].is<JsonObjectConst>()) {
+    JsonObjectConst f = o["flights"];
+    s.flights = flights::Prefs();
+    if (f["home"].is<const char *>())
+      flights::prefs_set(s.flights, "flyhome", f["home"].as<const char *>());
+    if (f["place"].is<const char *>())
+      flights::prefs_set(s.flights, "flyplace", f["place"].as<const char *>());
+    if (f["radius"].is<int>())
+      flights::prefs_set(s.flights, "flyradius",
+                         std::to_string(f["radius"].as<int>()) + (const char *) (f["radius_unit"] | "mi"));
+    if (f["receiver"].is<const char *>())
+      flights::prefs_set(s.flights, "flyreceiver", f["receiver"].as<const char *>());
+  }
   if (o["players"].is<JsonArrayConst>()) {
     for (auto &p : s.players)
       p = FavPlayer{};
@@ -316,7 +352,14 @@ void apply(Settings &s, const SetOp &op) {
       break;
     }
     case SetKind::WIRING: s.wiring = op.value; break;
-    case SetKind::SPLIT: s.split = op.value; break;
+    case SetKind::SPLIT:  // set_split: never a display it lacks
+      if (split_allowed(op.value, s.displays))
+        s.split = op.value;
+      break;
+    case SetKind::MAIN_DISPLAY:  // set_display: the same
+      if (display_has(s.displays, op.value))
+        s.display = op.value;
+      break;
     case SetKind::CLOCK_SIZE: s.clocksize = op.value; break;
     case SetKind::TEXT_SIZE: s.textsize = op.value; break;
     case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
@@ -413,9 +456,11 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
   doc["split"] = s.split;
+  doc["display"] = s.display;
   doc["clocksize"] = s.clocksize;
   doc["textsize"] = s.textsize;
   doc["splitteam"] = team_str(s.splitteam);
+  flights::prefs_state(s.flights, flights::units_for_zone(s.tz), doc["flights"].to<JsonObject>());
   JsonArray players = doc["players"].to<JsonArray>();
   for (const FavPlayer &p : s.players) {
     if (player_empty(p))
@@ -425,6 +470,15 @@ void state_doc(const Settings &s, JsonDocument &doc) {
     o["id"] = p.athlete;
     o["team"] = p.team_id;
     o["name"] = (const char *) p.name;
+  }
+  JsonArray markets = doc["markets"].to<JsonArray>();
+  const MarketBlob defaults = market_defaults();
+  const MarketBlob &shown = market_shown(s.markets.blob, defaults);
+  for (uint8_t i = 0; i < market_count(shown); i++) {
+    JsonObject o = markets.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["sym"] = (const char *) shown.syms[i].sym;
+    o["kind"] = market_kind_key((MarketKind) shown.syms[i].kind);
   }
 }
 
@@ -439,18 +493,32 @@ void test_fixture_cases() {
     Settings s;
     load(s, fx["base"].as<JsonObjectConst>());
     load(s, c["start"].as<JsonObjectConst>());
-    // handle_set_: only kSetKeys, in that order; 400 when none are there.
+    // handle_set_: kSetKeys, then its displays' keys; else 400.
     std::vector<std::pair<std::string, std::string>> kv;
-    for (const char *key : kSetKeys)
+    auto take = [&](const char *key) {
       for (JsonArrayConst p : c["set"].as<JsonArrayConst>())
         if (std::string(p[0].as<const char *>()) == key)
           kv.emplace_back(key, p[1].as<const char *>());
+    };
+    for (const char *key : kSetKeys)
+      take(key);
+    if (display_has(s.displays, (int) Display::MARKETS))
+      for (const char *const *k = kMarketSetKeys; *k != nullptr; k++)
+        take(*k);
+    if (display_has(s.displays, (int) Display::FLIGHTS))
+      for (const char *const *k = flights::kFlightSetKeys; *k != nullptr; k++)
+        take(*k);
     int status = kv.empty() ? 400 : 200;
     SCHECK(status == (c["status"] | 200), "%s: status %d", name, status);
     SetOp op;
-    for (const auto &p : kv)
+    for (const auto &p : kv) {
       if (parse_set(p.first, p.second, op, kFavMax))
         apply(s, op);
+      else if (p.first.rfind("mkt", 0) == 0)  // app_set_: the display's own set
+        markets_set(s.markets, market_defaults(), p.first, p.second);
+      else
+        flights::prefs_set(s.flights, p.first, p.second);
+    }
     JsonDocument got;
     state_doc(s, got);
     for (JsonPairConst e : c["expect"].as<JsonObjectConst>()) {

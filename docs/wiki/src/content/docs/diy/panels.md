@@ -34,7 +34,7 @@ The arrangement the panel drives is the layout you pick, saved on the panel and 
 
 One firmware drives every layout. The [DIY installer](/diy/install/) offers one 64x64 panel or a 128x64 display, so the first start uses the right one. For three or four panels, install the one-panel build, then pick **Three wide**, **Four wide** or **Two rows of two** on the device page. You can change the layout there any time. See [Panel sizes](/using/panel-sizes/).
 
-Two rows of two, and three or four in a row, can show something else beside the board: today's scores, a second team's game, other live games or the clock. See [The second area](/using/panel-sizes/#the-second-area).
+Two rows of two, and three or four in a row, can show something else beside the board: today's scores, a second team's game, other live games, the clock, or another display like F1, Stocks & Crypto or the Flight Tracker. See [The second area](/using/panel-sizes/#the-second-area).
 
 With three or four panels:
 

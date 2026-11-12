@@ -5,7 +5,7 @@ sidebar:
   order: 10.5
 ---
 
-Keep an eye on bets you've placed. You type each one into the **Bets** card on the [device page](/using/device-page/), and during the game the panel says in the ticker whether it's covering. The panel never connects to a sportsbook and never asks for an account or a password. It only compares the bet you typed in with the score it's already showing.
+Keep an eye on bets you've placed. You type each one into the **Bets** card on the [device page](/using/device-page/), and during the game the panel says in the ticker whether it's covering. A [player prop](#player-props), a bet on one player's numbers, goes in the same card and the same ticker. The panel never connects to a sportsbook and never asks for an account or a password. It only compares a bet you typed in with the score it's already showing, and a player prop with the game's box score from ESPN.
 
 ## What you can enter
 
@@ -56,6 +56,8 @@ A bet on a team the panel isn't showing waits until a game of that team comes on
 | During the game | **BUF -3.5 COVERING**, **BUF -3.5 NOT COVERING**, or **BUF -3.5 PUSH** while the score is exactly on the line. A total reads like **OVER 47.5 COVERING**, and a moneyline like **BUF ML COVERING** while the team is ahead. |
 | After the final | **WON**, **LOST** or **PUSH**, like **BUF -3.5 WON**. A game that's postponed or canceled says **VOID**. |
 
+Each bet scrolls in the same color as its tag on the device page: green while it's covering or after it won, red while it isn't or after it lost, and gold for a push or a game called off. Before the start it's the ticker's usual color.
+
 A tie is a push for every kind of bet: a spread or total exactly on the line, or a moneyline game that ends level.
 
 While the [idle display](/using/modes/#when-nothing-is-on-the-idle-display) shows something in place of the game, like the clock before the start or once the final has been up for its usual time, the panel's ticker has no bets. The device page's ticker, its board and the Bets card keep showing them.
@@ -74,7 +76,6 @@ Bets are saved on the panel, so they stay through a restart or an update.
 
 ## Player props
 
-:::note[Coming in the next release]
 A player prop is a bet on one player's numbers in a game: over or under a line on one of their stats, like Josh Allen over 250.5 passing yards, or a yes bet, like Josh Allen to score a touchdown. You type it into the same **Bets** card, and the ticker follows it like a bet. As with bets, the panel never connects to a sportsbook and never asks for an account or a password: it reads the game's box score from ESPN and compares it with the line you typed in.
 
 **What you can enter.** Any player on a team in the leagues below, picked from the team's roster:
@@ -113,6 +114,8 @@ If something is missing or doesn't fit, the card says so before anything is save
 | During the game | The player's number so far and how it's going: **ALLEN O 250.5 PASS YDS 187 ON TRACK** or **OFF TRACK**, and **HIT** once an over is already past its line. A yes prop says **ALLEN ANY TD NOT YET**, then **HIT**. |
 | After the final | **WON**, **LOST** or **PUSH**, with the final number for an over or under, like **ALLEN O 250.5 PASS YDS 262 WON**, or **VOID** with no number, until midnight. |
 
+Each prop scrolls in its device page color: green while it's on track, once it's hit and after a win, red while it's off track or after a loss, and gold for **NOT YET**, a push or a void. Before the start, and early in the game while the ticker shows the number alone, it's the ticker's usual color.
+
 **On track** looks at the pace: the number so far, stretched over the whole game by how much of it has been played. 120 passing yards at halftime is on pace for 240, so an over 250.5 is off track and an under on track. In baseball the game's share is counted in innings and outs, and in overtime or extra innings the number so far is the whole game's. In the first few minutes the ticker shows the number alone, since a pace means little that early. A pitcher who leaves early, or a starter who sits out the fourth quarter, keeps the pace they had, so take **ON TRACK** as a guide, not a forecast.
 
 **How it's settled.** Half a minute after ESPN calls the game final, the panel reads the box score once more and settles the prop on the final's numbers: an over wins above the line, an under below it, and a whole-number line hit exactly is a **PUSH**. A yes prop wins with at least one. A number can be below zero, like a quarterback's -3 rushing yards after kneel-downs. In basketball, baseball and hockey the box score lists who played, so a player who didn't play makes the prop **VOID**, as most sportsbooks treat them; check your sportsbook's own rule. A football box score lists only players who had a stat, and a soccer game says nothing about who played, so in those sports a player the box score leaves out counts as zero: a yes prop or an over loses and an under wins. If your football player was ruled out before the game, your sportsbook voids the bet, so remove it from the card. Between ESPN's final and that last read, a number sitting exactly on a whole-number line shows no word, since it's headed for a push. A game that's postponed or canceled makes it **VOID** too. A prop goes away at midnight after its final, or a day and a half after its game's start if the panel stops showing the game before the final.
@@ -120,4 +123,3 @@ If something is missing or doesn't fit, the card says so before anything is save
 **The device page.** The Bets card lists each prop with its game and the player's number so far, and the board's tags show the props on its game: green while on track, once it's hit and after a win, red while off track or after a loss, and gold for **NOT YET**, a push or a void.
 
 **Data.** While a game with a prop is on, the panel reads that game's box score from ESPN about once a minute, and once more after the final. It stops reading each one at the end of the box score, the first part of ESPN's game page: about 25 KB for basketball, 40 to 60 KB for football and hockey, and about 190 KB for baseball, out of a page of 250 to 950 KB, plus at most about 20 KB the connection already had on its way. That's about 1.5 MB an hour for basketball, 3 MB for football and hockey and 11 MB for baseball, on top of the 3 to 7 MB an hour the board's own reads of a live game take. The board's own reads come first: a box score is read only in a gap before the board's next read that's long enough for how long that sport's last box score took, a failed read's time included. When a read fails, the next try waits twice as long, up to 15 minutes. A soccer prop reads nothing more: the goals are in the game read the panel already makes. Props are saved on the panel, so they stay through a restart or an update.
-:::

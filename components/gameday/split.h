@@ -87,8 +87,8 @@ inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash) {
   return at == SplitAt::BOTTOM && splash_up(now, board_splash);
 }
 
-// DATE while the main board shows a clock: never two.
-enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE };
+// DATE beside the board's clock; GAME, APP other displays.
+enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP };
 
 inline const char *area_view_key(AreaView v) {
   switch (v) {
@@ -102,6 +102,10 @@ inline const char *area_view_key(AreaView v) {
       return "team";
     case AreaView::LIVE:
       return "live";
+    case AreaView::GAME:
+      return "game";
+    case AreaView::APP:
+      return "app";
     default:
       return "";
   }
@@ -120,6 +124,10 @@ struct AreaInputs {
   // Rotating live games
   bool rot_games{false};  // other live games to show
   bool jump{false};       // a big play has the area for its stay
+  // The displays (apps.h)
+  Display main{Display::GAMEDAY};  // what the main area shows
+  uint8_t displays{kGameDayOnly};  // the ones this firmware has
+  bool app_busy{false};            // the area's display keeps up at night
 };
 
 inline AreaView area_view(const AreaInputs &in) {
@@ -141,10 +149,24 @@ inline AreaView area_view(const AreaInputs &in) {
       return in.scores ? AreaView::SCORES : clock;
     case SplitShow::SCORES:
       return !in.night && in.scores ? AreaView::SCORES : clock;
-    default:
-      return clock;
+    case SplitShow::GAMEDAY:
+      return in.main != Display::GAMEDAY ? AreaView::GAME : clock;
+    default: {
+      // Never one the main area shows too.
+      Display d;
+      if (!split_display(in.show, d) || !display_has(in.displays, (int) d) || in.main == d ||
+          (in.night && !in.app_busy))
+        return clock;
+      return AreaView::APP;
+    }
   }
 }
+
+// The display drawn in the area for show, if any.
+inline bool area_app(SplitShow show, Display &d) { return split_display(show, d) && d != Display::GAMEDAY; }
+
+// The clock, or the date under the board's clock.
+inline bool area_clock(AreaView v) { return v == AreaView::CLOCK || v == AreaView::DATE; }
 
 // Half a loop apart, so both never show one card.
 inline int scores_step(size_t step, size_t cards, bool main_shows) {

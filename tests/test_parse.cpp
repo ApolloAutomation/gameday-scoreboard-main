@@ -3636,10 +3636,16 @@ int run_bet_tests(int &checks);
 int run_watch_tests(int &checks);
 int run_player_tests(int &checks);
 int run_prop_tests(int &checks);
+int run_flight_tests(int &checks);
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
 int run_layout_tests(int &checks);
+int run_app_tests(int &checks);
+int run_f1_tests(int &checks);
+int run_app_f1_tests(int &checks);
+int run_market_tests(int &checks);
+int run_markets_app_tests(int &checks);
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -6578,6 +6584,22 @@ static void test_panel_text() {
   CHECK_EQ(panel_text("a\xC2\xA0" "b\xE2\x80\x89" "c"), std::string("a b c"));
   CHECK_EQ(panel_text("a\xE2\x80\x8B" "b\xC2\xAD" "c\xEF\xBB\xBF"), std::string("abc"));
   CHECK_EQ(panel_text("line\none\ttwo"), std::string("line one two"));
+  // The ticker's color marker never gets through.
+  CHECK_EQ(panel_text("Rock `n` Roll"), std::string("Rock 'n' Roll"));
+
+  using esphome::gameday::ticker_markup;
+  using esphome::gameday::TickerSpan;
+  const std::string line = "#5 OSU vs #12 MICH | Q2 4:10 | OSU -3.5 COVERING | SMITH O 80.5 REC YDS 41 OFF TRACK";
+  CHECK_EQ(ticker_markup(line, {}), line);
+  CHECK_EQ(ticker_markup(line, {{"OSU -3.5 COVERING", 0x2ED573}, {"SMITH O 80.5 REC YDS 41 OFF TRACK", 0xFF3B3B}}),
+           std::string("#5 OSU vs #12 MICH | Q2 4:10 | `2ED573 OSU -3.5 COVERING` | "
+                       "`FF3B3B SMITH O 80.5 REC YDS 41 OFF TRACK`"));
+  // No color, or not in the line: unchanged.
+  CHECK_EQ(ticker_markup(line, {{"BET OSU -3.5", 0}, {"OSU -7 COVERING", 0x2ED573}}), line);
+  // Spans are found in order, past the one before.
+  CHECK_EQ(ticker_markup("A WON | A WON", {{"A WON", 0x2ED573}, {"A WON", 0xFFD000}}),
+           std::string("`2ED573 A WON` | `FFD000 A WON`"));
+  CHECK_EQ(ticker_markup("x", {{"x", 0x00000A}}), std::string("`00000A x`"));
   // A splash keeps only its line break.
   CHECK_EQ(panel_text("PHI\nFUMBLE RECOVERY", true), std::string("PHI\nFUMBLE RECOVERY"));
   CHECK_EQ(panel_text("a\r\nb\tc", true), std::string("a \nb c"));
@@ -9201,10 +9223,16 @@ int main() {
   failures += run_watch_tests(checks);
   failures += run_player_tests(checks);
   failures += run_prop_tests(checks);
+  failures += run_flight_tests(checks);
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
   failures += run_layout_tests(checks);
+  failures += run_app_tests(checks);
+  failures += run_f1_tests(checks);
+  failures += run_app_f1_tests(checks);
+  failures += run_market_tests(checks);
+  failures += run_markets_app_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

@@ -22,7 +22,7 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [Soccer: MLS and the Premier League](/using/soccer/)
 - [Golf: PGA Tour and LPGA Tour](/using/golf/)
 - [Racing: Formula 1 and NASCAR Cup Series](/using/racing/)
-- [Bets](/using/bets/): type in bets you've placed, and the ticker says whether each one is covering.
+- [Bets](/using/bets/): type in bets and player props you've placed, and the ticker says whether each one is covering or on track.
 - [The ticker](/using/ticker/): the scrolling line along the bottom.
 - [Panel sizes and layouts](/using/panel-sizes/): one 64x64 panel, a 128x64 display, three or four panels in a row, or two rows of two, and the second area.
 - [WizMote remote](/using/remote/): pairing and what each button does.
@@ -31,3 +31,6 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [Wi-Fi](/using/wifi/): saved networks, the hotspot and `.local` names.
 - [Home Assistant (optional)](/using/home-assistant/): adding the panel to Home Assistant.
 - [Brightness, panel on and off, and the clock](/using/brightness-and-clock/): night hours, and the clock and text sizes too.
+- [The F1 display](/using/f1/): the running order during a session, the next session's countdown, the circuit, the weather there, the championships and the last race, on the main board or in the second area.
+- [Stocks & Crypto](/using/markets/): up to eight stocks, funds, indexes and coins, on the main board or in the second area.
+- [Flight Tracker](/using/flights/): the planes flying near a spot you pick, on the main board or in the second area.

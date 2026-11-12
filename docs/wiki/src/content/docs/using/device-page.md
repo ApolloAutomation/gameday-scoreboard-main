@@ -1,13 +1,13 @@
 ---
 title: "The device page"
-description: "The web page your panel serves: a live copy of the board, quick settings, the team chooser, every setting, favorite players, bets and firmware updates."
+description: "The web page your panel serves: a live copy of the board, quick settings, the team chooser, every setting, favorite players, bets and props, the other displays' cards and firmware updates."
 sidebar:
   order: 2
 ---
 
 Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
-The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; and a team's roster when you add a favorite player, from ESPN. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
+The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; and a town or a ZIP code you look up for the [Flight Tracker](/using/flights/)'s home, from Open-Meteo's place search. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
 ## The live board
 
@@ -21,12 +21,8 @@ A ranked college team shows its rank in front of its abbreviation on the board, 
 
 Under the board are tags for the game on it:
 
-- **Bets**: one for each bet you typed into the **Bets** card that's on that game: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. See [Bets](/using/bets/).
+- **Bets**: one for each bet you typed into the **Bets** card that's on that game: the bet before the start, then whether it's **COVERING**, **NOT COVERING** or a **PUSH**, and after the final **WON**, **LOST** or **PUSH**. Each player prop on the game gets one too, with the player's number and **ON TRACK**, **OFF TRACK**, **HIT** or **NOT YET**, then the result. See [Bets](/using/bets/) and [Player props](/using/bets/#player-props).
 - **Favorite players**: while the game is live, one for each of your favorite players that ESPN lists among its leaders, with their stat line, like **ALLEN 21/34, 241 YDS, 2 TD**: the same line the panel's ticker shows. See [Favorite players](/using/favorite-players/).
-
-:::note[Coming in the next release]
-The **Bets** tags include one for each player prop on the game too, with the player's number and **ON TRACK**, **OFF TRACK**, **HIT** or **NOT YET**, then the result. See [Player props](/using/bets/#player-props).
-:::
 
 When nothing is on, the board says why. When the panel has a reason of its own, the page shows the same words the panel shows, like **Can't reach ESPN**, **Can't reach MLB**, **Can't reach HockeyTech** or **Getting ready**. Otherwise it says **No upcoming game for this team**, **No live games right now** or **None of your favorites has a game coming up**, or, with nothing on the schedule, **No upcoming event for this tour** for a golf tour and **No upcoming race for this series** for a racing series. See [Panel messages](/help/panel-messages/) for what the panel's own messages mean.
 
@@ -70,9 +66,9 @@ The page puts what you change most at the top, and folds the rest away. From the
 
 1. **Quick settings**, right under the board: **Panel on**, **Brightness**, **Follow this game** while there's a game to follow, the **Idle display**, and on three or four panels in a row or two rows of two, what the second area **Shows**.
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
-3. The cards: **Panel**, **Favorites**, **Favorite players** and **Bets**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
+3. The cards: **Panel**, **Flight Tracker**, **Favorites**, **Favorite players**, **Bets** and **Stocks & Crypto**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
 
-Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites**, **Favorite players** and **Bets** start open when they hold anything, with how many beside the name, like **3 of 16**, and folded while they're empty.
+Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites** and **Favorite players** start open when they hold anything, and **Bets** when it holds a bet, with how many beside the name, like **3 of 16**. Otherwise they start folded, so **Bets** holding only player props starts folded, with how many beside it, like **1 prop**. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
 
 The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
 
@@ -94,16 +90,18 @@ The settings, in the order the page shows them:
 | **After the final** (Favorite teams) | How long a favorite's final stays up before the playlist moves on, 30 seconds to 60 minutes. Starts at 30 seconds. |
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them, every 30 seconds or every 1 to 30 minutes, from the list next to it. |
 | **Ticker speed** (Panel) | How fast the ticker scrolls, 1 to 10. |
-| **Showing** (Panel) | The Scoreboard page or the Clock page. |
+| **Showing** (Panel) | The Scoreboard page, the Clock page, or another display: **F1**, **Stocks & Crypto** or **Flight Tracker**. See below. |
 | **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, the Clock page and the game clock during a game, like "5:21 3rd" or "Halftime", wherever they fit without touching the logos, records, scores or the row under them, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
 | **Standing next to pro teams** (Panel) | **Record** (where a new panel starts), **Seed** or **Place**: what your pro team shows where its record goes. See below. |
 | **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores** or **Next game**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
+| Flight Tracker | **Home location**, **Within** and your own receiver. See [The Flight Tracker card](#the-flight-tracker-card). |
 | **Only today's games** (Favorites) | The Favorite teams playlist skips favorites that aren't playing today. |
 | Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
 | Favorite players | Up to eight players. See [The Favorite players card](#the-favorite-players-card). |
-| Bets | Up to eight bets you've placed. See [The Bets card](#the-bets-card). |
+| Bets | Up to eight bets and eight player props you've placed. See [The Bets card](#the-bets-card). |
+| Stocks & Crypto | Up to eight symbols. See [The Stocks & Crypto card](#the-stocks--crypto-card). |
 | Ticker: **Down and distance** | Football: the down, yards to go and where the ball is. |
 | Ticker: **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
 | Ticker: **Match stats** | Soccer: goals, cards, possession and shots. |
@@ -118,6 +116,8 @@ The settings, in the order the page shows them:
 | **Install updates automatically** (Device) | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
+
+**Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).
 
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
@@ -135,10 +135,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 
 | Setting | What it does |
 | --- | --- |
-| **Shows** | **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date**, and on three and four wide **Nothing: the board fills the row**, where those start. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
+| **Shows** | **Rotating live games**, **A second team's game**, **Today's scores**, **Clock and date**, **F1**, **Stocks & Crypto** or **Flight Tracker**, and on three and four wide **Nothing: the board fills the row**, where those start. While the main board shows another display, **Game Day** puts the scoreboard here. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
 
-A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game** or **No other live games: showing the clock**. See [The second area](/using/panel-sizes/#the-second-area).
+A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game**, **No other live games: showing the clock**, **Showing F1.** or **Showing Game Day.** When the main board shows the display you picked here already, it says why the area shows the clock instead, like **The main board shows F1, so this shows the clock.** See [The second area](/using/panel-sizes/#the-second-area).
 
 ### Celebrations
 
@@ -177,17 +177,34 @@ A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel
 
 The Time line in the Setup card names the panel's timezone. While it follows your browser, opening the page from a browser in another zone moves the panel to that zone. Tap **choose manually** to pick one from the list instead; the page then leaves it alone until you tap **follow this browser**. The list covers the US zones (Eastern, Central, Mountain, Arizona, Pacific, Alaska and Hawaii), Canada Atlantic and Newfoundland, Mexico City, UK and Ireland, Central Europe, Australia Eastern and UTC. A new panel starts on US Central.
 
+## The Flight Tracker card
+
+The **Flight Tracker** card comes after the Panel card. It sets up the [Flight Tracker](/using/flights/):
+
+| Setting | What it does |
+| --- | --- |
+| **Home location** | Type a town, a ZIP or postal code, or a latitude and longitude like **40.64, -73.78**, then tap **Find** or press Enter. A town or a code lists the places found; tap the right one. The panel keeps the latitude and longitude and the place's name. |
+| **Planes near** | The spot the panel has, with **Clear** to remove it. |
+| **Within** | How far from home a plane can be: 5, 10, 15, 25, 50 or 100 miles in the US and UK time zones, or 5, 10, 25, 50, 100 or 150 km elsewhere. A new panel starts at 10 miles. |
+| **Your own receiver** | Optional: an ADS-B receiver on your network, then **Save**. For tar1090 its address is enough, like **192.168.1.50**; for PiAware or another receiver, its aircraft.json address, like `http://192.168.1.50/skyaware/data/aircraft.json`. Save it empty to stop using it. See [Your own receiver](/using/flights/#your-own-receiver). |
+
+The line at the bottom says what the panel is doing: **Looking for planes.**, how many planes are nearby and where they came from, like **12 planes nearby, from Flightradar24.**, or **Can't reach the flight data right now.** While the Flight Tracker is off the panel it says it isn't reading planes, rather than an old count. Until you choose the Flight Tracker, it says to choose it under **Showing**; when you have and the night hours' clock is up instead, it says so.
+
+If a place can't be found, the card says so: try a town and state, or a ZIP code. If the place search can't be reached, type the latitude and longitude instead.
+
 ## The Favorite players card
 
 The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
 
 ## The Bets card
 
-The **Bets** card comes after the Favorite players card. It starts open while it holds a bet and folded while it's empty; tap **Bets** to open or fold it. The number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
+The **Bets** card comes after the Favorite players card. It starts open while it holds a bet, and folded while it holds none, even with player props in it; tap **Bets** to open or fold it. The number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
 
-:::note[Coming in the next release]
 The kind of bet has a fifth choice, **Player prop**. Pick the player's team, and your browser reads its roster from ESPN; or tap **Favorite players** to list just your favorite players, from every team. Then pick the player, the **Stat** (the ones for the player's sport), **Over** or **Under** and the line, like 24.5, and tap **Add bet**. A yes prop, like an anytime touchdown, has no side or line. Minor league, AHL and ECHL teams are left out of the chooser for a prop, since ESPN has no rosters or box scores for them. The card lists props after the bets, with the player's number so far, and the number beside the card's name counts them too, like **2 of 8 · 1 prop**. See [Player props](/using/bets/#player-props).
-:::
+
+## The Stocks & Crypto card
+
+The **Stocks & Crypto** card comes after the Bets card. It lists the symbols the display shows, up to eight, each with its price and the day's change in green or red, its kind and whether its market is open, and **▲**, **▼** and **✕** to move it or remove it. The number beside the card's name says how many are in use, like **4 of 8**, with **the starting list** while it's still SPY, AAPL, BTC and ETH. To add one, type it under **Symbol**, like **AAPL**, **^GSPC** or **BTC**, pick its **Kind** if it's a symbol that's both a coin and a stock, and tap **Add symbol**. The line under **Symbol** says what the panel will save before you add it, and a symbol Yahoo Finance doesn't list says so once the panel has read it. A line under the hint says when the panel is reading Kraken and Nasdaq while Yahoo Finance is out, or, when nothing listed is on them, that the prices wait for Yahoo Finance. Whether a market is open is as of now, and when the prices are more than half an hour old, because the display isn't on screen, a line says when they were read. **▲**, **▼** and **✕** wait until the panel has made the change, so a double tap acts once. See [Stocks & Crypto](/using/markets/).
 
 ## The Device card
 
@@ -218,13 +235,13 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
-- **Data used**: how much the panel has downloaded since it started, from ESPN, and from MLB and HockeyTech when it follows their teams, for anyone on a capped internet plan.
+- **Data used**: how much the panel has downloaded since it started, for anyone on a capped internet plan: from ESPN, from MLB and HockeyTech when it follows their teams, and what F1, Stocks & Crypto and the Flight Tracker read.
 
 ### Follow beta
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.3-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.4-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

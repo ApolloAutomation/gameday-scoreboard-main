@@ -1,0 +1,83 @@
+[
+  {
+    "_airport_codes_iata": "unknown",
+    "_airports": [],
+    "airline_code": "unknown",
+    "airport_codes": "unknown",
+    "callsign": "N1103S",
+    "number": "unknown"
+  },
+  {
+    "_airport_codes_iata": "unknown",
+    "_airports": [],
+    "airline_code": "unknown",
+    "airport_codes": "unknown",
+    "callsign": "ZZZ999",
+    "number": "unknown"
+  },
+  null,
+  {
+    "_airport_codes_iata": "IAH-LHR",
+    "_airports": [
+      {
+        "alt_feet": 97.0,
+        "alt_meters": 29.57,
+        "countryiso2": "US",
+        "iata": "IAH",
+        "icao": "KIAH",
+        "lat": 29.9844,
+        "location": "Houston",
+        "lon": -95.3414,
+        "name": "George Bush Intercontinental Houston Airport"
+      },
+      {
+        "alt_feet": 83.0,
+        "alt_meters": 25.3,
+        "countryiso2": "GB",
+        "iata": "LHR",
+        "icao": "EGLL",
+        "lat": 51.4706,
+        "location": "London",
+        "lon": -0.461941,
+        "name": "London Heathrow Airport"
+      }
+    ],
+    "airline_code": "UAL",
+    "airport_codes": "KIAH-EGLL",
+    "callsign": "UAL5",
+    "number": "5",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "SFO-JFK",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "SFO",
+        "icao": "KSFO",
+        "lat": 37.618999,
+        "location": "San Francisco",
+        "lon": -122.375,
+        "name": "San Francisco International Airport"
+      },
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      }
+    ],
+    "airline_code": "JBU",
+    "airport_codes": "KSFO-KJFK",
+    "callsign": "JBU416",
+    "number": "416",
+    "plausible": true
+  }
+]

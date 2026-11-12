@@ -1,0 +1,141 @@
+[
+  {
+    "_airport_codes_iata": "SFO-JFK",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "SFO",
+        "icao": "KSFO",
+        "lat": 37.618999,
+        "location": "San Francisco",
+        "lon": -122.375,
+        "name": "San Francisco International Airport"
+      },
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      }
+    ],
+    "airline_code": "JBU",
+    "airport_codes": "KSFO-KJFK",
+    "callsign": "JBU416",
+    "number": "416",
+    "plausible": false
+  },
+  {
+    "_airport_codes_iata": "JFK-RFD",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      },
+      {
+        "alt_feet": 742.0,
+        "alt_meters": 226.16,
+        "countryiso2": "US",
+        "iata": "RFD",
+        "icao": "KRFD",
+        "lat": 42.1954,
+        "location": "Chicago/Rockford",
+        "lon": -89.097198,
+        "name": "Chicago Rockford International Airport"
+      }
+    ],
+    "airline_code": "UPS",
+    "airport_codes": "KJFK-KRFD",
+    "callsign": "UPS1125",
+    "number": "1125",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "CLT-LGA",
+    "_airports": [
+      {
+        "alt_feet": 748.0,
+        "alt_meters": 227.99,
+        "countryiso2": "US",
+        "iata": "CLT",
+        "icao": "KCLT",
+        "lat": 35.214001,
+        "location": "Charlotte",
+        "lon": -80.9431,
+        "name": "Charlotte Douglas International Airport"
+      },
+      {
+        "alt_feet": 21.0,
+        "alt_meters": 6.4,
+        "countryiso2": "US",
+        "iata": "LGA",
+        "icao": "KLGA",
+        "lat": 40.777199,
+        "location": "New York",
+        "lon": -73.872597,
+        "name": "La Guardia Airport"
+      }
+    ],
+    "airline_code": "AAL",
+    "airport_codes": "KCLT-KLGA",
+    "callsign": "AAL1070",
+    "number": "1070",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "DAL-PHX-LAS",
+    "_airports": [
+      {
+        "alt_feet": 487.0,
+        "alt_meters": 148.44,
+        "countryiso2": "US",
+        "iata": "DAL",
+        "icao": "KDAL",
+        "lat": 32.847099,
+        "location": "Dallas",
+        "lon": -96.851799,
+        "name": "Dallas Love Field"
+      },
+      {
+        "alt_feet": 1135.0,
+        "alt_meters": 345.95,
+        "countryiso2": "US",
+        "iata": "PHX",
+        "icao": "KPHX",
+        "lat": 33.434299,
+        "location": "Phoenix",
+        "lon": -112.012001,
+        "name": "Phoenix Sky Harbor International Airport"
+      },
+      {
+        "alt_feet": 2181.0,
+        "alt_meters": 664.77,
+        "countryiso2": "US",
+        "iata": "LAS",
+        "icao": "KLAS",
+        "lat": 36.080101,
+        "location": "Las Vegas",
+        "lon": -115.152,
+        "name": "Harry Reid International Airport"
+      }
+    ],
+    "airline_code": "SWA",
+    "airport_codes": "KDAL-KPHX-KLAS",
+    "callsign": "SWA1234",
+    "number": "1234",
+    "plausible": false
+  }
+]

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace esphome::gameday {
 
@@ -130,7 +131,9 @@ inline std::string panel_text(const std::string &in, bool lines = false) {
   while (i < in.size()) {
     const uint8_t c = (uint8_t) in[i];
     if (c < 0x80) {
-      if (c >= 0x20 && c != 0x7F)
+      if (c == '`')
+        out += '\'';  // the ticker's color marker
+      else if (c >= 0x20 && c != 0x7F)
         out += (char) c;
       else if (c == '\n' && lines)
         out += '\n';
@@ -174,6 +177,38 @@ inline std::string panel_text(const std::string &in, bool lines = false) {
       panel_text_append_(out, cp);
     i += n;
   }
+  return out;
+}
+
+// Ticker text drawn in its own color, like a bet
+struct TickerSpan {
+  std::string text;
+  uint32_t rgb;
+};
+
+// LVGL's recolor marker, defined in __init__.py
+constexpr char kRecolorCmd = '`';
+
+// Wraps each span found, in order: "`2ED573 BUF -3.5 COVERING`"
+inline std::string ticker_markup(const std::string &line, const std::vector<TickerSpan> &spans) {
+  static const char kHex[] = "0123456789ABCDEF";
+  std::string out;
+  size_t from = 0;
+  for (const TickerSpan &s : spans) {
+    const std::string text = panel_text(s.text);
+    const size_t at = text.empty() || s.rgb == 0 ? std::string::npos : line.find(text, from);
+    if (at == std::string::npos)
+      continue;
+    out.append(line, from, at - from);
+    out += kRecolorCmd;
+    for (int shift = 20; shift >= 0; shift -= 4)
+      out += kHex[(s.rgb >> shift) & 0xF];
+    out += ' ';
+    out += text;
+    out += kRecolorCmd;
+    from = at + text.size();
+  }
+  out.append(line, from, std::string::npos);
   return out;
 }
 
