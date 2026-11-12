@@ -122,7 +122,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
-  `bets.h`, `players.h`, `props.h`, `split.h`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`. `logo_cache.cpp` downloads and decodes
   logos. `board_view.cpp/.h` is the board renderer: a `BoardView` holds a
@@ -267,6 +267,31 @@ league second team's reads go to MLB or HockeyTech like the board's
 With Rotating live games, the watcher reads every live game of the sources'
 leagues (`WatchCtx::all`), ESPN's only, as ever (`from_espn`), and a big play
 jumps the area (`a2_jump_`) instead of taking the main board.
+
+**Other displays.** Each area shows one display: Game Day (everything
+above) or another, an `App` (`apps.h`) that `register_apps` in
+`app_list.cpp` puts in its `Display` slot at boot; the firmware lists the
+ones it has (`AppSlots::mask`) in the state document's `displays`, and the
+page offers only those. The main area's choice is `display` (the `display`
+set key, `SplitPrefs::display`, refused for one the firmware lacks); the
+second area's are `SplitShow` 5 to 8, Game Day (the board's own game, the
+area's `AreaView::GAME`, while the main area shows another) and one per
+display (`AreaView::APP`, never the one the main area shows). `main_view`
+puts the clock up in the night hours unless the display says it's busy,
+and `app_main_dim` is Off or dim for it. A display reads in the board's
+gaps (`start_app_job_`, after the area's own reads) only while it's on
+screen, at its `poll_ms`, each read fitted with `AppTimes`, on its own
+`Source` and `HostWait`; `open_` sends its method, body and headers
+(`AppRequest`) and tells its hosts apart (`url_source`). Its `parse` runs
+on the fetch task over an `AppStream`, `apply` on the main loop, and
+`frame` fills an `AppFrame` (the leaderboard's title, six rows and ticker,
+and one polyline) that `app_fields_` turns into the board's leaderboard
+fields: `gd_board` and a `line` widget on the board, `RowsView` and its line
+in the second area (`area_build`). Its own set keys go after `kSetKeys`, its
+settings in their own blob, its state under its key, its host's status in
+the health block. Game Day's own reads, splashes and Home Assistant's
+sensors carry on whatever the areas show; its splash shows only where Game
+Day is on screen.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -695,7 +720,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   `test_props.cpp` (player props and box score reads),
   `test_watch.cpp` (the big-play watcher: which games, big plays from day
   scoreboards, when a read may run, when the board switches and goes back),
-  `test_players.cpp` (favorite players) and `test_networks.cpp`
+  `test_players.cpp` (favorite players), `test_apps.cpp` (the display
+  picker, its frame helpers and a stand-in display) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.
