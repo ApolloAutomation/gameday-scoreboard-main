@@ -7264,14 +7264,6 @@ std::string GamedayComponent::health_json_() {
   h.mlb_ago = mlb_at == 0 ? -1 : (int64_t) ((millis() - mlb_at) / 1000);
   h.ht_status = this->host_status_[ht].load();
   h.ht_ago = ht_at == 0 ? -1 : (int64_t) ((millis() - ht_at) / 1000);
-  for (int i = 0; i < ::espn::kHealthApps; i++) {
-    const ::espn::Display d = (::espn::Display) (i + 1);
-    const size_t src = (size_t) ::espn::display_source(d);
-    const uint32_t app_at = this->host_answer_ms_[src].load();
-    h.app_key[i] = ::espn::display_key(d);
-    h.app_status[i] = this->host_status_[src].load();
-    h.app_ago[i] = app_at == 0 ? -1 : (int64_t) ((millis() - app_at) / 1000);
-  }
 #ifdef ESPHOME_PROJECT_VERSION
   h.version = ESPHOME_PROJECT_VERSION;
 #else
@@ -7287,17 +7279,24 @@ std::string GamedayComponent::health_json_() {
 #else
   h.channel = "none";
 #endif
-  char buf[::espn::kHealthJsonSize];
-  int n = ::espn::health_json(buf, sizeof(buf), h);
-  if (n <= 0 || n >= (int) sizeof(buf))
+  // On the heap: httpd's stack has little room left
+  std::string out(::espn::kHealthJsonSize, '\0');
+  const int n = ::espn::health_json(&out[0], out.size(), h);
+  if (n <= 0 || n >= (int) out.size())
     return "{}";
+  out.resize(n - 1);
+  for (int i = 0; i < ::espn::kHealthApps; i++) {
+    const ::espn::Display d = (::espn::Display) (i + 1);
+    const size_t src = (size_t) ::espn::display_source(d);
+    const uint32_t app_at = this->host_answer_ms_[src].load();
+    ::espn::health_app_json(out, ::espn::display_key(d), this->host_status_[src].load(),
+                            app_at == 0 ? -1 : (int64_t) ((millis() - app_at) / 1000));
+  }
   // The heat and power keys go in before its closing brace (guard.h)
   char guard[::espn::kGuardJsonSize];
   int g = ::espn::guard_json_keys(guard, sizeof(guard), this->heat_.last_c, this->heat_.step, this->power_log_);
-  if (g <= 0 || g >= (int) sizeof(guard))
-    return std::string(buf, n);
-  std::string out(buf, n - 1);
-  out.append(guard, g);
+  if (g > 0 && g < (int) sizeof(guard))
+    out.append(guard, g);
   out += '}';
   return out;
 }

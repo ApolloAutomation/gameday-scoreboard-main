@@ -349,44 +349,19 @@ void test_app_slots() {
 }
 
 void test_health_apps() {
-  Health h{};
-  h.start = Restart::RESTART;
-  h.version = "x";
-  h.channel = "stable";
-  char buf[kHealthJsonSize];
-  health_json(buf, sizeof(buf), h);
+  std::string out = "{";
+  health_app_json(out, "f1", 200, -1);  // none read yet
+  health_app_json(out, nullptr, 200, 7);
+  ACHECK(out == "{");
+  health_app_json(out, "f1", 200, 7);
+  health_app_json(out, "markets", 999, 4000000000LL);
+  out += "}";
   JsonDocument doc;
-  ACHECK(!deserializeJson(doc, buf));
-  ACHECK(doc["f1"].isNull());  // none read yet
-  h.app_key[0] = "f1";
-  h.app_status[0] = 200;
-  h.app_ago[0] = 7;
-  h.app_key[2] = "flights";  // no read: left out
-  health_json(buf, sizeof(buf), h);
-  doc.clear();
-  ACHECK(!deserializeJson(doc, buf));
-  ACHECK(doc["f1"].as<int>() == 200 && doc["f1_ago"].as<int>() == 7 && doc["flights"].isNull());
-  // Every host's worst case fits.
-  h.uptime_s = h.fault_ago = h.espn_ago = h.mlb_ago = h.ht_ago = 4000000000LL;
-  h.fault = Restart::BROWNOUT;
-  h.wifi = true;
-  h.rssi = -100;
-  h.heap_kb = h.block_kb = h.psram_kb = 999999.9f;
-  h.espn_status = h.mlb_status = h.ht_status = 999;
-  h.version = "2026.12.31-beta.1234567";
-  h.built = 4000000000LL;
-  h.channel = "stable";
-  const char *keys[] = {"f1", "markets", "flights"};
-  for (int i = 0; i < kHealthApps; i++) {
-    h.app_key[i] = keys[i];
-    h.app_status[i] = 999;
-    h.app_ago[i] = 4000000000LL;
-  }
-  const int n = health_json(buf, sizeof(buf), h);
-  ACHECK(n > 0 && (size_t) n < sizeof(buf));
-  doc.clear();
-  ACHECK(!deserializeJson(doc, buf));
-  ACHECK(doc["markets_ago"].as<int64_t>() == 4000000000LL && doc["ht"].as<int>() == 999);
+  out[1] = ' ';  // the leading comma
+  ACHECK(!deserializeJson(doc, out));
+  ACHECK(doc["f1"].as<int>() == 200 && doc["f1_ago"].as<int>() == 7);
+  ACHECK(doc["markets"].as<int>() == 999 && doc["markets_ago"].as<int64_t>() == 4000000000LL);
+  ACHECK(doc["flights"].isNull());
 }
 
 }  // namespace

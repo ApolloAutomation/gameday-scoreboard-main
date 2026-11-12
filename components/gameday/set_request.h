@@ -44,8 +44,7 @@ enum class Mode : uint8_t { MY_TEAM = 0, LIVE_NFL = 1, LIVE_NCAA = 2, LIVE_ANY =
 constexpr int kModeCount = 6;
 static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kModeCount - 1");
 
-// Saved as a byte (SplitPrefs): append only, never renumber.
-// GAMEDAY and up: Game Day, then one per display.
+// Saved byte, append only: GAMEDAY and up are displays.
 enum class SplitShow : uint8_t {
   OFF = 0,
   LIVE = 1,

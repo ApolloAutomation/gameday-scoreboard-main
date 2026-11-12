@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 namespace espn {
 
@@ -221,19 +222,15 @@ struct Health {
   int64_t mlb_ago{-1};  // -1 before its first read: no key
   int ht_status{0};     // and for HockeyTech (the AHL and the ECHL)
   int64_t ht_ago{-1};
-  // Each other display's host; nullptr key leaves it out.
-  const char *app_key[kHealthApps]{};
-  int app_status[kHealthApps]{};
-  int64_t app_ago[kHealthApps]{-1, -1, -1};
 };
 
 // Room for the longest "health" object (GamedayComponent::health_json_
 // sends "{}" when it doesn't fit, and the device page hides Diagnostics).
-static const size_t kHealthJsonSize = 576;
+static const size_t kHealthJsonSize = 448;
 
 // The "health" object in /gameday/state. Optional keys are left out rather
 // than sent empty: fault and fault_ago, rssi off Wi-Fi, espn before a read.
-// Likewise mlb, ht and display hosts before their first read.
+// Likewise mlb and ht before their first read.
 // Returns what snprintf does; the strings are the firmware's own, no quotes.
 inline int health_json(char *buf, size_t size, const Health &h) {
   char fault[64] = "";
@@ -256,17 +253,25 @@ inline int health_json(char *buf, size_t size, const Health &h) {
                    (long long) h.mlb_ago);
   if (h.ht_ago >= 0 && at >= 0 && (size_t) at < sizeof(espn))
     snprintf(espn + at, sizeof(espn) - at, ",\"ht\":%d,\"ht_ago\":%lld", h.ht_status, (long long) h.ht_ago);
-  char apps[144] = "";
-  int ap = 0;
-  for (int i = 0; i < kHealthApps; i++)
-    if (h.app_key[i] != nullptr && h.app_ago[i] >= 0 && ap >= 0 && (size_t) ap < sizeof(apps))
-      ap += snprintf(apps + ap, sizeof(apps) - ap, ",\"%s\":%d,\"%s_ago\":%lld", h.app_key[i], h.app_status[i],
-                     h.app_key[i], (long long) h.app_ago[i]);
   return snprintf(buf, size,
                   "{\"up\":%lld,\"start\":\"%s\",\"boots\":%u%s,\"heap_kb\":%.1f,\"block_kb\":%.1f,"
-                  "\"psram_kb\":%.1f%s%s%s,\"version\":\"%s\",\"built\":%lld,\"channel\":\"%s\"}",
+                  "\"psram_kb\":%.1f%s%s,\"version\":\"%s\",\"built\":%lld,\"channel\":\"%s\"}",
                   (long long) h.uptime_s, restart_key(h.start), (unsigned) h.boots, fault, h.heap_kb, h.block_kb,
-                  h.psram_kb, rssi, espn, apps, h.version, (long long) h.built, h.channel);
+                  h.psram_kb, rssi, espn, h.version, (long long) h.built, h.channel);
+}
+
+// A display host's keys, on the heap: httpd's stack is small.
+inline void health_app_json(std::string &out, const char *key, int status, int64_t ago) {
+  if (key == nullptr || ago < 0)
+    return;
+  out += ",\"";
+  out += key;
+  out += "\":";
+  out += std::to_string(status);
+  out += ",\"";
+  out += key;
+  out += "_ago\":";
+  out += std::to_string((long long) ago);
 }
 
 }  // namespace espn
