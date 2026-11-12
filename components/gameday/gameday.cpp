@@ -5853,15 +5853,13 @@ void GamedayComponent::run_app_job_() {
   if (container == nullptr)
     return;
   ContainerReader reader(container, this->espn_bytes_);
+  ReaderStream in(reader);
   JsonDocument filter(::espn::detail::json_allocator());
   if (a->filter(filter)) {
-    // The same document read as Game Day's, no second parser.
+    // One document, through the stream's same reader.
     JsonDocument doc(::espn::detail::json_allocator());
-    j.app_ok = !deserializeJson(doc, reader, DeserializationOption::Filter(filter),
-                                DeserializationOption::NestingLimit(40)) &&
-               a->parse_doc(doc.as<JsonObjectConst>(), j.app_now);
+    j.app_ok = !in.json(doc, filter, 40) && a->parse_doc(doc.as<JsonObjectConst>(), j.app_now);
   } else {
-    ReaderStream in(reader);
     j.app_ok = a->parse(in, j.app_now);
   }
   container->end();

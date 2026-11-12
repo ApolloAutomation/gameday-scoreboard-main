@@ -154,19 +154,34 @@ bool MarketsApp::request(int64_t now, AppRequest &out) {
   return !out.url.empty();
 }
 
-bool MarketsApp::parse(AppStream &in, int64_t now) {
+bool MarketsApp::filter(JsonDocument &f) {
+  switch (this->src_) {
+    case MarketSource::KRAKEN:
+      detail::fill_kraken_filter(f);
+      break;
+    case MarketSource::NASDAQ:
+      detail::fill_nasdaq_filter(f);
+      break;
+    default:
+      detail::fill_yahoo_filter(f);
+      break;
+  }
+  return true;
+}
+
+bool MarketsApp::parse_doc(JsonObjectConst root, int64_t now) {
   for (MarketQuote &r : this->read_)
     r = MarketQuote();
   int n = -1;
   switch (this->src_) {
     case MarketSource::KRAKEN:
-      n = parse_kraken_quotes(in, this->asked_, now, this->read_);
+      n = detail::kraken_from_doc(root, this->asked_, now, this->read_);
       break;
     case MarketSource::NASDAQ:
-      n = parse_nasdaq_quotes(in, this->asked_, now, this->read_);
+      n = detail::nasdaq_from_doc(root, this->asked_, now, this->read_);
       break;
     default:
-      n = parse_yahoo_quotes(in, this->asked_, this->read_);
+      n = detail::yahoo_from_doc(root, this->asked_, this->read_);
       break;
   }
   return n >= 0;

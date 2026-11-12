@@ -179,7 +179,8 @@ class MarketsApp final : public App {
   bool busy(int64_t now) const override;
   uint32_t poll_ms(int64_t now) const override;
   bool request(int64_t now, AppRequest &out) override;
-  bool parse(AppStream &in, int64_t now) override;
+  bool filter(JsonDocument &f) override;
+  bool parse_doc(JsonObjectConst root, int64_t now) override;
   void apply(bool ok, int64_t now) override;
   bool failed(bool refused) override;
   void frame(int w, int h, int64_t now, AppFrame &out) const override;
@@ -199,7 +200,7 @@ class MarketsApp final : public App {
   MarketQuote quotes_[kMarketSlots];
   bool miss_[kMarketSlots]{};  // Yahoo answered without it
   MarketFeed feed_;
-  // The read in flight; parse writes read_
+  // The read in flight; parse_doc writes read_
   MarketBlob asked_{};
   MarketSource src_{MarketSource::YAHOO};
   int64_t asked_at_{0};

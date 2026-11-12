@@ -17,6 +17,14 @@ namespace {
 int checks = 0;
 int failures = 0;
 
+// One read as run_app_job_ makes it.
+bool read_body(MarketsApp &a, const std::string &body, int64_t now) {
+  JsonDocument filter, doc;
+  return a.filter(filter) &&
+         !deserializeJson(doc, body, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(40)) &&
+         a.parse_doc(doc.as<JsonObjectConst>(), now);
+}
+
 #define KCHECK(cond, ...)                         \
   do {                                            \
     checks++;                                     \
@@ -264,8 +272,8 @@ void test_app() {
   KCHECK(a.request(kNow, req) && req.url == market_spark_url(a.symbols()), "%s", req.url.c_str());
   KCHECK(req.headers.size() == 1 && req.headers[0].name == "User-Agent" && req.headers[0].value == "Mozilla/5.0",
          "a browser's agent");
-  AppTextStream yahoo(slurp("fixtures/markets_yahoo_spark.json"));
-  KCHECK(a.parse(yahoo, kNow) && !a.quote(0).valid, "nothing shows before apply");
+  const std::string yahoo_body = slurp("fixtures/markets_yahoo_spark.json");
+  KCHECK(read_body(a, yahoo_body, kNow) && !a.quote(0).valid, "nothing shows before apply");
   a.apply(true, kNow);
   KCHECK(a.quote(0).valid && a.quote(4).valid && a.poll_ms(kNow) == kMarketPollMs, "read; coins every minute");
   // Busy in a trading day, never for coins alone
@@ -302,8 +310,8 @@ void test_app() {
   KCHECK(a.request(kNow + 120, req) && a.failed(false) && a.poll_ms(kNow + 120) == 0, "twice: the backups now");
   KCHECK(a.request(kNow + 121, req) && req.url == "https://api.kraken.com/0/public/Ticker?pair=XXBTZUSD,XETHZUSD",
          "%s", req.url.c_str());
-  AppTextStream kraken(slurp("fixtures/markets_kraken_ticker.json"));
-  KCHECK(a.parse(kraken, kNow + 121), "kraken");
+  const std::string kraken_body = slurp("fixtures/markets_kraken_ticker.json");
+  KCHECK(read_body(a, kraken_body, kNow + 121), "kraken");
   a.apply(true, kNow + 121);
   KCHECK(a.quote(2).price > 73746 && a.quote(2).price < 73747 && market_spark_count(a.quote(2)) >= 11,
          "BTC from Kraken, its line kept");
@@ -311,8 +319,8 @@ void test_app() {
   KCHECK(a.request(kNow + 122, req) && req.url.find("https://api.nasdaq.com/") == 0 &&
              req.url.find("brk.b%7Cstocks") != std::string::npos && req.url.find("zzzzq") != std::string::npos,
          "%s", req.url.c_str());
-  AppTextStream nasdaq(slurp("fixtures/markets_nasdaq_watchlist.json"));
-  KCHECK(a.parse(nasdaq, kNow + 122), "nasdaq");
+  const std::string nasdaq_body = slurp("fixtures/markets_nasdaq_watchlist.json");
+  KCHECK(read_body(a, nasdaq_body, kNow + 122), "nasdaq");
   a.apply(true, kNow + 122);
   KCHECK(a.poll_ms(kNow + 122) == kMarketPollMs && a.feed().backup, "then the usual minute");
   doc.clear();
@@ -321,8 +329,8 @@ void test_app() {
          "on the backups; only Yahoo says a symbol is unknown");
   KCHECK(a.request(kNow + 120 + kMarketRetrySeconds, req) && req.url.find("query1.finance.yahoo.com") != std::string::npos,
          "Yahoo again later");
-  AppTextStream again(slurp("fixtures/markets_yahoo_spark.json"));
-  KCHECK(a.parse(again, kNow + 720), "yahoo back");
+  const std::string again_body = slurp("fixtures/markets_yahoo_spark.json");
+  KCHECK(read_body(a, again_body, kNow + 720), "yahoo back");
   a.apply(true, kNow + 720);
   doc.clear();
   a.state(doc["markets"].to<JsonObject>());
@@ -342,9 +350,9 @@ void test_app() {
   AppFrame down;
   b.frame(64, 64, kNow, down);
   KCHECK(down.ticker == "Can't reach Yahoo Finance, Kraken or Nasdaq", "%s", down.ticker.c_str());
-  AppTextStream junk("<html>Edge: Too Many Requests</html>");
+  const std::string junk_body = "<html>Edge: Too Many Requests</html>";
   b.request(kNow, req);
-  KCHECK(!b.parse(junk, kNow), "not JSON");
+  KCHECK(!read_body(b, junk_body, kNow), "not JSON");
 }
 
 }  // namespace
