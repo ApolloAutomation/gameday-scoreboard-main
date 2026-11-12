@@ -82,6 +82,8 @@ BoardView *board_view();
 BoardView *board_view_set(const BoardView &bound);
 // Builds splash tiles and clock AM/PM widgets, once
 void board_build(BoardView &v);
+// Whether board_build found LVGL reading the color marker
+bool ticker_colors_on();
 
 // splash_h may exceed h: a 2x2 splash covers all four
 void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);

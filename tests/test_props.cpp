@@ -511,6 +511,20 @@ void test_soccer() {
   RCHECK(bw.n == 1 && bw.ids[0] == 3918298, "the box read keeps the league's prop players");
 }
 
+void test_color() {
+  // As the device page's chips (app.js propTone)
+  RCHECK(prop_color(PropStatus::ON_TRACK) == kBetGood && prop_color(PropStatus::HIT) == kBetGood &&
+             prop_color(PropStatus::WON) == kBetGood,
+         "good");
+  RCHECK(prop_color(PropStatus::OFF_TRACK) == kBetBad && prop_color(PropStatus::LOST) == kBetBad, "bad");
+  RCHECK(prop_color(PropStatus::NOT_YET) == kBetEven && prop_color(PropStatus::PUSH) == kBetEven &&
+             prop_color(PropStatus::VOID) == kBetEven,
+         "even");
+  RCHECK(prop_color(PropStatus::WAITING) == 0 && prop_color(PropStatus::PRE) == 0 &&
+             prop_color(PropStatus::UNREAD) == 0 && prop_color(PropStatus::LIVE) == 0,
+         "no color without a status word");
+}
+
 }  // namespace
 
 int run_prop_tests(int &total_checks) {
@@ -526,6 +540,7 @@ int run_prop_tests(int &total_checks) {
   test_store();
   test_progress();
   test_soccer();
+  test_color();
   total_checks += checks;
   return failures;
 }

@@ -34,6 +34,7 @@
 #include "hotspot.h"
 #include "idle.h"
 #include "offseason.h"
+#include "panel_text.h"
 #include "players.h"
 #include "props.h"
 #include "recap.h"
@@ -74,6 +75,7 @@ struct UpdateFields {
   std::string opponent_abbr;
   int opponent_score{0};
   std::string status_text;
+  std::vector<TickerSpan> ticker_spans;  // bets and props, in color
   std::string team_logo;
   std::string opponent_logo;
   int possession{0};
@@ -1137,7 +1139,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool bet_game_(const GameSnapshot &g, uint8_t league, ::espn::BetGame &out) const;
   // nullptr when the panel holds no game for b.
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
-  void bets_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
+  void bets_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
   // Player props: followed like bets, numbers from box scores.
   ESPPreferenceObject props_pref_;
   ::espn::PropBlob props_{};
@@ -1149,7 +1151,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
   // Half units, kPropNoValue when no number yet.
   int prop_now_(const ::espn::Prop &p, const GameSnapshot *g) const;
-  void props_ticker_(const GameSnapshot &g, uint8_t league, std::string &out) const;
+  void props_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
   // A game's box score while a prop waits.
   struct BoxGame {
     uint8_t league{0};

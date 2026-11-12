@@ -58,6 +58,10 @@ A bet on a team the panel isn't showing waits until a game of that team comes on
 
 A tie is a push for every kind of bet: a spread or total exactly on the line, or a moneyline game that ends level.
 
+:::note[Coming in the next release]
+Each bet scrolls in the same color as its tag on the device page: green while it's covering or after it won, red while it isn't or after it lost, and gold for a push or a game called off. Before the start it's the ticker's usual color.
+:::
+
 While the [idle display](/using/modes/#when-nothing-is-on-the-idle-display) shows something in place of the game, like the clock before the start or once the final has been up for its usual time, the panel's ticker has no bets. The device page's ticker, its board and the Bets card keep showing them.
 
 **The device page's board.** Under the board, a tag for each bet on the game: gray before the start, green while it's covering or after it won, red while it isn't or after it lost, and gold for a push or a game called off.
@@ -112,6 +116,8 @@ If something is missing or doesn't fit, the card says so before anything is save
 | Before the start | The prop itself, like **PROP ALLEN O 250.5 PASS YDS**. |
 | During the game | The player's number so far and how it's going: **ALLEN O 250.5 PASS YDS 187 ON TRACK** or **OFF TRACK**, and **HIT** once an over is already past its line. A yes prop says **ALLEN ANY TD NOT YET**, then **HIT**. |
 | After the final | **WON**, **LOST** or **PUSH**, with the final number for an over or under, like **ALLEN O 250.5 PASS YDS 262 WON**, or **VOID** with no number, until midnight. |
+
+Each prop scrolls in its device page color: green while it's on track, once it's hit and after a win, red while it's off track or after a loss, and gold for **NOT YET**, a push or a void. Before the start, and early in the game while the ticker shows the number alone, it's the ticker's usual color.
 
 **On track** looks at the pace: the number so far, stretched over the whole game by how much of it has been played. 120 passing yards at halftime is on pace for 240, so an over 250.5 is off track and an under on track. In baseball the game's share is counted in innings and outs, and in overtime or extra innings the number so far is the whole game's. In the first few minutes the ticker shows the number alone, since a pace means little that early. A pitcher who leaves early, or a starter who sits out the fourth quarter, keeps the pace they had, so take **ON TRACK** as a guide, not a forecast.
 

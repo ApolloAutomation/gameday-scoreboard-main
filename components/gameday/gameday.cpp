@@ -1291,7 +1291,7 @@ const GameSnapshot *GamedayComponent::bet_snapshot_(const ::espn::Bet &b, ::espn
   return nullptr;
 }
 
-void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, std::string &out) const {
+void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, UpdateFields &f) const {
   ::espn::BetGame g;
   if (!this->clock_set_() || !this->bet_game_(game, league, g))
     return;
@@ -1299,9 +1299,10 @@ void GamedayComponent::bets_ticker_(const GameSnapshot &game, uint8_t league, st
   for (const auto &b : this->bets_.blob.bets) {
     if (::espn::bet_empty(b) || b.event != g.event || b.league != g.league)
       continue;
-    if (!out.empty())
-      out += " | ";
-    out += ::espn::bet_ticker(b, ::espn::bet_status(b, &g, now));
+    const ::espn::BetStatus st = ::espn::bet_status(b, &g, now);
+    std::string text = ::espn::bet_ticker(b, st);
+    f.status_text += (f.status_text.empty() ? "" : " | ") + text;
+    f.ticker_spans.push_back({std::move(text), ::espn::bet_color(st)});
   }
 }
 
@@ -1397,7 +1398,7 @@ int GamedayComponent::prop_now_(const ::espn::Prop &p, const GameSnapshot *g) co
   return ::espn::kPropNoValue;
 }
 
-void GamedayComponent::props_ticker_(const GameSnapshot &game, uint8_t league, std::string &out) const {
+void GamedayComponent::props_ticker_(const GameSnapshot &game, uint8_t league, UpdateFields &f) const {
   ::espn::BetGame g;
   if (!this->clock_set_() || !this->bet_game_(game, league, g))
     return;
@@ -1407,9 +1408,10 @@ void GamedayComponent::props_ticker_(const GameSnapshot &game, uint8_t league, s
     if (::espn::prop_empty(p) || p.event != g.event || p.league != g.league)
       continue;
     const int v = this->prop_now_(p, &game);
-    if (!out.empty())
-      out += " | ";
-    out += ::espn::prop_ticker(p, ::espn::prop_status(p, &g, v, progress, now), v);
+    const ::espn::PropStatus st = ::espn::prop_status(p, &g, v, progress, now);
+    std::string text = ::espn::prop_ticker(p, st, v);
+    f.status_text += (f.status_text.empty() ? "" : " | ") + text;
+    f.ticker_spans.push_back({std::move(text), ::espn::prop_color(st)});
   }
 }
 
@@ -1589,6 +1591,9 @@ void GamedayComponent::dump_config() {
 #endif
 #ifdef GAMEDAY_BETA_CHANNEL
   ESP_LOGCONFIG(TAG, "  Follow beta: %s", this->follow_beta() ? "on" : "off");
+#endif
+#ifdef USE_LVGL
+  ESP_LOGCONFIG(TAG, "  Ticker colors: %s", ticker_colors_on() ? "on" : "off");
 #endif
 }
 
@@ -4999,8 +5004,8 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
   } else {
     for (const std::string &line : this->player_lines_(*g, league))
       f.status_text += (f.status_text.empty() ? "" : " | ") + line;
-    this->bets_ticker_(*g, league, f.status_text);
-    this->props_ticker_(*g, league, f.status_text);
+    this->bets_ticker_(*g, league, f);
+    this->props_ticker_(*g, league, f);
   }
   // No diamond in the area: outs go in text.
   if (f.sport == (uint8_t) ::espn::Sport::BASEBALL && g->state == GameState::IN && f.outs >= 0)
@@ -5937,12 +5942,13 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
   }
   f.kickoff = kickoff;
   f.status_text = ::espn::status_text(g, opts, kickoff);
+  f.ticker_spans.clear();
   // Players and bets only on the mode's own game.
   if (&g == &this->game_) {
     for (const std::string &line : this->player_lines_(g))
       f.status_text += (f.status_text.empty() ? "" : " | ") + line;
-    this->bets_ticker_(g, this->board_league_(), f.status_text);
-    this->props_ticker_(g, this->board_league_(), f.status_text);
+    this->bets_ticker_(g, this->board_league_(), f);
+    this->props_ticker_(g, this->board_league_(), f);
   }
 }
 

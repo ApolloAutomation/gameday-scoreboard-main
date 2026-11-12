@@ -23,7 +23,9 @@ During the game, a stat line for each of your favorite players that ESPN lists a
 Bets you typed into the device page's **Bets** card go at the end of the ticker of their game while it's on the board: the bet before the start, like **BET BUF -3.5**, then **BUF -3.5 COVERING**, **NOT COVERING** or **PUSH** during the game, and **WON**, **LOST** or **PUSH** after the final until midnight. The panel never connects to a sportsbook. See [Bets](/using/bets/).
 
 :::note[Coming in the next release]
-Player props come after the bets: the prop before the start, like **PROP ALLEN O 250.5 PASS YDS**, then the player's number so far and whether it's **ON TRACK** or **OFF TRACK**, like **ALLEN O 250.5 PASS YDS 187 ON TRACK**, or **HIT** once an over is past its line. A yes prop reads **ALLEN ANY TD NOT YET** until it's **HIT**. After the final the prop says **WON**, **LOST** or **PUSH**, with the final number for an over or under, or **VOID**, until midnight. See [Player props](/using/bets/#player-props).
+Each bet scrolls in green while it's covering or after it won, red while it isn't or after it lost, and gold for a push or a game called off, as on the device page.
+
+Player props come after the bets: the prop before the start, like **PROP ALLEN O 250.5 PASS YDS**, then the player's number so far and whether it's **ON TRACK** or **OFF TRACK**, like **ALLEN O 250.5 PASS YDS 187 ON TRACK**, or **HIT** once an over is past its line. A yes prop reads **ALLEN ANY TD NOT YET** until it's **HIT**. After the final the prop says **WON**, **LOST** or **PUSH**, with the final number for an over or under, or **VOID**, until midnight. Props scroll in the same colors as bets, with **NOT YET** in gold. See [Player props](/using/bets/#player-props).
 :::
 
 ## Ranks and standings
