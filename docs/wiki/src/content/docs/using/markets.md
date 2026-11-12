@@ -16,13 +16,15 @@ The panel keeps following your games while it shows Stocks & Crypto, and Home As
 
 ## What the panel shows
 
-Each symbol gets a row: the symbol, then its price and the day's change in percent, green when it's up, red when it's down and white when it hasn't moved. A row goes gray when its price is more than half an hour old while its market is open: a stock nobody has traded lately, or any symbol while the panel can't get new prices. Coins trade around the clock, so theirs is always open. A symbol the panel has no price for yet shows **--**.
+Each symbol gets a row: its logo, where there's room, then the symbol, its price and the day's change in percent, green when it's up, red when it's down and white when it hasn't moved. A row goes gray when its price is more than half an hour old while its market is open: a stock nobody has traded lately, or any symbol while the panel can't get new prices. Coins trade around the clock, so theirs is always open. A symbol the panel has no price for yet shows **--**.
 
 | Board | Each row |
 | --- | --- |
 | One 64x64 panel, or a three-wide second area | The symbol, then the price for 4 seconds and the change in percent for 4. |
 | 128x64, two rows of two, or a four-wide second area | The symbol, the price and the change in percent. |
 | Three or four panels in a row, with no second area | The symbol, the price, the change and the change in percent. |
+
+**Logos.** Each row starts with a small logo of the company, fund or coin, 7 LEDs square, before its symbol. On one panel, or a three-wide second area, the logos show when every symbol you listed is four letters or fewer, like **AAPL** or **BTC**; with a longer one, like **GOOGL**, the rows stay as above. Indexes like **^GSPC** have no logo. A logo that's dark, like a black mark that would vanish on the black panel, is shown light instead. The panel downloads each logo once, about a kilobyte, and keeps it until it restarts; until a logo comes in, or when none of its sources has one, its spot stays dark. Stock and fund logos come from Parqet, then companiesmarketcap.com, then Financial Modeling Prep; coin logos from Parqet, then the open cryptocurrency-icons set, then CoinCap. None of them needs an account or key.
 
 **The top row.** On 128 wide and up, **STOCKS**, **CRYPTO** or **MARKETS**, for what you've listed, with the page when there's more than one, like **MARKETS 1/2**. At the right is where the market stands: **OPEN** in green, or in gray **PRE-MARKET**, **AFTER HOURS**, **CLOSED**, or the day of the last close, like **FRI CLOSE**, over a weekend or a holiday. One panel has room for one word in the middle: **OPEN**, **PRE**, **AH**, **CLOSED** or the day, like **FRI**, or **CRYPTO** when you've listed only coins. With stocks from more than one market, the open one wins.
 

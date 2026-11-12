@@ -139,6 +139,8 @@ struct UpdateFields {
   bool board_card{false};
   // Post-join address line leads the status text.
   bool join_line{false};
+  // Team logo screen; next_line: opponent, when, short when
+  bool logo_screen{false};
   std::string board_title, board_status;
   uint32_t board_status_color{0xFFFFFF};
   bool board_value_narrow{true};
@@ -152,6 +154,10 @@ struct UpdateFields {
   uint32_t line_color{0xFFFFFF};
   // Another display's own labels over the board.
   std::vector<::espn::AppText> texts;
+  // Another display's loaded logos, with x, y pairs.
+  image::Image *icon_img[::espn::kAppIcons]{};
+  int16_t icon_xy[2 * ::espn::kAppIcons]{};
+  uint8_t icon_n{0};
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -656,10 +662,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     int64_t today_since{0};
     int64_t today_have{0};
     std::unique_ptr<GameSnapshot> today_final;
-    // Favorite players as of the job's start.
-    ::espn::PlayerBlob players{};
-    // Player props as of the job's start.
-    ::espn::PropBlob props{};
+    // Favorite and soccer prop players at the job's start.
+    ::espn::WatchRoster roster;
     // A box score read for player props, in a gap.
     bool need_box{false};
     bool box_final{false};  // started after the game's final
@@ -879,6 +883,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void idle_fields_(UpdateFields &f);
   // nullptr means show the clock.
   const GameSnapshot *today_game_() const;
+  // nullptr means show the clock; game may be nullptr.
+  const ::espn::Team *logo_team_(const GameSnapshot **game, std::string *color = nullptr) const;
+  bool logo_fields_(UpdateFields &f);
   // Night hours need the team's card for the clock.
   bool live_recap_() const {
     return this->current_team_() == nullptr ||
@@ -1163,11 +1170,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   const GameSnapshot *bet_snapshot_(const ::espn::Bet &b, ::espn::BetGame &out) const;
   void bets_ticker_(const GameSnapshot &g, uint8_t league, UpdateFields &f) const;
   // Player props: followed like bets, numbers from box scores.
-  ESPPreferenceObject props_pref_;
+  // One per saved half (prop_half_bit).
+  ESPPreferenceObject props_pref_[2];
   ::espn::PropBlob props_{};
   void set_prop_(uint8_t slot, ::espn::Prop p);
   void remove_prop_(uint8_t slot);
-  void props_changed_();
+  void save_props_(uint8_t halves);
+  void props_changed_(uint8_t halves);
   // True when a done prop was dropped.
   bool props_tick_();
   const GameSnapshot *game_for_(uint8_t league, uint32_t event, ::espn::BetGame &out) const;
@@ -1192,11 +1201,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void run_box_job_();
   void apply_box_job_();
   void box_failed_(uint32_t took_ms);
-  ESPPreferenceObject players_pref_;
+  // One per saved half (player_half_bit).
+  ESPPreferenceObject players_pref_[2];
   ::espn::PlayerBlob players_{};
   void set_player_(const ::espn::SetOp &op);
   void remove_player_(uint8_t league, uint32_t athlete);
-  void players_changed_();
+  void players_changed_(uint8_t halves);
   // e.g. "ALLEN 21/34, 241 YDS"
   std::vector<std::string> player_lines_(const GameSnapshot &g) const {
     return this->player_lines_(g, this->board_league_());
@@ -1377,7 +1387,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apps_tick_();
   void app_redraw_(::espn::Display d, bool timed = false);
   // A frame into fields the board or area draws.
-  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const;
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
   void draw_main_app_(bool quiet = false);
   // 1 started, -1 doesn't fit before due, 0 none.
   int start_app_job_(uint32_t now, uint32_t due);

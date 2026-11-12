@@ -324,6 +324,8 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .favbar .stepper label { min-width: 118px; }
 .favbar .stepper select, .favbar .stepper input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
 .favbar .stepper input { width: 58px; text-align: center; }
+/* Take over's words wrap beside the minutes */
+.favbar .stepper > span { flex: 1 1 6em; }
 .favmove { display: inline-flex; gap: 4px; margin-left: 6px; flex: none; }
 .favmove button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); width: 26px; height: 26px; cursor: pointer; font-size: 9px; padding: 0; }
 .favmove button:hover { border-color: #3a4556; }
@@ -373,13 +375,21 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .betsign button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 32px; padding: 0; font-size: 17px; font-weight: 700; color: var(--text); cursor: pointer; }
 .betsign button.on { background: var(--accent); border-color: var(--accent); color: #041022; }
 #betAdd, #mktAdd { margin-top: 8px; }
+/* Control drops under its label when both don't fit */
+.ctl.drop { flex-wrap: wrap; row-gap: 8px; }
+.ctl.drop > label { flex: 1 1 12em; }
+#propRows > .ctl:first-of-type { border-top: 1px solid #1a2029; }
+/* Prop player: own line, button beside or under */
+.proppick { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%; min-width: 0; }
+.ctl .proppick select { flex: 1 1 14em; min-width: 0; max-width: none; }
 .mkttools { display: flex; gap: 4px; flex: none; }
 .mktrow .bet { flex: none; }
 .mkttools .betdel:disabled { opacity: .35; cursor: default; }
 /* Favorite players: board stat lines, card list, form */
 .playerline .bet { color: var(--text); white-space: normal; }
 .playerrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
-#playerPick { max-width: 60%; }
+/* No width cap: select shrinks only when crowded */
+.ctl #playerPick { flex: 0 1 auto; min-width: 0; max-width: none; }
 #playerAdd { margin-top: 8px; }
 /* Flight Tracker: find a home, the places found */
 .flightrow { display: flex; gap: 8px; margin: 0 0 8px; }

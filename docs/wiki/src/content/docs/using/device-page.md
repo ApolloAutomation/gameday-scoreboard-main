@@ -46,7 +46,7 @@ While the panel follows a game it doesn't switch to big plays in other games, or
 
 In My team, the **Up next** list shows the next three games after the one on the board, with the opponent, the day and time (in your browser's time) and the TV channel. It appears for football and soccer teams, and for minor league baseball, AHL and ECHL teams. MLB, NBA, WNBA, men's college basketball and NHL season schedules are too large for the panel to read, so those teams have no Up next list.
 
-In Favorite teams, the list has one row per favorite: the live score, the final, or the next kickoff and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add a favorite.
+In Favorite teams, the list has one row per favorite: the live score, the final, or the next game's start time and channel. The row the panel is showing now is highlighted. **No game scheduled** means ESPN lists no game for that team. **Not checked yet** means the panel hasn't read that team from ESPN yet, for example just after it starts or right after you add a favorite.
 
 ## Choosing a team
 
@@ -79,28 +79,28 @@ The settings, in the order the page shows them:
 | **Panel on** (Quick settings) | Turns the panel's lights on or off. |
 | **Brightness** (Quick settings) | Panel brightness, 1 to 255. |
 | **Follow this game** (Quick settings) | Keeps the game on the board instead of moving on. Shown while there's a game to follow. See [Follow this game](#follow-this-game). |
-| **Idle display** (Quick settings) | What the panel shows while none of the games it follows is on: **Next game** (each mode's own board, what a panel starts with), **Clock**, **Scores**, **My team today** or **Off or dim**. The line under it says what the choice does. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display). |
+| **Idle display** (Quick settings) | What the panel shows while none of the games it follows is on: **Next game** (each mode's own board, what a panel starts with), **Clock**, **Scores**, **My team today**, **Off or dim** or **Team logo** (your team's logo, big, with its name and its next game or last result). The line under it says what the choice does. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display). |
 | **Dim to** (Off or dim) | How dim the panel goes, 0 to 255. 0, what it starts at, turns the screen off; **Panel on** stays on. |
 | **Shows** (Quick settings, second area) | What the second area shows, on three or four panels in a row or two rows of two. See [The second area](#the-second-area). |
 | **My team**, **Live games**, **Favorite teams** | What the panel follows. See [Show: My team, Favorite teams, Live games](/using/modes/). |
 | **Change team** | Opens the team chooser. Shown in My team. |
 | Leagues (Live games) | The leagues Live games picks from. Until you pick, it follows the leagues of your team and favorites. **Back to automatic** goes back to that. |
 | **Switch every** (Live games) | Moves to another game in progress after this long: **30 s**, or every minute from 1 to 30. A new panel starts at 1 minute. |
-| **Take over** (Favorite teams) | How many minutes before kickoff a favorite's game takes the panel, 5 to 120. Starts at 15. |
+| **Take over** (Favorite teams) | How early a favorite's game takes the panel: 5 to 120 minutes before the start of the game. Starts at 15. |
 | **After the final** (Favorite teams) | How long a favorite's final stays up before the playlist moves on, 30 seconds to 60 minutes. Starts at 30 seconds. |
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them, every 30 seconds or every 1 to 30 minutes, from the list next to it. |
 | **Ticker speed** (Panel) | How fast the ticker scrolls, 1 to 10. |
 | **Showing** (Panel) | The Scoreboard page, the Clock page, or another display: **F1**, **Stocks & Crypto** or **Flight Tracker**. See below. |
 | **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, the Clock page and the game clock during a game, like "5:21 3rd" or "Halftime", wherever they fit without touching the logos, records, scores or the row under them, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
 | **Standing next to pro teams** (Panel) | **Record** (where a new panel starts), **Seed** or **Place**: what your pro team shows where its record goes. See below. |
-| **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores** or **Next game**. Off unless you turn it on. |
+| **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores**, **Next game** or **Team logo**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
 | Flight Tracker | **Home location**, **Within** and your own receiver. See [The Flight Tracker card](#the-flight-tracker-card). |
 | **Only today's games** (Favorites) | The Favorite teams playlist skips favorites that aren't playing today. |
 | Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
-| Favorite players | Up to eight players. See [The Favorite players card](#the-favorite-players-card). |
-| Bets | Up to eight bets and eight player props you've placed. See [The Bets card](#the-bets-card). |
+| Favorite players | Up to 16 players. See [The Favorite players card](#the-favorite-players-card). |
+| Bets | Up to eight bets and 16 player props you've placed. See [The Bets card](#the-bets-card). |
 | Stocks & Crypto | Up to eight symbols. See [The Stocks & Crypto card](#the-stocks--crypto-card). |
 | Ticker: **Down and distance** | Football: the down, yards to go and where the ball is. |
 | Ticker: **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
@@ -109,7 +109,7 @@ The settings, in the order the page shows them:
 | Ticker: **Pre-game odds and TV** | The line, over/under and TV channel before the start, when ESPN has them. Golf: the purse before a tournament, and the TV channel during it. Racing: the TV channel. |
 | **Opponent scores too** and the celebration switches | Which splashes show. See [Celebrations](#celebrations). |
 | **Discovery**, **Unpair remote** | Pairs and unpairs a WizMote remote. See [WizMote remote](/using/remote/). |
-| Timezone (Setup) | Used for kickoff times and the clock. The page sets it from your browser unless you choose one by hand. |
+| Timezone (Setup) | Used for game times and the clock. The page sets it from your browser unless you choose one by hand. |
 | **Show how to connect when the panel starts** (Setup) | After it joins Wi-Fi, the panel shows a QR code that opens this page, at the panel's IP address, then the page address: for about 18 seconds on a panel with a team, and on a new panel for 45 seconds or until you pick a team. Then the IP address and `.local` name lead the ticker for 30 seconds. If a game is live when a panel that already has a team joins Wi-Fi, the scoreboard comes up as soon as it's ready and the address is in the ticker only. Turn it off and a panel with a team goes straight to the scoreboard, with no address in the ticker. A new panel still shows the QR code, without the address. |
 | Matrix (Setup) | Click the picture that matches your panel: **One 64x64 panel**, **One 128x64 panel** (or two 64x64 side by side), **Three wide**, **Four wide** or **Two rows of two**. The page asks before it restarts the panel with the new layout. See [Panel sizes and layouts](/using/panel-sizes/). |
 | **How the rows are mounted** (Setup) | On two rows of two only: **Bottom row upside down**, **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-the-panels). |
@@ -194,7 +194,7 @@ If a place can't be found, the card says so: try a town and state, or a ZIP code
 
 ## The Favorite players card
 
-The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
+The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to 16, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
 
 ## The Bets card
 
@@ -241,7 +241,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.4-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.5-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

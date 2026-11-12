@@ -656,7 +656,9 @@ void test_parse_set() {
 
   SCHECK(parse_set("idle", "4", op, kFavMax) && op.kind == SetKind::IDLE && op.value == 4, "idle 4");
   SCHECK(parse_set("idle", "0", op, kFavMax) && op.value == 0, "idle 0");
-  SCHECK(!parse_set("idle", "5", op, kFavMax), "idle 5 is past the choices");
+  SCHECK(parse_set("idle", "5", op, kFavMax) && op.kind == SetKind::IDLE && op.value == (int) IdleShow::LOGO,
+         "idle 5 is the Team logo");
+  SCHECK(!parse_set("idle", "6", op, kFavMax), "idle 6 is past the choices");
   SCHECK(!parse_set("idle", "-1", op, kFavMax), "idle -1");
   SCHECK(parse_set("idledim", "0", op, kFavMax) && op.kind == SetKind::IDLE_DIM && op.value == 0, "idledim 0 is dark");
   SCHECK(parse_set("idledim", "300", op, kFavMax) && op.value == kIdleDimMax, "idledim clamps down");

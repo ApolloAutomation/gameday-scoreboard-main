@@ -21,7 +21,7 @@ body:
       description: The steps, if you know them. "It happened once during a game" is useful too.
       placeholder: |
         1. Pick a team on the panel's page
-        2. Wait for kickoff
+        2. Wait for the start of the game
         3. ...
   - type: input
     id: version
