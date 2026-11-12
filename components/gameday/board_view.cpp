@@ -330,6 +330,33 @@ void put_texts(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Each logo in order; hidden past the frame's
+void put_icons(BoardView &v, const UpdateFields &f) {
+  const size_t n = f.board ? std::min((size_t) f.icon_n, ::espn::kAppIcons) : 0;
+  for (size_t i = 0; i < ::espn::kAppIcons; i++) {
+    lv_obj_t *&o = v.icon[i];
+    if (i >= n) {
+      if (o == nullptr)
+        break;
+      show(o, false);
+      continue;
+    }
+    if (o == nullptr) {
+      if (v.board == nullptr)
+        return;
+      o = lv_image_create(v.board);
+      lv_obj_remove_style_all(o);
+    }
+    const lv_image_dsc_t *src = f.icon_img[i]->get_lv_image_dsc();
+    if (lv_image_get_src(o) != src)
+      ::lv_image_set_src(o, src);
+    const int16_t x = f.icon_xy[2 * i], y = f.icon_xy[2 * i + 1];
+    if (lv_obj_get_style_x(o, LV_PART_MAIN) != x || lv_obj_get_style_y(o, LV_PART_MAIN) != y)
+      lv_obj_set_pos(o, x, y);
+    show(o, true);
+  }
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -584,6 +611,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   show(v.board, f.board);
   put_line(v, f);
   put_texts(v, f);
+  put_icons(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {

@@ -152,6 +152,10 @@ struct UpdateFields {
   uint32_t line_color{0xFFFFFF};
   // Another display's own labels over the board.
   std::vector<::espn::AppText> texts;
+  // Another display's loaded logos, with x, y pairs.
+  image::Image *icon_img[::espn::kAppIcons]{};
+  int16_t icon_xy[2 * ::espn::kAppIcons]{};
+  uint8_t icon_n{0};
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -1378,7 +1382,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apps_tick_();
   void app_redraw_(::espn::Display d, bool timed = false);
   // A frame into fields the board or area draws.
-  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const;
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
   void draw_main_app_(bool quiet = false);
   // 1 started, -1 doesn't fit before due, 0 none.
   int start_app_job_(uint32_t now, uint32_t due);

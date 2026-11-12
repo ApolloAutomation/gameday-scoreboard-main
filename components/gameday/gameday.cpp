@@ -5780,7 +5780,7 @@ void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
     this->emit_a2_({});
 }
 
-void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const {
+void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f) {
   const ::espn::App *a = ::espn::app_slots().get(d);
   ::espn::AppFrame fr;
   if (a != nullptr)
@@ -5821,6 +5821,35 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.texts = std::move(fr.texts);
   for (::espn::AppText &t : f.texts)
     t.text = panel_text(t.text);
+  // A loaded source, else the first unfailed; one download each.
+  uint32_t shown[::espn::kAppIcons];
+  char url[160];
+  f.icon_n = 0;
+  for (const ::espn::AppIcon &ic : fr.icons) {
+    if (ic.url == nullptr || f.icon_n >= ::espn::kAppIcons)
+      continue;
+    uint8_t from = 0;
+    size_t len;
+    while ((len = ic.url(ic.key, ic.kind, from, url, sizeof url)) > 0 &&
+           !this->logos_.ready(std::string_view(url, len)))
+      from++;
+    if (len == 0)
+      from = 0;
+    for (uint8_t k = from; (len = ic.url(ic.key, ic.kind, k, url, sizeof url)) > 0; k++) {
+      const std::string_view u(url, len);
+      image::Image *img = this->logos_.get(u, ic.px);
+      if (img != nullptr) {
+        f.icon_img[f.icon_n] = img;
+        f.icon_xy[2 * f.icon_n] = ic.x;
+        f.icon_xy[2 * f.icon_n + 1] = ic.y;
+        shown[f.icon_n++] = ::espn::logo_key(url, len);
+        break;
+      }
+      if (this->logos_.waiting(u))
+        break;
+    }
+  }
+  this->logos_.pin_icons(shown, f.icon_n);
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {

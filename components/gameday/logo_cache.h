@@ -57,14 +57,19 @@ class LogoCache {
   // Like prefetch, but may drop an old logo
   void want(const std::string &url);
   // The decoded logo, or nullptr while it is still missing; a miss starts a download.
-  image::Image *get(const std::string &url);
+  // icon: new entries shrink to that square, dark ones lifted.
+  image::Image *get(std::string_view url, uint8_t icon = 0);
+  // Loaded already: never starts a download.
+  bool ready(std::string_view url);
   // True while the logo is still on its way. A miss starts it, as get() does;
   // a failed logo is not on its way.
-  bool waiting(const std::string &url);
+  bool waiting(std::string_view url);
   // The two URLs about to be shown. They and the two before them are never
   // dropped, so nothing LVGL may still point at is freed.
   void pin(const std::string &team, const std::string &opponent) { this->pin_at_(0, team, opponent); }
   void pin_a2(const std::string &team, const std::string &opponent) { this->pin_at_(4, team, opponent); }
+  // On-screen row logos by logo_key; keeps the last set.
+  void pin_icons(const uint32_t *keys, size_t n);
   bool busy() const { return this->task_running_; }
   // Decodes finished downloads and retries failed logos that are on screen.
   // True when at least one logo became ready.
@@ -89,6 +94,7 @@ class LogoCache {
     uint8_t prio{::espn::LOGO_NOW};
     uint32_t seq{0};   // queue order within a priority
     uint8_t fails{0};  // failures in a row, for the wait
+    uint8_t icon{0};   // shrink to this square; 0 keeps 32
     uint32_t used_ms{0};
     uint32_t failed_ms{0};
     uint32_t wait_ms{0};  // how long after failed_ms to ask again
@@ -106,8 +112,8 @@ class LogoCache {
   void retry_pinned_(uint32_t now);
   void drain_pending_();
   // These three: caller holds the lock
-  Entry *find_(const std::string &url);
-  Entry *add_(const std::string &url, uint8_t prio, uint32_t now);
+  Entry *find_(std::string_view url);
+  Entry *add_(std::string_view url, uint8_t prio, uint32_t now);
   void queue_(Entry &e, uint8_t prio, uint32_t now);
 
   http_request::HttpRequestComponent *http_{nullptr};
@@ -121,6 +127,9 @@ class LogoCache {
   std::vector<Url, PsramAllocator<Url>> pending_;  // prefetches for the main loop
   uint32_t seq_{0};
   std::string pinned_[8];  // board pair, previous pair, then second area's two
+  static constexpr size_t ICON_PINS = 8;
+  uint32_t icon_pins_[2][ICON_PINS]{};  // this set, then the last
+  uint8_t icon_pin_n_[2]{};
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
   std::atomic<bool> downloaded_{false};
