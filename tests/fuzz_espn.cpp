@@ -5,7 +5,7 @@
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
-// Also runs the MLB Stats and HockeyTech parsers.
+// Also runs the MLB Stats, HockeyTech and market quote parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -16,12 +16,14 @@
 #include "captive.h"
 #include "espn_parse.h"
 #include "logo_lru.h"
+#include "markets_view.h"
 #include "panel_text.h"
 #include "players.h"
 #include "props.h"
 #include "poll_timing.h"
 #include "recap.h"
 #include "source_hockeytech.h"
+#include "source_markets.h"
 #include "source_mlbstats.h"
 #include "startup.h"
 #include "watch.h"
@@ -415,6 +417,59 @@ size_t racing(GameSnapshot g, const GolfNext &next, int64_t now) {
 
 const Sport kSports[] = {Sport::FOOTBALL, Sport::BASEBALL, Sport::BASKETBALL, Sport::HOCKEY, Sport::SOCCER};
 
+// Every sparkline point inside its box.
+void spark_inside(const SparkLine &l, int x, int y, int w, int h) {
+  for (int i = 0; i < l.n; i++)
+    if (l.pts[i].x < x || l.pts[i].x >= x + w || l.pts[i].y < y || l.pts[i].y >= y + h)
+      abort();
+  if (l.base_y >= 0 && (l.base_y < y || l.base_y >= y + h))
+    abort();
+}
+
+// Stocks, an index, ETFs and coins, one of each source.
+MarketBlob market_list() {
+  MarketBlob b{};
+  for (const char *t : {"AAPL", "^GSPC", "BRK.B", "NDX", "BTC", "DOGE", "SHIB", "HBAR-USD"}) {
+    MarketSymbol s{};
+    if (parse_market_symbol(t, MarketKind::NONE, s))
+      market_put(b, 0, s);
+  }
+  return b;
+}
+
+// The three quote reads, then every frame drawn from them.
+size_t markets(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
+  static const MarketBlob list = market_list();
+  size_t n = 0;
+  MarketQuote q[kMarketSlots];
+  ChunkReader r1(data, size, chunk);
+  int found = parse_yahoo_quotes(r1, list, q);
+  ChunkReader r2(data, size, chunk);
+  found += parse_kraken_quotes(r2, list, now, q);
+  ChunkReader r3(data, size, chunk);
+  found += parse_nasdaq_quotes(r3, list, now, q);
+  if (found > 3 * kMarketSlots)
+    abort();
+  for (int w : {64, 128, 256}) {
+    const MarketGeom g = market_geom(w, 64, true, true);
+    const MarketFrame f = market_frame(list, q, g, now, 1, true);
+    if (f.n > g.rows || f.page >= f.pages)
+      abort();
+    spark_inside(f.line, g.spark_x, g.spark_y, g.spark_w, g.spark_h);
+    for (int i = 0; i < f.n; i++)
+      n += f.rows[i].price.size() + f.rows[i].change.size() + f.rows[i].pct.size();
+  }
+  for (int i = 0; i < kMarketSlots; i++) {
+    const MarketCard c = market_card(list.syms[i], q[i], 64, 64, true, now);
+    spark_inside(c.line, 0, 0, 64, 56);
+    n += c.price.size() + c.status.size() + market_state_text(market_state(q[i], MarketKind::STOCK, now), q[i], now,
+                                                               true).size();
+  }
+  std::vector<esphome::gameday::TickerSpan> spans;
+  const std::string line = market_ticker(list, q, now, &spans);
+  return n + esphome::gameday::ticker_markup(line, spans).size() + market_poll_ms(list, q, now);
+}
+
 }  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
@@ -683,6 +738,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       prev = e;
     }
   }
+  sink = sink + markets(data, size, chunk, now);
   (void) sink;
   return 0;
 }

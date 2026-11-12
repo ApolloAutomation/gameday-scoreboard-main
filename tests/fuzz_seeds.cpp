@@ -15,6 +15,7 @@
 
 #include "espn_parse.h"
 #include "source_hockeytech.h"
+#include "source_markets.h"
 #include "source_mlbstats.h"
 
 using namespace espn;
@@ -62,6 +63,9 @@ int main(int argc, char **argv) {
       [](JsonDocument &f) { espn::detail::fill_ht_game_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_ht_day_filter(f); },
       [](JsonDocument &f) { espn::detail::fill_box_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_yahoo_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_kraken_filter(f); },
+      [](JsonDocument &f) { espn::detail::fill_nasdaq_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;
