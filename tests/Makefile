@@ -14,8 +14,8 @@ all: build/test_parse build/test_networks
 	./build/test_parse
 	./build/test_networks
 
-TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp
-SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/box_score.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp ../components/gameday/source_mlbstats.cpp ../components/gameday/source_hockeytech.cpp
+TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp test_flights.cpp
+SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/box_score.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp ../components/gameday/source_mlbstats.cpp ../components/gameday/source_hockeytech.cpp ../components/gameday/flights.cpp
 
 build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h) ../components/panel_layout/layouts.h
 	@mkdir -p build

@@ -37,6 +37,26 @@
       "heap": 2000,
       "json": 30500
     },
+    "flights_adsbdb": {
+      "heap": 1024,
+      "json": 5921
+    },
+    "flights_adsbfi": {
+      "heap": 1024,
+      "json": 6482
+    },
+    "flights_frame_256": {
+      "heap": 4096,
+      "json": 1024
+    },
+    "flights_receiver_570": {
+      "heap": 1024,
+      "json": 6482
+    },
+    "flights_routeset": {
+      "heap": 1024,
+      "json": 6401
+    },
     "golf_calendar": {
       "heap": 1600,
       "json": 15985
