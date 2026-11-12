@@ -72,6 +72,10 @@ The page puts what you change most at the top, and folds the rest away. From the
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
 3. The cards: **Panel**, **Favorites**, **Favorite players** and **Bets**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
 
+:::note[Coming in the next release]
+A **Stocks & Crypto** card comes after the Bets card when your panel's firmware has that display. It starts open while the main board or the second area shows Stocks & Crypto. See [The Stocks & Crypto card](#the-stocks--crypto-card).
+:::
+
 Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites**, **Favorite players** and **Bets** start open when they hold anything, with how many beside the name, like **3 of 16**, and folded while they're empty.
 
 The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
@@ -119,6 +123,10 @@ The settings, in the order the page shows them:
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+**Showing** in the Panel card also lists **Stocks & Crypto** when your panel's firmware has it: pick it to show your stocks and coins on the main board, and **Scoreboard** to bring the games back. The panel keeps following your games meanwhile. See [Stocks & Crypto](/using/markets/).
+:::
+
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
 **Switch every** and the time next to **Alternate** are one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
@@ -137,6 +145,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 | --- | --- |
 | **Shows** | **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date**, and on three and four wide **Nothing: the board fills the row**, where those start. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
+
+:::note[Coming in the next release]
+**Shows** also lists **Stocks & Crypto**, and while the main board shows Stocks & Crypto, **Game Day**: the scoreboard, in the second area. The line under **Shows** then says **Showing Stocks & Crypto.** or **Showing Game Day.** See [The second area](/using/panel-sizes/#the-second-area).
+:::
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game** or **No other live games: showing the clock**. See [The second area](/using/panel-sizes/#the-second-area).
 
@@ -187,6 +199,12 @@ The **Bets** card comes after the Favorite players card. It starts open while it
 
 :::note[Coming in the next release]
 The kind of bet has a fifth choice, **Player prop**. Pick the player's team, and your browser reads its roster from ESPN; or tap **Favorite players** to list just your favorite players, from every team. Then pick the player, the **Stat** (the ones for the player's sport), **Over** or **Under** and the line, like 24.5, and tap **Add bet**. A yes prop, like an anytime touchdown, has no side or line. Minor league, AHL and ECHL teams are left out of the chooser for a prop, since ESPN has no rosters or box scores for them. The card lists props after the bets, with the player's number so far, and the number beside the card's name counts them too, like **2 of 8 · 1 prop**. See [Player props](/using/bets/#player-props).
+:::
+
+## The Stocks & Crypto card
+
+:::note[Coming in the next release]
+The **Stocks & Crypto** card comes after the Bets card when your panel's firmware has that display. It lists the symbols the display shows, up to eight, each with its price and the day's change in green or red, its kind and whether its market is open, and **▲**, **▼** and **✕** to move it or remove it. The number beside the card's name says how many are in use, like **4 of 8**, with **the starting list** while it's still SPY, AAPL, BTC and ETH. To add one, type it under **Symbol**, like **AAPL**, **^GSPC** or **BTC**, pick its **Kind** if it's a symbol that's both a coin and a stock, and tap **Add symbol**. The line under **Symbol** says what the panel will save before you add it, and a symbol Yahoo Finance doesn't list says so once the panel has read it. A line under the hint says when the panel is reading Kraken and Nasdaq while Yahoo Finance is out. See [Stocks & Crypto](/using/markets/).
 :::
 
 ## The Device card
