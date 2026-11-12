@@ -58,14 +58,14 @@ class LogoCache {
   // Like prefetch, but may drop an old logo
   void want(const std::string &url);
   // The decoded logo, or nullptr while it is still missing; a miss starts a download.
-  // icon: new entries shrink to that square, dark ones lifted.
+  // icon: a separate entry shrunk to that square, lifted.
   // mark: white edges cleared, unreadable ones fail.
   image::Image *get(std::string_view url, uint8_t icon = 0, bool mark = false);
   // Loaded already: never starts a download.
-  bool ready(std::string_view url);
+  bool ready(std::string_view url, uint8_t icon = 0);
   // True while the logo is still on its way. A miss starts it, as get() does;
   // a failed logo is not on its way.
-  bool waiting(std::string_view url);
+  bool waiting(std::string_view url, uint8_t icon = 0);
   // The two URLs about to be shown. They and the two before them are never
   // dropped, so nothing LVGL may still point at is freed.
   void pin(const std::string &team, const std::string &opponent) { this->pin_at_(0, team, opponent); }
@@ -120,7 +120,7 @@ class LogoCache {
   void retry_pinned_(uint32_t now);
   void drain_pending_();
   // These three: caller holds the lock
-  Entry *find_(std::string_view url);
+  Entry *find_(std::string_view url, uint8_t icon = 0);
   Entry *add_(std::string_view url, uint8_t prio, uint32_t now);
   void queue_(Entry &e, uint8_t prio, uint32_t now);
 

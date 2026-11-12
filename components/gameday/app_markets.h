@@ -162,8 +162,9 @@ inline MarketQuote market_merge(const MarketQuote &shown, const MarketQuote &rea
 constexpr int64_t kMarketCardSeconds = 8;  // the sparkline's symbol moves on
 constexpr int64_t kMarketAltSeconds = 4;   // one panel: price, then percent
 constexpr uint32_t kMarketDim = 0xA0A0A0;
+constexpr uint32_t kMarketBar = 0x203C8C;  // behind the charted row
 
-// Rows, the rotating symbol's sparkline and the ticker.
+// Rows, the rotating symbol's sparkline, its logo and the ticker.
 void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], int w, int h, int64_t now,
                    AppFrame &out);
 

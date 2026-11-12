@@ -136,7 +136,14 @@ struct AppIcon {
   char key[16]{};
   AppIconUrl url{nullptr};
   int8_t alt{-1};    // texts index shown only while no logo draws
+  int8_t with{-1};   // texts index shown only while it draws
   bool mark{false};  // white edges cleared; unreadable counts as missing
+};
+
+// A filled box, area-local, under the rows; w 0: none.
+struct AppFill {
+  int16_t x{0}, y{0}, w{0}, h{0};
+  uint32_t color{0};
 };
 
 // A 2-bit picture: 0 clear, 1-3 ink.
@@ -175,6 +182,7 @@ struct AppFrame {
   std::vector<AppText> texts;  // drawn over the rows
   std::vector<AppIcon> icons;
   std::vector<AppArt> art;
+  AppFill bar;
 };
 
 // Rows, labels, a line, logos or art, else the message.
