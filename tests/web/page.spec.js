@@ -2795,6 +2795,102 @@ test("Showing and the second area offer only the displays the firmware lists", a
   expect([st.display, st.display_now, st.split]).toEqual([0, "gameday", 7]);
 });
 
+// The Stocks & Crypto card (components/gameday/app_markets.h).
+const mktRows = (page) => page.locator("#mktList .mktrow > label");
+
+test("the Stocks & Crypto card shows only with the display, and the starting list", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#mktCard")).toBeHidden();
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.reload();
+  await expect(page.locator("#mktCard")).toBeVisible();
+  await expect(page.locator("#mktSum")).toHaveText("4 of 8 \u00b7 the starting list");
+  await expect(mktRows(page)).toHaveText(["SPYStock or fund \u00b7 Closed", "AAPLStock or fund \u00b7 Closed",
+                                          "BTCCrypto", "ETHCrypto"]);
+  const aapl = page.locator("#mktList .mktrow").nth(1);
+  await expect(aapl.locator(".bet")).toHaveText("355.63 +2.04%");
+  await expect(aapl.locator(".bet")).toHaveClass(/good/);
+  await expect(page.locator("#mktList .mktrow").nth(0).locator(".bet")).toHaveClass(/bad/);
+  await expect(page.getByRole("button", { name: "Move SPY up" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Move ETH down" })).toBeDisabled();
+  await expect(page.locator("#mktSrc")).toBeHidden();
+  await reset(request, { displays: DISPLAYS, display: 2, markets_src: "backup" });
+  await page.reload();
+  await expect(page.locator("#mktSrc")).toBeVisible();
+});
+
+test("the Stocks & Crypto card adds, moves and removes symbols", async ({ page, request }) => {
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.goto("/");
+  const sym = page.locator("#mktSym");
+  await expect(page.locator("#mktHint")).toHaveText("Like AAPL, SPY, ^GSPC for the S&P 500, or BTC");
+  await sym.fill("tsla");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as TSLA, a stock or fund");
+  await sym.press("Enter");
+  await expectSet(request, { mkt: "0,TSLA,stock" });
+  await expect(mktRows(page)).toHaveCount(5);
+  await expect(page.locator("#mktSum")).toHaveText("5 of 8");
+  await expect(sym).toHaveValue("");
+  await page.getByRole("button", { name: "Move TSLA up" }).click();
+  await expectSet(request, { mktmove: "5,4" });
+  await expect(mktRows(page).nth(3)).toHaveText(/^TSLA/);
+  await page.getByRole("button", { name: "Remove SPY" }).click();
+  await expectSet(request, { mktdel: "1" });
+  await expect(mktRows(page).first()).toHaveText(/^AAPL/);
+  // Read the way the panel reads them
+  await sym.fill("brk/b");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as BRK.B, a stock or fund");
+  await sym.fill("^gspc");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as GSPC, an index");
+  await sym.fill("sol");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as SOL, a coin, in US dollars");
+  await page.locator("#mktKind").selectOption("stock");
+  await expect(page.locator("#mktHint")).toHaveText("Saves as SOL, a stock or fund");
+  await page.locator("#mktAdd").click();
+  await expectSet(request, { mkt: "0,SOL,stock" });
+  // A symbol Yahoo Finance doesn't list says so
+  await page.locator("#mktKind").selectOption("");
+  await sym.fill("zzzzq");
+  await page.locator("#mktAdd").click();
+  await expectSet(request, { mkt: "0,ZZZZQ,stock" });
+  await expect(page.locator("#mktList .mktrow", { hasText: "ZZZZQ" }).locator("small"))
+    .toHaveText("Yahoo Finance doesn't know this symbol");
+  const st = await deviceState(request);
+  expect(st.markets.syms.map((x) => x.sym)).toEqual(["AAPL", "BTC", "TSLA", "ETH", "SOL", "ZZZZQ"]);
+  expect(st.markets.defaults).toBe(false);
+});
+
+test("the Stocks & Crypto card says what's wrong with a symbol before posting it", async ({ page, request }) => {
+  await reset(request, { displays: DISPLAYS, display: 2 });
+  await page.goto("/");
+  const msg = page.locator("#mktMsg");
+  const add = page.locator("#mktAdd");
+  await add.click();
+  await expect(msg).toHaveText("Type a symbol, like AAPL or BTC.");
+  await page.locator("#mktSym").fill("AA!PL");
+  await expect(page.locator("#mktHint")).toHaveText("Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD");
+  await add.click();
+  await expect(msg).toHaveText("The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+  await page.locator("#mktSym").fill("aapl");
+  await expect(msg).toBeHidden();
+  await add.click();
+  await expect(msg).toHaveText("AAPL is in the list already.");
+  await page.locator("#mktSym").fill("^btc");
+  await page.locator("#mktKind").selectOption("crypto");
+  await add.click();
+  await expect(msg).toHaveText("A ^ symbol is an index. Set Kind to Index or Auto.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+  const full = ["SPY", "AAPL", "BTC", "ETH", "TSLA", "MSFT", "NVDA", "QQQ"].map((x) => ({ sym: x, kind: /BTC|ETH/.test(x) ? "crypto" : "stock" }));
+  await reset(request, { displays: DISPLAYS, display: 2, markets: full });
+  await page.reload();
+  await page.locator("#mktKind").selectOption("");
+  await page.locator("#mktSym").fill("doge");
+  await add.click();
+  await expect(msg).toHaveText("All 8 are in use. Remove one first.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+});
+
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {
   await reset(request, { panels: 4 });
   await page.goto("/");
