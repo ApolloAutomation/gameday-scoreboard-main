@@ -92,11 +92,7 @@ An anytime touchdown counts a rushing or receiving touchdown, or one scored on a
 
 Some props aren't there because ESPN's box score doesn't have what they need: total bases (it lists doubles and triples only by last name, not by player), first or last scorer (it has totals, not the order they came in), and a soccer player's shots, assists or cards (ESPN keeps them in a part of the game's page the panel would have to read 250 KB or more to reach, every time).
 
-Lines are whole or half numbers, like 6 or 24.5, from 0.5 to 999.5, with no + or -. A comma works in place of the point. A whole number can push. A yes prop has no line. The panel keeps up to eight props, besides the eight bets. Golf, racing, minor league baseball, AHL and ECHL players can't take a prop: the rosters and box scores come from ESPN, which doesn't carry them, so those tabs are left out of the team chooser for a prop.
-
-:::note[Coming in the next release]
-The panel keeps up to 16 props, besides the eight bets.
-:::
+Lines are whole or half numbers, like 6 or 24.5, from 0.5 to 999.5, with no + or -. A comma works in place of the point. A whole number can push. A yes prop has no line. The panel keeps up to 16 props, besides the eight bets. Golf, racing, minor league baseball, AHL and ECHL players can't take a prop: the rosters and box scores come from ESPN, which doesn't carry them, so those tabs are left out of the team chooser for a prop.
 
 **Adding a prop.**
 
@@ -106,11 +102,7 @@ The panel keeps up to 16 props, besides the eight bets.
 4. For an over or under, pick **Over** or **Under** and type the line, like 250.5. A yes prop has neither.
 5. Tap **Add bet**.
 
-If something is missing or doesn't fit, the card says so before anything is saved, like **Pick the player first.**, **A prop's line has no + or -. Type it like 24.5.**, **You have that prop already.** or **All 8 props are in use. Remove one first.** To take a prop off, tap the remove button (✕) next to it.
-
-:::note[Coming in the next release]
-The panel keeps 16 props, so once all 16 are in use the card says **All 16 props are in use. Remove one first.**
-:::
+If something is missing or doesn't fit, the card says so before anything is saved, like **Pick the player first.**, **A prop's line has no + or -. Type it like 24.5.**, **You have that prop already.** or **All 16 props are in use. Remove one first.** To take a prop off, tap the remove button (✕) next to it.
 
 **Which game.** A prop is for the player's team's game that's on now, or its next game, and the panel follows it only on games it's already showing, exactly as for a bet: the game on the board, and in Favorite teams your favorites' games. Its card says **Starts when the panel shows a BUF game** until then. If the player moves to another team, the prop keeps the team you picked them from.
 

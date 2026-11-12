@@ -79,7 +79,7 @@ The settings, in the order the page shows them:
 | **Panel on** (Quick settings) | Turns the panel's lights on or off. |
 | **Brightness** (Quick settings) | Panel brightness, 1 to 255. |
 | **Follow this game** (Quick settings) | Keeps the game on the board instead of moving on. Shown while there's a game to follow. See [Follow this game](#follow-this-game). |
-| **Idle display** (Quick settings) | What the panel shows while none of the games it follows is on: **Next game** (each mode's own board, what a panel starts with), **Clock**, **Scores**, **My team today** or **Off or dim**. The line under it says what the choice does. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display). |
+| **Idle display** (Quick settings) | What the panel shows while none of the games it follows is on: **Next game** (each mode's own board, what a panel starts with), **Clock**, **Scores**, **My team today**, **Off or dim** or **Team logo** (your team's logo, big, with its name and its next game or last result). The line under it says what the choice does. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display). |
 | **Dim to** (Off or dim) | How dim the panel goes, 0 to 255. 0, what it starts at, turns the screen off; **Panel on** stays on. |
 | **Shows** (Quick settings, second area) | What the second area shows, on three or four panels in a row or two rows of two. See [The second area](#the-second-area). |
 | **My team**, **Live games**, **Favorite teams** | What the panel follows. See [Show: My team, Favorite teams, Live games](/using/modes/). |
@@ -93,14 +93,14 @@ The settings, in the order the page shows them:
 | **Showing** (Panel) | The Scoreboard page, the Clock page, or another display: **F1**, **Stocks & Crypto** or **Flight Tracker**. See below. |
 | **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, the Clock page and the game clock during a game, like "5:21 3rd" or "Halftime", wherever they fit without touching the logos, records, scores or the row under them, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
 | **Standing next to pro teams** (Panel) | **Record** (where a new panel starts), **Seed** or **Place**: what your pro team shows where its record goes. See below. |
-| **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores** or **Next game**. Off unless you turn it on. |
+| **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores**, **Next game** or **Team logo**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
 | Flight Tracker | **Home location**, **Within** and your own receiver. See [The Flight Tracker card](#the-flight-tracker-card). |
 | **Only today's games** (Favorites) | The Favorite teams playlist skips favorites that aren't playing today. |
 | Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
-| Favorite players | Up to eight players. See [The Favorite players card](#the-favorite-players-card). |
-| Bets | Up to eight bets and eight player props you've placed. See [The Bets card](#the-bets-card). |
+| Favorite players | Up to 16 players. See [The Favorite players card](#the-favorite-players-card). |
+| Bets | Up to eight bets and 16 player props you've placed. See [The Bets card](#the-bets-card). |
 | Stocks & Crypto | Up to eight symbols. See [The Stocks & Crypto card](#the-stocks--crypto-card). |
 | Ticker: **Down and distance** | Football: the down, yards to go and where the ball is. |
 | Ticker: **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
@@ -116,14 +116,6 @@ The settings, in the order the page shows them:
 | **Install updates automatically** (Device) | Off unless you turn it on. Installs a new release between 3 and 5 AM, never during a game the panel follows. See [Firmware updates](/using/updates/). |
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
-
-:::note[Coming in the next release]
-The panel keeps up to 16 favorite players, and up to 16 player props besides the eight bets.
-
-**Idle display** also lists **Team logo**: your team's logo, big, with its name and its next game or last result. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
-
-**Night hours** show the clock in place of **Team logo** too.
-:::
 
 **Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).
 
@@ -202,11 +194,7 @@ If a place can't be found, the card says so: try a town and state, or a ZIP code
 
 ## The Favorite players card
 
-The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to eight, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
-
-:::note[Coming in the next release]
-The card lists up to 16 favorite players.
-:::
+The **Favorite players** card comes after the Favorites card. It lists your favorite players, up to 16, each with their team and a remove button (✕). To add one, tap **Pick a team**: your browser reads that team's roster from ESPN, and a **Player** list appears. Pick the player and tap **Add player**; the card says **Added** once the panel has them. The panel shows the player's last name in capitals, with the first initial when a teammate has the same last name (more of the first name when the initial is the same too), in at most 10 letters. If the roster can't be read, the card says so: check the internet connection of the phone or computer you're using. See [Favorite players](/using/favorite-players/).
 
 ## The Bets card
 
@@ -253,7 +241,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.4-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.5-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

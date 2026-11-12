@@ -14,6 +14,17 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.4
+
+Your team's logo can fill the board before and after the game, Stocks & Crypto shows a logo on each row, and the panel keeps up to 16 favorite players and 16 player props.
+
+- Team logo, a new choice under Idle display in Quick settings: your team's logo, big, with its name in its colors and its next game, a countdown on game day, or the last result. In Favorite teams it's the favorite that plays next. The game takes the panel when it starts, and the night hours show the clock in its place.
+- Stocks & Crypto starts each row with a small logo of the company, fund or coin where the board has room for it: on one panel, when every symbol you listed is four letters or fewer. Dark logos are lightened so they show on the black panel. Indexes have no logo. The logos come from Parqet, companiesmarketcap.com and Financial Modeling Prep for stocks and funds, and from Parqet, the cryptocurrency-icons set and CoinCap for coins, each a backup for the one before, with no sign-up or key.
+- Up to 16 favorite players and 16 player props, up from eight each. Bets stay at eight. The players and props you saved before the update stay put.
+- On a phone, the Bets card's player list fits the screen: the Team, Player and Line controls drop under their labels when they don't fit beside them.
+- The device page says "the start of the game" where it said kickoff, since not every sport kicks off.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.3
 
 The panel can show F1, stocks and crypto, or the planes overhead in place of Game Day, follow player props like a bet, and scroll bets and props in color.
