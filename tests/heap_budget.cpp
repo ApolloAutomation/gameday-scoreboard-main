@@ -19,6 +19,8 @@
 
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
+#include "app_f1.h"
+#include "f1.h"
 #include "props.h"
 #include "watch.h"
 #include "source_hockeytech.h"
@@ -286,6 +288,70 @@ int main() {
     measure("racing_calendar", [&] {
       GolfNext n;
       return parse_racing_calendar(json, parse_iso8601_z("2026-11-02T12:00Z"), std::string("202611010020"), 0, n) == 1;
+    });
+  }
+  // The F1 display's reads, each at its largest.
+  {
+    std::string json = slurp("fixtures/racing_header_f1_final.json");
+    measure("f1_live_header", [&] {
+      F1Live live;
+      return parse_f1_live(json, live) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_next.json");
+    measure("f1_next", [&] {
+      F1Schedule s;
+      return parse_f1_race(json, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_driver_standings.json");
+    measure("f1_driver_standings", [&] {
+      F1Standings s;
+      return parse_f1_standings(json, true, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_constructor_standings.json");
+    measure("f1_constructor_standings", [&] {
+      F1Standings s;
+      return parse_f1_standings(json, false, s) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/jolpica_last_results.json");
+    measure("f1_last_results", [&] {
+      F1Results r;
+      return parse_f1_results(json, r) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/f1_circuit_vegas.json");
+    measure("f1_circuit", [&] {
+      F1CircuitFacts c;
+      return parse_f1_circuit(json, c) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/f1_athlete_verstappen.json");
+    measure("f1_athlete", [&] {
+      F1Athlete a;
+      return parse_f1_athlete(json, a) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/openmeteo_monaco.json");
+    measure("f1_weather", [&] {
+      F1Weather w;
+      return parse_f1_weather(json, w) == 1;
+    });
+  }
+  {
+    std::string json = slurp("fixtures/met_vegas.json");
+    measure("f1_met_weather", [&] {
+      F1Weather w;
+      return parse_met_weather(json, parse_iso8601_z("2026-11-12T05:04:00Z"), w) == 1;
     });
   }
   {

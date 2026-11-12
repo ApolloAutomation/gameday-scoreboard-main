@@ -195,6 +195,35 @@ dropped; nothing the panel reads changes:
 | `racing_calendar_f1_2026.json` | `.../racing/f1/scoreboard?dates=20261110`: no events, the 2026 calendar of 25 races. Entries have no `id` (it is in `event.$ref`), and their times run 3 hours after the header's |
 | `racing_calendar_nascar_2026.json` | `.../racing/nascar-premier/scoreboard?dates=20261110`: the 2026 calendar of 40 races, exhibitions included |
 
+The F1 display, recorded 2026-11-12 between 03:45 and 04:00 UTC, each whole.
+ESPN's with a `curl/8.0` User-Agent, Jolpica's and Open-Meteo's with
+`GameDayScoreboard/1.0`. The live board's own reads are the racing headers
+above:
+
+| File | Source |
+| --- | --- |
+| `f1_header_vegas_pre.json` | `https://site.api.espn.com/apis/v2/scoreboard/header?sport=racing&league=f1`: 600057449 Las Vegas Grand Prix, all five sessions scheduled, no competitors |
+| `f1_circuit_vegas.json` | `https://sports.core.api.espn.com/v2/sports/racing/leagues/f1/circuits/4250`: length, laps, turns, counterclockwise, lap record 1:33.365 (2025) and its driver's `$ref` |
+| `f1_circuit_interlagos.json` | `.../circuits/617`, Autodromo Jose Carlos Pace |
+| `f1_circuit_hanoi.json` | `.../circuits/3885`, Hanoi: no lap record |
+| `f1_athlete_verstappen.json` | `https://sports.core.api.espn.com/v2/sports/racing/athletes/4665`: the lap record's driver, `abbreviation` VER |
+| `jolpica_next.json` | `https://api.jolpi.ca/ergast/f1/current/next.json`: round 21, Las Vegas, three practices |
+| `jolpica_race_sprint.json` | `https://api.jolpi.ca/ergast/f1/current/17.json`: Singapore, a sprint weekend |
+| `jolpica_driver_standings.json` | `https://api.jolpi.ca/ergast/f1/current/driverStandings.json`: after round 20, 25 drivers |
+| `jolpica_constructor_standings.json` | `https://api.jolpi.ca/ergast/f1/current/constructorStandings.json`: after round 20, 11 teams |
+| `jolpica_last_results.json` | `https://api.jolpi.ca/ergast/f1/current/last/results.json`: the Brazilian Grand Prix, 22 cars, lapped, retired and did-not-start rows |
+| `openmeteo_vegas.json` | `https://api.open-meteo.com/v1/forecast?latitude=36.1147&longitude=-115.173&current=temperature_2m,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_hours=3`: clear |
+| `openmeteo_monaco.json` | The same at 43.7347, 7.4206: rain (code 61), 0.2 mm, 100% chance |
+
+The F1 display's weather backup, MET Norway's compact forecast, recorded
+2026-11-12 at 05:04 UTC with the User-Agent
+`GameDayScoreboard/2026.11.2 github.com/ApolloAutomation/gameday-scoreboard-main`:
+
+| File | Source |
+| --- | --- |
+| `met_vegas.json` | `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=36.1750&lon=-115.1364`: clear, 90 hours from 04:00 UTC. Whole, 40 KB |
+| `met_monaco.json` | The same at 43.7347, 7.4206: heavy rain, 2.4 mm in the first hour. Trimmed to its first six hours |
+
 Minor league baseball, from the MLB Stats API's schedule endpoint
 (`https://statsapi.mlb.com/api/v1/schedule`), recorded 2026-11-08 between
 22:50 and 23:30 UTC with a `curl/8.0` User-Agent, each with the exact query

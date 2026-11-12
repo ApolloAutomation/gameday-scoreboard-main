@@ -119,6 +119,10 @@ The settings, in the order the page shows them:
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
+:::note[Coming in the next release]
+**Showing** also lists **F1**, which puts the [F1 display](/using/f1/) on the board in place of the scoreboard; **Scoreboard** brings the scoreboard back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. The F1 display has no settings of its own.
+:::
+
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
 **Switch every** and the time next to **Alternate** are one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
@@ -139,6 +143,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game** or **No other live games: showing the clock**. See [The second area](/using/panel-sizes/#the-second-area).
+
+:::note[Coming in the next release]
+**Shows** also lists **F1**, the [F1 display](/using/f1/), and while the board shows F1, **Game Day**, the scoreboard. The line under it then says **Showing F1.**, **Showing Game Day.**, or **The main board shows F1, so this shows the clock.** when both would show F1.
+:::
 
 ### Celebrations
 
