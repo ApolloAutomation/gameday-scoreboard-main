@@ -142,6 +142,10 @@ inline void app_frame_trim(AppFrame &f) {
   cut(f.rows.detail);
   cut(f.rows.value_color);
   cut(f.rows.name_color);
+  cut(f.rows.pos_color);
+  cut(f.rows.detail_color);
+  if (f.rows.cols.size() != 8)
+    f.rows.cols.clear();
   f.line.pts = app_line_thin(f.line.pts, kAppLinePoints);
 }
 
@@ -352,6 +356,8 @@ class App {
   virtual bool parse(AppStream &in, int64_t now) = 0;
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
+  // Refused is 403 or 429; true reads another host now.
+  virtual bool failed(bool /*refused*/) { return false; }
   // A w by h area's frame.
   virtual void frame(int w, int h, int64_t now, AppFrame &out) const = 0;
   // Redraws this often on its own; 0 after reads only.

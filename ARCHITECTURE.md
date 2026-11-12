@@ -122,6 +122,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `source_mlbstats.cpp/.h` (minor league baseball from the MLB Stats API),
   `source_hockeytech.cpp/.h` (the AHL and the ECHL from HockeyTech),
   `source_markets.cpp/.h` (stock and crypto quotes), `markets.h`, `markets_view.h`,
+  `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
@@ -294,7 +295,7 @@ the health block. Game Day's own reads, splashes and Home Assistant's
 sensors carry on whatever the areas show; its splash shows only where Game
 Day is on screen.
 
-**Stocks and crypto (not drawn yet).** `markets.h` holds the owner's up to 8
+**Stocks and crypto.** `markets.h` holds the owner's up to 8
 symbols (`MarketBlob`, 100 bytes: a stock, an index or a coin each, kept
 packed, with the slot whose sparkline shows) and their checks
 (`parse_market_symbol` guesses the kind: `BTC` is a coin, `SPX` the S&P
@@ -311,7 +312,20 @@ with a filter into the slots it names. `markets_view.h` lays out the rows
 (`market_geom`: symbol and price or percent on one panel, price and percent
 on two, change too on three and four), the 64x64 one-symbol card
 (`market_card`), the sparkline's points (`market_spark`) and the ticker with
-its colored moves (`market_ticker`, the bets' green and red).
+its colored moves (`market_ticker`, the bets' green and red). `app_markets.h`
+makes it the `Display::MARKETS` app: its list is the app's prefs blob, edited
+by `mkt`, `mktdel` and `mktmove` (`markets_set`, which starts from the
+defaults SPY, AAPL, BTC and ETH while nothing is saved), its quotes follow
+their symbols when the list changes, and `MarketFeed` picks each read's host:
+Yahoo until two failures or a refusal, then Kraken and Nasdaq back to back
+(`App::failed` ends the shared wait for the switch) with Yahoo retried after
+10 or 30 minutes, doubling to an hour. `market_merge` keeps the day's
+sparkline under a backup's price. `markets_frame` lays the rows into the
+leaderboard's labels at its own columns (`BoardLines::cols`, with place and
+detail colors; `rows_cells` and `rows_put` in `board_view.cpp` place them on
+the board and in the second area), turns the sparkline to the next charted
+symbol and its page every 8 s and flips one panel's value between price and
+percent every 4 s. `busy` is a listed market's regular session.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -742,7 +756,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   scoreboards, when a read may run, when the board switches and goes back),
   `test_players.cpp` (favorite players), `test_apps.cpp` (the display
   picker, its frame helpers and a stand-in display), `test_markets.cpp`
-  (stock and crypto symbols, quotes, text and frames) and `test_networks.cpp`
+  (stock and crypto symbols, quotes, text and frames), `test_markets_app.cpp`
+  (the Stocks & Crypto display's list, failover, frames and state) and
+  `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

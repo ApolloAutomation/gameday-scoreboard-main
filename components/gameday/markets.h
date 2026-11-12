@@ -556,14 +556,24 @@ inline bool market_stale(const MarketQuote &q, MarketKind kind, int64_t now) {
 }
 
 constexpr uint32_t kMarketPollMs = 60 * 1000;
-constexpr uint32_t kMarketClosedPollMs = 15 * 60 * 1000;
+constexpr uint32_t kMarketShutPollMs = 5 * 60 * 1000;
+constexpr uint32_t kMarketClosedPollMs = 10 * 60 * 1000;
 
-// Every minute unless every listed market is closed.
+// Coins or open markets each minute; never past the open
 inline uint32_t market_poll_ms(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], int64_t now) {
-  for (uint8_t i = 0; i < market_count(b); i++)
-    if (market_state(q[i], (MarketKind) b.syms[i].kind, now) != MarketState::CLOSED)
+  uint32_t ms = kMarketClosedPollMs;
+  for (uint8_t i = 0; i < market_count(b); i++) {
+    const MarketState st = market_state(q[i], (MarketKind) b.syms[i].kind, now);
+    if (st == MarketState::OPEN || st == MarketState::ALWAYS || st == MarketState::UNKNOWN)
       return kMarketPollMs;
-  return kMarketClosedPollMs;
+    if (st != MarketState::CLOSED && ms > kMarketShutPollMs)
+      ms = kMarketShutPollMs;
+    // Just after a known open
+    const int64_t until = (int64_t) q[i].open_at - now;
+    if (q[i].open_at != 0 && until > 0 && until * 1000 + 5000 < (int64_t) ms)
+      ms = (uint32_t) (until * 1000 + 5000);
+  }
+  return ms;
 }
 
 // The stocks' state for a title; slot -1 none.

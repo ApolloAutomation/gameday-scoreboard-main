@@ -143,6 +143,9 @@ struct UpdateFields {
   bool board_value_narrow{true};
   std::vector<std::string> board_pos, board_name, board_value, board_detail;
   std::vector<int> board_value_color, board_name_color;
+  // Another display's cell colors and columns (espn::BoardLines)
+  std::vector<int> board_pos_color, board_detail_color;
+  std::vector<int16_t> board_cols;
   // Another display's polyline over the board: x, y pairs.
   std::vector<int16_t> line;
   uint32_t line_color{0xFFFFFF};

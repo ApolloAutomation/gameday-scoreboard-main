@@ -110,6 +110,10 @@ struct RowsView {
   bool wide{false};
 };
 
+// Places, fills and colors kRowsCount rows of leaderboard cells
+void rows_put(lv_obj_t *const *pos, lv_obj_t *const *name, lv_obj_t *const *value, lv_obj_t *const *detail, int w,
+              const UpdateFields &f);
+
 // Second area (split.h): no pips or diamond; fireworks when free
 struct AreaView {
   lv_obj_t *root{nullptr};

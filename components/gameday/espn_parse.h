@@ -654,6 +654,10 @@ struct BoardLines {
   // and gap (128 wide only)
   std::vector<std::string> pos, name, value, detail;
   std::vector<int> value_color, name_color;
+  // Another display's: place and detail colors, gray without
+  std::vector<int> pos_color, detail_color;
+  // Its own columns: x, width per cell; width 0 hides
+  std::vector<int16_t> cols;
 };
 // Golf's leaderboard (none before the event or for a canceled one: the board
 // shows golf_card_text).

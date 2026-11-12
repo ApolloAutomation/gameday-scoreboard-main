@@ -439,7 +439,9 @@ void test_state() {
     market_put(stocks, 0, sym(t));
   MCHECK(market_poll_ms(stocks, q, kNow) == kMarketClosedPollMs, "closed stocks rest");
   MCHECK(market_poll_ms(stocks, q, kOpen + 60) == kMarketPollMs, "open");
-  MCHECK(market_poll_ms(stocks, q, kPre + 60) == kMarketPollMs, "pre-market");
+  MCHECK(market_poll_ms(stocks, q, kPre + 60) == kMarketShutPollMs, "pre-market every five minutes");
+  MCHECK(market_poll_ms(stocks, q, kOpen - 120) == 125000, "read just after the open");
+  MCHECK(market_poll_ms(stocks, q, kClose + 60) == kMarketShutPollMs, "after hours");
   MarketQuote unread[kMarketSlots];
   MCHECK(market_poll_ms(stocks, unread, kNow) == kMarketPollMs, "nothing read yet");
 

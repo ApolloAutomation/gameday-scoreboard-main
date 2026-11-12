@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "app_markets.h"
 #include "follow.h"
 #include "players.h"
 #include "set_request.h"
@@ -73,6 +74,7 @@ struct Settings {
   Bet bets[kBetSlots]{};
   Prop props[kPropSlots]{};
   FavPlayer players[kPlayerSlots]{};
+  MarketList markets;  // the Stocks & Crypto list (app_markets.h)
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 4;
@@ -209,6 +211,15 @@ void load(Settings &s, JsonObjectConst o) {
   }
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
+  if (o["markets"].is<JsonArrayConst>()) {
+    s.markets = MarketList{};
+    for (JsonObjectConst m : o["markets"].as<JsonArrayConst>()) {
+      MarketKind kind = MarketKind::NONE;
+      market_kind_by_key(m["kind"] | "", kind);
+      if (market_put(s.markets.blob, 0, market_symbol(m["sym"] | "", kind)) == 0)
+        printf("FAIL set_cases.json: a start symbol doesn't fit: %s\n", m["sym"] | "");
+    }
+  }
   if (o["players"].is<JsonArrayConst>()) {
     for (auto &p : s.players)
       p = FavPlayer{};
@@ -443,6 +454,15 @@ void state_doc(const Settings &s, JsonDocument &doc) {
     o["team"] = p.team_id;
     o["name"] = (const char *) p.name;
   }
+  JsonArray markets = doc["markets"].to<JsonArray>();
+  const MarketBlob defaults = market_defaults();
+  const MarketBlob &shown = market_shown(s.markets.blob, defaults);
+  for (uint8_t i = 0; i < market_count(shown); i++) {
+    JsonObject o = markets.add<JsonObject>();
+    o["slot"] = i + 1;
+    o["sym"] = (const char *) shown.syms[i].sym;
+    o["kind"] = market_kind_key((MarketKind) shown.syms[i].kind);
+  }
 }
 
 void test_fixture_cases() {
@@ -456,18 +476,25 @@ void test_fixture_cases() {
     Settings s;
     load(s, fx["base"].as<JsonObjectConst>());
     load(s, c["start"].as<JsonObjectConst>());
-    // handle_set_: only kSetKeys, in that order; 400 when none are there.
+    // handle_set_: kSetKeys, then the displays'; 400 for none.
     std::vector<std::pair<std::string, std::string>> kv;
-    for (const char *key : kSetKeys)
+    std::vector<const char *> keys(std::begin(kSetKeys), std::end(kSetKeys));
+    if (display_has(s.displays, (int) Display::MARKETS))
+      for (const char *const *k = kMarketSetKeys; *k != nullptr; k++)
+        keys.push_back(*k);
+    for (const char *key : keys)
       for (JsonArrayConst p : c["set"].as<JsonArrayConst>())
         if (std::string(p[0].as<const char *>()) == key)
           kv.emplace_back(key, p[1].as<const char *>());
     int status = kv.empty() ? 400 : 200;
     SCHECK(status == (c["status"] | 200), "%s: status %d", name, status);
     SetOp op;
-    for (const auto &p : kv)
+    for (const auto &p : kv) {
       if (parse_set(p.first, p.second, op, kFavMax))
         apply(s, op);
+      else  // app_set_: the display's own set
+        markets_set(s.markets, market_defaults(), p.first, p.second);
+    }
     JsonDocument got;
     state_doc(s, got);
     for (JsonPairConst e : c["expect"].as<JsonObjectConst>()) {
