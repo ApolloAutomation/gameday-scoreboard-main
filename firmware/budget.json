@@ -37,6 +37,38 @@
       "heap": 2000,
       "json": 30500
     },
+    "f1_athlete": {
+      "heap": 1024,
+      "json": 5519
+    },
+    "f1_circuit": {
+      "heap": 1144,
+      "json": 6420
+    },
+    "f1_constructor_standings": {
+      "heap": 1024,
+      "json": 6635
+    },
+    "f1_driver_standings": {
+      "heap": 1024,
+      "json": 11123
+    },
+    "f1_last_results": {
+      "heap": 1024,
+      "json": 16913
+    },
+    "f1_live_header": {
+      "heap": 1509,
+      "json": 77752
+    },
+    "f1_next": {
+      "heap": 1088,
+      "json": 7520
+    },
+    "f1_weather": {
+      "heap": 1024,
+      "json": 5812
+    },
     "golf_calendar": {
       "heap": 1600,
       "json": 15985
