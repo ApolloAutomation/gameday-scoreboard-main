@@ -2838,6 +2838,7 @@ void GamedayComponent::auto_update_tick_() {
 }
 
 void GamedayComponent::apply_timezone_() {
+  ::espn::app_env().tz = this->prefs_.tz_index;
 #ifdef GAMEDAY_TZ_PARSED
   // ESPHome 2026.9+: no POSIX parser on the device, hand the clock the
   // pre-parsed rules (scripts/build_timezones.py keeps the table in step).
@@ -5670,6 +5671,11 @@ void GamedayComponent::end_jump_() {
 
 void GamedayComponent::apps_setup_() {
   ::espn::AppSlots &slots = ::espn::app_slots();
+  ::espn::AppEnv &env = ::espn::app_env();
+  env.local = [](int64_t t) { return ESPTime::from_epoch_local((time_t) t).to_c_tm(); };
+  env.version = App.get_comment().c_str();
+  if (!env.version.empty() && env.version[0] == 'v')
+    env.version.erase(0, 1);
   ::espn::register_apps(slots);
   this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
@@ -5832,8 +5838,17 @@ void GamedayComponent::run_app_job_() {
   if (container == nullptr)
     return;
   ContainerReader reader(container, this->espn_bytes_);
-  ReaderStream in(reader);
-  j.app_ok = a->parse(in, j.app_now);
+  JsonDocument filter(::espn::detail::json_allocator());
+  if (a->filter(filter)) {
+    // The same document read as Game Day's, no second parser.
+    JsonDocument doc(::espn::detail::json_allocator());
+    j.app_ok = !deserializeJson(doc, reader, DeserializationOption::Filter(filter),
+                                DeserializationOption::NestingLimit(40)) &&
+               a->parse_doc(doc.as<JsonObjectConst>(), j.app_now);
+  } else {
+    ReaderStream in(reader);
+    j.app_ok = a->parse(in, j.app_now);
+  }
   container->end();
   ESP_LOGD(TAG, "%s: %s (%u bytes)", ::espn::display_name((::espn::Display) j.app), j.app_ok ? "read" : "not read",
            (unsigned) reader.total());
@@ -5857,9 +5872,14 @@ void GamedayComponent::apply_app_job_() {
     this->app_last_ms_[j.app] = 0;  // read again for the new settings
     return;
   }
+  const ::espn::Source src = ::espn::display_source(d);
+  const Job::HostJob &h = j.host[(size_t) src];
+  a->ended(::espn::AppResult{this->host_status_[(size_t) src].load(), h.throttled, h.retry_after_ms});
   if (j.app_ok) {
     this->app_times_.took(d, j.took_ms, true);
-    this->host_wait_[(size_t) ::espn::display_source(d)].clear();
+    this->host_wait_[(size_t) src].clear();
+  } else if (a->own_backoff()) {
+    this->app_times_.took(d, j.took_ms, false);
   } else {
     this->app_failed_(d, j.took_ms);
   }

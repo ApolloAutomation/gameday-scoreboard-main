@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <new>
 #include <string>
 #include <utility>
@@ -319,6 +320,35 @@ struct AppTimes {
 
 enum class AppSet : uint8_t { REFUSED = 0, SAME, CHANGED };
 
+// How one read ended, before apply.
+struct AppResult {
+  int status{0};  // HTTP status, 0 no answer
+  bool refused{false};  // 403 or 429
+  uint32_t retry_after_ms{0};
+};
+
+// What displays need from the panel; the component sets it.
+struct AppEnv {
+  struct tm (*local)(int64_t epoch){nullptr};  // null reads UTC
+  uint8_t tz{0};  // index into kTimezones
+  std::string version;  // the firmware's, "2026.11.2"
+};
+
+inline AppEnv &app_env() {
+  static AppEnv e;
+  return e;
+}
+
+// Panel-local time; UTC until the component sets it.
+inline struct tm app_local(int64_t epoch) {
+  if (app_env().local != nullptr)
+    return app_env().local(epoch);
+  const time_t t = (time_t) epoch;
+  struct tm out {};
+  gmtime_r(&t, &out);
+  return out;
+}
+
 // Main loop only, except parse (the fetch task).
 class App {
  public:
@@ -349,7 +379,15 @@ class App {
   // The next read; false for none now.
   virtual bool request(int64_t now, AppRequest &out) = 0;
   // Fetch task: into its own result, in PSRAM.
-  virtual bool parse(AppStream &in, int64_t now) = 0;
+  virtual bool parse(AppStream & /*in*/, int64_t /*now*/) { return false; }
+  // Fetch task: a filter for one document; false streams it.
+  virtual bool filter(JsonDocument & /*f*/) { return false; }
+  // Fetch task: that document, in place of parse.
+  virtual bool parse_doc(JsonObjectConst /*root*/, int64_t /*now*/) { return false; }
+  // Before apply, for a display failing over hosts.
+  virtual void ended(const AppResult & /*r*/) {}
+  // True: it backs off each host itself.
+  virtual bool own_backoff() const { return false; }
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
   // A w by h area's frame.
