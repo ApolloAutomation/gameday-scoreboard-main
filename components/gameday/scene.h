@@ -27,10 +27,13 @@ StageGeom stage_geom(int w, int h);
 struct Kit {
   uint32_t jersey, trim, helmet;
 };
+constexpr uint32_t kIceRgb = 0xB0BCC8;
 // Jerseys clear of the black sky and turf
 Kit kit_colors(uint32_t primary, uint32_t alt);
 // The other side's kit, kept apart from mine
 Kit kit_against(const Kit &mine, uint32_t primary, uint32_t alt);
+// A kit clear of the ice, from kit_colors's
+Kit ice_kit(Kit k, uint32_t primary, uint32_t alt);
 
 struct Scene {
   AnimArgs args{};

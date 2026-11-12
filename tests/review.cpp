@@ -46,16 +46,23 @@ void render(const std::string &dir, AnimKind kind, int w, int h, const Kit2 &kit
 
 }  // namespace
 
+// Optional second argument: one scene, by anim_name
 int main(int argc, char **argv) {
   const std::string dir = argc > 1 ? argv[1] : "build/review";
+  const std::string only = argc > 2 ? argv[2] : "";
   for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN,
-                     AnimKind::SOCCER_GOAL})
+                     AnimKind::SOCCER_GOAL, AnimKind::HOCKEY_GOAL}) {
+    if (!only.empty() && only != anim_name(k))
+      continue;
     for (const auto &s : kSceneScreens) {
       for (const Kit2 &kit : kReviewKits)
         render(dir, k, s[0], s[1], kit, false);
       if (k != AnimKind::HOME_RUN)
         render(dir, k, s[0], s[1], kReviewKits[0], true);
     }
+  }
+  if (!only.empty())
+    return 0;
   for (const auto &s : kSceneScreens) {
     render(dir, AnimKind::HOME_RUN, s[0], s[1], kReviewKits[1], false, 440);
     render(dir, AnimKind::HOME_RUN, s[0], s[1], kReviewKits[1], false, 360);

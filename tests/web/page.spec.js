@@ -894,6 +894,10 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect
     .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
     .toContain("soccer");
+  await page.locator("#animTryRow").getByRole("button", { name: "Goal (hockey)" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("hockey");
 
   // A Yankees panel with an Arsenal and a Pacers favorite.
   await reset(request, {

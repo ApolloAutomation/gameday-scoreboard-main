@@ -50,6 +50,10 @@ A few things HockeyTech's feed doesn't have:
 
 Every goal splashes the same way, yours and, with **Opponent scores too** on, the other side's, under the hockey **Goal** switch in the Celebrations card, as an NHL goal does. HockeyTech doesn't say which came on a power play or into an empty net either. The winning goal in a shootout splashes like any other. See [Celebrations](/using/device-page/#celebrations).
 
+:::note[Coming in the next release]
+An AHL or ECHL goal plays the same goal animation as an NHL goal before its splash, with the scoring team in white, since HockeyTech gives no team colors. See [Goal animation](/using/hockey/#goal-animation).
+:::
+
 ## The final
 
 The ticker says "Final", "Final/OT", "Final/SO" or "Final/2OT", with the records. A victory splash with fireworks shows your logo and "WINS", or your abbreviation in a box for a team with no small logo. The final stays up for half an hour in My team, then the panel looks up the next game. **Refresh scores** during that half hour reads the final again and keeps it up.

@@ -97,6 +97,10 @@ bool greenish(uint32_t c) {
   const int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
   return g > r + 24 && g > b + 24 && g < 0xD8;
 }
+int ice_gap(uint32_t c) {
+  return abs((int) ((c >> 16) & 255) - (int) ((kIceRgb >> 16) & 255)) +
+         abs((int) ((c >> 8) & 255) - (int) ((kIceRgb >> 8) & 255)) + abs((int) (c & 255) - (int) (kIceRgb & 255));
+}
 uint32_t rgb888(uint16_t c) {
   return ((uint32_t) ((c >> 11) & 31) << 19) | ((uint32_t) ((c >> 5) & 63) << 10) | ((uint32_t) (c & 31) << 3);
 }
@@ -123,6 +127,18 @@ void test_kits() {
       const uint32_t keeper = rgb888(sc.keeper[4]);
       PCHECK(sc.keeper[4] != sc.off[4] && sc.keeper[4] != sc.def[4] && !greenish(keeper) && !dark(keeper));
       PCHECK(!dark(rgb888(sc.word[4])) && sc.word_hi[4] == rgb565(0xFFFFFF));
+    }
+  // Hockey: both sides clear of the ice and apart
+  for (uint32_t c : colors)
+    for (uint32_t alt : {0u, 0xFFFFFFu, 0x000000u, 0xC0C0C0u, 0x99D9D9u}) {
+      AnimArgs a;
+      a.kind = AnimKind::HOCKEY_GOAL;
+      const Scene sc = scene_make(a, 128, 64, c, alt, alt ? alt : 0xA2AAAD, c, 5);
+      const uint32_t mine = rgb888(sc.off[4]), theirs = rgb888(sc.def[4]);
+      PCHECK(ice_gap(mine) >= 140 && ice_gap(theirs) >= 140 && sc.off[4] != sc.def[4]);
+      PCHECK(!dark(rgb888(sc.word[4])));
+      const Kit k = ice_kit(kit_colors(c, alt), c, alt);
+      PCHECK(ice_gap(k.jersey) >= 150);
     }
 }
 
@@ -333,7 +349,7 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
 int test_goldens() {
   std::ostringstream o;
   for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN,
-                     AnimKind::SOCCER_GOAL})
+                     AnimKind::SOCCER_GOAL, AnimKind::HOCKEY_GOAL})
     for (const auto &s : kSceneScreens)
       for (const Kit2 &kit : kReviewKits) {
         int frames = 0;
