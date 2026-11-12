@@ -409,6 +409,9 @@ void test_feed() {
   FCHECK(f.lol_gap_ms == 360000, "spread over the window: %u", f.lol_gap_ms);
   feed_lol_limits(f, "0", "3600");
   FCHECK(f.lol_gap_ms == 3600000, "none left: wait for the reset");
+  feed_lol_limits(f, "0", "200000");
+  FCHECK(f.lol_gap_ms == kLolMaxMs, "at most a day: %u", f.lol_gap_ms);
+  feed_lol_limits(f, "0", "3600");
   feed_lol_limits(f, "x", "3600");
   FCHECK(f.lol_gap_ms == 3600000, "garbage ignored");
 }

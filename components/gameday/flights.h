@@ -38,7 +38,7 @@ static const char *const kRoutesetUrl = "http://adsb.im/api/0/routeset";
 static const uint32_t kFiPollMs = 20 * 1000;
 static const uint32_t kLocalPollMs = 10 * 1000;
 static const uint32_t kLolMinMs = 180 * 1000;  // 500 a day per address
-static const uint32_t kLolMaxMs = 60 * 60 * 1000;
+static const uint32_t kLolMaxMs = 24 * 3600 * 1000;
 static const uint32_t kRoutesetGapMs = 30 * 1000;  // adsb.im wants batches
 static const uint32_t kAdsbdbGapMs = 5 * 1000;
 

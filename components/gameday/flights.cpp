@@ -215,11 +215,10 @@ void feed_lol_limits(Feed &f, const std::string &remaining, const std::string &r
     return;
   const uint64_t window = (uint64_t) reset * 1000;
   uint64_t gap = left > 0 ? window / (uint64_t) left : window;
-  const uint64_t day = 24ull * 3600 * 1000;
   if (gap < kLolMinMs)
     gap = kLolMinMs;
-  if (gap > day)
-    gap = day;
+  if (gap > kLolMaxMs)
+    gap = kLolMaxMs;
   f.lol_gap_ms = (uint32_t) gap;
 }
 
