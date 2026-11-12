@@ -2,7 +2,7 @@
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
 //   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
-//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
+//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap), anim&play=pass|run|hr
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
 // "Game Status" event, sent on every board update, is the cue to re-read the
@@ -319,6 +319,8 @@
         <summary><h2>Celebrations</h2><span class="peek">Splashes and big plays</span></summary>
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
+          <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's or a home run's splash: the pass or the run into the end zone, or the swing and the ball over the fence. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
+          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="hr">Home run</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
@@ -540,7 +542,7 @@
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
-    alerts: Number, alertfav: (v) => v === "1",
+    alerts: Number, alertfav: (v) => v === "1", anim: (v) => v === "1",
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
@@ -650,6 +652,14 @@
     setQueue = run;
     return run;
   };
+  document.querySelectorAll("[data-anim]").forEach((b) => b.addEventListener("click", async () => {
+    try {
+      const r = await fetch("/gameday/action?do=anim&play=" + encodeURIComponent(b.dataset.anim), { method: "POST" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+    } catch (e) {
+      toast("Device did not respond (" + (e.message || "network") + ")");
+    }
+  }));
   const doAction = async (name) => {
     try {
       const r = await fetch("/gameday/action?do=" + encodeURIComponent(name), { method: "POST" });
@@ -1301,6 +1311,7 @@
     });
     // Firmware from before big-play alerts has neither.
     $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
+    $("#animRow").hidden = $("#animTryRow").hidden = S.anim === undefined;
     alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
     // Older firmware sends no standing; college teams have ranks
     const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);

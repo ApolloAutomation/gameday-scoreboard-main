@@ -3648,6 +3648,7 @@ int run_app_f1_tests(int &checks);
 int run_market_tests(int &checks);
 int run_markets_app_tests(int &checks);
 int run_logo_decode_tests(int &checks);
+int run_picture_tests(int &checks);
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -9309,6 +9310,7 @@ int main() {
   failures += run_market_tests(checks);
   failures += run_markets_app_tests(checks);
   failures += run_logo_decode_tests(checks);
+  failures += run_picture_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

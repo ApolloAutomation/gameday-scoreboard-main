@@ -109,6 +109,10 @@ The logo is the one the panel already has for the board. If it hasn't downloaded
 - **Room around the words.** The words never touch the logo or the points: there are always at least 2 blank rows or columns between them, on every layout, in the second area, and for a favorite player's name with its play. On 128x64, and in a 128x64 second area, words too long for one line, like a long name with TOUCHDOWN, go on two lines in smaller letters, so they still clear the logo above them.
 - **Fireworks beside the logo.** A splash with fireworks shows them around the logo and the points, above the words, so the words stay easy to read: across the whole width of a single panel or a 128x64 one, across the middle of three or four panels in a row, and on two rows of two in up to 64 rows above the words. On a single panel or a 128x64 one, and in a second area, the points sit on a patch of black, as the logo sits on its tile, so a burst never crosses them. Only when the words leave too little room above and below them, as three lines across the middle of three or four panels do, do the fireworks go behind them. In the second area they show whenever the board isn't using them; see [The second area](#the-second-area).
 
+:::note[Coming in the next release]
+A touchdown's or a home run's splash can start with a short pixel-art play across the whole setup: every panel of three or four in a row, and all four of two rows of two, with bigger players. The splash then stays its full 7 seconds. See [Play animations](/using/football/#play-animations).
+:::
+
 ## Changing the layout
 
 1. Open the device page and find the **Setup** card. It starts folded: tap **Setup** to open it.

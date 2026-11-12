@@ -59,6 +59,22 @@ Two points say which they were. A play ESPN calls a safety says "SAFETY", and so
 
 A touchdown gets fireworks on black with the words in the team's color. The fireworks go off around the logo and the points, above the words, so the words stay clear of them. The smaller scores flash the screen in the team's color with white words.
 
+### Play animations
+
+:::note[Coming in the next release]
+Before a touchdown's splash, the panel plays the touchdown across the whole screen for about 3 seconds, in pixel art, with players in the scoring team's colors on a field under the stadium lights:
+
+| Touchdown | What plays |
+| --- | --- |
+| A passing touchdown | The quarterback drops back and throws, the ball flies across the panel, and the receiver catches it in the end zone past a diving defender. A deep pass flies higher and farther than a short one. |
+| A rushing touchdown | The running back takes the handoff and runs into the end zone, past a defender who dives and misses, with another chasing him. |
+| An interception, fumble, kickoff or punt return | The returner runs the length of the field into the end zone, past a defender who dives and misses, with another chasing him. |
+
+The scoring team always runs toward the end zone on its own side of the board, so a touchdown by the team on the right runs right to left. On three or four panels in a row the play spans every panel, and on two rows of two it fills all four, with bigger players.
+
+Then the splash shows for its usual 7 seconds, fireworks and all. The panel tells the plays apart from ESPN's play type, and from the play's words when the type is missing. A play it can't tell, like a touchdown ESPN has already replaced with the extra point by the time the panel reads it, gets the splash on its own. **Play animations** in the Celebrations card turns them off; see [Celebrations](/using/device-page/#celebrations).
+:::
+
 The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN, in their color. The other side's splashes need **Opponent scores too** in the Celebrations card. The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.
 
 The panel compares each score with the one before, about every 10 seconds, so a touchdown and the extra point that land in the same update show as one TOUCHDOWN. An extra point a read later gets its own splash after the touchdown's, with the board between them. A new splash that comes while one is up takes its place.

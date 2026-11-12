@@ -786,6 +786,18 @@ switch:
       - lambda: 'id(gameday_ctl).set_auto_update(true);'
     turn_off_action:
       - lambda: 'id(gameday_ctl).set_auto_update(false);'
+  # Play animations switch; the component keeps it
+  - platform: template
+    name: "Play Animations"
+    id: gd_play_anim
+    icon: "mdi:football"
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: 'return id(gameday_ctl).anim_on();'
+    turn_on_action:
+      - lambda: 'id(gameday_ctl).set_anim(true);'
+    turn_off_action:
+      - lambda: 'id(gameday_ctl).set_anim(false);'
 number:
   - platform: template
     name: "Brightness"
