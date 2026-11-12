@@ -55,6 +55,7 @@ struct BoardView {
   lv_point_precise_t line_pts[::espn::kAppLinePoints]{};
   // Another display's labels, made on first use
   lv_obj_t *text[::espn::kAppTexts]{};
+  lv_obj_t *icon[::espn::kAppIcons]{};  // another display's logos
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout

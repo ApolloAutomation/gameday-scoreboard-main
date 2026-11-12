@@ -1,6 +1,8 @@
 // Stocks & Crypto frames: rows, one-symbol card, sparkline, ticker.
 #pragma once
 
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -65,6 +67,64 @@ inline SparkLine market_spark(const MarketQuote &q, int x, int y, int w, int h, 
   return L;
 }
 
+// ---- logos ----------------------------------------------------------------------
+
+// Stocks, funds and coins; not indexes or pairs.
+inline bool market_has_logo(const char *sym, uint8_t kind) {
+  const size_t len = strlen(sym);
+  if (len == 0 || len > (size_t) kMarketSymMax || kind == (uint8_t) MarketKind::INDEX)
+    return false;
+  for (size_t i = 0; i < len; i++) {
+    const char c = sym[i];
+    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.'))
+      return false;
+  }
+  return true;
+}
+
+// Keyless logo host k's URL, first to last; 0: none.
+inline size_t market_logo_url(const char *sym, uint8_t kind, uint8_t k, char *out, size_t n) {
+  if (out == nullptr || n == 0 || !market_has_logo(sym, kind))
+    return 0;
+  char low[kMarketSymMax + 1], cls[kMarketSymMax + 1];
+  const size_t len = strlen(sym);
+  for (size_t i = 0; i <= len; i++) {
+    low[i] = (char) (sym[i] >= 'A' && sym[i] <= 'Z' ? sym[i] - 'A' + 'a' : sym[i]);
+    cls[i] = sym[i];
+  }
+  // Class shares as Yahoo writes them: BRK-B
+  if (len >= 3 && cls[len - 2] == '.' && strchr(cls, '.') == cls + len - 2)
+    cls[len - 2] = '-';
+  int r = 0;
+  if (kind == (uint8_t) MarketKind::CRYPTO) {
+    if (k == 0)
+      r = snprintf(out, n, "https://assets.parqet.com/logos/crypto/%s?format=png&size=32", sym);
+    else if (k == 1)
+      r = snprintf(out, n, "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/%s.png", low);
+    else if (k == 2)
+      r = snprintf(out, n, "https://assets.coincap.io/assets/icons/%s@2x.png", low);
+  } else if (k == 0) {
+    r = snprintf(out, n, "https://assets.parqet.com/logos/symbol/%s?format=png&size=32", cls);
+  } else if (k == 1) {
+    r = snprintf(out, n, "https://companiesmarketcap.com/img/company-logos/64/%s.png", cls);
+  } else if (k == 2) {
+    r = snprintf(out, n, "https://financialmodelingprep.com/image-stock/%s.png", sym);
+  }
+  return r > 0 && (size_t) r < n ? (size_t) r : 0;
+}
+
+// Logos when some symbol has one; one panel: short symbols.
+inline bool market_logos_fit(const MarketBlob &b, int w) {
+  bool any = false;
+  for (uint8_t i = 0; i < market_count(b); i++) {
+    const MarketSymbol &s = b.syms[i];
+    if (w < 128 && strlen(s.sym) > 4)
+      return false;
+    any = any || market_has_logo(s.sym, s.kind);
+  }
+  return any;
+}
+
 // ---- rows of symbols ------------------------------------------------------------
 
 constexpr int kMarketCharPx = 5;  // spleen_8 is 5 px
@@ -81,15 +141,18 @@ struct MarketGeom {
   int16_t w{64}, h{64};
   // 2: symbol, price or percent; 3: percent; 4: change
   uint8_t cols{2};
-  MarketCol sym, price, change, pct;
+  MarketCol logo, sym, price, change, pct;  // logo.w 0: no logos
   uint8_t rows{6};
   int16_t row_y{8};  // the first row; the title row above
   bool spark{false};
   int16_t spark_x{0}, spark_y{0}, spark_w{0}, spark_h{0};
 };
 
-// ticker: the area's bottom 8 rows hold one.
-inline MarketGeom market_geom(int w, int h, bool ticker, bool spark) {
+constexpr int kMarketLogoPx = 7;  // a row's logo, 1 px apart
+constexpr int kMarketLogoCol = kMarketLogoPx + 2;
+
+// ticker: bottom 8 rows hold one; logos: a logo column.
+inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos = false) {
   MarketGeom g;
   g.w = (int16_t) w;
   g.h = (int16_t) h;
@@ -106,6 +169,14 @@ inline MarketGeom market_geom(int w, int h, bool ticker, bool spark) {
     g.price = {(int16_t) (bx + 40), 55};
     g.change = {(int16_t) (bx + 95), 50};
     g.pct = {(int16_t) (bx + 145), 45};
+    if (logos) {
+      // Change and percent give up a character each
+      g.logo = {(int16_t) bx, kMarketLogoCol};
+      g.sym = {(int16_t) (bx + 9), 40};
+      g.price = {(int16_t) (bx + 49), 55};
+      g.change = {(int16_t) (bx + 104), 46};
+      g.pct = {(int16_t) (bx + 150), 40};
+    }
     if (side) {
       g.spark = true;
       g.spark_x = 194;
@@ -119,6 +190,17 @@ inline MarketGeom market_geom(int w, int h, bool ticker, bool spark) {
     g.sym = {0, 30};
     g.price = {30, 50};
     g.pct = {80, (int16_t) (w - 80)};
+    if (logos) {
+      g.logo = {0, kMarketLogoCol};
+      g.sym = {9, 30};
+      g.price = {39, 49};
+      g.pct = {88, (int16_t) (w - 88)};
+    }
+  } else if (logos) {
+    // Only when every symbol fits four characters
+    g.logo = {0, kMarketLogoCol};
+    g.sym = {9, 21};
+    g.price = {30, (int16_t) (w - 30)};
   } else {
     g.sym = {0, 30};
     g.price = {30, (int16_t) (w - 30)};

@@ -122,6 +122,21 @@ struct AppText {
   std::string text;
 };
 
+// Most logos a frame places (the views' pool).
+constexpr size_t kAppIcons = 8;
+
+// Source k's URL for key into out; 0: no more.
+using AppIconUrl = size_t (*)(const char *key, uint8_t kind, uint8_t k, char *out, size_t n);
+
+// A logo at an area-local spot; first source that loads.
+struct AppIcon {
+  int16_t x{0}, y{0};
+  uint8_t px{7};
+  uint8_t kind{0};
+  char key[16]{};
+  AppIconUrl url{nullptr};
+};
+
 // The leaderboard's shape: title, status, up to kAppRows rows.
 struct AppFrame {
   BoardLines rows;
@@ -130,6 +145,7 @@ struct AppFrame {
   std::vector<esphome::gameday::TickerSpan> spans;
   AppLine line;
   std::vector<AppText> texts;  // drawn over the rows
+  std::vector<AppIcon> icons;
 };
 
 // Rows, labels or a line to draw, else the message.
@@ -169,6 +185,8 @@ inline void app_frame_trim(AppFrame &f) {
   f.line.pts = app_line_thin(f.line.pts, kAppLinePoints);
   if (f.texts.size() > kAppTexts)
     f.texts.resize(kAppTexts);
+  if (f.icons.size() > kAppIcons)
+    f.icons.resize(kAppIcons);
 }
 
 // Flat x, y pairs clipped to the area.

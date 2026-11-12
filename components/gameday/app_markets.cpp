@@ -16,7 +16,7 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
   for (uint8_t i = 0; i < n; i++)
     if (q[i].valid && market_spark_count(q[i]) >= 2)
       charted[k++] = i;
-  const MarketGeom g = market_geom(w, h, true, k > 0);
+  const MarketGeom g = market_geom(w, h, true, k > 0, market_logos_fit(b, w));
   const int64_t tick = now > 0 ? now / kMarketCardSeconds : 0;
   MarketBlob view = b;
   uint8_t page = 0;
@@ -53,6 +53,23 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
     r.name_color.push_back((int) (f.spark && !row.spark ? kMarketDim : kMarketFlat));
     r.value_color.push_back((int) (g.cols == 3 ? kMarketFlat : row.color));
     r.detail_color.push_back((int) row.color);
+  }
+  if (g.logo.w > 0) {
+    const int first = f.page * g.rows;
+    out.icons.reserve(f.n);
+    for (uint8_t i = 0; i < f.n; i++) {
+      const MarketSymbol &s = b.syms[first + i];
+      if (!market_has_logo(s.sym, s.kind))
+        continue;
+      AppIcon ic;
+      ic.x = g.logo.x;
+      ic.y = (int16_t) (g.row_y + i * kMarketRowPx);
+      ic.px = (uint8_t) kMarketLogoPx;
+      ic.kind = s.kind;
+      memcpy(ic.key, s.sym, sizeof s.sym);
+      ic.url = market_logo_url;
+      out.icons.push_back(ic);
+    }
   }
   if (f.spark) {
     for (uint8_t i = 0; i < f.line.n; i++)
