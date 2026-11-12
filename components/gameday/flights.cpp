@@ -66,8 +66,23 @@ const char *source_name(Source s) {
       return "adsb.lol";
     case Source::LOCAL:
       return "your receiver";
+    case Source::FR24:
+      return "Flightradar24";
     default:
       return "adsb.fi";
+  }
+}
+
+const char *source_key(Source s) {
+  switch (s) {
+    case Source::ADSBLOL:
+      return "adsblol";
+    case Source::LOCAL:
+      return "receiver";
+    case Source::FR24:
+      return "fr24";
+    default:
+      return "adsbfi";
   }
 }
 
@@ -89,6 +104,30 @@ double round2(double v) {
   return r == 0 ? 0 : r;
 }
 
+}
+
+Bounds query_bounds(const Home &h) {
+  Bounds b;
+  const double lat = round2(h.lat), lon = round2(h.lon);
+  // A nautical mile is a minute of latitude.
+  const double r = query_radius_nm(h) / 60.0;
+  const double c = cosf((float) rad(lat));
+  const double dlon = c > r / 180.0 ? std::min(180.0, r / c) : 180.0;
+  b.north = std::min(90.0, lat + r);
+  b.south = std::max(-90.0, lat - r);
+  b.west = dlon >= 180.0 ? -180.0 : std::max(-180.0, lon - dlon);
+  b.east = dlon >= 180.0 ? 180.0 : std::min(180.0, lon + dlon);
+  return b;
+}
+
+std::string fr24_url(const Home &h) {
+  const Bounds b = query_bounds(h);
+  char buf[288];
+  snprintf(buf, sizeof(buf),
+           "https://%s/zones/fcgi/feed.js?bounds=%.2f,%.2f,%.2f,%.2f&faa=1&satellite=1&mlat=1&flarm=1&adsb=1&gnd=0"
+           "&air=1&vehicles=0&estimated=0&maxage=14400&gliders=0&stats=0",
+           kFr24Host, b.north, b.south, b.west, b.east);
+  return buf;
 }
 
 std::string adsbfi_url(const Home &h) {
@@ -146,16 +185,22 @@ uint32_t feed_gap_ms(const Feed &f, Source s) {
       return f.lol_gap_ms;
     case Source::LOCAL:
       return kLocalPollMs;
+    case Source::FR24:
+      return kFr24PollMs;
     default:
       return kFiPollMs;
   }
 }
 
+bool feed_out(const Feed &f, Source s, uint32_t now_ms) {
+  const espn::HostWait &w = f.wait[(size_t) s];
+  return w.waiting(now_ms) && (w.run.throttled || w.run.streak >= kFailoverStreak);
+}
+
 FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms) {
-  const Source with_local[] = {Source::LOCAL, Source::ADSBFI, Source::ADSBLOL};
-  const Source plain[] = {Source::ADSBFI, Source::ADSBLOL};
-  const Source *order = local ? with_local : plain;
-  const size_t n = local ? 3 : 2;
+  const Source order_all[] = {Source::LOCAL, Source::FR24, Source::ADSBFI, Source::ADSBLOL};
+  const Source *order = local ? order_all : order_all + 1;
+  const size_t n = local ? 4 : 3;
   FeedPick best;
   bool have = false;
   for (size_t i = 0; i < n; i++) {
@@ -174,7 +219,7 @@ FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms) {
       best.in_ms = t;
       have = true;
     }
-    if (!f.wait[k].waiting(now_ms))
+    if (!feed_out(f, s, now_ms))
       break;
   }
   return best;
@@ -256,18 +301,19 @@ float from_nm(float nm, DistUnit u) {
 
 // ---- Geometry ----------------------------------------------------------------
 
+// Float trig: the firmware links it already.
 double distance_nm(double lat1, double lon1, double lat2, double lon2) {
-  const double dlat = rad(lat2 - lat1), dlon = rad(lon2 - lon1);
-  const double a = std::sin(dlat / 2) * std::sin(dlat / 2) +
-                   std::cos(rad(lat1)) * std::cos(rad(lat2)) * std::sin(dlon / 2) * std::sin(dlon / 2);
-  return 2 * kEarthNm * std::atan2(std::sqrt(a), std::sqrt(1 - a));
+  const float dlat = (float) rad(lat2 - lat1), dlon = (float) rad(lon2 - lon1);
+  const float sl = sinf(dlat / 2), so = sinf(dlon / 2);
+  const float a = sl * sl + cosf((float) rad(lat1)) * cosf((float) rad(lat2)) * so * so;
+  return 2 * kEarthNm * (double) atan2f(sqrtf(a), sqrtf(1 - a));
 }
 
 double bearing_deg(double lat1, double lon1, double lat2, double lon2) {
-  const double dlon = rad(lon2 - lon1);
-  const double y = std::sin(dlon) * std::cos(rad(lat2));
-  const double x = std::cos(rad(lat1)) * std::sin(rad(lat2)) - std::sin(rad(lat1)) * std::cos(rad(lat2)) * std::cos(dlon);
-  const double deg = std::atan2(y, x) * 180.0 / kPi;
+  const float dlon = (float) rad(lon2 - lon1), p1 = (float) rad(lat1), p2 = (float) rad(lat2);
+  const float y = sinf(dlon) * cosf(p2);
+  const float x = cosf(p1) * sinf(p2) - sinf(p1) * cosf(p2) * cosf(dlon);
+  const double deg = (double) atan2f(y, x) * 180.0 / kPi;
   return deg < 0 ? deg + 360.0 : deg;
 }
 
@@ -397,6 +443,22 @@ namespace {
 
 bool number(JsonVariantConst v) { return v.is<float>() || v.is<int>() || v.is<long>(); }
 
+// Where it is from home; false outside the radius.
+bool place_plane(Plane &p, double lat, double lon, const Home &home) {
+  if (!std::isfinite(lat) || !std::isfinite(lon) || std::fabs(lat) > 90 || std::fabs(lon) > 180)
+    return false;
+  p.lat = (float) lat;
+  p.lon = (float) lon;
+  if (home.valid()) {
+    const double d = distance_nm(home.lat, home.lon, lat, lon);
+    if (d > home.radius_nm)
+      return false;
+    p.dist_nm = (float) d;
+    p.bearing = (float) bearing_deg(home.lat, home.lon, lat, lon);
+  }
+  return true;
+}
+
 }
 
 bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p) {
@@ -452,20 +514,60 @@ bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p) {
   p.emergency = (em[0] != '\0' && strcmp(em, "none") != 0) || p.squawk == 7500 || p.squawk == 7600 ||
                 p.squawk == 7700;
   const bool pos = number(o["lat"]) && number(o["lon"]) && (o["seen_pos"] | 0.0f) <= kStaleS;
-  if (pos) {
-    p.lat = o["lat"].as<float>();
-    p.lon = o["lon"].as<float>();
-    if (!std::isfinite(p.lat) || !std::isfinite(p.lon) || std::fabs(p.lat) > 90 || std::fabs(p.lon) > 180)
-      return false;
-    if (home.valid()) {
-      const double d = distance_nm(home.lat, home.lon, o["lat"].as<double>(), o["lon"].as<double>());
-      if (d > home.radius_nm)
-        return false;
-      p.dist_nm = (float) d;
-      p.bearing = (float) bearing_deg(home.lat, home.lon, o["lat"].as<double>(), o["lon"].as<double>());
-    }
-  }
+  if (pos && !place_plane(p, o["lat"].as<double>(), o["lon"].as<double>(), home))
+    return false;
   p.tier = !pos ? Tier::NOPOS : ground ? Tier::GROUND : Tier::AIR;
+  return true;
+}
+
+bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p) {
+  p = Plane();
+  // Each field once, in order: an index walks the list.
+  JsonVariantConst f[19];
+  size_t n = 0;
+  for (JsonVariantConst e : a)
+    if (n < 19)
+      f[n++] = e;
+  if (n < 17 || !number(f[1]) || !number(f[2]))
+    return false;
+  const char *hex = f[0] | "";
+  size_t h = 0;
+  for (; hex[h] != '\0' && h < 6; h++)
+    p.hex[h] = (char) tolower((unsigned char) hex[h]);
+  p.hex[h] = '\0';
+  const int64_t at = f[10] | (int64_t) 0;
+  p.seen_s = at > 0 && now_s > at ? (float) (now_s - at) : 0.0f;
+  if (!(p.seen_s <= kStaleS))
+    return false;
+  clean_callsign(f[16] | "", p.callsign);
+  copy_cut(p.reg, sizeof(p.reg), f[9] | "");
+  copy_cut(p.type, sizeof(p.type), f[8] | "");
+  copy_cut(p.flight, sizeof(p.flight), f[13] | "");
+  const char *from = f[11] | "", *to = f[12] | "";
+  if (from[0] != '\0' && to[0] != '\0' && strlen(from) < sizeof(p.from) && strlen(to) < sizeof(p.to)) {
+    copy_cut(p.from, sizeof(p.from), from);
+    copy_cut(p.to, sizeof(p.to), to);
+  }
+  const bool ground = (f[14] | 0) != 0;
+  if (!ground && number(f[4])) {
+    const float ft = f[4].as<float>();
+    if (std::isfinite(ft) && ft > -2000 && ft < 200000)
+      p.alt_ft = (int32_t) std::lround(ft);
+  }
+  if (number(f[5]) && f[5].as<float>() >= 0 && f[5].as<float>() < 2000)
+    p.gs_kt = f[5].as<float>();
+  if (number(f[3]))
+    p.track = std::fmod(std::fmod(f[3].as<float>(), 360.0f) + 360.0f, 360.0f);
+  if (number(f[15])) {
+    const float r = f[15].as<float>();
+    p.vrate_fpm = (int16_t) (r > 32000 ? 32000 : r < -32000 ? -32000 : r);
+  }
+  const char *sq = f[6] | "";
+  p.squawk = (uint16_t) (strlen(sq) == 4 ? atoi(sq) : 0);
+  p.emergency = p.squawk == 7500 || p.squawk == 7600 || p.squawk == 7700;
+  if (!place_plane(p, f[1].as<double>(), f[2].as<double>(), home))
+    return false;
+  p.tier = ground ? Tier::GROUND : Tier::AIR;
   return true;
 }
 
@@ -506,189 +608,182 @@ std::string flight_number(const char *callsign) {
 
 namespace {
 
-struct TypeName {
-  char code[5];
-  char full[18];
-  char brief[13];
-};
+// Code, then friendly name, each NUL-ended; packed for flash.
+const char kTypes[] =
+    "A109\0" "Leonardo AW109\0"
+    "A139\0" "Leonardo AW139\0"
+    "A169\0" "Leonardo AW169\0"
+    "A19N\0" "Airbus A319neo\0"
+    "A20N\0" "Airbus A320neo\0"
+    "A21N\0" "Airbus A321neo\0"
+    "A306\0" "Airbus A300-600\0"
+    "A318\0" "Airbus A318\0"
+    "A319\0" "Airbus A319\0"
+    "A320\0" "Airbus A320\0"
+    "A321\0" "Airbus A321\0"
+    "A332\0" "Airbus A330-200\0"
+    "A333\0" "Airbus A330-300\0"
+    "A337\0" "Airbus BelugaXL\0"
+    "A338\0" "Airbus A330-800\0"
+    "A339\0" "Airbus A330-900\0"
+    "A343\0" "Airbus A340-300\0"
+    "A346\0" "Airbus A340-600\0"
+    "A359\0" "Airbus A350-900\0"
+    "A35K\0" "Airbus A350-1000\0"
+    "A388\0" "Airbus A380\0"
+    "A3ST\0" "Airbus Beluga\0"
+    "AS50\0" "Airbus H125\0"
+    "AT45\0" "ATR 42-500\0"
+    "AT72\0" "ATR 72\0"
+    "AT76\0" "ATR 72-600\0"
+    "B06\0" "Bell 206\0"
+    "B190\0" "Beech 1900\0"
+    "B350\0" "King Air 350\0"
+    "B37M\0" "Boeing 737 MAX 7\0"
+    "B38M\0" "Boeing 737 MAX 8\0"
+    "B39M\0" "Boeing 737 MAX 9\0"
+    "B3XM\0" "Boeing 737 MAX 10\0"
+    "B407\0" "Bell 407\0"
+    "B429\0" "Bell 429\0"
+    "B52\0" "Boeing B-52\0"
+    "B712\0" "Boeing 717\0"
+    "B733\0" "Boeing 737-300\0"
+    "B734\0" "Boeing 737-400\0"
+    "B735\0" "Boeing 737-500\0"
+    "B736\0" "Boeing 737-600\0"
+    "B737\0" "Boeing 737-700\0"
+    "B738\0" "Boeing 737-800\0"
+    "B739\0" "Boeing 737-900\0"
+    "B744\0" "Boeing 747-400\0"
+    "B748\0" "Boeing 747-8\0"
+    "B752\0" "Boeing 757-200\0"
+    "B753\0" "Boeing 757-300\0"
+    "B762\0" "Boeing 767-200\0"
+    "B763\0" "Boeing 767-300\0"
+    "B764\0" "Boeing 767-400\0"
+    "B772\0" "Boeing 777-200\0"
+    "B773\0" "Boeing 777-300\0"
+    "B778\0" "Boeing 777-8\0"
+    "B779\0" "Boeing 777-9\0"
+    "B77L\0" "Boeing 777-200LR\0"
+    "B77W\0" "Boeing 777-300ER\0"
+    "B788\0" "Boeing 787-8\0"
+    "B789\0" "Boeing 787-9\0"
+    "B78X\0" "Boeing 787-10\0"
+    "BCS1\0" "Airbus A220-100\0"
+    "BCS3\0" "Airbus A220-300\0"
+    "BE20\0" "King Air 200\0"
+    "BE36\0" "Beech Bonanza\0"
+    "BE58\0" "Beech Baron\0"
+    "BE9L\0" "King Air 90\0"
+    "BLCF\0" "747 Dreamlifter\0"
+    "C130\0" "C-130 Hercules\0"
+    "C152\0" "Cessna 152\0"
+    "C17\0" "Boeing C-17\0"
+    "C172\0" "Cessna 172\0"
+    "C182\0" "Cessna 182\0"
+    "C208\0" "Cessna Caravan\0"
+    "C25A\0" "Citation CJ2\0"
+    "C25B\0" "Citation CJ3\0"
+    "C25C\0" "Citation CJ4\0"
+    "C25M\0" "Citation M2\0"
+    "C30J\0" "C-130J Hercules\0"
+    "C510\0" "Citation Mustang\0"
+    "C525\0" "Citation CJ1\0"
+    "C56X\0" "Citation Excel\0"
+    "C5M\0" "Lockheed C-5M\0"
+    "C680\0" "Cessna Sovereign\0"
+    "C68A\0" "Cessna Latitude\0"
+    "C700\0" "Cessna Longitude\0"
+    "C750\0" "Citation X\0"
+    "CL30\0" "Challenger 300\0"
+    "CL35\0" "Challenger 350\0"
+    "CL60\0" "Challenger 600\0"
+    "CRJ2\0" "CRJ200\0"
+    "CRJ7\0" "CRJ700\0"
+    "CRJ9\0" "CRJ900\0"
+    "CRJX\0" "CRJ1000\0"
+    "DA40\0" "Diamond DA40\0"
+    "DA42\0" "Diamond DA42\0"
+    "DH8A\0" "Dash 8-100\0"
+    "DH8B\0" "Dash 8-200\0"
+    "DH8C\0" "Dash 8-300\0"
+    "DH8D\0" "Dash 8-400\0"
+    "E135\0" "Embraer ERJ-135\0"
+    "E145\0" "Embraer ERJ-145\0"
+    "E170\0" "Embraer E170\0"
+    "E190\0" "Embraer E190\0"
+    "E195\0" "Embraer E195\0"
+    "E290\0" "Embraer E190-E2\0"
+    "E295\0" "Embraer E195-E2\0"
+    "E50P\0" "Phenom 100\0"
+    "E55P\0" "Phenom 300\0"
+    "E75L\0" "Embraer E175\0"
+    "E75S\0" "Embraer E175\0"
+    "EC30\0" "Airbus H130\0"
+    "EC35\0" "Airbus H135\0"
+    "EC45\0" "Airbus H145\0"
+    "F2TH\0" "Falcon 2000\0"
+    "F900\0" "Falcon 900\0"
+    "FA50\0" "Falcon 50\0"
+    "FA7X\0" "Falcon 7X\0"
+    "FA8X\0" "Falcon 8X\0"
+    "G280\0" "Gulfstream G280\0"
+    "GA5C\0" "Gulfstream G500\0"
+    "GA6C\0" "Gulfstream G600\0"
+    "GA7C\0" "Gulfstream G700\0"
+    "GL5T\0" "Global 5000\0"
+    "GL7T\0" "Global 7500\0"
+    "GLEX\0" "Global Express\0"
+    "GLF4\0" "Gulfstream IV\0"
+    "GLF5\0" "Gulfstream V\0"
+    "GLF6\0" "Gulfstream G650\0"
+    "H25B\0" "Hawker 800\0"
+    "H60\0" "Black Hawk\0"
+    "HDJT\0" "HondaJet\0"
+    "K35R\0" "Boeing KC-135\0"
+    "LJ35\0" "Learjet 35\0"
+    "LJ45\0" "Learjet 45\0"
+    "LJ60\0" "Learjet 60\0"
+    "LJ75\0" "Learjet 75\0"
+    "MD11\0" "MD-11\0"
+    "MD88\0" "MD-88\0"
+    "P28A\0" "Piper Cherokee\0"
+    "P28R\0" "Piper Arrow\0"
+    "PA34\0" "Piper Seneca\0"
+    "PA46\0" "Piper Malibu\0"
+    "PC12\0" "Pilatus PC-12\0"
+    "PC24\0" "Pilatus PC-24\0"
+    "R22\0" "Robinson R22\0"
+    "R44\0" "Robinson R44\0"
+    "R66\0" "Robinson R66\0"
+    "S76\0" "Sikorsky S-76\0"
+    "S92\0" "Sikorsky S-92\0"
+    "SF50\0" "Cirrus Vision Jet\0"
+    "SR20\0" "Cirrus SR20\0"
+    "SR22\0" "Cirrus SR22\0"
+    "TBM7\0" "Daher TBM 700\0"
+    "TBM9\0" "Daher TBM 900\0"
+    "V22\0" "V-22 Osprey\0";
 
-const TypeName kTypes[] = {
-    {"A109", "Leonardo AW109", "AW109"},
-    {"A139", "Leonardo AW139", "AW139"},
-    {"A169", "Leonardo AW169", "AW169"},
-    {"A19N", "Airbus A319neo", "A319neo"},
-    {"A20N", "Airbus A320neo", "A320neo"},
-    {"A21N", "Airbus A321neo", "A321neo"},
-    {"A306", "Airbus A300-600", "A300-600"},
-    {"A318", "Airbus A318", "A318"},
-    {"A319", "Airbus A319", "A319"},
-    {"A320", "Airbus A320", "A320"},
-    {"A321", "Airbus A321", "A321"},
-    {"A332", "Airbus A330-200", "A330-200"},
-    {"A333", "Airbus A330-300", "A330-300"},
-    {"A337", "Airbus BelugaXL", "BelugaXL"},
-    {"A338", "Airbus A330-800", "A330-800"},
-    {"A339", "Airbus A330-900", "A330-900"},
-    {"A343", "Airbus A340-300", "A340-300"},
-    {"A346", "Airbus A340-600", "A340-600"},
-    {"A359", "Airbus A350-900", "A350-900"},
-    {"A35K", "Airbus A350-1000", "A350-1000"},
-    {"A388", "Airbus A380", "A380"},
-    {"A3ST", "Airbus Beluga", "Beluga"},
-    {"AS50", "Airbus H125", "H125"},
-    {"AT45", "ATR 42-500", "ATR 42"},
-    {"AT72", "ATR 72", "ATR 72"},
-    {"AT76", "ATR 72-600", "ATR 72"},
-    {"B06", "Bell 206", "Bell 206"},
-    {"B190", "Beech 1900", "Beech 1900"},
-    {"B350", "King Air 350", "King Air"},
-    {"B37M", "Boeing 737 MAX 7", "737 MAX 7"},
-    {"B38M", "Boeing 737 MAX 8", "737 MAX 8"},
-    {"B39M", "Boeing 737 MAX 9", "737 MAX 9"},
-    {"B3XM", "Boeing 737 MAX 10", "737 MAX 10"},
-    {"B407", "Bell 407", "Bell 407"},
-    {"B429", "Bell 429", "Bell 429"},
-    {"B52", "Boeing B-52", "B-52"},
-    {"B712", "Boeing 717", "717"},
-    {"B733", "Boeing 737-300", "737-300"},
-    {"B734", "Boeing 737-400", "737-400"},
-    {"B735", "Boeing 737-500", "737-500"},
-    {"B736", "Boeing 737-600", "737-600"},
-    {"B737", "Boeing 737-700", "737-700"},
-    {"B738", "Boeing 737-800", "737-800"},
-    {"B739", "Boeing 737-900", "737-900"},
-    {"B744", "Boeing 747-400", "747-400"},
-    {"B748", "Boeing 747-8", "747-8"},
-    {"B752", "Boeing 757-200", "757-200"},
-    {"B753", "Boeing 757-300", "757-300"},
-    {"B762", "Boeing 767-200", "767-200"},
-    {"B763", "Boeing 767-300", "767-300"},
-    {"B764", "Boeing 767-400", "767-400"},
-    {"B772", "Boeing 777-200", "777-200"},
-    {"B773", "Boeing 777-300", "777-300"},
-    {"B778", "Boeing 777-8", "777-8"},
-    {"B779", "Boeing 777-9", "777-9"},
-    {"B77L", "Boeing 777-200LR", "777-200LR"},
-    {"B77W", "Boeing 777-300ER", "777-300ER"},
-    {"B788", "Boeing 787-8", "787-8"},
-    {"B789", "Boeing 787-9", "787-9"},
-    {"B78X", "Boeing 787-10", "787-10"},
-    {"BCS1", "Airbus A220-100", "A220-100"},
-    {"BCS3", "Airbus A220-300", "A220-300"},
-    {"BE20", "King Air 200", "King Air"},
-    {"BE36", "Beech Bonanza", "Bonanza"},
-    {"BE58", "Beech Baron", "Baron"},
-    {"BE9L", "King Air 90", "King Air"},
-    {"BLCF", "747 Dreamlifter", "Dreamlifter"},
-    {"C130", "C-130 Hercules", "C-130"},
-    {"C152", "Cessna 152", "Cessna 152"},
-    {"C17", "Boeing C-17", "C-17"},
-    {"C172", "Cessna 172", "Cessna 172"},
-    {"C182", "Cessna 182", "Cessna 182"},
-    {"C208", "Cessna Caravan", "Caravan"},
-    {"C25A", "Citation CJ2", "CJ2"},
-    {"C25B", "Citation CJ3", "CJ3"},
-    {"C25C", "Citation CJ4", "CJ4"},
-    {"C25M", "Citation M2", "M2"},
-    {"C30J", "C-130J Hercules", "C-130J"},
-    {"C510", "Citation Mustang", "Mustang"},
-    {"C525", "Citation CJ1", "CJ1"},
-    {"C56X", "Citation Excel", "Excel"},
-    {"C5M", "Lockheed C-5M", "C-5M"},
-    {"C680", "Cessna Sovereign", "Sovereign"},
-    {"C68A", "Cessna Latitude", "Latitude"},
-    {"C700", "Cessna Longitude", "Longitude"},
-    {"C750", "Citation X", "Citation X"},
-    {"CL30", "Challenger 300", "CL300"},
-    {"CL35", "Challenger 350", "CL350"},
-    {"CL60", "Challenger 600", "CL600"},
-    {"CRJ2", "CRJ200", "CRJ200"},
-    {"CRJ7", "CRJ700", "CRJ700"},
-    {"CRJ9", "CRJ900", "CRJ900"},
-    {"CRJX", "CRJ1000", "CRJ1000"},
-    {"DA40", "Diamond DA40", "DA40"},
-    {"DA42", "Diamond DA42", "DA42"},
-    {"DH8A", "Dash 8-100", "Dash 8"},
-    {"DH8B", "Dash 8-200", "Dash 8"},
-    {"DH8C", "Dash 8-300", "Dash 8"},
-    {"DH8D", "Dash 8-400", "Q400"},
-    {"E135", "Embraer ERJ-135", "ERJ-135"},
-    {"E145", "Embraer ERJ-145", "ERJ-145"},
-    {"E170", "Embraer E170", "E170"},
-    {"E190", "Embraer E190", "E190"},
-    {"E195", "Embraer E195", "E195"},
-    {"E290", "Embraer E190-E2", "E190-E2"},
-    {"E295", "Embraer E195-E2", "E195-E2"},
-    {"E50P", "Phenom 100", "Phenom 100"},
-    {"E55P", "Phenom 300", "Phenom 300"},
-    {"E75L", "Embraer E175", "E175"},
-    {"E75S", "Embraer E175", "E175"},
-    {"EC30", "Airbus H130", "H130"},
-    {"EC35", "Airbus H135", "H135"},
-    {"EC45", "Airbus H145", "H145"},
-    {"F2TH", "Falcon 2000", "Falcon 2000"},
-    {"F900", "Falcon 900", "Falcon 900"},
-    {"FA50", "Falcon 50", "Falcon 50"},
-    {"FA7X", "Falcon 7X", "Falcon 7X"},
-    {"FA8X", "Falcon 8X", "Falcon 8X"},
-    {"G280", "Gulfstream G280", "G280"},
-    {"GA5C", "Gulfstream G500", "G500"},
-    {"GA6C", "Gulfstream G600", "G600"},
-    {"GA7C", "Gulfstream G700", "G700"},
-    {"GL5T", "Global 5000", "Global 5000"},
-    {"GL7T", "Global 7500", "Global 7500"},
-    {"GLEX", "Global Express", "Global"},
-    {"GLF4", "Gulfstream IV", "G-IV"},
-    {"GLF5", "Gulfstream V", "G-V"},
-    {"GLF6", "Gulfstream G650", "G650"},
-    {"H25B", "Hawker 800", "Hawker 800"},
-    {"H60", "Black Hawk", "Black Hawk"},
-    {"HDJT", "HondaJet", "HondaJet"},
-    {"K35R", "Boeing KC-135", "KC-135"},
-    {"LJ35", "Learjet 35", "Learjet 35"},
-    {"LJ45", "Learjet 45", "Learjet 45"},
-    {"LJ60", "Learjet 60", "Learjet 60"},
-    {"LJ75", "Learjet 75", "Learjet 75"},
-    {"MD11", "MD-11", "MD-11"},
-    {"MD88", "MD-88", "MD-88"},
-    {"P28A", "Piper Cherokee", "Cherokee"},
-    {"P28R", "Piper Arrow", "Arrow"},
-    {"PA34", "Piper Seneca", "Seneca"},
-    {"PA46", "Piper Malibu", "Malibu"},
-    {"PC12", "Pilatus PC-12", "PC-12"},
-    {"PC24", "Pilatus PC-24", "PC-24"},
-    {"R22", "Robinson R22", "R22"},
-    {"R44", "Robinson R44", "R44"},
-    {"R66", "Robinson R66", "R66"},
-    {"S76", "Sikorsky S-76", "S-76"},
-    {"S92", "Sikorsky S-92", "S-92"},
-    {"SF50", "Cirrus Vision Jet", "Vision Jet"},
-    {"SR20", "Cirrus SR20", "SR20"},
-    {"SR22", "Cirrus SR22", "SR22"},
-    {"TBM7", "Daher TBM 700", "TBM 700"},
-    {"TBM9", "Daher TBM 900", "TBM 900"},
-    {"V22", "V-22 Osprey", "V-22"},
-};
-
-const TypeName *type_for(const char *type) {
+const char *type_for(const char *type) {
   if (type == nullptr || type[0] == '\0')
     return nullptr;
-  for (const TypeName &t : kTypes)
-    if (strcmp(t.code, type) == 0)
-      return &t;
+  for (const char *p = kTypes; *p != '\0';) {
+    const char *full = p + strlen(p) + 1;
+    if (strcmp(p, type) == 0)
+      return full;
+    p = full + strlen(full) + 1;
+  }
   return nullptr;
 }
 
 }
 
 std::string type_text(const char *type, size_t max) {
-  const TypeName *t = type_for(type);
-  if (t != nullptr) {
-    if (strlen(t->full) <= max)
-      return t->full;
-    if (strlen(t->brief) <= max)
-      return t->brief;
-  }
+  const char *full = type_for(type);
+  if (full != nullptr && strlen(full) <= max)
+    return full;
   return type != nullptr ? cut(type, max) : "";
 }
 
@@ -767,6 +862,13 @@ std::string leg_text(const Leg &l, const char *sep) {
   return std::string(l.from->code) + sep + l.to->code;
 }
 
+std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep) {
+  if (p.from[0] != '\0' && p.to[0] != '\0')
+    return std::string(p.from) + sep + p.to;
+  const Route *r = routes != nullptr ? routes->find(p.callsign, now_s) : nullptr;
+  return r != nullptr ? leg_text(route_leg(*r, p), sep) : "";
+}
+
 int RouteCache::index_(const char *cs, uint32_t now_s) const {
   if (cs == nullptr || cs[0] == '\0')
     return -1;
@@ -824,7 +926,7 @@ RouteAsk route_asks(const Nearby &near, const RouteCache &cache, uint32_t now_s)
   RouteAsk ask;
   for (size_t i = 0; i < near.n; i++) {
     const Plane &p = near.planes[i];
-    if (!plane_located(p) || !cache.wants(p.callsign, now_s))
+    if (!plane_located(p) || p.from[0] != '\0' || !cache.wants(p.callsign, now_s))
       continue;
     bool dup = false;
     for (size_t k = 0; k < ask.n && !dup; k++)
@@ -1057,9 +1159,8 @@ Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s)
   c.cat = cat;
   if (c.who.empty())
     c.who = p.type[0] != '\0' ? type_text(p.type, 16) : cat != nullptr ? cat : "";
-  const Route *r = routes != nullptr ? routes->find(p.callsign, now_s) : nullptr;
-  const std::string leg = r != nullptr ? leg_text(route_leg(*r, p), " > ") : "";
-  const std::string fn = flight_number(p.callsign);
+  const std::string leg = route_text(p, routes, now_s, "-");
+  const std::string fn = p.flight[0] != '\0' ? std::string(p.flight) : flight_number(p.callsign);
   if (p.callsign[0] != '\0' && fn != p.callsign)
     c.tail = fn;
   else if (p.reg[0] != '\0' && c.label != p.reg)
@@ -1136,18 +1237,20 @@ void compact(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
     put(f, 0, 55, w, BoardFont::S8, Align::CENTER, kColDim, "+" + std::to_string(n.n - 1) + " more");
 }
 
-void card128(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
-  put(f, 1, 0, 64, BoardFont::S16, Align::LEFT, c.label_color, c.label);
-  put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColAirline, fit_words(c.who, 12));
-  put(f, 66, 8, 61, BoardFont::S8, Align::RIGHT, c.route ? kColRoute : kColDim, c.sub);
-  put(f, 1, 16, 60, BoardFont::S8, Align::LEFT, kColType, type_fit(c, 12));
-  put(f, 66, 16, 61, BoardFont::S8, Align::RIGHT, kColDist, pick_fit(c.where_full, c.where_short, 12));
-  put(f, 1, 24, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
-  put(f, 66, 24, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
-  rows(f, n, o.card, 0, 32, 128, o.ticker ? o.h - 8 : o.h, o.units);
+// The list alone, nearest first.
+void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
+  const int lw = o.w >= 128 ? 128 : 64;
+  if (lw >= 128) {
+    put(f, 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
+    put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
+  } else {
+    put(f, 0, 0, lw, BoardFont::S8, Align::CENTER, kColDim, count_text(n));
+  }
+  rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o.units);
 }
 
-void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
+// The plane's card in the left 128 pixels.
+void card_left(Frame &f, const Card &c) {
   put(f, 1, 0, 64, BoardFont::S16, Align::LEFT, c.label_color, c.label);
   put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColAirline, fit_words(c.who, 12));
   if (c.route)
@@ -1158,6 +1261,10 @@ void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, kColDist, pick_fit(c.where_full, c.where_short, 12));
   put(f, 66, 46, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
+}
+
+void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
+  card_left(f, c);
   const int x0 = 128, lw = o.w - 128;
   if (lw >= 128) {
     put(f, x0 + 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
@@ -1179,35 +1286,22 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   if (opts.card >= near.n)
     opts.card = 0;
   const Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
-  if (opts.w < 128)
-    compact(f, c, near, opts);
-  else if (opts.w < 192)
-    card128(f, c, near, opts);
-  else
+  if (opts.w >= 192)
     card_wide(f, c, near, opts);
+  else if (opts.list)
+    list_frame(f, near, opts);
+  else if (opts.w < 128)
+    compact(f, c, near, opts);
+  else
+    card_left(f, c);
   if (opts.ticker)
     f.ticker = flight_ticker(near, routes, opts, now_s);
   return f;
 }
 
-Frame note_frame(Note note, const FrameOpts &o, float radius_nm, Source source) {
-  std::string text;
-  switch (note) {
-    case Note::NO_HOME:
-      text = "Set your location on the device page";
-      break;
-    case Note::NONE_NEAR:
-      text = "No planes within " + dist_text(radius_nm, o.units.dist, Fmt::FULL);
-      break;
-    case Note::NO_DATA:
-      text = std::string("Can't reach ") + source_name(source);
-      break;
-    default:
-      text = "Looking for planes";
-      break;
-  }
-  const size_t max = (size_t) o.w / 5;
-  std::vector<std::string> lines;
+namespace {
+
+void wrap_into(std::vector<std::string> &lines, const std::string &text, size_t max) {
   std::string line;
   size_t at = 0;
   while (at <= text.size()) {
@@ -1224,11 +1318,38 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm, Source source) 
   }
   if (!line.empty())
     lines.push_back(line);
+}
+
+}
+
+Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
+  std::string text, sub;
+  switch (note) {
+    case Note::NO_HOME:
+      text = "Set your location on the device page";
+      break;
+    case Note::NONE_NEAR:
+      text = "No planes nearby";
+      sub = "within " + dist_text(radius_nm, o.units.dist, Fmt::FULL);
+      break;
+    case Note::NO_DATA:
+      text = "Can't reach flight data";
+      break;
+    default:
+      text = "Looking for planes";
+      break;
+  }
+  const size_t max = (size_t) o.w / 5;
+  std::vector<std::string> lines;
+  wrap_into(lines, text, max);
+  const size_t main = lines.size();
+  if (!sub.empty())
+    wrap_into(lines, sub, max);
   Frame f;
   const int limit = o.ticker ? o.h - 8 : o.h;
   int y = (limit - (int) lines.size() * 8) / 2;
-  for (const std::string &l : lines) {
-    put(f, 0, y, o.w, BoardFont::S8, Align::CENTER, kColDim, l);
+  for (size_t i = 0; i < lines.size(); i++) {
+    put(f, 0, y, o.w, BoardFont::S8, Align::CENTER, i < main ? kColValue : kColDim, lines[i]);
     y += 8;
   }
   return f;
@@ -1254,9 +1375,7 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
     add(airline_name(p.callsign), " ");
     const char *cat = category_text(p.category);
     add(p.type[0] != '\0' ? type_text(p.type, 17) : cat != nullptr ? cat : "", ", ");
-    const Route *r = routes != nullptr ? routes->find(p.callsign, now_s) : nullptr;
-    if (r != nullptr)
-      add(leg_text(route_leg(*r, p), " to "), ", ");
+    add(route_text(p, routes, now_s, " to "), ", ");
     add(alt_text(p, o.units.alt, Fmt::FULL), ", ");
     add(speed_text(p, o.units.speed, Fmt::FULL), ", ");
     add(where_text(p, o.units.dist, Fmt::FULL), ", ");

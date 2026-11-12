@@ -321,6 +321,7 @@ file is the whole answer as sent:
 | `flights_adsbdb_ual755.json`, `flights_adsbdb_jbu1407.json` | `api.adsbdb.com/v0/callsign/<callsign>`: one origin and destination, no plausible flag |
 | `flights_adsbdb_aal1070.json` | adsbdb's route for AAL1070 is DFW-TPA while the plane was over New York (adsb.im had CLT-LGA) |
 | `flights_adsbdb_unknown.json` | adsbdb's 404 body for an unknown callsign |
+| `flights_fr24_nyc.json` | `data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=41.2,40.2,-74.6,-73.5&...&gnd=0&air=1&stats=0` around New York, 2026-11-12: `full_count`, `version`, then 34 flights, each an array (hex, lat, lon, track, altitude, speed, squawk, radar, type, registration, timestamp, origin, destination, flight number, on ground, vertical speed, callsign, a flag, airline). Some have one end of their route or none (4,502 bytes) |
 
 tar1090's and PiAware's `aircraft.json` have readsb's shape without `dst`,
 `dir`, `t` and `r`; `test_flights.cpp` strips those from

@@ -8,15 +8,15 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2540000,
+      "flash": 2596000,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2540000,
+      "flash": 2596000,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2517000,
+      "flash": 2573000,
       "static_ram": 172568
     }
   },
@@ -44,6 +44,10 @@
     "flights_adsbfi": {
       "heap": 1024,
       "json": 6482
+    },
+    "flights_fr24_340": {
+      "heap": 1024,
+      "json": 5292
     },
     "flights_frame_256": {
       "heap": 4096,

@@ -9,8 +9,10 @@
 #include <sstream>
 #include <string>
 
+#include "app_flights.h"
 #include "flight_airlines.h"
 #include "flights.h"
+#include "timezones.h"
 
 using namespace flights;
 using esphome::gameday::font_desc_bottom;
@@ -256,7 +258,8 @@ void test_names() {
       FCHECK((unsigned char) *c >= 0x20 && (unsigned char) *c < 0x7F, "%s ASCII", kAirlines[i].icao);
   }
   FCHECK_EQ(type_text("B738", 25), "Boeing 737-800");
-  FCHECK_EQ(type_text("B738", 12), "737-800");
+  FCHECK_EQ(type_text("B738", 12), "B738");
+  FCHECK_EQ(type_text("B3XM", 16), "B3XM");
   FCHECK_EQ(type_text("B38M", 4), "B38M");
   FCHECK_EQ(type_text("ZZZZ", 12), "ZZZZ");
   FCHECK_EQ(type_text("", 12), "");
@@ -325,7 +328,7 @@ void test_geometry() {
   const double b = bearing_deg(40.6398, -73.7789, 33.9425, -118.4081);
   FCHECK(std::fabs(b - 274) < 1.5, "heading west: %f", b);
   FCHECK(distance_nm(10, 20, 10, 20) == 0, "zero");
-  FCHECK(std::fabs(bearing_deg(0, 0, 1, 0)) < 1e-9 && std::fabs(bearing_deg(0, 0, 0, 1) - 90) < 1e-9, "N and E");
+  FCHECK(std::fabs(bearing_deg(0, 0, 1, 0)) < 1e-4 && std::fabs(bearing_deg(0, 0, 0, 1) - 90) < 1e-4, "N and E");
   FCHECK_EQ(compass8(0), "N");
   FCHECK_EQ(compass8(22.4f), "N");
   FCHECK_EQ(compass8(22.6f), "NE");
@@ -370,37 +373,63 @@ void test_urls() {
 void test_feed() {
   Feed f;
   FeedPick p = feed_pick(f, false, 1000);
-  FCHECK(p.source == Source::ADSBFI && p.in_ms == 0, "adsb.fi first");
-  feed_started(f, Source::ADSBFI, 1000);
-  feed_done(f, Source::ADSBFI, 200, true, 0, 0, 1500);
+  FCHECK(p.source == Source::FR24 && p.in_ms == 0, "Flightradar24 first");
+  feed_started(f, Source::FR24, 1000);
+  feed_done(f, Source::FR24, 200, true, 0, 0, 1500);
   p = feed_pick(f, false, 2000);
-  FCHECK(p.source == Source::ADSBFI && p.in_ms == kFiPollMs - 1000, "every 20 s: %u", p.in_ms);
-  feed_started(f, Source::ADSBFI, 21000);
-  feed_done(f, Source::ADSBFI, -1, false, 0, 7, 21500);
+  FCHECK(p.source == Source::FR24 && p.in_ms == kFr24PollMs - 1000, "every 20 s: %u", p.in_ms);
+  feed_started(f, Source::FR24, 21000);
+  feed_done(f, Source::FR24, -1, false, 0, 7, 21500);
   p = feed_pick(f, false, 22000);
-  FCHECK(p.source == Source::ADSBLOL && p.in_ms == 0, "adsb.lol while adsb.fi backs off");
-  feed_started(f, Source::ADSBLOL, 22000);
-  feed_done(f, Source::ADSBLOL, 200, true, 0, 0, 22500);
-  p = feed_pick(f, false, 23000);
-  FCHECK(p.source == Source::ADSBFI && p.in_ms > 0 && p.in_ms <= 30000, "back to adsb.fi soon: %u", p.in_ms);
-  feed_started(f, Source::ADSBFI, 60000);
-  feed_done(f, Source::ADSBFI, 429, false, 120000, 0, 60500);
-  p = feed_pick(f, false, 61000);
-  FCHECK(p.source == Source::ADSBLOL && p.in_ms == kLolMinMs - 39000, "adsb.lol at its pace: %u", p.in_ms);
-  FCHECK(f.wait[0].left(61000) >= 120000, "Retry-After honored: %u", f.wait[0].left(61000));
-  feed_done(f, Source::ADSBFI, 200, true, 0, 0, 62000);
-  p = feed_pick(f, false, 62000);
-  FCHECK(p.source == Source::ADSBFI, "a good read ends the wait");
+  FCHECK(p.source == Source::FR24 && p.in_ms > 0 && p.in_ms <= 30000, "one failure: try it again: %u", p.in_ms);
+  FCHECK(!feed_out(f, Source::FR24, 22000), "not out yet");
+  feed_started(f, Source::FR24, 22000 + p.in_ms);
+  feed_done(f, Source::FR24, 503, false, 0, 7, 22500 + p.in_ms);
+  const uint32_t t2 = 23000 + p.in_ms;
+  p = feed_pick(f, false, t2);
+  FCHECK(p.source == Source::ADSBFI && p.in_ms == 0, "two failures: adsb.fi");
+  feed_started(f, Source::ADSBFI, t2);
+  feed_done(f, Source::ADSBFI, 200, true, 0, 0, t2 + 500);
+  p = feed_pick(f, false, t2 + 1000);
+  FCHECK(p.source == Source::ADSBFI && p.in_ms == kFiPollMs - 1000, "adsb.fi at its pace: %u", p.in_ms);
+  const uint32_t back = t2 + f.wait[(size_t) Source::FR24].left(t2);
+  p = feed_pick(f, false, back);
+  FCHECK(p.source == Source::FR24 && p.in_ms == 0, "back to Flightradar24 once its wait ends");
+  feed_started(f, Source::FR24, back);
+  feed_done(f, Source::FR24, 200, true, 0, 0, back + 500);
+  FCHECK(f.wait[(size_t) Source::FR24].run.streak == 0, "a good read clears its run");
+
+  Feed r;
+  feed_started(r, Source::FR24, 1000);
+  feed_done(r, Source::FR24, 403, false, 0, 0, 1500);
+  p = feed_pick(r, false, 2000);
+  FCHECK(p.source == Source::ADSBFI && p.in_ms == 0, "a refusal moves on at once");
+  FCHECK(r.wait[(size_t) Source::FR24].left(2000) >= espn::kThrottleBaseMs / 2 - 500, "and waits the long way");
+  feed_started(r, Source::ADSBFI, 2000);
+  feed_done(r, Source::ADSBFI, 429, false, 120000, 0, 2500);
+  p = feed_pick(r, false, 3000);
+  FCHECK(p.source == Source::ADSBLOL && p.in_ms == 0, "adsb.lol while both are out");
+  FCHECK(r.wait[(size_t) Source::ADSBFI].left(3000) >= 119000, "Retry-After honored: %u",
+         r.wait[(size_t) Source::ADSBFI].left(3000));
+  feed_started(r, Source::ADSBLOL, 3000);
+  feed_done(r, Source::ADSBLOL, 200, true, 0, 0, 3500);
+  p = feed_pick(r, false, 4000);
+  FCHECK(p.source == Source::FR24 && p.in_ms == 147500, "Flightradar24 before adsb.lol's next turn: %u", p.in_ms);
+  feed_done(r, Source::ADSBFI, 200, true, 0, 0, 5000);
+  p = feed_pick(r, false, 5000);
+  FCHECK(p.source == Source::ADSBFI && p.in_ms == kFiPollMs - 3000, "a good read ends the wait: %u", p.in_ms);
 
   Feed l;
   p = feed_pick(l, true, 0);
   FCHECK(p.source == Source::LOCAL && p.in_ms == 0, "the owner's receiver first");
   feed_started(l, Source::LOCAL, 0);
   feed_done(l, Source::LOCAL, -1, false, 0, 0, 100);
-  p = feed_pick(l, true, 200);
-  FCHECK(p.source == Source::ADSBFI && p.in_ms == 0, "adsb.fi while it is down");
-  feed_done(l, Source::LOCAL, 200, true, 0, 0, 300);
-  p = feed_pick(l, true, kLocalPollMs);
+  feed_started(l, Source::LOCAL, 30000);
+  feed_done(l, Source::LOCAL, -1, false, 0, 0, 30100);
+  p = feed_pick(l, true, 30200);
+  FCHECK(p.source == Source::FR24 && p.in_ms == 0, "Flightradar24 while it is down");
+  feed_done(l, Source::LOCAL, 200, true, 0, 0, 30300);
+  p = feed_pick(l, true, kLocalPollMs + 30000);
   FCHECK(p.source == Source::LOCAL && p.in_ms == 0, "every 10 s");
 
   feed_lol_limits(f, "498", "72122");
@@ -610,32 +639,48 @@ void test_frames() {
   for (int w : {64, 128, 192, 256})
     for (bool ticker : {true, false})
       for (int metric = 0; metric < 2; metric++)
-        for (uint8_t card = 0; card < n.n; card++) {
-          FrameOpts o;
-          o.w = w;
-          o.ticker = ticker;
-          o.card = card;
-          if (metric)
-            o.units = units_metric();
-          char what[64];
-          snprintf(what, sizeof(what), "%d%s%s card %u", w, ticker ? " ticker" : "", metric ? " metric" : "", card);
-          const Frame f = flight_frame(n, &cache, o, 100);
-          check_frame(f, o, what);
-          FCHECK(!f.items.empty() && f.items[0].text == plane_label(n.planes[card]), "%s: callsign first", what);
-          FCHECK(ticker == !f.ticker.empty(), "%s: ticker", what);
-        }
+        for (bool list : {false, true})
+          for (uint8_t card = 0; card < n.n; card++) {
+            FrameOpts o;
+            o.w = w;
+            o.ticker = ticker;
+            o.card = card;
+            o.list = list;
+            if (metric)
+              o.units = units_metric();
+            char what[64];
+            snprintf(what, sizeof(what), "%d%s%s%s card %u", w, ticker ? " ticker" : "", metric ? " metric" : "",
+                     list ? " list" : "", card);
+            const Frame f = flight_frame(n, &cache, o, 100);
+            check_frame(f, o, what);
+            if (!list || w >= 192)
+              FCHECK(!f.items.empty() && f.items[0].text == plane_label(n.planes[card]), "%s: callsign first", what);
+            FCHECK(ticker == !f.ticker.empty(), "%s: ticker", what);
+          }
   FrameOpts o;
   o.w = 128;
   Frame f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "JetBlue") != nullptr && find_text(f, "JFK > CDG") != nullptr, "the 128 card");
-  FCHECK(find_text(f, "A321neo") != nullptr && find_text(f, "1.5 mi SE") != nullptr, "type and where");
+  FCHECK(find_text(f, "JetBlue") != nullptr && find_text(f, "JFK-CDG") != nullptr, "the 128 card");
+  FCHECK(find_text(f, "Airbus A321neo") != nullptr && find_text(f, "1.5 mi SE") != nullptr, "type and where");
   FCHECK(find_text(f, "1,525 ft") != nullptr && find_text(f, "203 mph") != nullptr, "altitude and speed");
-  FCHECK(find_text(f, "LOT5N") != nullptr && find_text(f, "N24NY") != nullptr && find_text(f, "N7QD") == nullptr,
-         "three rows under the ticker");
-  FCHECK(find_text(f, "JFK > CDG")->color == kColRoute, "route in gold");
+  FCHECK(find_text(f, "Climbing") != nullptr && find_text(f, "LOT5N") == nullptr, "the card alone");
+  FCHECK(find_text(f, "JFK-CDG")->color == kColRoute, "route in gold");
+  o.list = true;
+  f = flight_frame(n, &cache, o, 100);
+  FCHECK(find_text(f, "Nearby") != nullptr && find_text(f, "23 planes") != nullptr, "the list's head");
+  FCHECK(find_text(f, "JBU1407") != nullptr && find_text(f, "UAL2495") != nullptr && find_text(f, "JBU416") == nullptr,
+         "six rows over the ticker");
+  FCHECK(find_text(f, "A21N") != nullptr && find_text(f, "1,525") != nullptr && find_text(f, "1.5") != nullptr,
+         "type, altitude and distance");
   o.ticker = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "N7QD") != nullptr, "a fourth row without it");
+  FCHECK(find_text(f, "JBU416") != nullptr, "a seventh row without it");
+  o.w = 64;
+  o.ticker = true;
+  f = flight_frame(n, &cache, o, 100);
+  FCHECK(find_text(f, "23 planes") != nullptr && find_text(f, "JBU1407") != nullptr && find_text(f, "A21N") == nullptr,
+         "the one-panel list: callsign and distance");
+  o.list = false;
   o.w = 256;
   o.ticker = true;
   f = flight_frame(n, &cache, o, 100);
@@ -651,7 +696,7 @@ void test_frames() {
   FCHECK(find_text(f, "B6 1407") == nullptr && find_text(f, "B61407") != nullptr, "flight number over the route");
   o.w = 64;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "JFK > CDG") != nullptr && find_text(f, "A21N") != nullptr && find_text(f, "203mph") != nullptr,
+  FCHECK(find_text(f, "JFK-CDG") != nullptr && find_text(f, "A21N") != nullptr && find_text(f, "203mph") != nullptr,
          "the 64 card");
   o.card = 2;
   f = flight_frame(n, &cache, o, 100);
@@ -678,19 +723,21 @@ void test_notes() {
     for (int k = 0; k < 4; k++) {
       FrameOpts o;
       o.w = w;
-      const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES), Source::ADSBFI);
+      const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES));
       check_frame(f, o, "note");
       FCHECK(!f.items.empty(), "a note");
     }
   FrameOpts o;
   o.w = 64;
-  Frame f = note_frame(Note::NO_HOME, o, 10, Source::ADSBFI);
+  Frame f = note_frame(Note::NO_HOME, o, 10);
   FCHECK(f.items.size() == 4 && f.items[0].text == "Set your", "wrapped for one panel: %zu", f.items.size());
-  f = note_frame(Note::NONE_NEAR, o, to_nm(10, DistUnit::MILES), Source::ADSBFI);
-  FCHECK(f.items.size() == 2 && f.items[1].text == "within 10 mi", "%s", f.items.back().text.c_str());
+  f = note_frame(Note::NONE_NEAR, o, to_nm(10, DistUnit::MILES));
+  FCHECK(f.items.size() == 3 && f.items[0].text == "No planes" && f.items[2].text == "within 10 mi", "%s",
+         f.items.back().text.c_str());
+  FCHECK(f.items[0].color == kColValue && f.items[2].color == kColDim, "the radius dimmer");
   o.w = 128;
-  f = note_frame(Note::NO_DATA, o, 10, Source::ADSBLOL);
-  FCHECK(f.items.size() == 1 && f.items[0].text == "Can't reach adsb.lol", "one line on two panels");
+  f = note_frame(Note::NO_DATA, o, 10);
+  FCHECK(f.items.size() == 1 && f.items[0].text == "Can't reach flight data", "one line on two panels");
 }
 
 void test_ticker() {
@@ -710,9 +757,413 @@ void test_ticker() {
          "the card first, metric: %s", m.c_str());
 }
 
+// ---- Flightradar24 -------------------------------------------------------------
+
+const char *kFr24File = "fixtures/flights_fr24_nyc.json";
+const int64_t kFr24Now = 1794457500;  // the recording's timestamps plus a few seconds
+
+Home nyc(float radius_nm = 25) {
+  Home h;
+  h.lat = 40.71;
+  h.lon = -74.01;
+  h.radius_nm = radius_nm;
+  return h;
+}
+
+void test_fr24() {
+  const std::string json = slurp(kFr24File);
+  Nearby n;
+  FCHECK(parse_fr24(json, nyc(), kFr24Now, n), "the feed parses");
+  FCHECK(n.total == 34 && n.n == kNear && n.tier == Tier::AIR, "34 flights, the nearest 8: %u, %u", n.total, n.n);
+  FCHECK(n.air == 28 && n.ground == 0, "28 within 25 nm: %u", n.air);
+  const char *want[] = {"SWA1678", "N7QD", "N24NY", "N77NY", "JBU2128", "RPA4505", "C172", "JBU924"};
+  for (size_t i = 0; i < kNear; i++)
+    FCHECK_EQ(plane_label(n.planes[i]), want[i]);
+  const Plane &p = n.planes[0];
+  FCHECK_EQ(p.hex, "ac0fdc");
+  FCHECK_EQ(p.flight, "WN1678");
+  FCHECK_EQ(p.from, "DEN");
+  FCHECK_EQ(p.to, "LGA");
+  FCHECK_EQ(p.type, "B38M");
+  FCHECK(p.alt_ft == 5450 && p.gs_kt == 277 && p.seen_s >= 3 && p.seen_s <= 5, "SWA1678 5450 ft, 277 kt");
+  FCHECK(std::fabs(p.dist_nm - 1.40f) < 0.01f, "SWA1678 1.4 nm: %f", p.dist_nm);
+  FCHECK(p.track >= 0 && !p.emergency && p.tier == Tier::AIR, "airborne");
+  for (size_t i = 1; i < n.n; i++)
+    FCHECK(n.planes[i - 1].dist_nm <= n.planes[i].dist_nm, "nearest first at %zu", i);
+  // Every flight against the haversine and its own array.
+  JsonDocument doc;
+  deserializeJson(doc, json);
+  int seen = 0;
+  for (JsonPairConst kv : doc.as<JsonObjectConst>()) {
+    if (!kv.value().is<JsonArrayConst>())
+      continue;
+    Plane q;
+    JsonArrayConst a = kv.value().as<JsonArrayConst>();
+    if (!plane_from_fr24(a, nyc(), kFr24Now, q))
+      continue;
+    seen++;
+    const double d = distance_nm(40.71, -74.01, a[1].as<double>(), a[2].as<double>());
+    FCHECK(std::fabs(q.dist_nm - d) < 0.01, "%s distance", q.callsign);
+    FCHECK(q.bearing >= 0 && q.bearing < 360, "%s bearing", q.callsign);
+  }
+  FCHECK(seen == 28, "28 kept one by one: %d", seen);
+
+  // No route without both ends.
+  const int eja = index_of(n, "EJA974");
+  FCHECK(eja < 0, "EJA974 is farther than the eighth");
+  Nearby wide;
+  FCHECK(parse_fr24(json, nyc(30), kFr24Now, wide), "30 nm");
+  Plane e;
+  for (JsonPairConst kv : doc.as<JsonObjectConst>())
+    if (kv.value().is<JsonArrayConst>() && strcmp(kv.value()[16] | "", "EJA974") == 0)
+      plane_from_fr24(kv.value().as<JsonArrayConst>(), nyc(30), kFr24Now, e);
+  FCHECK(e.from[0] == '\0' && e.to[0] == '\0' && strcmp(e.flight, "EJA974") == 0, "BCT and no destination: none");
+
+  // Old positions, the ground and emergencies.
+  FCHECK(parse_fr24(json, nyc(), kFr24Now + 120, n) && n.total == 34 && n.n == 0, "two minutes old: none");
+  std::string gnd = std::regex_replace(json, std::regex("\"WN1678\",0,"), "\"WN1678\",1,");
+  FCHECK(parse_fr24(gnd, nyc(1.5f), kFr24Now, n) && n.n == 1 && n.tier == Tier::GROUND &&
+             n.planes[0].alt_ft == kNoAlt,
+         "on the ground");
+  std::string sq = std::regex_replace(json, std::regex("277,\"\""), "277,\"7700\"");
+  FCHECK(parse_fr24(sq, nyc(), kFr24Now, n) && n.planes[0].emergency && n.planes[0].squawk == 7700, "7700");
+
+  // The answer's shape, cut short or not the feed.
+  FCHECK(!parse_fr24(json.substr(0, json.size() / 2), nyc(), kFr24Now, n), "a cut-off read fails");
+  FCHECK(!parse_fr24(std::string("<html>blocked</html>"), nyc(), kFr24Now, n), "not JSON");
+  FCHECK(parse_fr24(std::string("{\"full_count\":0,\"version\":4}"), nyc(), kFr24Now, n) && n.n == 0 &&
+             n.total == 0,
+         "an empty sky");
+  const std::string extra = "{\"full_count\":13569,\"stats\":{\"a\":[1,{\"b\":\"]}\"}]},\"k\\\"ey\":\"x\"," + json.substr(1);
+  FCHECK(parse_fr24(extra, nyc(), kFr24Now, n) && n.total == 34, "skips objects and strings: %u", n.total);
+  FCHECK(parse_fr24(std::string("{\"x\":[\"A\",\"lat\"],\"version\":4}"), nyc(), kFr24Now, n) && n.total == 1 &&
+             n.n == 0,
+         "an array that isn't a flight");
+  // Ten copies, flat memory: still the nearest eight.
+  std::string big = "{";
+  for (int i = 0; i < 10; i++)
+    big += (i ? "," : "") + json.substr(1, json.rfind('}') - 1);
+  big += "}";
+  FCHECK(parse_fr24(big, nyc(), kFr24Now, n) && n.total == 340 && n.n == kNear, "340 in: %u", n.total);
+  FCHECK_EQ(plane_label(n.planes[1]), "N7QD");
+
+  // Its routes need no lookup; the card shows them.
+  RouteCache cache;
+  parse_fr24(json, nyc(), kFr24Now, n);
+  FCHECK(route_asks(n, cache, 100).n == 0, "nothing to look up");
+  FrameOpts o;
+  const Frame f = flight_frame(n, &cache, o, 100);
+  bool route = false, number = false;
+  for (const Text &t : f.items) {
+    route = route || (t.text == "DEN-LGA" && t.color == kColRoute);
+    number = number || t.text == "WN1678";
+  }
+  FCHECK(route && number, "DEN-LGA and WN1678 on the card");
+  FCHECK(f.ticker.find("SWA1678 Southwest, Boeing 737 MAX 8, DEN to LGA, 5,450 ft") != std::string::npos, "%s",
+         f.ticker.c_str());
+}
+
+void test_fr24_url() {
+  Home h;
+  h.lat = 40.6413;
+  h.lon = -73.7781;
+  h.radius_nm = 10;
+  const Bounds b = query_bounds(h);
+  FCHECK(std::fabs(b.north - (40.64 + 11 / 60.0)) < 1e-9 && std::fabs(b.south - (40.64 - 11 / 60.0)) < 1e-9,
+         "11 nm north and south of the rounded center");
+  const double d = distance_nm(40.64, -73.78, 40.64, b.east);
+  FCHECK(std::fabs(d - 11) < 0.05, "and east: %f", d);
+  FCHECK_EQ(fr24_url(h),
+            "https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=40.82,40.46,-74.02,-73.54&faa=1&satellite=1"
+            "&mlat=1&flarm=1&adsb=1&gnd=0&air=1&vehicles=0&estimated=0&maxage=14400&gliders=0&stats=0");
+  h.lat = 89.9;
+  h.lon = 179.95;
+  h.radius_nm = 250;
+  const Bounds p = query_bounds(h);
+  FCHECK(p.north == 90 && p.east == 180 && p.west == -180, "clamped at the pole: %f %f %f", p.north, p.east, p.west);
+  FCHECK_EQ(source_name(Source::FR24), "Flightradar24");
+  FCHECK_EQ(source_key(Source::FR24), "fr24");
+  FCHECK_EQ(source_key(Source::LOCAL), "receiver");
+}
+
+// ---- Settings --------------------------------------------------------------------
+
+void test_prefs() {
+  int32_t la = 0, lo = 0;
+  FCHECK(parse_coords("40.6413,-73.7781", la, lo) && la == 406413 && lo == -737781, "lat,lon");
+  FCHECK(parse_coords(" 40.64129, -73.77806 ", la, lo) && la == 406413 && lo == -737781, "rounded: %d %d", la, lo);
+  FCHECK(parse_coords("51.5 -0.12", la, lo) && la == 515000 && lo == -1200, "a space between");
+  FCHECK(parse_coords("+33.94,151", la, lo) && la == 339400 && lo == 1510000, "a plus sign, a whole number");
+  FCHECK(parse_coords("-33.86785,151.20732", la, lo) && la == -338679 && lo == 1512073, "southern: %d", la);
+  for (const char *bad : {"", "40.6", "91,0", "0,181", "40.6,-73.7,1", "forty,two", "40.6;-73.7", "0,0", "1234,5",
+                          "40.6-73.7", "40.6,", ",-73.7"})
+    FCHECK(!parse_coords(bad, la, lo), "refused: \"%s\"", bad);
+  FCHECK(parse_coords("90,180", la, lo) && parse_coords("-90.0000,-180", la, lo), "the edges");
+  FCHECK_EQ(coord_text(406413, -737781), "40.6413,-73.7781");
+  FCHECK_EQ(coord_text(-1200, 5), "-0.1200,0.0005");
+  FCHECK_EQ(coord_text(kNoCoord, kNoCoord), "");
+
+  uint16_t r = 0;
+  uint8_t u = 9;
+  FCHECK(parse_radius("10", r, u) && r == 10 && u == (uint8_t) DistUnit::MILES, "miles by default");
+  FCHECK(parse_radius("25km", r, u) && r == 25 && u == (uint8_t) DistUnit::KM, "km");
+  FCHECK(parse_radius("999nm", r, u) && r == 200 && u == (uint8_t) DistUnit::NM, "capped");
+  for (const char *bad : {"", "0", "km", "10 mi", "10ft", "1000", "-5"})
+    FCHECK(!parse_radius(bad, r, u), "refused: \"%s\"", bad);
+  FCHECK(to_nm(radius_max(DistUnit::MILES), DistUnit::MILES) <= kMaxRadiusNm &&
+             to_nm(radius_max(DistUnit::KM), DistUnit::KM) <= kMaxRadiusNm,
+         "every cap within the query's");
+
+  Prefs p;
+  FCHECK(!prefs_home(p).valid(), "no home at first");
+  FCHECK(prefs_set(p, "flyhome", "40.71,-74.01") == espn::AppSet::CHANGED, "a home");
+  FCHECK(prefs_set(p, "flyhome", "40.71, -74.01") == espn::AppSet::SAME, "the same home");
+  FCHECK(prefs_set(p, "flyhome", "north") == espn::AppSet::REFUSED && p.lat_e4 == 407100, "a bad one kept out");
+  const Home h = prefs_home(p);
+  FCHECK(h.valid() && std::fabs(h.lat - 40.71) < 1e-9 && std::fabs(h.radius_nm - to_nm(10, DistUnit::MILES)) < 1e-4,
+         "10 miles around it");
+  FCHECK(prefs_set(p, "flyplace", "Manhattan, New York\x01") == espn::AppSet::CHANGED &&
+             strcmp(p.place, "Manhattan, New York") == 0,
+         "a place name, no control characters");
+  std::string longer(60, 'a');
+  longer.replace(46, 4, "\xC3\xA9\xC3\xA9");
+  prefs_set(p, "flyplace", longer);
+  FCHECK(strlen(p.place) == 46, "cut before a split letter: %zu", strlen(p.place));
+  FCHECK(prefs_set(p, "flyradius", "25km") == espn::AppSet::CHANGED && p.radius == 25 && p.radius_unit == 1, "25 km");
+  FCHECK(prefs_set(p, "flyreceiver", "192.168.1.50") == espn::AppSet::CHANGED, "a receiver");
+  FCHECK(prefs_set(p, "flyreceiver", "my pi") == espn::AppSet::REFUSED, "no spaces");
+  FCHECK(prefs_set(p, "flyreceiver", std::string(96, 'a')) == espn::AppSet::REFUSED, "96 is too long");
+  FCHECK(prefs_set(p, "flyreceiver", "none") == espn::AppSet::CHANGED && p.receiver[0] == '\0', "none clears it");
+  FCHECK(prefs_set(p, "flyhome", "none") == espn::AppSet::CHANGED && !prefs_home(p).valid() && p.place[0] == '\0',
+         "none clears the home and its name");
+  FCHECK(prefs_set(p, "bogus", "1") == espn::AppSet::REFUSED, "not its key");
+
+  Prefs junk;
+  memset(&junk, 0x7F, sizeof(junk));
+  prefs_clean(junk);
+  FCHECK(junk.lat_e4 == kNoCoord && junk.radius == kRadiusDefault && junk.radius_unit == 0 &&
+             strlen(junk.place) == kPlaceMax && strlen(junk.receiver) == kReceiverMax,
+         "a garbled blob cleaned");
+
+  int us = -1, uk = -1, eu = -1;
+  for (size_t i = 0; i < espn::kTimezoneCount; i++) {
+    const std::string name = espn::kTimezones[i].name;
+    if (name == "US Pacific")
+      us = (int) i;
+    if (name == "UK and Ireland")
+      uk = (int) i;
+    if (name == "Central Europe")
+      eu = (int) i;
+  }
+  FCHECK(units_for_zone(us).dist == DistUnit::MILES && units_for_zone(us).alt == AltUnit::FEET, "US: miles, feet");
+  FCHECK(units_for_zone(uk).speed == SpeedUnit::MPH, "UK: mph");
+  FCHECK(units_for_zone(eu).dist == DistUnit::KM && units_for_zone(eu).alt == AltUnit::METERS, "Europe: metric");
+  FCHECK(units_for_zone(-1).dist == DistUnit::KM, "unknown: metric");
+
+  JsonDocument d;
+  Prefs q;
+  prefs_set(q, "flyhome", "40.71,-74.01");
+  prefs_set(q, "flyplace", "Manhattan");
+  prefs_state(q, units_for_zone(us), d.to<JsonObject>());
+  std::string out;
+  serializeJson(d, out);
+  FCHECK_EQ(out, "{\"home\":\"40.7100,-74.0100\",\"place\":\"Manhattan\",\"radius\":10,\"radius_unit\":\"mi\","
+                 "\"receiver\":\"\",\"units\":\"imperial\"}");
+}
+
+// ---- The display ------------------------------------------------------------------
+
+struct Reads {
+  FlightsApp app;
+  int64_t now{kFr24Now};
+  std::string last_url;
+  // One read the way the firmware runs it.
+  bool step(int status, const std::string &body, uint32_t retry_ms = 0) {
+    espn::AppRequest r;
+    if (!this->app.request(this->now, r))
+      return false;
+    this->last_url = r.url;
+    bool ok = false;
+    if (status == 200) {
+      espn::AppTextStream in(body);
+      ok = this->app.parse(in, this->now);
+    }
+    this->app.answered(status, retry_ms);
+    this->app.apply(ok, this->now);
+    return true;
+  }
+  // Waits as long as poll_ms says, from this read's start.
+  void wait() {
+    const uint32_t ms = this->app.poll_ms(this->now);
+    this->now += (ms + 999) / 1000;
+  }
+};
+
+std::string frame_text(const espn::AppFrame &f) {
+  std::string out;
+  for (const espn::AppText &t : f.texts)
+    out += t.text + "|";
+  return out;
+}
+
+void test_app() {
+  const std::string fr24 = slurp(kFr24File);
+  const std::string fi = slurp("fixtures/flights_adsbfi_jfk.json");
+  Reads r;
+  r.app.setup();
+  espn::AppFrame f;
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_text(f).find("Set your") == 0, "no home: a note: %s", frame_text(f).c_str());
+  espn::AppRequest req;
+  FCHECK(!r.app.request(r.now, req), "nothing to read without a home");
+  FCHECK(r.app.set("flyhome", "40.71,-74.01") == espn::AppSet::CHANGED, "a home");
+  r.app.set("flyradius", "28mi");
+  r.app.zone(0);
+  r.app.shown(true);
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_text(f) == "Looking for planes|", "before the first read: %s", frame_text(f).c_str());
+  FCHECK(r.app.poll_ms(r.now) == 0, "due at once");
+  FCHECK(r.step(200, fr24) && r.last_url.find("data-cloud.flightradar24.com") != std::string::npos,
+         "Flightradar24 first: %s", r.last_url.c_str());
+  FCHECK(r.app.nearby().n == kNear && r.app.source() == Source::FR24, "eight planes from it");
+  FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "next in 20 s: %u", r.app.poll_ms(r.now));
+  FCHECK(!r.app.request(r.now + 5, req), "not before");
+
+  // Each width: the card, then the list, then the card.
+  for (int w : {64, 128}) {
+    r.app.shown(true);
+    f = espn::AppFrame();
+    r.app.frame(w, 64, r.now, f);
+    FCHECK(!f.texts.empty() && f.texts[0].text == "SWA1678", "%d: the card first", w);
+    FCHECK(f.ticker.rfind("27 planes nearby | SWA1678", 0) == 0, "%d: the ticker: %s", w, f.ticker.c_str());
+    f = espn::AppFrame();
+    r.app.frame(w, 64, r.now + 3, f);
+    FCHECK(f.texts[0].text == "SWA1678", "%d: still the card", w);
+    f = espn::AppFrame();
+    r.app.frame(w, 64, r.now + 8, f);
+    FCHECK(frame_text(f).find("27 planes") != std::string::npos && frame_text(f).find("N7QD") != std::string::npos,
+           "%d: then the list: %s", w, frame_text(f).c_str());
+    f = espn::AppFrame();
+    r.app.frame(w, 64, r.now + 16, f);
+    FCHECK(f.texts[0].text == "SWA1678", "%d: then the card again", w);
+  }
+  for (int w : {192, 256}) {
+    f = espn::AppFrame();
+    r.app.frame(w, 64, r.now + 8, f);
+    FCHECK(f.texts[0].text == "SWA1678" && frame_text(f).find("27 planes") != std::string::npos,
+           "%d: card and list together: %s", w, frame_text(f).c_str());
+  }
+  JsonDocument d;
+  r.app.state(d.to<JsonObject>());
+  FCHECK(d["status"] == "ok" && d["source"] == "fr24" && d["planes"] == 27 && d["nearest"] == "SWA1678" &&
+             d["units"] == "imperial" && d["radius"] == 28,
+         "the page's view");
+
+  // Two failures, then the backup; then Flightradar24 again.
+  r.wait();
+  FCHECK(r.step(503, ""), "a failure");
+  r.wait();
+  FCHECK(r.step(-1, "") && r.last_url.find("flightradar24") != std::string::npos, "tried again");
+  r.wait();
+  FCHECK(r.step(200, fi) && r.last_url.find("opendata.adsb.fi") != std::string::npos, "then adsb.fi: %s",
+         r.last_url.c_str());
+  FCHECK(r.app.source() == Source::ADSBFI, "planes from adsb.fi");
+  // Its planes need routes: adsb.im's batch comes next.
+  r.wait();
+  espn::AppRequest rr;
+  FCHECK(r.app.request(r.now, rr) && rr.url == kRoutesetUrl && rr.body.find("\"planes\"") != std::string::npos &&
+             rr.headers.size() == 1 && rr.headers[0].value == "application/json",
+         "the routes batch: %s", rr.url.c_str());
+  r.app.answered(403, 0);
+  r.app.apply(false, r.now);
+  r.wait();
+  FCHECK(r.app.request(r.now, rr) && rr.url.find("api.adsbdb.com/v0/callsign/") != std::string::npos,
+         "adsbdb while adsb.im refuses: %s", rr.url.c_str());
+  r.app.answered(404, 0);
+  r.app.apply(false, r.now);
+  int fr = 0;
+  for (int i = 0; i < 40 && r.app.source() != Source::FR24; i++) {
+    r.wait();
+    espn::AppRequest q;
+    if (!r.app.request(r.now, q))
+      continue;
+    const bool back = q.url.find("flightradar24") != std::string::npos;
+    fr += back;
+    espn::AppTextStream in(back ? fr24 : q.url.find("adsb.fi") != std::string::npos ? fi : std::string("[]"));
+    const bool ok = q.url.find("adsbdb") == std::string::npos && r.app.parse(in, r.now);
+    r.app.answered(ok ? 200 : 404, 0);
+    r.app.apply(ok, r.now);
+  }
+  FCHECK(fr == 1 && r.app.source() == Source::FR24, "back on Flightradar24 after its wait");
+
+  // A refusal moves on at once and honors Retry-After.
+  r.wait();
+  FCHECK(r.step(429, "", 600000), "refused");
+  r.wait();
+  FCHECK(r.step(200, fi) && r.last_url.find("adsb.fi") != std::string::npos, "adsb.fi at once");
+  const uint32_t ms = (uint32_t) ((uint64_t) r.now * 1000u);
+  FCHECK(r.app.feed().wait[(size_t) Source::FR24].left(ms) >= 590000, "Retry-After honored");
+
+  // A read that never came back counts as a failure.
+  Reads lost;
+  lost.app.setup();
+  lost.app.set("flyhome", "40.71,-74.01");
+  espn::AppRequest q;
+  FCHECK(lost.app.request(lost.now, q), "a read");
+  lost.now += 60;
+  FCHECK(!lost.app.request(lost.now, q) && lost.app.poll_ms(lost.now) > 60000, "then a wait");
+  FCHECK(lost.app.feed().wait[(size_t) Source::FR24].run.streak == 1, "counted");
+
+  // The receiver first; a setting change drops the read.
+  Reads rx;
+  rx.app.setup();
+  rx.app.set("flyhome", "40.64,-73.78");
+  rx.app.set("flyradius", "30");
+  rx.app.set("flyreceiver", "192.168.1.50");
+  FCHECK(rx.step(200, fi) && rx.last_url == "http://192.168.1.50/tar1090/data/aircraft.json", "the receiver: %s",
+         rx.last_url.c_str());
+  FCHECK(rx.app.source() == Source::LOCAL && rx.app.nearby().n == kNear, "its planes");
+  FCHECK(rx.app.set("flyplace", "JFK") == espn::AppSet::CHANGED && rx.app.nearby().n == kNear, "a name keeps them");
+  FCHECK(rx.app.set("flyradius", "5") == espn::AppSet::CHANGED && rx.app.nearby().n == 0, "a radius drops them");
+  FCHECK(rx.app.poll_ms(rx.now) == 0, "and reads at once");
+  rx.now += 600;
+  f = espn::AppFrame();
+  rx.app.frame(64, 64, rx.now, f);
+  FCHECK(frame_text(f) == "Looking for|planes|", "%s", frame_text(f).c_str());
+
+  // An empty sky, and no answers at all.
+  Reads none;
+  none.app.setup();
+  none.app.set("flyhome", "40.71,-74.01");
+  none.app.zone(-1);
+  none.step(200, "{\"full_count\":1,\"version\":4}");
+  f = espn::AppFrame();
+  none.app.frame(128, 64, none.now, f);
+  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "%s", frame_text(f).c_str());
+  for (int i = 0; i < 6; i++) {
+    none.wait();
+    none.step(-1, "");
+  }
+  f = espn::AppFrame();
+  none.app.frame(128, 64, none.now, f);
+  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "the last answer while it is fresh");
+  none.now += FlightsApp::kOldS;
+  f = espn::AppFrame();
+  none.app.frame(128, 64, none.now, f);
+  FCHECK(frame_text(f) == "Can't reach flight data|", "%s", frame_text(f).c_str());
+  d.clear();
+  none.app.state(d.to<JsonObject>());
+  FCHECK(d["status"] == "failing" && d["units"] == "metric", "the page hears it");
+}
+
 }
 
 int run_flight_tests(int &total_checks) {
+  test_fr24();
+  test_fr24_url();
+  test_prefs();
+  test_app();
   test_adsbfi();
   test_ground_only();
   test_other_sources();

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -28,21 +29,27 @@ static const float kStaleS = 60.0f;
 
 // ---- Sources and cadence ------------------------------------------------------
 
-enum class Source : uint8_t { ADSBFI = 0, ADSBLOL, LOCAL };
-static const size_t kSources = 3;
+enum class Source : uint8_t { ADSBFI = 0, ADSBLOL, LOCAL, FR24 };
+static const size_t kSources = 4;
 
+static const char *const kFr24Host = "data-cloud.flightradar24.com";
 static const char *const kAdsbFiHost = "opendata.adsb.fi";
 static const char *const kAdsbLolHost = "api.adsb.lol";
 static const char *const kRoutesetUrl = "http://adsb.im/api/0/routeset";
 
+static const uint32_t kFr24PollMs = 20 * 1000;
 static const uint32_t kFiPollMs = 20 * 1000;
 static const uint32_t kLocalPollMs = 10 * 1000;
 static const uint32_t kLolMinMs = 180 * 1000;  // 500 a day per address
 static const uint32_t kLolMaxMs = 24 * 3600 * 1000;
 static const uint32_t kRoutesetGapMs = 30 * 1000;  // adsb.im wants batches
 static const uint32_t kAdsbdbGapMs = 5 * 1000;
+// Ordinary failures in a row before the next source.
+static const uint8_t kFailoverStreak = 2;
 
 const char *source_name(Source s);
+// The state document's word for it.
+const char *source_key(Source s);
 
 struct Home {
   double lat{NAN};
@@ -51,6 +58,12 @@ struct Home {
   bool valid() const;
 };
 
+struct Bounds {
+  double north{0}, south{0}, west{0}, east{0};
+};
+// A box around the rounded center, covering the radius.
+Bounds query_bounds(const Home &h);
+std::string fr24_url(const Home &h);
 // Query center rounded to 0.01 degrees.
 std::string adsbfi_url(const Home &h);
 std::string adsblol_url(const Home &h);
@@ -72,7 +85,9 @@ struct FeedPick {
 };
 
 uint32_t feed_gap_ms(const Feed &f, Source s);
-// Fallbacks only while every source before them backs off.
+// Out after kFailoverStreak failures or a refusal.
+bool feed_out(const Feed &f, Source s, uint32_t now_ms);
+// Receiver, Flightradar24, adsb.fi, adsb.lol; each while earlier ones are out.
 FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms);
 void feed_started(Feed &f, Source s, uint32_t now_ms);
 // status: HTTP status, or negative when the read never answered.
@@ -114,6 +129,9 @@ struct Plane {
   char reg[9]{};
   char type[5]{};
   char category[3]{};
+  char flight[9]{};  // Flightradar24's flight number
+  char from[5]{};    // and its route, when it has one
+  char to[5]{};
   int32_t alt_ft{kNoAlt};
   float gs_kt{-1.0f};
   float track{-1.0f};
@@ -157,12 +175,15 @@ ArduinoJson::Allocator *json_allocator();
 void fill_aircraft_filter(JsonDocument &f);
 // False when the plane is dropped.
 bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p);
+// One Flightradar24 flight array; now_s dates its position.
+bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p);
 
 namespace detail {
 
-template<typename R> class Held {
+// Any reader as a source: peek holds one character.
+template<typename R> class Source {
  public:
-  explicit Held(R &r) : r_(r) {}
+  explicit Source(R &r) : r_(r) {}
   int read() {
     if (this->held_ >= 0) {
       const int c = this->held_;
@@ -177,13 +198,13 @@ template<typename R> class Held {
       buf[i] = (char) c;
     return i;
   }
-  void hold(int c) { this->held_ = c; }
-  int next() {
-    int c;
-    do {
-      c = this->read();
-    } while (c == ' ' || c == '\n' || c == '\r' || c == '\t');
-    return c;
+  int peek() {
+    if (this->held_ < 0)
+      this->held_ = this->r_.read();
+    return this->held_;
+  }
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) {
+    return deserializeJson(doc, *this, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(nesting));
   }
 
  private:
@@ -191,8 +212,18 @@ template<typename R> class Held {
   int held_{-1};
 };
 
+inline bool space(int c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+
+// The next character past white space, left unread.
+template<typename S> int peek_past_space(S &in) {
+  int c;
+  while (space(c = in.peek()))
+    in.read();
+  return c;
+}
+
 // Reads up to the '[' of root "ac" or "aircraft".
-template<typename R> bool seek_aircraft(Held<R> &in) {
+template<typename S> bool seek_aircraft(S &in) {
   int depth = 0;
   bool str = false, esc = false, keyish = false;
   char key[10];
@@ -217,13 +248,12 @@ template<typename R> bool seek_aircraft(Held<R> &in) {
       len = 0;
       continue;
     }
-    if (c == ':' && keyish && (strcmp(key, "ac") == 0 || strcmp(key, "aircraft") == 0)) {
-      const int v = in.next();
-      if (v == '[')
-        return true;
-      in.hold(v);
+    if (c == ':' && keyish && (strcmp(key, "ac") == 0 || strcmp(key, "aircraft") == 0) &&
+        peek_past_space(in) == '[') {
+      in.read();
+      return true;
     }
-    if (c != ' ' && c != '\n' && c != '\r' && c != '\t')
+    if (!space(c))
       keyish = false;
     if (c == '{' || c == '[')
       depth++;
@@ -231,6 +261,44 @@ template<typename R> bool seek_aircraft(Held<R> &in) {
       depth--;
   }
   return false;
+}
+
+// After the opening quote: through the closing one.
+template<typename S> bool skip_string(S &in) {
+  for (int c; (c = in.read()) >= 0;) {
+    if (c == '\\')
+      in.read();
+    else if (c == '"')
+      return true;
+  }
+  return false;
+}
+
+// Skips the value starting at the next character.
+template<typename S> bool skip_value(S &in) {
+  int c = in.read();
+  if (c == '"')
+    return skip_string(in);
+  if (c == '{' || c == '[') {
+    for (int depth = 1; depth > 0;) {
+      c = in.read();
+      if (c < 0 || (c == '"' && !skip_string(in)))
+        return false;
+      if (c == '{' || c == '[')
+        depth++;
+      else if (c == '}' || c == ']')
+        depth--;
+    }
+    return true;
+  }
+  for (;;) {
+    c = in.peek();
+    if (c < 0)
+      return false;
+    if (c == ',' || c == '}' || c == ']' || space(c))
+      return true;
+    in.read();
+  }
 }
 
 class StrReader {
@@ -251,26 +319,24 @@ class StrReader {
 
 }
 
+// A source has peek(), read() and json(doc, filter, nesting).
 // One plane at a time, so memory stays flat.
-template<typename TInput, typename = decltype(std::declval<TInput &>().read())>
-bool parse_aircraft(TInput &input, const Home &home, Nearby &out) {
+template<typename S> bool parse_aircraft_from(S &in, const Home &home, Nearby &out) {
   out = Nearby();
-  detail::Held<TInput> in(input);
   if (!detail::seek_aircraft(in))
     return false;
   JsonDocument filter(json_allocator());
   fill_aircraft_filter(filter);
   JsonDocument doc(json_allocator());
   for (;;) {
-    const int c = in.next();
+    const int c = detail::peek_past_space(in);
     if (c == ']')
       break;
-    if (c == ',')
+    if (c == ',') {
+      in.read();
       continue;
-    if (c != '{')
-      return false;
-    in.hold(c);
-    if (deserializeJson(doc, in, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(6)))
+    }
+    if (c != '{' || in.json(doc, filter, 6))
       return false;
     if (out.total < UINT16_MAX)
       out.total++;
@@ -282,9 +348,67 @@ bool parse_aircraft(TInput &input, const Home &home, Nearby &out) {
   return true;
 }
 
+// Flightradar24's feed: one flight's array at a time.
+template<typename S> bool parse_fr24_from(S &in, const Home &home, int64_t now_s, Nearby &out) {
+  out = Nearby();
+  if (detail::peek_past_space(in) != '{')
+    return false;
+  in.read();
+  JsonDocument filter(json_allocator());
+  filter.add(true);
+  JsonDocument doc(json_allocator());
+  for (;;) {
+    int c = detail::peek_past_space(in);
+    if (c == '}')
+      break;
+    if (c == ',') {
+      in.read();
+      continue;
+    }
+    if (c != '"')
+      return false;
+    in.read();
+    if (!detail::skip_string(in) || detail::peek_past_space(in) != ':')
+      return false;
+    in.read();
+    if (detail::peek_past_space(in) != '[') {
+      if (!detail::skip_value(in))
+        return false;
+      continue;
+    }
+    if (in.json(doc, filter, 2))
+      return false;
+    if (out.total < UINT16_MAX)
+      out.total++;
+    Plane p;
+    if (plane_from_fr24(doc.as<JsonArrayConst>(), home, now_s, p))
+      nearby_add(out, p);
+  }
+  nearby_finish(out);
+  return true;
+}
+
+// Plain readers, with read() and readBytes().
+template<typename TInput, typename = decltype(std::declval<TInput &>().read())>
+bool parse_aircraft(TInput &input, const Home &home, Nearby &out) {
+  detail::Source<TInput> in(input);
+  return parse_aircraft_from(in, home, out);
+}
+
 inline bool parse_aircraft(const std::string &json, const Home &home, Nearby &out) {
   detail::StrReader r(json);
   return parse_aircraft(r, home, out);
+}
+
+template<typename TInput, typename = decltype(std::declval<TInput &>().read())>
+bool parse_fr24(TInput &input, const Home &home, int64_t now_s, Nearby &out) {
+  detail::Source<TInput> in(input);
+  return parse_fr24_from(in, home, now_s, out);
+}
+
+inline bool parse_fr24(const std::string &json, const Home &home, int64_t now_s, Nearby &out) {
+  detail::StrReader r(json);
+  return parse_fr24(r, home, now_s, out);
 }
 
 // ---- Names -------------------------------------------------------------------
@@ -347,6 +471,8 @@ Leg route_leg(const Route &r, const Plane &p);
 // adsbdb has no plausible flag: check the geometry.
 bool route_fits(const Stop &a, const Stop &b, const Plane &p);
 std::string leg_text(const Leg &l, const char *sep);
+// Flightradar24's route, else a looked-up leg that fits.
+std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep);
 
 struct RouteAsk {
   char callsign[kNear][9]{};
@@ -355,6 +481,7 @@ struct RouteAsk {
   uint8_t n{0};
 };
 
+// Planes with no route of their own and none cached.
 RouteAsk route_asks(const Nearby &near, const RouteCache &cache, uint32_t now_s);
 std::string routeset_body(const RouteAsk &ask);
 std::string adsbdb_url(const char *callsign);
@@ -366,24 +493,44 @@ bool adsbdb_from_doc(JsonObjectConst root, const char *callsign, RouteCache &cac
 // A 404 from adsbdb.
 void route_unknown(RouteCache &cache, const char *callsign, uint32_t now_s);
 
-template<typename TInput>
-bool parse_routeset(TInput &&input, const RouteAsk &ask, RouteCache &cache, uint32_t now_s) {
+template<typename S> bool parse_routeset_from(S &in, const RouteAsk &ask, RouteCache &cache, uint32_t now_s) {
   JsonDocument filter(json_allocator());
   fill_routeset_filter(filter);
   JsonDocument doc(json_allocator());
-  if (deserializeJson(doc, input, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(5)))
+  if (in.json(doc, filter, 5))
     return false;
   return routes_from_doc(doc.as<JsonArrayConst>(), ask, cache, now_s);
 }
 
-template<typename TInput>
-bool parse_adsbdb(TInput &&input, const char *callsign, RouteCache &cache, uint32_t now_s) {
+template<typename S> bool parse_adsbdb_from(S &in, const char *callsign, RouteCache &cache, uint32_t now_s) {
   JsonDocument filter(json_allocator());
   fill_adsbdb_filter(filter);
   JsonDocument doc(json_allocator());
-  if (deserializeJson(doc, input, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(5)))
+  if (in.json(doc, filter, 5))
     return false;
   return adsbdb_from_doc(doc.as<JsonObjectConst>(), callsign, cache, now_s);
+}
+
+template<typename TInput, typename = decltype(std::declval<TInput &>().read())>
+bool parse_routeset(TInput &input, const RouteAsk &ask, RouteCache &cache, uint32_t now_s) {
+  detail::Source<TInput> in(input);
+  return parse_routeset_from(in, ask, cache, now_s);
+}
+
+template<typename TInput, typename = decltype(std::declval<TInput &>().read())>
+bool parse_adsbdb(TInput &input, const char *callsign, RouteCache &cache, uint32_t now_s) {
+  detail::Source<TInput> in(input);
+  return parse_adsbdb_from(in, callsign, cache, now_s);
+}
+
+inline bool parse_routeset(const std::string &json, const RouteAsk &ask, RouteCache &cache, uint32_t now_s) {
+  detail::StrReader r(json);
+  return parse_routeset(r, ask, cache, now_s);
+}
+
+inline bool parse_adsbdb(const std::string &json, const char *callsign, RouteCache &cache, uint32_t now_s) {
+  detail::StrReader r(json);
+  return parse_adsbdb(r, callsign, cache, now_s);
 }
 
 // ---- Text --------------------------------------------------------------------
@@ -435,13 +582,14 @@ struct FrameOpts {
   bool ticker{true};  // bottom 8 rows kept for it
   Units units;
   uint8_t card{0};  // index into Nearby::planes
+  bool list{false};  // under 192 wide: the list, not the card
 };
 
 enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING };
 
-// Narrow: one plane; 128: card, rows; wider: side list.
+// Under 192 wide the card or the list; wider, both.
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s);
-Frame note_frame(Note note, const FrameOpts &o, float radius_nm, Source source);
+Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
 std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s,
                           size_t planes = 3);
 // Text width in pixels at the font's advance.

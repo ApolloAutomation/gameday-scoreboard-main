@@ -538,9 +538,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         for (const flights::Text &t : f.items)
           if (flights::text_px(t) > t.w || t.x < 0 || t.x + t.w > w)
             abort();
-        sink = sink + f.ticker.size() + flights::note_frame(flights::Note::NONE_NEAR, o, 10, {}).items.size();
+        o.list = true;
+        sink = sink + flights::flight_frame(near, &cache, o, 100).items.size();
+        sink = sink + f.ticker.size() + flights::note_frame(flights::Note::NONE_NEAR, o, 10).items.size();
       }
     }
+    ChunkReader r2(data, size, chunk);
+    if (flights::parse_fr24(r2, home, 1794457500, near) && near.n > flights::kNear)
+      abort();
     flights::RouteAsk ask;
     for (const char *cs : {"UAL755", "JBU1407", "DAL2064", "FIN16"})
       strcpy(ask.callsign[ask.n++], cs);

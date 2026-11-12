@@ -13,6 +13,7 @@
 
 #include <ArduinoJson.h>
 
+#include "board_layout.h"
 #include "espn_parse.h"
 #include "health.h"
 #include "idle.h"
@@ -105,6 +106,20 @@ struct AppLine {
   uint32_t color{0xFFFFFF};
 };
 
+// Most labels a frame places itself (the views' pool).
+constexpr size_t kAppTexts = 40;
+
+enum class AppAlign : uint8_t { LEFT = 0, CENTER, RIGHT };
+
+// A label at an area-local spot, clipped to w.
+struct AppText {
+  int16_t x{0}, y{0}, w{0};
+  esphome::gameday::BoardFont font{esphome::gameday::BoardFont::S8};
+  AppAlign align{AppAlign::LEFT};
+  uint32_t color{0xFFFFFF};
+  std::string text;
+};
+
 // The leaderboard's shape: title, status, up to kAppRows rows.
 struct AppFrame {
   BoardLines rows;
@@ -112,10 +127,13 @@ struct AppFrame {
   std::string ticker;
   std::vector<esphome::gameday::TickerSpan> spans;
   AppLine line;
+  std::vector<AppText> texts;  // drawn over the rows
 };
 
-// Rows or a line to draw, else the message.
-inline bool app_frame_board(const AppFrame &f) { return !f.rows.name.empty() || f.line.pts.size() >= 2; }
+// Rows, labels or a line to draw, else the message.
+inline bool app_frame_board(const AppFrame &f) {
+  return !f.rows.name.empty() || !f.texts.empty() || f.line.pts.size() >= 2;
+}
 
 // Keeps the first and last, evenly between.
 inline std::vector<AppPoint> app_line_thin(const std::vector<AppPoint> &pts, size_t max) {
@@ -143,6 +161,8 @@ inline void app_frame_trim(AppFrame &f) {
   cut(f.rows.value_color);
   cut(f.rows.name_color);
   f.line.pts = app_line_thin(f.line.pts, kAppLinePoints);
+  if (f.texts.size() > kAppTexts)
+    f.texts.resize(kAppTexts);
 }
 
 // Flat x, y pairs clipped to the area.
@@ -225,6 +245,10 @@ class AppStream {
   virtual ~AppStream() = default;
   virtual int read() = 0;
   virtual size_t readBytes(char *dst, size_t n) = 0;
+  // The next character, left unread; -1 at the end.
+  virtual int peek() = 0;
+  // One value from here, through the board's JSON reader.
+  virtual DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) = 0;
 };
 
 // A whole body in memory, for host tests.
@@ -237,6 +261,10 @@ class AppTextStream final : public AppStream {
     memcpy(dst, this->text_.data() + this->at_, take);
     this->at_ += take;
     return take;
+  }
+  int peek() override { return this->at_ < this->text_.size() ? (unsigned char) this->text_[this->at_] : -1; }
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, *this, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(nesting));
   }
 
  private:
@@ -341,6 +369,8 @@ class App {
 
   // On screen in some area now, or not.
   virtual void shown(bool /*on*/) {}
+  // The panel's time zone (kTimezones index), at setup and changes.
+  virtual void zone(int /*tz_index*/) {}
   // Keeps it up through night hours and Off or dim.
   virtual bool busy(int64_t /*now*/) const { return false; }
 
@@ -350,6 +380,10 @@ class App {
   virtual bool request(int64_t now, AppRequest &out) = 0;
   // Fetch task: into its own result, in PSRAM.
   virtual bool parse(AppStream &in, int64_t now) = 0;
+  // Before apply: the read's HTTP status (0 none) and Retry-After.
+  virtual void answered(int /*status*/, uint32_t /*retry_after_ms*/) {}
+  // True: it backs off each host itself, not the display.
+  virtual bool own_backoff() const { return false; }
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
   // A w by h area's frame.

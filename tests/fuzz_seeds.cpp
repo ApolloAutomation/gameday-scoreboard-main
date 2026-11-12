@@ -109,6 +109,14 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Flightradar24's feed has no filter: its fixtures as they are.
+  for (const auto &e : fs::directory_iterator(fixtures)) {
+    if (e.path().filename().string().rfind("flights_fr24", 0) != 0)
+      continue;
+    std::ofstream(espn_out / e.path().filename(), std::ios::binary) << slurp(e.path());
+    espn_seeds++;
+  }
+
   // fuzz_espn also reads its input line by line as response headers and as
   // the sign-in probe's answer: a Date, a Retry-After and redirects.
   const char *const header_seeds[] = {

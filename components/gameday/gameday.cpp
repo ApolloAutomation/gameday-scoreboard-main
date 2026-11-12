@@ -191,6 +191,9 @@ class ContainerReader {
     return copied;
   }
 
+  // A display's parse looks ahead; never with a cutter.
+  int peek() { return this->fill_() ? static_cast<unsigned char>(this->buf_[this->pos_]) : -1; }
+
   size_t total() const { return this->total_; }
   // A summary's read ends after its box score.
   void cut(::espn::BoxCutter *c) { this->cut_ = c; }
@@ -228,6 +231,12 @@ class ReaderStream final : public ::espn::AppStream {
   explicit ReaderStream(ContainerReader &r) : r_(r) {}
   int read() override { return this->r_.read(); }
   size_t readBytes(char *dst, size_t n) override { return this->r_.readBytes(dst, n); }
+  int peek() override { return this->r_.peek(); }
+  // The board's own reader: no second copy in flash.
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, this->r_, DeserializationOption::Filter(filter),
+                           DeserializationOption::NestingLimit(nesting));
+  }
 
  private:
   ContainerReader &r_;
@@ -2862,6 +2871,9 @@ void GamedayComponent::apply_timezone_() {
   if (this->time_ != nullptr)
     this->time_->set_timezone(::espn::kTimezones[this->prefs_.tz_index].posix);
 #endif
+  for (::espn::App *a : ::espn::app_slots().app)
+    if (a != nullptr)
+      a->zone(this->prefs_.tz_index);
 }
 
 // A failed read with only the team change's logo on the board: drop it, so
@@ -5766,6 +5778,9 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.board_name_color = std::move(fr.rows.name_color);
   f.line = ::espn::app_line_xy(fr.line, w, h);
   f.line_color = fr.line.color;
+  f.texts = std::move(fr.texts);
+  for (::espn::AppText &t : f.texts)
+    t.text = panel_text(t.text);
 }
 
 void GamedayComponent::draw_main_app_() {
@@ -5844,6 +5859,11 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   this->app_times_.took(d, took_ms, false);
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
+  const ::espn::App *a = ::espn::app_slots().get(d);
+  if (a != nullptr && a->own_backoff()) {
+    ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
+    return;
+  }
   const uint32_t ms = this->host_wait_[(size_t) src].fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
   ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
            (unsigned) (ms / 1000));
@@ -5857,14 +5877,17 @@ void GamedayComponent::apply_app_job_() {
     this->app_last_ms_[j.app] = 0;  // read again for the new settings
     return;
   }
+  const ::espn::Source src = ::espn::display_source(d);
   if (j.app_ok) {
     this->app_times_.took(d, j.took_ms, true);
-    this->host_wait_[(size_t) ::espn::display_source(d)].clear();
+    this->host_wait_[(size_t) src].clear();
   } else {
     this->app_failed_(d, j.took_ms);
   }
+  a->answered(j.host[(size_t) src].read ? this->host_status_[(size_t) src].load() : 0, j.host[(size_t) src].retry_after_ms);
   a->apply(j.app_ok, j.app_now);
   this->app_redraw_(d);
+  this->rebuild_state_(&this->last_fields_);  // the page's view of it
 }
 
 // A display's own key: false when none takes it.

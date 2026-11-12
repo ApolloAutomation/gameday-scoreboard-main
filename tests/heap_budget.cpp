@@ -424,6 +424,19 @@ int main() {
     measure("flights_routeset", [&] { return flights::parse_routeset(routes, ask, cache, 1); });
     std::string db = slurp("fixtures/flights_adsbdb_ual755.json");
     measure("flights_adsbdb", [&] { return flights::parse_adsbdb(db, "UAL755", cache, 1); });
+    // Flightradar24's feed, ten times over: flat too.
+    std::string fr24 = slurp("fixtures/flights_fr24_nyc.json");
+    std::string fr24_big = "{";
+    for (int i = 0; i < 10; i++)
+      fr24_big += (i ? "," : "") + fr24.substr(1, fr24.rfind('}') - 1);
+    fr24_big += "}";
+    flights::Home nyc = home;
+    nyc.lat = 40.71;
+    nyc.lon = -74.01;
+    measure("flights_fr24_340", [&] {
+      flights::Nearby n;
+      return flights::parse_fr24(fr24_big, nyc, 1794457500, n) && n.total == 340;
+    });
     flights::Nearby n;
     flights::parse_aircraft(json, home, n);
     measure("flights_frame_256", [&] {
