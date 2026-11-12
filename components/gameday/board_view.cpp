@@ -81,6 +81,12 @@ bool recolor_works(lv_obj_t *label) {
   return marked.x == plain.x;
 }
 
+}  // namespace
+
+bool ticker_colors_on() { return ticker_colors; }
+
+namespace {
+
 std::string ticker_line(const UpdateFields &f) {
   const std::string line = panel_text(f.status_text);
   return ticker_colors ? ticker_markup(line, f.ticker_spans) : line;

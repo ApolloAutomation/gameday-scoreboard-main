@@ -1592,6 +1592,9 @@ void GamedayComponent::dump_config() {
 #ifdef GAMEDAY_BETA_CHANNEL
   ESP_LOGCONFIG(TAG, "  Follow beta: %s", this->follow_beta() ? "on" : "off");
 #endif
+#ifdef USE_LVGL
+  ESP_LOGCONFIG(TAG, "  Ticker colors: %s", ticker_colors_on() ? "on" : "off");
+#endif
 }
 
 void GamedayComponent::on_shutdown() { ::espn::boot_log_planned(boot_log); }
