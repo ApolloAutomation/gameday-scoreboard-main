@@ -18,6 +18,7 @@
 #include "app_f1.h"
 #include "f1.h"
 #include "flights.h"
+#include "logo_icon.h"
 #include "logo_lru.h"
 #include "markets_view.h"
 #include "panel_text.h"
@@ -738,6 +739,33 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     ChunkReader r2(data, size, chunk);
     if (flights::parse_fr24(r2, home, 1794457500, near) && near.n > flights::kNear)
       abort();
+    // Pictures and logos stay inside the card.
+    for (int w : {64, 128, 256}) {
+      flights::FrameOpts o;
+      o.w = w;
+      const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
+      for (const flights::Art &a : f.art) {
+        const flights::PlaneSprite *s = flights::plane_sprite(a.kind);
+        if (s == nullptr || a.x < 0 || a.y < 0 || a.x + s->w > w || a.y + s->h > o.h - 8)
+          abort();
+      }
+      for (const flights::Logo &l : f.logos)
+        if (l.x < 0 || l.x + flights::kLogoPx > w || flights::airline_by_icao(l.icao) == nullptr ||
+            l.alt >= (int) f.items.size())
+          abort();
+      sink = sink + f.art.size() + f.logos.size();
+    }
+    {
+      // The logo steps on the bytes as an image.
+      const int side = 1 + (int) (size % 32);
+      std::vector<uint8_t> img(espn::logo_icon_bytes(side, side), 0);
+      memcpy(img.data(), data, std::min(size, img.size()));
+      std::vector<uint16_t> stack;
+      espn::logo_icon_knockout(img.data(), side, side, stack);
+      std::vector<uint8_t> icon = espn::logo_icon_shrink(img.data(), side, side, 16);
+      espn::logo_icon_lift(icon.data(), 16, 16, true);
+      sink = sink + espn::logo_icon_usable(icon.data(), 16) + espn::logo_placeholder(espn::kGoogleLogoUrl, data, size);
+    }
     flights::RouteAsk ask;
     for (const char *cs : {"UAL755", "JBU1407", "DAL2064", "FIN16"})
       strcpy(ask.callsign[ask.n++], cs);

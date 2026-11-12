@@ -158,6 +158,7 @@ struct UpdateFields {
   image::Image *icon_img[::espn::kAppIcons]{};
   int16_t icon_xy[2 * ::espn::kAppIcons]{};
   uint8_t icon_n{0};
+  std::vector<::espn::AppArt> art;  // and its picture
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -1401,6 +1402,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t app_last_ms_[::espn::kDisplayCount]{};  // last read's start
   uint32_t app_gen_[::espn::kDisplayCount]{};      // bumped by a settings change
   uint32_t app_drawn_ms_[::espn::kDisplayCount]{};
+  // Displays drawn while a logo downloads, by bit
+  uint32_t icon_wait_{0};
   bool app_shown_[::espn::kDisplayCount]{};
   ESPPreferenceObject app_pref_[::espn::kDisplayCount];
   static constexpr size_t APP_HOSTS = 8;

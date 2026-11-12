@@ -14,6 +14,7 @@
 #include "board_layout.h"
 #include "espn_parse.h"
 #include "gameday.h"
+#include "logo_lru.h"
 #include "panel_text.h"
 #include "setup_qr.h"
 
@@ -440,6 +441,54 @@ void logo_draw(BoardView &v, const UpdateFields &f, image::Image *img) {
   logo_show(v, img);
 }
 
+uint32_t art_key(const ::espn::AppArt &a) {
+  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16), a.ink[0], a.ink[1],
+                        a.ink[2]};
+  return ::espn::logo_key(reinterpret_cast<const char *>(v), sizeof(v)) | 1;
+}
+
+// Repainted in place: LVGL must not cache it.
+static_assert(LV_CACHE_DEF_SIZE == 0, "put_art repaints one buffer; drop it from the image cache");
+
+// The frame's picture; repainted only when it changes
+void put_art(BoardView &v, const UpdateFields &f) {
+  if (!f.board || f.art.empty()) {
+    show(v.art, false);
+    return;
+  }
+  const ::espn::AppArt &a = f.art[0];
+  if (v.art_buf == nullptr) {
+    v.art_buf = static_cast<uint8_t *>(
+        heap_caps_malloc(::espn::kAppArtMaxW * ::espn::kAppArtMaxH * 3, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (v.art_buf == nullptr)
+      return;
+  }
+  if (v.art == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.art = lv_image_create(v.board);
+    lv_obj_remove_style_all(v.art);
+  }
+  const uint32_t key = art_key(a);
+  if (key != v.art_key) {
+    ::espn::app_art_paint(a, v.art_buf);
+    lv_image_dsc_t &d = v.art_dsc;
+    d.header.magic = LV_IMAGE_HEADER_MAGIC;
+    d.header.cf = LV_COLOR_FORMAT_RGB565A8;
+    d.header.w = a.w;
+    d.header.h = a.h;
+    d.header.stride = a.w * 2;
+    d.data_size = (uint32_t) a.w * a.h * 3;
+    d.data = v.art_buf;
+    ::lv_image_set_src(v.art, &d);
+    lv_obj_invalidate(v.art);
+    v.art_key = key;
+  }
+  if (lv_obj_get_style_x(v.art, LV_PART_MAIN) != a.x || lv_obj_get_style_y(v.art, LV_PART_MAIN) != a.y)
+    lv_obj_set_pos(v.art, a.x, a.y);
+  show(v.art, true);
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -695,6 +744,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_line(v, f);
   put_texts(v, f);
   put_icons(v, f);
+  put_art(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {

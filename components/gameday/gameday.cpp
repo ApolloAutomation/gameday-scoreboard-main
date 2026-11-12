@@ -1646,9 +1646,19 @@ void GamedayComponent::on_shutdown() { ::espn::boot_log_planned(boot_log); }
 
 void GamedayComponent::loop() {
   PsramTasks::reap();
-  if (this->logos_.loop()) {
+  bool logo_missed = false;
+  const bool logo_ready = this->logos_.loop(logo_missed);
+  if (logo_ready) {
     this->fire_action_("logo_ready");  // gameday-common.yaml redraws the logos
     this->a2_show_logos_();            // and the second area's here
+  }
+  if ((logo_ready || logo_missed) && this->icon_wait_ != 0) {
+    // Waiting displays draw it, or ask the backup
+    const uint32_t wait = this->icon_wait_;
+    this->icon_wait_ = 0;
+    for (int i = 1; i < ::espn::kDisplayCount; i++)
+      if ((wait >> i) & 1)
+        this->app_redraw_((::espn::Display) i, true);
   }
   if (this->logo_held_ && this->logo_hold_done_())
     this->draw_(this->last_fields_);
@@ -5891,6 +5901,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.texts = std::move(fr.texts);
   for (::espn::AppText &t : f.texts)
     t.text = panel_text(t.text);
+  f.art = std::move(fr.art);
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons];
   char url[160];
@@ -5907,16 +5918,21 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
       from = 0;
     for (uint8_t k = from; (len = ic.url(ic.key, ic.kind, k, url, sizeof url)) > 0; k++) {
       const std::string_view u(url, len);
-      image::Image *img = this->logos_.get(u, ic.px);
+      image::Image *img = this->logos_.get(u, ic.px, ic.mark);
       if (img != nullptr) {
         f.icon_img[f.icon_n] = img;
         f.icon_xy[2 * f.icon_n] = ic.x;
         f.icon_xy[2 * f.icon_n + 1] = ic.y;
         shown[f.icon_n++] = ::espn::logo_key(url, len);
+        // The logo stands in for its label
+        if (ic.alt >= 0 && (size_t) ic.alt < f.texts.size())
+          f.texts[ic.alt].text.clear();
         break;
       }
-      if (this->logos_.waiting(u))
+      if (this->logos_.waiting(u)) {
+        this->icon_wait_ |= 1u << (int) d;
         break;
+      }
     }
   }
   this->logos_.pin_icons(shown, f.icon_n);

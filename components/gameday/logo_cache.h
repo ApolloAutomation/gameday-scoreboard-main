@@ -58,7 +58,8 @@ class LogoCache {
   void want(const std::string &url);
   // The decoded logo, or nullptr while it is still missing; a miss starts a download.
   // icon: new entries shrink to that square, dark ones lifted.
-  image::Image *get(std::string_view url, uint8_t icon = 0);
+  // mark: white edges cleared, unreadable ones fail.
+  image::Image *get(std::string_view url, uint8_t icon = 0, bool mark = false);
   // Loaded already: never starts a download.
   bool ready(std::string_view url);
   // True while the logo is still on its way. A miss starts it, as get() does;
@@ -73,7 +74,8 @@ class LogoCache {
   bool busy() const { return this->task_running_; }
   // Decodes finished downloads and retries failed logos that are on screen.
   // True when at least one logo became ready.
-  bool loop();
+  // failed: one failed or proved unreadable instead.
+  bool loop(bool &failed);
   // Logo bytes downloaded since boot, any task.
   uint32_t bytes_downloaded() const { return this->bytes_downloaded_.load(); }
 
@@ -95,6 +97,7 @@ class LogoCache {
     uint32_t seq{0};   // queue order within a priority
     uint8_t fails{0};  // failures in a row, for the wait
     uint8_t icon{0};   // shrink to this square; 0 keeps 32
+    bool mark{false};
     uint32_t used_ms{0};
     uint32_t failed_ms{0};
     uint32_t wait_ms{0};  // how long after failed_ms to ask again
@@ -104,7 +107,8 @@ class LogoCache {
   void run_();
   // code: the HTTP status, 0 for no answer
   bool download_(const std::string &url, Bytes &body, int &code, bool &throttled, uint32_t &retry_after_ms);
-  bool decode_(Entry &e, const Bytes &body);
+  // 1 decoded, 0 failed, -1 unreadable as an icon
+  int decode_(Entry &e, const Bytes &body);
   void make_room_(uint32_t now);  // now: millis()
   void start_task_();
   bool pinned_url_(std::string_view url) const;
@@ -133,6 +137,7 @@ class LogoCache {
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
   std::atomic<bool> downloaded_{false};
+  std::atomic<bool> failed_{false};  // a download failed since loop()
   std::atomic<bool> pending_any_{false};
   std::atomic<uint32_t> bytes_downloaded_{0};
 };

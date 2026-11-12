@@ -266,8 +266,13 @@ void test_names() {
       FCHECK((unsigned char) *c >= 0x20 && (unsigned char) *c < 0x7F, "%s ASCII", kAirlines[i].icao);
   }
   FCHECK_EQ(type_text("B738", 25), "Boeing 737-800");
-  FCHECK_EQ(type_text("B738", 12), "B738");
-  FCHECK_EQ(type_text("B3XM", 16), "B3XM");
+  FCHECK_EQ(type_text("B738", 12), "737-800");
+  FCHECK_EQ(type_text("B738", 6), "B738");
+  FCHECK_EQ(type_text("B3XM", 16), "737 MAX 10");
+  FCHECK_EQ(type_text("B38M", 14), "737 MAX 8");
+  FCHECK_EQ(type_text("SF50", 14), "Vision Jet");
+  FCHECK_EQ(type_text("CL35", 14), "Challenger 350");
+  FCHECK_EQ(type_text("C25B", 10), "C25B");
   FCHECK_EQ(type_text("B38M", 4), "B38M");
   FCHECK_EQ(type_text("ZZZZ", 12), "ZZZZ");
   FCHECK_EQ(type_text("", 12), "");
@@ -616,6 +621,7 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
     int x0, x1, y0, y1;
   };
   std::vector<Box> boxes;
+  auto apart = [](const Box &a, const Box &b) { return a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 < b.y0 || b.y1 < a.y0; };
   for (const Text &t : f.items) {
     const int px = text_px(t);
     FCHECK(px <= t.w, "%s: \"%s\" fits %d px", what, t.text.c_str(), t.w);
@@ -626,9 +632,36 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
     for (unsigned char c : t.text)
       FCHECK(c >= 0x20 && c < 0x7F, "%s: ASCII", what);
     for (const Box &o2 : boxes)
-      FCHECK(b.x1 <= o2.x0 || o2.x1 <= b.x0 || b.y1 < o2.y0 || o2.y1 < b.y0, "%s: \"%s\" overlaps", what,
-             t.text.c_str());
+      FCHECK(apart(b, o2), "%s: \"%s\" overlaps", what, t.text.c_str());
     boxes.push_back(b);
+  }
+  // Pictures and logos: inside, over the ticker, clear of text.
+  std::vector<Box> pics;
+  for (const Art &a : f.art) {
+    const PlaneSprite *s = plane_sprite(a.kind);
+    FCHECK(s != nullptr, "%s: a picture of something", what);
+    if (s == nullptr)
+      continue;
+    const Box b{a.x, a.x + s->w, a.y, a.y + s->h - 1};
+    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the picture inside", what);
+    for (const Box &t : boxes)
+      FCHECK(apart(b, t), "%s: the picture clear of text", what);
+    pics.push_back(b);
+  }
+  FCHECK(f.art.size() <= 1 && f.logos.size() <= 1, "%s: one picture, one logo", what);
+  for (const Logo &l : f.logos) {
+    const Box b{l.x, l.x + kLogoPx, l.y, l.y + kLogoPx - 1};
+    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
+    FCHECK(airline_by_icao(l.icao) != nullptr, "%s: a logo to load", what);
+    for (size_t i = 0; i < boxes.size(); i++)
+      FCHECK((int) i == l.alt || apart(b, boxes[i]), "%s: the logo clear of \"%s\"", what, f.items[i].text.c_str());
+    for (const Box &p : pics)
+      FCHECK(apart(b, p), "%s: the logo clear of the picture", what);
+    if (l.alt >= 0) {
+      FCHECK((size_t) l.alt < f.items.size(), "%s: its code a label", what);
+      const Box &c = boxes[(size_t) l.alt];
+      FCHECK(c.x0 >= b.x0 && c.x1 <= b.x1 && c.y0 >= b.y0 && c.y1 <= b.y1, "%s: the code in the logo's box", what);
+    }
   }
 }
 
@@ -662,7 +695,9 @@ void test_frames() {
             const Frame f = flight_frame(n, &cache, o, 100);
             check_frame(f, o, what);
             if (!list || w >= 192)
-              FCHECK(!f.items.empty() && f.items[0].text == plane_label(n.planes[card]), "%s: callsign first", what);
+              FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
+            if (list && w < 192)
+              FCHECK(f.art.empty() && f.logos.empty(), "%s: the list has no pictures", what);
             FCHECK(ticker == !f.ticker.empty(), "%s: ticker", what);
           }
   FrameOpts o;
@@ -708,7 +743,36 @@ void test_frames() {
          "the 64 card");
   o.card = 2;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "Bell 407") != nullptr, "no airline: the type: %s", f.items[1].text.c_str());
+  FCHECK(find_text(f, "B407") != nullptr && f.art.size() == 1 && f.art[0].kind == PlaneKind::HELI && f.logos.empty(),
+         "no airline: a helicopter and its code");
+  FCHECK(f.items[0].font == BoardFont::S16 && f.items[0].text == "N77NY", "the big callsign stays");
+  // An airline missing from the table keeps its route.
+  Nearby un = n;
+  un.n = 1;
+  un.planes[0] = n.planes[0];
+  Plane &nk = un.planes[0];
+  memset(nk.callsign, 0, sizeof(nk.callsign));
+  strcpy(nk.callsign, "NKS123");
+  strcpy(nk.type, "A20N");
+  strcpy(nk.from, "DEN");
+  strcpy(nk.to, "LGA");
+  nk.flight[0] = nk.brand[0] = '\0';
+  FCHECK(logo_airline(nk) == nullptr, "NKS isn't in the table");
+  for (bool ticker : {true, false}) {
+    FrameOpts ou;
+    ou.w = 64;
+    ou.ticker = ticker;
+    f = flight_frame(un, nullptr, ou, 100);
+    check_frame(f, ou, "unlisted airline");
+    const Text *route = find_text(f, "DEN-LGA");
+    FCHECK(route != nullptr && route->color == kColRoute && find_text(f, "NKS123") != nullptr && f.logos.empty(),
+           "unlisted airline: callsign and route");
+    FCHECK(f.art.size() == 1 && f.art[0].kind == PlaneKind::NARROW, "unlisted airline: its picture");
+  }
+  un.planes[0].from[0] = un.planes[0].to[0] = '\0';
+  strcpy(un.planes[0].flight, "NK123");
+  f = flight_frame(un, nullptr, o, 100);
+  FCHECK(find_text(f, "NK123") != nullptr && find_text(f, "NK123")->color == kColDim, "or its flight number");
 
   // Ground-only, emergencies and no routes still fit.
   Nearby g = read(file, jfk(1));
@@ -1035,6 +1099,13 @@ struct Reads {
   }
 };
 
+bool app_has(const espn::AppFrame &f, const std::string &text) {
+  for (const espn::AppText &t : f.texts)
+    if (t.text == text)
+      return true;
+  return false;
+}
+
 std::string frame_text(const espn::AppFrame &f) {
   std::string out;
   for (const espn::AppText &t : f.texts)
@@ -1066,6 +1137,23 @@ void test_app() {
   FCHECK(r.app.nearby().n == kNear && r.app.source() == Source::FR24, "eight planes from it");
   FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "next in 20 s: %u", r.app.poll_ms(r.now));
   FCHECK(r.app.lit(r.now) && !r.app.lit(r.now + FlightsApp::kOldS + 1), "planes keep Off or dim lit");
+  {
+    // The airline logo as an icon the board loads
+    espn::AppFrame wide;
+    r.app.frame(256, 64, r.now, wide);
+    FCHECK(wide.icons.size() == 1 && wide.art.size() == 1, "a logo and a picture: %zu %zu", wide.icons.size(),
+           wide.art.size());
+    for (const espn::AppIcon &ic : wide.icons) {
+      char url[160];
+      const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, 0, url, sizeof url) : 0;
+      FCHECK(n > 0 && std::string(url, n).find("https://") == 0, "its first source: %s", ic.key);
+      FCHECK(ic.mark && ic.px == kLogoPx && ic.alt >= 0 && (size_t) ic.alt < wide.texts.size(),
+             "a mark with its code meanwhile");
+      FCHECK(ic.url(ic.key, ic.kind, 2, url, sizeof url) == 0 && ic.url("", 0, 0, url, sizeof url) == 0 &&
+                 ic.url(ic.key, ic.kind, 0, url, 8) == 0,
+             "two sources at most, none unknown or cut");
+    }
+  }
   FCHECK(!r.app.request(r.now + 5, req), "not before");
   // Whole seconds against millis: due must read 0, not 20 s.
   FCHECK(r.app.poll_ms(r.now + kFr24PollMs / 1000) == 0, "due at its time: %u",
@@ -1076,18 +1164,18 @@ void test_app() {
     r.app.shown(true);
     f = espn::AppFrame();
     r.app.frame(w, 64, r.now, f);
-    FCHECK(!f.texts.empty() && f.texts[0].text == "SWA1678", "%d: the card first", w);
+    FCHECK(app_has(f, "SWA1678"), "%d: the card first", w);
     FCHECK(f.ticker.rfind("27 planes nearby | SWA1678", 0) == 0, "%d: the ticker: %s", w, f.ticker.c_str());
     f = espn::AppFrame();
     r.app.frame(w, 64, r.now + 3, f);
-    FCHECK(f.texts[0].text == "SWA1678", "%d: still the card", w);
+    FCHECK(app_has(f, "SWA1678") && !app_has(f, "N7QD"), "%d: still the card", w);
     f = espn::AppFrame();
     r.app.frame(w, 64, r.now + 8, f);
     FCHECK(frame_text(f).find("27 planes") != std::string::npos && frame_text(f).find("N7QD") != std::string::npos,
            "%d: then the list: %s", w, frame_text(f).c_str());
     f = espn::AppFrame();
     r.app.frame(w, 64, r.now + 16, f);
-    FCHECK(f.texts[0].text == "SWA1678", "%d: then the card again", w);
+    FCHECK(app_has(f, "SWA1678") && !app_has(f, "N7QD"), "%d: then the card again", w);
   }
   for (int w : {192, 256}) {
     f = espn::AppFrame();
