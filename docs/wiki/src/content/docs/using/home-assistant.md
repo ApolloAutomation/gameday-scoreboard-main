@@ -60,7 +60,7 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **Check for Updates**, **Refresh Now**, **Reboot** | The device page's buttons. |
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
-| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, and from MLB and HockeyTech for minor league baseball, AHL and ECHL teams. It keeps its name, though the device page calls it **Data used**. |
+| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, from MLB and HockeyTech for minor league baseball, AHL and ECHL teams, and what F1, Stocks & Crypto and the Flight Tracker read. It keeps its name, though the device page calls it **Data used**. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
 For a minor league baseball, AHL or ECHL team, **Game Status** follows the game the same way. See [Baseball: minor leagues](/using/minor-league-baseball/) and [Hockey: AHL and ECHL](/using/minor-league-hockey/).

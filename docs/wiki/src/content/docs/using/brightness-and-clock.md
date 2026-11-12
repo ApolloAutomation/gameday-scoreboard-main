@@ -5,7 +5,7 @@ sidebar:
   order: 17
 ---
 
-**Panel on** and **Brightness** are in the Quick settings card at the top of the device page, right under the board. The Panel card under it holds the rest of the settings for the screen itself: **Ticker speed**, **Showing**, **Clock size**, **Text size** and **Night hours**. The Game Day app and Home Assistant have **Panel on**, **Brightness**, **Ticker speed** and **Showing** too. See [Settings](/using/device-page/#settings).
+**Panel on** and **Brightness** are in the Quick settings card at the top of the device page, right under the board. The Panel card under it holds the rest of the settings for the screen itself: **Ticker speed**, **Showing**, **Clock size**, **Text size** and **Night hours**. The Game Day app and Home Assistant have **Panel on**, **Brightness** and **Ticker speed** too, and **Showing**'s choice between the scoreboard and the clock page, but not the other displays; see [Showing](#showing-the-scoreboard-the-clock-or-another-display). See [Settings](/using/device-page/#settings).
 
 ## Brightness
 

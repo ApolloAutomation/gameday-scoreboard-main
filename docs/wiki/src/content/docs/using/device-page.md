@@ -68,7 +68,7 @@ The page puts what you change most at the top, and folds the rest away. From the
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
 3. The cards: **Panel**, **Flight Tracker**, **Favorites**, **Favorite players**, **Bets** and **Stocks & Crypto**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
 
-Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites**, **Favorite players** and **Bets** start open when they hold anything, with how many beside the name, like **3 of 16**, and folded while they're empty. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
+Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites** and **Favorite players** start open when they hold anything, and **Bets** when it holds a bet, with how many beside the name, like **3 of 16**. Otherwise they start folded, so **Bets** holding only player props starts folded, with how many beside it, like **1 prop**. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
 
 The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
 
@@ -96,10 +96,12 @@ The settings, in the order the page shows them:
 | **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores** or **Next game**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
+| Flight Tracker | **Home location**, **Within** and your own receiver. See [The Flight Tracker card](#the-flight-tracker-card). |
 | **Only today's games** (Favorites) | The Favorite teams playlist skips favorites that aren't playing today. |
 | Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
 | Favorite players | Up to eight players. See [The Favorite players card](#the-favorite-players-card). |
-| Bets | Up to eight bets you've placed. See [The Bets card](#the-bets-card). |
+| Bets | Up to eight bets and eight player props you've placed. See [The Bets card](#the-bets-card). |
+| Stocks & Crypto | Up to eight symbols. See [The Stocks & Crypto card](#the-stocks--crypto-card). |
 | Ticker: **Down and distance** | Football: the down, yards to go and where the ball is. |
 | Ticker: **Count and at-bat** | Baseball: the count, outs, pitcher and batter. |
 | Ticker: **Match stats** | Soccer: goals, cards, possession and shots. |
@@ -196,7 +198,7 @@ The **Favorite players** card comes after the Favorites card. It lists your favo
 
 ## The Bets card
 
-The **Bets** card comes after the Favorite players card. It starts open while it holds a bet and folded while it's empty; tap **Bets** to open or fold it. The number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
+The **Bets** card comes after the Favorite players card. It starts open while it holds a bet, and folded while it holds none, even with player props in it; tap **Bets** to open or fold it. The number beside it says how many of the eight bets are in use. You type in bets you've placed, and the panel never connects to a sportsbook. The card lists every bet with its game and where it stands, and has a form to add one: **Pick a team**, the kind of bet (**Point spread**, **Total, over**, **Total, under** or **Moneyline**) and the line, then **Add bet**. For a spread, tap **−** if the team is the favorite or **+** if it's the underdog, then type the points, like 3.5. The remove button (✕) takes a bet off. The panel follows bets only on games it's already reading: the game on the board, and in Favorite teams your favorites' games. See [Bets](/using/bets/).
 
 The kind of bet has a fifth choice, **Player prop**. Pick the player's team, and your browser reads its roster from ESPN; or tap **Favorite players** to list just your favorite players, from every team. Then pick the player, the **Stat** (the ones for the player's sport), **Over** or **Under** and the line, like 24.5, and tap **Add bet**. A yes prop, like an anytime touchdown, has no side or line. Minor league, AHL and ECHL teams are left out of the chooser for a prop, since ESPN has no rosters or box scores for them. The card lists props after the bets, with the player's number so far, and the number beside the card's name counts them too, like **2 of 8 · 1 prop**. See [Player props](/using/bets/#player-props).
 
@@ -233,7 +235,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
-- **Data used**: how much the panel has downloaded since it started, from ESPN, and from MLB and HockeyTech when it follows their teams, for anyone on a capped internet plan.
+- **Data used**: how much the panel has downloaded since it started, for anyone on a capped internet plan: from ESPN, from MLB and HockeyTech when it follows their teams, and what F1, Stocks & Crypto and the Flight Tracker read.
 
 ### Follow beta
 

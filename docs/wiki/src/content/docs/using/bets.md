@@ -5,7 +5,7 @@ sidebar:
   order: 10.5
 ---
 
-Keep an eye on bets you've placed. You type each one into the **Bets** card on the [device page](/using/device-page/), and during the game the panel says in the ticker whether it's covering. A [player prop](#player-props), a bet on one player's numbers, works the same way. The panel never connects to a sportsbook and never asks for an account or a password. It only compares the bet you typed in with the score it's already showing.
+Keep an eye on bets you've placed. You type each one into the **Bets** card on the [device page](/using/device-page/), and during the game the panel says in the ticker whether it's covering. A [player prop](#player-props), a bet on one player's numbers, goes in the same card and the same ticker. The panel never connects to a sportsbook and never asks for an account or a password. It only compares a bet you typed in with the score it's already showing, and a player prop with the game's box score from ESPN.
 
 ## What you can enter
 
