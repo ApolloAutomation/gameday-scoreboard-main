@@ -17,6 +17,8 @@
 #include "panel_text.h"
 #include "setup_qr.h"
 
+static_assert(LV_TXT_COLOR_CMD[0] == esphome::gameday::kRecolorCmd, "__init__.py defines LV_TXT_COLOR_CMD");
+
 namespace esphome::gameday {
 
 namespace {
@@ -66,6 +68,22 @@ const lv_font_t *font_of(const BoardView &v, BoardFont f) {
                        : f == BoardFont::S24 ? v.f24
                                              : v.f32;
   return p != nullptr ? p : v.f16;
+}
+
+// Off unless LVGL's own code reads our marker
+bool ticker_colors = false;
+
+bool recolor_works(lv_obj_t *label) {
+  const lv_font_t *font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+  lv_point_t marked, plain;
+  lv_text_get_size(&marked, "`FFFFFF A`", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_RECOLOR);
+  lv_text_get_size(&plain, "A", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return marked.x == plain.x;
+}
+
+std::string ticker_line(const UpdateFields &f) {
+  const std::string line = panel_text(f.status_text);
+  return ticker_colors ? ticker_markup(line, f.ticker_spans) : line;
 }
 
 void put_text(lv_obj_t *o, const char *t) {
@@ -257,6 +275,10 @@ BoardView *board_view_set(const BoardView &bound) {
 }
 
 void board_build(BoardView &v) {
+  if (v.ticker != nullptr) {
+    ticker_colors = recolor_works(v.ticker);
+    lv_label_set_recolor(v.ticker, ticker_colors);
+  }
   if (v.clock_ampm == nullptr && v.no_game != nullptr && v.clock_time != nullptr) {
     v.clock_ampm = plain_label(v.no_game, v.f8, LV_OPA_COVER);
     lv_obj_add_flag(v.clock_ampm, LV_OBJ_FLAG_HIDDEN);
@@ -377,7 +399,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   const bool live = f.game_state == "IN";
   // panel_text() so missing glyphs never draw as boxes
   const std::string abbr[2] = {panel_text(f.team_abbr), panel_text(f.opponent_abbr)};
-  const std::string status = panel_text(f.status_text);
+  const std::string status = ticker_line(f);
   const std::string clock_text = panel_text(f.clock_text);
   const std::string down = panel_text(f.down_distance);
   const std::string rec[2] = {panel_text(f.team_record), panel_text(f.opponent_record)};
@@ -729,6 +751,8 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
   v.f32 = fonts.f32;
   v.blank = blank;
   a->ticker = ticker;
+  if (ticker != nullptr)
+    lv_label_set_recolor(ticker, ticker_colors);
   a->ampm = plain_label(root, f8, LV_OPA_COVER);
   lv_obj_add_flag(a->ampm, LV_OBJ_FLAG_HIDDEN);
   // Created later, so drawn over the time and ticker
@@ -810,7 +834,7 @@ bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &te
 DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_clock, bool main_date,
                      image::Image *team_logo, image::Image *opp_logo) {
   BoardView &v = a.game;
-  const std::string line = panel_text(f.status_text);
+  const std::string line = ticker_line(f);
   DrawResult r;
   if (clock) {
     show(v.game, false);

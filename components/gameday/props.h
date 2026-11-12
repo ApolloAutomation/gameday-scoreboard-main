@@ -308,6 +308,25 @@ inline std::string prop_ticker(const Prop &p, PropStatus s, int value) {
   return *word ? out + " " + word : out;
 }
 
+// As bet_color: the device page's chip color
+inline uint32_t prop_color(PropStatus s) {
+  switch (s) {
+    case PropStatus::ON_TRACK:
+    case PropStatus::HIT:
+    case PropStatus::WON:
+      return kBetGood;
+    case PropStatus::OFF_TRACK:
+    case PropStatus::LOST:
+      return kBetBad;
+    case PropStatus::NOT_YET:
+    case PropStatus::PUSH:
+    case PropStatus::VOID:
+      return kBetEven;
+    default:
+      return 0;
+  }
+}
+
 // Grades at the final; played false voids it.
 inline bool prop_grade(Prop &p, bool played, int value, int64_t now, int64_t midnight) {
   PropResult r = PropResult::VOID;

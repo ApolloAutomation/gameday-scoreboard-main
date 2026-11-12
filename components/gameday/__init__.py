@@ -202,6 +202,8 @@ async def to_code(config):
         # 2026.9 removed RealTimeClock::set_timezone and the on-device POSIX
         # parser; the clock takes a pre-parsed struct instead.
         cg.add_define("GAMEDAY_TZ_PARSED")
+    # LVGL's recolor marker for every file, LVGL's too
+    cg.add_build_flag('-DLV_TXT_COLOR_CMD=\\"`\\"')
     if config[CONF_DEMO]:
         cg.add_define("GAMEDAY_DEMO")
     if CONF_BAR in config:

@@ -320,6 +320,27 @@ inline std::string bet_ticker(const Bet &b, BetStatus s) {
   return *word ? bet_label(b) + " " + word : "BET " + bet_label(b);
 }
 
+// The device page's chip colors (app.css)
+constexpr uint32_t kBetGood = 0x2ED573, kBetBad = 0xFF3B3B, kBetEven = 0xFFD000;
+
+// 0 keeps the ticker's own color
+inline uint32_t bet_color(BetStatus s) {
+  switch (s) {
+    case BetStatus::COVERING:
+    case BetStatus::WON:
+      return kBetGood;
+    case BetStatus::NOT_COVERING:
+    case BetStatus::LOST:
+      return kBetBad;
+    case BetStatus::LEVEL:
+    case BetStatus::PUSH:
+    case BetStatus::VOID:
+      return kBetEven;
+    default:
+      return 0;
+  }
+}
+
 // Abstract so a bet tracker API could feed bets.
 class BetSource {
  public:
