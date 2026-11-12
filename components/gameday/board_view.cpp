@@ -264,6 +264,37 @@ void fx_stop(FxHost who) {
   fx_host = FxHost::NONE;
 }
 
+void line_style(lv_obj_t *line) {
+#if LV_USE_LINE
+  if (line == nullptr)
+    return;
+  lv_obj_set_pos(line, 0, 0);
+  lv_obj_set_style_line_width(line, 1, 0);
+  lv_obj_set_style_line_opa(line, LV_OPA_COVER, 0);
+  lv_obj_add_flag(line, LV_OBJ_FLAG_HIDDEN);
+#endif
+}
+
+// Shown on a leaderboard with two points or more
+void put_line(BoardView &v, const UpdateFields &f) {
+#if LV_USE_LINE
+  if (v.line == nullptr)
+    return;
+  const size_t n = std::min(f.line.size() / 2, ::espn::kAppLinePoints);
+  if (!f.board || n < 2) {
+    show(v.line, false);
+    return;
+  }
+  for (size_t i = 0; i < n; i++) {
+    v.line_pts[i].x = f.line[2 * i];
+    v.line_pts[i].y = f.line[2 * i + 1];
+  }
+  lv_obj_set_style_line_color(v.line, lv_color_hex(f.line_color), 0);
+  lv_line_set_points_mutable(v.line, v.line_pts, (uint32_t) n);
+  show(v.line, true);
+#endif
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -292,6 +323,7 @@ void board_build(BoardView &v) {
   // Fireworks fill the canvas's top left
   if (v.fx != nullptr)
     lv_image_set_inner_align(v.fx, LV_IMAGE_ALIGN_TOP_LEFT);
+  line_style(v.line);
   if (v.splash == nullptr || v.tile[0] != nullptr)
     return;
   for (int i = 0; i < 2; i++) {
@@ -515,6 +547,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     show(v.no_game, false);
   }
   show(v.board, f.board);
+  put_line(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -788,6 +821,28 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
   v.clock = plain_label(v.game, f12, LV_OPA_COVER);
   v.down = plain_label(v.game, f8, 191);
   v.msg = plain_label(v.no_game, f12, 230, true);
+  // A leaderboard or another display's rows, and its line
+  v.board = plain_obj(root);
+  lv_obj_add_flag(v.board, LV_OBJ_FLAG_HIDDEN);
+  RowsView &r = a->rows;
+  r.title = plain_label(v.board, f8, 230);
+  lv_obj_set_style_text_align(r.title, LV_TEXT_ALIGN_LEFT, 0);
+  r.status = plain_label(v.board, f8, LV_OPA_COVER);
+  for (int i = 0; i < kRowsCount; i++) {
+    r.pos[i] = plain_label(v.board, f8, 191);
+    r.name[i] = plain_label(v.board, f8, 230);
+    r.value[i] = plain_label(v.board, f8, LV_OPA_COVER);
+    r.detail[i] = plain_label(v.board, f8, 191);
+    lv_obj_set_style_text_align(r.name[i], LV_TEXT_ALIGN_LEFT, 0);
+    for (lv_obj_t *c : {r.pos[i], r.value[i], r.detail[i]})
+      lv_obj_set_style_text_align(c, LV_TEXT_ALIGN_RIGHT, 0);
+    put_color(r.pos[i], 0xA0A0A0);
+    put_color(r.detail[i], 0xA0A0A0);
+  }
+#if LV_USE_LINE
+  v.line = lv_line_create(v.board);
+  lv_obj_remove_style_all(v.line);
+#endif
   v.splash = plain_bar(root, 0x000000);
   v.splash_lbl = plain_label(v.splash, f16, LV_OPA_COVER, true);
   board_build(v);
@@ -808,6 +863,22 @@ void area_layout(AreaView &a, bool on, int x, int y, int w, int h, Sizes sizes) 
   put_width(a.ampm, w);
   put_width(a.ticker, w);
   board_layout(a.game, w, h, h, sizes);
+  const RowsGeom g = rows_geom(w);
+  RowsView &r = a.rows;
+  r.wide = g.wide;
+  place(r.title, g.title);
+  show(r.title, g.wide);
+  place(r.status, g.status);
+  if (r.status != nullptr)
+    lv_obj_set_style_text_align(r.status, g.wide ? LV_TEXT_ALIGN_RIGHT : LV_TEXT_ALIGN_CENTER, 0);
+  for (int i = 0; i < kRowsCount; i++) {
+    const int16_t y = (int16_t) rows_y(i);
+    place(r.pos[i], Spot{g.pos.x, y, g.pos.w});
+    place(r.name[i], Spot{g.name.x, y, g.name.w});
+    place(r.value[i], Spot{g.value.x, y, g.value.w});
+    place(r.detail[i], Spot{g.detail.x, y, g.detail.w});
+    show(r.detail[i], g.wide);
+  }
 }
 
 namespace {
@@ -816,6 +887,30 @@ namespace {
 void put_y(lv_obj_t *o, int y) {
   if (o != nullptr && lv_obj_get_style_y(o, LV_PART_MAIN) != y)
     lv_obj_set_y(o, y);
+}
+
+// gd_board's drawing, for the area's labels
+void rows_draw(RowsView &r, const UpdateFields &f) {
+  auto at = [](const std::vector<std::string> &v, int i) { return i < (int) v.size() ? v[i].c_str() : ""; };
+  put_changed(r.title, f.board_title.c_str());
+  put_changed(r.status, f.board_status.c_str());
+  put_color(r.status, f.board_status_color);
+  const RowsGeom g = rows_geom(r.wide ? 128 : 64);
+  for (int i = 0; i < kRowsCount; i++) {
+    if (!r.wide) {
+      // One panel: the value, or its room for the names
+      put_width(r.name[i], f.board_value_narrow ? g.name.w : g.name_no_value);
+      show(r.value[i], f.board_value_narrow);
+    }
+    put_changed(r.pos[i], at(f.board_pos, i));
+    put_changed(r.name[i], at(f.board_name, i));
+    put_changed(r.value[i], at(f.board_value, i));
+    put_changed(r.detail[i], at(f.board_detail, i));
+    if (i < (int) f.board_value_color.size())
+      put_color(r.value[i], (uint32_t) f.board_value_color[i]);
+    if (i < (int) f.board_name_color.size())
+      put_color(r.name[i], (uint32_t) f.board_name_color[i]);
+  }
 }
 
 bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &text) {
@@ -845,6 +940,7 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   if (clock) {
     show(v.game, false);
     show(v.no_game, false);
+    show(v.board, false);
     const LowerHalf lower = lower_half(main_clock, main_date, a.w, v.sizes);
     a.time_split = lower.ampm;
     show(a.time, lower.time);
@@ -863,7 +959,11 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   show(a.date, false);
   r = board_draw(v, f, team_logo, opp_logo);
   const GameGeom g = game_geom(a.w, v.sizes.text, v.sizes.clock);
-  r.ticker_changed = put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
+  // Leaderboards fit only spleen_8, on the last row
+  if (f.board)
+    rows_draw(a.rows, f);
+  r.ticker_changed = f.board ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
+                             : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
     // Fireworks when the board isn't using them
     a.splash_color = f.splash_color;
@@ -884,6 +984,7 @@ void area_clear(AreaView &a) {
   BoardView &v = a.game;
   show(v.game, false);
   show(v.no_game, false);
+  show(v.board, false);
   show(v.splash, false);
   fx_stop(FxHost::AREA);
   show(a.time, false);

@@ -111,6 +111,7 @@ script:
           v.clock_sub = id(gd_clock_sub_lbl);
           v.splash = id(tt_splash);
           v.splash_lbl = id(tt_splash_lbl);
+          v.line = id(gd_board_line)->obj;
           v.fx = id(tt_fx_canvas);
           v.fx_run = [](bool on) {
             if (on)
@@ -723,6 +724,13 @@ lvgl:
               - label:
                   id: gd_board_detail6
                   text: ""
+              # Another display's polyline, drawn by board_view.cpp
+              - line:
+                  id: gd_board_line
+                  points:
+                    - 0, 0
+                    - 1, 0
+                  hidden: true
 
         # Second area (split.h); its ticker clears the guard line
         - obj:

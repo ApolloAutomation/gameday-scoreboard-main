@@ -21,6 +21,7 @@
 #include "esphome/core/preferences.h"
 
 #include "alerts.h"
+#include "apps.h"
 #include "auto_update.h"
 #include "badge.h"
 #include "bets.h"
@@ -142,6 +143,9 @@ struct UpdateFields {
   bool board_value_narrow{true};
   std::vector<std::string> board_pos, board_name, board_value, board_detail;
   std::vector<int> board_value_color, board_name_color;
+  // Another display's polyline over the board: x, y pairs.
+  std::vector<int16_t> line;
+  uint32_t line_color{0xFFFFFF};
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -280,7 +284,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void show_join_address();
   // What the board is drawing: the fields of the on_update in progress, or
   // of the last one. gd_board reads its leaderboard from here.
-  const UpdateFields &board_fields() const { return this->last_fields_; }
+  const UpdateFields &board_fields() const {
+    return this->main_view_ != ::espn::MainView::GAMEDAY && this->main_app_ != nullptr ? *this->main_app_
+                                                                                        : this->last_fields_;
+  }
   // The Wi-Fi answered ESPN with a sign-in page (captive.h) and ESPN has not
   // answered since. The boot screen says so over the board (boot.yaml).
   bool captive() const { return this->captive_; }
@@ -347,6 +354,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void note_brightness();
   void set_split(int show);
   void set_split_team(uint8_t league, uint32_t id);
+  // The main area's display; refuses one the firmware lacks.
+  void set_display(int display);
   ::espn::SplitArea split_area() const {
     return this->panels_ != nullptr
                ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(), this->split_prefs_.show)
@@ -664,6 +673,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     bool visit{false};
     // Second area's read: A2_TEAM or A2_JUMP.
     uint8_t a2{0};
+    // Another display's read (apps.h), by Display; 0 none.
+    uint8_t app{0};
+    bool app_ok{false};
+    int64_t app_now{0};
+    ::espn::AppRequest app_req;
     // Board's next read; later requests must fit before it.
     uint32_t deadline_ms{0};
     uint32_t event_ms{0}, day_ms{0};
@@ -801,7 +815,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Mode 4 with at least one favorite set; with none it behaves like My Team.
   bool favorites_mode_() const { return this->prefs2_.mode == (uint8_t) Mode::FAVORITES && !this->fav_.empty(); }
   uint32_t our_id_() const;  // team id the snapshot is oriented around
-  std::shared_ptr<http_request::HttpContainer> open_(const std::string &url);
+  // app: another display's read, its method and headers.
+  std::shared_ptr<http_request::HttpContainer> open_(const std::string &url, const ::espn::AppRequest *app = nullptr);
   void schedule_next_(uint32_t ms) { this->next_fetch_ms_ = millis() + ms; }
   uint32_t interval_for_phase_() const;
   uint32_t linger_ms_() const;  // how long a final stays up before the next game
@@ -956,10 +971,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     ::espn::Source s = ::espn::league_source(league);
     return s != ::espn::Source::ESPN ? this->host_wait_[(size_t) s].waiting(millis()) : this->backing_off_();
   }
+  // Game Day's hosts only; displays keep their own.
   bool other_host_failing_() const {
     bool failing = false;
-    for (const auto &w : this->host_wait_)
-      failing = failing || w.run.streak > 0;
+    for (size_t i = 1; i < ::espn::kGameSourceCount; i++)
+      failing = failing || this->host_wait_[i].run.streak > 0;
     return failing;
   }
   // 0 for ESPN (see backing_off_) or no wait.
@@ -970,7 +986,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // 0 when no other host's wait runs.
   uint32_t soonest_host_left_(uint32_t now) const {
     uint32_t best = 0;
-    for (size_t i = 1; i < ::espn::kSourceCount; i++) {
+    for (size_t i = 1; i < ::espn::kGameSourceCount; i++) {
       uint32_t left = this->host_wait_[i].left(now);
       if (left != 0 && (best == 0 || left < best))
         best = left;
@@ -1240,7 +1256,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t show;
     uint8_t team_league;
     uint32_t team_id;     // 0 means no team
-    uint8_t spare[10];
+    uint8_t display;      // the main area's Display, 0 on older panels
+    uint8_t spare[9];
   } __attribute__((packed));
   static_assert(sizeof(SplitPrefs) == 16, "SplitPrefs keeps its size, or every setting in it resets");
   ESPPreferenceObject split_pref_;
@@ -1338,6 +1355,39 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t fav_gap_due_(uint32_t now) const;
   // Next known games, minus the main board's.
   std::string a2_clock_line_() const;
+  // The board's splash goes to the area's Game Day.
+  bool a2_take_splash_{false};
+
+  // ---- Other displays (apps.h) ----
+  ::espn::Display main_display_() const {
+    return ::espn::display_effective(this->split_prefs_.display, ::espn::app_slots().mask());
+  }
+  bool app_busy_(::espn::Display d) const;
+  bool app_on_screen_(::espn::Display d) const;
+  void apps_setup_();
+  // Per second: shown changes and timed redraws.
+  void apps_tick_();
+  void app_redraw_(::espn::Display d);
+  // A frame into fields the board or area draws.
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f) const;
+  void draw_main_app_();
+  // 1 started, -1 doesn't fit before due, 0 none.
+  int start_app_job_(uint32_t now, uint32_t due);
+  void run_app_job_();
+  void apply_app_job_();
+  void app_failed_(::espn::Display d, uint32_t took_ms);
+  bool app_set_(const std::string &key, const std::string &value);
+  ::espn::MainView main_view_{::espn::MainView::GAMEDAY};
+  UpdateFields *main_app_{nullptr};  // PSRAM: what the board draws then
+  ::espn::AppTimes app_times_;
+  uint32_t app_last_ms_[::espn::kDisplayCount]{};  // last read's start
+  uint32_t app_gen_[::espn::kDisplayCount]{};      // bumped by a settings change
+  uint32_t app_drawn_ms_[::espn::kDisplayCount]{};
+  bool app_shown_[::espn::kDisplayCount]{};
+  ESPPreferenceObject app_pref_[::espn::kDisplayCount];
+  static constexpr size_t APP_HOSTS = 8;
+  ::espn::AppHost app_hosts_[APP_HOSTS]{};
+  size_t app_host_n_{0};
 
   Schedule schedule_;
   uint32_t schedule_fetched_ms_{0};

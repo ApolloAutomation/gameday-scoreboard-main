@@ -144,6 +144,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       case SetKind::PLAYER_DEL:
         require(op.athlete != 0 && op.team.league < kLeagueCount, "the player to drop is no player", k, v);
         break;
+      case SetKind::MAIN_DISPLAY:
+        require(op.value >= 0 && op.value < kDisplayCount, "the display is past Display", k, v);
+        break;
+      case SetKind::SPLIT:
+        require(op.value >= 0 && op.value < kSplitCount, "the area's choice is past SplitShow", k, v);
+        break;
       default:
         break;
     }

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "../panel_layout/layouts.h"
+#include "apps.h"
 #include "bets.h"
 #include "idle.h"
 #include "leagues.h"
@@ -33,7 +34,7 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
                                     "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
                                     "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
-                                    "splitteam", "split"};
+                                    "display",   "splitteam",  "split"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -43,9 +44,40 @@ enum class Mode : uint8_t { MY_TEAM = 0, LIVE_NFL = 1, LIVE_NCAA = 2, LIVE_ANY =
 constexpr int kModeCount = 6;
 static_assert((int) Mode::LIVE + 1 == kModeCount, "parse_set takes modes 0 to kModeCount - 1");
 
-// Saved as a byte (SplitPrefs): keep the values.
-enum class SplitShow : uint8_t { OFF = 0, LIVE = 1, TEAM = 2, SCORES = 3, CLOCK = 4 };
-constexpr int kSplitCount = 5;
+// Saved byte, append only: GAMEDAY and up are displays.
+enum class SplitShow : uint8_t {
+  OFF = 0,
+  LIVE = 1,
+  TEAM = 2,
+  SCORES = 3,
+  CLOCK = 4,
+  GAMEDAY = 5,
+  F1 = 6,
+  MARKETS = 7,
+  FLIGHTS = 8
+};
+constexpr int kSplitCount = 9;
+static_assert((int) SplitShow::GAMEDAY + kDisplayCount == kSplitCount, "a SplitShow per display, in Display order");
+static_assert((int) SplitShow::F1 == (int) SplitShow::GAMEDAY + (int) Display::F1, "SplitShow follows Display");
+static_assert((int) SplitShow::FLIGHTS == (int) SplitShow::GAMEDAY + (int) Display::FLIGHTS, "SplitShow follows Display");
+
+// A display choice, and which display it is.
+inline bool split_display(SplitShow s, Display &d) {
+  if ((int) s < (int) SplitShow::GAMEDAY || (int) s >= kSplitCount)
+    return false;
+  d = (Display) ((int) s - (int) SplitShow::GAMEDAY);
+  return true;
+}
+
+inline SplitShow split_of_display(Display d) { return (SplitShow) ((int) SplitShow::GAMEDAY + (int) d); }
+
+// Refuses a display the firmware lacks; Game Day always fits.
+inline bool split_allowed(int show, uint8_t displays) {
+  if (show < 0 || show >= kSplitCount)
+    return false;
+  Display d;
+  return !split_display((SplitShow) show, d) || display_has(displays, (int) d);
+}
 
 // Clock size and Text size: 0 Normal, 1 Large.
 constexpr int kSizeCount = 2;
@@ -249,6 +281,7 @@ enum class SetKind : uint8_t {
   SPLIT_TEAM,   // team: the second area's team (id 0 clears it)
   CLOCK_SIZE,   // value, 0 Normal or 1 Large: the clock's digits
   TEXT_SIZE,    // value, 0 Normal or 1 Large: the ticker's letters
+  MAIN_DISPLAY, // value, apps.h's Display: what the main area shows
 };
 
 struct TeamRef {
@@ -625,6 +658,12 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     // One digit only: the page sends just its choices.
     op.kind = SetKind::SPLIT;
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
+    return op.value >= 0;
+  }
+  if (k == "display") {
+    // One digit, as for split; unknown displays dropped later.
+    op.kind = SetKind::MAIN_DISPLAY;
+    op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kDisplayCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
   if (k == "clocksize" || k == "textsize") {

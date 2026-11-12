@@ -518,7 +518,7 @@
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
-    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}),
+    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -1059,6 +1059,19 @@
     const show = Number(S.split) || 0;
     return S.split_at === "bottom" && show === 0 ? 4 : show;
   };
+  // The displays besides Game Day the firmware lists (apps.h)
+  const otherDisplays = () => ((S && S.displays) || []).filter((d) => d.id !== 0);
+  const displayName = (id) => (((S && S.displays) || []).find((d) => d.id === id) || {}).name || "";
+  const mainDisplay = () => Number((S && S.display) || 0);
+  // [value, label, hint]: old choices, Game Day, then displays
+  const splitOffered = (show) => {
+    const out = (S.split_at === "bottom" ? "1234" : "01234").split("").map((c) => [Number(c), ...SPLIT_CHOICES[c]]);
+    if (mainDisplay() !== 0 || show === 5)
+      out.push([5, "Game Day", "The scoreboard: your team's game, and what the main board would show, while the main board shows " + (displayName(mainDisplay()) || "another display") + "."]);
+    for (const d of otherDisplays())
+      out.push([d.split, d.name, d.name + ", while the main board shows something else. The clock when the main board shows it too."]);
+    return out;
+  };
   const splitSelect = $("#split");
   splitSelect.onchange = () => setGD({ split: splitSelect.value });
   $("#splitTeam").onclick = () => openPicker(false, false, false, true);
@@ -1069,14 +1082,15 @@
     if (show < 0) return;
     $("#splitTitle").textContent = SPLIT_TITLES[S.split_at] || "Second area";
     // Nothing is offered on three and four wide only.
-    const offered = S.split_at === "bottom" ? "1234" : "01234";
-    if (splitOptions !== offered) {
-      splitOptions = offered;
+    const offered = splitOffered(show);
+    const key = offered.map((o) => o[0] + o[1]).join("|");
+    if (splitOptions !== key) {
+      splitOptions = key;
       splitSelect.innerHTML = "";
-      for (const c of offered) splitSelect.add(new Option(SPLIT_CHOICES[c][0], c));
+      for (const [v, label] of offered) splitSelect.add(new Option(label, String(v)));
     }
     if (document.activeElement !== splitSelect) splitSelect.value = String(show);
-    $("#splitHint").textContent = SPLIT_CHOICES[show][1];
+    $("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
@@ -1086,6 +1100,8 @@
     if (now === "live") line = n === 1 ? "Showing the one other live game." : "Rotating " + n + " live games.";
     else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
     else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
+    else if (now === "game") line = "Showing Game Day.";
+    else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
     else if (now === "clock" || now === "date") {
       line = show === 2 && !t ? "Pick a team for it."
         : show === 2 ? "Showing the clock: " + t.abbr + " isn't on now, or is on the main board."
@@ -1093,6 +1109,9 @@
             : show === 3 ? "No scores yet: showing the clock."
               : "";
       if (now === "date" && show === 4) line = "The main board has the time, so this shows the date.";
+      if (show === 5) line = "The main board shows Game Day, so this shows the clock.";
+      if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
+        : "Showing the clock: the night hours, or nothing to show yet.";
     }
     $("#splitNow").textContent = line;
   };
@@ -1360,6 +1379,34 @@
       restart: "The panel is restarting into setup with everything erased, so this page won't reconnect." },
   ];
   const built = {};
+  // "Showing": the panel's pages, and each display the firmware lists
+  let showing = null;
+  const pageOf = () => (showing && (showing.ent.value || showing.ent.state)) || "";
+  const pickShowing = (v) => {
+    const page = pageOf();
+    if (v.startsWith("display:")) {
+      setGD({ display: v.slice(8) });
+      if (page !== "Scoreboard") post(showing.ent.id, "set", { option: "Scoreboard" });
+      return;
+    }
+    if (v === "Scoreboard" && mainDisplay() !== 0) setGD({ display: "0" });
+    if (v !== page) post(showing.ent.id, "set", { option: v });
+  };
+  const renderShowing = () => {
+    if (!showing) return;
+    const { sel, ent } = showing;
+    const opts = (ent.option || []).map((o) => [o, o]);
+    for (const d of otherDisplays()) opts.push(["display:" + d.id, d.name]);
+    const key = opts.map((o) => o[0]).join("|");
+    if (sel.dataset.key !== key) {
+      sel.dataset.key = key;
+      sel.innerHTML = "";
+      for (const [v, label] of opts) sel.add(new Option(label, v));
+    }
+    const page = pageOf();
+    const cur = page === "Scoreboard" && mainDisplay() !== 0 && otherDisplays().length ? "display:" + mainDisplay() : page;
+    if (document.activeElement !== sel) sel.value = cur;
+  };
 
   const buildControl = (def, e) => {
     const domain = domainOf(e);
@@ -1412,6 +1459,15 @@
       row.appendChild(val);
       host.appendChild(row);
       return { update(ev) { if (document.activeElement !== r) { r.value = ev.value; val.textContent = ev.value; } } };
+    }
+    if (domain === "select" && def.name === "Select Page") {
+      const s = el("select");
+      s.id = label.htmlFor = id;
+      row.appendChild(s);
+      host.appendChild(row);
+      showing = { sel: s, ent: e };
+      s.onchange = () => pickShowing(s.value);
+      return { update(ev) { showing.ent = ev; renderShowing(); } };
     }
     if (domain === "select") {
       const s = el("select");
@@ -2439,6 +2495,7 @@
     renderMode();
     renderSettings();
     renderSplit();
+    renderShowing();
     renderIdle();
     renderPanels();
     renderTime();

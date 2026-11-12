@@ -78,7 +78,8 @@ LIMITS = {k: int(v) for k, v in re.findall(r"(?:constexpr|static const) int (k\w
                                              SET_H + (REPO / "components/gameday/startup.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/idle.h").read_text(encoding="utf-8")
                                              + (REPO / "components/gameday/bets.h").read_text(encoding="utf-8")
-                                             + (REPO / "components/gameday/props.h").read_text(encoding="utf-8"))}
+                                             + (REPO / "components/gameday/props.h").read_text(encoding="utf-8")
+                                             + (REPO / "components/gameday/apps.h").read_text(encoding="utf-8"))}
 # props.h's kPropStats: (sport, key) to (label, yes)
 PROP_STATS = {(sport.lower(), key): (label, yes == "true") for key, label, sport, yes in re.findall(
     r'\{"(\w+)",\s*"([^"]+)",\s*Sport::(\w+),\s*(true|false),',
@@ -99,6 +100,26 @@ def layout_ok(cols, rows):
         return 1 <= cols <= MAX_COLS
     return rows == 2 and rows <= MAX_ROWS and cols == 2 and cols * rows <= MAX_COLS
 FIXTURE = REPO / "tests/fixtures/set_cases.json"
+
+# apps.h's displays by id; split is 5 plus id.
+APPS_H = (REPO / "components/gameday/apps.h").read_text(encoding="utf-8")
+DISPLAY_IDS = dict(re.findall(r"(\w+) = (\d+)", re.search(r"enum class Display : uint8_t \{(.*?)\};", APPS_H).group(1)))
+DISPLAY_KEYS = dict(re.findall(r"case Display::(\w+):\s*return \"(\w+)\";",
+                               APPS_H[APPS_H.index("display_key("):APPS_H.index("display_name(")]))
+DISPLAY_NAMES = dict(re.findall(r"case Display::(\w+):\s*return \"([^\"]+)\";",
+                                APPS_H[APPS_H.index("display_name("):APPS_H.index("kGameDayOnly")]))
+SPLIT_GAMEDAY = int(re.search(r"GAMEDAY = (\d+)", SET_H)[1])
+
+
+def display_doc(d):
+    """rebuild_state_()'s entry in displays for Display d."""
+    name = next(n for n, i in DISPLAY_IDS.items() if int(i) == d)
+    return {"id": d, "key": DISPLAY_KEYS.get(name, "gameday"), "name": DISPLAY_NAMES.get(name, "Game Day"),
+            "split": SPLIT_GAMEDAY + d}
+
+
+def display_ids():
+    return {d["id"] for d in STATE.get("displays") or [display_doc(0)]}
 
 
 def team(lg, tid):
@@ -131,8 +152,10 @@ INITIAL = {
     # idle_view is "", "clock", "scores" or "today" (idle.h)
     "idle": 0, "idledim": 0, "night": False, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "idle_view": "", "night_now": False, "dark": False,
-    # split 0-4 (split.h); state_doc() derives split_at, split_now
+    # split 0-8 (split.h); state_doc() derives split_at, split_now
     "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
+    # The main area's display and those the firmware has
+    "display": 0, "display_now": "gameday",
     "espn_kb": 412, "espn_reads": 23,
     # Manual bets (bets.h): filled slots only, and capacity
     "bets": [], "betmax": LIMITS["kBetSlots"],
@@ -186,6 +209,7 @@ ENTITIES = [
     {"id": "button/Factory Reset", "domain": "button", "name": "Factory Reset", "state": ""},
 ]
 FIRMWARE = next(e for e in ENTITIES if e["name"] == "Firmware")
+INITIAL["displays"] = [display_doc(0)]
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -297,6 +321,12 @@ def split_doc():
     now = SPLIT_NOW.get(show, "")
     if show == 2 and not STATE.get("splitteam"):
         now = "clock"
+    # Game Day or a display the main board isn't showing
+    if show >= SPLIT_GAMEDAY:
+        d = show - SPLIT_GAMEDAY
+        now = "game" if d == 0 and STATE.get("display", 0) != 0 else \
+            next((x["key"] for x in STATE.get("displays") or [] if x["id"] == d), "clock") \
+            if d != 0 and d != STATE.get("display", 0) else "clock"
     if show == 1 and not STATE.get("split_n"):
         now = "clock"
     STATE["split_now"] = now
@@ -311,6 +341,9 @@ def state_doc():
     if STATE.get("live_auto"):
         STATE["live"] = live_auto_leagues()
     split_doc()
+    if "display" in STATE:
+        STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
+                                    "gameday")
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
     return STATE
@@ -636,9 +669,14 @@ def apply_set(kv):
             if 0 <= atoi(v) < WIRING_COUNT:
                 STATE["wiring"] = atoi(v)
         elif k == "split":
-            # One ASCII digit, 0 to kSplitCount - 1, nothing else.
-            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"]:
+            # One ASCII digit; never a display the firmware lacks.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSplitCount"] and \
+                    (int(v) < SPLIT_GAMEDAY or int(v) - SPLIT_GAMEDAY in display_ids()):
                 STATE["split"] = int(v)
+        elif k == "display":
+            # One ASCII digit, a display the firmware has.
+            if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kDisplayCount"] and int(v) in display_ids():
+                STATE["display"] = int(v)
         elif k == "splitteam":
             # Never a golf tour, racing series or own team
             ref = parse_team_ref(v)
@@ -694,6 +732,7 @@ def selftest():
         start["team"] = to_team(start["team"])
         start["favs"] = [to_team(r) for r in start["favs"]]
         start["splitteam"] = to_team(start.get("splitteam", ""))
+        start["displays"] = [display_doc(d) for d in start.get("displays", [0])]
         # board false: nothing to follow; final true: game ended
         if start.get("visit"):
             start["visit_follow"] = start.get("board", True) and not start.get("final", False)
