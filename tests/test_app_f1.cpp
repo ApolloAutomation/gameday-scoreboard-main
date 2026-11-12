@@ -196,8 +196,9 @@ void test_helpers() {
   PCHECK(!f1_weather_word(met_weather_code("heavyrain")).empty(), "a word for each");
 
   PCHECK(f1_units_for_tz(0).fahrenheit && f1_units_for_tz(6).mph, "US zones");
-  PCHECK(!f1_units_for_tz(7).fahrenheit && !f1_units_for_tz(10).mph && !f1_units_for_tz(13).fahrenheit,
-         "Canada, the UK and UTC are metric");
+  PCHECK(!f1_units_for_tz(7).fahrenheit && !f1_units_for_tz(7).mph && !f1_units_for_tz(13).fahrenheit,
+         "Canada and UTC are metric");
+  PCHECK(f1_units_for_tz(10).mph && !f1_units_for_tz(10).fahrenheit, "the UK: mph and miles, Celsius");
   PCHECK(!f1_units_for_tz(200).fahrenheit, "out of range");
 
   PCHECK_EQ(f1_cell("VER", "+13.07", 10), "VER +13.07");

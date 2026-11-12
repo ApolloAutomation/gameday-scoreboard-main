@@ -2,6 +2,7 @@
 #include "apps.h"
 
 #include "app_f1.h"
+#include "app_flights.h"
 #include "app_markets.h"
 
 namespace espn {
@@ -10,6 +11,7 @@ namespace espn {
 void register_apps(AppSlots &slots) {
   app_register(slots, app_new<F1App>());
   app_register(slots, app_new<MarketsApp>());
+  app_register(slots, app_new<::flights::FlightsApp>());
 }
 
 }  // namespace espn

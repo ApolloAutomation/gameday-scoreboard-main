@@ -5,7 +5,7 @@
 // line by line, is also read as the response headers the panel acts on (Date,
 // Retry-After) and as the answer to the sign-in probe (captive.h). See
 // fuzz_main.cpp and the fuzz targets in the Makefile.
-// Also runs the MLB Stats, HockeyTech, F1 and market parsers.
+// Also runs the MLB Stats, HockeyTech, F1, market and flight parsers.
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -17,6 +17,7 @@
 #include "espn_parse.h"
 #include "app_f1.h"
 #include "f1.h"
+#include "flights.h"
 #include "logo_lru.h"
 #include "markets_view.h"
 #include "panel_text.h"
@@ -701,6 +702,54 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (games.size() > kWatchMax)
       abort();
     sink = sink + games.size() + second.alert.splash.text.size();
+  }
+
+  {
+    // Flight Tracker: planes, their routes, frames and the ticker.
+    flights::Home home;
+    home.lat = 40.64;
+    home.lon = -73.78;
+    home.radius_nm = 250;
+    flights::Nearby near;
+    flights::RouteCache cache;
+    ChunkReader r(data, size, chunk);
+    if (flights::parse_aircraft(r, home, near)) {
+      if (near.n > flights::kNear)
+        abort();
+      const flights::RouteAsk ask = flights::route_asks(near, cache, 100);
+      sink = sink + flights::routeset_body(ask).size();
+      for (int w : {64, 128, 192, 256}) {
+        flights::FrameOpts o;
+        o.w = w;
+        o.card = flights::pick_card(near, near.planes[near.n > 1 ? 1 : 0].hex);
+        const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
+        for (const flights::Text &t : f.items)
+          if (flights::text_px(t) > t.w || t.x < 0 || t.x + t.w > w)
+            abort();
+        o.list = true;
+        sink = sink + flights::flight_frame(near, &cache, o, 100).items.size();
+        sink = sink + f.ticker.size() + flights::note_frame(flights::Note::NONE_NEAR, o, 10).items.size();
+      }
+    }
+    ChunkReader r2(data, size, chunk);
+    if (flights::parse_fr24(r2, home, 1794457500, near) && near.n > flights::kNear)
+      abort();
+    flights::RouteAsk ask;
+    for (const char *cs : {"UAL755", "JBU1407", "DAL2064", "FIN16"})
+      strcpy(ask.callsign[ask.n++], cs);
+    flights::parse_routeset(json, ask, cache, 200);
+    flights::parse_adsbdb(json, "AAL1070", cache, 200);
+    for (const flights::Route &rt : cache.slots) {
+      if (rt.n > flights::kStops)
+        abort();
+      for (size_t i = 0; i < near.n; i++)
+        sink = sink + flights::leg_text(flights::route_leg(rt, near.planes[i]), " > ").size();
+      flights::Plane p;
+      p.lat = 40.4f;
+      p.lon = -74.2f;
+      p.track = 52;
+      sink = sink + flights::leg_text(flights::route_leg(rt, p), "-").size();
+    }
   }
 
   {

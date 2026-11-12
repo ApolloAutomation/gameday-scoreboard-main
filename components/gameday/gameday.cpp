@@ -191,6 +191,9 @@ class ContainerReader {
     return copied;
   }
 
+  // A display's parse looks ahead; never with a cutter.
+  int peek() { return this->fill_() ? static_cast<unsigned char>(this->buf_[this->pos_]) : -1; }
+
   size_t total() const { return this->total_; }
   // A summary's read ends after its box score.
   void cut(::espn::BoxCutter *c) { this->cut_ = c; }
@@ -228,6 +231,12 @@ class ReaderStream final : public ::espn::AppStream {
   explicit ReaderStream(ContainerReader &r) : r_(r) {}
   int read() override { return this->r_.read(); }
   size_t readBytes(char *dst, size_t n) override { return this->r_.readBytes(dst, n); }
+  int peek() override { return this->r_.peek(); }
+  // The board's own reader: no second copy in flash.
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, this->r_, DeserializationOption::Filter(filter),
+                           DeserializationOption::NestingLimit(nesting));
+  }
 
  private:
   ContainerReader &r_;
@@ -5775,6 +5784,9 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.board_cols = std::move(fr.rows.cols);
   f.line = ::espn::app_line_xy(fr.line, w, h);
   f.line_color = fr.line.color;
+  f.texts = std::move(fr.texts);
+  for (::espn::AppText &t : f.texts)
+    t.text = panel_text(t.text);
 }
 
 void GamedayComponent::draw_main_app_() {
@@ -5863,6 +5875,10 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
   ::espn::App *a = ::espn::app_slots().get(d);
+  if (a != nullptr && a->own_backoff()) {
+    ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
+    return;
+  }
   const bool other = a != nullptr && a->failed(h.throttled);
   ::espn::HostWait &w = this->host_wait_[(size_t) src];
   uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
@@ -5885,12 +5901,11 @@ void GamedayComponent::apply_app_job_() {
   }
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = j.host[(size_t) src];
-  a->ended(::espn::AppResult{this->host_status_[(size_t) src].load(), h.throttled, h.retry_after_ms});
+  a->ended(h.read ? ::espn::AppResult{this->host_status_[(size_t) src].load(), h.throttled, h.retry_after_ms}
+                  : ::espn::AppResult{});
   if (j.app_ok) {
     this->app_times_.took(d, j.took_ms, true);
     this->host_wait_[(size_t) src].clear();
-  } else if (a->own_backoff()) {
-    this->app_times_.took(d, j.took_ms, false);
   } else {
     this->app_failed_(d, j.took_ms);
   }

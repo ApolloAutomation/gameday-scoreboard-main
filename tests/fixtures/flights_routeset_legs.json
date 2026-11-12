@@ -1,0 +1,120 @@
+[
+  {
+    "_airport_codes_iata": "RNO-SFO-IAD-BOS",
+    "_airports": [
+      {
+        "alt_feet": 4415.0,
+        "alt_meters": 1345.69,
+        "countryiso2": "US",
+        "iata": "RNO",
+        "icao": "KRNO",
+        "lat": 39.4991,
+        "location": "Reno",
+        "lon": -119.767998,
+        "name": "Reno Tahoe International Airport"
+      },
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "SFO",
+        "icao": "KSFO",
+        "lat": 37.618999,
+        "location": "San Francisco",
+        "lon": -122.375,
+        "name": "San Francisco International Airport"
+      },
+      {
+        "alt_feet": 312.0,
+        "alt_meters": 95.1,
+        "countryiso2": "US",
+        "iata": "IAD",
+        "icao": "KIAD",
+        "lat": 38.9445,
+        "location": "Washington",
+        "lon": -77.455803,
+        "name": "Washington Dulles International Airport"
+      },
+      {
+        "alt_feet": 20.0,
+        "alt_meters": 6.1,
+        "countryiso2": "US",
+        "iata": "BOS",
+        "icao": "KBOS",
+        "lat": 42.3643,
+        "location": "Boston",
+        "lon": -71.005203,
+        "name": "General Edward Lawrence Logan International Airport"
+      }
+    ],
+    "airline_code": "UAL",
+    "airport_codes": "KRNO-KSFO-KIAD-KBOS",
+    "callsign": "UAL755",
+    "number": "755",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "ATL-PVD",
+    "_airports": [
+      {
+        "alt_feet": 1026.0,
+        "alt_meters": 312.72,
+        "countryiso2": "US",
+        "iata": "ATL",
+        "icao": "KATL",
+        "lat": 33.6367,
+        "location": "Atlanta",
+        "lon": -84.428101,
+        "name": "Hartsfield Jackson Atlanta International Airport"
+      },
+      {
+        "alt_feet": 55.0,
+        "alt_meters": 16.76,
+        "countryiso2": "US",
+        "iata": "PVD",
+        "icao": "KPVD",
+        "lat": 41.732601,
+        "location": "Providence",
+        "lon": -71.420403,
+        "name": "Theodore Francis Green State Airport"
+      }
+    ],
+    "airline_code": "DAL",
+    "airport_codes": "KATL-KPVD",
+    "callsign": "DAL2064",
+    "number": "2064",
+    "plausible": true
+  },
+  {
+    "_airport_codes_iata": "JFK-HEL",
+    "_airports": [
+      {
+        "alt_feet": 13.0,
+        "alt_meters": 3.96,
+        "countryiso2": "US",
+        "iata": "JFK",
+        "icao": "KJFK",
+        "lat": 40.639801,
+        "location": "New York",
+        "lon": -73.7789,
+        "name": "John F Kennedy International Airport"
+      },
+      {
+        "alt_feet": 179.0,
+        "alt_meters": 54.56,
+        "countryiso2": "FI",
+        "iata": "HEL",
+        "icao": "EFHK",
+        "lat": 60.3172,
+        "location": "Helsinki",
+        "lon": 24.963301,
+        "name": "Helsinki Vantaa Airport"
+      }
+    ],
+    "airline_code": "FIN",
+    "airport_codes": "KJFK-EFHK",
+    "callsign": "FIN16",
+    "number": "16",
+    "plausible": true
+  }
+]

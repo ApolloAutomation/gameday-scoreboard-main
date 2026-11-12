@@ -2891,6 +2891,104 @@ test("the Stocks & Crypto card says what's wrong with a symbol before posting it
   expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
 });
 
+// The Flight Tracker (app_flights.h) and Open-Meteo's place search.
+const FLIGHT_DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 3, key: "flights", name: "Flight Tracker", split: 8 },
+];
+const BROOKLYN = { results: [
+  { name: "Brooklyn", latitude: 40.6501, longitude: -73.94958, admin1: "New York", country: "United States" },
+  { name: "Brooklyn", latitude: 41.73361, longitude: -92.44546, admin1: "Iowa", country: "United States" },
+] };
+
+test("the Flight Tracker card finds a home by name and keeps the radius and receiver", async ({ page, request }) => {
+  await reset(request, {});
+  await page.goto("/");
+  await expect(page.locator("#flightCard")).toBeHidden();
+  await reset(request, { displays: FLIGHT_DISPLAYS });
+  let asked = "";
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => {
+    asked = new URL(route.request().url()).searchParams.get("name");
+    return route.fulfill({ json: BROOKLYN });
+  });
+  await page.reload();
+  const card = page.locator("#flightCard");
+  await expect(card).toBeVisible();
+  await expect(page.locator("#flightSum")).toHaveText("No location yet");
+  await expect(page.locator("#flightNow")).toHaveText("Set a home location to see the planes near it.");
+  await page.getByRole("textbox", { name: "Home location" }).fill("Brooklyn");
+  await page.getByRole("button", { name: "Find" }).click();
+  const picks = page.locator("#flightPicks button");
+  await expect(picks).toHaveText(["Brooklyn, New York, United States", "Brooklyn, Iowa, United States"]);
+  expect(asked).toBe("Brooklyn");
+  await picks.first().click();
+  await expectSet(request, { flyhome: "40.6501,-73.9496", flyplace: "Brooklyn, New York, United States" });
+  await expect(page.locator("#flightPicks")).toBeHidden();
+  await expect(page.locator("#flightHome")).toHaveText("Brooklyn, New York, United States (40.6501, -73.9496)");
+  await expect(page.locator("#flightSum")).toHaveText("Brooklyn, New York, United States");
+  await expect(page.locator("#flightNow")).toHaveText(
+    "Looking for planes. Choose Flight Tracker under Showing to put it on the panel.");
+
+  const radius = page.getByRole("combobox", { name: /^Within/ });
+  await expect(radius.locator("option")).toHaveText(["5 mi", "10 mi", "15 mi", "25 mi", "50 mi", "100 mi"]);
+  await expect(radius).toHaveValue("10mi");
+  await radius.selectOption({ label: "25 mi" });
+  await expectSet(request, { flyradius: "25mi" });
+  await expect(radius).toHaveValue("25mi");
+
+  await page.getByRole("textbox", { name: "Your own receiver" }).fill("my pi");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("#flightMsg")).toHaveText("A receiver's address has no spaces, like 192.168.1.50.");
+  await page.getByRole("textbox", { name: "Your own receiver" }).fill("192.168.1.50");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expectSet(request, { flyreceiver: "192.168.1.50" });
+  await expect(page.locator("#flightMsg")).toBeHidden();
+
+  await page.getByRole("combobox", { name: "Showing" }).selectOption({ label: "Flight Tracker" });
+  await expectSet(request, { display: "3" });
+  await expect(page.locator("#flightNow")).toHaveText("Looking for planes.");
+  const st = await deviceState(request);
+  expect(st.flights).toEqual({ home: "40.6501,-73.9496", place: "Brooklyn, New York, United States", radius: 25,
+                               radius_unit: "mi", receiver: "192.168.1.50", units: "imperial" });
+  expect(st.display_now).toBe("flights");
+
+  await page.locator("#flightClear").click();
+  await expectSet(request, { flyhome: "none" });
+  await expect(page.locator("#flightHomeRow")).toBeHidden();
+  expect((await deviceState(request)).flights.place).toBe("");
+});
+
+test("the Flight Tracker card takes a latitude and longitude and says where the planes come from", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS, tz: 11, display: 3,
+                         flights: { home: "48.1374,11.5755", place: "Munich", status: "ok", source: "adsbfi", planes: 12 } });
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.abort());
+  await page.goto("/");
+  await expect(page.locator("#flightNow")).toHaveText("12 planes nearby, from adsb.fi while Flightradar24 is out.");
+  const radius = page.getByRole("combobox", { name: /^Within/ });
+  // Choices in the panel's units, plus the radius it has.
+  await expect(radius.locator("option")).toHaveText(["5 km", "10 km", "25 km", "50 km", "100 km", "150 km", "10 mi"]);
+  await expect(radius).toHaveValue("10mi");
+  const where = page.getByRole("textbox", { name: "Home location" });
+  await where.fill("95, 10");
+  await where.press("Enter");
+  await expect(page.locator("#flightMsg")).toHaveText("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+  await where.fill("51.5 -0.12");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expectSet(request, { flyhome: "51.5000,-0.1200", flyplace: "" });
+  await expect(page.locator("#flightHome")).toHaveText("51.5000, -0.1200");
+  await where.fill("Atlantis");
+  await page.getByRole("button", { name: "Find" }).click();
+  await expect(page.locator("#flightMsg")).toHaveText(
+    "Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+
+  await reset(request, { displays: FLIGHT_DISPLAYS, split: 8, panels: 4,
+                         flights: { home: "48.1374,11.5755", status: "failing" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText(
+    "Can't reach the flight data right now. The panel keeps trying.");
+  await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+});
+
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {
   await reset(request, { panels: 4 });
   await page.goto("/");

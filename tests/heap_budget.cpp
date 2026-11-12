@@ -11,6 +11,7 @@
 //   make -C tests heap
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <new>
 #include <sstream>
@@ -21,6 +22,7 @@
 #include "espn_parse_impl.h"
 #include "app_f1.h"
 #include "f1.h"
+#include "flights.h"
 #include "props.h"
 #include "watch.h"
 #include "source_hockeytech.h"
@@ -483,6 +485,60 @@ int main() {
       return parse_nasdaq_quotes(nasdaq, list, now, q) == 3;
     });
   }
+  // Flight Tracker: each read at its largest.
+  flights::set_json_allocator(&json_alloc);
+  {
+    flights::Home home;
+    home.lat = 40.64;
+    home.lon = -73.78;
+    home.radius_nm = 25;
+    std::string json = slurp("fixtures/flights_adsbfi_jfk.json");
+    measure("flights_adsbfi", [&] {
+      flights::Nearby n;
+      return flights::parse_aircraft(json, home, n) && n.n == flights::kNear;
+    });
+    // A receiver's whole list: ten copies, memory still flat.
+    const size_t a = json.find('['), z = json.rfind(']');
+    std::string big = json.substr(0, a + 1);
+    for (int i = 0; i < 10; i++)
+      big += (i ? "," : "") + json.substr(a + 1, z - a - 1);
+    big += json.substr(z);
+    measure("flights_receiver_570", [&] {
+      flights::Nearby n;
+      return flights::parse_aircraft(big, home, n) && n.total == 570;
+    });
+    std::string routes = slurp("fixtures/flights_routeset_jfk.json");
+    const char *cs[] = {"JBU1407", "LOT5N", "UAL2495", "JBU416", "CNS482", "AAL1070", "UAL1263", "UPS1125"};
+    flights::RouteAsk ask;
+    for (const char *c : cs)
+      strcpy(ask.callsign[ask.n++], c);
+    flights::RouteCache cache;
+    measure("flights_routeset", [&] { return flights::parse_routeset(routes, ask, cache, 1); });
+    std::string db = slurp("fixtures/flights_adsbdb_ual755.json");
+    measure("flights_adsbdb", [&] { return flights::parse_adsbdb(db, "UAL755", cache, 1); });
+    // Flightradar24's feed, ten times over: flat too.
+    std::string fr24 = slurp("fixtures/flights_fr24_nyc.json");
+    std::string fr24_big = "{";
+    for (int i = 0; i < 10; i++)
+      fr24_big += (i ? "," : "") + fr24.substr(1, fr24.rfind('}') - 1);
+    fr24_big += "}";
+    flights::Home nyc = home;
+    nyc.lat = 40.71;
+    nyc.lon = -74.01;
+    measure("flights_fr24_340", [&] {
+      flights::Nearby n;
+      return flights::parse_fr24(fr24_big, nyc, 1794457500, n) && n.total == 340;
+    });
+    flights::Nearby n;
+    flights::parse_aircraft(json, home, n);
+    measure("flights_frame_256", [&] {
+      flights::FrameOpts o;
+      o.w = 256;
+      const flights::Frame f = flights::flight_frame(n, &cache, o, 1);
+      return !f.items.empty() && !f.ticker.empty();
+    });
+  }
+  flights::set_json_allocator(nullptr);
 
   printf("\n}\n");
   set_json_allocator(nullptr);

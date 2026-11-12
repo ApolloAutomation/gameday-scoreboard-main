@@ -6,8 +6,8 @@ the entities the page builds controls from, and the gameday component's
 routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
-  POST /gameday/set      only the keys in SET_KEYS, and MARKET_KEYS with Stocks & Crypto listed;
-                         400 when none match (player= and
+  POST /gameday/set      only the keys in SET_KEYS, then each listed display's own (Stocks &
+                         Crypto's, the Flight Tracker's); 400 when none match (player= and
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know;
@@ -110,6 +110,72 @@ DISPLAY_KEYS = dict(re.findall(r"case Display::(\w+):\s*return \"(\w+)\";",
 DISPLAY_NAMES = dict(re.findall(r"case Display::(\w+):\s*return \"([^\"]+)\";",
                                 APPS_H[APPS_H.index("display_name("):APPS_H.index("kGameDayOnly")]))
 SPLIT_GAMEDAY = int(re.search(r"GAMEDAY = (\d+)", SET_H)[1])
+# The Flight Tracker's own keys and limits (app_flights.h, app_flights.cpp)
+FLIGHTS_H = (REPO / "components/gameday/app_flights.h").read_text(encoding="utf-8")
+FLIGHTS_CPP = (REPO / "components/gameday/app_flights.cpp").read_text(encoding="utf-8")
+FLIGHT_SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kFlightSetKeys\[\] = \{(.*?)\};", FLIGHTS_H, re.S).group(1)))
+FLIGHTS_ID = int(DISPLAY_IDS["FLIGHTS"])
+FLIGHT_MAX = {k: int(v) for k, v in zip(("km", "nm", "mi"), re.search(
+    r"radius_max\(DistUnit u\) \{ return u == DistUnit::KM \? (\d+) : u == DistUnit::NM \? (\d+) : (\d+);",
+    FLIGHTS_CPP).groups())}
+FLIGHT_LIMITS = {k: int(v) for k, v in re.findall(r"static const \w+ (k\w+) = (\d+);", FLIGHTS_H)}
+COORDS_RE = re.compile(r"[ \t]*([+-]?)([0-9]{1,3})(?:\.([0-9]*))?(?:[ \t]*,[ \t]*|[ \t]+)"
+                       r"([+-]?)([0-9]{1,3})(?:\.([0-9]*))?[ \t]*\Z")
+
+
+def flights_doc():
+    """prefs_state(): the Flight Tracker's settings, as a fresh panel has them."""
+    return {"home": "", "place": "", "radius": FLIGHT_LIMITS["kRadiusDefault"], "radius_unit": "mi",
+            "receiver": "", "units": "imperial"}
+
+
+def parse_coords(v):
+    """parse_coords(): two decimals, digit by digit, to four places; None when refused."""
+    m = COORDS_RE.match(v)
+    if not m:
+        return None
+    out = []
+    for sign, whole, frac, top in ((m[1], m[2], m[3], 900000), (m[4], m[5], m[6], 1800000)):
+        e4 = (int(whole) * 100000 + int(((frac or "") + "00000")[:5]) + 5) // 10
+        if e4 > top:
+            return None
+        out.append(-e4 if sign == "-" else e4)
+    return None if out == [0, 0] else out
+
+
+def coord_text(e4):
+    return "-" * (e4 < 0) + "%d.%04d" % divmod(abs(e4), 10000)
+
+
+def flights_set(k, v):
+    """prefs_set() for one of the Flight Tracker's keys."""
+    f = STATE.setdefault("flights", flights_doc())
+    if k == "flyhome":
+        if v in ("", "none"):
+            f["home"], f["place"] = "", ""
+        elif parse_coords(v):
+            f["home"] = ",".join(coord_text(x) for x in parse_coords(v))
+    elif k == "flyplace":
+        b = bytes(c for c in v.encode() if c >= 0x20 and c != 0x7F)
+        n = min(len(b), FLIGHT_LIMITS["kPlaceMax"])
+        while 0 < n < len(b) and b[n] & 0xC0 == 0x80:
+            n -= 1
+        f["place"] = b[:n].decode()
+    elif k == "flyradius":
+        m = re.fullmatch(r"([0-9]{1,3})(mi|km|nm)?", v, re.ASCII)
+        if m and int(m[1]) >= 1:
+            unit = m[2] or "mi"
+            f["radius"], f["radius_unit"] = min(int(m[1]), FLIGHT_MAX[unit]), unit
+    elif k == "flyreceiver":
+        v = "" if v == "none" else v
+        if len(v) <= FLIGHT_LIMITS["kReceiverMax"] and all(0x20 < ord(c) < 0x7F for c in v):
+            f["receiver"] = v
+
+
+def set_keys():
+    """handle_set_()'s keys: kSetKeys, then each display's the firmware has."""
+    ids = display_ids()
+    return SET_KEYS + (MARKET_KEYS if MARKETS in ids else ()) + (FLIGHT_SET_KEYS if FLIGHTS_ID in ids else ())
 
 
 def display_doc(d):
@@ -332,6 +398,8 @@ ENTITIES = [
 ]
 FIRMWARE = next(e for e in ENTITIES if e["name"] == "Firmware")
 INITIAL["displays"] = [display_doc(0)]
+# Flight Tracker settings; resets may add status and planes
+INITIAL["flights"] = flights_doc()
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -351,6 +419,8 @@ def reset_state(overrides):
     STATE.clear()
     STATE.update(copy.deepcopy(INITIAL))
     STATE.update(overrides)
+    if isinstance(overrides.get("flights"), dict):
+        STATE["flights"] = {**flights_doc(), **overrides["flights"]}
     # rotate and rotatesec are one setting
     if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
         STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
@@ -468,6 +538,10 @@ def state_doc():
     if "display" in STATE:
         STATE["display_now"] = next((x["key"] for x in STATE.get("displays") or [] if x["id"] == STATE["display"]),
                                     "gameday")
+    if isinstance(STATE.get("flights"), dict):
+        # units_for_zone(): the US and UK zones are imperial
+        tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
+        STATE["flights"]["units"] = "imperial" if tz.startswith(("US ", "UK ")) else "metric"
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
     if MARKETS in display_ids():
@@ -681,8 +755,7 @@ def drop_player(lg, pid):
 
 def set_pairs(q):
     """handle_set_(): kSetKeys, then each display's own keys, in order."""
-    keys = SET_KEYS + (MARKET_KEYS if MARKETS in display_ids() else ())
-    return [(k, q[k]) for k in keys if k in q]
+    return [(k, q[k]) for k in set_keys() if k in q]
 
 
 def apply_set(kv):
@@ -838,6 +911,8 @@ def apply_set(kv):
             STATE["nightbri"] = clamp(atoi(v), "kNightBriMin", "kNightBriMax")
         elif k in MARKET_KEYS:
             markets_set(k, v)
+        elif k in FLIGHT_SET_KEYS:
+            flights_set(k, v)
 
 
 def selftest():
@@ -883,8 +958,7 @@ def selftest():
         reset_state(start)
         if not STATE["team"]:
             TEAM_LEAGUE[0] = team_league
-        keys = SET_KEYS + (MARKET_KEYS if MARKETS in display_ids() else ())
-        kv = [(k, v) for key in keys for k, v in case["set"] if k == key]
+        kv = [(k, v) for key in set_keys() for k, v in case["set"] if k == key]
         status = 200 if kv else 400
         if kv:
             apply_set(kv)

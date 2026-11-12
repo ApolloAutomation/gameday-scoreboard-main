@@ -14,6 +14,7 @@
 
 #include <ArduinoJson.h>
 
+#include "board_layout.h"
 #include "espn_parse.h"
 #include "health.h"
 #include "idle.h"
@@ -22,6 +23,7 @@
 #include "recap.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
+#include "timezones.h"
 
 namespace espn {
 
@@ -106,6 +108,20 @@ struct AppLine {
   uint32_t color{0xFFFFFF};
 };
 
+// Most labels a frame places itself (the views' pool).
+constexpr size_t kAppTexts = 40;
+
+enum class AppAlign : uint8_t { LEFT = 0, CENTER, RIGHT };
+
+// A label at an area-local spot, clipped to w.
+struct AppText {
+  int16_t x{0}, y{0}, w{0};
+  esphome::gameday::BoardFont font{esphome::gameday::BoardFont::S8};
+  AppAlign align{AppAlign::LEFT};
+  uint32_t color{0xFFFFFF};
+  std::string text;
+};
+
 // The leaderboard's shape: title, status, up to kAppRows rows.
 struct AppFrame {
   BoardLines rows;
@@ -113,10 +129,13 @@ struct AppFrame {
   std::string ticker;
   std::vector<esphome::gameday::TickerSpan> spans;
   AppLine line;
+  std::vector<AppText> texts;  // drawn over the rows
 };
 
-// Rows or a line to draw, else the message.
-inline bool app_frame_board(const AppFrame &f) { return !f.rows.name.empty() || f.line.pts.size() >= 2; }
+// Rows, labels or a line to draw, else the message.
+inline bool app_frame_board(const AppFrame &f) {
+  return !f.rows.name.empty() || !f.texts.empty() || f.line.pts.size() >= 2;
+}
 
 // Keeps the first and last, evenly between.
 inline std::vector<AppPoint> app_line_thin(const std::vector<AppPoint> &pts, size_t max) {
@@ -148,6 +167,8 @@ inline void app_frame_trim(AppFrame &f) {
   if (f.rows.cols.size() != 8)
     f.rows.cols.clear();
   f.line.pts = app_line_thin(f.line.pts, kAppLinePoints);
+  if (f.texts.size() > kAppTexts)
+    f.texts.resize(kAppTexts);
 }
 
 // Flat x, y pairs clipped to the area.
@@ -230,6 +251,10 @@ class AppStream {
   virtual ~AppStream() = default;
   virtual int read() = 0;
   virtual size_t readBytes(char *dst, size_t n) = 0;
+  // The next character, left unread; -1 at the end.
+  virtual int peek() = 0;
+  // One value from here, through the board's JSON reader.
+  virtual DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) = 0;
 };
 
 // A whole body in memory, for host tests.
@@ -242,6 +267,10 @@ class AppTextStream final : public AppStream {
     memcpy(dst, this->text_.data() + this->at_, take);
     this->at_ += take;
     return take;
+  }
+  int peek() override { return this->at_ < this->text_.size() ? (unsigned char) this->text_[this->at_] : -1; }
+  DeserializationError json(JsonDocument &doc, JsonDocument &filter, uint8_t nesting) override {
+    return deserializeJson(doc, *this, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(nesting));
   }
 
  private:
@@ -324,9 +353,9 @@ struct AppTimes {
 
 enum class AppSet : uint8_t { REFUSED = 0, SAME, CHANGED };
 
-// How one read ended, before apply.
+// How one read ended: its host's answer, if read.
 struct AppResult {
-  int status{0};  // HTTP status, 0 no answer
+  int status{0};  // HTTP status, 0 unread or no answer
   bool refused{false};  // 403 or 429
   uint32_t retry_after_ms{0};
 };
@@ -341,6 +370,18 @@ struct AppEnv {
 inline AppEnv &app_env() {
   static AppEnv e;
   return e;
+}
+
+// US and UK zones: miles, mph and feet.
+inline bool tz_miles(int tz) {
+  if (tz < 0 || (size_t) tz >= kTimezoneCount)
+    return false;
+  return strncmp(kTimezones[tz].name, "US ", 3) == 0 || strncmp(kTimezones[tz].name, "UK ", 3) == 0;
+}
+
+// US zones alone: Fahrenheit.
+inline bool tz_fahrenheit(int tz) {
+  return tz >= 0 && (size_t) tz < kTimezoneCount && strncmp(kTimezones[tz].name, "US ", 3) == 0;
 }
 
 // Panel-local time; UTC until the component sets it.
@@ -388,7 +429,7 @@ class App {
   virtual bool filter(JsonDocument & /*f*/) { return false; }
   // Fetch task: that document, in place of parse.
   virtual bool parse_doc(JsonObjectConst /*root*/, int64_t /*now*/) { return false; }
-  // Before apply, for a display failing over hosts.
+  // Once per read, before apply; status 0 unread.
   virtual void ended(const AppResult & /*r*/) {}
   // True: it backs off each host itself.
   virtual bool own_backoff() const { return false; }

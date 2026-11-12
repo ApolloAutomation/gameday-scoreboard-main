@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app_markets.h"
+#include "app_flights.h"
 #include "panel_text.h"
 #include "players.h"
 #include "set_request.h"
@@ -55,6 +56,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     std::string v = eq == std::string::npos ? std::string() : pair.substr(eq + 1);
     // The log line a refused value gets.
     esphome::gameday::panel_text(k + "=" + v);
+    // The Flight Tracker's keys, which apply_set_ hands to its display.
+    flights::Prefs fp;
+    if (flights::prefs_set(fp, k, v) != AppSet::REFUSED) {
+      const flights::Home h = flights::prefs_home(fp);
+      require(fp.lat_e4 == flights::kNoCoord || h.valid(), "the home is out of range", k, v);
+      require(h.radius_nm > 0 && h.radius_nm <= flights::kMaxRadiusNm, "the radius is past the query's", k, v);
+      require(strlen(fp.place) <= flights::kPlaceMax && strlen(fp.receiver) <= flights::kReceiverMax,
+              "a name runs past its field", k, v);
+    }
     SetOp op;
     if (!parse_set(k, v, op, kFavMax)) {
       // app_set_: the Stocks & Crypto keys

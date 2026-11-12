@@ -295,6 +295,41 @@ void put_line(BoardView &v, const UpdateFields &f) {
 #endif
 }
 
+// Each label in order; hidden past the frame's
+void put_texts(BoardView &v, const UpdateFields &f) {
+  const size_t n = f.board ? std::min(f.texts.size(), ::espn::kAppTexts) : 0;
+  for (size_t i = 0; i < ::espn::kAppTexts; i++) {
+    lv_obj_t *&l = v.text[i];
+    if (i >= n) {
+      if (l == nullptr)
+        break;
+      show(l, false);
+      continue;
+    }
+    if (l == nullptr) {
+      if (v.board == nullptr || v.f8 == nullptr)
+        return;
+      l = plain_label(v.board, v.f8, LV_OPA_COVER);
+    }
+    const ::espn::AppText &t = f.texts[i];
+    const lv_font_t *font = font_of(v, t.font);
+    if (lv_obj_get_style_text_font(l, LV_PART_MAIN) != font)
+      lv_obj_set_style_text_font(l, font, 0);
+    if (lv_obj_get_style_x(l, LV_PART_MAIN) != t.x || lv_obj_get_style_y(l, LV_PART_MAIN) != t.y)
+      lv_obj_set_pos(l, t.x, t.y);
+    if (lv_obj_get_style_width(l, LV_PART_MAIN) != t.w)
+      lv_obj_set_width(l, t.w);
+    const lv_text_align_t align = t.align == ::espn::AppAlign::RIGHT    ? LV_TEXT_ALIGN_RIGHT
+                                  : t.align == ::espn::AppAlign::CENTER ? LV_TEXT_ALIGN_CENTER
+                                                                        : LV_TEXT_ALIGN_LEFT;
+    if (lv_obj_get_style_text_align(l, LV_PART_MAIN) != align)
+      lv_obj_set_style_text_align(l, align, 0);
+    put_color(l, t.color);
+    put_changed(l, t.text.c_str());
+    show(l, true);
+  }
+}
+
 }  // namespace
 
 BoardView *board_view() { return page_view; }
@@ -548,6 +583,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   }
   show(v.board, f.board);
   put_line(v, f);
+  put_texts(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {

@@ -227,7 +227,8 @@ F1Schedule f1_calendar_schedule(const GolfNext &next) {
 
 F1Units f1_units_for_tz(uint8_t tz) {
   F1Units u;
-  u.fahrenheit = u.mph = tz < kTimezoneCount && strncmp(kTimezones[tz].name, "US ", 3) == 0;
+  u.fahrenheit = tz_fahrenheit(tz);
+  u.mph = tz_miles(tz);
   return u;
 }
 

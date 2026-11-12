@@ -149,6 +149,8 @@ struct UpdateFields {
   // Another display's polyline over the board: x, y pairs.
   std::vector<int16_t> line;
   uint32_t line_color{0xFFFFFF};
+  // Another display's own labels over the board.
+  std::vector<::espn::AppText> texts;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };

@@ -381,3 +381,9 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .playerrow img { width: 28px; height: 28px; object-fit: contain; flex: none; }
 #playerPick { max-width: 60%; }
 #playerAdd { margin-top: 8px; }
+/* Flight Tracker: find a home, the places found */
+.flightrow { display: flex; gap: 8px; margin: 0 0 8px; }
+.flightrow input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
+.flightrow input:focus { border-color: var(--accent); outline: none; }
+.flightpicks { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.flightpicks .btn { text-align: left; }
