@@ -75,7 +75,7 @@ LogoCache::Entry *LogoCache::add_(std::string_view url, uint8_t prio, uint32_t n
   return p;
 }
 
-image::Image *LogoCache::get(std::string_view url, uint8_t icon) {
+image::Image *LogoCache::get(std::string_view url, uint8_t icon, bool mark) {
   if (url.empty() || this->lock_ == nullptr)
     return nullptr;
   Locked guard(this->lock_);
@@ -83,7 +83,9 @@ image::Image *LogoCache::get(std::string_view url, uint8_t icon) {
   Entry *e = this->find_(url);
   if (e == nullptr) {
     this->make_room_(now);
-    this->add_(url, ::espn::LOGO_NOW, now)->icon = icon;
+    Entry *n = this->add_(url, ::espn::LOGO_NOW, now);
+    n->icon = icon;
+    n->mark = mark;
     return nullptr;
   }
   e->used_ms = now;
@@ -282,8 +284,13 @@ void LogoCache::run_() {
       ESP_LOGD(TAG, "No dark logo, using %s", plain.c_str());
       ok = this->download_(plain, body, plain_code, throttled, retry_after_ms);
     }
-    const ::espn::LogoNote note =
+    ::espn::LogoNote note =
         ::espn::logo_learned(!::espn::plain_logo_url(url).empty(), first != url, code, plain_code);
+    // Google's stand-in for an airline it lacks
+    if (ok && ::espn::logo_placeholder(first.c_str(), body.data(), body.size())) {
+      ok = false;
+      note = ::espn::LogoNote::NONE;
+    }
     size_t bytes = body.size();
     {
       Locked guard(this->lock_);
@@ -299,6 +306,7 @@ void LogoCache::run_() {
           job->wait_ms = ::espn::kLogoNoneMs;
         else
           ::espn::logo_failed(job->fails, job->wait_ms, throttled, retry_after_ms, random_uint32());
+        this->failed_ = true;
       }
     }
     if (ok) {
@@ -354,7 +362,7 @@ bool LogoCache::download_(const std::string &url, Bytes &body, int &code, bool &
 // Shared decoder; the entry keeps a copy of the pixels.
 // Safe without the lock: the entry is DOWNLOADED until the caller marks it
 // READY, so nothing draws it and nothing drops it.
-bool LogoCache::decode_(Entry &e, const Bytes &body) {
+int LogoCache::decode_(Entry &e, const Bytes &body) {
   runtime_image::RuntimeImage &d = *this->decoder_;
   bool ok = d.begin_decode(body.size());
   size_t offset = 0;
@@ -373,22 +381,37 @@ bool LogoCache::decode_(Entry &e, const Bytes &body) {
     ok = d.end_decode();
   const uint8_t *px = d.get_data_start();
   const int w = d.get_width(), h = d.get_height();
-  ok = ok && px != nullptr;
+  ok = ok && px != nullptr && w > 0 && h > 0;
+  int result = ok ? 1 : 0;
   if (ok && e.icon > 0) {
-    const std::vector<uint8_t> small = ::espn::logo_icon_shrink(px, w, h, e.icon);
+    // Squared so a wide logo keeps its shape
+    const int side = std::max(w, h);
+    Bytes square(::espn::logo_icon_bytes(side, side));
+    ::espn::logo_icon_square(px, w, h, square.data());
+    if (e.mark) {
+      std::vector<uint16_t, PsramAllocator<uint16_t>> stack;
+      ::espn::logo_icon_knockout(square.data(), side, side, stack);
+    }
+    const std::vector<uint8_t> small = ::espn::logo_icon_shrink(square.data(), side, side, e.icon);
     e.pixels.assign(small.begin(), small.end());
-    ::espn::logo_icon_lift(e.pixels.data(), e.icon, e.icon);
-    e.image.emplace(e.pixels.data(), e.icon, e.icon, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
+    ::espn::logo_icon_lift(e.pixels.data(), e.icon, e.icon, e.mark);
+    if (!e.mark || ::espn::logo_icon_usable(e.pixels.data(), e.icon)) {
+      e.image.emplace(e.pixels.data(), e.icon, e.icon, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
+    } else {
+      e.pixels = {};
+      result = -1;
+    }
   } else if (ok) {
     e.pixels.assign(px, px + d.get_buffer_size(w, h));
     e.image.emplace(e.pixels.data(), w, h, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
   }
   // Frees its pixels and ends a failed decode
   d.release();
-  return ok;
+  return result;
 }
 
-bool LogoCache::loop() {
+bool LogoCache::loop(bool &failed) {
+  failed = false;
   if (this->lock_ == nullptr)
     return false;
   if (this->pending_any_.exchange(false))
@@ -396,6 +419,7 @@ bool LogoCache::loop() {
   this->retry_pinned_(millis());
   if (!this->downloaded_.exchange(false))
     return false;
+  failed = this->failed_.exchange(false);
   bool ready = false;
   while (true) {
     Entry *job = nullptr;
@@ -414,12 +438,20 @@ bool LogoCache::loop() {
     if (job == nullptr)
       return ready;
     // Only the main loop drops entries, so job stays valid without the lock.
-    bool ok = this->decode_(*job, body);
+    const int ok = this->decode_(*job, body);
     Locked guard(this->lock_);
-    if (ok) {
+    failed = failed || ok <= 0;
+    if (ok > 0) {
       job->state = State::READY;
       ::espn::logo_loaded(job->fails, job->wait_ms);
       ready = true;
+    } else if (ok < 0) {
+      // Too thin or faint: asked again in hours
+      ESP_LOGI(TAG, "Logo unreadable at %u px: %s", (unsigned) job->icon, job->url.c_str());
+      job->state = State::FAILED;
+      job->failed_ms = millis();
+      job->wait_ms = ::espn::kLogoNoneMs;
+      ::espn::memo_note(this->memo_, url_key(job->url), ::espn::LogoNote::NONE, job->failed_ms);
     } else {
       job->state = State::FAILED;
       job->failed_ms = millis();

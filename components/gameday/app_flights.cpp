@@ -81,6 +81,33 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     a.text = t.text;
     out.texts.push_back(std::move(a));
   }
+  for (const Art &a : fr.art) {
+    const PlaneSprite *s = plane_sprite(a.kind);
+    if (s == nullptr)
+      continue;
+    espn::AppArt o;
+    o.x = a.x;
+    o.y = a.y;
+    o.w = s->w;
+    o.h = s->h;
+    o.bits = s->bits;
+    o.flip = a.flip;
+    o.ink[kArtBody - 1] = kColBody;
+    o.ink[kArtTail - 1] = a.tail;
+    o.ink[kArtDetail - 1] = kColDetail;
+    out.art.push_back(o);
+  }
+  for (const Logo &l : fr.logos) {
+    espn::AppIcon ic;
+    ic.x = l.x;
+    ic.y = l.y;
+    ic.px = (uint8_t) kLogoPx;
+    memcpy(ic.key, l.icao, sizeof l.icao);
+    ic.url = logo_url;
+    ic.alt = l.alt;
+    ic.mark = true;
+    out.icons.push_back(ic);
+  }
   out.ticker = fr.ticker;
 }
 

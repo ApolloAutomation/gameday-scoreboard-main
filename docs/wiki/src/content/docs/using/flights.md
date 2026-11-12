@@ -36,6 +36,15 @@ The nearest plane's card has:
 - how far away it is and in which direction, like **2.4 mi SW**
 - except on a 64x64 area, whether it's climbing, descending or level
 
+:::note[Coming in the next release]
+The card also shows the airline's logo and a picture of the plane.
+
+- **The logo** is the airline painted on the plane, like Delta's red triangle. A flight that Republic flies for American shows American's logo, with **Republic** as the airline's name, when Flightradar24 says so. Until the logo comes in, or for an airline whose logo is only a long name or can't be found, the airline's code shows in its place, like **WN** for Southwest or **EJA** for NetJets.
+- **The picture** is the plane's shape from the side, bigger for bigger planes: a four-engine jumbo, a twin-aisle jet, a single-aisle jet, a regional jet, a turboprop airliner, a business jet, a small twin or single propeller plane, a helicopter, a fighter, a military transport, or a plain plane when the type isn't known. It faces the way the plane is flying, and its tail is in the airline's color. A glider gets the small propeller plane. A balloon, an airship, a drone or skydivers get no picture.
+- **On a 64x64 area** the logo and a smaller callsign share the top, with the route or flight number under the callsign, then the picture, then the type code and the speed, the altitude and where it is. The airline's name is left to the ticker. A plane with no airline the panel knows, like a private plane, has no logo: its callsign is small with the route or flight number under it, or big when it has neither, and the picture is under that.
+- **On 128 wide and more**, the logo is at the top right, after the airline's name, and the picture is right of the route and the type. A type name too long for its space leaves off its maker, like **737 MAX 8**.
+:::
+
 The list of the nearest planes, nearest first, has each one's callsign, type code, altitude and distance, or just the callsign and the distance where the list is one panel wide. Its first line says how many planes are nearby.
 
 | Area | What it shows |
@@ -69,6 +78,10 @@ With the **Idle display** on **Off or dim** and the Flight Tracker on the main b
 
 The card's line says which source the planes on the panel came from.
 
+:::note[Coming in the next release]
+**Airline logos** come from Google Flights' logo images (www.gstatic.com) or FlightAware's (www.flightaware.com), whichever reads better at 16 pixels, with the other as a backup. The panel downloads an airline's logo, a few KB, the first time one of its planes is on the card, and keeps it until it restarts or needs the room for newer logos. A logo that's missing, or can't be read at 16 pixels, isn't asked for again for 6 hours; the airline's code shows meanwhile.
+:::
+
 ## Your own receiver
 
 With an ADS-B receiver on your network, the panel reads it first, every 10 seconds. When it fails twice in a row, the panel reads Flightradar24 and the backups above until the receiver answers again. A changed address is read right away.
@@ -84,5 +97,9 @@ The receiver's planes need no internet, but their routes still come from adsb.im
 ## Your location
 
 The home location stays on the panel, to four decimal places (about 10 meters), with the place's name if you looked one up. Each read sends the flight data service a box around it, not the spot itself: the center is rounded to about a kilometer first, and the box reaches a little past your **Within** distance all around it. adsb.fi and adsb.lol get that rounded center and the distance. The panel still works out each plane's distance and direction from your exact spot. Route lookups send only the planes' callsigns and positions, over plain HTTP to adsb.im.
+
+:::note[Coming in the next release]
+A logo download sends only the airline's code, never your location.
+:::
 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

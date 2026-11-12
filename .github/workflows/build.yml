@@ -572,6 +572,7 @@ jobs:
           python3 scripts/crash_report.py --selftest
           python3 scripts/site_seo.py --selftest
           python3 scripts/release_notes.py --selftest
+          python3 scripts/build_airlines.py --selftest
           bash scripts/beta_version.sh --selftest
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site

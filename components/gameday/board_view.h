@@ -61,6 +61,11 @@ struct BoardView {
   // Another display's labels, made on first use
   lv_obj_t *text[::espn::kAppTexts]{};
   lv_obj_t *icon[::espn::kAppIcons]{};  // another display's logos
+  // Another display's picture, painted into PSRAM
+  lv_obj_t *art{nullptr};
+  uint8_t *art_buf{nullptr};
+  lv_image_dsc_t art_dsc{};
+  uint32_t art_key{0};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout

@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "board_layout.h"
+#include "logo_icon.h"
+#include "plane_art.h"
 #include "poll_timing.h"
 
 namespace flights {
@@ -22,7 +24,7 @@ using esphome::gameday::BoardFont;
 static const size_t kNear = 8;
 static const size_t kRouteCache = 16;
 static const size_t kStops = 4;
-static const size_t kFrameMax = 40;
+static const size_t kFrameMax = 44;
 static const int32_t kNoAlt = INT32_MIN;
 static const float kMaxRadiusNm = 250.0f;
 static const float kStaleS = 60.0f;
@@ -132,6 +134,7 @@ struct Plane {
   char type[5]{};
   char category[3]{};
   char flight[9]{};  // Flightradar24's flight number
+  char brand[4]{};   // and the airline painted on it
   char from[5]{};    // and its route, when it has one
   char to[5]{};
   int32_t alt_ft{kNoAlt};
@@ -422,6 +425,20 @@ std::string airline_name(const char *callsign);
 std::string flight_number(const char *callsign);
 // "Boeing 737-800", else "737-800", else the code.
 std::string type_text(const char *type, size_t max);
+
+// AirlineName::logo: which source answers with a usable logo.
+enum : uint8_t { kLogoUnknown = 0, kLogoGoogle = 1, kLogoFlightAware = 2, kLogoNone = 3 };
+using ::espn::kGoogleLogoUrl;
+static const char *const kFlightAwareLogoUrl = "https://www.flightaware.com/images/airline_logos/90p/";
+const AirlineName *airline_by_icao(const char *icao);
+// The airline painted on it, else the one flying it.
+const AirlineName *logo_airline(const Plane &p);
+// Source k's URL, hinted first; 0: no more.
+size_t airline_logo_url(const AirlineName &a, uint8_t k, char *out, size_t n);
+// The same by ICAO code, as an AppIcon's url.
+size_t logo_url(const char *icao, uint8_t kind, uint8_t k, char *out, size_t n);
+// Its IATA code when the flight number starts with it.
+std::string logo_chip(const AirlineName &a, const std::string &flight_no);
 // For a plane with no type: "Helicopter", "Glider".
 const char *category_text(const char *category);
 
@@ -560,6 +577,10 @@ static const uint32_t kColValue = 0xFFFFFF;
 static const uint32_t kColDim = 0xA0A0A0;
 static const uint32_t kColDist = 0x2ED573;
 static const uint32_t kColAlert = 0xFF4040;
+// The plane picture: a little under the white text.
+static const uint32_t kColBody = 0xC8C8C8;
+static const uint32_t kColDetail = 0x6E6E6E;
+static const uint32_t kColTail = 0x8C8C8C;
 
 enum class Align : uint8_t { LEFT = 0, CENTER, RIGHT };
 
@@ -573,8 +594,27 @@ struct Text {
   std::string text;
 };
 
+// A plane picture's top left; flip faces it left.
+struct Art {
+  int16_t x{0}, y{0};
+  PlaneKind kind{PlaneKind::NONE};
+  bool flip{false};
+  uint32_t tail{kColTail};
+};
+
+static const int kLogoPx = 16;
+
+// An airline logo's top left and whose.
+struct Logo {
+  int16_t x{0}, y{0};
+  char icao[4]{};
+  int8_t alt{-1};  // items index of the code shown meanwhile
+};
+
 struct Frame {
   std::vector<Text> items;
+  std::vector<Art> art;
+  std::vector<Logo> logos;
   std::string ticker;
 };
 

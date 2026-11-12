@@ -570,6 +570,10 @@ bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p
   copy_cut(p.reg, sizeof(p.reg), f[9] | "");
   copy_cut(p.type, sizeof(p.type), f[8] | "");
   copy_cut(p.flight, sizeof(p.flight), f[13] | "");
+  const char *brand = f[18] | "";
+  if (strlen(brand) == 3 && isupper((unsigned char) brand[0]) && isupper((unsigned char) brand[1]) &&
+      isupper((unsigned char) brand[2]))
+    copy_cut(p.brand, sizeof(p.brand), brand);
   const char *from = f[11] | "", *to = f[12] | "";
   if (from[0] != '\0' && to[0] != '\0' && strlen(from) < sizeof(p.from) && strlen(to) < sizeof(p.to)) {
     copy_cut(p.from, sizeof(p.from), from);
@@ -600,13 +604,13 @@ bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p
 
 // ---- Names -------------------------------------------------------------------
 
-const AirlineName *airline_for(const char *callsign) {
-  if (!airline_callsign(callsign))
+const AirlineName *airline_by_icao(const char *icao) {
+  if (icao == nullptr || strnlen(icao, 3) < 3)
     return nullptr;
   size_t lo = 0, hi = sizeof(kAirlines) / sizeof(kAirlines[0]);
   while (lo < hi) {
     const size_t mid = (lo + hi) / 2;
-    const int c = strncmp(kAirlines[mid].icao, callsign, 3);
+    const int c = strncmp(kAirlines[mid].icao, icao, 3);
     if (c == 0)
       return &kAirlines[mid];
     if (c < 0)
@@ -615,6 +619,39 @@ const AirlineName *airline_for(const char *callsign) {
       hi = mid;
   }
   return nullptr;
+}
+
+const AirlineName *airline_for(const char *callsign) {
+  return airline_callsign(callsign) ? airline_by_icao(callsign) : nullptr;
+}
+
+const AirlineName *logo_airline(const Plane &p) {
+  const AirlineName *a = p.brand[0] != '\0' ? airline_by_icao(p.brand) : nullptr;
+  return a != nullptr ? a : airline_for(p.callsign);
+}
+
+size_t airline_logo_url(const AirlineName &a, uint8_t k, char *out, size_t n) {
+  if (out == nullptr || n == 0 || a.logo == kLogoNone)
+    return 0;
+  const bool google = a.iata[0] != '\0';
+  // FlightAware's comes first when hinted, else last
+  const bool fa_first = a.logo == kLogoFlightAware || !google;
+  if (k > (google ? 1 : 0))
+    return 0;
+  const int r = (k == 0) == fa_first ? snprintf(out, n, "%s%s.png", kFlightAwareLogoUrl, a.icao)
+                                     : snprintf(out, n, "%s%s.png", kGoogleLogoUrl, a.iata);
+  return r > 0 && (size_t) r < n ? (size_t) r : 0;
+}
+
+size_t logo_url(const char *icao, uint8_t, uint8_t k, char *out, size_t n) {
+  const AirlineName *a = airline_by_icao(icao);
+  return a != nullptr ? airline_logo_url(*a, k, out, n) : 0;
+}
+
+std::string logo_chip(const AirlineName &a, const std::string &flight_no) {
+  if (a.iata[0] != '\0' && flight_no.compare(0, strlen(a.iata), a.iata) == 0)
+    return a.iata;
+  return a.icao;
 }
 
 std::string airline_name(const char *callsign) {
@@ -807,10 +844,20 @@ const char *type_for(const char *type) {
 
 }
 
+// Leading words type_text may leave off.
+const char *const kMakers[] = {"Airbus",   "Boeing",     "Embraer", "Cessna",  "Beech",  "Piper",
+                               "Bell",     "Robinson",   "Sikorsky", "Leonardo", "Gulfstream",
+                               "Pilatus",  "Diamond",    "Cirrus",  "Daher",   "Lockheed"};
+
 std::string type_text(const char *type, size_t max) {
   const char *full = type_for(type);
   if (full != nullptr && strlen(full) <= max)
     return full;
+  const char *sp = full != nullptr ? strchr(full, ' ') : nullptr;
+  if (sp != nullptr && strlen(sp + 1) <= max)
+    for (const char *m : kMakers)
+      if (strlen(m) == (size_t) (sp - full) && strncmp(full, m, sp - full) == 0)
+        return sp + 1;
   return type != nullptr ? cut(type, max) : "";
 }
 
@@ -1170,24 +1217,54 @@ std::string fit_words(const std::string &s, size_t max) {
 namespace {
 
 struct Card {
-  std::string label, who, sub, tail, type_code, alt_full, speed_full, speed_short, where_full, where_short;
+  std::string label, who, sub, tail, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
   const char *climb{""};
   const char *cat{nullptr};
+  const AirlineName *brand{nullptr};  // whose logo shows
   uint32_t label_color{kColCallsign};
+  uint32_t brand_color{kColAirline};
+  uint32_t tail_color{kColTail};
+  PlaneKind kind{PlaneKind::NONE};
+  bool flip{false};
   bool route{false};
 };
+
+// Its color, brightened to at least min at its peak.
+uint32_t rgb_of(const AirlineName *a, int min) {
+  if (a == nullptr)
+    return 0;
+  int c[3] = {a->rgb[0], a->rgb[1], a->rgb[2]};
+  const int top = std::max(c[0], std::max(c[1], c[2]));
+  if (top == 0)
+    return 0;
+  for (int &v : c)
+    v = top < min ? v * min / top : v;
+  return ((uint32_t) c[0] << 16) | ((uint32_t) c[1] << 8) | (uint32_t) c[2];
+}
 
 Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s) {
   Card c;
   c.label = plane_label(p);
   c.label_color = p.emergency ? kColAlert : kColCallsign;
   c.who = airline_name(p.callsign);
+  c.brand = logo_airline(p);
   const char *cat = category_text(p.category);
   c.cat = cat;
+  if (c.who.empty() && c.brand != nullptr)
+    c.who = c.brand->name;
   if (c.who.empty())
     c.who = p.type[0] != '\0' ? type_text(p.type, 16) : cat != nullptr ? cat : "";
   const std::string leg = route_text(p, routes, now_s, "-");
   const std::string fn = p.flight[0] != '\0' ? std::string(p.flight) : flight_number(p.callsign);
+  if (c.brand != nullptr) {
+    c.chip = logo_chip(*c.brand, fn);
+    if (rgb_of(c.brand, 0) != 0) {
+      c.brand_color = rgb_of(c.brand, 0xFF);
+      c.tail_color = rgb_of(c.brand, 0xD0);
+    }
+  }
+  c.kind = plane_kind(p.type, p.category);
+  c.flip = p.track > 180.0f;
   if (p.callsign[0] != '\0' && fn != p.callsign)
     c.tail = fn;
   else if (p.reg[0] != '\0' && c.label != p.reg)
@@ -1220,6 +1297,39 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
 
 std::string pick_fit(const std::string &a, const std::string &b, size_t max) { return a.size() <= max ? a : cut(b, max); }
 
+// The plane centered in the box, if it fits.
+void put_art(Frame &f, const Card &c, int x, int y, int w, int h) {
+  const PlaneSprite *s = plane_sprite(c.kind);
+  if (s == nullptr || s->w > w || s->h > h)
+    return;
+  Art a;
+  a.x = (int16_t) (x + (w - s->w) / 2);
+  a.y = (int16_t) (y + (h - s->h) / 2);
+  a.kind = c.kind;
+  a.flip = c.flip;
+  a.tail = c.tail_color;
+  f.art.push_back(a);
+}
+
+// The airline's code, then its logo over it.
+void put_logo(Frame &f, const Card &c, int x, int y) {
+  if (c.brand == nullptr)
+    return;
+  const size_t at = f.items.size();
+  if (c.chip.size() <= 2)
+    put(f, x, y + 2, kLogoPx, BoardFont::S12, Align::CENTER, c.brand_color, c.chip);
+  else
+    put(f, x, y + 4, kLogoPx, BoardFont::S8, Align::CENTER, c.brand_color, c.chip);
+  if (c.brand->logo == kLogoNone)
+    return;
+  Logo l;
+  l.x = (int16_t) x;
+  l.y = (int16_t) y;
+  memcpy(l.icao, c.brand->icao, sizeof l.icao);
+  l.alt = f.items.size() > at ? (int8_t) at : (int8_t) -1;
+  f.logos.push_back(l);
+}
+
 std::string type_fit(const Card &c, size_t max) {
   if (!c.type_code.empty())
     return type_text(c.type_code.c_str(), max);
@@ -1251,19 +1361,28 @@ std::string count_text(const Nearby &n) {
   return std::to_string(c) + (c == 1 ? " plane" : " planes");
 }
 
+// An airline's logo shares the top with a small callsign.
 void compact(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   const int w = o.w;
-  put(f, 0, 0, w, BoardFont::S16, Align::CENTER, c.label_color, c.label);
-  put(f, 0, 15, w, BoardFont::S8, Align::CENTER, kColAirline, fit_words(c.who, (size_t) w / 5));
-  put(f, 0, 23, w, BoardFont::S8, Align::CENTER, c.route ? kColRoute : kColDim, c.sub);
-  put(f, 1, 31, 25, BoardFont::S8, Align::LEFT, kColType, c.type_code);
+  if (c.brand != nullptr) {
+    put_logo(f, c, 0, 0);
+    put(f, kLogoPx + 2, 0, w - kLogoPx - 2, BoardFont::S8, Align::LEFT, c.label_color, c.label);
+    put(f, kLogoPx + 2, 8, w - kLogoPx - 2, BoardFont::S8, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+  } else if (!c.sub.empty()) {
+    put(f, 0, 0, w, BoardFont::S8, Align::CENTER, c.label_color, c.label);
+    put(f, 0, 8, w, BoardFont::S8, Align::CENTER, c.route ? kColRoute : kColDim, c.sub);
+  } else {
+    put(f, 0, 0, w, BoardFont::S16, Align::CENTER, c.label_color, c.label);
+  }
+  put_art(f, c, 0, 16, w, 16);
+  put(f, 1, 32, 25, BoardFont::S8, Align::LEFT, kColType, c.type_code);
   // "1185km/h" too wide: the number alone.
   const std::string bare = c.speed_short.substr(0, c.speed_short.find_first_not_of("0123456789"));
-  put(f, 27, 31, w - 28, BoardFont::S8, Align::RIGHT, kColValue, pick_fit(c.speed_short, bare, (size_t) (w - 28) / 5));
-  put(f, 0, 39, w, BoardFont::S8, Align::CENTER, kColValue, c.alt_full);
-  put(f, 0, 47, w, BoardFont::S8, Align::CENTER, kColDist, pick_fit(c.where_full, c.where_short, (size_t) w / 5));
+  put(f, 27, 32, w - 28, BoardFont::S8, Align::RIGHT, kColValue, pick_fit(c.speed_short, bare, (size_t) (w - 28) / 5));
+  put(f, 0, 40, w, BoardFont::S8, Align::CENTER, kColValue, c.alt_full);
+  put(f, 0, 48, w, BoardFont::S8, Align::CENTER, kColDist, pick_fit(c.where_full, c.where_short, (size_t) w / 5));
   if (!o.ticker && n.n > 1)
-    put(f, 0, 55, w, BoardFont::S8, Align::CENTER, kColDim, "+" + std::to_string(n.n - 1) + " more");
+    put(f, 0, 56, w, BoardFont::S8, Align::CENTER, kColDim, "+" + std::to_string(n.n - 1) + " more");
 }
 
 // The list alone, nearest first.
@@ -1281,11 +1400,17 @@ void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
 // The plane's card in the left 128 pixels.
 void card_left(Frame &f, const Card &c) {
   put(f, 1, 0, 64, BoardFont::S16, Align::LEFT, c.label_color, c.label);
-  put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColAirline, fit_words(c.who, 12));
+  // Past the callsign, up to the logo at 111.
+  const int lx = 127 - kLogoPx;
+  const int rx = c.brand != nullptr ? std::max(48, 4 + font_px(BoardFont::S16) * (int) c.label.size()) : 66;
+  const int rw = c.brand != nullptr ? lx - 2 - rx : 61;
+  put(f, rx, 0, rw, BoardFont::S8, Align::RIGHT, kColAirline, fit_words(c.who, (size_t) rw / 5));
   if (c.route)
-    put(f, 66, 8, 61, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
-  put(f, 1, 17, 126, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
-  put(f, 1, 30, 126, BoardFont::S8, Align::LEFT, kColType, type_fit(c, 25));
+    put(f, rx, 8, rw, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+  put_logo(f, c, lx, 0);
+  put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_fit(c, 14));
+  put_art(f, c, 72, 17, 56, 21);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, kColDist, pick_fit(c.where_full, c.where_short, 12));

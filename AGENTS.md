@@ -73,6 +73,7 @@ the same ground for people; this file is the short version.
   `make -C tests replay` and runs the `--selftest` of
   `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
   `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`,
+  `build_airlines.py`,
   `scripts/beta_version.sh` and `tests/web/mock_device.py`. The last checks
   the device page's mock against `tests/fixtures/set_cases.json`, the same
   table the host tests run through `components/gameday/set_request.h`.
@@ -128,8 +129,8 @@ the same ground for people; this file is the short version.
   decides that posture; don't add passwords or keys to the default build
   in a feature PR. The README section "On your network" explains why.
 - Team logos come from ESPN (minor league baseball teams' from MLB, AHL and
-  ECHL teams' from HockeyTech) at runtime.
-  Don't commit league or team logos.
+  ECHL teams' from HockeyTech) at runtime, and airline logos from Google
+  Flights or FlightAware. Don't commit league, team or airline logos.
 - Version bumps and CHANGELOG sections are written by maintainers at
   release time. Leave both alone in a feature PR.
 - A change an owner or DIY builder can see or do comes with its docs
