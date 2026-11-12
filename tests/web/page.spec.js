@@ -2751,6 +2751,50 @@ test("the second area posts its choice, and its team from the chooser, a minor l
   expect((await deviceState(request)).splitteam.id).toBe(21);
 });
 
+// A firmware with displays besides Game Day lists them (apps.h).
+const DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 1, key: "f1", name: "F1", split: 6 },
+  { id: 2, key: "markets", name: "Stocks & Crypto", split: 7 },
+];
+
+test("Showing and the second area offer only the displays the firmware lists", async ({ page, request }) => {
+  await reset(request, { panels: 4 });
+  await page.goto("/");
+  const showing = page.getByRole("combobox", { name: "Showing" });
+  await expect(showing.locator("option")).toHaveText(["Scoreboard", "Clock"]);
+  const choices = page.locator("#split option");
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date"]);
+
+  await reset(request, { panels: 4, displays: DISPLAYS });
+  await page.reload();
+  await expect(showing.locator("option")).toHaveText(["Scoreboard", "Clock", "F1", "Stocks & Crypto"]);
+  await expect(showing).toHaveValue("Scoreboard");
+  // Game Day is offered once the main board shows another.
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date", "F1", "Stocks & Crypto"]);
+  await showing.selectOption({ label: "F1" });
+  await expectSet(request, { display: "1" });
+  await expect(showing).toHaveValue("display:1");
+  await expect(choices).toHaveText(["Nothing: the board fills the row", "Rotating live games", "A second team's game",
+                                    "Today's scores", "Clock and date", "Game Day", "F1", "Stocks & Crypto"]);
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  await split.selectOption({ label: "Game Day" });
+  await expectSet(request, { split: "5" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Game Day.");
+  await split.selectOption({ label: "Stocks & Crypto" });
+  await expectSet(request, { split: "7" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Stocks & Crypto.");
+  expect((await deviceState(request)).split_now).toBe("markets");
+  // Back to the scoreboard on the main board.
+  await showing.selectOption("Scoreboard");
+  await expectSet(request, { display: "0" });
+  await expect(showing).toHaveValue("Scoreboard");
+  const st = await deviceState(request);
+  expect([st.display, st.display_now, st.split]).toEqual([0, "gameday", 7]);
+});
+
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {
   await reset(request, { panels: 4 });
   await page.goto("/");
