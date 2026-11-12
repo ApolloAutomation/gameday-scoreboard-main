@@ -197,7 +197,9 @@ MARKET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kMarketSetKeys\[\] = \{(.
 MARKET_SLOTS = int(re.search(r"kMarketSlots = (\d+);", MARKETS_H)[1])
 MARKET_SYM_MAX = int(re.search(r"kMarketSymMax = (\d+);", MARKETS_H)[1])
 MARKET_COINS = set(re.findall(r'\{"(\w+)", "[\w-]+", "\w+"\}', MARKETS_H))
-MARKET_INDEX_GUESS = {sym: guess == "true" for sym, guess in re.findall(r'\{"(\w+)", "\^\w+", "\w*", (true|false)\}', MARKETS_H)}
+MARKET_INDEX_ROWS = re.findall(r'\{"(\w+)", "\^(\w+)", "\w*", (true|false)\}', MARKETS_H)
+MARKET_INDEX_GUESS = {sym: guess == "true" for sym, _, guess in MARKET_INDEX_ROWS}
+MARKET_INDEX_YAHOO = {sym: yahoo for sym, yahoo, _ in MARKET_INDEX_ROWS}
 MARKET_ALIAS = dict(re.findall(r'if \(s == "(\w+)"\)\s*return "(\w+)";', MARKETS_H))
 MARKET_DEFAULTS = re.findall(r'"(\w+)"', re.search(r"for \(const char \*t : \{(.*?)\}\)", APP_MARKETS_H).group(1))
 MARKET_KINDS = ("stock", "index", "crypto")
@@ -252,6 +254,14 @@ def parse_market_symbol(text, kind):
     return (s, kind) if market_ok(s, kind) else None
 
 
+def market_same(a, b):
+    """market_same() (markets.h): two names for one index match."""
+    if a[1] != b[1]:
+        return False
+    return a[0] == b[0] or (a[1] == "index" and a[0] in MARKET_INDEX_YAHOO and
+                            MARKET_INDEX_YAHOO[a[0]] == MARKET_INDEX_YAHOO.get(b[0]))
+
+
 def market_slot(v, free_ok=False):
     """parse_market_slot() (markets.h): one ASCII digit, 0 only when free_ok."""
     return int(v) if len(v) == 1 and ("0" if free_ok else "1") <= v <= str(MARKET_SLOTS) else None
@@ -273,7 +283,7 @@ def markets_set(k, v):
         if not got:
             return
         slot = market_slot(f[0], True)
-        if got not in work:
+        if not any(market_same(x, got) for x in work):
             if slot == 0 or slot > len(work):
                 if len(work) == MARKET_SLOTS:
                     return
@@ -523,6 +533,9 @@ def split_doc():
             if d != 0 and d != STATE.get("display", 0) else "clock"
     if show == 1 and not STATE.get("split_n"):
         now = "clock"
+    # A display at night: the date under the board's clock
+    if show > SPLIT_GAMEDAY and now not in ("", "clock") and STATE.get("night_now"):
+        now = "date"
     STATE["split_now"] = now
     if show == 1:
         STATE.setdefault("split_n", 0)

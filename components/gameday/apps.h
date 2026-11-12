@@ -418,6 +418,8 @@ class App {
   virtual void shown(bool /*on*/) {}
   // Keeps it up through night hours and Off or dim.
   virtual bool busy(int64_t /*now*/) const { return false; }
+  // Off or dim alone; busy unless overridden.
+  virtual bool lit(int64_t now) const { return this->busy(now); }
 
   // From one read's start to the next; 0 is now.
   virtual uint32_t poll_ms(int64_t now) const = 0;

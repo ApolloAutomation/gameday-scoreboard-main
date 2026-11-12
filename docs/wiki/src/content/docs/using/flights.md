@@ -61,6 +61,8 @@ The panel shows a message instead of planes when it has none to show:
 - **Can't reach flight data**: three reads in a row failed, and the panel has no planes from the last 3 minutes. The panel keeps trying.
 
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes the Flight Tracker's place until they end, and the device page says so.
+
+With the **Idle display** on **Off or dim** and the Flight Tracker on the main board, the panel stays dark or dim while it has no planes to show within your **Within** distance, and lights up when one comes near. It keeps reading while it's dark, so a plane, not a game, lights it.
 :::
 
 ## Where the data comes from
@@ -70,7 +72,7 @@ At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the c
 - **adsb.fi, then adsb.lol**: when Flightradar24 fails twice in a row, or turns the panel away, the panel switches to adsb.fi on its own, and to adsb.lol if adsb.fi is out too. adsb.lol is read at most every 3 minutes. The panel goes back to Flightradar24 once its wait is over, longer each time it fails again, and as long as it asks when it turns the panel away. A read from adsb.fi is larger, about 30 KB for 50 planes, about 5 MB an hour.
 - **Routes**: for an airline flight whose source has no full route (adsb.fi, adsb.lol, your own receiver, and some Flightradar24 flights), the panel looks the route up from adsb.im, at most every 30 seconds, over plain HTTP, or from adsbdb while adsb.im is failing or turning the panel away. It shows a route only when it fits where the plane is and the way it's heading, and keeps each route for 3 hours.
 - **Nothing while it's off screen**: the Flight Tracker reads only while it's on the main board or in the second area. Off screen, the device page says it isn't reading planes, rather than an old count.
-- **Near the 180th meridian**: Flightradar24's box can't reach across it, so for a home whose circle crosses it, like in Fiji, the panel reads adsb.fi first.
+- **Near the 180th meridian**: Flightradar24's box can't reach across it, so for a home whose circle crosses it, like in Fiji, the panel reads adsb.fi first. The card's line then names adsb.fi without saying Flightradar24 is out.
 
 The card's line says which source the planes on the panel came from.
 :::

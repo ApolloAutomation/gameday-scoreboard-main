@@ -48,18 +48,20 @@ PROPS_H = ROOT / "components" / "gameday" / "props.h"
 PROP_RE = re.compile(r'\{"(\w+)",\s*"([^"]+)",\s*Sport::(\w+),\s*(true|false),')
 MARKETS_H = ROOT / "components" / "gameday" / "markets.h"
 COIN_RE = re.compile(r'\{"(\w+)", "[\w-]+", "\w+"\}')
-INDEX_RE = re.compile(r'\{"(\w+)", "\^\w+", "\w*", (true|false)\}')
+INDEX_RE = re.compile(r'\{"(\w+)", "\^(\w+)", "\w*", (true|false)\}')
 ALIAS_RE = re.compile(r'if \(s == "(\w+)"\)\s*return "(\w+)";')
 
 
 def market_tables(markets_h):
-    """markets.h's coins, guessed indexes and coin aliases."""
+    """markets.h's coins, guessed indexes, each index's Yahoo symbol and coin aliases."""
     coins = COIN_RE.findall(markets_h)
-    indexes = [sym for sym, guess in INDEX_RE.findall(markets_h) if guess == "true"]
+    rows = INDEX_RE.findall(markets_h)
+    indexes = [sym for sym, _, guess in rows if guess == "true"]
+    yahoo = {sym: y for sym, y, _ in rows}
     alias = dict(ALIAS_RE.findall(markets_h))
-    if len(coins) < 10 or len(indexes) < 5 or "XBT" not in alias:
+    if len(coins) < 10 or len(indexes) < 5 or "XBT" not in alias or "SPX" not in yahoo or yahoo["SPX"] != yahoo.get("GSPC"):
         raise SystemExit("markets.h's coin and index tables don't parse")
-    return {"coins": coins, "indexes": indexes, "alias": alias}
+    return {"coins": coins, "indexes": indexes, "yahoo": yahoo, "alias": alias}
 
 
 def fold_tables(cpp):

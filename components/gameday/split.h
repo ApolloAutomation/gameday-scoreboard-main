@@ -165,6 +165,9 @@ inline AreaView area_view(const AreaInputs &in) {
 // The display drawn in the area for show, if any.
 inline bool area_app(SplitShow show, Display &d) { return split_display(show, d) && d != Display::GAMEDAY; }
 
+// The clock, or the date under the board's clock.
+inline bool area_clock(AreaView v) { return v == AreaView::CLOCK || v == AreaView::DATE; }
+
 // Half a loop apart, so both never show one card.
 inline int scores_step(size_t step, size_t cards, bool main_shows) {
   if (cards == 0 || (main_shows && cards < 2))

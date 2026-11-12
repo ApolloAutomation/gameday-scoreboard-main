@@ -1052,6 +1052,7 @@ void test_app() {
   FCHECK(frame_text(f).find("Set your") == 0, "no home: a note: %s", frame_text(f).c_str());
   espn::AppRequest req;
   FCHECK(!r.app.request(r.now, req), "nothing to read without a home");
+  FCHECK(!r.app.lit(r.now), "no home, no planes to light it");
   FCHECK(r.app.set("flyhome", "40.71,-74.01") == espn::AppSet::CHANGED, "a home");
   r.app.set("flyradius", "28mi");
   espn::app_env().tz = 0;
@@ -1064,6 +1065,7 @@ void test_app() {
          "Flightradar24 first: %s", r.last_url.c_str());
   FCHECK(r.app.nearby().n == kNear && r.app.source() == Source::FR24, "eight planes from it");
   FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "next in 20 s: %u", r.app.poll_ms(r.now));
+  FCHECK(r.app.lit(r.now) && !r.app.lit(r.now + FlightsApp::kOldS + 1), "planes keep Off or dim lit");
   FCHECK(!r.app.request(r.now + 5, req), "not before");
 
   // Each width: the card, then the list, then the card.
@@ -1093,7 +1095,7 @@ void test_app() {
   JsonDocument d;
   r.app.state(d.to<JsonObject>(), r.now);
   FCHECK(d["status"] == "ok" && d["source"] == "fr24" && d["planes"] == 27 && d["nearest"] == "SWA1678" &&
-             d["units"] == "imperial" && d["radius"] == 28,
+             d["units"] == "imperial" && d["radius"] == 28 && d["fr24"].isNull(),
          "the page's view");
 
   // Two failures, then the backup; then Flightradar24 again.
@@ -1205,6 +1207,9 @@ void test_app() {
   far.app.set("flyhome", "-16.43,179.38");
   far.app.set("flyradius", "100");
   FCHECK(far.app.request(far.now, req) && req.url.find("adsb.fi") != std::string::npos, "%s", req.url.c_str());
+  d.clear();
+  far.app.state(d.to<JsonObject>(), far.now);
+  FCHECK(d["fr24"] == "skip", "the page hears Flightradar24 is skipped");
 
   // An empty sky, and no answers at all.
   Reads none;
@@ -1215,6 +1220,7 @@ void test_app() {
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
   FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "%s", frame_text(f).c_str());
+  FCHECK(!none.app.lit(none.now), "an empty sky lets it dim");
   for (int i = 0; i < 6; i++) {
     none.wait();
     none.step(-1, "");

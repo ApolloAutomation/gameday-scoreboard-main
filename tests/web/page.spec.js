@@ -2661,6 +2661,12 @@ test("the idle display says what the panel shows now, and hides on firmware with
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a game you follow starts.");
   await expect(page.locator("#idleDimRow")).toBeVisible();
+  // Another display on the board: what lights it
+  await reset(request, { idle: 4, idle_view: "clock", dark: true, display: 3,
+                         displays: [{ id: 0, key: "gameday", name: "Game Day", split: 5 },
+                                    { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
+  await page.reload();
+  await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
   await reset(request, { idle: 2, idle_view: "" });
   await page.reload();
   await expect(page.locator("#idleCtls")).toBeVisible();
@@ -2892,6 +2898,13 @@ test("the Stocks & Crypto card says what's wrong with a symbol before posting it
   await add.click();
   await expect(msg).toHaveText("A ^ symbol is an index. Set Kind to Index or Auto.");
   expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
+  // Another name for a listed index
+  await reset(request, { displays: DISPLAYS, display: 2, markets: [{ sym: "SPX", kind: "index" }] });
+  await page.reload();
+  await page.locator("#mktSym").fill("^gspc");
+  await add.click();
+  await expect(msg).toHaveText("SPX is in the list already.");
+  expect((await sets(request)).filter((q) => q.mkt)).toEqual([]);
   const full = ["SPY", "AAPL", "BTC", "ETH", "TSLA", "MSFT", "NVDA", "QQQ"].map((x) => ({ sym: x, kind: /BTC|ETH/.test(x) ? "crypto" : "stock" }));
   await reset(request, { displays: DISPLAYS, display: 2, markets: full });
   await page.reload();
@@ -2998,6 +3011,20 @@ test("the Flight Tracker card takes a latitude and longitude and says where the 
   await expect(page.locator("#flightNow")).toHaveText(
     "Can't reach the flight data right now. The panel keeps trying.");
   await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+
+  // Near the 180th meridian adsb.fi is read on purpose
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3,
+                         flights: { home: "-16.4300,179.3800", status: "ok", source: "adsbfi", planes: 3, fr24: "skip" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText("3 planes nearby, from adsb.fi.");
+
+  // In the second area at night: the date under the board's clock
+  await reset(request, { displays: FLIGHT_DISPLAYS, split: 8, panels: 4, night_now: true,
+                         flights: { home: "48.1374,11.5755", status: "old", source: "fr24", planes: 12 } });
+  await page.reload();
+  expect((await deviceState(request)).split_now).toBe("date");
+  await expect(page.locator("#flightNow")).toHaveText("Not reading planes now: the panel reads them only while "
+    + "Flight Tracker is on it. The clock is up for the night hours, and Flight Tracker comes back after them.");
 
   // Picked, with the night clock up and an old count
   await reset(request, { displays: FLIGHT_DISPLAYS, display: 3, night_now: true,

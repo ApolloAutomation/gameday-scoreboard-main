@@ -261,10 +261,14 @@ espn::AppSet FlightsApp::set(const std::string &key, const std::string &value) {
 void FlightsApp::state(JsonObject out, int64_t now) const {
   prefs_state(this->prefs_, this->units_(), out);
   const bool failing = this->fails_ >= kNoDataFails;
-  if (!prefs_home(this->prefs_).valid()) {
+  const Home home = prefs_home(this->prefs_);
+  if (!home.valid()) {
     out["status"] = "no_home";
     return;
   }
+  // Flightradar24 can't cover this box.
+  if (box_wraps(home))
+    out["fr24"] = "skip";
   if (this->got_s_ == 0) {
     out["status"] = failing ? "failing" : "waiting";
     return;
@@ -276,6 +280,10 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
   if (n.n > 0)
     out["nearest"] = plane_label(n.planes[0]);
+}
+
+bool FlightsApp::lit(int64_t now) const {
+  return prefs_home(this->prefs_).valid() && this->got_s_ != 0 && now - this->got_s_ <= kOldS && this->near_.n > 0;
 }
 
 void FlightsApp::shown(bool on) {

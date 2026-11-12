@@ -66,6 +66,8 @@ class FlightsApp final : public espn::App {
   espn::AppSet set(const std::string &key, const std::string &value) override;
   void state(JsonObject out, int64_t now) const override;
   void shown(bool on) override;
+  // Planes on screen keep Off or dim lit.
+  bool lit(int64_t now) const override;
   bool own_backoff() const override { return true; }
   void ended(const espn::AppResult &r) override {
     this->status_ = r.status;

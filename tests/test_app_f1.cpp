@@ -629,6 +629,30 @@ void test_failover() {
     PCHECK(std::string(a.schedule(back).race) == "Las Vegas Grand Prix", "its schedule again");
   }
   {
+    // Jolpica reads the panel gives up on count too.
+    F1App a;
+    Net net;
+    settle(a, t0, net);
+    int64_t now = t0 + 7 * 3600;
+    int lost = 0;
+    for (int i = 0; i < 40 && !a.host(F1App::HOST_JOLPICA).backup(); i++) {
+      int64_t when;
+      a.next_read(now, when);
+      now = when > now ? when : now + 60;
+      AppRequest rq;
+      if (!a.request(now, rq))
+        continue;
+      if (url_host(rq.url) == "api.jolpi.ca") {
+        lost++;
+        continue;
+      }
+      const bool ok = read_body(a, slurp(fixture_for(rq.url, net)), now);
+      a.ended(AppResult{200, false, 0});
+      a.apply(ok, now);
+    }
+    PCHECK(a.host(F1App::HOST_JOLPICA).backup() && lost == 3, "three lost reads fail over: %d", lost);
+  }
+  {
     // A refusal fails over at once.
     F1App a;
     Net net;

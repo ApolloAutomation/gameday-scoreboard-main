@@ -128,6 +128,11 @@ void test_area_views() {
   ACHECK(area_view(in) == AreaView::CLOCK);
   in.app_busy = true;
   ACHECK(area_view(in) == AreaView::APP);
+  // Under the board's night clock: the date, still the night clock.
+  in.app_busy = false;
+  in.main_clock = true;
+  ACHECK(area_view(in) == AreaView::DATE && area_clock(AreaView::DATE) && area_clock(AreaView::CLOCK));
+  ACHECK(!area_clock(AreaView::APP) && !area_clock(AreaView::NONE));
   // The old choices ignore the displays.
   in = AreaInputs{};
   in.show = SplitShow::CLOCK;
@@ -340,6 +345,7 @@ void test_app_slots() {
   ACHECK(url_source("https://api.example.com/v1", hosts, n) == Source::MARKETS);
   ACHECK(app_for_key(slots, "testunit") == Display::MARKETS && app_for_key(slots, "split") == Display::GAMEDAY);
   ACHECK(app_hosts(slots, hosts, 0) == 0);
+  ACHECK(!a.lit(0));  // busy's answer by default
 
   // Through the interface, as the firmware runs it.
   ACHECK(a.set("testunit", "1") == AppSet::CHANGED && a.set("testunit", "1") == AppSet::SAME);

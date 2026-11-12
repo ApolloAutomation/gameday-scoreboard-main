@@ -449,6 +449,12 @@ uint32_t F1App::poll_ms(int64_t now) const {
 }
 
 bool F1App::request(int64_t now, AppRequest &out) {
+  // A read given up on counts as failed.
+  if (this->inflight_ != Read::NONE) {
+    this->result_ = AppResult{};
+    this->fail_(this->inflight_host_, now);
+    this->inflight_ = Read::NONE;
+  }
   int64_t at;
   const Read r = this->next_read(now, at);
   if (r == Read::NONE || at > now)

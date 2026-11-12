@@ -291,7 +291,7 @@
       </details>
       <details class="card betcard" id="mktCard" hidden>
         <summary><h2>Stocks &amp; Crypto</h2><span class="peek sum" id="mktSum"></span></summary>
-        <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Nothing to sign up for.</p>
+        <p class="hint">Up to 8 stocks, funds, indexes or coins for the Stocks &amp; Crypto display, in the order it shows them. The panel reads their prices from Yahoo Finance while the display is up: about once a minute while a market is open or a coin is listed, every 5 to 10 minutes while the markets are closed. Behind the night hours' clock it still checks every 10 minutes for an open, unless only coins are listed. Nothing to sign up for.</p>
         <p class="hint" id="mktSrc" hidden>Yahoo Finance isn't answering, so the panel is reading coins from Kraken and US stocks and funds from Nasdaq for now, and tries Yahoo Finance again every so often. Anything else keeps its last price until then.</p>
         <p class="hint" id="mktRetry" hidden>Yahoo Finance isn't answering, and nothing listed is on Kraken or Nasdaq, so the prices keep their last value until the panel tries Yahoo Finance again.</p>
         <p class="hint" id="mktOld" hidden></p>
@@ -1063,7 +1063,9 @@
       $("#nightbriVal").textContent = String(S.nightbri || 1);
     }
     const now = { clock: "the clock", scores: "recent scores", today: "today's game" }[S.idle_view];
-    $("#idleNow").textContent = S.dark ? "The panel is dark until a game you follow starts."
+    const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
+    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
+    $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
         : S.night_now ? "In the night hours." : "";
   };
@@ -1886,6 +1888,9 @@
     const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
     return s.length <= 10 && ok.test(s) ? [s, kind] : null;
   };
+  // market_same (markets.h): SPX and GSPC are one index
+  const mktSame = (a, b) => a.kind === b.kind && (a.sym === b.sym
+    || (a.kind === "index" && !!MARKETS.yahoo[a.sym] && MARKETS.yahoo[a.sym] === MARKETS.yahoo[b.sym]));
   const renderMarkets = () => {
     const card = $("#mktCard");
     card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
@@ -1965,8 +1970,9 @@
       : "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
     const list = S.markets.syms || [];
     // Count pending posts so a double tap adds once
-    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => sy.sym === p.sym && sy.kind === p.kind));
-    if (list.concat(mktPending).some((sy) => sy.sym === got[0] && sy.kind === got[1])) return mktSay(got[0] + " is in the list already.");
+    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => mktSame(sy, p)));
+    const dup = list.concat(mktPending).find((sy) => mktSame(sy, { sym: got[0], kind: got[1] }));
+    if (dup) return mktSay(dup.sym + " is in the list already.");
     const max = S.markets.max || 8;
     if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
     mktSay("");
@@ -2748,7 +2754,8 @@
     if (document.activeElement !== rx) rx.value = f.receiver;
     const n = Number(f.planes) || 0;
     const from = FLIGHT_SOURCES[f.source] || "";
-    const backup = f.source === "adsbfi" || f.source === "adsblol";
+    // Near the 180th meridian it skips Flightradar24
+    const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
     const shown = S.display_now === "flights" || S.split_now === "flights";
     const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
     const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
@@ -2758,7 +2765,7 @@
           + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
           : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
             : "Looking for planes.";
-    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock"))
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
       line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
     else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
     $("#flightNow").textContent = line;

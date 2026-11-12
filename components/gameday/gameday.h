@@ -1369,6 +1369,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     return ::espn::display_effective(this->split_prefs_.display, ::espn::app_slots().mask());
   }
   bool app_busy_(::espn::Display d) const;
+  bool app_lit_(::espn::Display d) const;
   bool app_on_screen_(::espn::Display d) const;
   bool app_night_(::espn::Display d) const;
   void apps_setup_();

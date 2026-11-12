@@ -2362,7 +2362,7 @@ bool GamedayComponent::idle_update_() {
   const bool app_busy = this->app_busy_(shown);
   const ::espn::MainView mv = ::espn::main_view(shown, this->demo_playing_(), s.night, app_busy);
   if (mv != ::espn::MainView::GAMEDAY)
-    s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, app_busy, in.area2_busy);
+    s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, this->app_lit_(shown), in.area2_busy);
   const bool main_changed = mv != this->main_view_;
   this->main_view_ = mv;
   const ::espn::IdleView v = this->idle_effective_(s.view);
@@ -5709,6 +5709,11 @@ bool GamedayComponent::app_busy_(::espn::Display d) const {
   return a != nullptr && this->clock_set_() && a->busy((int64_t) this->time_->timestamp_now());
 }
 
+bool GamedayComponent::app_lit_(::espn::Display d) const {
+  const ::espn::App *a = d == ::espn::Display::GAMEDAY ? nullptr : ::espn::app_slots().get(d);
+  return a != nullptr && this->clock_set_() && a->lit((int64_t) this->time_->timestamp_now());
+}
+
 bool GamedayComponent::app_on_screen_(::espn::Display d) const {
   if (d == ::espn::Display::GAMEDAY)
     return false;
@@ -5724,7 +5729,7 @@ bool GamedayComponent::app_night_(::espn::Display d) const {
   if (this->main_view_ == ::espn::MainView::CLOCK && this->main_display_() == d)
     return true;
   ::espn::Display a;
-  return this->a2_view_ == ::espn::AreaView::CLOCK && ::espn::area_app(this->a2_show_(), a) && a == d;
+  return ::espn::area_clock(this->a2_view_) && ::espn::area_app(this->a2_show_(), a) && a == d;
 }
 
 void GamedayComponent::apps_tick_() {
