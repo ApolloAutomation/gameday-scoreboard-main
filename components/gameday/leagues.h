@@ -18,8 +18,10 @@ enum class Sport : uint8_t { FOOTBALL = 0, BASEBALL = 1, BASKETBALL = 2, HOCKEY 
                              RACING = 6 };
 
 // Each source is read and backed off on its own.
-enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1, HOCKEYTECH = 2 };
-static const size_t kSourceCount = 3;
+// Game Day's three, then one per other display (apps.h).
+enum class Source : uint8_t { ESPN = 0, MLB_STATS = 1, HOCKEYTECH = 2, F1 = 3, MARKETS = 4, FLIGHTS = 5 };
+static const size_t kSourceCount = 6;
+static const size_t kGameSourceCount = 3;
 
 struct LeagueInfo {
   League league;

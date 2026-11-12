@@ -52,6 +52,9 @@ struct Settings {
   TeamRef team;
   TeamRef splitteam;
   int split{0};
+  // The main area's display, and the ones the firmware has
+  int display{0};
+  uint8_t displays{kGameDayOnly};
   int clocksize{0}, textsize{0};
   uint8_t team_league{0};
   // rotatesec: Switch every, in seconds.
@@ -134,6 +137,12 @@ void load(Settings &s, JsonObjectConst o) {
   num("standing", s.standing);
   num("watchstay", s.watchstay);
   num("split", s.split);
+  num("display", s.display);
+  if (o["displays"].is<JsonArrayConst>()) {
+    s.displays = 0;
+    for (auto d : o["displays"].as<JsonArrayConst>())
+      s.displays |= (uint8_t) (1u << d.as<int>());
+  }
   num("clocksize", s.clocksize);
   num("textsize", s.textsize);
   int collide = s.collide ? 1 : 0;
@@ -316,7 +325,14 @@ void apply(Settings &s, const SetOp &op) {
       break;
     }
     case SetKind::WIRING: s.wiring = op.value; break;
-    case SetKind::SPLIT: s.split = op.value; break;
+    case SetKind::SPLIT:  // set_split: never a display it lacks
+      if (split_allowed(op.value, s.displays))
+        s.split = op.value;
+      break;
+    case SetKind::MAIN_DISPLAY:  // set_display: the same
+      if (display_has(s.displays, op.value))
+        s.display = op.value;
+      break;
     case SetKind::CLOCK_SIZE: s.clocksize = op.value; break;
     case SetKind::TEXT_SIZE: s.textsize = op.value; break;
     case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
@@ -413,6 +429,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
   doc["split"] = s.split;
+  doc["display"] = s.display;
   doc["clocksize"] = s.clocksize;
   doc["textsize"] = s.textsize;
   doc["splitteam"] = team_str(s.splitteam);

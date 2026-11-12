@@ -435,6 +435,34 @@ inline bool no_game_screen(const std::string &game_state, bool clock_card, bool 
 
 inline bool clock_card_date(int w, bool have_next) { return w < 128 || !have_next; }
 
+// ---- leaderboard rows ------------------------------------------------------------
+
+// As tt_apply_layout and gd_board place the board's (gameday-live.yaml).
+static const int kRowsCount = 6, kRowsCellPx = 8;
+struct RowsGeom {
+  bool wide{false};         // title and detail shown; status right
+  Spot title{}, status{};   // the top row
+  Spot pos{}, name{}, value{}, detail{};  // x and w; y is row_y
+  int16_t name_no_value{0};  // one panel's name width without the value
+};
+
+inline int rows_y(int row) { return kRowsCellPx + kRowsCellPx * row; }
+
+inline RowsGeom rows_geom(int w) {
+  RowsGeom g;
+  g.wide = w >= 128;
+  // Rows are 128 wide, centered on wider boards.
+  const int bx = w > 128 ? (w - 128) / 2 : 0;
+  g.title = Spot{2, 0, (int16_t) (w - 4)};
+  g.status = Spot{0, 0, (int16_t) (g.wide ? w - 2 : w)};
+  g.pos = Spot{(int16_t) (bx + (g.wide ? 2 : 0)), 0, 10};
+  g.name = Spot{(int16_t) (bx + (g.wide ? 16 : 12)), 0, (int16_t) (g.wide ? 55 : 35)};
+  g.value = Spot{(int16_t) (bx + (g.wide ? 74 : 49)), 0, 15};
+  g.detail = Spot{(int16_t) (bx + 94), 0, 30};
+  g.name_no_value = 52;
+  return g;
+}
+
 // ---- a splash with its logo --------------------------------------------------
 
 // Mirrors LVGL wrapping; 0 if LVGL would split a word.
