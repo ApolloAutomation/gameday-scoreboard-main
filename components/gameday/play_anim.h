@@ -22,13 +22,15 @@ enum class AnimKind : uint8_t {
   SOCCER_GOAL,
   HOCKEY_GOAL,
   EXTRA_POINT,
+  TWO_POINT,
 };
-constexpr int kAnimKinds = 9;
+constexpr int kAnimKinds = 10;
 
 // AnimArgs.flags bits
 constexpr uint8_t kAnimMirror = 1;  // the board's right team scored
 constexpr uint8_t kAnimShort = 2;
 constexpr uint8_t kAnimDeep = 4;
+constexpr uint8_t kAnimTwoRun = 8;  // TWO_POINT: a run, not a pass
 
 struct AnimArgs {
   AnimKind kind{AnimKind::NONE};
@@ -172,6 +174,34 @@ inline bool pat_made(const GameSnapshot &s) {
          tail.find("kick)") != std::string::npos || tail.find("kick is good") != std::string::npos;
 }
 
+// A two-point try's words, from its bracket or "two-point" on
+inline std::string two_point_words(const std::string &low) {
+  for (const char *w : {"two-point", "two point", "2pt", "2-pt"}) {
+    const size_t at = low.find(w);
+    if (at == std::string::npos)
+      continue;
+    // "(Cam Ward Run for Two-Point Conversion)"
+    const size_t open = low.rfind('(', at);
+    const bool inside = open != std::string::npos && low.find(')', open) > at;
+    return low.substr(inside ? open : at);
+  }
+  return "";
+}
+
+// The words say a made try; def: the defense's return
+inline bool two_point_made(const GameSnapshot &s, bool &run, bool &def) {
+  const std::string t = anim_lower(s.play_type), tw = two_point_words(t), w = two_point_words(anim_lower(s.last_play));
+  if (tw.empty() && w.empty())
+    return false;
+  const std::string all = tw + " | " + w;
+  def = all.find("defensive") != std::string::npos;
+  if (all.find("fail") != std::string::npos || all.find("no good") != std::string::npos ||
+      all.find("unsuccessful") != std::string::npos || (!def && try_missed(w)))
+    return false;
+  run = all.find("pass") == std::string::npos;
+  return true;
+}
+
 // Pinned on side (0 team, 1 opponent); no shootouts
 inline bool goal_known(const GameSnapshot &prev, const GameSnapshot &cur, int side) {
   if (side != 0 && side != 1)
@@ -234,6 +264,14 @@ inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur, const Gam
     }
     return r;
   }
+  if (a == Alert::TWO_POINT) {
+    bool run = false, def = false;
+    if (detail::two_point_made(cur, run, def)) {
+      r.kind = def ? AnimKind::TD_RETURN : AnimKind::TWO_POINT;
+      r.flags = (uint8_t) (m | (run && !def ? kAnimTwoRun : 0));
+    }
+    return r;
+  }
   if (a != Alert::TOUCHDOWN)
     return r;
   const std::string low = detail::anim_lower(cur.last_play);
@@ -243,9 +281,13 @@ inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur, const Gam
     const int gain = prev == nullptr || (side != 0 && side != 1) ? 7
                      : side ? detail::score_gain(prev->opp_score, cur.opp_score)
                             : detail::score_gain(prev->team_score, cur.team_score);
+    bool run = false, def = false;
     if (gain == 7 && detail::pat_made(cur)) {
       r.kind = AnimKind::EXTRA_POINT;
       r.flags = m;
+    } else if (gain == 8 && detail::two_point_made(cur, run, def) && !def) {
+      r.kind = AnimKind::TWO_POINT;
+      r.flags = (uint8_t) (m | (run ? kAnimTwoRun : 0));
     }
     return r;
   }
@@ -275,7 +317,9 @@ enum class Say : uint8_t {
   WALK_OFF,
   PENALTY,
   OWN_GOAL,
-  TD_PAT,  // a touchdown and its kick in one read
+  TD_PAT,   // a touchdown and its kick in one read
+  TD_TWO,   // a touchdown and its two points
+  DEF_TWO,  // the defense's two-point return
 };
 
 namespace detail {
@@ -439,6 +483,19 @@ inline std::string scorer(AnimKind k, const GameSnapshot &prev, const GameSnapsh
     n = initial_name(t, at);
     if (n.empty())
       n = word_before(t, at);
+  } else if (k == AnimKind::TWO_POINT) {
+    size_t at = find_low(t, " for two-point");
+    if (at != std::string::npos) {
+      n = word_before(t, at);
+      if (n == "Run" || n == "Rush" || n == "Pass")
+        n = word_before(t, at - n.size() - 1);
+    } else if ((at = find_low(t, "conversion attempt")) != std::string::npos) {
+      // NFL: "C.Ward rushes", "J.Allen pass to S.Diggs"
+      const std::string seg = t.substr(at);
+      const size_t to = seg.find(" to "), end = seg.find(". ", seg.find(". ") + 1);
+      n = seg.find(" pass") != std::string::npos && to != std::string::npos ? initial_name(seg, end > to ? end : seg.size())
+                                                                             : initial_name(seg, end);
+    }
   } else if (k == AnimKind::HOME_RUN) {
     const size_t at = t.find(" homered");
     if (at == std::string::npos)
@@ -498,6 +555,12 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
                                           "PUNT RETURN TD", "BLOCKED KICK TD"};
       static const char *const kShort[] = {"RETURN TD", "PICK SIX", "FUMBLE TD", "KICK RET TD", "PUNT RET TD",
                                            "BLOCK TD"};
+      if (what == Say::DEF_TWO) {
+        detail::say_add(out, "DEFENSIVE 2-PT RETURN");
+        detail::say_add(out, "DEF 2-PT RETURN");
+        detail::say_add(out, "DEF 2-PT");
+        break;
+      }
       const int i = (int) what <= (int) Say::BLOCK_TD ? (int) what : 0;
       detail::say_ladder(out, n, y, kLong[i], kShort[i]);
       break;
@@ -518,6 +581,20 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
       }
       detail::say_add(out, "EXTRA POINT GOOD");
       detail::say_add(out, "PAT GOOD");
+      break;
+    case AnimKind::TWO_POINT:
+      if (what == Say::TD_TWO) {
+        detail::say_add(out, "TOUCHDOWN + 2-PT GOOD");
+        detail::say_add(out, "TD + 2-PT GOOD");
+        detail::say_add(out, "TD + 2-PT");
+        break;
+      }
+      if (!n.empty()) {
+        detail::say_add(out, n + " 2-PT CONVERSION GOOD");
+        detail::say_add(out, n + " 2-PT GOOD");
+      }
+      detail::say_add(out, "2-PT CONVERSION GOOD");
+      detail::say_add(out, "2-PT GOOD");
       break;
     case AnimKind::HOME_RUN: {
       const std::string r = std::to_string(runs);
@@ -606,6 +683,10 @@ inline AnimSample anim_sample(const std::string &play, const std::string &abbr, 
     a.kind = AnimKind::FIELD_GOAL;
     a.dist = 47;
     gain = 3;
+  } else if (play == "two" || play == "tworun") {
+    a.kind = AnimKind::TWO_POINT;
+    a.flags = play == "tworun" ? kAnimTwoRun : 0;
+    gain = 2;
   } else if (play == "pat") {
     a.kind = AnimKind::EXTRA_POINT;
     gain = 1;
@@ -636,6 +717,10 @@ inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const Game
     what = detail::td_say(cur);
   else if (a == Alert::TOUCHDOWN && r.kind == AnimKind::EXTRA_POINT)
     what = Say::TD_PAT;
+  else if (a == Alert::TOUCHDOWN && r.kind == AnimKind::TWO_POINT)
+    what = Say::TD_TWO;
+  if (a == Alert::TWO_POINT && r.kind == AnimKind::TD_RETURN)
+    what = Say::DEF_TWO;
   else if (a == Alert::GRAND_SLAM)
     what = Say::SLAM;
   else if (a == Alert::WALK_OFF)
@@ -645,7 +730,7 @@ inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const Game
   else if (r.kind == AnimKind::SOCCER_GOAL && cur.soc.goals.size() > prev.soc.goals.size() &&
            cur.soc.goals.back().own_goal)
     what = Say::OWN_GOAL;
-  const std::string who = what == Say::TD_PAT ? std::string()
+  const std::string who = what == Say::TD_PAT || what == Say::TD_TWO || what == Say::DEF_TWO ? std::string()
                           : name != nullptr  ? detail::say_name(name)
                                              : detail::scorer(r.kind, prev, cur);
   s.anim_say = say_words(r, what, who, gain);
@@ -653,7 +738,7 @@ inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const Game
 }
 
 inline const char *anim_name(AnimKind k) {
-  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr", "soccer", "hockey", "pat"};
+  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr", "soccer", "hockey", "pat", "two"};
   return (int) k < kAnimKinds ? kNames[(int) k] : "none";
 }
 

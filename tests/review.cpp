@@ -31,7 +31,7 @@ void render(const std::string &dir, const ScenePlay &play, int w, int h, const K
     g.add(buf.data(), w, cs);
   }
   char name[128];
-  snprintf(name, sizeof name, "/anim_%s_%dx%d_%s%s%s.gif", anim_name(sc.args.kind), w, h, kit.name,
+  snprintf(name, sizeof name, "/anim_%s_%dx%d_%s%s%s.gif", play.play, w, h, kit.name,
            mirror ? "_mirror" : "", feet == 0 ? "" : feet > 401 ? "_long" : "_short");
   const std::string path = dir + name;
   if (g.save(path))
@@ -42,13 +42,13 @@ void render(const std::string &dir, const ScenePlay &play, int w, int h, const K
 
 }  // namespace
 
-// Optional second argument: one scene, by anim_name
+// Optional second argument: one play, or anim_name's kind
 int main(int argc, char **argv) {
   const std::string dir = argc > 1 ? argv[1] : "build/review";
   const std::string only = argc > 2 ? argv[2] : "";
   for (const ScenePlay &p : kScenePlays) {
     const AnimKind k = anim_sample(p.play, "", 0).args.kind;
-    if (!only.empty() && only != anim_name(k))
+    if (!only.empty() && only != anim_name(k) && only != p.play)
       continue;
     for (const auto &s : kSceneScreens) {
       // Navy: the Try it caption; the rest name a scorer

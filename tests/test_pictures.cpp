@@ -458,6 +458,72 @@ void test_kicks() {
   PCHECK(scene_ms(AnimKind::EXTRA_POINT) < scene_ms(AnimKind::FIELD_GOAL));
 }
 
+// Only a made two-point try; a return is the defense's
+void test_two_point() {
+  // TENN @ FUR: ESPN's failed try, then a good one
+  GameSnapshot fur = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856666", 2633);
+  PCHECK(fur.play_type == "Two Point Rush" && fur.last_play == "(Two-Point Conversion failed)");
+  PCHECK(anim_of(Alert::TWO_POINT, false, fur).kind == AnimKind::NONE);
+  const int fs = fur.team_abbr == "FUR" ? 0 : 1;
+  GameSnapshot good = fur;
+  good.last_play = "(Two-Point Conversion good)";
+  good.play_type = "Two Point Pass";
+  Splash s = decide_splash(before_score(good, fs, 2, "Passing Touchdown", "pass for 9 yards, TOUCHDOWN"), good, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) == 0);
+  PCHECK(s.anim_say == "2-PT CONVERSION GOOD|2-PT GOOD");
+  PCHECK(s.anim_score == "FUR " + std::to_string(fs ? good.opp_score : good.team_score) + " +2");
+  good.play_type = "Two Point Rush";
+  PCHECK((anim_of(Alert::TWO_POINT, false, good).flags & kAnimTwoRun) != 0);
+  // The touchdown and its two points in one read
+  s = decide_splash(before_score(good, fs, 8, "Rush", "rush for 3 yards"), good, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && s.anim_say == "TOUCHDOWN + 2-PT GOOD|TD + 2-PT GOOD|TD + 2-PT");
+  PCHECK(s.anim_score.size() > 3 && s.anim_score.compare(s.anim_score.size() - 3, 3, " +8") == 0);
+  s = decide_splash(before_score(good, fs, 6, "Rush", "rush for 3 yards"), good, true);
+  PCHECK(s.anim == 0);
+  // NFL words: the runner, the receiver
+  GameSnapshot prev = td("Rush", "C.Ward rushes for 3 yards");
+  prev.play_id = "1";
+  GameSnapshot cur = td("Rushing Touchdown", "T.Pollard left end for 1 yard, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. "
+                                             "C.Ward rushes left end. ATTEMPT SUCCEEDS.");
+  cur.team_abbr = "TEN";
+  cur.team_score = 22;
+  s = Splash{"2-PT!", 0, "TEN", false, 0, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) != 0);
+  PCHECK(first_say(s.anim_say) == "WARD 2-PT CONVERSION GOOD" && s.anim_score == "TEN 22 +2");
+  cur.last_play = "J.Allen pass short right to K.Shakir for 6 yards, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. "
+                  "J.Allen pass to S.Diggs is complete. ATTEMPT SUCCEEDS.";
+  s = Splash{"2-PT!", 0, "BUF", false, 0, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) == 0 && first_say(s.anim_say) == "DIGGS 2-PT CONVERSION GOOD");
+  // ESPN's scoring summaries, both kinds
+  cur.last_play = "Tony Pollard 1 Yd Rush (Cam Ward Run for Two-Point Conversion)";
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) != 0 && first_say(s.anim_say) == "WARD 2-PT CONVERSION GOOD");
+  cur.last_play = "Tee Higgins 17 Yd pass from Joe Burrow (Joe Burrow Pass to Ja'Marr Chase for Two-Point Conversion)";
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) == 0 && first_say(s.anim_say) == "CHASE 2-PT CONVERSION GOOD");
+  // Failed tries, and a safety, never play
+  for (const char *w : {"... TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. C.Ward rushes left end. ATTEMPT FAILS.",
+                        "... TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs is incomplete. ATTEMPT FAILS.",
+                        "(Two-Point Pass Conversion Failed)", "(Two-Point Conversion no good)",
+                        "C.Ward sacked in End Zone for -9 yards, SAFETY"})
+    PCHECK(anim_of(Alert::TWO_POINT, false, td("", w)).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::SAFETY, false, td("", "(Two-Point Conversion good)")).kind == AnimKind::NONE);
+  // The defense's return: their run, credited to them
+  cur.last_play = "TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs INTERCEPTED by K.Joseph. DEFENSIVE TWO-POINT "
+                  "ATTEMPT. K.Joseph for 100 yards. ATTEMPT SUCCEEDS.";
+  cur.opp_abbr = "DET";
+  cur.opp_score = 23;
+  s = Splash{"DET 2-PT", 0, "DET", false, 4, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::OPP);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_RETURN && s.anim_say == "DEFENSIVE 2-PT RETURN|DEF 2-PT RETURN|DEF 2-PT");
+  PCHECK(s.anim_score == "DET 23 +2");
+  PCHECK(std::string(anim_name(AnimKind::TWO_POINT)) == "two");
+  PCHECK(anim_sample("two", "", 0).args.kind == AnimKind::TWO_POINT && anim_sample("two", "", 0).score == "+2");
+  PCHECK((anim_sample("tworun", "", 0).args.flags & kAnimTwoRun) != 0);
+}
+
 // Lines fit the setup, clear of posts, word, ball
 void test_caption_fit() {
   for (const ScenePlay &p : kScenePlays)
@@ -468,7 +534,8 @@ void test_caption_fit() {
           const StageGeom &g = sc.g;
           PCHECK(sc.say[0] != 0 && sc.score[0] != 0);
           const bool football = sc.args.kind == AnimKind::TD_PASS || sc.args.kind == AnimKind::TD_RUN ||
-                                sc.args.kind == AnimKind::TD_RETURN || kick_kind(sc.args.kind);
+                                sc.args.kind == AnimKind::TD_RETURN || sc.args.kind == AnimKind::TWO_POINT ||
+                                kick_kind(sc.args.kind);
           for (uint32_t t : scene_times(sc.args.kind)) {
             const ScenePose ps = scene_pose(sc, t);
             for (const PxBox &c : ps.cap) {
@@ -481,7 +548,8 @@ void test_caption_fit() {
               PCHECK(!box_overlap(c, ps.word));
               PCHECK(c.y + c.h <= g.crowd_y || (c.y >= g.crowd_y && c.y + c.h <= g.field_y));
               // A pass or a kick flies under it
-              if ((sc.args.kind == AnimKind::TD_PASS || kick_kind(sc.args.kind)) && ps.ball_free && c.y < g.crowd_y)
+              if ((sc.args.kind == AnimKind::TD_PASS || sc.args.kind == AnimKind::TWO_POINT || kick_kind(sc.args.kind)) &&
+                  ps.ball_free && c.y < g.crowd_y)
                 PCHECK(ps.ball_y - 2 * g.s >= c.y + c.h);
             }
           }
@@ -685,6 +753,7 @@ int run_picture_tests(int &total_checks) {
   test_goal_classifier();
   test_captions();
   test_kicks();
+  test_two_point();
   test_caption_fit();
   test_word();
   test_kits();

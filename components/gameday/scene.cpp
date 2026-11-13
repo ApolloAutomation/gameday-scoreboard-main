@@ -26,7 +26,7 @@ constexpr uint32_t kIceScuff = 0xA2AEBA, kRinkRed = 0xB42828, kRinkBlue = 0x2850
 constexpr uint32_t kBoards = 0xB4B4B4, kKick = 0xC8A818, kNetRed = 0xD01818, kIceMesh = 0xE0E0E0;
 constexpr uint32_t kLampOff = 0x4A1010, kLampOn = 0xFF2828, kHalo = 0x8C0C0C;
 constexpr uint32_t kSayRgb = 0xFFFFFF, kPlusRgb = 0xFFD000;
-constexpr uint32_t kFgMs = 3200, kPatMs = 2500;
+constexpr uint32_t kFgMs = 3200, kPatMs = 2500, kTwoMs = 2800;
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 int lerp(int a, int b, int num, int den) { return den <= 0 ? b : a + (b - a) * clampi(num, 0, den) / den; }
@@ -755,6 +755,87 @@ void stage_kick(const Scene &sc, uint32_t t, Stage &st) {
   st.good = t >= k.cross + 100;
 }
 
+// ---- The two-point try ----
+
+// From the 2: a lob or a dive
+void stage_two(const Scene &sc, uint32_t t, Stage &st) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, feet = g.feet_y;
+  const bool run = (sc.args.flags & kAnimTwoRun) != 0;
+  // Narrow setups start back a step, for room
+  const int los = g.goal_x - (g.w / s < 128 ? 13 : 8) * s, cx = catch_x(g);
+  const int xc = los - 5 * s, xd = los + 6 * s, xq = on_stage(g, los - 16 * s);
+  // The linemen fire off and push, upfield
+  const int push = t < 300 ? 0 : std::min((int) (t - 300) / 100, 2) * s, far = feet - 2 * s;
+  add(st, t < 300 ? kSprLine[SPR_LINE_SET] : kSprLine[SPR_LINE_BLOCK], xd + (t < 300 ? 0 : 2 * s - push), far, true,
+      true);
+  add(st, t < 300 ? kSprLine[SPR_LINE_SET] : kSprLine[SPR_LINE_BLOCK], xc + push, far, false);
+  const uint32_t score = run ? 1350 : 1450;
+  st.pulse = pulse_at(t, score);
+  if (!run) {
+    // Quarterback: set, drop, wind up, lob
+    static const uint32_t kAt[] = {300, 500, 700, 900, 1200};
+    int k = 0;
+    while (k < 5 && t >= kAt[k])
+      k++;
+    const Sprite &q = k < 5 ? kSprQb[k] : kSprRecv[3];
+    add(st, q, xq - std::min(k, 2) * 2 * s, feet, false);
+    // Receiver: off the line into the end zone
+    const int rx0 = on_stage(g, los - 9 * s);
+    int x = cx;
+    if (t < 300) {
+      x = rx0;
+      add(st, kSprRecv[3], x, feet, false);
+    } else if (t < score) {
+      x = lerp(rx0, cx, (int) t - 300, (int) score - 300);
+      add(st, recv_frame(t), x, feet, false);
+    } else {
+      add(st, t < score + 200 ? kSprRun[SPR_RUN_CATCH] : kSprRun[SPR_RUN_BALLUP], cx, feet, false);
+    }
+    st.hero_x = x;
+    if (t >= 900 && t < score) {
+      // A short lob, cleared of the caption
+      const int u = (int) t - 900, U = (int) score - 900;
+      const int x0 = xq - 4 * s + 8 * s, y0 = feet - 23 * s, y1 = feet - 24 * s;
+      const int H = (y0 + y1) / 2 - apex_y(sc, 14 * s);
+      st.ball = true;
+      st.bx = x0 + (cx - x0) * u / U;
+      st.by = y0 + (y1 - y0) * u / U - (int) (4LL * H * u * (U - u) / ((long long) U * U));
+      st.shade = (int) ((t / 66) % 3);
+      st.shadow_x = st.bx;
+    } else if (t >= score && t < score + 200) {
+      st.ball = true;
+      st.bx = cx;
+      st.by = feet - 24 * s;
+    }
+    return;
+  }
+  // The run: a handoff, then a dive over the pile
+  add(st, t < 550 ? kSprQb[SPR_QB_SET] : t < score ? kSprRecv[SPR_RECV_PASS1] : kSprRun[SPR_RUN_CATCH], xq, feet,
+      false);
+  const int rb0 = on_stage(g, los - 30 * s), jump = los - 8 * s, land = std::min(cx, g.goal_x + 6 * s);
+  if (t < 300) {
+    add(st, kSprRecv[3], rb0, feet, false);
+    st.hero_x = rb0;
+  } else if (t < 850) {
+    const int x = lerp(rb0, jump, (int) t - 300, 550);
+    add(st, t < 550 ? recv_frame(t) : run_frame(t), x, feet, false);
+    st.hero_x = x;
+  } else if (t < score) {
+    const int u = (int) t - 850, U = (int) score - 850;
+    const int x = lerp(jump, std::min(land, g.w - 13 * s), u, U);
+    const int y = feet - 3 * s - (int) (4LL * 19 * s * u * (U - u) / ((long long) U * U));
+    add(st, kSprDive[0], x, y, false);
+    st.hero_x = x;
+    st.ball = true;
+    st.bx = x + 12 * s;
+    st.by = y - 3 * s;
+  } else {
+    add(st, t < score + 150 ? kSprRun[SPR_RUN_PASS1] : kSprRun[SPR_RUN_BALLUP], land, feet, false);
+    st.hero_x = land;
+  }
+}
+
 void stage_at(const Scene &sc, uint32_t t, Stage &st) {
   switch (sc.args.kind) {
     case AnimKind::TD_PASS:
@@ -778,6 +859,9 @@ void stage_at(const Scene &sc, uint32_t t, Stage &st) {
     case AnimKind::FIELD_GOAL:
     case AnimKind::EXTRA_POINT:
       stage_kick(sc, t, st);
+      break;
+    case AnimKind::TWO_POINT:
+      stage_two(sc, t, st);
       break;
     default:
       break;
@@ -1064,7 +1148,8 @@ void draw_word(Px565 &p, const Scene &sc, uint32_t t) {
 constexpr uint32_t kCapWinMs = 200;
 
 bool football(AnimKind k) {
-  return k == AnimKind::TD_PASS || k == AnimKind::TD_RUN || k == AnimKind::TD_RETURN || kick_kind(k);
+  return k == AnimKind::TD_PASS || k == AnimKind::TD_RUN || k == AnimKind::TD_RETURN || k == AnimKind::TWO_POINT ||
+         kick_kind(k);
 }
 
 // A line's logical x range; crowd: under the word
@@ -1116,9 +1201,10 @@ void draw_caption(Px565 &p, const Scene &sc, uint32_t t) {
   const int s = sc.g.s;
   const bool m = p.mirror;
   p.mirror = false;
-  if (!c.a.empty())
+  // Only lines this box touches
+  if (!c.a.empty() && box_overlap(c.a, p.clip))
     px_text(p, c.a.x, c.a.y, sc.say, rgb565(kSayRgb), s);
-  if (!c.b.empty()) {
+  if (!c.b.empty() && box_overlap(c.b, p.clip)) {
     int x = c.b.x, y = c.b.y;
     if (c.back) {
       p.fill(c.b.x, c.b.y, c.b.w, c.b.h, 0);
@@ -1345,6 +1431,8 @@ uint32_t scene_ms(AnimKind k) {
       return kFgMs;
     case AnimKind::EXTRA_POINT:
       return kPatMs;
+    case AnimKind::TWO_POINT:
+      return kTwoMs;
     default:
       return 0;
   }
@@ -1476,8 +1564,8 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
     // The near upright passes in front of the ball
     const int post = post_x(sc.g);
     p.fill(post + 2 * s, 3 * s, s, post_bar(sc) - 3 * s, rgb565(st.lit_posts ? 0xFFFFFF : kPost));
-    if (st.good) {
-      const PxBox b = good_box(sc);
+    const PxBox b = good_box(sc);
+    if (st.good && box_overlap(b, p.clip)) {
       const bool m = p.mirror;
       p.mirror = false;
       p.fill(b.x, b.y, b.w, b.h, 0);
