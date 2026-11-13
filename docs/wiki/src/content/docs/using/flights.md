@@ -20,6 +20,10 @@ The device page has a **Flight Tracker** card. It needs a home location before i
 
 **Planes near** shows the spot the panel has, with **Clear** to remove it. The line at the bottom of the card says what the panel is doing, like **12 planes nearby, from Flightradar24.**
 
+:::note[Coming in the next release]
+Under that line, the card shows a photo of the plane on the panel's card, from Planespotters.net, with its callsign and the photographer's name. Tap the photo or the name to open the photo's page on Planespotters.net. Your browser looks the photo up itself, by the plane's address and then its registration, and keeps what it found while the page is open. A plane with no photo there shows none.
+:::
+
 The panel uses your time zone's units: in the US and UK time zones feet, mph and miles, and elsewhere meters, km/h and km.
 
 **Your own receiver** is optional: an ADS-B receiver on your home network. For tar1090 its address is enough, like **192.168.1.50**; for PiAware, give its whole aircraft.json address. See [Your own receiver](#your-own-receiver).
@@ -43,6 +47,7 @@ The card also shows the airline's logo and a picture of the plane.
 - **The picture** is the plane's shape from the side, bigger for bigger planes: a four-engine jumbo, a twin-aisle jet, a single-aisle jet, a regional jet, a turboprop airliner, a business jet, a small twin or single propeller plane, a helicopter, a fighter, a military transport, or a plain plane when the type isn't known. It faces the way the plane is flying, and its tail is in the airline's color. A glider gets the small propeller plane. A balloon, an airship, a drone or skydivers get no picture.
 - **On a 64x64 area** the logo and a smaller callsign share the top, with the route or flight number under the callsign, then the picture, then the type code and the speed, the altitude and where it is. The airline's name is left to the ticker. A plane with no airline the panel knows, like a private plane, has no logo: its callsign is small with the route or flight number under it, or big when it has neither, and the picture is under that.
 - **On 128 wide and more**, the logo is at the top right, after the airline's name, and the picture is right of the route and the type. A type name too long for its space leaves off its maker, like **737 MAX 8**.
+- **A photo of the plane** takes the picture's place on a card 128 wide or more (one 128x64 panel, either half of two rows of two, and three or four panels in a row), once it comes in: a real photo of that very plane from [Planespotters.net](https://www.planespotters.net), found by the plane's address or registration. The panel shows the photo's middle, cut to the card's shape, with the sky and the ground behind the plane dimmed so the plane stands out. Once the photo is in, the ticker credits the photographer right after that plane, like **Photo: Jane Doe**, and keeps the credit while a 128x64 panel shows the list, so the ticker's words don't change as the screens take turns. Until the photo comes in, and for a plane Planespotters has no photo of, the picture shows. A 64x64 area keeps the picture.
 :::
 
 The list of the nearest planes, nearest first, has each one's callsign, type code, altitude and distance, or just the callsign and the distance where the list is one panel wide. Its first line says how many planes are nearby.
@@ -80,6 +85,8 @@ The card's line says which source the planes on the panel came from.
 
 :::note[Coming in the next release]
 **Airline logos** come from Google Flights' logo images (www.gstatic.com) or FlightAware's (www.flightaware.com), whichever reads better at 16 pixels, with the other as a backup. The panel downloads an airline's logo, a few KB, the first time one of its planes is on the card, and keeps it until it restarts or needs the room for newer logos. A logo that's missing, or can't be read at 16 pixels, isn't asked for again for 6 hours; the airline's code shows meanwhile.
+
+**Plane photos** come from Planespotters.net. While a card 128 wide or more is on screen, the panel asks Planespotters' photo service (api.planespotters.net) about the plane on it, once a plane and at most every 5 seconds, then downloads the photo it names, about 20 to 50 KB, from t.plnspttrs.net. It remembers a plane's photo for a day and that a plane has none for 12 hours, and keeps only the last four photos, so they don't crowd out team logos. When Planespotters fails or turns the panel away, the panel waits longer each time before asking again, and as long as Planespotters asks.
 :::
 
 ## Your own receiver
@@ -99,7 +106,7 @@ The receiver's planes need no internet, but their routes still come from adsb.im
 The home location stays on the panel, to four decimal places (about 10 meters), with the place's name if you looked one up. Each read sends the flight data service a box around it, not the spot itself: the center is rounded to about a kilometer first, and the box reaches a little past your **Within** distance all around it. adsb.fi and adsb.lol get that rounded center and the distance. The panel still works out each plane's distance and direction from your exact spot. Route lookups send only the planes' callsigns and positions, over plain HTTP to adsb.im.
 
 :::note[Coming in the next release]
-A logo download sends only the airline's code, never your location.
+A logo download sends only the airline's code, never your location. A photo lookup sends only the plane's address or registration.
 :::
 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

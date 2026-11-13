@@ -397,3 +397,6 @@ details.card[open] > summary .peek:not(.sum) { visibility: hidden; }
 .flightrow input:focus { border-color: var(--accent); outline: none; }
 .flightpicks { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
 .flightpicks .btn { text-align: left; }
+.flightphoto { margin: 0 0 8px; }
+.flightphoto img { display: block; width: 100%; max-width: 420px; height: auto; border-radius: 8px; background: var(--panel-2); }
+.flightphoto figcaption { color: var(--muted); font-size: 12px; margin-top: 4px; }

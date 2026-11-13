@@ -9,6 +9,10 @@ Every panel serves its own web page. Open it in a browser on any phone or comput
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; and a town or a ZIP code you look up for the [Flight Tracker](/using/flights/)'s home, from Open-Meteo's place search. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
+:::note[Coming in the next release]
+The Flight Tracker card also shows a photo of the plane on the panel's card, which your browser reads from Planespotters.net (api.planespotters.net and t.plnspttrs.net), with the photographer's name and a link to the photo's page. See [Flight Tracker](/using/flights/#set-it-up).
+:::
+
 ## The live board
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.

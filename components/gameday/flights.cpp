@@ -36,6 +36,11 @@ void copy_cut(char *dst, size_t cap, const char *src) {
   dst[i] = '\0';
 }
 
+// Too long to keep whole: left empty.
+void copy_whole(char *dst, size_t cap, const char *src) {
+  copy_cut(dst, cap, src != nullptr && strlen(src) < cap ? src : "");
+}
+
 std::string with_commas(long v) {
   char buf[24];
   snprintf(buf, sizeof(buf), "%ld", v < 0 ? -v : v);
@@ -362,6 +367,15 @@ const char *plane_label(const Plane &p) {
   return p.hex;
 }
 
+bool hex_usable(const Plane &p) {
+  if (p.anon || strlen(p.hex) != 6 || strcmp(p.hex, "000000") == 0)
+    return false;
+  for (const char c : p.hex)
+    if (c != '\0' && !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+      return false;
+  return true;
+}
+
 void clean_callsign(const char *in, char out[9]) {
   size_t n = 0;
   bool nonzero = false;
@@ -488,8 +502,10 @@ bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p) {
   if (o.isNull())
     return false;
   const char *hex = o["hex"] | "";
-  if (hex[0] == '~')
+  if (hex[0] == '~') {
     hex++;
+    p.anon = true;
+  }
   size_t h = 0;
   for (; hex[h] != '\0' && h < 6; h++)
     p.hex[h] = (char) tolower((unsigned char) hex[h]);
@@ -501,7 +517,7 @@ bool plane_from_json(JsonObjectConst o, const Home &home, Plane &p) {
   if (!(p.seen_s <= kStaleS))
     return false;
   clean_callsign(o["flight"] | "", p.callsign);
-  copy_cut(p.reg, sizeof(p.reg), o["r"] | "");
+  copy_whole(p.reg, sizeof(p.reg), o["r"] | "");
   copy_cut(p.type, sizeof(p.type), o["t"] | "");
   bool ground = false;
   for (const char *k : {"alt_baro", "alt_geom", "altitude"}) {
@@ -567,7 +583,7 @@ bool plane_from_fr24(JsonArrayConst a, const Home &home, int64_t now_s, Plane &p
   if (!(p.seen_s <= kStaleS))
     return false;
   clean_callsign(f[16] | "", p.callsign);
-  copy_cut(p.reg, sizeof(p.reg), f[9] | "");
+  copy_whole(p.reg, sizeof(p.reg), f[9] | "");
   copy_cut(p.type, sizeof(p.type), f[8] | "");
   copy_cut(p.flight, sizeof(p.flight), f[13] | "");
   const char *brand = f[18] | "";
@@ -1141,6 +1157,148 @@ void route_unknown(RouteCache &cache, const char *callsign, uint32_t now_s) {
   r.source = RouteSource::ADSBDB;
 }
 
+// ---- Photos ------------------------------------------------------------------
+
+int PhotoCache::index_(const char *key, uint32_t now_s) const {
+  if (key == nullptr || key[0] == '\0')
+    return -1;
+  for (size_t i = 0; i < kPhotoCache; i++) {
+    const PlanePhoto &p = this->slots[i];
+    if (p.state == PhotoState::EMPTY || strcmp(p.key, key) != 0)
+      continue;
+    const uint32_t ttl = p.state == PhotoState::KNOWN ? kPhotoKnownS : kPhotoNoneS;
+    return now_s - p.at_s < ttl ? (int) i : -1;
+  }
+  return -1;
+}
+
+const PlanePhoto *PhotoCache::find(const char *key, uint32_t now_s) {
+  const int i = this->index_(key, now_s);
+  if (i < 0)
+    return nullptr;
+  this->slots[i].used_s = now_s;
+  return &this->slots[i];
+}
+
+bool PhotoCache::wants(const char *key, uint32_t now_s) const {
+  return key != nullptr && key[0] != '\0' && this->index_(key, now_s) < 0;
+}
+
+// Its own slot, else empty, else least used.
+PlanePhoto &PhotoCache::put(const char *key, uint32_t now_s) {
+  size_t pick = kPhotoCache;
+  for (size_t i = 0; i < kPhotoCache && pick == kPhotoCache; i++)
+    if (this->slots[i].state != PhotoState::EMPTY && strcmp(this->slots[i].key, key) == 0)
+      pick = i;
+  for (size_t i = 0; i < kPhotoCache && pick == kPhotoCache; i++)
+    if (this->slots[i].state == PhotoState::EMPTY)
+      pick = i;
+  if (pick == kPhotoCache) {
+    pick = 0;
+    for (size_t i = 1; i < kPhotoCache; i++)
+      if (now_s - this->slots[i].used_s > now_s - this->slots[pick].used_s)
+        pick = i;
+  }
+  PlanePhoto &p = this->slots[pick];
+  p = PlanePhoto();
+  copy_cut(p.key, sizeof(p.key), key);
+  p.state = PhotoState::NONE;
+  p.at_s = now_s;
+  p.used_s = now_s;
+  return p;
+}
+
+bool photo_key(const Plane &p, char out[9]) {
+  out[0] = '\0';
+  if (hex_usable(p)) {
+    copy_cut(out, 9, p.hex);
+    return true;
+  }
+  const size_t n = strlen(p.reg);
+  if (n < 2 || n > 8)
+    return false;
+  for (size_t i = 0; i < n; i++) {
+    const char c = (char) toupper((unsigned char) p.reg[i]);
+    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) {
+      out[0] = '\0';
+      return false;
+    }
+    out[i] = c;
+  }
+  out[n] = '\0';
+  return true;
+}
+
+std::string photo_url(const char *key) {
+  bool hex = strlen(key) == 6;
+  for (const char *c = key; hex && *c != '\0'; c++)
+    hex = (*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'f');
+  return std::string(kPhotoApi) + (hex ? "hex/" : "reg/") + key;
+}
+
+std::string photo_agent(const std::string &version) {
+  return "GameDayScoreboard/" + (version.empty() ? std::string("1.0") : version) +
+         " (+https://github.com/ApolloAutomation/gameday-scoreboard-main)";
+}
+
+void fill_photo_filter(JsonDocument &f) {
+  JsonObject p = f["photos"].add<JsonObject>();
+  p["thumbnail_large"]["src"] = true;
+  p["thumbnail"]["src"] = true;
+  p["photographer"] = true;
+}
+
+namespace {
+
+bool photo_src_ok(const char *s) {
+  const size_t n = strlen(s);
+  if (n <= 8 || n > kPhotoUrlMax || strncmp(s, "https://", 8) != 0)
+    return false;
+  for (size_t i = 0; i < n; i++)
+    if ((unsigned char) s[i] <= 0x20 || (unsigned char) s[i] >= 0x7F)
+      return false;
+  return true;
+}
+
+// Control characters out, cut on a UTF-8 boundary.
+void copy_name(char *dst, size_t cap, const char *src) {
+  size_t n = 0;
+  for (; *src != '\0' && n + 1 < cap; src++)
+    if ((unsigned char) *src >= 0x20 && *src != 0x7F)
+      dst[n++] = *src;
+  // Cut mid-letter: drop its first bytes too
+  if (((unsigned char) *src & 0xC0) == 0x80) {
+    while (n > 0 && ((unsigned char) dst[n - 1] & 0xC0) == 0x80)
+      n--;
+    if (n > 0)
+      n--;
+  }
+  dst[n] = '\0';
+}
+
+}
+
+bool photo_from_doc(JsonObjectConst root, PlanePhoto &out) {
+  JsonArrayConst photos = root["photos"];
+  if (photos.isNull())
+    return false;
+  out.state = PhotoState::NONE;
+  out.url[0] = out.by[0] = '\0';
+  for (JsonObjectConst ph : photos) {
+    // The large one: the small one decodes too small
+    const char *src = ph["thumbnail_large"]["src"] | "";
+    if (!photo_src_ok(src))
+      src = ph["thumbnail"]["src"] | "";
+    if (!photo_src_ok(src))
+      continue;
+    copy_cut(out.url, sizeof(out.url), src);
+    copy_name(out.by, sizeof(out.by), ph["photographer"] | "");
+    out.state = PhotoState::KNOWN;
+    break;
+  }
+  return true;
+}
+
 // ---- Text --------------------------------------------------------------------
 
 std::string alt_text(const Plane &p, AltUnit u, Fmt f) {
@@ -1448,8 +1606,20 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
     compact(f, c, near, opts);
   else
     card_left(f, c);
+  // Credited on the list too, so the ticker holds
+  const PlanePhoto *ph = opts.photo;
+  if (opts.w >= 128 && ph != nullptr && ph->state == PhotoState::KNOWN && ph->url[0] != '\0') {
+    f.photo.url = ph->url;
+    f.photo.credit = std::string(" | Photo: ") + (ph->by[0] != '\0' ? ph->by : "Planespotters.net");
+    if (opts.w >= 192 || !opts.list) {
+      f.photo.x = (int16_t) kPhotoX;
+      f.photo.y = (int16_t) kPhotoY;
+      f.photo.w = (uint8_t) kPhotoW;
+      f.photo.h = (uint8_t) kPhotoH;
+    }
+  }
   if (opts.ticker)
-    f.ticker = flight_ticker(near, routes, opts, now_s);
+    f.ticker = flight_ticker(near, routes, opts, now_s, 3, &f.photo.at);
   return f;
 }
 
@@ -1509,7 +1679,8 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
   return f;
 }
 
-std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s, size_t planes) {
+std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s, size_t planes,
+                          size_t *card_end) {
   if (near.n == 0)
     return "";
   std::string out = count_text(near) + (near.tier == Tier::GROUND ? " on the ground" : " nearby");
@@ -1534,6 +1705,8 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
     add(speed_text(p, o.units.speed, Fmt::FULL), ", ");
     add(where_text(p, o.units.dist, Fmt::FULL), ", ");
     out += " | " + one;
+    if (k == 0 && card_end != nullptr)
+      *card_end = out.size();
   }
   return out;
 }

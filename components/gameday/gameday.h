@@ -166,6 +166,8 @@ struct UpdateFields {
   int16_t icon_xy[2 * ::espn::kAppIcons]{};
   uint8_t icon_n{0};
   std::vector<::espn::AppArt> art;  // and its picture
+  image::Image *photo_img{nullptr};  // or its loaded photo
+  int16_t photo_xy[2]{};
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };

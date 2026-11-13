@@ -257,6 +257,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
         <p class="hint" id="flightNow" role="status"></p>
+        <figure class="flightphoto" id="flightPhoto" hidden><a id="flightPhotoLink" target="_blank" rel="noopener"><img id="flightPhotoImg" alt=""></a><figcaption><span id="flightPhotoOf"></span> <a id="flightPhotoBy" target="_blank" rel="noopener"></a></figcaption></figure>
       </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
@@ -2747,6 +2748,42 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   };
   $("#flightRxSave").onclick = saveRx;
   $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+  // Planespotters' photo of the card's plane, read by this browser
+  const PHOTO_API = "https://api.planespotters.net/pub/photos/";
+  const PHOTO_RETRY_MS = 60000;
+  const flightPhotos = new Map();  // by hex: {photo}, {pending} or {failed}
+  const photoAt = async (path) => {
+    const r = await fetch(PHOTO_API + path);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const p = ((await r.json()).photos || [])[0];
+    const t = p && (p.thumbnail_large || p.thumbnail);
+    if (!t || typeof t.src !== "string" || !/^https:\/\//.test(t.src)) return null;
+    const link = typeof p.link === "string" && /^https:\/\//.test(p.link) ? p.link : "";
+    return { src: t.src, link, by: typeof p.photographer === "string" ? p.photographer : "" };
+  };
+  const showFlightPhoto = (hex, reg, label) => {
+    const fig = $("#flightPhoto");
+    const key = hex || (reg ? "reg:" + reg : "");
+    const got = key ? flightPhotos.get(key) : undefined;
+    if (key && (!got || (got.failed && Date.now() - got.failed >= PHOTO_RETRY_MS))) {
+      flightPhotos.set(key, { pending: true });
+      (async () => (hex && (await photoAt("hex/" + encodeURIComponent(hex))))
+        || (reg ? photoAt("reg/" + encodeURIComponent(reg)) : null))()
+        .then((photo) => flightPhotos.set(key, { photo }), () => flightPhotos.set(key, { failed: Date.now() }))
+        .then(() => renderFlights());
+    }
+    const p = got && got.photo;
+    if (!p) { fig.hidden = true; return; }
+    const img = $("#flightPhotoImg");
+    if (img.getAttribute("src") !== p.src) img.src = p.src;
+    img.alt = "Photo of " + label;
+    const by = $("#flightPhotoBy");
+    by.textContent = "Photo: " + (p.by ? p.by + ", " : "") + "Planespotters.net";
+    for (const a of [$("#flightPhotoLink"), by])
+      if (p.link) a.href = p.link; else a.removeAttribute("href");
+    $("#flightPhotoOf").textContent = label;
+    fig.hidden = false;
+  };
   let flightRadii = "";
   const renderFlights = () => {
     const card = $("#flightCard");
@@ -2788,6 +2825,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
     else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
     $("#flightNow").textContent = line;
+    const live = f.status === "ok" && n > 0;
+    showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
   };
 
   const renderAll = () => {
