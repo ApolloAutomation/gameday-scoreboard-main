@@ -890,6 +890,14 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect
     .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
     .toContain("run");
+  await page.locator("#animTryRow").getByRole("button", { name: "Field goal" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("fg");
+  await page.locator("#animTryRow").getByRole("button", { name: "2-pt" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("two");
   await page.locator("#animTryRow").getByRole("button", { name: "Goal (soccer)" }).click();
   await expect
     .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))

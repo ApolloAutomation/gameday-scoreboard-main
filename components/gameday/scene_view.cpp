@@ -141,7 +141,7 @@ bool ensure(lv_obj_t *screen, int w, int h) {
 }  // namespace
 
 bool scene_play(lv_obj_t *host, const ::espn::AnimArgs &a, uint32_t color, uint32_t other, uint32_t seed,
-                void (*done)()) {
+                void (*done)(), const char *say, const char *score) {
   if (host == nullptr || ::espn::scene_ms(a.kind) == 0)
     return false;
   lv_obj_t *screen = lv_obj_get_screen(host);
@@ -158,6 +158,7 @@ bool scene_play(lv_obj_t *host, const ::espn::AnimArgs &a, uint32_t color, uint3
     return false;
   SceneState &s = *state;
   s.sc = ::espn::scene_make(a, w, h, color, 0, other, 0, seed);
+  ::espn::scene_say(s.sc, say, score);
   s.ms = ::espn::scene_ms(a.kind);
   s.done = done;
   s.t0 = millis();

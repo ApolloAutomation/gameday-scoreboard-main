@@ -98,6 +98,7 @@ struct UpdateFields {
   int16_t splash_anim_dist{0};
   uint8_t splash_anim_flags{0};
   uint32_t splash_seq{0};
+  std::string splash_say, splash_score;  // its caption, Splash's anim_say and anim_score
   std::string last_play;
   std::string clock_text;  // "5:36 - 3rd" while the game is live, else empty
   std::string down_distance;  // "3rd & 10" while live, else empty
@@ -207,7 +208,7 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|hr|soccer|hockey;
+//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
 //                                    qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,

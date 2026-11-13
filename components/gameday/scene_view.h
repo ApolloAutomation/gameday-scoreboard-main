@@ -11,9 +11,9 @@
 
 namespace esphome::gameday {
 
-// done runs at its end, not when stopped
+// done runs at its end; say holds '|' choices
 bool scene_play(lv_obj_t *host, const ::espn::AnimArgs &a, uint32_t color, uint32_t other, uint32_t seed,
-                void (*done)());
+                void (*done)(), const char *say = nullptr, const char *score = nullptr);
 void scene_stop();
 bool scene_playing();
 

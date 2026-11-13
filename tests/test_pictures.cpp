@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "ArduinoJson.h"
 #include "play_anim.h"
 #include "split.h"
 #include "scene_render.h"
@@ -28,6 +29,8 @@ int failures = 0;
     }                                                        \
   } while (0)
 
+bool kick_kind(AnimKind k) { return k == AnimKind::FIELD_GOAL || k == AnimKind::EXTRA_POINT; }
+
 GameSnapshot td(const std::string &type, const std::string &words) {
   GameSnapshot g;
   g.play_type = type;
@@ -42,10 +45,11 @@ void test_classifier() {
   for (const char *t : {"Interception Return Touchdown", "Fumble Return Touchdown", "Kickoff Return Touchdown",
                         "Punt Return Touchdown", "Blocked Punt Touchdown", "Fumble Recovery (Own) Touchdown"})
     PCHECK(anim_of(Alert::TOUCHDOWN, false, td(t, "")).kind == AnimKind::TD_RETURN);
-  // The try or the next play replaced it
-  for (const char *t : {"Extra Point Good", "Kickoff", "Two Point Pass", "Pass Reception"})
+  // The try or next play replaced it; kicks play
+  for (const char *t : {"Kickoff", "Two Point Pass", "Pass Reception"})
     PCHECK(anim_of(Alert::TOUCHDOWN, false, td(t, "pass deep right for 30 yards, TOUCHDOWN")).kind ==
            AnimKind::NONE);
+  PCHECK(anim_of(Alert::TOUCHDOWN, false, td("Extra Point Good", "(P. Durkin KICK)")).kind == AnimKind::EXTRA_POINT);
   // Words only, as the demo and the watcher send them
   PCHECK(anim_of(Alert::TOUCHDOWN, false, td("", "Pass deep right for 21 yards, TOUCHDOWN")).kind ==
          AnimKind::TD_PASS);
@@ -230,6 +234,377 @@ void test_goal_classifier() {
          std::string(anim_name(AnimKind::HOCKEY_GOAL)) == "hockey");
 }
 
+// ESPN's football reads keep the play type through parse_event
+GameSnapshot from_scoreboard(const char *path, const char *id, uint32_t team) {
+  JsonDocument doc;
+  PCHECK(!deserializeJson(doc, slurp(path), DeserializationOption::NestingLimit(40)));
+  for (JsonObjectConst ev : doc["events"].as<JsonArrayConst>()) {
+    if (std::string(ev["id"] | "") != id)
+      continue;
+    std::string one;
+    serializeJson(ev, one);
+    GameSnapshot s;
+    PCHECK(parse_event_str(one, Sport::FOOTBALL, team, s, id));
+    s.state = GameState::IN;
+    return s;
+  }
+  PCHECK(false);
+  return GameSnapshot{};
+}
+
+std::string first_say(const std::string &say) { return say.substr(0, say.find('|')); }
+
+// Each choice is shorter than the one before
+bool ladder(const std::string &say) {
+  size_t prev = 999;
+  for (size_t at = 0; at <= say.size();) {
+    const size_t e = say.find('|', at);
+    const size_t n = (e == std::string::npos ? say.size() : e) - at;
+    if (n == 0 || n > prev + 12)
+      return false;
+    prev = n;
+    if (e == std::string::npos)
+      break;
+    at = e + 1;
+  }
+  return !say.empty();
+}
+
+void test_captions() {
+  // Names from ESPN's words
+  PCHECK(espn::detail::initial_name("(Shotgun) J.Burrow pass deep middle to J.Chase for 30 yards, TOUCHDOWN.", 69) ==
+         "Chase");
+  PCHECK(espn::detail::initial_name("(P. Durkin KICK)", 16) == "Durkin");
+  PCHECK(espn::detail::initial_name("J.Goff pass short left intended for A.St. Brown INTERCEPTED", 59) == "St. Brown");
+  PCHECK(espn::detail::yd_name("Ja'Marr Chase 30 Yd pass from Joe Burrow (Evan McPherson Kick)") == "Chase");
+  PCHECK(espn::detail::yd_name("James Mitchell Jr. 0 Yd Fumble Recovery") == "Mitchell");
+  PCHECK(espn::detail::say_name("O'Neil") == "O'NEIL" && espn::detail::say_name("J. HUGHES") == "J. HUGHES");
+  PCHECK(espn::detail::say_name("Wolfeschlegelstein").empty() && espn::detail::say_name("A").empty());
+  PCHECK(espn::detail::say_name("Guimar\xC3\xA3""es").empty());
+  // A touchdown: the scorer, his yards, the kind
+  GameSnapshot prev = td("Pass Reception", "J.Burrow pass short left to T.Higgins for 7 yards");
+  prev.play_id = "1";
+  prev.team_abbr = "CIN";
+  prev.team_score = 14;
+  GameSnapshot cur = td("Passing Touchdown",
+                        "(Shotgun) J.Burrow pass deep middle to J.Chase for 30 yards, TOUCHDOWN. E.McPherson extra "
+                        "point is GOOD, Center-W.Wagner, Holder-R.Rehkow.");
+  cur.play_id = "2";
+  cur.team_abbr = "CIN";
+  cur.team_score = 21;
+  Splash s{"TOUCHDOWN!", 0, "CIN", false, 0, "+7"};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_PASS && s.anim_dist == 30);
+  PCHECK(first_say(s.anim_say) == "CHASE 30 YD TD PASS" && ladder(s.anim_say));
+  PCHECK(s.anim_score == "CIN 21 +7");
+  // A kickoff return: the return's yards, not the kick's
+  cur = td("Kickoff Return Touchdown", "A.McNamara kicks 60 yards from NYJ 35 to LV 5. D.Laube for 95 yards, "
+                                       "TOUCHDOWN. M.Gay extra point is GOOD, Center-A.Ward, Holder-A.Cole.");
+  cur.team_score = 21;
+  cur.team_abbr = "LV";
+  s = Splash{"TOUCHDOWN!", 0, "LV", false, 0, "+7"};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim_dist == 95 && first_say(s.anim_say) == "LAUBE 95 YD KICKOFF RETURN TD");
+  PCHECK(s.anim_say.find("|95 YD KICK RET TD") != std::string::npos);
+  // The other side's pick six, in their score
+  cur = td("Interception Return Touchdown", "");
+  cur.opp_abbr = "BC";
+  cur.opp_score = 15;
+  s = Splash{"BC TOUCHDOWN", 0, "BC", false, 3, "+7"};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::OPP);
+  PCHECK(s.anim_say == "PICK SIX" && s.anim_score == "BC 15 +7");
+  // College words: "#13 J.Grier", a summary's full name
+  GameSnapshot app = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401866627", 2026);
+  GameSnapshot app0 = app;
+  app0.team_score -= 6;
+  app0.play_id = "0";
+  s = decide_splash(app0, app, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_RUN && first_say(s.anim_say) == "GRIER 28 YD TD RUN");
+  PCHECK(s.anim_score == "APP 51 +6");
+  cur = td("Rushing Touchdown", "Kaytron Allen 5 Yd Run (Ryan Barker Kick)");
+  s = Splash{"TOUCHDOWN!", 0, "PSU", false, 0, "+7"};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::TEAM);
+  PCHECK(first_say(s.anim_say) == "ALLEN 5 YD TD RUN");
+  // A favorite player's name wins
+  s = Splash{"ALLEN TOUCHDOWN", 0, "PSU", false, 0, "+7"};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::TEAM, "K. ALLEN");
+  PCHECK(first_say(s.anim_say) == "K. ALLEN 5 YD TD RUN");
+  // No name, no yards: the play alone
+  cur = td("Rushing Touchdown", "");
+  cur.team_score = 21;
+  s = Splash{"TOUCHDOWN!", 0, "", false, 0, ""};
+  splash_anim(s, Alert::TOUCHDOWN, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim_say == "TD RUN|TD" && s.anim_score == "21");
+  // Home runs: runs, distance, field, the batter
+  cur = td("Play Result", "Mesa Jr. homered to right center (401 feet), Caminero scored.");
+  cur.team_abbr = "MIA";
+  cur.team_score = 5;
+  s = Splash{"HOME RUN!", 0, "MIA", false, 0, "+2 RUNS"};
+  splash_anim(s, Alert::HOME_RUN, prev, cur, AlertSide::TEAM);
+  PCHECK(first_say(s.anim_say) == "MESA 2-RUN HOME RUN 401 FT RIGHT CENTER" && s.anim_score == "MIA 5 +2");
+  s = Splash{"GRAND SLAM!", 0, "MIA", false, 0, "+4 RUNS"};
+  splash_anim(s, Alert::GRAND_SLAM, prev, cur, AlertSide::TEAM);
+  PCHECK(first_say(s.anim_say) == "MESA GRAND SLAM 401 FT RIGHT CENTER");
+  s = Splash{"WALK-OFF!", 0, "MIA", false, 0, "+1"};
+  splash_anim(s, Alert::WALK_OFF, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim_say.find("|WALK-OFF HR") != std::string::npos);
+  // Soccer and hockey (test_alerts.cpp's games)
+  GameSnapshot end = read_event("fixtures/event_epl_final.json", Sport::SOCCER, 359);
+  end.state = GameState::IN;
+  end.completed = false;
+  GameSnapshot before = end;
+  before.soc.goals.pop_back();
+  before.team_score -= 1;
+  s = decide_splash(before, end, true);
+  PCHECK(s.anim_say.find("PENALTY GOAL") != std::string::npos);
+  PCHECK(s.anim_score == end.team_abbr + " " + std::to_string(end.team_score) + " +1");
+  GameSnapshot own = end;
+  own.soc.goals.back().own_goal = true;
+  own.soc.goals.back().penalty = false;
+  PCHECK(decide_splash(before, own, true).anim_say == "OWN GOAL");
+  GameSnapshot hk = read_event("fixtures/event_nhl_live.json", Sport::HOCKEY, 28);
+  GameSnapshot goal = hk;
+  goal.team_score += 1;
+  goal.play_id = hk.play_id + "9";
+  goal.last_play = "Gabriel Landeskog Goal (4) Wrist Shot, assists: Cale Makar (20)";
+  PCHECK(decide_splash(hk, goal, true).anim_say == "LANDESKOG GOAL|GOAL");
+  goal.last_play = "Faceoff won by WPG";
+  PCHECK(decide_splash(hk, goal, true).anim_say == "GOAL");
+  goal.last_play = "James van Riemsdyk Goal (4) Wrist Shot";
+  PCHECK(decide_splash(hk, goal, true).anim_say == "VAN RIEMSDYK GOAL|RIEMSDYK GOAL|GOAL");
+  // A surname whole, its last word when long
+  GameSnapshot vd = end;
+  vd.soc.goals.back() = SoccerGoal{};
+  vd.soc.goals.back().ours = end.soc.goals.back().ours;
+  vd.soc.goals.back().name = "van Dijk";
+  PCHECK(first_say(decide_splash(before, vd, true).anim_say) == "VAN DIJK GOAL");
+  vd.soc.goals.back().name = "Giovanni van Bronckhorst Jr";
+  PCHECK(first_say(decide_splash(before, vd, true).anim_say) == "BRONCKHORST GOAL");
+  PCHECK(espn::detail::yd_name("Amon-Ra St. Brown 20 Yd pass from Jared Goff") == "St. Brown");
+  AnimArgs tdp{AnimKind::TD_PASS, 20, 0};
+  PCHECK(say_words(tdp, Say::PLAIN, "ST. BROWN").find("|BROWN 20 YD TD|") != std::string::npos);
+  // The feet fit a single panel and two rows of two
+  for (const auto &sz : kSceneScreens)
+    for (int named = 0; named < 2; named++) {
+      const Scene hr = scene_of(kScenePlays[3], sz[0], sz[1], kReviewKits[0], named != 0, false);
+      PCHECK(std::string(hr.say).find("410 FT") != std::string::npos);
+      if (sz[0] == 128 && sz[1] == 128)
+        PCHECK(std::string(hr.say) == "2-RUN HR 410 FT");
+    }
+  // Score lines, with and without a team
+  PCHECK(say_score("", -1, 6) == "+6" && say_score("TA&M", 7, 0) == "TA&M 7");
+  PCHECK(say_score("BUF", 21, 6) == "BUF 21 +6");
+  // Every Try it play has a caption
+  for (const ScenePlay &p : kScenePlays) {
+    const AnimSample a = anim_sample(p.play, "BUF", 3);
+    PCHECK(ladder(a.say) && a.score.find("BUF ") == 0 && a.args.kind != AnimKind::NONE);
+    PCHECK(anim_sample(p.play, "", 0).score[0] == '+');
+  }
+}
+
+// The read before cur: side has pts fewer
+GameSnapshot before_score(const GameSnapshot &cur, int side, int pts, const char *type, const char *words) {
+  GameSnapshot p = cur;
+  (side ? p.opp_score : p.team_score) -= pts;
+  p.play_type = type;
+  p.last_play = words;
+  p.play_id = "prev";
+  return p;
+}
+
+// Made kicks only, from ESPN's types and words
+void test_kicks() {
+  // TEX @ TXST: "Field Goal Good", college words
+  GameSnapshot fg = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856667", 251);
+  PCHECK(fg.play_type == "Field Goal Good");
+  const int side = fg.team_abbr == "TEX" ? 0 : 1;
+  Splash s = decide_splash(before_score(fg, side, 3, "Rush", "rush for 2 yards"), fg, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::FIELD_GOAL && s.anim_dist == 48);
+  PCHECK(first_say(s.anim_say) == "SPETIC 48 YD FIELD GOAL" && ladder(s.anim_say));
+  PCHECK(s.anim_score == "TEX 52 +3");
+  // NFL words alone, and ESPN's summary
+  PCHECK(anim_of(Alert::FIELD_GOAL, false, td("", "J.Slye 46 yard field goal is GOOD, Center-M.Cox, Holder-T.Morstead."))
+             .dist == 46);
+  PCHECK(anim_of(Alert::FIELD_GOAL, true, td("", "Joey Slye 46 Yd Field Goal")).kind == AnimKind::FIELD_GOAL);
+  PCHECK((anim_of(Alert::FIELD_GOAL, true, td("Field Goal Good", "")).flags & kAnimMirror) != 0);
+  PCHECK(anim_of(Alert::FIELD_GOAL, false, td("Field Goal Good", "")).dist == 0);
+  // Never a miss, a block, a return or a fake
+  for (const char *t : {"Field Goal Missed", "Blocked Field Goal", "Missed Field Goal Return", "Kickoff",
+                        "Blocked Field Goal Touchdown", "Rush"})
+    PCHECK(anim_of(Alert::FIELD_GOAL, false, td(t, "J.Slye 46 yard field goal is GOOD")).kind == AnimKind::NONE);
+  for (const char *w : {"C.Boswell 57 yard field goal is No Good, Wide Left, Center-C.Kuntz, Holder-C.Johnston.",
+                        "T.Loop 34 yard field goal is BLOCKED (D.Hunter), RECOVERED by BLT", "Field goal missed",
+                        "End of the 2nd quarter", "FAKE FIELD GOAL. J.Stout pass to J.Tucker for 9 yards"})
+    PCHECK(anim_of(Alert::FIELD_GOAL, false, td("", w)).kind == AnimKind::NONE);
+
+  // CSU @ WYO: ESPN's own extra point play
+  GameSnapshot pat = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401860878", 36);
+  PCHECK(pat.play_type == "Extra Point Good" && pat.last_play == "(K. Nguma KICK)");
+  const int ps = pat.team_abbr == "CSU" ? 0 : 1;
+  s = decide_splash(before_score(pat, ps, 1, "Passing Touchdown", "pass for 9 yards, TOUCHDOWN"), pat, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::EXTRA_POINT && first_say(s.anim_say) == "NGUMA EXTRA POINT GOOD");
+  PCHECK(s.anim_score == "CSU 7 +1");
+  // Touchdown and kick in one read: the kick plays
+  s = decide_splash(before_score(pat, ps, 7, "Rush", "rush for 3 yards"), pat, true);
+  PCHECK(s.text.find("TOUCHDOWN") != std::string::npos && s.anim == (uint8_t) AnimKind::EXTRA_POINT);
+  PCHECK(s.anim_say == "TOUCHDOWN + PAT GOOD|TD + PAT GOOD|TD + PAT" && s.anim_score == "CSU 7 +7");
+  // Six with the kick's words: no scene, nothing guessed
+  s = decide_splash(before_score(pat, ps, 6, "Rush", "rush for 3 yards"), pat, true);
+  PCHECK(s.anim == 0);
+  // NFL: the kick joins the touchdown's words later
+  GameSnapshot td1 = before_score(pat, ps, 0, "Passing Touchdown",
+                                  "(Shotgun) J.Burrow pass deep middle to J.Chase for 30 yards, TOUCHDOWN.");
+  td1.play_id = "4018";
+  (ps ? td1.opp_score : td1.team_score) -= 1;
+  GameSnapshot td0 = before_score(td1, ps, 6, "Rush", "J.Burrow scrambles for 4 yards");
+  td0.play_id = "4017";
+  s = decide_splash(td0, td1, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_PASS);
+  GameSnapshot td2 = td1;
+  td2.last_play += " E.McPherson extra point is GOOD, Center-W.Wagner, Holder-R.Rehkow.";
+  (ps ? td2.opp_score : td2.team_score) += 1;
+  s = decide_splash(td1, td2, true);
+  PCHECK(s.text.find("EXTRA POINT") != std::string::npos && s.anim == (uint8_t) AnimKind::EXTRA_POINT);
+  PCHECK(first_say(s.anim_say) == "MCPHERSON EXTRA POINT GOOD");
+  // Its summary words, and a missed or blocked kick
+  PCHECK(anim_of(Alert::EXTRA_POINT, false, td("Rushing Touchdown", "Tony Pollard 40 Yd Rush (Joey Slye Kick)")).kind ==
+         AnimKind::EXTRA_POINT);
+  for (const char *w : {"... TOUCHDOWN. J.Slye extra point is No Good, Wide Right, Center-M.Cox.",
+                        "... TOUCHDOWN. J.Slye extra point is BLOCKED, Center-M.Cox.", "(Kick failed)",
+                        "... TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. C.Ward rushes left end. ATTEMPT SUCCEEDS."})
+    PCHECK(anim_of(Alert::EXTRA_POINT, false, td("Rushing Touchdown", w)).kind == AnimKind::NONE);
+  for (const char *t : {"Extra Point Missed", "Kickoff", "Two Point Pass"})
+    PCHECK(anim_of(Alert::EXTRA_POINT, false, td(t, "(P. Durkin KICK)")).kind == AnimKind::NONE);
+  PCHECK(std::string(anim_name(AnimKind::FIELD_GOAL)) == "fg" && std::string(anim_name(AnimKind::EXTRA_POINT)) == "pat");
+  PCHECK(scene_ms(AnimKind::EXTRA_POINT) < scene_ms(AnimKind::FIELD_GOAL));
+}
+
+// Only a made two-point try; a return is the defense's
+void test_two_point() {
+  // TENN @ FUR: ESPN's failed try, then a good one
+  GameSnapshot fur = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856666", 2633);
+  PCHECK(fur.play_type == "Two Point Rush" && fur.last_play == "(Two-Point Conversion failed)");
+  PCHECK(anim_of(Alert::TWO_POINT, false, fur).kind == AnimKind::NONE);
+  const int fs = fur.team_abbr == "FUR" ? 0 : 1;
+  GameSnapshot good = fur;
+  good.last_play = "(Two-Point Conversion good)";
+  good.play_type = "Two Point Pass";
+  Splash s = decide_splash(before_score(good, fs, 2, "Passing Touchdown", "pass for 9 yards, TOUCHDOWN"), good, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) == 0);
+  PCHECK(s.anim_say == "2-PT CONVERSION GOOD|2-PT GOOD");
+  PCHECK(s.anim_score == "FUR " + std::to_string(fs ? good.opp_score : good.team_score) + " +2");
+  good.play_type = "Two Point Rush";
+  PCHECK((anim_of(Alert::TWO_POINT, false, good).flags & kAnimTwoRun) != 0);
+  // The touchdown and its two points in one read
+  s = decide_splash(before_score(good, fs, 8, "Rush", "rush for 3 yards"), good, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && s.anim_say == "TOUCHDOWN + 2-PT GOOD|TD + 2-PT GOOD|TD + 2-PT");
+  PCHECK(s.anim_score.size() > 3 && s.anim_score.compare(s.anim_score.size() - 3, 3, " +8") == 0);
+  s = decide_splash(before_score(good, fs, 6, "Rush", "rush for 3 yards"), good, true);
+  PCHECK(s.anim == 0);
+  // NFL words: the runner, the receiver
+  GameSnapshot prev = td("Rush", "C.Ward rushes for 3 yards");
+  prev.play_id = "1";
+  GameSnapshot cur = td("Rushing Touchdown", "T.Pollard left end for 1 yard, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. "
+                                             "C.Ward rushes left end. ATTEMPT SUCCEEDS.");
+  cur.team_abbr = "TEN";
+  cur.team_score = 22;
+  s = Splash{"2-PT!", 0, "TEN", false, 0, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) != 0);
+  PCHECK(first_say(s.anim_say) == "WARD 2-PT CONVERSION GOOD" && s.anim_score == "TEN 22 +2");
+  cur.last_play = "J.Allen pass short right to K.Shakir for 6 yards, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. "
+                  "J.Allen pass to S.Diggs is complete. ATTEMPT SUCCEEDS.";
+  s = Splash{"2-PT!", 0, "BUF", false, 0, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) == 0 && first_say(s.anim_say) == "DIGGS 2-PT CONVERSION GOOD");
+  // ESPN's scoring summaries, both kinds
+  cur.last_play = "Tony Pollard 1 Yd Rush (Cam Ward Run for Two-Point Conversion)";
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) != 0 && first_say(s.anim_say) == "WARD 2-PT CONVERSION GOOD");
+  cur.last_play = "Tee Higgins 17 Yd pass from Joe Burrow (Joe Burrow Pass to Ja'Marr Chase for Two-Point Conversion)";
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+  PCHECK((s.anim_flags & kAnimTwoRun) == 0 && first_say(s.anim_say) == "CHASE 2-PT CONVERSION GOOD");
+  // Failed tries, and a safety, never play
+  for (const char *w : {"... TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. C.Ward rushes left end. ATTEMPT FAILS.",
+                        "... TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs is incomplete. ATTEMPT FAILS.",
+                        "(Two-Point Pass Conversion Failed)", "(Two-Point Conversion no good)",
+                        "C.Ward sacked in End Zone for -9 yards, SAFETY"})
+    PCHECK(anim_of(Alert::TWO_POINT, false, td("", w)).kind == AnimKind::NONE);
+  PCHECK(anim_of(Alert::SAFETY, false, td("", "(Two-Point Conversion good)")).kind == AnimKind::NONE);
+  // The defense's return: their run, credited to them
+  cur.last_play = "TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs INTERCEPTED by K.Joseph. DEFENSIVE TWO-POINT "
+                  "ATTEMPT. K.Joseph for 100 yards. ATTEMPT SUCCEEDS.";
+  cur.opp_abbr = "DET";
+  cur.opp_score = 23;
+  s = Splash{"DET 2-PT", 0, "DET", false, 4, "+2"};
+  splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::OPP);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_RETURN && s.anim_say == "DEFENSIVE 2-PT RETURN|DEF 2-PT RETURN|DEF 2-PT");
+  PCHECK(s.anim_score == "DET 23 +2");
+  // A blocked kick run back, ESPN's college type
+  for (const GameSnapshot &d :
+       {td("", "J.Tucker extra point is BLOCKED (S.Gardner), Center-N.Moore, Holder-J.Stout. DEFENSIVE TWO-POINT "
+               "ATTEMPT. S.Gardner for 98 yards. ATTEMPT SUCCEEDS."),
+        td("", "TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs INTERCEPTED by K.Joseph. ATTEMPT FAILS. "
+               "DEFENSIVE TWO-POINT ATTEMPT. K.Joseph for 100 yards. ATTEMPT SUCCEEDS."),
+        td("Defensive 2pt Conversion", "(Two-Point Conversion failed)"), td("Defensive 2pt Conversion", "")}) {
+    cur.play_type = d.play_type;
+    cur.last_play = d.last_play;
+    s = Splash{"DET 2-PT", 0, "DET", false, 4, "+2"};
+    splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::OPP);
+    PCHECK(s.anim == (uint8_t) AnimKind::TD_RETURN && first_say(s.anim_say) == "DEFENSIVE 2-PT RETURN");
+  }
+  PCHECK(anim_of(Alert::TWO_POINT, false, td("", "... DEFENSIVE TWO-POINT ATTEMPT. K.Joseph for 40 yards. ATTEMPT "
+                                                 "FAILS.")).kind == AnimKind::NONE);
+  // The offense's good try; the defense's penalty declined
+  cur.play_type.clear();
+  for (const char *pen : {"Defensive Offside", "Defensive Pass Interference"}) {
+    cur.last_play = std::string("TWO-POINT CONVERSION ATTEMPT. J.Hurts rushes up the middle. ATTEMPT SUCCEEDS. "
+                                "PENALTY on DAL-M.Parsons, ") +
+                    pen + ", declined.";
+    s = Splash{"2-PT!", 0, "PHI", false, 0, "+2"};
+    splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+    PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) != 0);
+    PCHECK(first_say(s.anim_say) == "HURTS 2-PT CONVERSION GOOD");
+  }
+  cur.last_play = "(Cam Ward Run for Two-Point Conversion) TEN Penalty, Defensive Pass Interference, declined";
+  PCHECK((anim_of(Alert::TWO_POINT, false, cur).flags & kAnimTwoRun) != 0);
+  PCHECK(std::string(anim_name(AnimKind::TWO_POINT)) == "two");
+  PCHECK(anim_sample("two", "", 0).args.kind == AnimKind::TWO_POINT && anim_sample("two", "", 0).score == "+2");
+  PCHECK((anim_sample("tworun", "", 0).args.flags & kAnimTwoRun) != 0);
+}
+
+// Lines fit the setup, clear of posts, word, ball
+void test_caption_fit() {
+  for (const ScenePlay &p : kScenePlays)
+    for (const auto &sz : kSceneScreens)
+      for (int named = 0; named < 2; named++)
+        for (int m = 0; m < 2; m++) {
+          const Scene sc = scene_of(p, sz[0], sz[1], kReviewKits[2], named != 0, m != 0);
+          const StageGeom &g = sc.g;
+          PCHECK(sc.say[0] != 0 && sc.score[0] != 0);
+          const bool football = sc.args.kind == AnimKind::TD_PASS || sc.args.kind == AnimKind::TD_RUN ||
+                                sc.args.kind == AnimKind::TD_RETURN || sc.args.kind == AnimKind::TWO_POINT ||
+                                kick_kind(sc.args.kind);
+          for (uint32_t t : scene_times(sc.args.kind)) {
+            const ScenePose ps = scene_pose(sc, t);
+            for (const PxBox &c : ps.cap) {
+              if (c.empty())
+                continue;
+              PCHECK(c.x >= 0 && c.x + c.w <= g.w && c.y >= 0);
+              // The posts stand in the last 6s columns
+              if (football)
+                PCHECK(m ? c.x >= 6 * g.s : c.x + c.w <= g.w - 6 * g.s);
+              PCHECK(!box_overlap(c, ps.word));
+              PCHECK(c.y + c.h <= g.crowd_y || (c.y >= g.crowd_y && c.y + c.h <= g.field_y));
+              // A pass or a kick flies under it
+              if ((sc.args.kind == AnimKind::TD_PASS || sc.args.kind == AnimKind::TWO_POINT || kick_kind(sc.args.kind)) &&
+                  ps.ball_free && c.y < g.crowd_y)
+                PCHECK(ps.ball_y - 2 * g.s >= c.y + c.h);
+            }
+          }
+        }
+}
+
 // G, then O's, A's and L's; longer when wider
 void test_word() {
   int prev_n = 0;
@@ -253,13 +628,22 @@ void test_word() {
   PCHECK(word_letters(stage_geom(256, 64)) >= 24);
 }
 
-// Text rows in band aren't mirrored: equal there
-bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, int w, int h, PxBox band = PxBox{}) {
+// Text isn't mirrored: the word's rows and captions match unmirrored
+bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, int w, int h, const ScenePose &pa,
+              const ScenePose &pb) {
+  const PxBox band = pa.word;
   for (int y = 0; y < h; y++) {
     const bool text = !band.empty() && y >= band.y && y < band.y + band.h;
-    for (int x = 0; x < w; x++)
-      if (a[(size_t) y * w + x] != b[(size_t) y * w + (text ? x : w - 1 - x)])
+    for (int x = 0; x < w; x++) {
+      int bx = text ? x : w - 1 - x;
+      for (int k = 0; k < 3; k++) {
+        const PxBox &c = pa.cap[k];
+        if (!c.empty() && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h)
+          bx = pb.cap[k].x + (x - c.x);
+      }
+      if (a[(size_t) y * w + x] != b[(size_t) y * w + bx])
         return false;
+    }
   }
   return true;
 }
@@ -267,24 +651,18 @@ bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, in
 bool goal_kind(AnimKind k) { return k == AnimKind::SOCCER_GOAL || k == AnimKind::HOCKEY_GOAL; }
 
 // Every frame as the panel draws it, checked
-uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) {
-  AnimArgs a;
-  a.kind = kind;
+uint32_t check_scene(const ScenePlay &play, int w, int h, const Kit2 &kit, bool named, int &frames) {
+  const Scene sc = scene_of(play, w, h, kit, named, false);
+  const AnimKind kind = sc.args.kind;
   const bool hr = kind == AnimKind::HOME_RUN;
-  if (hr) {
-    a.dist = 401;
-    a.flags = 4 << kAnimFieldShift;
-  }
-  const Scene sc = scene_make(a, w, h, kit.color, kit.alt, kit.other, kit.other_alt, 7);
-  AnimArgs am = a;
-  am.flags |= kAnimMirror;
-  const Scene scm = scene_make(am, w, h, kit.color, kit.alt, kit.other, kit.other_alt, 7);
+  const Scene scm = scene_of(play, w, h, kit, named, true);
   const size_t n = (size_t) w * h;
   std::vector<uint16_t> inc(n), full(n), mir(n);
   const std::vector<uint32_t> ts = scene_times(kind);
   const int limit = sc.g.s == 2 ? 12000 : 3500;
   uint32_t hash = 2166136261u;
   bool complete = true, small = true, mirror_ok = true;
+  PCHECK(sc.say[0] != 0 && sc.score[0] != 0);
   for (size_t i = 0; i < ts.size(); i++) {
     const uint32_t t = ts[i];
     scene_full(full, sc, t);
@@ -305,7 +683,7 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
     }
     if (i % 7 == 0 && !hr) {
       scene_full(mir, scm, t);
-      if (!mirrored(full, mir, w, h, scene_pose(sc, t).word))
+      if (!mirrored(full, mir, w, h, scene_pose(sc, t), scene_pose(scm, t)))
         mirror_ok = false;
     }
     hash = fnv1a(hash, full);
@@ -323,6 +701,20 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
     // The word fills the width, in the dark above
     PCHECK(!end.word.empty() && end.word.x >= 0 && end.word.x + end.word.w <= w);
     PCHECK(end.word.w >= w - 12 * sc.g.s && end.word.y + end.word.h <= sc.g.crowd_y);
+  } else if (kick_kind(kind)) {
+    // Through the uprights, above the bar, and gone
+    const int s = sc.g.s, post = w - 3 * s, bar = sc.g.crowd_y + 2 * s;
+    PCHECK(!end.ball_free);
+    bool through = false;
+    for (uint32_t t = 0; t < scene_ms(kind) && !through; t += 5) {
+      const ScenePose p = scene_pose(sc, t);
+      if (p.ball_free && p.ball_x >= post) {
+        through = true;
+        PCHECK(p.ball_y - 2 * s > 3 * s && p.ball_y + 2 * s < bar);
+      }
+    }
+    PCHECK(through);
+    PCHECK(!end.cap[2].empty());
   } else if (!hr) {
     PCHECK(end.hero_x >= sc.g.goal_x);
     PCHECK(end.hero_x + 9 * sc.g.s <= w);
@@ -333,7 +725,7 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
     if (p.ball_free && p.ball_x > far)
       far = p.ball_x;
     if (p.ball_free && !hr)
-      PCHECK(p.ball_x >= 0 && p.ball_x < w && p.ball_y >= 0 && p.ball_y < h);
+      PCHECK(p.ball_x >= 0 && (p.ball_x < w || kick_kind(kind)) && p.ball_y >= 0 && p.ball_y < h);
   }
   if (hr)
     PCHECK(far >= w - (w / 10 < 6 ? 6 : w / 10 > 24 ? 24 : w / 10));
@@ -348,14 +740,14 @@ uint32_t check_scene(AnimKind kind, int w, int h, const Kit2 &kit, int &frames) 
 
 int test_goldens() {
   std::ostringstream o;
-  for (AnimKind k : {AnimKind::TD_PASS, AnimKind::TD_RUN, AnimKind::TD_RETURN, AnimKind::HOME_RUN,
-                     AnimKind::SOCCER_GOAL, AnimKind::HOCKEY_GOAL})
+  for (const ScenePlay &p : kScenePlays)
     for (const auto &s : kSceneScreens)
-      for (const Kit2 &kit : kReviewKits) {
+      for (int i = 0; i < 4; i++) {
+        const Kit2 &kit = kReviewKits[i];
         int frames = 0;
-        const uint32_t hash = check_scene(k, s[0], s[1], kit, frames);
+        const uint32_t hash = check_scene(p, s[0], s[1], kit, i != 0, frames);
         char line[96];
-        snprintf(line, sizeof line, "%s %dx%d %s %d %08x\n", anim_name(k), s[0], s[1], kit.name, frames, hash);
+        snprintf(line, sizeof line, "%s %dx%d %s %d %08x\n", p.play, s[0], s[1], kit.name, frames, hash);
         o << line;
       }
   const std::string got = o.str();
@@ -408,6 +800,10 @@ void test_geometry() {
 int run_picture_tests(int &total_checks) {
   test_classifier();
   test_goal_classifier();
+  test_captions();
+  test_kicks();
+  test_two_point();
+  test_caption_fit();
   test_word();
   test_kits();
   test_geometry();

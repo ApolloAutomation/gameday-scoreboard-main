@@ -2088,19 +2088,10 @@ void GamedayComponent::try_anim_(const std::string &play) {
     ESP_LOGI(TAG, "Play animation: one is already playing");
     return;
   }
-  ::espn::AnimArgs a;
-  a.kind = play == "run"      ? ::espn::AnimKind::TD_RUN
-           : play == "ret"    ? ::espn::AnimKind::TD_RETURN
-           : play == "hr"     ? ::espn::AnimKind::HOME_RUN
-           : play == "soccer" ? ::espn::AnimKind::SOCCER_GOAL
-           : play == "hockey" ? ::espn::AnimKind::HOCKEY_GOAL
-                              : ::espn::AnimKind::TD_PASS;
-  if (a.kind == ::espn::AnimKind::HOME_RUN) {
-    a.dist = 410;
-    a.flags = 3 << ::espn::kAnimFieldShift;
-  }
   const UpdateFields &f = this->last_fields_;
-  if (!scene_play(v->splash, a, f.team_color, f.opponent_color, millis(), nullptr))
+  const ::espn::AnimSample a = ::espn::anim_sample(play, f.team_abbr, f.team_score);
+  if (!scene_play(v->splash, a.args, f.team_color, f.opponent_color, millis(), nullptr, a.say.c_str(),
+                  a.score.c_str()))
     ESP_LOGI(TAG, "Play animation: shows on the Scoreboard page only");
 #endif
 }
@@ -6494,6 +6485,8 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
     // The board's right team scores leftward
     f.splash_anim_flags = (uint8_t) ((splash.anim_flags & ~::espn::kAnimMirror) |
                                      (f.splash_side == 1 ? ::espn::kAnimMirror : 0));
+    f.splash_say = splash.anim_say;
+    f.splash_score = splash.anim_score;
   }
 
   TickerOptions opts;

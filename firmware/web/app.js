@@ -2,7 +2,7 @@
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
 //   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
-//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap), anim&play=pass|run|hr|soccer|hockey
+//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap), anim&play=pass|run|fg|two|hr|soccer|hockey
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
 // "Game Status" event, sent on every board update, is the cue to re-read the
@@ -320,8 +320,8 @@
         <summary><h2>Celebrations</h2><span class="peek">Splashes and big plays</span></summary>
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
-          <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a home run's or a goal's splash: the pass or the run into the end zone, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
-          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="hr">Home run</button> <button class="btn" data-anim="soccer">Goal (soccer)</button> <button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
+          <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the pass or the run into the end zone, the kick through the uprights, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL, with a caption across the top that says what happened and the score. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
+          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="fg">Field goal</button> <button class="btn" data-anim="two">2-pt</button> <button class="btn" data-anim="hr">Home run</button> <button class="btn" data-anim="soccer">Goal (soccer)</button> <button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
