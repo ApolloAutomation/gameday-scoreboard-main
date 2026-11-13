@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 namespace espn {
 
@@ -24,6 +25,7 @@ constexpr uint32_t kHockeyMs = 2800, kSlapMs = 900;
 constexpr uint32_t kIceScuff = 0xA2AEBA, kRinkRed = 0xB42828, kRinkBlue = 0x2850B4, kCrease = 0x5A82CC;
 constexpr uint32_t kBoards = 0xB4B4B4, kKick = 0xC8A818, kNetRed = 0xD01818, kIceMesh = 0xE0E0E0;
 constexpr uint32_t kLampOff = 0x4A1010, kLampOn = 0xFF2828, kHalo = 0x8C0C0C;
+constexpr uint32_t kSayRgb = 0xFFFFFF, kPlusRgb = 0xFFD000;
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 int lerp(int a, int b, int num, int den) { return den <= 0 ? b : a + (b - a) * clampi(num, 0, den) / den; }
@@ -134,7 +136,6 @@ struct Stage {
   int hero_x{0};
   int ball_px{0};      // a baseball's size, 0 a football
   bool spark{false};   // bat meets ball
-  bool caption{false};
   int ball_kind{0};    // 1 a soccer ball, else as ball_px says
   int spin{0};         // the ball's frame
   int net_amp{0}, net_y{0};  // the net's bulge and where
@@ -167,6 +168,18 @@ void add_keeper(Stage &st, const Sprite &spr, int x, int y) {
     st.actors[st.n++] = Actor{&spr, x, y, true, true, true};
 }
 
+// The caption's last row plus one, else 0
+int cap_bottom(const Scene &sc) {
+  const int s = sc.g.s;
+  return sc.say[0] && sc.score[0] ? 13 * s : sc.say[0] || sc.score[0] ? 6 * s : 0;
+}
+
+// An arc's top, kept under the caption
+int apex_y(const Scene &sc, int apex) {
+  const int top = cap_bottom(sc) ? cap_bottom(sc) + sc.g.s : 0;
+  return top + apex * (sc.g.crowd_y - top) / sc.g.crowd_y;
+}
+
 int pass_span(const Scene &sc) {
   const int run = sc.g.w - sc.g.ez;
   const int pct = (sc.args.flags & kAnimDeep) ? 85 : (sc.args.flags & kAnimShort) ? 45 : 65;
@@ -181,7 +194,7 @@ void ball_arc(const Scene &sc, uint32_t t, int &x, int &y) {
   const int qx = on_stage(g, g.goal_x - pass_span(sc)) - 5 * s;
   const int x0 = qx + 8 * s, y0 = g.feet_y - 23 * s;
   const int x1 = catch_x(g), y1 = g.feet_y - 24 * s;
-  const int apex = (sc.args.flags & kAnimDeep) ? 2 * s : (sc.args.flags & kAnimShort) ? 20 * s : 10 * s;
+  const int apex = apex_y(sc, (sc.args.flags & kAnimDeep) ? 2 * s : (sc.args.flags & kAnimShort) ? 20 * s : 10 * s);
   const int u = clampi((int) t - 900, 0, 1500);
   x = x0 + (x1 - x0) * u / 1500;
   const int H = (y0 + y1) / 2 - apex;
@@ -322,7 +335,7 @@ void hr_arc(const Scene &sc, uint32_t t, int &x, int &y) {
   int x1, y1;
   if (feet >= 420) {
     x1 = g.w + 12 * s;
-    y1 = -8 * s;
+    y1 = cap_bottom(sc) ? cap_bottom(sc) - s : -8 * s;
   } else if (feet >= 380) {
     x1 = clampi(fx + 8 * s, fx + 3 * s, g.w - 2 * s);
     y1 = (g.crowd_y + g.field_y) / 2;
@@ -332,7 +345,7 @@ void hr_arc(const Scene &sc, uint32_t t, int &x, int &y) {
   }
   const int u = clampi((int) t - 700, 0, 2100);
   x = x0 + (x1 - x0) * u / 2100;
-  const int H = (y0 + y1) / 2 - 2 * s;
+  const int H = (y0 + y1) / 2 - apex_y(sc, 2 * s);
   y = y0 + (y1 - y0) * u / 2100 - (int) (4LL * H * u * (2100 - u) / (2100LL * 2100));
 }
 
@@ -384,20 +397,6 @@ void stage_hr(const Scene &sc, uint32_t t, Stage &st) {
     if (st.ball && st.bx < fx)
       st.shadow_x = st.bx;
   }
-  st.caption = t >= 2800 && sc.args.dist > 0 && g.w >= 128;
-}
-
-void hr_caption(const Scene &sc, char *out, size_t n) {
-  static const char *const kFields[] = {"", " LEFT", " LEFT CENTER", " CENTER", " RIGHT CENTER", " RIGHT"};
-  const int field = (sc.args.flags >> kAnimFieldShift) & 7;
-  snprintf(out, n, "%d FT%s", sc.args.dist, sc.g.w >= 192 && field < 6 ? kFields[field] : "");
-}
-
-PxBox caption_box(const Scene &sc) {
-  char text[32];
-  hr_caption(sc, text, sizeof text);
-  const int s = sc.g.s, w = px_text_w(text, s);
-  return PxBox{(int16_t) ((sc.g.w - w) / 2), (int16_t) (4 * s), (int16_t) w, (int16_t) (5 * s)};
 }
 
 // The net's back at row y, before any bulge
@@ -923,6 +922,92 @@ void draw_word(Px565 &p, const Scene &sc, uint32_t t) {
   p.mirror = m;
 }
 
+// ---- The caption ----
+
+constexpr uint32_t kCapWinMs = 200;
+
+bool football(AnimKind k) {
+  return k == AnimKind::TD_PASS || k == AnimKind::TD_RUN || k == AnimKind::TD_RETURN;
+}
+
+// A line's logical x range; crowd: under the word
+void cap_band(const Scene &sc, bool crowd, int &x0, int &x1) {
+  const StageGeom &g = sc.g;
+  const int s = g.s;
+  x0 = s;
+  x1 = crowd ? g.goal_x - 2 * s : football(sc.args.kind) ? g.w - 7 * s : g.w - s;
+}
+
+struct CapAt {
+  PxBox a, b;  // on the picture; b with its backing
+  bool back{false};
+};
+
+PxBox cap_line(const Scene &sc, const char *text, bool crowd, int y) {
+  int x0, x1;
+  cap_band(sc, crowd, x0, x1);
+  const int s = sc.g.s, w = px_text_w(text, s);
+  PxBox b{(int16_t) (x0 + (x1 - x0 - w) / 2), (int16_t) y, (int16_t) w, (int16_t) (5 * s)};
+  if (sc.args.flags & kAnimMirror)
+    b.x = (int16_t) (sc.g.w - b.x - b.w);
+  return b;
+}
+
+// The lines at t: the score drops under the word
+CapAt cap_at(const Scene &sc, uint32_t t) {
+  CapAt c;
+  const StageGeom &g = sc.g;
+  const int s = g.s;
+  const bool word = play_ms(sc.args.kind) != 0 && t >= play_ms(sc.args.kind);
+  if (sc.say[0] && !word)
+    c.a = cap_line(sc, sc.say, false, s);
+  if (sc.score[0]) {
+    if (word) {
+      c.b = cap_line(sc, sc.score, true, g.crowd_y + (g.field_y - g.crowd_y - 5 * s) / 2);
+      c.b = PxBox{(int16_t) (c.b.x - s), (int16_t) (c.b.y - s), (int16_t) (c.b.w + 2 * s), (int16_t) (c.b.h + 2 * s)};
+      c.back = true;
+    } else {
+      c.b = cap_line(sc, sc.score, false, sc.say[0] ? 8 * s : s);
+    }
+  }
+  return c;
+}
+
+// The team in its color, the points in gold
+void draw_caption(Px565 &p, const Scene &sc, uint32_t t) {
+  const CapAt c = cap_at(sc, t);
+  const int s = sc.g.s;
+  const bool m = p.mirror;
+  p.mirror = false;
+  if (!c.a.empty())
+    px_text(p, c.a.x, c.a.y, sc.say, rgb565(kSayRgb), s);
+  if (!c.b.empty()) {
+    int x = c.b.x, y = c.b.y;
+    if (c.back) {
+      p.fill(c.b.x, c.b.y, c.b.w, c.b.h, 0);
+      x += s;
+      y += s;
+    }
+    char tok[20];
+    for (const char *q = sc.score; *q;) {
+      size_t n = 0;
+      while (q[n] && q[n] != ' ' && n + 1 < sizeof tok) {
+        tok[n] = q[n];
+        n++;
+      }
+      tok[n] = 0;
+      const uint16_t col = tok[0] == '+' ? rgb565(kPlusRgb) : isdigit((unsigned char) tok[0]) ? rgb565(kSayRgb)
+                                                                                              : sc.word[4];
+      px_text(p, x, y, tok, col, s);
+      x += 4 * s * (int) (n + 1);
+      q += n;
+      while (*q == ' ')
+        q++;
+    }
+  }
+  p.mirror = m;
+}
+
 }  // namespace
 
 StageGeom stage_geom(int w, int h) {
@@ -982,6 +1067,33 @@ int word_glyph(int i, int n) {
   const int rest = n - 1, l = std::max(1, rest * 25 / 100), a = std::max(1, rest * 30 / 100);
   const int o = rest - a - l;
   return i <= 0 ? 0 : i <= o ? 1 : i <= o + a ? 2 : 3;
+}
+
+void scene_say(Scene &sc, const char *words, const char *score) {
+  sc.say[0] = sc.score[0] = 0;
+  const int s = sc.g.s;
+  int x0, x1, c0, c1;
+  cap_band(sc, false, x0, x1);
+  cap_band(sc, true, c0, c1);
+  for (const char *q = words != nullptr ? words : ""; *q;) {
+    const char *e = strchr(q, '|');
+    const size_t n = e != nullptr ? (size_t) (e - q) : strlen(q);
+    if (n > 0 && n < sizeof sc.say && (int) (4 * n - 1) * s <= x1 - x0) {
+      memcpy(sc.say, q, n);
+      sc.say[n] = 0;
+      break;
+    }
+    if (e == nullptr)
+      break;
+    q = e + 1;
+  }
+  const size_t n = score != nullptr ? strlen(score) : 0;
+  const bool word = play_ms(sc.args.kind) != 0;
+  if (n > 0 && n < sizeof sc.score && (int) (4 * n - 1) * s <= x1 - x0 &&
+      (!word || (int) (4 * n + 1) * s <= c1 - c0)) {
+    memcpy(sc.score, score, n);
+    sc.score[n] = 0;
+  }
 }
 
 Kit ice_kit(Kit k, uint32_t primary, uint32_t alt) {
@@ -1094,8 +1206,13 @@ int scene_boxes(const Scene &sc, uint32_t t, PxBox *out) {
   if (st.shadow_x >= 0)
     out[n++] = px_phys(frame, PxBox{(int16_t) (st.shadow_x - s), (int16_t) (sc.g.feet_y + s), (int16_t) (3 * s),
                                     (int16_t) s});
-  if (st.caption)
-    out[n++] = px_phys(frame, caption_box(sc));
+  // The score moves under the word
+  const uint32_t pm = play_ms(sc.args.kind);
+  if (pm != 0 && t >= pm && t < pm + kCapWinMs) {
+    const CapAt was = cap_at(sc, pm - 1), now = cap_at(sc, pm);
+    out[n++] = box_join(was.a, was.b);
+    out[n++] = now.b;
+  }
   if (st.pulse != kEzDim)
     out[n++] = px_phys(frame, PxBox{(int16_t) (sc.g.goal_x - sc.g.h / 3), sc.g.field_y, (int16_t) (sc.g.ez + sc.g.h / 3),
                                     (int16_t) (sc.g.h - sc.g.field_y)});
@@ -1122,6 +1239,7 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
   for (int y = c.y; y < c.y + c.h; y++)
     for (int x = c.x; x < c.x + c.w; x++)
       p.px[y * p.stride + x] = rgb565(bg_rgb(sc, p.mirror ? p.w - 1 - x : x, y, st));
+  draw_caption(p, sc, t);
   const int s = sc.g.s;
   if (st.shadow_x >= 0)
     p.fill(st.shadow_x - s, sc.g.feet_y + s, 3 * s, s, rgb565(kShadow));
@@ -1163,12 +1281,6 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
     if (st.shade != 2)
       p.fill(x + 2 * s, y + s, s, s, lace);
   }
-  if (st.caption) {
-    char text[32];
-    hr_caption(sc, text, sizeof text);
-    const PxBox b = caption_box(sc);
-    px_text(p, b.x, b.y, text, rgb565(0xFFD000), s);
-  }
   draw_word(p, sc, t);
 }
 
@@ -1187,6 +1299,9 @@ ScenePose scene_pose(const Scene &sc, uint32_t t) {
     r.ball_x = (int16_t) st.bx;
     r.ball_y = (int16_t) st.by;
   }
+  const CapAt c = cap_at(sc, t);
+  r.cap[0] = c.a;
+  r.cap[1] = c.b;
   return r;
 }
 

@@ -11,7 +11,7 @@ namespace espn {
 
 constexpr uint32_t kAnimMaxMs = 4800;
 constexpr uint32_t kSceneFrameMs = 33;
-constexpr int kSceneBoxes = 10;
+constexpr int kSceneBoxes = 12;
 
 // Logical coordinates: the scoring team attacks right
 struct StageGeom {
@@ -43,11 +43,15 @@ struct Scene {
   uint16_t word[16]{}, word_hi[16]{};
   uint32_t ez_rgb{0}, crowd_a{0}, crowd_b{0};
   uint32_t seed{0};
+  // The caption (scene_say): the words that fit, the score
+  char say[40]{}, score[20]{};
 };
 
 // The scorer's colors, then the defense's; alt 0 none
 Scene scene_make(const AnimArgs &a, int w, int h, uint32_t color, uint32_t alt, uint32_t other, uint32_t other_alt,
                  uint32_t seed);
+// Picks the first of words ('|' between) that fits
+void scene_say(Scene &sc, const char *words, const char *score);
 uint32_t scene_ms(AnimKind k);
 // What moves at t, on the picture; returns the count
 int scene_boxes(const Scene &sc, uint32_t t, PxBox *out);
@@ -61,6 +65,7 @@ struct ScenePose {
   bool ball_free{false};
   bool flash{false};  // a whole-word flash: a big redraw
   PxBox word{};       // on the picture, never mirrored
+  PxBox cap[2]{};     // the caption's lines, on the picture
 };
 // Word length; glyph i: 0 G to 3 L
 int word_letters(const StageGeom &g);

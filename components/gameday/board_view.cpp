@@ -698,7 +698,7 @@ bool splash_scene(BoardView &v, const UpdateFields &f) {
     const bool opp = f.splash_side == 1;
     const ::espn::AnimArgs a{(::espn::AnimKind) f.splash_anim, f.splash_anim_dist, f.splash_anim_flags};
     on = scene_play(v.splash, a, opp ? f.opponent_color : f.team_color, opp ? f.team_color : f.opponent_color,
-                    f.splash_seq, scene_reveal);
+                    f.splash_seq, scene_reveal, f.splash_say.c_str(), f.splash_score.c_str());
   }
   stay_ms = ::espn::kSplashMs + (on ? ::espn::scene_ms((::espn::AnimKind) f.splash_anim) : 0);
   return on;

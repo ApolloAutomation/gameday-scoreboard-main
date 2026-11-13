@@ -96,16 +96,40 @@ inline void px_sprite(Px565 &p, const Sprite &s, int x, int y, const uint16_t pa
 
 // 3x5 glyphs, rows top down, bit 2 the left column
 inline const uint8_t *font3x5(char c) {
-  static const char kChars[] = "0123456789FTLECNRIGH- ";
   static const uint8_t kRows[][5] = {
+      // digits 0 to 9
       {7, 5, 5, 5, 7}, {2, 6, 2, 2, 7}, {7, 1, 7, 4, 7}, {7, 1, 3, 1, 7}, {5, 5, 7, 1, 1}, {7, 4, 7, 1, 7},
-      {7, 4, 7, 5, 7}, {7, 1, 1, 2, 2}, {7, 5, 7, 5, 7}, {7, 5, 7, 1, 7}, {7, 4, 6, 4, 4}, {7, 2, 2, 2, 2},
-      {4, 4, 4, 4, 7}, {7, 4, 6, 4, 7}, {7, 4, 4, 4, 7}, {5, 7, 7, 5, 5}, {6, 5, 6, 5, 5}, {7, 2, 2, 2, 7},
-      {7, 4, 5, 5, 7}, {5, 5, 7, 5, 5}, {0, 0, 7, 0, 0}, {0, 0, 0, 0, 0}};
-  for (int i = 0; kChars[i]; i++)
-    if (kChars[i] == c)
-      return kRows[i];
-  return kRows[sizeof(kChars) - 2];
+      {7, 4, 7, 5, 7}, {7, 1, 1, 2, 2}, {7, 5, 7, 5, 7}, {7, 5, 7, 1, 7},
+      // letters A to Z
+      {2, 5, 7, 5, 5}, {6, 5, 6, 5, 6}, {3, 4, 4, 4, 3}, {6, 5, 5, 5, 6}, {7, 4, 6, 4, 7}, {7, 4, 6, 4, 4},
+      {3, 4, 5, 5, 3}, {5, 5, 7, 5, 5}, {7, 2, 2, 2, 7}, {1, 1, 1, 5, 2}, {5, 5, 6, 5, 5}, {4, 4, 4, 4, 7},
+      {5, 7, 7, 5, 5}, {6, 5, 5, 5, 5}, {2, 5, 5, 5, 2}, {6, 5, 6, 4, 4}, {2, 5, 5, 7, 3}, {6, 5, 6, 5, 5},
+      {3, 4, 2, 1, 6}, {7, 2, 2, 2, 2}, {5, 5, 5, 5, 7}, {5, 5, 5, 5, 2}, {5, 5, 5, 7, 5}, {5, 5, 2, 5, 5},
+      {5, 5, 2, 2, 2}, {7, 1, 2, 4, 7},
+      // marks, as kMarks, then space
+      {0, 0, 7, 0, 0}, {0, 2, 7, 2, 0}, {2, 2, 0, 0, 0}, {0, 0, 0, 0, 2}, {2, 2, 2, 0, 2}, {0, 0, 0, 2, 4},
+      {2, 5, 2, 5, 3}, {0, 2, 0, 2, 0}, {1, 1, 2, 4, 4}, {0, 0, 0, 0, 0}};
+  static const char kMarks[] = "-+'.!,&:/";
+  if (c >= '0' && c <= '9')
+    return kRows[c - '0'];
+  if (c >= 'a' && c <= 'z')
+    c = (char) (c - 'a' + 'A');
+  if (c >= 'A' && c <= 'Z')
+    return kRows[10 + c - 'A'];
+  for (int i = 0; kMarks[i]; i++)
+    if (kMarks[i] == c)
+      return kRows[36 + i];
+  return kRows[36 + sizeof(kMarks) - 1];
+}
+
+// Draws as font3x5 would: it has c
+inline bool font3x5_has(char c) {
+  if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == ' ')
+    return true;
+  for (const char *m = "-+'.!,&:/"; *m; m++)
+    if (*m == c)
+      return true;
+  return false;
 }
 
 inline int px_text_w(const char *s, int scale) {

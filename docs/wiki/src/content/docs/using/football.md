@@ -70,6 +70,8 @@ Before a touchdown's splash, the panel plays the touchdown across the whole scre
 | A rushing touchdown | The running back takes the handoff and runs into the end zone, past a defender who dives and misses, with another chasing him. |
 | An interception, fumble, kickoff or punt return | The returner runs the length of the field into the end zone, past a defender who dives and misses, with another chasing him. |
 
+While it plays, a caption across the top says what happened: the scorer's name when ESPN's words give it, the yards and the kind of touchdown, like **CHASE 30 YD TD PASS** or **LAUBE 95 YD KICKOFF RETURN TD**, with an interception return as a **PICK SIX**. Under it go the scoring team's abbreviation in its color, its new score, and the points in gold, like **CIN 21 +7**. A single panel and two rows of two show the shorter words that fit, like **30 YD TD PASS** or **KICK RET TD**; 128x64 and wider add the name. The caption stays clear of the goal post, and a pass flies under it.
+
 The scoring team always runs from its own side of the board toward the end zone on the other side, so a touchdown by the team on the right runs right to left. On three or four panels in a row the play spans every panel, and on two rows of two it fills all four, with bigger players.
 
 Then the splash shows for its usual 7 seconds, fireworks and all. The panel tells the plays apart from ESPN's play type, and from the play's words when the type is missing. A play it can't tell, like a touchdown ESPN has already replaced with the extra point by the time the panel reads it, gets the splash on its own. **Play animations** in the Celebrations card turns them off; see [Celebrations](/using/device-page/#celebrations).

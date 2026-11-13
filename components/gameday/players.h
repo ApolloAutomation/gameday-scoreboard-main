@@ -377,7 +377,7 @@ inline Splash board_splash_with_players(const GameSnapshot &prev, const GameSnap
     const PlayerScore ps = player_scored(prev, cur, league, list);
     if (ps.slot >= 0) {
       Splash s = player_splash(ps, cur, list, wide);
-      splash_anim(s, ps.type, prev, cur, ps.side);
+      splash_anim(s, ps.type, prev, cur, ps.side, list[ps.slot].name);
       return s;
     }
   }

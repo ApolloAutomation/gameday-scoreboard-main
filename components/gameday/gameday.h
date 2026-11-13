@@ -98,6 +98,7 @@ struct UpdateFields {
   int16_t splash_anim_dist{0};
   uint8_t splash_anim_flags{0};
   uint32_t splash_seq{0};
+  std::string splash_say, splash_score;  // its caption, Splash's anim_say and anim_score
   std::string last_play;
   std::string clock_text;  // "5:36 - 3rd" while the game is live, else empty
   std::string down_distance;  // "3rd & 10" while live, else empty

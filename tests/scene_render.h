@@ -21,6 +21,30 @@ constexpr Kit2 kReviewKits[] = {{"navy", 0x14284B, 0xFFFFFF, 0x9E1B32, 0xF2B705}
 
 constexpr int kSceneScreens[][2] = {{64, 64}, {128, 64}, {192, 64}, {256, 64}, {128, 128}};
 
+// Each Try it play, its team, score and scorer
+struct ScenePlay {
+  const char *play, *abbr;
+  int score;
+  const char *name;
+};
+constexpr ScenePlay kScenePlays[] = {{"pass", "BUF", 21, "Chase"},  {"run", "BUF", 21, "Pollard"},
+                                     {"ret", "BUF", 21, "Laube"},   {"hr", "NYY", 3, "Stanton"},
+                                     {"soccer", "ARS", 1, "Saka"},  {"hockey", "COL", 2, "MacKinnon"}};
+
+// The kit's index picks the scorer's name or none
+inline Scene scene_of(const ScenePlay &p, int w, int h, const Kit2 &kit, bool named, bool mirror, int feet = 0) {
+  AnimSample a = anim_sample(p.play, p.abbr, p.score, named ? p.name : "");
+  if (mirror)
+    a.args.flags |= kAnimMirror;
+  if (feet > 0) {
+    a.args.dist = (int16_t) feet;
+    a = AnimSample{a.args, say_words(a.args, Say::PLAIN, named ? p.name : "", 2), a.score};
+  }
+  Scene sc = scene_make(a.args, w, h, kit.color, kit.alt, kit.other, kit.other_alt, 7);
+  scene_say(sc, a.say.c_str(), a.score.c_str());
+  return sc;
+}
+
 inline std::vector<uint32_t> scene_times(AnimKind k) {
   std::vector<uint32_t> ts;
   const uint32_t ms = scene_ms(k);
