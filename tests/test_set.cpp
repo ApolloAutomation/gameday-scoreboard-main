@@ -63,7 +63,7 @@ struct Settings {
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
-  bool watch{true}, watchmine{false}, visit{false}, anim{true};
+  bool watch{true}, watchmine{false}, visit{false}, anim{true}, full{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
   int alerts{(1 << kAlertBits) - 1};
@@ -215,6 +215,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
   flag("anim", s.anim);
+  flag("full", s.full);
   if (o["markets"].is<JsonArrayConst>()) {
     s.markets = MarketList{};
     for (JsonObjectConst m : o["markets"].as<JsonArrayConst>()) {
@@ -340,6 +341,7 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::WATCHSTAY: s.watchstay = op.value; break;
     case SetKind::WATCHMINE: s.watchmine = op.on; break;
     case SetKind::ANIM: s.anim = op.on; break;
+    case SetKind::FULL: s.full = op.on; break;
     case SetKind::PLAYER:  // set_player_: nothing changes when every slot is in use
       player_put(s.players, make_player(op.team.league, op.athlete, op.team.id, op.name));
       break;
@@ -458,6 +460,7 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
   doc["anim"] = s.anim;
+  doc["full"] = s.full;
   doc["split"] = s.split;
   doc["display"] = s.display;
   doc["clocksize"] = s.clocksize;
@@ -689,6 +692,8 @@ void test_parse_set() {
   SCHECK(parse_set("watch", "0", op, kFavMax) && op.kind == SetKind::WATCH && !op.on, "watch 0");
   SCHECK(parse_set("watchmine", "1", op, kFavMax) && op.kind == SetKind::WATCHMINE && op.on, "watchmine 1");
   SCHECK(parse_set("anim", "0", op, kFavMax) && op.kind == SetKind::ANIM && !op.on, "anim 0");
+  SCHECK(parse_set("full", "1", op, kFavMax) && op.kind == SetKind::FULL && op.on, "full 1");
+  SCHECK(parse_set("full", "2", op, kFavMax) && op.kind == SetKind::FULL && !op.on, "full 2 is off");
   SCHECK(parse_set("watchstay", "120", op, kFavMax) && op.kind == SetKind::WATCHSTAY && op.value == 120,
          "watchstay 120");
   SCHECK(parse_set("watchstay", "5", op, kFavMax) && op.value == kWatchStayMinSeconds, "watchstay floor");

@@ -35,7 +35,8 @@
     "or the panel's own team, \"none\" or \"\" clearing it.",
     "display is what the main area shows (0 Game Day, 1 F1, 2 stocks and crypto, 3 flights), one",
     "digit. displays (start only) lists the ones the firmware has, Game Day alone unless it says;",
-    "display and split refuse a display it lacks.",
+    "display and split refuse a display it lacks. full is Full screen: 1 on, anything else off; a",
+    "display on the main board then fills the panel, and split keeps its choice for Game Day.",
     "clocksize and textsize are Clock size and Text size, 0 Normal or 1 Large, one digit and",
     "nothing else.",
     "props lists the player prop bets by slot as entered: slot, league, ESPN athlete id, team id,",
@@ -63,7 +64,7 @@
     "visit": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "bets": [], "props": [], "players": [], "split": 0, "splitteam": "", "clocksize": 0, "textsize": 0,
-    "display": 0
+    "display": 0, "full": false
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -399,6 +400,10 @@
     {"name": "the main display refuses nothing", "start": {"displays": [0, 1], "display": 1}, "set": [["display", ""]], "expect": {"display": 1}},
     {"name": "the main display refuses trailing letters", "start": {"displays": [0, 1]}, "set": [["display", "1x"]], "expect": {"display": 0}},
     {"name": "the main display refuses -1", "start": {"displays": [0, 1]}, "set": [["display", "-1"]], "expect": {"display": 0}},
+    {"name": "full screen on", "set": [["full", "1"]], "expect": {"full": true}},
+    {"name": "full screen off", "start": {"full": true}, "set": [["full", "0"]], "expect": {"full": false}},
+    {"name": "full screen takes only 1 as on", "start": {"full": true}, "set": [["full", "yes"]], "expect": {"full": false}},
+    {"name": "full screen keeps the second area's choice", "start": {"displays": [0, 3], "split": 8}, "set": [["display", "3"], ["full", "1"]], "expect": {"display": 3, "split": 8, "full": true}},
     {"name": "the main display and the area's Game Day in one request", "start": {"displays": [0, 2]}, "set": [["split", "5"], ["display", "2"]], "expect": {"display": 2, "split": 5}},
     {"name": "Stocks & Crypto shows SPY, AAPL, BTC and ETH until a list is saved", "start": {"displays": [0, 2]}, "set": [["mkt", "0,aapl"]], "expect": {"markets": [{"slot": 1, "sym": "SPY", "kind": "stock"}, {"slot": 2, "sym": "AAPL", "kind": "stock"}, {"slot": 3, "sym": "BTC", "kind": "crypto"}, {"slot": 4, "sym": "ETH", "kind": "crypto"}]}},
     {"name": "mkt into slot 0 adds a symbol at the end", "start": {"displays": [0, 2]}, "set": [["mkt", "0,tsla"]], "expect": {"markets": [{"slot": 1, "sym": "SPY", "kind": "stock"}, {"slot": 2, "sym": "AAPL", "kind": "stock"}, {"slot": 3, "sym": "BTC", "kind": "crypto"}, {"slot": 4, "sym": "ETH", "kind": "crypto"}, {"slot": 5, "sym": "TSLA", "kind": "stock"}]}},

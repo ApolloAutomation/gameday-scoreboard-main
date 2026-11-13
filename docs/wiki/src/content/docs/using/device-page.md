@@ -140,6 +140,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game**, **No other live games: showing the clock**, **Showing F1.** or **Showing Game Day.** When the main board shows the display you picked here already, it says why the area shows the clock instead, like **The main board shows F1, so this shows the clock.** See [The second area](/using/panel-sizes/#the-second-area).
 
+:::note[Coming in the next release]
+**Full screen**, a switch under **Shows**, appears when the panel has F1, Stocks & Crypto or the Flight Tracker. With it on, the display picked under **Showing** fills the whole panel, all four panels on two rows of two, instead of sharing it with the second area. **Shows** keeps its choice for when **Showing** is back on the Scoreboard or the night hours' clock is up. While the display fills the panel, the line under the switch says so, like **Flight Tracker fills the panel now: Full screen is on.** It starts off. See [Full screen](/using/panel-sizes/#the-second-area).
+:::
+
 ### Celebrations
 
 The panel fills the screen with a splash when someone scores or makes a big play, in the team's color, with its logo. Your team's always show. **Opponent scores too** turns the other side's scores and big plays on or off, in every sport. A red card, overtime and the final show either way.

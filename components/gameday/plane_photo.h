@@ -38,6 +38,15 @@ inline PhotoFit photo_fit(uint32_t w, uint32_t h, bool progressive, int bw, int 
     return std::min(sh, std::max(box, keep));
   };
   auto drawn = [&](uint32_t cw, uint32_t ch, int &ow, int &oh) {
+    // Twice the cut fits: grown to fill the box
+    if (cw * 2 <= (uint32_t) bw && ch * 2 <= (uint32_t) bh) {
+      const bool by_w = (uint64_t) bw * ch <= (uint64_t) bh * cw;
+      ow = by_w ? bw : (int) (((uint64_t) cw * bh + ch / 2) / ch);
+      oh = by_w ? (int) (((uint64_t) ch * bw + cw / 2) / cw) : bh;
+      ow = std::min(ow, bw);
+      oh = std::min(oh, bh);
+      return;
+    }
     if ((uint64_t) cw * bh >= (uint64_t) ch * bw) {
       ow = (int) std::min<uint32_t>(bw, cw);
       oh = (int) (((uint64_t) ch * ow + cw / 2) / cw);

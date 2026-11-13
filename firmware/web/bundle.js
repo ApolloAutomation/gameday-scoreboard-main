@@ -188,6 +188,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
             <div class="sub" id="splitTitle">Second area</div>
             <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
             <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
+            <div class="ctl" id="fullRow" hidden><label>Full screen<small id="fullHint"></small></label><button class="sw" data-set="full" aria-label="Full screen" aria-describedby="fullHint"></button></div>
             <p class="hint" id="splitNow" role="status"></p>
           </div>
         </div>
@@ -1142,6 +1143,14 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
+    // Full screen: the main board's display takes this area too
+    const others = otherDisplays();
+    $("#fullRow").hidden = S.full === undefined || !others.length;
+    const names = others.map((d) => d.name);
+    const which = names.length > 1 ? names.slice(0, -1).join(", ") + " or " + names[names.length - 1] : names[0] || "";
+    const area = S.split_at === "bottom" ? "the bottom half" : S.split_at === "right2" ? "the right two panels" : "the right panel";
+    $("#fullHint").textContent = "With Showing on " + which + ", it fills " + (S.split_at === "bottom" ? "all four panels" : "the whole row")
+      + " instead of sharing them with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
     const n = Number(S.split_n) || 0;
     const now = S.split_now;
     let line = "";
@@ -1161,6 +1170,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
         : "Showing the clock: the night hours, or nothing to show yet.";
     }
+    if (S.full_now) line = (displayName(mainDisplay()) || "The display") + " fills the panel now: Full screen is on.";
     $("#splitNow").textContent = line;
   };
 

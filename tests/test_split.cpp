@@ -56,6 +56,36 @@ void test_split_area() {
   PCHECK(split_effective(9, SplitAt::BOTTOM) == SplitShow::CLOCK);
 }
 
+// Full screen: the main board's display takes the area.
+void test_split_full() {
+  struct Setup {
+    int cols, rows;
+  };
+  for (Setup st : {Setup{1, 1}, Setup{2, 1}, Setup{3, 1}, Setup{4, 1}, Setup{2, 2}}) {
+    const SplitAt at = split_at(st.cols, st.rows);
+    for (int show = 0; show < kSplitCount; show++) {
+      // Off, or Game Day on the main board: today's split
+      const SplitArea was = split_area(st.cols, st.rows, (uint8_t) show);
+      for (bool full : {false, true})
+        for (bool app : {false, true}) {
+          const bool on = split_full(full, app, at);
+          PCHECK(on == (full && app && at != SplitAt::NONE));
+          const SplitArea a = split_area(st.cols, st.rows, (uint8_t) show, on);
+          if (!on) {
+            PCHECK(a.on == was.on && a.main_w == was.main_w && a.main_h == 64 && a.x == was.x && a.y == was.y &&
+                   a.w == was.w && a.h == was.h);
+            continue;
+          }
+          PCHECK(!a.on && a.main_w == st.cols * 64 && a.main_h == st.rows * 64);
+        }
+    }
+  }
+  // 2x2: the display 128 by 128, a tall board
+  const SplitArea b = split_area(2, 2, 4, true);
+  PCHECK(!b.on && b.main_w == 128 && b.main_h == 128 && esphome::gameday::tall_board(b.main_w, b.main_h));
+  PCHECK(!esphome::gameday::tall_board(split_area(4, 1, 0, true).main_w, split_area(4, 1, 0, true).main_h));
+}
+
 void test_area_view() {
   AreaInputs in;
   in.show = SplitShow::OFF;
@@ -487,6 +517,7 @@ void test_recap_one_league() {
 
 int run_split_tests(int &total_checks) {
   test_split_area();
+  test_split_full();
   test_area_view();
   test_scores_step();
   test_next_logos();

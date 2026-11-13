@@ -34,7 +34,7 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "anim",      "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
                                     "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
                                     "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
-                                    "display",   "splitteam",  "split"};
+                                    "display",   "splitteam",  "split",     "full"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -283,6 +283,7 @@ enum class SetKind : uint8_t {
   TEXT_SIZE,    // value, 0 Normal or 1 Large: the ticker's letters
   MAIN_DISPLAY, // value, apps.h's Display: what the main area shows
   ANIM,         // on, play animations before big plays' splashes
+  FULL,         // on: a display on the main board fills the panel
 };
 
 struct TeamRef {
@@ -673,6 +674,8 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
+  if (k == "full")
+    return on(SetKind::FULL);
   if (k == "display") {
     // One digit, as for split; unknown displays dropped later.
     op.kind = SetKind::MAIN_DISPLAY;

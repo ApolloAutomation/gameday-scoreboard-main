@@ -149,13 +149,15 @@ struct AppFill {
 // A 2-bit picture: 0 clear, 1-3 ink.
 struct AppArt {
   int16_t x{0}, y{0};
-  uint8_t w{0}, h{0};
+  uint8_t w{0}, h{0};  // the bits' size, before scale
   const uint8_t *bits{nullptr};  // in flash, row by row, low bits first
   bool flip{false};              // mirrored left to right
+  uint8_t scale{1};              // each bit drawn scale by scale
   uint32_t ink[3]{};
 };
 constexpr size_t kAppArt = 1;
-constexpr int kAppArtMaxW = 64, kAppArtMaxH = 24;
+// Drawn size, scale included.
+constexpr int kAppArtMaxW = 128, kAppArtMaxH = 32;
 
 // A boxed photo; it hides the art once loaded.
 struct AppPhoto {
@@ -165,14 +167,14 @@ struct AppPhoto {
   std::string credit;  // into the ticker at `at` once loaded
   size_t at{0};
 };
-constexpr int kAppPhotoMaxW = 64, kAppPhotoMaxH = 32;
+constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 80;
 
 // RGB565 then alpha, as runtime_image lays logos out.
 inline void app_art_paint(const AppArt &a, uint8_t *out) {
-  const int n = a.w * a.h;
-  for (int y = 0; y < a.h; y++)
-    for (int x = 0; x < a.w; x++) {
-      const int src = y * a.w + (a.flip ? a.w - 1 - x : x), i = y * a.w + x;
+  const int s = a.scale < 1 ? 1 : a.scale, ow = a.w * s, n = ow * a.h * s;
+  for (int y = 0; y < a.h * s; y++)
+    for (int x = 0; x < ow; x++) {
+      const int bx = x / s, src = (y / s) * a.w + (a.flip ? a.w - 1 - bx : bx), i = y * ow + x;
       const uint8_t v = (uint8_t) ((a.bits[src / 4] >> (2 * (src % 4))) & 3);
       const uint32_t c = v == 0 ? 0 : a.ink[v - 1];
       const uint16_t rgb = (uint16_t) (((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F));
@@ -195,6 +197,45 @@ struct AppFrame {
   AppFill bar;
   AppPhoto photo;
 };
+
+// Full screen: the rows as labels, pitch apart from y0.
+inline void app_rows_texts(AppFrame &f, int w, int y0, int pitch) {
+  using esphome::gameday::Spot;
+  const BoardLines &b = f.rows;
+  auto add = [&f](const Spot &at, int y, AppAlign al, uint32_t color, const std::string &s) {
+    if (s.empty() || at.w <= 0)
+      return;
+    AppText t;
+    t.x = at.x;
+    t.y = (int16_t) y;
+    t.w = at.w;
+    t.align = al;
+    t.color = color;
+    t.text = s;
+    f.texts.push_back(std::move(t));
+  };
+  // The leaderboard's look: its labels' opacities
+  auto dim = [](uint32_t c, int opa) {
+    return ((((c >> 16) & 0xFF) * opa / 255) << 16) | ((((c >> 8) & 0xFF) * opa / 255) << 8) | ((c & 0xFF) * opa / 255);
+  };
+  const esphome::gameday::RowsGeom g = esphome::gameday::rows_geom(w);
+  add(g.title, 0, AppAlign::LEFT, dim(0xFFFFFF, 230), b.title);
+  add(g.status, 0, g.wide ? AppAlign::RIGHT : AppAlign::CENTER, b.status_color, b.status);
+  const esphome::gameday::RowsCells c = esphome::gameday::rows_cells(w, b.value_narrow, b.cols);
+  static const int kOpa[4] = {191, 230, 255, 191};
+  auto tint = [](const std::vector<int> &v, size_t i, uint32_t none) { return i < v.size() ? (uint32_t) v[i] : none; };
+  for (size_t i = 0; i < b.name.size(); i++) {
+    const int y = y0 + pitch * (int) i;
+    const uint32_t col[4] = {tint(b.pos_color, i, 0xA0A0A0), tint(b.name_color, i, 0xFFFFFF),
+                             tint(b.value_color, i, 0xFFFFFF), tint(b.detail_color, i, 0xA0A0A0)};
+    const std::string *cell[4] = {i < b.pos.size() ? &b.pos[i] : nullptr, &b.name[i],
+                                  i < b.value.size() ? &b.value[i] : nullptr, i < b.detail.size() ? &b.detail[i] : nullptr};
+    for (int k = 0; k < 4; k++)
+      if (cell[k] != nullptr)
+        add(c.cell[k], y, k == 1 ? AppAlign::LEFT : AppAlign::RIGHT, c.own ? col[k] : dim(col[k], kOpa[k]), *cell[k]);
+  }
+  f.rows = BoardLines{};
+}
 
 // Rows, labels, a line, logos or art, else the message.
 inline bool app_frame_board(const AppFrame &f) {
@@ -238,8 +279,8 @@ inline void app_frame_trim(AppFrame &f) {
   if (f.art.size() > kAppArt)
     f.art.resize(kAppArt);
   // One that can't be drawn goes
-  if (!f.art.empty() && (f.art[0].bits == nullptr || f.art[0].w == 0 || f.art[0].h == 0 ||
-                         f.art[0].w > kAppArtMaxW || f.art[0].h > kAppArtMaxH))
+  if (!f.art.empty() && (f.art[0].bits == nullptr || f.art[0].w == 0 || f.art[0].h == 0 || f.art[0].scale < 1 ||
+                         f.art[0].w * f.art[0].scale > kAppArtMaxW || f.art[0].h * f.art[0].scale > kAppArtMaxH))
     f.art.clear();
   AppPhoto &p = f.photo;
   if (p.url.empty() || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH || p.at > f.ticker.size())

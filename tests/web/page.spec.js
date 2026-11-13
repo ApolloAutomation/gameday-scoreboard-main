@@ -2835,6 +2835,45 @@ test("Showing and the second area offer only the displays the firmware lists", a
   expect([st.display, st.display_now, st.split]).toEqual([0, "gameday", 7]);
 });
 
+test("Full screen lets a display fill a 2x2 and keeps the second area's choice for Game Day", async ({ page, request }) => {
+  const FLIGHTS = DISPLAYS.concat([{ id: 3, key: "flights", name: "Flight Tracker", split: 8 }]);
+  // No other displays: nothing to fill the panel with
+  await reset(request, { panels: 2, rows: 2 });
+  await page.goto("/");
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#fullRow")).toBeHidden();
+
+  await reset(request, { panels: 2, rows: 2, displays: FLIGHTS, display: 0, split: 8 });
+  await page.reload();
+  const full = page.getByRole("switch", { name: "Full screen" });
+  await expect(full).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator("#fullHint")).toHaveText("With Showing on F1, Stocks & Crypto or Flight Tracker, it fills all "
+    + "four panels instead of sharing them with the bottom half. This choice comes back for the Scoreboard and the night hours' clock.");
+  await full.click();
+  await expectSet(request, { full: "1" });
+  await expect(full).toHaveAttribute("aria-checked", "true");
+  // Game Day on the main board: the bottom half as before
+  await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+  let st = await deviceState(request);
+  expect([st.full, st.full_now, st.split]).toEqual([true, false, 8]);
+
+  const showing = page.getByRole("combobox", { name: "Showing" });
+  await showing.selectOption({ label: "Flight Tracker" });
+  await expectSet(request, { display: "3" });
+  await expect(page.locator("#splitNow")).toHaveText("Flight Tracker fills the panel now: Full screen is on.");
+  st = await deviceState(request);
+  expect([st.full_now, st.split, st.split_now]).toEqual([true, 8, ""]);
+  // Off again: the bottom half comes back
+  await full.click();
+  await expectSet(request, { full: "0" });
+  await expect(page.locator("#splitNow")).toHaveText("The main board shows Flight Tracker, so this shows the clock.");
+
+  // Four wide: the whole row
+  await reset(request, { panels: 4, displays: FLIGHTS, split: 4 });
+  await page.reload();
+  await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing them with the right two panels.");
+});
+
 // The Stocks & Crypto card (components/gameday/app_markets.h).
 const mktRows = (page) => page.locator("#mktList .mktrow > label");
 

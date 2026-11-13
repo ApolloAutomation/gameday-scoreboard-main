@@ -46,17 +46,26 @@ inline SplitShow split_effective(uint8_t show, SplitAt at) {
   return s == SplitShow::OFF && at == SplitAt::BOTTOM ? SplitShow::CLOCK : s;
 }
 
+// Full screen: the main board's display takes the area too.
+inline bool split_full(bool full, bool main_app, SplitAt at) { return full && main_app && at != SplitAt::NONE; }
+
 // Beside an area, the main board is one 128x64 panel.
 struct SplitArea {
   bool on{false};
   int16_t main_w{64};
+  int16_t main_h{64};  // 128 for a 2x2 at full screen
   int16_t x{0}, y{0}, w{0}, h{0};
 };
 
-inline SplitArea split_area(int cols, int rows, uint8_t show) {
+// full: as split_full gives, the whole panel.
+inline SplitArea split_area(int cols, int rows, uint8_t show, bool full = false) {
   SplitArea a;
   a.main_w = (int16_t) (cols > 0 ? cols * 64 : 64);
   const SplitAt at = split_at(cols, rows);
+  if (full && at != SplitAt::NONE) {
+    a.main_h = (int16_t) (rows * 64);
+    return a;
+  }
   if (split_effective(show, at) == SplitShow::OFF)
     return a;
   a.on = true;
