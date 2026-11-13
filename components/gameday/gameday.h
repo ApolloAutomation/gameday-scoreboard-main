@@ -1306,6 +1306,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
            ::espn::split_full(this->split_prefs_.full != 0, this->main_view_ == ::espn::MainView::APP,
                               ::espn::split_at(this->panels_->cols(), this->panels_->rows()));
   }
+  // Until then the old layout draws nothing.
+  bool relayout_due_() const { return this->full_want_() != this->full_on_; }
   void apply_full_();
   ::espn::SplitShow a2_show_() const {
     return this->panels_ != nullptr && !this->full_on_

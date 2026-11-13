@@ -2852,7 +2852,7 @@ test("Full screen lets a display fill a 2x2 and keeps the second area's choice f
   await full.click();
   await expectSet(request, { full: "1" });
   await expect(full).toHaveAttribute("aria-checked", "true");
-  // Game Day on the main board: the bottom half as before
+  // Game Day on the board: the bottom half stays
   await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
   let st = await deviceState(request);
   expect([st.full, st.full_now, st.split]).toEqual([true, false, 8]);
@@ -2871,7 +2871,7 @@ test("Full screen lets a display fill a 2x2 and keeps the second area's choice f
   // Four wide: the whole row
   await reset(request, { panels: 4, displays: FLIGHTS, split: 4 });
   await page.reload();
-  await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing them with the right two panels.");
+  await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing it with the right two panels.");
 });
 
 // The Stocks & Crypto card (components/gameday/app_markets.h).

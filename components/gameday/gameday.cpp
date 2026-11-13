@@ -2498,7 +2498,7 @@ bool GamedayComponent::idle_update_() {
   const bool main_changed = mv != this->main_view_;
   this->main_view_ = mv;
   // Deferred: emit_ may be deep in fav_choose_.
-  if (this->full_want_() != this->full_on_)
+  if (this->relayout_due_())
     this->defer("full", [this]() { this->apply_full_(); });
   const ::espn::IdleView v = this->idle_effective_(s.view);
   // The owner's change lasts until the night hours end.
@@ -4998,7 +4998,7 @@ void GamedayComponent::set_full(bool on) {
 
 // The area off or back, as set_split does.
 void GamedayComponent::apply_full_() {
-  if (this->full_want_() == this->full_on_)
+  if (!this->relayout_due_())
     return;
   const bool was_rotating = this->rotation_on_();
   this->full_on_ = !this->full_on_;
@@ -6025,7 +6025,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {
-  if (this->main_app_ == nullptr)
+  if (this->main_app_ == nullptr || this->relayout_due_())
     return;
   UpdateFields &af = *this->main_app_;
   af = UpdateFields{};
@@ -6304,7 +6304,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   // No Game Day splash while another display has the board.
   if (this->main_view_ != ::espn::MainView::GAMEDAY || !this->anim_on())
     f.splash_anim = 0;
-  if (!f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY) {
+  const bool splash_now = !f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY;
+  if (splash_now) {
     ESP_LOGI(TAG, "Splash: %s%s%s", f.splash_text.c_str(), f.splash_anim ? ", scene " : "",
              f.splash_anim ? ::espn::anim_name((::espn::AnimKind) f.splash_anim) : "");
     this->splash_ms_ = millis() == 0 ? 1 : millis();
@@ -6316,6 +6317,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
+  // apply_full_ draws it next, at the new size.
+  if (this->relayout_due_() && !splash_now)
+    return;
   // Before the area, which reads what the board shows.
   const bool app_main = this->main_view_ != ::espn::MainView::GAMEDAY;
   if (app_main)

@@ -1149,8 +1149,9 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const names = others.map((d) => d.name);
     const which = names.length > 1 ? names.slice(0, -1).join(", ") + " or " + names[names.length - 1] : names[0] || "";
     const area = S.split_at === "bottom" ? "the bottom half" : S.split_at === "right2" ? "the right two panels" : "the right panel";
-    $("#fullHint").textContent = "With Showing on " + which + ", it fills " + (S.split_at === "bottom" ? "all four panels" : "the whole row")
-      + " instead of sharing them with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
+    const bottom = S.split_at === "bottom";
+    $("#fullHint").textContent = "With Showing on " + which + ", it fills " + (bottom ? "all four panels" : "the whole row")
+      + " instead of sharing " + (bottom ? "them" : "it") + " with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
     const n = Number(S.split_n) || 0;
     const now = S.split_now;
     let line = "";

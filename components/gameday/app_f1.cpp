@@ -892,7 +892,7 @@ void F1App::circuit_frame_(int w, int h, int64_t now, AppFrame &out) const {
     put_status(out, w, glyphs(full) <= 12 ? full : f1_short_name(brief, 12), kWhite);
   }
   const esphome::gameday::RowsGeom g = esphome::gameday::rows_geom(w);
-  // Right of the facts, the whole panel, or full screen's top.
+  // Beside the facts, the whole panel, or full screen's top
   const bool tall = esphome::gameday::tall_board(w, h);
   const int x0 = tall ? 2 : wide ? g.name.x + g.name.w + 3 : 2, x1 = wide ? w - 2 : w - 3;
   const int y0 = tall ? 11 : 9, y1 = tall ? 76 : (h > 20 ? h : 64) - 10;
