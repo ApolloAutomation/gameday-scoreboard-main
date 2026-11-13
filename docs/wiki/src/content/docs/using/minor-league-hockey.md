@@ -50,9 +50,7 @@ A few things HockeyTech's feed doesn't have:
 
 Every goal splashes the same way, yours and, with **Opponent scores too** on, the other side's, under the hockey **Goal** switch in the Celebrations card, as an NHL goal does. HockeyTech doesn't say which came on a power play or into an empty net either. The winning goal in a shootout splashes like any other. See [Celebrations](/using/device-page/#celebrations).
 
-:::note[Coming in the next release]
 An AHL or ECHL goal plays the same goal animation as an NHL goal before its splash, with the scoring team in white, since HockeyTech gives no team colors. See [Goal animation](/using/hockey/#goal-animation).
-:::
 
 ## The final
 

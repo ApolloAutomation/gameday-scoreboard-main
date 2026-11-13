@@ -61,7 +61,6 @@ A touchdown gets fireworks on black with the words in the team's color. The fire
 
 ### Play animations
 
-:::note[Coming in the next release]
 Before a touchdown's, a field goal's, an extra point's or a two-point conversion's splash, the panel plays the score across the whole screen for about 3 seconds, in pixel art, with players in the scoring team's colors on a field under the stadium lights:
 
 | Score | What plays |
@@ -79,7 +78,6 @@ While it plays, a caption across the top says what happened: the scorer's name w
 The scoring team always runs from its own side of the board toward the end zone on the other side, so a touchdown by the team on the right runs right to left. On three or four panels in a row the play spans every panel, and on two rows of two it fills all four, with bigger players.
 
 Then the splash shows for its usual 7 seconds, fireworks and all. The panel tells the plays apart from ESPN's play type, and from the play's words when the type is missing. Only a made kick or a good two-point try plays, never a missed or blocked kick or a failed try, and a play that ends in a safety plays nothing. A touchdown and its extra point in one update play the touchdown when ESPN's latest play is the touchdown; when ESPN has already moved on to the extra point, they play the kick, captioned **TOUCHDOWN + PAT GOOD** with **+7**, and a good two-point try plays as **TOUCHDOWN + 2-PT GOOD** with **+8**. An extra point a read later plays its own short kick, never the touchdown again. A play it can't tell, like a touchdown ESPN has already replaced with the next kickoff, gets the splash on its own. **Play animations** in the Celebrations card turns them off; see [Celebrations](/using/device-page/#celebrations).
-:::
 
 The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN, in their color. The other side's splashes need **Opponent scores too** in the Celebrations card. The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.
 
