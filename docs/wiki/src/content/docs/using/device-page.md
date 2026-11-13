@@ -125,6 +125,10 @@ Under **Idle display** a line says what the panel is doing about it now, like **
 
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
+:::note[Coming in the next release]
+**Game board**, in the Panel card under **Text size**, is **Scoreboard**, where a panel starts, or **Field view**: a football game in progress drawn as a field, with the ball's spot, the line of scrimmage, the line to gain, the red zone and the drive, and the scores and the clock above it. Other sports, and football before the kickoff and after the final, keep the scoreboard. A change shows on the panel at once. **Try it** next to it shows a sample field on the panel for 15 seconds, in the colors of the game on the board, while the Scoreboard page is up, then the panel goes back to what it showed. Home Assistant has the setting as **Field View**. See [Field view](/using/football/#field-view).
+:::
+
 **Standing next to pro teams** sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it, and so does an AHL or ECHL team, since HockeyTech has none either. It's hidden while your panel follows only college teams, minor league baseball, AHL or ECHL teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 With three or four panels, Bluetooth setup is off and the panel sets up through its hotspot. The Setup card says so under the pictures.
@@ -137,6 +141,10 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 | --- | --- |
 | **Shows** | **Rotating live games**, **A second team's game**, **Today's scores**, **Clock and date**, **F1**, **Stocks & Crypto** or **Flight Tracker**, and on three and four wide **Nothing: the board fills the row**, where those start. While the main board shows another display, **Game Day** puts the scoreboard here. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
+
+:::note[Coming in the next release]
+**Game details**, a switch under **Shows** when it's **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date** (or **Nothing** on two rows of two, which is the clock there), puts your football game's field in the second area while the game is on, in place of the clock, the date or the scores. It's off unless you turn it on, and the line under it says **Showing your game's details.** while it shows. See [The second area](/using/panel-sizes/#the-second-area).
+:::
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game**, **No other live games: showing the clock**, **Showing F1.** or **Showing Game Day.** When the main board shows the display you picked here already, it says why the area shows the clock instead, like **The main board shows F1, so this shows the clock.** See [The second area](/using/panel-sizes/#the-second-area).
 

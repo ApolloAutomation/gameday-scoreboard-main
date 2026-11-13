@@ -57,7 +57,8 @@ struct Settings {
   // The main area's display, and the ones the firmware has
   int display{0};
   uint8_t displays{kGameDayOnly};
-  int clocksize{0}, textsize{0};
+  int clocksize{0}, textsize{0}, sportview{0};
+  bool areadetail{false};
   uint8_t team_league{0};
   // rotatesec: Switch every, in seconds.
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
@@ -150,6 +151,8 @@ void load(Settings &s, JsonObjectConst o) {
   }
   num("clocksize", s.clocksize);
   num("textsize", s.textsize);
+  num("sportview", s.sportview);
+  flag("areadetail", s.areadetail);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -366,6 +369,8 @@ void apply(Settings &s, const SetOp &op) {
       break;
     case SetKind::CLOCK_SIZE: s.clocksize = op.value; break;
     case SetKind::TEXT_SIZE: s.textsize = op.value; break;
+    case SetKind::SPORT_VIEW: s.sportview = op.value; break;
+    case SetKind::AREA_DETAIL: s.areadetail = op.on; break;
     case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
       if (op.team.id == 0 || !(op.team == s.team))
         s.splitteam = op.team;
@@ -465,6 +470,8 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["display"] = s.display;
   doc["clocksize"] = s.clocksize;
   doc["textsize"] = s.textsize;
+  doc["sportview"] = s.sportview;
+  doc["areadetail"] = s.areadetail;
   doc["splitteam"] = team_str(s.splitteam);
   flights::prefs_state(s.flights, flights::units_for_zone(s.tz), doc["flights"].to<JsonObject>());
   JsonArray players = doc["players"].to<JsonArray>();
@@ -658,7 +665,11 @@ void test_parse_set() {
   for (const char *bad : {"2", "-1", "", "01", "1 ", "L", "large"}) {
     SCHECK(!parse_set("clocksize", bad, op, kFavMax), "clocksize %s", bad);
     SCHECK(!parse_set("textsize", bad, op, kFavMax), "textsize %s", bad);
+    SCHECK(!parse_set("sportview", bad, op, kFavMax), "sportview %s", bad);
   }
+  SCHECK(parse_set("sportview", "1", op, kFavMax) && op.kind == SetKind::SPORT_VIEW && op.value == 1, "sportview 1");
+  SCHECK(parse_set("sportview", "0", op, kFavMax) && op.value == 0, "sportview 0");
+  SCHECK(parse_set("areadetail", "1", op, kFavMax) && op.kind == SetKind::AREA_DETAIL && op.on, "areadetail 1");
 
   SCHECK(parse_set("idle", "4", op, kFavMax) && op.kind == SetKind::IDLE && op.value == 4, "idle 4");
   SCHECK(parse_set("idle", "0", op, kFavMax) && op.value == 0, "idle 0");

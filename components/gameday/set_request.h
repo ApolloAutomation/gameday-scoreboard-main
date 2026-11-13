@@ -32,9 +32,9 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "lockon",    "release",    "collide",   "favs",     "today",      "live",
                                     "autoupd",   "count",      "match",     "beta",     "alerts",     "alertfav",
                                     "anim",      "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
-                                    "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
+                                    "sportview", "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
                                     "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
-                                    "display",   "splitteam",  "split",     "full"};
+                                    "display",   "splitteam",  "split",     "full",     "areadetail"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -284,6 +284,8 @@ enum class SetKind : uint8_t {
   MAIN_DISPLAY, // value, apps.h's Display: what the main area shows
   ANIM,         // on, play animations before big plays' splashes
   FULL,         // on: a display on the main board fills the panel
+  SPORT_VIEW,   // value, 0 Scoreboard or 1 Field view: the game board
+  AREA_DETAIL,  // on, the game's details in the second area
 };
 
 struct TeamRef {
@@ -620,6 +622,13 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::ALERTFAV);
   if (k == "anim")
     return on(SetKind::ANIM);
+  if (k == "areadetail")
+    return on(SetKind::AREA_DETAIL);
+  if (k == "sportview") {
+    op.kind = SetKind::SPORT_VIEW;
+    op.value = v.size() == 1 && (v[0] == '0' || v[0] == '1') ? v[0] - '0' : -1;
+    return op.value >= 0;
+  }
   if (k == "idle") {
     op.kind = SetKind::IDLE;
     op.value = read_int(v);

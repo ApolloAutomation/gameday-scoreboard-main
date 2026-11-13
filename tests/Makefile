@@ -14,8 +14,8 @@ all: build/test_parse build/test_networks
 	./build/test_parse
 	./build/test_networks
 
-TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp test_f1.cpp test_app_f1.cpp test_markets.cpp test_markets_app.cpp test_flights.cpp test_plane_art.cpp test_logo_decode.cpp test_pictures.cpp test_plane_photo.cpp
-SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/box_score.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp ../components/gameday/source_mlbstats.cpp ../components/gameday/source_hockeytech.cpp ../components/gameday/f1.cpp ../components/gameday/f1_parse.cpp ../components/gameday/app_f1.cpp ../components/gameday/source_markets.cpp ../components/gameday/app_markets.cpp ../components/gameday/flights.cpp ../components/gameday/app_flights.cpp ../components/gameday/plane_art.cpp ../components/gameday/scene.cpp
+TESTS = test_parse.cpp golden_football.cpp test_set.cpp test_alerts.cpp test_bets.cpp test_watch.cpp test_players.cpp test_mlbstats.cpp test_hockeytech.cpp test_split.cpp test_layout.cpp test_props.cpp test_apps.cpp test_f1.cpp test_app_f1.cpp test_markets.cpp test_markets_app.cpp test_flights.cpp test_plane_art.cpp test_logo_decode.cpp test_pictures.cpp test_plane_photo.cpp test_field.cpp
+SRCS = $(TESTS) ../components/gameday/espn_parse.cpp ../components/gameday/box_score.cpp ../components/gameday/sport_baseball.cpp ../components/gameday/sport_soccer.cpp ../components/gameday/sport_basketball.cpp ../components/gameday/sport_hockey.cpp ../components/gameday/sport_golf.cpp ../components/gameday/sport_racing.cpp ../components/gameday/source_mlbstats.cpp ../components/gameday/source_hockeytech.cpp ../components/gameday/f1.cpp ../components/gameday/f1_parse.cpp ../components/gameday/app_f1.cpp ../components/gameday/source_markets.cpp ../components/gameday/app_markets.cpp ../components/gameday/flights.cpp ../components/gameday/app_flights.cpp ../components/gameday/plane_art.cpp ../components/gameday/scene.cpp ../components/gameday/field.cpp
 
 build/test_parse: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h) ../components/panel_layout/layouts.h
 	@mkdir -p build
@@ -35,16 +35,17 @@ build/replay: replay.cpp $(filter-out $(TESTS),$(SRCS)) $(wildcard ../components
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) replay.cpp $(filter-out $(TESTS),$(SRCS)) -o $@ $(LDFLAGS)
 
-# Not part of `all`: play animation GIFs for review
+# Not part of `all`: animation and Field view review GIFs
 #   make review            writes build/review/*.gif (REVIEW_DIR to move it)
+#   REVIEW_FONTS=<dir>     spleen BDFs: labels drawn as on the panel
 REVIEW_DIR ?= build/review
 review: build/review_gifs
 	@mkdir -p $(REVIEW_DIR)
 	./build/review_gifs $(REVIEW_DIR)
 
-build/review_gifs: review.cpp gif_write.h scene_render.h ../components/gameday/scene.cpp $(wildcard ../components/gameday/*.h)
+build/review_gifs: review.cpp gif_write.h scene_render.h field_render.h review_field.h $(filter-out $(TESTS),$(SRCS)) $(wildcard ../components/gameday/*.h)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) review.cpp ../components/gameday/scene.cpp -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) review.cpp $(filter-out $(TESTS),$(SRCS)) -o $@ $(LDFLAGS)
 
 # Not part of `all`: the memory each ESPN read takes, as JSON for
 # scripts/size_budget.py (CI's budget check, firmware/budget.json).

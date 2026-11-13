@@ -12,6 +12,7 @@
 
 #include "apps.h"
 #include "board_layout.h"
+#include "field.h"
 
 namespace esphome::gameday {
 
@@ -68,6 +69,11 @@ struct BoardView {
   uint32_t art_key{0};
   lv_obj_t *bar{nullptr};  // its box, under the rows
   lv_obj_t *photo{nullptr};  // its photo, over the art's spot
+  // Football's field under the labels, made on first use
+  lv_obj_t *field{nullptr};
+  uint16_t *field_buf{nullptr}, *field_next{nullptr};  // shown, and painted
+  size_t field_px{0};
+  ::espn::FieldPic field_shown{};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout

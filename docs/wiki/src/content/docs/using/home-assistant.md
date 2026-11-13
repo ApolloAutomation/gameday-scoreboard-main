@@ -64,6 +64,10 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, from MLB and HockeyTech for minor league baseball, AHL and ECHL teams, and what F1, Stocks & Crypto and the Flight Tracker read. It keeps its name, though the device page calls it **Data used**. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
+:::note[Coming in the next release]
+**Field View** is the Panel card's **Game board**: on for the [Field view](/using/football/#field-view), a football game in progress drawn as a field, and off for the scoreboard, where a panel starts.
+:::
+
 For a minor league baseball, AHL or ECHL team, **Game Status** follows the game the same way. See [Baseball: minor leagues](/using/minor-league-baseball/) and [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 
 While a golf tour is the team, **Game Status** is the tournament in one line, like "TOTO Japan Classic | Round 3 | Leader: Iwai -12", "World Wide Technology Championship | Final | James wins at -20" or "The RSM Classic | Nov 19-22". See [Golf](/using/golf/).

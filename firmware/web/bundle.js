@@ -189,6 +189,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
             <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
             <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
             <div class="ctl" id="fullRow" hidden><label>Full screen<small id="fullHint"></small></label><button class="sw" data-set="full" aria-label="Full screen" aria-describedby="fullHint"></button></div>
+            <div class="ctl" id="areaDetailRow" hidden><label>Game details<small>While your football game is on, its field, the drive and each side's chance to win take the place of the clock, the date or the scores here. Not while the main board shows the Field view.</small></label><button class="sw" data-set="areadetail" aria-label="Game details"></button></div>
             <p class="hint" id="splitNow" role="status"></p>
           </div>
         </div>
@@ -235,6 +236,10 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <div id="sizeCtls" hidden>
           <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The game clock during a game, and the time when the panel shows a clock: the off-season clock, the idle display's Clock, the Clock page and the second area's Clock and date. Large makes them bigger where they fit.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
           <div class="ctl"><label for="textsize">Text size<small id="textsizeHelp">The ticker along the bottom of the board, and of the second area's game. Large has bigger letters. A golf or racing leaderboard keeps the small ones, and the ticker under the second area's clock is big at either size.</small></label><select id="textsize" aria-label="Text size" aria-describedby="textsizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
+        </div>
+        <div id="sportCtls" hidden>
+          <div class="ctl"><label for="sportview">Game board<small id="sportviewHelp">How a football game in progress shows on the main board. The Field view draws the field with the ball's spot, the line of scrimmage and the line to gain, the drive, and the score and the clock above it, and the ticker carries the game's leaders, the drive and each side's chance to win. Other sports, and football before the kickoff and after the final, keep the scoreboard.</small></label><select id="sportview" aria-label="Game board" aria-describedby="sportviewHelp"><option value="0">Scoreboard</option><option value="1">Field view</option></select></div>
+          <div class="ctl"><label>Try it<small>Shows a sample field on the Scoreboard page for 15 seconds, in your game's colors, then the panel goes back to what it showed.</small></label><button class="btn" id="fieldTry">Field view</button></div>
         </div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="nightCtls" hidden>
@@ -547,7 +552,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
   const stateForm = {
     mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
-    clocksize: Number, textsize: Number,
+    clocksize: Number, textsize: Number, sportview: Number, areadetail: (v) => v === "1",
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
@@ -677,6 +682,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       toast("Device did not respond (" + (e.message || "network") + ")");
     }
   };
+  $("#fieldTry").onclick = () => doAction("field");
 
   // Every ping calls this; #conn is a live region, so only a flip touches it.
   const setConn = (on) => {
@@ -1142,6 +1148,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     $("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
+    // Game details stand in for these choices only
+    $("#areaDetailRow").hidden = S.areadetail === undefined || show < 1 || show > 4;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
     // Full screen: the main board's display takes this area too
     const others = otherDisplays();
@@ -1159,6 +1167,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
     else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
     else if (now === "game") line = "Showing Game Day.";
+    else if (now === "detail") line = "Showing your game's details.";
     else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
     else if (now === "clock" || now === "date") {
       line = show === 2 && !t ? "Pick a team for it."
@@ -1179,7 +1188,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   const standingSel = $("#standing");
   standingSel.onchange = () => setGD({ standing: standingSel.value });
   // Clock size and Text size: Normal (0) or Large (1)
-  const sizeSels = ["clocksize", "textsize"].map((k) => {
+  const sizeSels = ["clocksize", "textsize", "sportview"].map((k) => {
     const sel = $("#" + k);
     sel.onchange = () => setGD({ [k]: sel.value });
     return sel;
@@ -1338,6 +1347,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
     // Older firmware sends no sizes.
     $("#sizeCtls").hidden = S.clocksize === undefined;
+    // Nor the Game board
+    $("#sportCtls").hidden = S.sportview === undefined;
     sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
     // Nor watch; an unlisted stay gets its own option
     $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;

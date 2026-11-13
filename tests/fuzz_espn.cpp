@@ -18,6 +18,7 @@
 #include "espn_parse.h"
 #include "app_f1.h"
 #include "f1.h"
+#include "field.h"
 #include "flights.h"
 #include "plane_photo.h"
 #include "logo_icon.h"
@@ -183,6 +184,26 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   }
   if (g.sport == Sport::BASKETBALL)
     n += basketball_series(g).size();
+  // The Field view, every width, painted
+  if (field_ready(g)) {
+    n += field_ticker(g, true).size();
+    for (int w : {64, 128, 192, 256}) {
+      SportFrame fr;
+      sport_frame(g, clock_text(g), w, w == 128, fr);
+      std::vector<uint16_t> buf((size_t) fr.pic.w * fr.pic.h);
+      Px565 p;
+      p.px = buf.data();
+      p.w = p.stride = fr.pic.w;
+      p.h = fr.pic.h;
+      p.clip = PxBox{0, 0, p.w, p.h};
+      field_paint(p, fr.pic);
+      n += buf.empty() ? 0 : buf[buf.size() / 2] + fr.texts.size();
+      if (w <= 128) {
+        detail_frame(g, clock_text(g), w, w == 64, fr);
+        n += fr.texts.size();
+      }
+    }
+  }
   return n;
 }
 

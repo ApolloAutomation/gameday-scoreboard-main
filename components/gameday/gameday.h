@@ -29,6 +29,7 @@
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"
+#include "field.h"
 #include "follow.h"
 #include "guard.h"
 #include "health.h"
@@ -169,6 +170,9 @@ struct UpdateFields {
   std::vector<::espn::AppArt> art;  // and its picture
   image::Image *photo_img{nullptr};  // or its loaded photo
   int16_t photo_xy[2]{};
+  // Football's field under the labels (field.h)
+  bool field{false};
+  ::espn::FieldPic field_pic;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -208,7 +212,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+//   POST /gameday/action?do=refresh|qc|power_ok|anim|field (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+//                                    field: a sample Field view for 15 s;
 //                                    qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -354,6 +359,14 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool anim_on() const { return (this->prefs9_.flags & ALERT9_NOANIM) == 0; }
   void set_anim(bool on);
   void try_anim_(const std::string &play);
+  // Game board: 0 Scoreboard, 1 Field view (football)
+  bool field_view() const { return this->split_prefs_.game_board == 1; }
+  void set_sport_view(int view);
+  // The second area's Game details
+  bool area_detail() const { return this->split_prefs_.area_detail != 0; }
+  void set_area_detail(bool on);
+  // The Try it: a sample field for kFieldTryMs
+  void try_field_();
   void set_alerts(uint32_t on);
   void set_alerts_favorites_only(bool on);
   bool watch_on() const { return (this->prefs9_.flags & ALERT9_NOWATCH) == 0; }
@@ -865,6 +878,15 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void emit_(const ::espn::Splash &splash);
   // countdown: a kickoff countdown replaces the clock.
   void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f, bool countdown = false);
+  // The Field view: g's game in progress, Field view picked
+  bool field_on_(const GameSnapshot &g) const {
+    return this->field_view() && ::espn::field_ready(g) && !this->demo_playing_();
+  }
+  // f's board becomes g's field, w wide; area: Game details
+  void field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area) const;
+  // The Try it's sample in place of f's board
+  void field_try_fields_(UpdateFields &f);
+  uint32_t field_try_ms_{0};
   // "Sun 3:25 PM" in the panel's time zone.
   std::string kickoff_of_(const GameSnapshot &g) const;
   // board: the game is a leaderboard.
@@ -1294,7 +1316,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint32_t team_id;     // 0 means no team
     uint8_t display;      // the main area's Display, 0 on older panels
     uint8_t full;         // 1: that display fills the panel
-    uint8_t spare[8];
+    uint8_t game_board;   // 1 Field view; 0, older panels too, Scoreboard
+    uint8_t area_detail;  // Game details in the area; 0 off
+    uint8_t spare[6];
   } __attribute__((packed));
   static_assert(sizeof(SplitPrefs) == 16, "SplitPrefs keeps its size, or every setting in it resets");
   ESPPreferenceObject split_pref_;

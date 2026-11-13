@@ -11,7 +11,8 @@ routes with the response shapes from components/gameday/gameday.cpp:
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know
-                         (anim takes play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey);
+                         (anim takes play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+                         field shows a sample Field view);
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
   POST /gameday/wifi     forget=<ssid>; 404 when it is not saved
@@ -341,6 +342,8 @@ INITIAL = {
     "autoupd": False, "beta": False, "standing": 0,
     # Clock size and Text size: 0 Normal, 1 Large.
     "clocksize": 0, "textsize": 0,
+    # Game board: 0 Scoreboard, 1 Field view; the area's Game details
+    "sportview": 0, "areadetail": False,
     # Big-play alert types on, as bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False, "anim": True,
     # The big-play watcher (components/gameday/watch.h): stay in seconds.
@@ -866,7 +869,7 @@ def apply_set(kv):
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
         elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "anim", "watch",
-                   "watchmine", "full"):
+                   "watchmine", "full", "areadetail"):
             STATE[k] = v == "1"
             if k == "watch" and v != "1":
                 end_visit()
@@ -932,6 +935,9 @@ def apply_set(kv):
         elif k in ("clocksize", "textsize"):
             # One ASCII digit, as for split
             if re.fullmatch(r"[0-9]", v, re.ASCII) and int(v) < LIMITS["kSizeCount"]:
+                STATE[k] = int(v)
+        elif k == "sportview":
+            if re.fullmatch(r"[01]", v, re.ASCII):
                 STATE[k] = int(v)
         elif k == "idle":
             if 0 <= atoi(v) < LIMITS["kIdleCount"]:
@@ -1171,7 +1177,7 @@ class Handler(BaseHTTPRequestHandler):
             LOG.append({"path": u.path, "q": q})
             if not q.get("do"):
                 return self._json(400, {"error": "do is required"})
-            if q["do"] not in ("refresh", "qc", "power_ok", "anim"):
+            if q["do"] not in ("refresh", "qc", "power_ok", "anim", "field"):
                 return self._json(404, {"error": "unknown action"})
             if q["do"] == "power_ok" and STATE.get("health"):
                 STATE["health"]["power"] = "ok"

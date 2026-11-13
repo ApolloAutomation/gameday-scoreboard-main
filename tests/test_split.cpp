@@ -131,6 +131,40 @@ void test_area_view() {
   PCHECK(area_view(in) == AreaView::CLOCK);
   in.jump = true;  // a big play still shows at night
   PCHECK(area_view(in) == AreaView::LIVE);
+
+  // Game details replace only the clock, the date or scores
+  for (int show = 0; show < kSplitCount; show++) {
+    for (int k = 0; k < 4; k++) {
+      in = AreaInputs{};
+      in.show = (SplitShow) show;
+      in.main_clock = k == 1;
+      in.scores = k == 2;
+      in.team_set = in.team_card = k == 3;
+      in.displays = 0xF;
+      in.main = show == (int) SplitShow::GAMEDAY ? Display::F1 : Display::GAMEDAY;
+      const AreaView before = area_view(in);
+      in.detail = true;
+      const AreaView v = area_view(in);
+      const bool takes = show != (int) SplitShow::OFF && show < (int) SplitShow::GAMEDAY &&
+                         (before == AreaView::CLOCK || before == AreaView::DATE || before == AreaView::SCORES);
+      PCHECK(v == (takes ? AreaView::DETAIL : before));
+      // A big play's jump keeps the area
+      in.jump = true;
+      PCHECK(area_view(in) != AreaView::DETAIL);
+    }
+  }
+  in = AreaInputs{};
+  in.show = SplitShow::LIVE;
+  in.rot_games = true;
+  in.detail = true;
+  PCHECK(area_view(in) == AreaView::LIVE);  // rotating games stay
+  in.show = SplitShow::TEAM;
+  in.team_set = in.team_card = true;
+  PCHECK(area_view(in) == AreaView::TEAM);  // the second team's game stays
+  in.show = SplitShow::FLIGHTS;
+  in.displays = 0xF;
+  PCHECK(area_view(in) == AreaView::APP);  // a display stays
+  PCHECK(std::string(area_view_key(AreaView::DETAIL)) == "detail");
 }
 
 void test_scores_step() {

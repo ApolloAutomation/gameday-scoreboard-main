@@ -641,6 +641,74 @@ test("clock size and text size: normal by default, each posts large and back, hi
   await expect(page.locator("#sizeCtls")).toBeHidden();
 });
 
+test("game board: the scoreboard by default, the Field view posts and back, Try it asks for a sample, hidden on older firmware", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#sportCtls")).toBeVisible();
+  const board = page.getByRole("combobox", { name: "Game board", exact: true });
+  await expect(board).toHaveAccessibleDescription(/^How a football game in progress shows on the main board\. .* keep the scoreboard\.$/);
+  await expect(board).toHaveValue("0");
+  await expect(board.locator("option")).toHaveText(["Scoreboard", "Field view"]);
+  await board.selectOption({ label: "Field view" });
+  await expectSet(request, { sportview: "1" });
+  await expect.poll(async () => (await deviceState(request)).sportview).toBe(1);
+  await page.reload();
+  await expect(board).toHaveValue("1");
+  await board.selectOption({ label: "Scoreboard" });
+  await expectSet(request, { sportview: "0" });
+  await expect.poll(async () => (await deviceState(request)).sportview).toBe(0);
+  // The sizes stay as they were
+  const s = await deviceState(request);
+  expect([s.clocksize, s.textsize]).toEqual([0, 0]);
+  await page.locator("#sportCtls").getByRole("button", { name: "Field view", exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.do))
+    .toContain("field");
+  // Firmware from before the Field view sends no game board.
+  await reset(request, { sportview: null, areadetail: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#sportCtls")).toBeHidden();
+});
+
+test("game details: a switch under a second area's clock, scores, team or live games, off by default, never with a display", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2 });
+  await page.goto("/");
+  const sw = page.getByRole("switch", { name: "Game details", exact: true });
+  // Off on two rows of two is the clock
+  await expect(page.locator("#areaDetailRow")).toBeVisible();
+  await expect(sw).not.toBeChecked();
+  await sw.click();
+  await expectSet(request, { areadetail: "1" });
+  await expect(sw).toBeChecked();
+  await expect.poll(async () => (await deviceState(request)).areadetail).toBe(true);
+  // The choice under it stays
+  expect((await deviceState(request)).split).toBe(0);
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  for (const v of ["1", "2", "3", "4"]) {
+    await split.selectOption(v);
+    await expect(page.locator("#areaDetailRow")).toBeVisible();
+  }
+  await reset(request, { panels: 4, display: 1, split: 5, areadetail: true,
+                         displays: [{ id: 0, key: "gameday", name: "Game Day", split: 5 }, { id: 1, key: "f1", name: "F1", split: 6 }] });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+  // Nothing in the area: nothing to switch
+  await reset(request, { panels: 4, split: 0 });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+  await reset(request, { panels: 4, split: 4, split_now: "detail", areadetail: true });
+  await page.reload();
+  await expect(page.locator("#areaDetailRow")).toBeVisible();
+  // Older firmware: no switch
+  await reset(request, { panels: 4, split: 4, areadetail: null });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+});
+
 const PGA = { l: "pga", id: 1106, abbr: "PGA", name: "PGA Tour" };
 
 test("a golf tour is a team on the Golf tab, and its leaderboard shows on the board", async ({ page, request }) => {

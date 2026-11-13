@@ -8,15 +8,15 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2817200,
+      "flash": 2854500,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2817200,
+      "flash": 2854500,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2793800,
+      "flash": 2830900,
       "static_ram": 172568
     }
   },
@@ -143,7 +143,7 @@
     },
     "poll_ncaa_event_players": {
       "heap": 2000,
-      "json": 9400
+      "json": 10400
     },
     "poll_ncaa_scoreboard": {
       "heap": 1508,
@@ -151,7 +151,7 @@
     },
     "poll_nfl_event": {
       "heap": 1584,
-      "json": 7503
+      "json": 9000
     },
     "poll_nhl_event": {
       "heap": 1621,
