@@ -93,6 +93,12 @@ struct UpdateFields {
   int8_t splash_side{-1};
   uint8_t splash_lead{0};
   std::string splash_points;
+  // The play animation before it (scene.h); seq: the splash's millis()
+  uint8_t splash_anim{0};
+  int16_t splash_anim_dist{0};
+  uint8_t splash_anim_flags{0};
+  uint32_t splash_seq{0};
+  std::string splash_say, splash_score;  // its caption, Splash's anim_say and anim_score
   std::string last_play;
   std::string clock_text;  // "5:36 - 3rd" while the game is live, else empty
   std::string down_distance;  // "3rd & 10" while live, else empty
@@ -154,10 +160,15 @@ struct UpdateFields {
   uint32_t line_color{0xFFFFFF};
   // Another display's own labels over the board.
   std::vector<::espn::AppText> texts;
+  // Another display's filled box, under the rows.
+  ::espn::AppFill bar;
   // Another display's loaded logos, with x, y pairs.
   image::Image *icon_img[::espn::kAppIcons]{};
   int16_t icon_xy[2 * ::espn::kAppIcons]{};
   uint8_t icon_n{0};
+  std::vector<::espn::AppArt> art;  // and its picture
+  image::Image *photo_img{nullptr};  // or its loaded photo
+  int16_t photo_xy[2]{};
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -197,7 +208,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc|power_ok   (qc: the factory check, firmware/pages/qc.yaml;
+//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+//                                    qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
 //                                    names only (components/saved_networks)
@@ -339,6 +351,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void set_opponent_splashes(bool on) { this->set_flag_(FLAG_OPP, on); }
   uint32_t alerts_on() const { return ::espn::kAlertsAll & ~this->prefs9_.alerts_off; }
   bool alerts_favorites_only() const { return (this->prefs9_.flags & ALERT9_FAV) != 0; }
+  bool anim_on() const { return (this->prefs9_.flags & ALERT9_NOANIM) == 0; }
+  void set_anim(bool on);
+  void try_anim_(const std::string &play);
   void set_alerts(uint32_t on);
   void set_alerts_favorites_only(bool on);
   bool watch_on() const { return (this->prefs9_.flags & ALERT9_NOWATCH) == 0; }
@@ -564,6 +579,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   static constexpr uint8_t ALERT9_FAV = 1;      // only games with the team or a favorite
   static constexpr uint8_t ALERT9_NOWATCH = 2;  // don't switch to big plays in other games
   static constexpr uint8_t ALERT9_MINE = 4;     // favorite's big play may preempt own team's game
+  static constexpr uint8_t ALERT9_NOANIM = 8;   // no play animations before splashes
   void save_prefs9_();
   // neutral: live modes, where no team is ours.
   ::espn::Splash board_splash_(bool neutral) const;
@@ -746,6 +762,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ::espn::WatchKept watch_board_;  // what the last cycle kept off
   ::espn::WatchTimes watch_times_;
   uint32_t splash_ms_{0};  // millis() of the last splash sent, 0 none
+  uint32_t splash_stay_ms_{::espn::kSplashMs};  // its scene plus kSplashMs
   struct Visit {
     bool active{false};
     bool first{false};
@@ -1333,7 +1350,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool a2_covered_(uint32_t now) const {
     return this->panels_ != nullptr &&
            ::espn::area_covered(::espn::split_at(this->panels_->cols(), this->panels_->rows()), now,
-                                this->splash_ms_);
+                                this->splash_ms_, this->splash_stay_ms_);
   }
   // Either splash up: the next card waits
   bool a2_held_(uint32_t now) const { return this->a2_splash_up_(now) || this->a2_covered_(now); }
@@ -1401,6 +1418,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t app_last_ms_[::espn::kDisplayCount]{};  // last read's start
   uint32_t app_gen_[::espn::kDisplayCount]{};      // bumped by a settings change
   uint32_t app_drawn_ms_[::espn::kDisplayCount]{};
+  // Displays drawn while a logo downloads, by bit
+  uint32_t icon_wait_{0};
   bool app_shown_[::espn::kDisplayCount]{};
   ESPPreferenceObject app_pref_[::espn::kDisplayCount];
   static constexpr size_t APP_HOSTS = 8;

@@ -4,7 +4,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
+
+#include "logo_lru.h"
 
 namespace espn {
 
@@ -58,10 +61,12 @@ inline std::vector<uint8_t> logo_icon_shrink(const uint8_t *in, int w, int h, in
 }
 
 // Dark vanishes on black: flip marks, brighten dim tiles.
-inline bool logo_icon_lift(uint8_t *img, int w, int h) {
+// most: three quarters' level, so an accent can't hide it.
+inline bool logo_icon_lift(uint8_t *img, int w, int h, bool most = false) {
   const int n = w * h;
   long bright = 0, all = 0;
-  int top = 0;
+  int opaque = 0;
+  uint16_t hist[256] = {};
   for (int i = 0; i < n; i++) {
     int r, g, b, a;
     logo_px_get(img, n, i, r, g, b, a);
@@ -69,11 +74,24 @@ inline bool logo_icon_lift(uint8_t *img, int w, int h) {
     all += a;
     if (y >= 96)
       bright += a;
-    if (a >= 128 && y > top)
-      top = y;
+    if (a >= 128) {
+      hist[y]++;
+      opaque++;
+    }
   }
   if (all == 0)
     return false;
+  int top = 0;
+  if (most) {
+    for (int k = std::min(opaque - 1, opaque * 3 / 4), seen = 0; top < 255; top++) {
+      seen += hist[top];
+      if (seen > k)
+        break;
+    }
+  } else {
+    for (top = 255; top > 0 && hist[top] == 0;)
+      top--;
+  }
   // A mark on clear, not a square tile
   const bool mark = all * 100 < (long) n * 255 * 85;
   const bool flip = mark && bright * 100 < all * 12;
@@ -90,6 +108,105 @@ inline bool logo_icon_lift(uint8_t *img, int w, int h) {
     }
   }
   return true;
+}
+
+// Centered on a clear square of side max(w, h).
+inline void logo_icon_square(const uint8_t *in, int w, int h, uint8_t *out) {
+  const int s = std::max(w, h), n = w * h, sn = s * s;
+  memset(out, 0, logo_icon_bytes(s, s));
+  const int ox = (s - w) / 2, oy = (s - h) / 2;
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) {
+      const int i = y * w + x, o = (y + oy) * s + x + ox;
+      out[2 * o] = in[2 * i];
+      out[2 * o + 1] = in[2 * i + 1];
+      out[2 * sn + o] = in[2 * n + i];
+    }
+}
+
+inline bool logo_whiteish(const uint8_t *img, int n, int i) {
+  int r, g, b, a;
+  logo_px_get(img, n, i, r, g, b, a);
+  return a >= 128 && r >= 0xE0 && g >= 0xE0 && b >= 0xE0;
+}
+
+// White joined to the edge goes clear: no glaring tiles.
+template<class V> int logo_icon_knockout(uint8_t *img, int w, int h, V &stack) {
+  const int n = w * h;
+  int cleared = 0;
+  stack.clear();
+  auto take = [&](int x, int y) {
+    if (x < 0 || y < 0 || x >= w || y >= h)
+      return;
+    const int i = y * w + x;
+    if (!logo_whiteish(img, n, i))
+      return;
+    img[2 * n + i] = 0;
+    cleared++;
+    stack.push_back((uint16_t) i);
+  };
+  for (int x = 0; x < w; x++) {
+    take(x, 0);
+    take(x, h - 1);
+  }
+  for (int y = 0; y < h; y++) {
+    take(0, y);
+    take(w - 1, y);
+  }
+  while (!stack.empty()) {
+    const int i = stack.back();
+    stack.pop_back();
+    const int x = i % w, y = i / w;
+    take(x + 1, y);
+    take(x - 1, y);
+    take(x, y + 1);
+    take(x, y - 1);
+  }
+  return cleared;
+}
+
+// Enough lit pixels, bright, wide and tall enough to read.
+inline bool logo_icon_usable(const uint8_t *img, int px) {
+  const int n = px * px;
+  int lit = 0, mid = 0, bright = 0, x0 = px, x1 = -1, y0 = px, y1 = -1;
+  for (int i = 0; i < n; i++) {
+    int r, g, b, a;
+    logo_px_get(img, n, i, r, g, b, a);
+    const int m = std::max(r, std::max(g, b));
+    if (a < 128 || m < 0x40)
+      continue;
+    lit++;
+    mid += m >= 0x80;
+    bright += m >= 0xA0;
+    const int x = i % px, y = i / px;
+    x0 = std::min(x0, x);
+    x1 = std::max(x1, x);
+    y0 = std::min(y0, y);
+    y1 = std::max(y1, y);
+  }
+  // Some bright pixels, or mostly not dim
+  const bool light = bright >= n / 16 || lit - mid <= lit / 2;
+  return lit >= n * 5 / 64 && x1 - x0 + 1 >= px * 3 / 8 && y1 - y0 + 1 >= px / 4 && light;
+}
+
+// A PNG's IHDR color type, or -1.
+inline int logo_png_color_type(const uint8_t *body, size_t n) {
+  static const uint8_t sig[] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+  if (body == nullptr || n < 26 || memcmp(body, sig, 8) != 0 || memcmp(body + 12, "IHDR", 4) != 0)
+    return -1;
+  return body[25];
+}
+
+// Google's airline logos, by IATA code
+static const char *const kGoogleLogoUrl = "https://www.gstatic.com/flights/airline_logos/32px/";
+// logo_key of Google's 405-byte gray tail at 32 px.
+static const uint32_t kGstaticBlankKey = 0x8cf55aa4u;
+
+// Google answers unknown airlines with a gray tail.
+inline bool logo_placeholder(const char *url, const uint8_t *body, size_t n) {
+  if (url == nullptr || strncmp(url, kGoogleLogoUrl, strlen(kGoogleLogoUrl)) != 0)
+    return false;
+  return logo_key(reinterpret_cast<const char *>(body), n) == kGstaticBlankKey || logo_png_color_type(body, n) == 4;
 }
 
 }  // namespace espn

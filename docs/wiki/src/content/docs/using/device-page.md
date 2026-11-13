@@ -7,7 +7,7 @@ sidebar:
 
 Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
-The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; and a town or a ZIP code you look up for the [Flight Tracker](/using/flights/)'s home, from Open-Meteo's place search. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
+The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the [Flight Tracker](/using/flights/)'s home, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
 ## The live board
 
@@ -159,6 +159,8 @@ They all start on. The sport pages say what each one shows: [football](/using/fo
 
 **Favorite players: Scores** shows whatever sports you follow, and names a favorite player who scores in place of the team's splash for that play. It works on its own, whatever the sport's switches and **Opponent scores too** say. See [Favorite players](/using/favorite-players/#the-celebration).
 
+**Play animations**, the first switch in the card, plays a short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the quarterback's pass flying into the end zone, the run in, the kick through the uprights, the dive over the pile, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL. The splash follows for its usual 7 seconds. It starts on, and Home Assistant has it too, as **Play Animations**. Each one has a caption across the top that says what happened and the score, like **CHASE 30 YD TD PASS** over **CIN 21 +7**. **Try it** under it plays one on the panel now, in your team's colors, with a sample caption and your team's abbreviation and score, and no splash, while the Scoreboard page is up: **Pass**, **Run**, **Field goal**, **2-pt**, **Home run**, **Goal (soccer)** or **Goal (hockey)**. See [Play animations](/using/football/#play-animations), [home runs](/using/baseball/#runs-home-runs-grand-slams-and-walk-offs), [soccer goals](/using/soccer/#goal-animation) and [hockey goals](/using/hockey/#goal-animation).
+
 **Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game.
 
 Three more controls under it are for big plays in other games:
@@ -241,7 +243,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.5-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.6-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

@@ -61,6 +61,13 @@ struct BoardView {
   // Another display's labels, made on first use
   lv_obj_t *text[::espn::kAppTexts]{};
   lv_obj_t *icon[::espn::kAppIcons]{};  // another display's logos
+  // Another display's picture, painted into PSRAM
+  lv_obj_t *art{nullptr};
+  uint8_t *art_buf{nullptr};
+  lv_image_dsc_t art_dsc{};
+  uint32_t art_key{0};
+  lv_obj_t *bar{nullptr};  // its box, under the rows
+  lv_obj_t *photo{nullptr};  // its photo, over the art's spot
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout
@@ -102,8 +109,10 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);
 // Logos nullptr while downloading; the splash shows badges
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo = nullptr,
                       image::Image *opp_logo = nullptr);
-// Hides the board's splash and its fireworks
+// Hides the board's splash, its scene and its fireworks
 void board_hide_splash(BoardView &v);
+// How long the last splash stays: its scene, then kSplashMs
+uint32_t splash_stay_ms();
 // Logo, or its badge when missing or badge set
 void board_logos(BoardView &v, image::Image *team, image::Image *opp, const bool badge[2]);
 // Swaps a splash badge for its newly loaded logo

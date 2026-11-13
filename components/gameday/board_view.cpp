@@ -14,7 +14,9 @@
 #include "board_layout.h"
 #include "espn_parse.h"
 #include "gameday.h"
+#include "logo_lru.h"
 #include "panel_text.h"
+#include "scene_view.h"
 #include "setup_qr.h"
 
 static_assert(LV_TXT_COLOR_CMD[0] == esphome::gameday::kRecolorCmd, "__init__.py defines LV_TXT_COLOR_CMD");
@@ -357,6 +359,26 @@ void put_icons(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// The box under the board's labels, made on first use
+void put_bar(BoardView &v, const UpdateFields &f) {
+  const ::espn::AppFill &b = f.bar;
+  const bool on = f.board && b.w > 0 && b.h > 0;
+  if (v.bar == nullptr) {
+    if (!on || v.board == nullptr)
+      return;
+    v.bar = plain_bar(v.board, b.color);
+    lv_obj_move_to_index(v.bar, 0);
+  }
+  if (on) {
+    if (lv_obj_get_style_x(v.bar, LV_PART_MAIN) != b.x || lv_obj_get_style_y(v.bar, LV_PART_MAIN) != b.y)
+      lv_obj_set_pos(v.bar, b.x, b.y);
+    if (lv_obj_get_style_width(v.bar, LV_PART_MAIN) != b.w || lv_obj_get_style_height(v.bar, LV_PART_MAIN) != b.h)
+      lv_obj_set_size(v.bar, b.w, b.h);
+    put_bg(v.bar, b.color);
+  }
+  show(v.bar, on);
+}
+
 // Team logo screen's logos, or its abbreviation
 void logo_show(BoardView &v, image::Image *img) {
   if (v.logo_abbr == nullptr)
@@ -438,6 +460,75 @@ void logo_draw(BoardView &v, const UpdateFields &f, image::Image *img) {
     show(v.logo_line[i], !text[i].empty() && !(i == 1 && ticker_row));
   }
   logo_show(v, img);
+}
+
+uint32_t art_key(const ::espn::AppArt &a) {
+  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16), a.ink[0], a.ink[1],
+                        a.ink[2]};
+  return ::espn::logo_key(reinterpret_cast<const char *>(v), sizeof(v)) | 1;
+}
+
+// Repainted in place: LVGL must not cache it.
+static_assert(LV_CACHE_DEF_SIZE == 0, "put_art repaints one buffer; drop it from the image cache");
+
+// The frame's picture; repainted only when it changes
+void put_art(BoardView &v, const UpdateFields &f) {
+  if (!f.board || f.art.empty()) {
+    show(v.art, false);
+    return;
+  }
+  const ::espn::AppArt &a = f.art[0];
+  if (v.art_buf == nullptr) {
+    v.art_buf = static_cast<uint8_t *>(
+        heap_caps_malloc(::espn::kAppArtMaxW * ::espn::kAppArtMaxH * 3, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (v.art_buf == nullptr)
+      return;
+  }
+  if (v.art == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.art = lv_image_create(v.board);
+    lv_obj_remove_style_all(v.art);
+  }
+  const uint32_t key = art_key(a);
+  if (key != v.art_key) {
+    ::espn::app_art_paint(a, v.art_buf);
+    lv_image_dsc_t &d = v.art_dsc;
+    d.header.magic = LV_IMAGE_HEADER_MAGIC;
+    d.header.cf = LV_COLOR_FORMAT_RGB565A8;
+    d.header.w = a.w;
+    d.header.h = a.h;
+    d.header.stride = a.w * 2;
+    d.data_size = (uint32_t) a.w * a.h * 3;
+    d.data = v.art_buf;
+    ::lv_image_set_src(v.art, &d);
+    lv_obj_invalidate(v.art);
+    v.art_key = key;
+  }
+  if (lv_obj_get_style_x(v.art, LV_PART_MAIN) != a.x || lv_obj_get_style_y(v.art, LV_PART_MAIN) != a.y)
+    lv_obj_set_pos(v.art, a.x, a.y);
+  show(v.art, true);
+}
+
+// The frame's photo, from the logo cache
+void put_photo(BoardView &v, const UpdateFields &f) {
+  if (!f.board || f.photo_img == nullptr) {
+    show(v.photo, false);
+    return;
+  }
+  if (v.photo == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.photo = lv_image_create(v.board);
+    lv_obj_remove_style_all(v.photo);
+  }
+  const lv_image_dsc_t *src = f.photo_img->get_lv_image_dsc();
+  if (lv_image_get_src(v.photo) != src)
+    ::lv_image_set_src(v.photo, src);
+  const int16_t x = f.photo_xy[0], y = f.photo_xy[1];
+  if (lv_obj_get_style_x(v.photo, LV_PART_MAIN) != x || lv_obj_get_style_y(v.photo, LV_PART_MAIN) != y)
+    lv_obj_set_pos(v.photo, x, y);
+  show(v.photo, true);
 }
 
 }  // namespace
@@ -574,6 +665,47 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   }
 }
 
+namespace {
+
+// The scene's splash: its fireworks wait for the scene's end
+uint32_t scene_seq = 0;
+uint32_t stay_ms = ::espn::kSplashMs;
+bool fx_wait = false;
+Spot fx_wait_at{};
+int16_t fx_wait_h = 0;
+uint32_t fx_wait_color = 0;
+
+void scene_reveal() {
+  BoardView *m = page_view;
+  if (m == nullptr || !fx_wait)
+    return;
+  fx_wait = false;
+  if (m->splash == nullptr || lv_obj_has_flag(m->splash, LV_OBJ_FLAG_HIDDEN))
+    return;
+  if (!fx_start(m->splash, FxHost::BOARD, fx_wait_at, fx_wait_h))
+    splash_paint(*m, false, fx_wait_color);
+}
+
+// A redraw of the same splash never replays it
+bool splash_scene(BoardView &v, const UpdateFields &f) {
+  if (f.splash_seq != 0 && f.splash_seq == scene_seq)
+    return scene_playing();
+  scene_seq = f.splash_seq;
+  scene_stop();
+  fx_wait = false;
+  bool on = false;
+  if (f.splash_anim != 0 && f.splash_seq != 0) {
+    const bool opp = f.splash_side == 1;
+    const ::espn::AnimArgs a{(::espn::AnimKind) f.splash_anim, f.splash_anim_dist, f.splash_anim_flags};
+    on = scene_play(v.splash, a, opp ? f.opponent_color : f.team_color, opp ? f.team_color : f.opponent_color,
+                    f.splash_seq, scene_reveal, f.splash_say.c_str(), f.splash_score.c_str());
+  }
+  stay_ms = ::espn::kSplashMs + (on ? ::espn::scene_ms((::espn::AnimKind) f.splash_anim) : 0);
+  return on;
+}
+
+}  // namespace
+
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo, image::Image *opp_logo) {
   DrawResult r;
   const int W = v.w;
@@ -692,9 +824,12 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     show(v.no_game, false);
   }
   show(v.board, f.board);
+  put_bar(v, f);
   put_line(v, f);
   put_texts(v, f);
   put_icons(v, f);
+  put_art(v, f);
+  put_photo(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -841,13 +976,21 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     const SplashBox sb = splash_box(W, v.splash_h);
     r.fx = L.logos ? L.fx : Spot{(int16_t) sb.fx_x, (int16_t) sb.band_y, (int16_t) std::min(W, kFxPx)};
     r.fx_h = L.logos ? L.fx_h : (int16_t) kBoardRows;
-    bool fx = false;
+    bool fx = false, wait = false;
     if (&v == page_view) {
-      fx = r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
+      const bool scene = splash_scene(v, f);
+      wait = scene && r.big_splash;
+      if (wait) {
+        fx_wait = true;
+        fx_wait_at = r.fx;
+        fx_wait_h = r.fx_h;
+        fx_wait_color = f.splash_color;
+      }
+      fx = !scene && r.big_splash && fx_start(v.splash, FxHost::BOARD, r.fx, r.fx_h);
       if (!fx)
         fx_stop(FxHost::BOARD);
     }
-    splash_paint(v, fx, f.splash_color);
+    splash_paint(v, fx || wait, f.splash_color);
     show(v.splash, true);
     r.splash = true;
   } else if (logos_key(f) != v.tile_logos) {
@@ -857,7 +1000,13 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   return r;
 }
 
+uint32_t splash_stay_ms() { return stay_ms; }
+
 void board_hide_splash(BoardView &v) {
+  if (&v == page_view) {
+    scene_stop();
+    fx_wait = false;
+  }
   show(v.splash, false);
   fx_stop(FxHost::BOARD);
 }

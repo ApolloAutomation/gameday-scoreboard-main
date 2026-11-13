@@ -35,6 +35,37 @@ template<class V> inline int pick_evict_in(const V &slots, uint32_t now) {
 
 inline int pick_evict(const std::vector<LogoSlot> &slots, uint32_t now) { return pick_evict_in(slots, now); }
 
+// A LogoSlot that tells plane photos from logos
+struct CacheSlot {
+  uint32_t used;
+  bool busy;
+  bool pinned;
+  bool photo;
+};
+
+// A new photo drops an idle photo before any logo.
+template<class V> inline int pick_photo_evict_in(const V &slots, size_t cap, size_t max, uint32_t now) {
+  size_t n = 0;
+  int best = -1;
+  uint32_t best_age = 0;
+  for (size_t i = 0; i < slots.size(); i++) {
+    if (!slots[i].photo)
+      continue;
+    n++;
+    const uint32_t age = now - slots[i].used;
+    if (!slots[i].busy && !slots[i].pinned && (best < 0 || age > best_age)) {
+      best = (int) i;
+      best_age = age;
+    }
+  }
+  if (n < cap && slots.size() < max)
+    return -1;
+  if (best >= 0)
+    return best;
+  // Every photo busy or shown: logos as usual
+  return slots.size() < max ? -1 : pick_evict_in(slots, now);
+}
+
 // Shown or held cards first, then prefetches, oldest first
 enum LogoPrio : uint8_t { LOGO_NOW = 0, LOGO_NEXT = 1 };
 

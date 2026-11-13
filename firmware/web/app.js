@@ -2,7 +2,7 @@
 // Scores and settings come from the gameday component's own routes:
 //   GET  /gameday/state           one JSON document with the game and every setting
 //   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
-//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap)
+//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap), anim&play=pass|run|fg|two|hr|soccer|hockey
 // The ESPHome event stream (/events) still carries the entities that stay
 // for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
 // "Game Status" event, sent on every board update, is the cue to re-read the
@@ -250,6 +250,7 @@
         <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
         <p class="hint" id="flightNow" role="status"></p>
+        <figure class="flightphoto" id="flightPhoto" hidden><a id="flightPhotoLink" target="_blank" rel="noopener"><img id="flightPhotoImg" alt=""></a><figcaption><span id="flightPhotoOf"></span> <a id="flightPhotoBy" target="_blank" rel="noopener"></a></figcaption></figure>
       </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
@@ -319,6 +320,8 @@
         <summary><h2>Celebrations</h2><span class="peek">Splashes and big plays</span></summary>
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
+          <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the pass or the run into the end zone, the kick through the uprights, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL, with a caption across the top that says what happened and the score. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
+          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="fg">Field goal</button> <button class="btn" data-anim="two">2-pt</button> <button class="btn" data-anim="hr">Home run</button> <button class="btn" data-anim="soccer">Goal (soccer)</button> <button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
@@ -540,7 +543,7 @@
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
-    alerts: Number, alertfav: (v) => v === "1",
+    alerts: Number, alertfav: (v) => v === "1", anim: (v) => v === "1",
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
@@ -650,6 +653,14 @@
     setQueue = run;
     return run;
   };
+  document.querySelectorAll("[data-anim]").forEach((b) => b.addEventListener("click", async () => {
+    try {
+      const r = await fetch("/gameday/action?do=anim&play=" + encodeURIComponent(b.dataset.anim), { method: "POST" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+    } catch (e) {
+      toast("Device did not respond (" + (e.message || "network") + ")");
+    }
+  }));
   const doAction = async (name) => {
     try {
       const r = await fetch("/gameday/action?do=" + encodeURIComponent(name), { method: "POST" });
@@ -1301,6 +1312,7 @@
     });
     // Firmware from before big-play alerts has neither.
     $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
+    $("#animRow").hidden = $("#animTryRow").hidden = S.anim === undefined;
     alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
     // Older firmware sends no standing; college teams have ranks
     const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
@@ -2729,6 +2741,42 @@
   };
   $("#flightRxSave").onclick = saveRx;
   $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+  // Planespotters' photo of the card's plane, read by this browser
+  const PHOTO_API = "https://api.planespotters.net/pub/photos/";
+  const PHOTO_RETRY_MS = 60000;
+  const flightPhotos = new Map();  // by hex: {photo}, {pending} or {failed}
+  const photoAt = async (path) => {
+    const r = await fetch(PHOTO_API + path);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const p = ((await r.json()).photos || [])[0];
+    const t = p && (p.thumbnail_large || p.thumbnail);
+    if (!t || typeof t.src !== "string" || !/^https:\/\//.test(t.src)) return null;
+    const link = typeof p.link === "string" && /^https:\/\//.test(p.link) ? p.link : "";
+    return { src: t.src, link, by: typeof p.photographer === "string" ? p.photographer : "" };
+  };
+  const showFlightPhoto = (hex, reg, label) => {
+    const fig = $("#flightPhoto");
+    const key = hex || (reg ? "reg:" + reg : "");
+    const got = key ? flightPhotos.get(key) : undefined;
+    if (key && (!got || (got.failed && Date.now() - got.failed >= PHOTO_RETRY_MS))) {
+      flightPhotos.set(key, { pending: true });
+      (async () => (hex && (await photoAt("hex/" + encodeURIComponent(hex))))
+        || (reg ? photoAt("reg/" + encodeURIComponent(reg)) : null))()
+        .then((photo) => flightPhotos.set(key, { photo }), () => flightPhotos.set(key, { failed: Date.now() }))
+        .then(() => renderFlights());
+    }
+    const p = got && got.photo;
+    if (!p) { fig.hidden = true; return; }
+    const img = $("#flightPhotoImg");
+    if (img.getAttribute("src") !== p.src) img.src = p.src;
+    img.alt = "Photo of " + label;
+    const by = $("#flightPhotoBy");
+    by.textContent = "Photo: " + (p.by ? p.by + ", " : "") + "Planespotters.net";
+    for (const a of [$("#flightPhotoLink"), by])
+      if (p.link) a.href = p.link; else a.removeAttribute("href");
+    $("#flightPhotoOf").textContent = label;
+    fig.hidden = false;
+  };
   let flightRadii = "";
   const renderFlights = () => {
     const card = $("#flightCard");
@@ -2770,6 +2818,8 @@
       line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
     else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
     $("#flightNow").textContent = line;
+    const live = f.status === "ok" && n > 0;
+    showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
   };
 
   const renderAll = () => {

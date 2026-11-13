@@ -109,7 +109,7 @@ struct AppLine {
 };
 
 // Most labels a frame places itself (the views' pool).
-constexpr size_t kAppTexts = 40;
+constexpr size_t kAppTexts = 44;
 
 enum class AppAlign : uint8_t { LEFT = 0, CENTER, RIGHT };
 
@@ -135,7 +135,52 @@ struct AppIcon {
   uint8_t kind{0};
   char key[16]{};
   AppIconUrl url{nullptr};
+  int8_t alt{-1};    // texts index shown only while no logo draws
+  int8_t with{-1};   // texts index shown only while it draws
+  bool mark{false};  // white edges cleared; unreadable counts as missing
 };
+
+// A filled box, area-local, under the rows; w 0: none.
+struct AppFill {
+  int16_t x{0}, y{0}, w{0}, h{0};
+  uint32_t color{0};
+};
+
+// A 2-bit picture: 0 clear, 1-3 ink.
+struct AppArt {
+  int16_t x{0}, y{0};
+  uint8_t w{0}, h{0};
+  const uint8_t *bits{nullptr};  // in flash, row by row, low bits first
+  bool flip{false};              // mirrored left to right
+  uint32_t ink[3]{};
+};
+constexpr size_t kAppArt = 1;
+constexpr int kAppArtMaxW = 64, kAppArtMaxH = 24;
+
+// A boxed photo; it hides the art once loaded.
+struct AppPhoto {
+  int16_t x{0}, y{0};
+  uint8_t w{0}, h{0};  // 0: credited, not drawn
+  std::string url;  // empty when there is none
+  std::string credit;  // into the ticker at `at` once loaded
+  size_t at{0};
+};
+constexpr int kAppPhotoMaxW = 64, kAppPhotoMaxH = 32;
+
+// RGB565 then alpha, as runtime_image lays logos out.
+inline void app_art_paint(const AppArt &a, uint8_t *out) {
+  const int n = a.w * a.h;
+  for (int y = 0; y < a.h; y++)
+    for (int x = 0; x < a.w; x++) {
+      const int src = y * a.w + (a.flip ? a.w - 1 - x : x), i = y * a.w + x;
+      const uint8_t v = (uint8_t) ((a.bits[src / 4] >> (2 * (src % 4))) & 3);
+      const uint32_t c = v == 0 ? 0 : a.ink[v - 1];
+      const uint16_t rgb = (uint16_t) (((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F));
+      out[2 * i] = (uint8_t) (rgb & 0xFF);
+      out[2 * i + 1] = (uint8_t) (rgb >> 8);
+      out[2 * n + i] = v == 0 ? 0 : 0xFF;
+    }
+}
 
 // The leaderboard's shape: title, status, up to kAppRows rows.
 struct AppFrame {
@@ -146,11 +191,14 @@ struct AppFrame {
   AppLine line;
   std::vector<AppText> texts;  // drawn over the rows
   std::vector<AppIcon> icons;
+  std::vector<AppArt> art;
+  AppFill bar;
+  AppPhoto photo;
 };
 
-// Rows, labels or a line to draw, else the message.
+// Rows, labels, a line, logos or art, else the message.
 inline bool app_frame_board(const AppFrame &f) {
-  return !f.rows.name.empty() || !f.texts.empty() || f.line.pts.size() >= 2;
+  return !f.rows.name.empty() || !f.texts.empty() || f.line.pts.size() >= 2 || !f.icons.empty() || !f.art.empty();
 }
 
 // Keeps the first and last, evenly between.
@@ -187,6 +235,17 @@ inline void app_frame_trim(AppFrame &f) {
     f.texts.resize(kAppTexts);
   if (f.icons.size() > kAppIcons)
     f.icons.resize(kAppIcons);
+  if (f.art.size() > kAppArt)
+    f.art.resize(kAppArt);
+  // One that can't be drawn goes
+  if (!f.art.empty() && (f.art[0].bits == nullptr || f.art[0].w == 0 || f.art[0].h == 0 ||
+                         f.art[0].w > kAppArtMaxW || f.art[0].h > kAppArtMaxH))
+    f.art.clear();
+  AppPhoto &p = f.photo;
+  if (p.url.empty() || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH || p.at > f.ticker.size())
+    f.photo = AppPhoto();
+  else if (p.w == 0 || p.h == 0)
+    p.w = p.h = 0;
 }
 
 // Flat x, y pairs clipped to the area.

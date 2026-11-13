@@ -1,0 +1,76 @@
+# The big GOAL letters for the goal animations (scripts/build_sprites.py).
+# Original blocky letters for this project. J fills them in the scoring
+# team's color and T shades their right and bottom edges.
+@legend .osdJTHPKbwBGMxy
+
+@frame word.g 9x16 anchor 0,0 float
+..JJJJJT.
+.JJTTTTJT
+JJT....TT
+JJT......
+JJT......
+JJT......
+JJT......
+JJT..JJJT
+JJT..TJJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+TJT...JJT
+.TJJJJJJT
+..TTTTTT.
+
+@frame word.o 9x16 anchor 0,0 float
+..JJJJT..
+.JJTTTJT.
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+TJT...JJT
+.TJJJJJT.
+..TTTTT..
+
+@frame word.a 9x16 anchor 0,0 float
+..JJJJT..
+.JJTTTJT.
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJJJJJJJT
+JJJTTTJJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+JJT...JJT
+TTT...TTT
+
+@frame word.l 9x16 anchor 0,0 float
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJT......
+JJJJJJJJT
+JJJJJJJJT
+TTTTTTTTT

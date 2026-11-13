@@ -881,6 +881,31 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await sw("Favorite teams only").click();
   await expectSet(request, { alertfav: "1" });
   await expect(sw("Favorite teams only")).toBeChecked();
+  // Play animations: on by default
+  await expect(sw("Play animations")).toBeChecked();
+  await sw("Play animations").click();
+  await expectSet(request, { anim: "0" });
+  await expect(sw("Play animations")).not.toBeChecked();
+  await page.locator("#animTryRow").getByRole("button", { name: "Run", exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("run");
+  await page.locator("#animTryRow").getByRole("button", { name: "Field goal" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("fg");
+  await page.locator("#animTryRow").getByRole("button", { name: "2-pt" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("two");
+  await page.locator("#animTryRow").getByRole("button", { name: "Goal (soccer)" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("soccer");
+  await page.locator("#animTryRow").getByRole("button", { name: "Goal (hockey)" }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.play))
+    .toContain("hockey");
 
   // A Yankees panel with an Arsenal and a Pacers favorite.
   await reset(request, {
@@ -947,11 +972,13 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   for (const h of await heads.all()) await expect(h).toHaveCSS("margin-top", "14px");
 
   // Firmware from before alerts: no switches, no Favorite teams only.
-  await reset(request, { alerts: null, alertfav: null });
+  await reset(request, { alerts: null, alertfav: null, anim: null });
   await page.reload();
   await expect(sw("Opponent scores too")).toBeVisible();
   await expect(page.locator("#alertCtls")).toBeHidden();
   await expect(page.locator("#alertFavRow")).toBeHidden();
+  await expect(page.locator("#animRow")).toBeHidden();
+  await expect(page.locator("#animTryRow")).toBeHidden();
 });
 
 test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {
@@ -3039,6 +3066,102 @@ test("the Flight Tracker card takes a latitude and longitude and says where the 
   await page.reload();
   await expect(page.locator("#flightNow")).toHaveText("Not reading planes now: the panel reads them only while "
     + "Flight Tracker is on it. The clock is up for the night hours, and Flight Tracker comes back after them.");
+});
+
+// Planespotters' photo API: by hex, then by registration.
+const PNG_1PX = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+const spotted = (id, by) => ({ photos: [{
+  id,
+  thumbnail: { src: `https://t.plnspttrs.net/1/${id}_t.jpg`, size: { width: 200, height: 133 } },
+  thumbnail_large: { src: `https://t.plnspttrs.net/1/${id}_280.jpg`, size: { width: 420, height: 280 } },
+  link: `https://www.planespotters.net/photo/${id}/n?utm_source=api`,
+  photographer: by,
+}] });
+const NYC_PLANES = { home: "40.7100,-74.0100", status: "ok", source: "fr24", planes: 12 };
+// answers by path, like "hex/accd69"; "down" fails the read
+const routePhotos = async (page, answers) => {
+  const asked = [];
+  await page.route("https://api.planespotters.net/**", (route) => {
+    const path = new URL(route.request().url()).pathname.replace("/pub/photos/", "");
+    asked.push(path);
+    const a = answers[path];
+    return a === "down" ? route.abort() : route.fulfill({ json: a || { photos: [] } });
+  });
+  await page.route("https://t.plnspttrs.net/**", (route) => route.fulfill({ contentType: "image/png", body: PNG_1PX }));
+  return asked;
+};
+
+test("the Flight Tracker card shows the card's plane's photo with its photographer and a link", async ({ page, request }) => {
+  const asked = await routePhotos(page, {
+    "hex/accd69": spotted("1987790", "Jay Huang"),
+    "reg/N594JB": spotted("1871733", "Gerrit Griem"),
+  });
+  const show = (flights) => reset(request, { displays: FLIGHT_DISPLAYS, display: 3, flights: { ...NYC_PLANES, ...flights } });
+  await show({ nearest: "DAL1011", nearest_hex: "accd69", nearest_reg: "N924DZ" });
+  await page.clock.install();
+  await page.goto("/");
+  const fig = page.locator("#flightPhoto");
+  const img = page.locator("#flightPhotoImg");
+  const by = page.locator("#flightPhotoBy");
+  await expect(fig).toBeVisible();
+  await expect(img).toHaveAttribute("src", "https://t.plnspttrs.net/1/1987790_280.jpg");
+  await expect(img).toHaveAttribute("alt", "Photo of DAL1011");
+  await expect(page.locator("#flightPhotoOf")).toHaveText("DAL1011");
+  await expect(by).toHaveText("Photo: Jay Huang, Planespotters.net");
+  await expect(by).toHaveAttribute("href", "https://www.planespotters.net/photo/1987790/n?utm_source=api");
+  await expect(page.locator("#flightPhotoLink")).toHaveAttribute("href", "https://www.planespotters.net/photo/1987790/n?utm_source=api");
+  expect(asked).toEqual(["hex/accd69"]);
+
+  // No photo under its hex: its registration's
+  await show({ nearest: "JBU2128", nearest_hex: "a7ad0d", nearest_reg: "N594JB" });
+  await page.clock.fastForward(16000);
+  await expect(by).toHaveText("Photo: Gerrit Griem, Planespotters.net");
+  await expect(img).toHaveAttribute("src", "https://t.plnspttrs.net/1/1871733_280.jpg");
+  await expect(page.locator("#flightPhotoOf")).toHaveText("JBU2128");
+
+  // Back to the first plane: kept from before
+  await show({ nearest: "DAL1011", nearest_hex: "accd69", nearest_reg: "N924DZ" });
+  await page.clock.fastForward(16000);
+  await expect(by).toHaveText("Photo: Jay Huang, Planespotters.net");
+  expect(asked).toEqual(["hex/accd69", "hex/a7ad0d", "reg/N594JB"]);
+
+  // No photo anywhere: nothing shows
+  await show({ nearest: "N7QD", nearest_hex: "a9513e", nearest_reg: "N7QD" });
+  await page.clock.fastForward(16000);
+  await expect(fig).toBeHidden();
+  await expect.poll(() => asked.slice(3)).toEqual(["hex/a9513e", "reg/N7QD"]);
+  await page.clock.fastForward(16000);
+  await expect(fig).toBeHidden();
+  expect(asked.length).toBe(5);
+
+  // No planes nearby: nothing either
+  await show({ nearest: "DAL1011", nearest_hex: "accd69", nearest_reg: "N924DZ" });
+  await page.clock.fastForward(16000);
+  await expect(fig).toBeVisible();
+  await show({ planes: 0 });
+  await page.clock.fastForward(16000);
+  await expect(fig).toBeHidden();
+  expect(asked.length).toBe(5);
+});
+
+test("the Flight Tracker card asks Planespotters again a minute after it can't be reached", async ({ page, request }) => {
+  const answers = { "hex/accd69": "down" };
+  const asked = await routePhotos(page, answers);
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3,
+                         flights: { ...NYC_PLANES, nearest: "DAL1011", nearest_hex: "accd69" } });
+  await page.clock.install();
+  await page.goto("/");
+  const fig = page.locator("#flightPhoto");
+  await expect.poll(() => asked).toEqual(["hex/accd69"]);
+  await expect(fig).toBeHidden();
+  answers["hex/accd69"] = spotted("1987790", "Jay Huang");
+  await page.clock.fastForward(16000);
+  await expect(fig).toBeHidden();
+  expect(asked).toEqual(["hex/accd69"]);
+  await page.clock.fastForward(60000);
+  await expect(fig).toBeVisible();
+  await expect(page.locator("#flightPhotoBy")).toHaveText("Photo: Jay Huang, Planespotters.net");
+  expect(asked).toEqual(["hex/accd69", "hex/accd69"]);
 });
 
 test("the second area keeps each tap through a slow re-read", async ({ page, request }) => {

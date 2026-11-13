@@ -97,10 +97,11 @@ inline size_t market_logo_url(const char *sym, uint8_t kind, uint8_t k, char *ou
     cls[len - 2] = '-';
   int r = 0;
   if (kind == (uint8_t) MarketKind::CRYPTO) {
+    // Colored coins first: Parqet's ETH is dim
     if (k == 0)
-      r = snprintf(out, n, "https://assets.parqet.com/logos/crypto/%s?format=png&size=32", sym);
-    else if (k == 1)
       r = snprintf(out, n, "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/%s.png", low);
+    else if (k == 1)
+      r = snprintf(out, n, "https://assets.parqet.com/logos/crypto/%s?format=png&size=32", sym);
     else if (k == 2)
       r = snprintf(out, n, "https://assets.coincap.io/assets/icons/%s@2x.png", low);
   } else if (k == 0) {
@@ -111,6 +112,13 @@ inline size_t market_logo_url(const char *sym, uint8_t kind, uint8_t k, char *ou
     r = snprintf(out, n, "https://financialmodelingprep.com/image-stock/%s.png", sym);
   }
   return r > 0 && (size_t) r < n ? (size_t) r : 0;
+}
+
+inline bool market_any_logo(const MarketBlob &b) {
+  for (uint8_t i = 0; i < market_count(b); i++)
+    if (market_has_logo(b.syms[i].sym, b.syms[i].kind))
+      return true;
+  return false;
 }
 
 // Logos when some symbol has one; one panel: short symbols.
@@ -142,20 +150,28 @@ struct MarketGeom {
   // 2: symbol, price or percent; 3: percent; 4: change
   uint8_t cols{2};
   MarketCol logo, sym, price, change, pct;  // logo.w 0: no logos
+  MarketCol list;                           // the rows' block, for the highlight
   uint8_t rows{6};
   int16_t row_y{8};  // the first row; the title row above
   bool spark{false};
   int16_t spark_x{0}, spark_y{0}, spark_w{0}, spark_h{0};
+  // The charted symbol's big logo; px 0: none
+  int16_t focus_x{0}, focus_y{0};
+  uint8_t focus_px{0};
+  // Its name and move beside the logo; w 0: none
+  MarketSpot name_at{}, move_at{};
 };
 
 constexpr int kMarketLogoPx = 7;  // a row's logo, 1 px apart
 constexpr int kMarketLogoCol = kMarketLogoPx + 2;
+constexpr int kMarketFocusPx = 24;  // the charted symbol's logo
 
-// ticker: bottom 8 rows hold one; logos: a logo column.
-inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos = false) {
+// ticker: 8 rows; logos: a column; focus: a big logo
+inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos = false, bool focus = false) {
   MarketGeom g;
   g.w = (int16_t) w;
   g.h = (int16_t) h;
+  g.list = {0, (int16_t) w};
   const int bottom = h - (ticker ? kMarketRowPx : 0);
   const int fit = (bottom - g.row_y) / kMarketRowPx;
   g.rows = (uint8_t) (fit < 1 ? 1 : fit > kMarketRowsMax ? kMarketRowsMax : fit);
@@ -165,6 +181,7 @@ inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos 
     g.cols = 4;
     const bool side = spark && w - 190 >= 40;
     bx = side ? 0 : (w - 190) / 2;
+    g.list = {(int16_t) bx, 190};
     g.sym = {(int16_t) bx, 40};
     g.price = {(int16_t) (bx + 40), 55};
     g.change = {(int16_t) (bx + 95), 50};
@@ -183,6 +200,17 @@ inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos 
       g.spark_y = (int16_t) (g.row_y + 1);
       g.spark_w = (int16_t) (w - 196);
       g.spark_h = (int16_t) (bottom - 1 - g.spark_y);
+      if (focus) {
+        // Logo, name and move over the line
+        g.focus_x = g.spark_x;
+        g.focus_y = g.row_y;
+        g.focus_px = (uint8_t) kMarketFocusPx;
+        const int16_t tx = (int16_t) (g.focus_x + kMarketFocusPx + 2);
+        g.name_at = {tx, (int16_t) (g.row_y + 1), (int16_t) (w - tx)};
+        g.move_at = {tx, (int16_t) (g.row_y + 14), (int16_t) (w - tx)};
+        g.spark_y = (int16_t) (g.focus_y + kMarketFocusPx + 2);
+        g.spark_h = (int16_t) (bottom - 1 - g.spark_y);
+      }
       return g;
     }
   } else if (w >= 128) {
@@ -208,10 +236,21 @@ inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos 
   // Narrower boards trade rows for the sparkline.
   if (spark && g.rows >= 5) {
     g.spark = true;
-    g.rows = 4;
+    // The logo's square under the rows: a row less
+    const int strip = focus ? kMarketFocusPx : 2 * kMarketRowPx - 1;
+    const int fit_rows = (bottom - g.row_y - strip) / kMarketRowPx;
+    g.rows = (uint8_t) (fit_rows < 1 ? 1 : fit_rows > 4 ? 4 : fit_rows);
+    const int top = g.row_y + g.rows * kMarketRowPx;
     g.spark_x = 0;
-    g.spark_y = (int16_t) (g.row_y + g.rows * kMarketRowPx + 1);
     g.spark_w = (int16_t) w;
+    if (focus) {
+      g.focus_x = (int16_t) bx;
+      g.focus_y = (int16_t) (bottom - kMarketFocusPx);
+      g.focus_px = (uint8_t) kMarketFocusPx;
+      g.spark_x = (int16_t) (bx + kMarketFocusPx + 2);
+      g.spark_w = (int16_t) (w - bx - g.spark_x);
+    }
+    g.spark_y = (int16_t) (top + 1);
     g.spark_h = (int16_t) (bottom - 1 - g.spark_y);
   }
   return g;
@@ -269,6 +308,11 @@ struct MarketFrame {
   MarketRow rows[kMarketRowsMax];
   bool spark{false};
   SparkLine line;
+  int8_t active{-1};  // the charted row on this page
+  int8_t slot{-1};    // the charted symbol, 0 based
+  bool logo{false};   // it has one
+  std::string name, move;  // beside its logo, four panels
+  uint32_t move_color{kMarketFlat};
 };
 
 constexpr uint32_t kMarketOpenColor = 0x2ED573, kMarketShutColor = 0xA0A0A0;
@@ -295,12 +339,32 @@ inline MarketFrame market_frame(const MarketBlob &b, const MarketQuote (&q)[kMar
   }
   const int spark_slot = g.spark ? market_spark_slot(b) : -1;
   for (int i = f.page * g.rows; i < count && f.n < g.rows; i++) {
+    if (i == spark_slot)
+      f.active = (int8_t) f.n;
     f.rows[f.n] = market_row(b.syms[i], q[i], g, now, alt);
     f.rows[f.n++].spark = i == spark_slot;
   }
   if (spark_slot >= 0) {
-    f.line = market_spark(q[spark_slot], g.spark_x, g.spark_y, g.spark_w, g.spark_h);
+    const MarketSymbol &s = b.syms[spark_slot];
+    const MarketQuote &sq = q[spark_slot];
+    f.line = market_spark(sq, g.spark_x, g.spark_y, g.spark_w, g.spark_h);
     f.spark = f.line.n >= 2;
+    f.slot = (int8_t) spark_slot;
+    f.logo = market_has_logo(s.sym, s.kind);
+    if (g.name_at.w > 0) {
+      const size_t room = (size_t) (g.name_at.w / kMarketCharPx);
+      f.name = market_sym_text(s.sym, room);
+      if (sq.valid && sq.prev != 0) {
+        f.move = market_percent_text(market_percent(sq), room);
+        f.move_color = market_stale(sq, (MarketKind) s.kind, now) ? kMarketStale : market_color(market_dir(sq));
+      }
+    }
+  }
+  if (!f.spark) {
+    f.active = f.slot = -1;
+    f.logo = false;
+    f.name.clear();
+    f.move.clear();
   }
   return f;
 }

@@ -148,8 +148,13 @@ void GamedayComponent::demo_tick_() {
     this->rebuild_demo_json_();
     return;
   }
+  const uint32_t splash_before = this->splash_ms_;
   this->demo_show_step_(this->demo_step_ > 0);
-  this->demo_next_ms_ = now + ::espn::kDemoSteps[this->demo_step_].hold_ms;
+  uint32_t hold = ::espn::kDemoSteps[this->demo_step_].hold_ms;
+  // The step's scene plays before its splash
+  if (this->splash_ms_ != splash_before)
+    hold += this->splash_stay_ms_ - ::espn::kSplashMs;
+  this->demo_next_ms_ = now + hold;
   this->demo_step_++;
 }
 

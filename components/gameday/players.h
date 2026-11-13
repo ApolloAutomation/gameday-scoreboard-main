@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "alerts.h"
+#include "play_anim.h"
 #include "espn_parse.h"
 #include "set_request.h"
 
@@ -374,8 +375,11 @@ inline Splash board_splash_with_players(const GameSnapshot &prev, const GameSnap
                                         const FavPlayer *list) {
   if ((alerts & alert_bit(Alert::PLAYER)) != 0) {
     const PlayerScore ps = player_scored(prev, cur, league, list);
-    if (ps.slot >= 0)
-      return player_splash(ps, cur, list, wide);
+    if (ps.slot >= 0) {
+      Splash s = player_splash(ps, cur, list, wide);
+      splash_anim(s, ps.type, prev, cur, ps.side, list[ps.slot].name);
+      return s;
+    }
   }
   return decide_splash(prev, cur, opponent_splashes, neutral, alerts, wide);
 }

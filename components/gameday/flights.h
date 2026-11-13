@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "board_layout.h"
+#include "logo_icon.h"
+#include "plane_art.h"
 #include "poll_timing.h"
 
 namespace flights {
@@ -22,7 +24,7 @@ using esphome::gameday::BoardFont;
 static const size_t kNear = 8;
 static const size_t kRouteCache = 16;
 static const size_t kStops = 4;
-static const size_t kFrameMax = 40;
+static const size_t kFrameMax = 44;
 static const int32_t kNoAlt = INT32_MIN;
 static const float kMaxRadiusNm = 250.0f;
 static const float kStaleS = 60.0f;
@@ -132,6 +134,7 @@ struct Plane {
   char type[5]{};
   char category[3]{};
   char flight[9]{};  // Flightradar24's flight number
+  char brand[4]{};   // and the airline painted on it
   char from[5]{};    // and its route, when it has one
   char to[5]{};
   int32_t alt_ft{kNoAlt};
@@ -146,6 +149,7 @@ struct Plane {
   uint16_t squawk{0};
   Tier tier{Tier::AIR};
   bool emergency{false};
+  bool anon{false};  // a "~" address, not the plane's own
 };
 
 struct Nearby {
@@ -159,6 +163,8 @@ struct Nearby {
 
 // Callsign, else registration, else the hex address.
 const char *plane_label(const Plane &p);
+// Six hex digits from the plane itself.
+bool hex_usable(const Plane &p);
 // Uppercase letters and digits only; "" for zeros.
 void clean_callsign(const char *in, char out[9]);
 // Three letters, then a digit somewhere after.
@@ -422,6 +428,20 @@ std::string airline_name(const char *callsign);
 std::string flight_number(const char *callsign);
 // "Boeing 737-800", else "737-800", else the code.
 std::string type_text(const char *type, size_t max);
+
+// AirlineName::logo: which source answers with a usable logo.
+enum : uint8_t { kLogoUnknown = 0, kLogoGoogle = 1, kLogoFlightAware = 2, kLogoNone = 3 };
+using ::espn::kGoogleLogoUrl;
+static const char *const kFlightAwareLogoUrl = "https://www.flightaware.com/images/airline_logos/90p/";
+const AirlineName *airline_by_icao(const char *icao);
+// The airline painted on it, else the one flying it.
+const AirlineName *logo_airline(const Plane &p);
+// Source k's URL, hinted first; 0: no more.
+size_t airline_logo_url(const AirlineName &a, uint8_t k, char *out, size_t n);
+// The same by ICAO code, as an AppIcon's url.
+size_t logo_url(const char *icao, uint8_t kind, uint8_t k, char *out, size_t n);
+// Its IATA code when the flight number starts with it.
+std::string logo_chip(const AirlineName &a, const std::string &flight_no);
 // For a plane with no type: "Helicopter", "Glider".
 const char *category_text(const char *category);
 
@@ -535,6 +555,63 @@ inline bool parse_adsbdb(const std::string &json, const char *callsign, RouteCac
   return parse_adsbdb(r, callsign, cache, now_s);
 }
 
+// ---- Photos ------------------------------------------------------------------
+
+static const char *const kPhotoApi = "https://api.planespotters.net/pub/photos/";
+static const size_t kPhotoCache = 16;
+static const size_t kPhotoUrlMax = 119;
+static const size_t kPhotoByMax = 31;
+static const uint32_t kPhotoKnownS = 24 * 3600;
+static const uint32_t kPhotoNoneS = 12 * 3600;
+static const uint32_t kPhotoGapMs = 5 * 1000;  // the least time between lookups
+
+enum class PhotoState : uint8_t { EMPTY = 0, KNOWN, NONE };
+
+// A plane's photo on Planespotters, or that it has none.
+struct PlanePhoto {
+  char key[9]{};  // hex, else registration
+  char url[kPhotoUrlMax + 1]{};
+  char by[kPhotoByMax + 1]{};  // who took the photo
+  PhotoState state{PhotoState::EMPTY};
+  uint32_t at_s{0};
+  uint32_t used_s{0};
+};
+
+class PhotoCache {
+ public:
+  const PlanePhoto *find(const char *key, uint32_t now_s);
+  bool wants(const char *key, uint32_t now_s) const;
+  PlanePhoto &put(const char *key, uint32_t now_s);
+  PlanePhoto slots[kPhotoCache];
+
+ private:
+  int index_(const char *key, uint32_t now_s) const;
+};
+
+// Its hex, else a registration fit for a URL.
+bool photo_key(const Plane &p, char out[9]);
+std::string photo_url(const char *key);
+// Planespotters asks for a way to reach us.
+std::string photo_agent(const std::string &version);
+void fill_photo_filter(JsonDocument &f);
+// KNOWN or NONE into out; false when unreadable.
+bool photo_from_doc(JsonObjectConst root, PlanePhoto &out);
+
+template<typename S> bool parse_photo_from(S &in, PlanePhoto &out) {
+  JsonDocument filter(json_allocator());
+  fill_photo_filter(filter);
+  JsonDocument doc(json_allocator());
+  if (in.json(doc, filter, 5))
+    return false;
+  return photo_from_doc(doc.as<JsonObjectConst>(), out);
+}
+
+inline bool parse_photo(const std::string &json, PlanePhoto &out) {
+  detail::StrReader r(json);
+  detail::Source<detail::StrReader> in(r);
+  return parse_photo_from(in, out);
+}
+
 // ---- Text --------------------------------------------------------------------
 
 enum class Fmt : uint8_t { FULL = 0, SHORT, BARE };
@@ -560,6 +637,10 @@ static const uint32_t kColValue = 0xFFFFFF;
 static const uint32_t kColDim = 0xA0A0A0;
 static const uint32_t kColDist = 0x2ED573;
 static const uint32_t kColAlert = 0xFF4040;
+// The plane picture: a little under the white text.
+static const uint32_t kColBody = 0xC8C8C8;
+static const uint32_t kColDetail = 0x6E6E6E;
+static const uint32_t kColTail = 0x8C8C8C;
 
 enum class Align : uint8_t { LEFT = 0, CENTER, RIGHT };
 
@@ -573,8 +654,37 @@ struct Text {
   std::string text;
 };
 
+// A plane picture's top left; flip faces it left.
+struct Art {
+  int16_t x{0}, y{0};
+  PlaneKind kind{PlaneKind::NONE};
+  bool flip{false};
+  uint32_t tail{kColTail};
+};
+
+static const int kLogoPx = 16;
+
+// An airline logo's top left and whose.
+struct Logo {
+  int16_t x{0}, y{0};
+  char icao[4]{};
+  int8_t alt{-1};  // items index of the code shown meanwhile
+};
+
+// The card's photo; the art shows until it loads.
+struct Photo {
+  int16_t x{0}, y{0};
+  uint8_t w{0}, h{0};  // 0 on the list: credit only
+  std::string url;  // empty when there is none
+  std::string credit;  // into the ticker at `at`
+  size_t at{0};
+};
+
 struct Frame {
   std::vector<Text> items;
+  std::vector<Art> art;
+  std::vector<Logo> logos;
+  Photo photo;
   std::string ticker;
 };
 
@@ -585,15 +695,20 @@ struct FrameOpts {
   Units units;
   uint8_t card{0};  // index into Nearby::planes
   bool list{false};  // under 192 wide: the list, not the card
+  const PlanePhoto *photo{nullptr};  // the card plane's
 };
+
+// The photo's spot on a card 128 wide.
+static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
 
 enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING };
 
 // Under 192 wide the card or the list; wider, both.
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s);
 Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
+// card_end: where the card plane's words end.
 std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s,
-                          size_t planes = 3);
+                          size_t planes = 3, size_t *card_end = nullptr);
 // Text width in pixels at the font's advance.
 int text_px(const Text &t);
 

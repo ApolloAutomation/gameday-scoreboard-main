@@ -572,7 +572,18 @@ jobs:
           python3 scripts/crash_report.py --selftest
           python3 scripts/site_seo.py --selftest
           python3 scripts/release_notes.py --selftest
+          python3 scripts/build_airlines.py --selftest
           bash scripts/beta_version.sh --selftest
+          python3 scripts/build_sprites.py --selftest
+      - name: sprites.h is built from the current art
+        run: python3 scripts/build_sprites.py --check
+      # Play animation GIFs for art review
+      - name: Play animation review images
+        run: make -C tests review
+      - uses: actions/upload-artifact@v7
+        with:
+          name: review
+          path: tests/build/review
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table

@@ -3637,6 +3637,7 @@ int run_watch_tests(int &checks);
 int run_player_tests(int &checks);
 int run_prop_tests(int &checks);
 int run_flight_tests(int &checks);
+int run_plane_art_tests(int &checks);  // test_plane_art.cpp
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
@@ -3646,6 +3647,9 @@ int run_f1_tests(int &checks);
 int run_app_f1_tests(int &checks);
 int run_market_tests(int &checks);
 int run_markets_app_tests(int &checks);
+int run_logo_decode_tests(int &checks);
+int run_picture_tests(int &checks);
+int run_plane_photo_tests(int &checks);  // test_plane_photo.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -3682,6 +3686,26 @@ static void test_logo_lru() {
            std::string("https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/scoreboard/dal.png&w=64&h=64"));
   CHECK_EQ(espn::plain_logo_url("https://a.espncdn.com/combiner/i?img=/i/teamlogos/soccer/500/436.png&w=64&h=64"),
            std::string());
+}
+
+// Plane photos replace each other, not logos.
+static void test_photo_evict() {
+  using S = espn::CacheSlot;
+  auto pick = [](const std::vector<S> &s, size_t max) { return espn::pick_photo_evict_in(s, 2, max, 1000); };
+  CHECK_EQ(pick({{100, false, false, false}, {200, false, false, true}}, 4), -1);
+  // Two photos: the older one goes, not the older logo
+  CHECK_EQ(pick({{100, false, false, false}, {300, false, false, true}, {200, false, false, true}}, 4), 2);
+  // An idle photo goes; a shown or loading one stays
+  CHECK_EQ(pick({{100, false, false, true}, {200, false, true, true}, {300, false, false, true}}, 8), 0);
+  CHECK_EQ(pick({{100, true, false, true}, {200, false, true, true}, {50, false, false, false}}, 8), -1);
+  // A full cache: a photo first, else the oldest logo
+  CHECK_EQ(pick({{100, false, false, false}, {900, false, false, true}, {200, false, false, false}}, 3), 1);
+  CHECK_EQ(pick({{100, false, false, false}, {900, true, false, true}, {200, false, false, false}}, 3), 0);
+  CHECK_EQ(pick({{100, true, false, false}, {200, false, true, false}}, 2), -1);
+  // Ages across the millis() wrap
+  CHECK_EQ(espn::pick_photo_evict_in(std::vector<S>{{0xFFFFFF00u, false, false, true}, {0x100u, false, false, true}},
+                                     2, 8, 0x200u),
+           0);
 }
 
 // Ties in the logo cache go to the first slot, and the plain-logo fallback
@@ -9233,6 +9257,7 @@ int main() {
   checks++;
   failures += run_football_golden();
   test_logo_lru();
+  test_photo_evict();
   test_logo_lru_edges();
   test_logo_backoff();
   test_logo_order();
@@ -9296,6 +9321,7 @@ int main() {
   failures += run_player_tests(checks);
   failures += run_prop_tests(checks);
   failures += run_flight_tests(checks);
+  failures += run_plane_art_tests(checks);
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
@@ -9305,6 +9331,9 @@ int main() {
   failures += run_app_f1_tests(checks);
   failures += run_market_tests(checks);
   failures += run_markets_app_tests(checks);
+  failures += run_logo_decode_tests(checks);
+  failures += run_picture_tests(checks);
+  failures += run_plane_photo_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
