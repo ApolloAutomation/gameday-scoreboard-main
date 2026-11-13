@@ -16,7 +16,7 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
   for (uint8_t i = 0; i < n; i++)
     if (q[i].valid && market_spark_count(q[i]) >= 2)
       charted[k++] = i;
-  const MarketGeom g = market_geom(w, h, true, k > 0, market_logos_fit(b, w));
+  const MarketGeom g = market_geom(w, h, true, k > 0, market_logos_fit(b, w), market_any_logo(b));
   const int64_t tick = now > 0 ? now / kMarketCardSeconds : 0;
   MarketBlob view = b;
   uint8_t page = 0;
@@ -49,26 +49,68 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
     r.value.push_back(four ? row.change : row.price);
     r.detail.push_back(row.pct);
     r.pos_color.push_back((int) kMarketFlat);
-    // The charted row stands out
     r.name_color.push_back((int) (f.spark && !row.spark ? kMarketDim : kMarketFlat));
     r.value_color.push_back((int) (g.cols == 3 ? kMarketFlat : row.color));
     r.detail_color.push_back((int) row.color);
   }
+  // The charted row stands out: a bar behind it
+  if (f.active >= 0)
+    out.bar = AppFill{g.list.x, (int16_t) (g.row_y + f.active * kMarketRowPx), g.list.w, (int16_t) kMarketRowPx,
+                      kMarketBar};
+  auto logo = [&](const MarketSymbol &s, int x, int y, int px) -> AppIcon & {
+    AppIcon ic;
+    ic.x = (int16_t) x;
+    ic.y = (int16_t) y;
+    ic.px = (uint8_t) px;
+    ic.kind = s.kind;
+    memcpy(ic.key, s.sym, sizeof s.sym);
+    ic.url = market_logo_url;
+    out.icons.push_back(ic);
+    return out.icons.back();
+  };
+  auto text = [&](int x, int y, int w, MarketFont font, uint32_t color, std::string s) -> int8_t {
+    AppText t;
+    t.x = (int16_t) x;
+    t.y = (int16_t) y;
+    t.w = (int16_t) w;
+    t.font = font;
+    t.color = color;
+    t.text = std::move(s);
+    out.texts.push_back(std::move(t));
+    return (int8_t) (out.texts.size() - 1);
+  };
+  using esphome::gameday::font_px;
+  // Its logo big, its name there until it draws
+  if (f.slot >= 0 && g.focus_px > 0) {
+    const MarketSymbol &s = b.syms[f.slot];
+    const int px = g.focus_px;
+    // Five letters reach the line's edge
+    std::string label = market_sym_text(s.sym, (size_t) ((px + 2) / kMarketCharPx));
+    const MarketFont font = (int) label.size() * font_px(MarketFont::S12) <= px ? MarketFont::S12 : MarketFont::S8;
+    const int tw = (int) label.size() * font_px(font);
+    const int8_t alt = text(g.focus_x, g.focus_y + (px - esphome::gameday::font_rows(font)) / 2, std::max(tw, px), font,
+                            kMarketFlat, std::move(label));
+    out.texts[alt].align = AppAlign::CENTER;
+    int8_t with = -1;
+    // Four panels: name beside the drawn logo, move always
+    if (!f.name.empty() && f.logo) {
+      const bool big = (int) f.name.size() * font_px(MarketFont::S12) <= g.name_at.w;
+      with = text(g.name_at.x, g.name_at.y, g.name_at.w, big ? MarketFont::S12 : MarketFont::S8, kMarketFlat, f.name);
+    }
+    if (!f.move.empty())
+      text(g.move_at.x, g.move_at.y, g.move_at.w, MarketFont::S8, f.move_color, f.move);
+    if (f.logo) {
+      AppIcon &big = logo(s, g.focus_x, g.focus_y, px);
+      big.alt = alt;
+      big.with = with;
+    }
+  }
   if (g.logo.w > 0) {
     const int first = f.page * g.rows;
-    out.icons.reserve(f.n);
     for (uint8_t i = 0; i < f.n; i++) {
       const MarketSymbol &s = b.syms[first + i];
-      if (!market_has_logo(s.sym, s.kind))
-        continue;
-      AppIcon ic;
-      ic.x = g.logo.x;
-      ic.y = (int16_t) (g.row_y + i * kMarketRowPx);
-      ic.px = (uint8_t) kMarketLogoPx;
-      ic.kind = s.kind;
-      memcpy(ic.key, s.sym, sizeof s.sym);
-      ic.url = market_logo_url;
-      out.icons.push_back(ic);
+      if (market_has_logo(s.sym, s.kind))
+        logo(s, g.logo.x, g.row_y + i * kMarketRowPx, kMarketLogoPx);
     }
   }
   if (f.spark) {

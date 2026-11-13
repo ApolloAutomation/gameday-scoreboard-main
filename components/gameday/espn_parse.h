@@ -418,6 +418,12 @@ struct Splash {
   uint8_t lead{0};
   // e.g. "+6" or "+2 RUNS"; empty when nothing scored.
   std::string points;
+  // The play animation first (play_anim.h's AnimKind and AnimArgs)
+  uint8_t anim{0};
+  int16_t anim_dist{0};
+  uint8_t anim_flags{0};
+  // Its caption: choices longest first, '|' between; "BUF 21 +6"
+  std::string anim_say{}, anim_score{};
 };
 
 const char *league_path(League league);  // the last part of the ESPN path: "nfl"

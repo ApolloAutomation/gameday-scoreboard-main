@@ -12,9 +12,12 @@
 #include <strings.h>
 #include <vector>
 
+#include "flights.h"
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "board_view.h"
+#include "scene.h"
+#include "scene_view.h"
 #include "psram_tasks.h"
 #include "timezones.h"
 #include "timezones_parsed.h"
@@ -1646,9 +1649,19 @@ void GamedayComponent::on_shutdown() { ::espn::boot_log_planned(boot_log); }
 
 void GamedayComponent::loop() {
   PsramTasks::reap();
-  if (this->logos_.loop()) {
+  bool logo_missed = false;
+  const bool logo_ready = this->logos_.loop(logo_missed);
+  if (logo_ready) {
     this->fire_action_("logo_ready");  // gameday-common.yaml redraws the logos
     this->a2_show_logos_();            // and the second area's here
+  }
+  if ((logo_ready || logo_missed) && this->icon_wait_ != 0) {
+    // Waiting displays draw it, or ask the backup
+    const uint32_t wait = this->icon_wait_;
+    this->icon_wait_ = 0;
+    for (int i = 1; i < ::espn::kDisplayCount; i++)
+      if ((wait >> i) & 1)
+        this->app_redraw_((::espn::Display) i, true);
   }
   if (this->logo_held_ && this->logo_hold_done_())
     this->draw_(this->last_fields_);
@@ -2065,6 +2078,33 @@ void GamedayComponent::set_alerts(uint32_t on) {
   this->save_prefs9_();
 }
 
+// The page's Try it: a scene alone, no splash
+void GamedayComponent::try_anim_(const std::string &play) {
+#ifdef USE_LVGL
+  BoardView *v = board_view();
+  if (v == nullptr || v->splash == nullptr)
+    return;
+  if (scene_playing()) {
+    ESP_LOGI(TAG, "Play animation: one is already playing");
+    return;
+  }
+  const UpdateFields &f = this->last_fields_;
+  const ::espn::AnimSample a = ::espn::anim_sample(play, f.team_abbr, f.team_score);
+  if (!scene_play(v->splash, a.args, f.team_color, f.opponent_color, millis(), nullptr, a.say.c_str(),
+                  a.score.c_str()))
+    ESP_LOGI(TAG, "Play animation: shows on the Scoreboard page only");
+#endif
+}
+
+void GamedayComponent::set_anim(bool on) {
+  const uint8_t flags = on ? (this->prefs9_.flags & ~ALERT9_NOANIM) : (this->prefs9_.flags | ALERT9_NOANIM);
+  if (flags == this->prefs9_.flags)
+    return;
+  this->prefs9_.flags = flags;
+  this->save_prefs9_();
+  ESP_LOGI(TAG, "Play animations: %s", on ? "on" : "off");
+}
+
 void GamedayComponent::set_alerts_favorites_only(bool on) {
   const uint8_t flags = on ? (this->prefs9_.flags | ALERT9_FAV) : (this->prefs9_.flags & ~ALERT9_FAV);
   if (flags == this->prefs9_.flags)
@@ -2446,7 +2486,7 @@ bool GamedayComponent::idle_update_() {
   in.board_ready = this->board_ready_;
   in.connected = network::is_connected();
   // The idle display waits for a splash, a win's too
-  in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_);
+  in.busy = this->idle_busy_() || ::espn::splash_up(millis(), this->splash_ms_, this->splash_stay_ms_);
   in.area2_busy = this->a2_busy_();
   ::espn::IdleState s = ::espn::idle_state(in);
   // Another display on the main area: its own busy decides.
@@ -5775,6 +5815,7 @@ void GamedayComponent::apps_setup_() {
   env.version = App.get_comment().c_str();
   if (!env.version.empty() && env.version[0] == 'v')
     env.version.erase(0, 1);
+  this->logos_.set_photo_agent(::flights::photo_agent(env.version));
   ::espn::register_apps(slots);
   this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
@@ -5891,8 +5932,10 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.texts = std::move(fr.texts);
   for (::espn::AppText &t : f.texts)
     t.text = panel_text(t.text);
+  f.art = std::move(fr.art);
+  f.bar = fr.bar;
   // A loaded source, else the first unfailed; one download each.
-  uint32_t shown[::espn::kAppIcons];
+  uint32_t shown[::espn::kAppIcons + 1];
   char url[160];
   f.icon_n = 0;
   for (const ::espn::AppIcon &ic : fr.icons) {
@@ -5901,25 +5944,54 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     uint8_t from = 0;
     size_t len;
     while ((len = ic.url(ic.key, ic.kind, from, url, sizeof url)) > 0 &&
-           !this->logos_.ready(std::string_view(url, len)))
+           !this->logos_.ready(std::string_view(url, len), ic.px))
       from++;
     if (len == 0)
       from = 0;
+    bool drawn = false;
     for (uint8_t k = from; (len = ic.url(ic.key, ic.kind, k, url, sizeof url)) > 0; k++) {
       const std::string_view u(url, len);
-      image::Image *img = this->logos_.get(u, ic.px);
+      image::Image *img = this->logos_.get(u, ic.px, ic.mark);
       if (img != nullptr) {
         f.icon_img[f.icon_n] = img;
         f.icon_xy[2 * f.icon_n] = ic.x;
         f.icon_xy[2 * f.icon_n + 1] = ic.y;
         shown[f.icon_n++] = ::espn::logo_key(url, len);
+        drawn = true;
         break;
       }
-      if (this->logos_.waiting(u))
+      if (this->logos_.waiting(u, ic.px)) {
+        this->icon_wait_ |= 1u << (int) d;
         break;
+      }
+    }
+    // Drawn: its label goes; missing: its with text
+    const int8_t gone = drawn ? ic.alt : ic.with;
+    if (gone >= 0 && (size_t) gone < f.texts.size())
+      f.texts[gone].text.clear();
+  }
+  size_t pins = f.icon_n;
+  // The photo stands in for the art
+  const ::espn::AppPhoto &ph = fr.photo;
+  if (!ph.url.empty()) {
+    const bool boxed = ph.w > 0 && ph.h > 0;
+    image::Image *img = boxed ? this->logos_.photo(ph.url, ph.w, ph.h) : nullptr;
+    // Credited whenever loaded, drawn only when boxed
+    if (img != nullptr || (!boxed && this->logos_.photo_ready(ph.url))) {
+      if (ph.at <= f.status_text.size())
+        f.status_text.insert(ph.at, ph.credit);
+      shown[pins++] = ::espn::logo_key(ph.url.data(), ph.url.size());
+    }
+    if (img != nullptr) {
+      f.photo_img = img;
+      f.photo_xy[0] = (int16_t) (ph.x + (ph.w - img->get_width()) / 2);
+      f.photo_xy[1] = (int16_t) (ph.y + (ph.h - img->get_height()) / 2);
+      f.art.clear();
+    } else if (boxed && this->logos_.photo_waiting(ph.url, ph.w, ph.h)) {
+      this->icon_wait_ |= 1u << (int) d;
     }
   }
-  this->logos_.pin_icons(shown, f.icon_n);
+  this->logos_.pin_icons(shown, pins);
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {
@@ -6200,12 +6272,17 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
 
   // No Game Day splash while another display has the board.
+  if (this->main_view_ != ::espn::MainView::GAMEDAY || !this->anim_on())
+    f.splash_anim = 0;
   if (!f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY) {
-    ESP_LOGI(TAG, "Splash: %s", f.splash_text.c_str());
+    ESP_LOGI(TAG, "Splash: %s%s%s", f.splash_text.c_str(), f.splash_anim ? ", scene " : "",
+             f.splash_anim ? ::espn::anim_name((::espn::AnimKind) f.splash_anim) : "");
     this->splash_ms_ = millis() == 0 ? 1 : millis();
+    f.splash_seq = this->splash_ms_;
+    this->splash_stay_ms_ = ::espn::kSplashMs + ::espn::scene_ms((::espn::AnimKind) f.splash_anim);
     // A 2x2's bottom half waits under it
     if (this->a2_covered_(this->splash_ms_))
-      this->set_timeout("a2_uncover", ::espn::kSplashMs, [this]() { this->a2_uncovered_(); });
+      this->set_timeout("a2_uncover", this->splash_stay_ms_, [this]() { this->a2_uncovered_(); });
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
@@ -6402,6 +6479,14 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
       f.splash_side = 1;
     f.splash_lead = splash.lead;
     f.splash_points = splash.points;
+    // A scene needs to know whose play it was
+    f.splash_anim = f.splash_side == 0 || f.splash_side == 1 ? splash.anim : 0;
+    f.splash_anim_dist = splash.anim_dist;
+    // The board's right team scores leftward
+    f.splash_anim_flags = (uint8_t) ((splash.anim_flags & ~::espn::kAnimMirror) |
+                                     (f.splash_side == 1 ? ::espn::kAnimMirror : 0));
+    f.splash_say = splash.anim_say;
+    f.splash_score = splash.anim_score;
   }
 
   TickerOptions opts;
@@ -7060,6 +7145,7 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["opp"] = this->opponent_splashes();
   doc["alerts"] = this->alerts_on();
   doc["alertfav"] = this->alerts_favorites_only();
+  doc["anim"] = this->anim_on();
   doc["watch"] = this->watch_on();
   doc["watchstay"] = this->watch_stay_ms() / 1000;
   doc["watchmine"] = this->watch_from_mine();
@@ -7608,7 +7694,8 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
       request->send(400, "application/json", "{\"error\":\"do is required\"}");
       return;
     }
-    bool known = name == "refresh" || name == "qc" || name == "power_ok";
+    bool known = name == "refresh" || name == "qc" || name == "power_ok" || name == "anim";
+    const std::string play = request->arg("play");
 #ifdef GAMEDAY_DEMO
     known = known || name == "demo" || name == "demo_stop";
 #endif
@@ -7616,9 +7703,11 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
       request->send(404, "application/json", "{\"error\":\"unknown action\"}");
       return;
     }
-    this->defer([this, name]() {
+    this->defer([this, name, play]() {
       if (name == "refresh")
         this->refresh_now();
+      else if (name == "anim")
+        this->try_anim_(play);
       else if (name == "power_ok")
         this->clear_power_cap();
 #ifdef GAMEDAY_DEMO
@@ -7801,6 +7890,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::ALERTS:
         this->set_alerts(op.mask);
+        break;
+      case ::espn::SetKind::ANIM:
+        this->set_anim(op.on);
         break;
       case ::espn::SetKind::ALERTFAV:
         this->set_alerts_favorites_only(op.on);

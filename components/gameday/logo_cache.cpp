@@ -1,14 +1,20 @@
 #include "logo_cache.h"
 
 #include <algorithm>
+#include <cstring>
+#include <new>
 
-#include "esphome/components/runtime_image/image_decoder.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#include "logo_decode.h"
 #include "logo_icon.h"
 #include "logo_lru.h"
+#include "plane_photo.h"
 #include "psram_tasks.h"
+
+// Last: its macros stay out of the headers above
+#include <JPEGDEC.h>
 
 namespace esphome::gameday {
 
@@ -16,6 +22,8 @@ static const char *const TAG = "gameday.logo";
 static const char *const USER_AGENT = ::espn::kUserAgent;  // the same as every ESPN read (poll_timing.h)
 // Rotating live games plus today's scores, ~3 KB each
 static const size_t MAX_LOGOS = 128;
+// Plane photos kept; a new one replaces the oldest
+static const size_t MAX_PHOTOS = 4;
 static const size_t MAX_PENDING = 8;
 // ESPN's PNGs are a few KB; anything far bigger is not a logo.
 static const size_t MAX_BODY = 128 * 1024;
@@ -34,17 +42,15 @@ template<class S> static uint32_t url_key(const S &url) { return ::espn::logo_ke
 
 void LogoCache::setup() {
   this->lock_ = xSemaphoreCreateMutex();
-  this->decoder_.emplace(runtime_image::PNG, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL, nullptr,
-                         false, LOGO_SIZE, LOGO_SIZE);
   this->entries_.reserve(MAX_LOGOS);
   this->slots_.reserve(MAX_LOGOS);
   this->memo_.reserve(::espn::kLogoMemoCap);
   this->pending_.reserve(MAX_PENDING);
 }
 
-LogoCache::Entry *LogoCache::find_(std::string_view url) {
+LogoCache::Entry *LogoCache::find_(std::string_view url, uint8_t icon, uint8_t box_w, uint8_t box_h) {
   for (auto &e : this->entries_) {
-    if (std::string_view(e->url) == url)
+    if (e->icon == icon && e->box_w == box_w && e->box_h == box_h && std::string_view(e->url) == url)
       return e.get();
   }
   return nullptr;
@@ -75,15 +81,22 @@ LogoCache::Entry *LogoCache::add_(std::string_view url, uint8_t prio, uint32_t n
   return p;
 }
 
-image::Image *LogoCache::get(std::string_view url, uint8_t icon) {
+image::Image *LogoCache::get_(std::string_view url, uint8_t icon, bool mark, uint8_t box_w, uint8_t box_h) {
   if (url.empty() || this->lock_ == nullptr)
     return nullptr;
   Locked guard(this->lock_);
   uint32_t now = millis();
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon, box_w, box_h);
   if (e == nullptr) {
-    this->make_room_(now);
-    this->add_(url, ::espn::LOGO_NOW, now)->icon = icon;
+    if (box_w > 0 && box_h > 0)
+      this->make_photo_room_(now);
+    else
+      this->make_room_(now);
+    Entry *n = this->add_(url, ::espn::LOGO_NOW, now);
+    n->icon = icon;
+    n->mark = mark;
+    n->box_w = box_w;
+    n->box_h = box_h;
     return nullptr;
   }
   e->used_ms = now;
@@ -112,19 +125,38 @@ void LogoCache::want(const std::string &url) {
     this->queue_(*e, ::espn::LOGO_NEXT, now);
 }
 
-bool LogoCache::ready(std::string_view url) {
+bool LogoCache::ready(std::string_view url, uint8_t icon) {
   if (url.empty() || this->lock_ == nullptr)
     return false;
   Locked guard(this->lock_);
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon);
   return e != nullptr && e->state == State::READY;
 }
 
-bool LogoCache::waiting(std::string_view url) {
-  if (url.empty() || this->lock_ == nullptr || this->get(url) != nullptr)
+bool LogoCache::waiting(std::string_view url, uint8_t icon) {
+  if (url.empty() || this->lock_ == nullptr || this->get(url, icon) != nullptr)
     return false;
   Locked guard(this->lock_);
-  Entry *e = this->find_(url);
+  Entry *e = this->find_(url, icon);
+  return e != nullptr && e->state != State::FAILED;
+}
+
+bool LogoCache::photo_ready(std::string_view url) {
+  if (url.empty() || this->lock_ == nullptr)
+    return false;
+  Locked guard(this->lock_);
+  for (auto &e : this->entries_) {
+    if (e->box_w > 0 && e->state == State::READY && std::string_view(e->url) == url)
+      return true;
+  }
+  return false;
+}
+
+bool LogoCache::photo_waiting(std::string_view url, uint8_t w, uint8_t h) {
+  if (url.empty() || this->lock_ == nullptr || this->photo(url, w, h) != nullptr)
+    return false;
+  Locked guard(this->lock_);
+  Entry *e = this->find_(url, 0, w, h);
   return e != nullptr && e->state != State::FAILED;
 }
 
@@ -222,11 +254,25 @@ void LogoCache::make_room_(uint32_t now) {
     return;
   this->slots_.clear();
   for (auto &e : this->entries_) {
-    bool busy = e->state == State::QUEUED || e->state == State::LOADING || e->state == State::DOWNLOADED;
+    bool busy = e->state == State::QUEUED || e->state == State::LOADING;
     bool pinned = this->pinned_url_(e->url);
-    this->slots_.push_back({e->used_ms, busy, pinned});
+    this->slots_.push_back({e->used_ms, busy, pinned, e->box_w > 0});
   }
   int i = ::espn::pick_evict_in(this->slots_, now);
+  if (i >= 0)
+    this->entries_.erase(this->entries_.begin() + i);
+}
+
+// Caller holds the lock. Photos give way to photos.
+void LogoCache::make_photo_room_(uint32_t now) {
+  this->slots_.clear();
+  for (auto &e : this->entries_) {
+    const bool photo = e->box_w > 0;
+    // A queued photo can go; the task holds only LOADING
+    const bool busy = e->state == State::LOADING || (!photo && e->state == State::QUEUED);
+    this->slots_.push_back({e->used_ms, busy, this->pinned_url_(e->url), photo});
+  }
+  const int i = ::espn::pick_photo_evict_in(this->slots_, MAX_PHOTOS, MAX_LOGOS, now);
   if (i >= 0)
     this->entries_.erase(this->entries_.begin() + i);
 }
@@ -250,11 +296,13 @@ void LogoCache::task_(void *arg) {
 }
 
 // Logo task: works through queued logos one at a time, then exits. The task
-// only touches an entry while it is LOADING, and nothing drops a busy entry.
+// only touches an entry while it is LOADING, and nothing drops a LOADING one.
 void LogoCache::run_() {
   while (true) {
     Entry *job = nullptr;
     std::string url, first;
+    uint8_t icon = 0, box_w = 0, box_h = 0;
+    bool mark = false;
     {
       Locked guard(this->lock_);
       for (auto &e : this->entries_) {
@@ -267,6 +315,10 @@ void LogoCache::run_() {
         return;
       }
       job->state = State::LOADING;
+      icon = job->icon;
+      mark = job->mark;
+      box_w = job->box_w;
+      box_h = job->box_h;
       url.assign(job->url.data(), job->url.size());
       first = ::espn::logo_first_url(url, ::espn::memo_get(this->memo_, url_key(url), millis()));
     }
@@ -275,23 +327,45 @@ void LogoCache::run_() {
     uint32_t retry_after_ms = 0;
     int code = 0, plain_code = 0;
     uint32_t start = millis();
-    bool ok = this->download_(first, body, code, throttled, retry_after_ms);
+    const bool photo = box_w > 0 && box_h > 0;
+    bool ok = this->download_(first, photo, body, code, throttled, retry_after_ms);
     // Kept under the dark URL, so lookups still find it
     const std::string plain = first == url ? ::espn::plain_logo_url(url) : std::string();
     if (!ok && code == 404 && !plain.empty()) {
       ESP_LOGD(TAG, "No dark logo, using %s", plain.c_str());
-      ok = this->download_(plain, body, plain_code, throttled, retry_after_ms);
+      ok = this->download_(plain, false, body, plain_code, throttled, retry_after_ms);
     }
-    const ::espn::LogoNote note =
+    ::espn::LogoNote note =
         ::espn::logo_learned(!::espn::plain_logo_url(url).empty(), first != url, code, plain_code);
-    size_t bytes = body.size();
+    // Google's stand-in for an airline it lacks
+    if (ok && ::espn::logo_placeholder(first.c_str(), body.data(), body.size())) {
+      ok = false;
+      note = ::espn::LogoNote::NONE;
+    }
+    if (ok) {
+      ESP_LOGD(TAG, "Downloaded %s (%u bytes, %u ms)", (plain_code == 200 ? plain : first).c_str(),
+               (unsigned) body.size(), (unsigned) (millis() - start));
+    }
+    Decoded img;
+    const uint32_t decode_start = millis();
+    int decoded = 0;
+    if (ok)
+      decoded = photo ? this->decode_photo_(body, box_w, box_h, img) : this->decode_(body, icon, mark, img);
+    const uint32_t decode_ms = millis() - decode_start;
+    // Too thin or faint: asked again in hours
+    if (decoded < 0)
+      note = ::espn::LogoNote::NONE;
     {
       Locked guard(this->lock_);
       const uint32_t now = millis();
       ::espn::memo_note(this->memo_, url_key(url), note, now);
-      if (ok) {
-        job->body = std::move(body);
-        job->state = State::DOWNLOADED;
+      if (decoded > 0) {
+        job->pixels = std::move(img.pixels);
+        job->image.emplace(job->pixels.data(), img.w, img.h, image::IMAGE_TYPE_RGB565,
+                           photo ? image::TRANSPARENCY_OPAQUE : image::TRANSPARENCY_ALPHA_CHANNEL);
+        job->state = State::READY;
+        ::espn::logo_loaded(job->fails, job->wait_ms);
+        this->loaded_ = true;
       } else {
         job->state = State::FAILED;
         job->failed_ms = now;
@@ -299,27 +373,31 @@ void LogoCache::run_() {
           job->wait_ms = ::espn::kLogoNoneMs;
         else
           ::espn::logo_failed(job->fails, job->wait_ms, throttled, retry_after_ms, random_uint32());
+        this->failed_ = true;
       }
     }
-    if (ok) {
-      ESP_LOGD(TAG, "Downloaded %s (%u bytes, %u ms)", (plain_code == 200 ? plain : first).c_str(), (unsigned) bytes,
-               (unsigned) (millis() - start));
-    } else if (note == ::espn::LogoNote::NONE) {
+    if (decoded > 0) {
+      ESP_LOGD(TAG, "Decoded %ux%u %s to %dx%d in %u ms", (unsigned) img.src_w, (unsigned) img.src_h,
+               photo ? "photo" : "logo", img.w, img.h, (unsigned) decode_ms);
+    } else if (decoded < 0 && photo) {
+      ESP_LOGI(TAG, "Photo unreadable: %s", url.c_str());
+    } else if (decoded < 0) {
+      ESP_LOGI(TAG, "Logo unreadable at %u px: %s", (unsigned) icon, url.c_str());
+    } else if (!ok && note == ::espn::LogoNote::NONE) {
       ESP_LOGI(TAG, "No logo at %s; its badge shows for now", url.c_str());
-    } else {
+    } else if (!ok) {
       ESP_LOGW(TAG, "Logo download failed after %u ms: %s", (unsigned) (millis() - start), url.c_str());
     }
-    this->downloaded_ = true;
   }
 }
 
 // On a refusal (403 or 429) sets throttled, and retry_after_ms when the reply
 // carried a plain Retry-After.
-bool LogoCache::download_(const std::string &url, Bytes &body, int &code, bool &throttled,
+bool LogoCache::download_(const std::string &url, bool photo, Bytes &body, int &code, bool &throttled,
                           uint32_t &retry_after_ms) {
   std::vector<http_request::Header> headers = {
-      {"User-Agent", USER_AGENT},
-      {"Accept", "image/png,*/*;q=0.8"},
+      {"User-Agent", photo && !this->photo_agent_.empty() ? this->photo_agent_.c_str() : USER_AGENT},
+      {"Accept", photo ? "image/jpeg,*/*;q=0.8" : "image/png,*/*;q=0.8"},
   };
   code = 0;
   auto container = this->http_->get(url, headers, {"retry-after"});
@@ -351,81 +429,207 @@ bool LogoCache::download_(const std::string &url, Bytes &body, int &code, bool &
   return true;
 }
 
-// Shared decoder; the entry keeps a copy of the pixels.
-// Safe without the lock: the entry is DOWNLOADED until the caller marks it
-// READY, so nothing draws it and nothing drops it.
-bool LogoCache::decode_(Entry &e, const Bytes &body) {
-  runtime_image::RuntimeImage &d = *this->decoder_;
-  bool ok = d.begin_decode(body.size());
+namespace {
+
+// One decode, for pngle's callbacks
+struct PngJob {
+  ::espn::LogoCanvas canvas;
+  std::vector<uint8_t, PsramAllocator<uint8_t>> *pixels{nullptr};
+  uint32_t px{0};
+  uint32_t rest_ms{0};
+
+  // Lets idle tasks and the main loop in
+  void rest() {
+    if (::espn::logo_rest_due(this->rest_ms, millis())) {
+      vTaskDelay(1);
+      this->rest_ms = millis();
+    }
+  }
+};
+
+void png_init(pngle_t *p, uint32_t w, uint32_t h) {
+  auto *job = static_cast<PngJob *>(pngle_get_user_data(p));
+  if (!::espn::logo_size_ok(w, h))
+    return;
+  int fw = 0, fh = 0;
+  ::espn::logo_fit(w, h, LOGO_SIZE, fw, fh);
+  job->pixels->assign(::espn::logo_icon_bytes(fw, fh), 0);
+  job->canvas = ::espn::LogoCanvas{job->pixels->data(), w, h, fw, fh};
+}
+
+void png_draw(pngle_t *p, uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint8_t rgba[4]) {
+  auto *job = static_cast<PngJob *>(pngle_get_user_data(p));
+  job->canvas.paint(x, y, w, h, rgba);
+  if ((++job->px & 1023) == 0)
+    job->rest();
+}
+
+}  // namespace
+
+// pngle itself: runtime_image's decoder feeds the loop's watchdog.
+int LogoCache::decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out) {
+  uint32_t w = 0, h = 0;
+  if (::espn::png_size(body.data(), body.size(), w, h) && !::espn::logo_size_ok(w, h)) {
+    ESP_LOGW(TAG, "Logo too large to decode (%ux%u)", (unsigned) w, (unsigned) h);
+    return 0;
+  }
+  if (this->png_ == nullptr) {
+    void *p = heap_caps_malloc_prefer(PNGLE_T_SIZE, 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
+    if (p == nullptr) {
+      ESP_LOGW(TAG, "No room for the PNG decoder");
+      return 0;
+    }
+    memset(p, 0, PNGLE_T_SIZE);
+    this->png_ = static_cast<pngle_t *>(p);
+    pngle_reset(this->png_);
+    pngle_set_init_callback(this->png_, png_init);
+    pngle_set_draw_callback(this->png_, png_draw);
+  }
+  PngJob job;
+  job.pixels = &out.pixels;
+  job.rest_ms = millis();
+  pngle_set_user_data(this->png_, &job);
+  bool ok = true;
   size_t offset = 0;
-  while (ok && offset < body.size()) {
-    // feed_data takes a non-const pointer but only reads it.
-    int used = d.feed_data(const_cast<uint8_t *>(body.data()) + offset, body.size() - offset);
+  while (offset < body.size()) {
+    int used = pngle_feed(this->png_, body.data() + offset, std::min<size_t>(body.size() - offset, 4096));
     if (used < 0) {
-      ESP_LOGW(TAG, "Logo decode error: %s", runtime_image::decode_error_to_string(used));
+      ESP_LOGW(TAG, "Logo decode error: %s", pngle_error(this->png_));
       ok = false;
     }
     if (used <= 0)
       break;
     offset += (size_t) used;
+    job.rest();
   }
-  if (ok)
-    ok = d.end_decode();
-  const uint8_t *px = d.get_data_start();
-  const int w = d.get_width(), h = d.get_height();
-  ok = ok && px != nullptr;
-  if (ok && e.icon > 0) {
-    const std::vector<uint8_t> small = ::espn::logo_icon_shrink(px, w, h, e.icon);
-    e.pixels.assign(small.begin(), small.end());
-    ::espn::logo_icon_lift(e.pixels.data(), e.icon, e.icon);
-    e.image.emplace(e.pixels.data(), e.icon, e.icon, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
-  } else if (ok) {
-    e.pixels.assign(px, px + d.get_buffer_size(w, h));
-    e.image.emplace(e.pixels.data(), w, h, image::IMAGE_TYPE_RGB565, image::TRANSPARENCY_ALPHA_CHANNEL);
+  // Frees its row buffers
+  pngle_reset(this->png_);
+  if (!ok)
+    return 0;
+  if (job.canvas.px == nullptr) {
+    ESP_LOGW(TAG, "Logo is not a usable PNG");
+    return 0;
   }
-  // Frees its pixels and ends a failed decode
-  d.release();
-  return ok;
+  out.src_w = job.canvas.w;
+  out.src_h = job.canvas.h;
+  out.w = job.canvas.fw;
+  out.h = job.canvas.fh;
+  if (icon > 0) {
+    // Squared so a wide logo keeps its shape
+    const int side = std::max(out.w, out.h);
+    Bytes square(::espn::logo_icon_bytes(side, side));
+    ::espn::logo_icon_square(job.canvas.px, out.w, out.h, square.data());
+    if (mark) {
+      std::vector<uint16_t, PsramAllocator<uint16_t>> stack;
+      ::espn::logo_icon_knockout(square.data(), side, side, stack);
+    }
+    const std::vector<uint8_t> small = ::espn::logo_icon_shrink(square.data(), side, side, icon);
+    out.pixels = Bytes(small.begin(), small.end());
+    ::espn::logo_icon_lift(out.pixels.data(), icon, icon, mark);
+    out.w = out.h = icon;
+    if (mark && !::espn::logo_icon_usable(out.pixels.data(), icon)) {
+      out.pixels = Bytes();
+      return -1;
+    }
+  }
+  return 1;
 }
 
-bool LogoCache::loop() {
+namespace {
+
+// One photo decode, for JPEGDEC's callback
+struct JpegJob {
+  uint16_t *px{nullptr};
+  int w{0}, h{0};
+  uint32_t rest_ms{0};
+};
+
+int jpeg_draw(JPEGDRAW *d) {
+  auto *job = static_cast<JpegJob *>(d->pUser);
+  for (int y = 0; y < d->iHeight; y++) {
+    const int row = d->y + y;
+    if (row < 0 || row >= job->h)
+      continue;
+    for (int x = 0; x < d->iWidthUsed; x++) {
+      const int col = d->x + x;
+      if (col >= 0 && col < job->w)
+        job->px[row * job->w + col] = d->pPixels[y * d->iWidth + x];
+    }
+  }
+  // Lets idle tasks and the main loop in
+  if (::espn::logo_rest_due(job->rest_ms, millis())) {
+    vTaskDelay(1);
+    job->rest_ms = millis();
+  }
+  return 1;
+}
+
+}  // namespace
+
+// JPEGDEC itself; progressive ones decode their first scan
+int LogoCache::decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out) {
+  if (body.size() < 4 || body[0] != 0xFF || body[1] != 0xD8)
+    return -1;
+  if (this->jpeg_ == nullptr) {
+    void *p = heap_caps_malloc_prefer(sizeof(JPEGDEC), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
+    if (p == nullptr) {
+      ESP_LOGW(TAG, "No room for the JPEG decoder");
+      return 0;
+    }
+    this->jpeg_ = new (p) JPEGDEC();
+  }
+  JPEGDEC &jpeg = *this->jpeg_;
+  if (!jpeg.openRAM(const_cast<uint8_t *>(body.data()), (int) body.size(), jpeg_draw)) {
+    ESP_LOGW(TAG, "Photo is not a usable JPEG (%d)", jpeg.getLastError());
+    return -1;
+  }
+  const int type = jpeg.getJPEGType();
+  const bool progressive = type == JPEG_MODE_PROGRESSIVE;
+  const uint32_t w = (uint32_t) std::max(0, jpeg.getWidth()), h = (uint32_t) std::max(0, jpeg.getHeight());
+  ::flights::PhotoFit fit;
+  if (type != JPEG_MODE_INVALID)
+    fit = ::flights::photo_fit(w, h, progressive, box_w, box_h);
+  if (!fit.ok()) {
+    ESP_LOGW(TAG, "Photo can't be read (%ux%u)", (unsigned) w, (unsigned) h);
+    jpeg.close();
+    return -1;
+  }
+  std::vector<uint16_t, PsramAllocator<uint16_t>> px((size_t) fit.sw * fit.sh, 0);
+  JpegJob job;
+  job.px = px.data();
+  job.w = fit.sw;
+  job.h = fit.sh;
+  job.rest_ms = millis();
+  jpeg.setUserPointer(&job);
+  jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+  static const int SCALE[] = {0, JPEG_SCALE_HALF, JPEG_SCALE_QUARTER, JPEG_SCALE_EIGHTH};
+  const int ok = jpeg.decode(0, 0, progressive ? 0 : SCALE[fit.shift]);
+  const int err = jpeg.getLastError();
+  jpeg.close();
+  if (!ok) {
+    ESP_LOGW(TAG, "Photo decode error %d", err);
+    return 0;
+  }
+  Bytes rgb((size_t) fit.ow * fit.oh * 3);
+  ::flights::photo_scale(px.data(), fit, rgb.data());
+  out.pixels.assign((size_t) fit.ow * fit.oh * 2, 0);
+  ::flights::photo_light(rgb.data(), fit.ow, fit.oh, out.pixels.data());
+  out.w = fit.ow;
+  out.h = fit.oh;
+  out.src_w = w;
+  out.src_h = h;
+  return 1;
+}
+
+bool LogoCache::loop(bool &failed) {
+  failed = false;
   if (this->lock_ == nullptr)
     return false;
   if (this->pending_any_.exchange(false))
     this->drain_pending_();
   this->retry_pinned_(millis());
-  if (!this->downloaded_.exchange(false))
-    return false;
-  bool ready = false;
-  while (true) {
-    Entry *job = nullptr;
-    Bytes body;
-    {
-      Locked guard(this->lock_);
-      for (auto &e : this->entries_) {
-        if (e->state == State::DOWNLOADED) {
-          job = e.get();
-          body = std::move(e->body);
-          e->body = {};
-          break;
-        }
-      }
-    }
-    if (job == nullptr)
-      return ready;
-    // Only the main loop drops entries, so job stays valid without the lock.
-    bool ok = this->decode_(*job, body);
-    Locked guard(this->lock_);
-    if (ok) {
-      job->state = State::READY;
-      ::espn::logo_loaded(job->fails, job->wait_ms);
-      ready = true;
-    } else {
-      job->state = State::FAILED;
-      job->failed_ms = millis();
-      ::espn::logo_failed(job->fails, job->wait_ms, false, 0, random_uint32());
-    }
-  }
+  failed = this->failed_.exchange(false);
+  return this->loaded_.exchange(false);
 }
 
 }  // namespace esphome::gameday

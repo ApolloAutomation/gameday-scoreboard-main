@@ -18,6 +18,8 @@
 #include "app_f1.h"
 #include "f1.h"
 #include "flights.h"
+#include "plane_photo.h"
+#include "logo_icon.h"
 #include "logo_lru.h"
 #include "markets_view.h"
 #include "panel_text.h"
@@ -738,6 +740,59 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     ChunkReader r2(data, size, chunk);
     if (flights::parse_fr24(r2, home, 1794457500, near) && near.n > flights::kNear)
       abort();
+    // Pictures and logos stay inside the card.
+    for (int w : {64, 128, 256}) {
+      flights::FrameOpts o;
+      o.w = w;
+      const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
+      for (const flights::Art &a : f.art) {
+        const flights::PlaneSprite *s = flights::plane_sprite(a.kind);
+        if (s == nullptr || a.x < 0 || a.y < 0 || a.x + s->w > w || a.y + s->h > o.h - 8)
+          abort();
+      }
+      for (const flights::Logo &l : f.logos)
+        if (l.x < 0 || l.x + flights::kLogoPx > w || flights::airline_by_icao(l.icao) == nullptr ||
+            l.alt >= (int) f.items.size())
+          abort();
+      sink = sink + f.art.size() + f.logos.size();
+    }
+    {
+      // The logo steps on the bytes as an image.
+      const int side = 1 + (int) (size % 32);
+      std::vector<uint8_t> img(espn::logo_icon_bytes(side, side), 0);
+      memcpy(img.data(), data, std::min(size, img.size()));
+      std::vector<uint16_t> stack;
+      espn::logo_icon_knockout(img.data(), side, side, stack);
+      std::vector<uint8_t> icon = espn::logo_icon_shrink(img.data(), side, side, 16);
+      espn::logo_icon_lift(icon.data(), 16, 16, true);
+      sink = sink + espn::logo_icon_usable(icon.data(), 16) + espn::logo_placeholder(espn::kGoogleLogoUrl, data, size);
+    }
+    {
+      // A photo answer, its card, the photo steps.
+      flights::PlanePhoto ph;
+      if (flights::parse_photo(json, ph) && ph.state == flights::PhotoState::KNOWN &&
+          (strncmp(ph.url, "https://", 8) != 0 || strlen(ph.url) >= sizeof ph.url || strlen(ph.by) >= sizeof ph.by))
+        abort();
+      flights::FrameOpts o;
+      o.w = 128 + (int) (size % 3) * 64;
+      o.photo = &ph;
+      const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
+      if (!f.photo.url.empty() && (f.photo.x + f.photo.w > o.w || f.photo.y + f.photo.h > o.h - 8 ||
+                                   f.photo.at > f.ticker.size()))
+        abort();
+      const flights::PhotoFit fit = flights::photo_fit(1 + (uint32_t) (size % 1100), 1 + (uint32_t) (size / 7 % 900),
+                                                       size & 1, 1 + (int) (size % 64), 1 + (int) (size / 3 % 32));
+      if (fit.ok()) {
+        if (fit.ow > fit.cw || fit.oh > fit.ch || fit.cy + fit.ch > fit.sh)
+          abort();
+        std::vector<uint16_t> px((size_t) fit.sw * fit.sh, 0);
+        memcpy(px.data(), data, std::min(size, px.size() * 2));
+        std::vector<uint8_t> rgb((size_t) fit.ow * fit.oh * 3), out((size_t) fit.ow * fit.oh * 2);
+        flights::photo_scale(px.data(), fit, rgb.data());
+        flights::photo_light(rgb.data(), fit.ow, fit.oh, out.data());
+        sink = sink + out[0];
+      }
+    }
     flights::RouteAsk ask;
     for (const char *cs : {"UAL755", "JBU1407", "DAL2064", "FIN16"})
       strcpy(ask.callsign[ask.n++], cs);

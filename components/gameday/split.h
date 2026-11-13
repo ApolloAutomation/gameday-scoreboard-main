@@ -80,11 +80,13 @@ inline SplitArea split_area(int cols, int rows, uint8_t show) {
 }
 
 // A splash shown at since (0 none) is up
-inline bool splash_up(uint32_t now, uint32_t since) { return since != 0 && now - since < kSplashMs; }
+inline bool splash_up(uint32_t now, uint32_t since, uint32_t stay = kSplashMs) {
+  return since != 0 && now - since < stay;
+}
 
 // Only a 2x2's board splash covers the area
-inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash) {
-  return at == SplitAt::BOTTOM && splash_up(now, board_splash);
+inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash, uint32_t stay = kSplashMs) {
+  return at == SplitAt::BOTTOM && splash_up(now, board_splash, stay);
 }
 
 // DATE beside the board's clock; GAME, APP other displays.

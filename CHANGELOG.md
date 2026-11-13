@@ -14,6 +14,19 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.5
+
+Touchdowns, kicks, home runs and goals play a short pixel-art animation before their splash, the Flight Tracker shows each plane's airline logo, its shape and a real photo of it, and Stocks & Crypto shows the charted symbol's logo big.
+
+- Play animations: before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash, the panel plays the score across the whole setup in pixel art, in the scoring team's colors: the pass into the end zone, the run in, the return the length of the field, the kick through the uprights, the dive over the pile, the ball over the outfield wall, or the shot into a soccer or hockey net and a long GOOOAAALLL. A missed or blocked kick, a failed try and a safety play nothing.
+- A caption across the top of each animation says what happened, like CHASE 30 YD TD PASS, 47 YD FG or 2-RUN HOME RUN, with the team's new score and the points in gold under it.
+- A Play animations switch, the first in the Celebrations card and in Home Assistant, turns them off. It starts on. Its Try it buttons play each one on the panel now, in your team's colors.
+- The Flight Tracker's card shows the airline's logo and a picture of the plane from the side, bigger for bigger planes, facing the way it flies, with its tail in the airline's color. The logos come from Google Flights and FlightAware, with no sign-up or key, and the airline's code shows until one comes in.
+- On a Flight Tracker card 128 wide or more, a real photo of that very plane from Planespotters.net takes the picture's place once it loads, and the ticker credits the photographer. The device page's Flight Tracker card shows the photo too, with the photographer's name and a link to it.
+- Stocks & Crypto puts a blue bar behind the charted symbol's row and shows its logo big, 24 LEDs square, beside the chart, with the symbol in its place until the logo comes in. The rows under the chart are three to a page to make room. Coin logos come from the cryptocurrency-icons set first, since its colored coins show better on the panel.
+- A big team logo, like Lehigh Valley's or Tulsa's, no longer freezes the panel for about two seconds while it loads.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.4
 
 Your team's logo can fill the board before and after the game, Stocks & Crypto shows a logo on each row, and the panel keeps up to 16 favorite players and 16 player props.
