@@ -12,8 +12,18 @@
 
 namespace espn {
 
-enum class AnimKind : uint8_t { NONE, TD_PASS, TD_RUN, TD_RETURN, FIELD_GOAL, HOME_RUN, SOCCER_GOAL, HOCKEY_GOAL };
-constexpr int kAnimKinds = 8;
+enum class AnimKind : uint8_t {
+  NONE,
+  TD_PASS,
+  TD_RUN,
+  TD_RETURN,
+  FIELD_GOAL,
+  HOME_RUN,
+  SOCCER_GOAL,
+  HOCKEY_GOAL,
+  EXTRA_POINT,
+};
+constexpr int kAnimKinds = 9;
 
 // AnimArgs.flags bits
 constexpr uint8_t kAnimMirror = 1;  // the board's right team scored
@@ -130,6 +140,38 @@ inline int homer_field(const std::string &low) {
   return w.compare(0, 6, "center") == 0 ? 3 : 0;
 }
 
+// A try or kick that missed, or wasn't one
+inline bool try_missed(const std::string &low) {
+  for (const char *w : {"no good", "missed", "blocked", "fail", "aborted", "fake", "fumble", "intercept", "nullified",
+                        "no play"})
+    if (low.find(w) != std::string::npos)
+      return true;
+  return false;
+}
+
+// A made field goal, by ESPN's type, else its words
+inline bool fg_made(const GameSnapshot &s) {
+  const std::string t = anim_lower(s.play_type), low = anim_lower(s.last_play);
+  if (!t.empty())
+    return t.find("field goal good") != std::string::npos;
+  return low.find("field goal") != std::string::npos && !try_missed(low) && low.find("return") == std::string::npos &&
+         (low.find("good") != std::string::npos || low.find(" yd field goal") != std::string::npos ||
+          low.find(" yard field goal") != std::string::npos);
+}
+
+// A made extra point: its own play, or the touchdown's
+inline bool pat_made(const GameSnapshot &s) {
+  const std::string t = anim_lower(s.play_type), low = anim_lower(s.last_play);
+  if (!t.empty() && t.find("touchdown") == std::string::npos)
+    return t.find("extra point good") != std::string::npos;
+  const size_t td = low.rfind("touchdown");
+  const std::string tail = td == std::string::npos ? low : low.substr(td);
+  if (try_missed(tail) || tail.find("two-point") != std::string::npos || tail.find("conversion") != std::string::npos)
+    return false;
+  return tail.find("extra point is good") != std::string::npos || tail.find("extra point good") != std::string::npos ||
+         tail.find("kick)") != std::string::npos || tail.find("kick is good") != std::string::npos;
+}
+
 // Pinned on side (0 team, 1 opponent); no shootouts
 inline bool goal_known(const GameSnapshot &prev, const GameSnapshot &cur, int side) {
   if (side != 0 && side != 1)
@@ -175,12 +217,38 @@ inline AnimArgs anim_of(Alert a, bool mirror, const GameSnapshot &cur, const Gam
     r.flags = (uint8_t) (detail::homer_field(low) << kAnimFieldShift);
     return r;
   }
+  const uint8_t m = mirror ? kAnimMirror : 0;
+  if (a == Alert::FIELD_GOAL) {
+    if (!detail::fg_made(cur))
+      return r;
+    const int yd = detail::play_yards(detail::anim_lower(cur.last_play));
+    r.kind = AnimKind::FIELD_GOAL;
+    r.dist = (int16_t) (yd >= 10 && yd <= 75 ? yd : 0);
+    r.flags = m;
+    return r;
+  }
+  if (a == Alert::EXTRA_POINT) {
+    if (detail::pat_made(cur)) {
+      r.kind = AnimKind::EXTRA_POINT;
+      r.flags = m;
+    }
+    return r;
+  }
   if (a != Alert::TOUCHDOWN)
     return r;
   const std::string low = detail::anim_lower(cur.last_play);
   r.kind = cur.play_type.empty() ? detail::td_from_words(low) : detail::td_from_type(cur.play_type);
-  if (r.kind == AnimKind::NONE)
+  if (r.kind == AnimKind::NONE) {
+    // The read's last play is the touchdown's kick: play that
+    const int gain = prev == nullptr || (side != 0 && side != 1) ? 7
+                     : side ? detail::score_gain(prev->opp_score, cur.opp_score)
+                            : detail::score_gain(prev->team_score, cur.team_score);
+    if (gain == 7 && detail::pat_made(cur)) {
+      r.kind = AnimKind::EXTRA_POINT;
+      r.flags = m;
+    }
     return r;
+  }
   r.dist = (int16_t) detail::td_yards(low);
   if (low.find("deep") != std::string::npos)
     r.flags |= kAnimDeep;
@@ -207,6 +275,7 @@ enum class Say : uint8_t {
   WALK_OFF,
   PENALTY,
   OWN_GOAL,
+  TD_PAT,  // a touchdown and its kick in one read
 };
 
 namespace detail {
@@ -357,6 +426,19 @@ inline std::string scorer(AnimKind k, const GameSnapshot &prev, const GameSnapsh
     n = initial_name(t, find_low(t, "touchdown"));
     if (n.empty())
       n = yd_name(t);
+  } else if (k == AnimKind::FIELD_GOAL) {
+    n = initial_name(t, find_low(t, "field goal"));
+    if (n.empty())
+      n = yd_name(t);
+  } else if (k == AnimKind::EXTRA_POINT) {
+    size_t at = find_low(t, "extra point");
+    if (at == std::string::npos)
+      at = find_low(t, "kick)");
+    if (at == std::string::npos)
+      return "";
+    n = initial_name(t, at);
+    if (n.empty())
+      n = word_before(t, at);
   } else if (k == AnimKind::HOME_RUN) {
     const size_t at = t.find(" homered");
     if (at == std::string::npos)
@@ -420,6 +502,23 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
       detail::say_ladder(out, n, y, kLong[i], kShort[i]);
       break;
     }
+    case AnimKind::FIELD_GOAL:
+      detail::say_ladder(out, n, y, "FIELD GOAL", "FG");
+      break;
+    case AnimKind::EXTRA_POINT:
+      if (what == Say::TD_PAT) {
+        detail::say_add(out, "TOUCHDOWN + PAT GOOD");
+        detail::say_add(out, "TD + PAT GOOD");
+        detail::say_add(out, "TD + PAT");
+        break;
+      }
+      if (!n.empty()) {
+        detail::say_add(out, n + " EXTRA POINT GOOD");
+        detail::say_add(out, n + " PAT GOOD");
+      }
+      detail::say_add(out, "EXTRA POINT GOOD");
+      detail::say_add(out, "PAT GOOD");
+      break;
     case AnimKind::HOME_RUN: {
       const std::string r = std::to_string(runs);
       const std::string wl = what == Say::SLAM || runs == 4 ? "GRAND SLAM"
@@ -503,6 +602,13 @@ inline AnimSample anim_sample(const std::string &play, const std::string &abbr, 
     a.dist = 410;
     a.flags = 3 << kAnimFieldShift;
     gain = 2;
+  } else if (play == "fg") {
+    a.kind = AnimKind::FIELD_GOAL;
+    a.dist = 47;
+    gain = 3;
+  } else if (play == "pat") {
+    a.kind = AnimKind::EXTRA_POINT;
+    gain = 1;
   } else if (play == "soccer" || play == "hockey") {
     a.kind = play == "soccer" ? AnimKind::SOCCER_GOAL : AnimKind::HOCKEY_GOAL;
     gain = 1;
@@ -528,6 +634,8 @@ inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const Game
   Say what = Say::PLAIN;
   if (r.kind == AnimKind::TD_RETURN)
     what = detail::td_say(cur);
+  else if (a == Alert::TOUCHDOWN && r.kind == AnimKind::EXTRA_POINT)
+    what = Say::TD_PAT;
   else if (a == Alert::GRAND_SLAM)
     what = Say::SLAM;
   else if (a == Alert::WALK_OFF)
@@ -537,13 +645,15 @@ inline void splash_anim(Splash &s, Alert a, const GameSnapshot &prev, const Game
   else if (r.kind == AnimKind::SOCCER_GOAL && cur.soc.goals.size() > prev.soc.goals.size() &&
            cur.soc.goals.back().own_goal)
     what = Say::OWN_GOAL;
-  const std::string who = name != nullptr ? detail::say_name(name) : detail::scorer(r.kind, prev, cur);
+  const std::string who = what == Say::TD_PAT ? std::string()
+                          : name != nullptr  ? detail::say_name(name)
+                                             : detail::scorer(r.kind, prev, cur);
   s.anim_say = say_words(r, what, who, gain);
   s.anim_score = say_score(s.abbr, side == AlertSide::OPP ? cur.opp_score : cur.team_score, gain);
 }
 
 inline const char *anim_name(AnimKind k) {
-  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr", "soccer", "hockey"};
+  static const char *const kNames[] = {"none", "pass", "run", "return", "fg", "hr", "soccer", "hockey", "pat"};
   return (int) k < kAnimKinds ? kNames[(int) k] : "none";
 }
 

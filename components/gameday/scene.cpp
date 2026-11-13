@@ -26,6 +26,7 @@ constexpr uint32_t kIceScuff = 0xA2AEBA, kRinkRed = 0xB42828, kRinkBlue = 0x2850
 constexpr uint32_t kBoards = 0xB4B4B4, kKick = 0xC8A818, kNetRed = 0xD01818, kIceMesh = 0xE0E0E0;
 constexpr uint32_t kLampOff = 0x4A1010, kLampOn = 0xFF2828, kHalo = 0x8C0C0C;
 constexpr uint32_t kSayRgb = 0xFFFFFF, kPlusRgb = 0xFFD000;
+constexpr uint32_t kFgMs = 3200, kPatMs = 2500;
 
 int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 int lerp(int a, int b, int num, int den) { return den <= 0 ? b : a + (b - a) * clampi(num, 0, den) / den; }
@@ -142,6 +143,8 @@ struct Stage {
   bool in_net{false};  // the ball behind the mesh
   int net_jig{0};      // the hockey net's shake
   int light{-1};       // goal light: -1 idle, 0 dark, 1 lit
+  int lit_posts{0};    // 1: the uprights flash white
+  bool good{false};    // IT'S GOOD! under the posts
 };
 
 const Sprite &run_frame(uint32_t t) { return kSprRun[(t / 100) % 4]; }
@@ -623,6 +626,135 @@ void stage_hockey(const Scene &sc, uint32_t t, Stage &st) {
   st.light = (int) (((t - in) / 125 + 1) & 1);
 }
 
+// ---- The kick ----
+
+bool kick_kind(AnimKind k) { return k == AnimKind::FIELD_GOAL || k == AnimKind::EXTRA_POINT; }
+
+// The goal post's foot, and its crossbar's row
+int post_x(const StageGeom &g) { return g.w - 3 * g.s; }
+int post_bar(const Scene &sc) {
+  return kick_kind(sc.args.kind) ? sc.g.crowd_y + 2 * sc.g.s : sc.g.crowd_y - 2 * sc.g.s;
+}
+
+struct KickPlan {
+  int spot{0}, holder{0}, snapper{0}, rusher{0};
+  uint32_t snap{0}, caught{0}, place{0}, go{0}, plant{0}, contact{0}, cross{0};
+  bool rush{false};
+};
+
+// The spot by the yards; wider setups add a rusher
+KickPlan kick_plan(const Scene &sc) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, post = post_x(g);
+  const bool pat = sc.args.kind == AnimKind::EXTRA_POINT;
+  KickPlan k;
+  k.rush = g.w / s >= 128;
+  const int lo = 27 * s, hi = std::max(lo, post - (k.rush ? 46 : 36) * s);
+  const int yards = pat ? 33 : sc.args.dist > 0 ? sc.args.dist : 40;
+  k.spot = clampi(post - (post - lo) * yards / 60, lo, hi);
+  k.holder = k.spot + 7 * s;
+  k.snapper = k.holder + 14 * s;
+  k.rusher = k.snapper + 11 * s;
+  const uint32_t lead = pat ? 0 : 150;
+  k.snap = 250 + lead;
+  k.caught = k.snap + 250;
+  k.place = k.caught + 150;
+  k.go = k.caught;
+  k.plant = k.place + 250;
+  k.contact = k.plant + 100;
+  k.cross = k.contact + (pat ? 700 : 1000);
+  return k;
+}
+
+// The kick's flight, peaking just short of the posts
+void kick_ball(const Scene &sc, const KickPlan &k, uint32_t t, int &x, int &y) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, post = post_x(g);
+  const int x0 = k.spot, y0 = g.feet_y - 3 * s;
+  const int ya = std::max(cap_bottom(sc) + 3 * s, 6 * s);
+  const int xv = x0 + (post - x0) * 85 / 100;
+  const int u = (int) t - (int) k.contact;
+  x = x0 + (post - x0) * u / (int) (k.cross - k.contact);
+  const long long dx = x - xv, run = xv - x0 > 0 ? xv - x0 : 1;
+  y = ya + (int) ((long long) (y0 - ya) * dx * dx / (run * run));
+}
+
+void stage_kick(const Scene &sc, uint32_t t, Stage &st) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, feet = g.feet_y;
+  const KickPlan k = kick_plan(sc);
+  // The rusher: set, a push, a leap
+  if (k.rush) {
+    if (t < k.snap) {
+      add(st, kSprLine[SPR_LINE_SET], k.rusher, feet, true, true);
+    } else if (t + 150 < k.contact || t >= k.contact + 450) {
+      add(st, kSprLine[SPR_LINE_BLOCK], k.rusher - (t < k.contact ? 0 : s), feet, true, true);
+    } else {
+      const int u = (int) (t + 150 - k.contact);
+      add(st, kSprRush[SPR_RUSH_LEAP], k.rusher - s, feet - (int) (4LL * 7 * s * u * (600 - u) / (600 * 600)), true,
+          true);
+    }
+  }
+  // The snapper: set over the ball, then up to block
+  add(st, t < k.snap ? kSprLine[SPR_LINE_SET] : kSprLine[SPR_LINE_BLOCK], k.snapper, feet, false);
+  // The holder: catches facing the snap, turns, holds
+  if (t < k.caught) {
+    add(st, kSprHold[SPR_HOLD_KNEEL], k.holder, feet, false);
+  } else if (t < k.contact + 150) {
+    add(st, kSprHold[SPR_HOLD_PLACE], k.holder, feet, false, true);
+  } else if (t < k.cross + 150) {
+    add(st, kSprHold[SPR_HOLD_KNEEL], k.holder, feet, false, true);
+  } else {
+    add(st, kSprRun[SPR_RUN_CATCH], k.holder, feet, false, true);
+  }
+  // The kicker: waits, two steps, plant, boot, follow
+  const int foot = k.spot - 9 * s, x0 = k.spot - 20 * s, x1 = k.spot - 12 * s;
+  if (t < k.go) {
+    add(st, kSprKick[SPR_KICK_SET], x0, feet, false);
+    st.hero_x = x0;
+  } else if (t < k.plant) {
+    const int x = lerp(x0, x1, (int) (t - k.go), (int) (k.plant - k.go));
+    add(st, recv_frame((t - k.go) * 3 / 2), x, feet, false);
+    st.hero_x = x;
+  } else {
+    const Sprite &f = t < k.contact          ? kSprKick[SPR_KICK_PLANT]
+                      : t < k.contact + 120  ? kSprKick[SPR_KICK_BOOT]
+                      : t < k.cross + 300    ? kSprKick[SPR_KICK_FOLLOW]
+                                             : kSprRun[SPR_RUN_CATCH];
+    add(st, f, &f == &kSprRun[SPR_RUN_CATCH] ? foot + 2 * s : foot, feet, false);
+    st.hero_x = foot;
+  }
+  // The ball: snapped, held upright, kicked end over end
+  st.ball = true;
+  st.ball_kind = 3;
+  if (t < k.snap) {
+    st.bx = k.snapper + 6 * s;
+    st.by = feet - s;
+  } else if (t < k.caught) {
+    const int u = (int) (t - k.snap), U = (int) (k.caught - k.snap);
+    st.bx = lerp(k.snapper + 6 * s, k.holder + 6 * s, u, U);
+    st.by = lerp(feet - s, feet - 9 * s, u, U) - (int) (4LL * 2 * s * u * (U - u) / ((long long) U * U));
+    st.shade = (int) ((t / 66) % 3);
+  } else if (t < k.place) {
+    st.bx = k.holder + 6 * s;
+    st.by = feet - 9 * s;
+  } else if (t < k.contact) {
+    st.bx = k.spot;
+    st.by = feet - 3 * s;
+    st.spin = 2;
+  } else {
+    kick_ball(sc, k, t, st.bx, st.by);
+    st.spin = (int) (((t - k.contact) / 60) & 3);
+    st.ball = st.bx < g.w + 3 * s;
+    if (st.bx < g.goal_x)
+      st.shadow_x = st.bx;
+  }
+  // Through: the uprights flash, IT'S GOOD! shows
+  if (t >= k.cross && t < k.cross + 500)
+    st.lit_posts = ((t - k.cross) / 125 + 1) & 1;
+  st.good = t >= k.cross + 100;
+}
+
 void stage_at(const Scene &sc, uint32_t t, Stage &st) {
   switch (sc.args.kind) {
     case AnimKind::TD_PASS:
@@ -642,6 +774,10 @@ void stage_at(const Scene &sc, uint32_t t, Stage &st) {
       break;
     case AnimKind::HOCKEY_GOAL:
       stage_hockey(sc, t, st);
+      break;
+    case AnimKind::FIELD_GOAL:
+    case AnimKind::EXTRA_POINT:
+      stage_kick(sc, t, st);
       break;
     default:
       break;
@@ -845,13 +981,14 @@ uint32_t bg_rgb(const Scene &sc, int lx, int y, const Stage &st) {
   if (sc.args.kind == AnimKind::HOCKEY_GOAL)
     return rink_rgb(sc, lx, y, st);
   // Goal post at the end line, uprights into the sky
-  const int post = g.w - 3 * s, bar_y = g.crowd_y - 2 * s;
+  const int post = post_x(g), bar_y = post_bar(sc);
+  const uint32_t pc = st.lit_posts ? 0xFFFFFF : kPost;
   if (lx >= post && lx < post + s && y >= bar_y && y < g.field_y + 6 * s)
-    return kPost;
+    return pc;
   if (y >= bar_y && y < bar_y + s && lx >= post - 3 * s && lx < post + 3 * s)
-    return kPost;
+    return pc;
   if (y >= 3 * s && y < bar_y && ((lx >= post - 3 * s && lx < post - 2 * s) || (lx >= post + 2 * s && lx < post + 3 * s)))
-    return kPost;
+    return pc;
   if (y < g.crowd_y)
     return 0;
   if (y < g.field_y)
@@ -927,7 +1064,7 @@ void draw_word(Px565 &p, const Scene &sc, uint32_t t) {
 constexpr uint32_t kCapWinMs = 200;
 
 bool football(AnimKind k) {
-  return k == AnimKind::TD_PASS || k == AnimKind::TD_RUN || k == AnimKind::TD_RETURN;
+  return k == AnimKind::TD_PASS || k == AnimKind::TD_RUN || k == AnimKind::TD_RETURN || kick_kind(k);
 }
 
 // A line's logical x range; crowd: under the word
@@ -1006,6 +1143,44 @@ void draw_caption(Px565 &p, const Scene &sc, uint32_t t) {
     }
   }
   p.mirror = m;
+}
+
+const char *const kGood = "IT'S GOOD!";
+
+// IT'S GOOD! under the posts, on black
+PxBox good_box(const Scene &sc) {
+  const StageGeom &g = sc.g;
+  const int s = g.s, w = px_text_w(kGood, s) + 2 * s;
+  PxBox b{(int16_t) (post_x(g) - 5 * s - w), (int16_t) (g.crowd_y + (g.field_y - g.crowd_y - 5 * s) / 2 - s),
+          (int16_t) w, (int16_t) (7 * s)};
+  if (sc.args.flags & kAnimMirror)
+    b.x = (int16_t) (g.w - b.x - b.w);
+  return b;
+}
+
+PxBox posts_box(const Scene &sc) {
+  const StageGeom &g = sc.g;
+  const int s = g.s;
+  PxBox b{(int16_t) (post_x(g) - 3 * s), (int16_t) (3 * s), (int16_t) (6 * s), (int16_t) (g.field_y + 3 * s)};
+  if (sc.args.flags & kAnimMirror)
+    b.x = (int16_t) (g.w - b.x - b.w);
+  return b;
+}
+
+// End over end: flat, tilted, upright, tilted back
+void kicked_ball(Px565 &p, const Scene &sc, const Stage &st) {
+  static const char *const kShapes[4][5] = {{".....", ".###.", "##w##", ".###.", "....."},
+                                            {"...##", "..###", ".#w#.", "###..", "##..."},
+                                            {"..#..", ".###.", ".#w#.", ".###.", "..#.."},
+                                            {"##...", "###..", ".#w#.", "..###", "...##"}};
+  const int s = sc.g.s;
+  const uint16_t c0 = rgb565(kBall[st.shade]), lace = rgb565(0xF0F0F0);
+  for (int r = 0; r < 5; r++)
+    for (int c = 0; c < 5; c++) {
+      const char v = kShapes[st.spin & 3][r][c];
+      if (v != '.')
+        p.fill(st.bx + (c - 2) * s, st.by + (r - 2) * s, s, s, v == 'w' && st.shade != 2 ? lace : c0);
+    }
 }
 
 }  // namespace
@@ -1166,6 +1341,10 @@ uint32_t scene_ms(AnimKind k) {
       return kSoccerMs + kWordMs;
     case AnimKind::HOCKEY_GOAL:
       return kHockeyMs + kWordMs;
+    case AnimKind::FIELD_GOAL:
+      return kFgMs;
+    case AnimKind::EXTRA_POINT:
+      return kPatMs;
     default:
       return 0;
   }
@@ -1194,6 +1373,9 @@ int scene_boxes(const Scene &sc, uint32_t t, PxBox *out) {
     if (st.trails > 0)
       b = box_join(b, PxBox{(int16_t) st.trail_x[0], (int16_t) (st.by - s), (int16_t) s, (int16_t) s});
     out[n++] = px_phys(frame, b);
+  } else if (st.ball && st.ball_kind == 3) {
+    out[n++] = px_phys(frame, PxBox{(int16_t) (st.bx - 2 * s), (int16_t) (st.by - 2 * s), (int16_t) (5 * s),
+                                    (int16_t) (5 * s)});
   } else if (st.ball && st.ball_px > 0) {
     out[n++] = px_phys(frame, PxBox{(int16_t) (st.bx - 3 * s), (int16_t) (st.by - 3 * s), (int16_t) (7 * s),
                                     (int16_t) (7 * s)});
@@ -1206,6 +1388,13 @@ int scene_boxes(const Scene &sc, uint32_t t, PxBox *out) {
   if (st.shadow_x >= 0)
     out[n++] = px_phys(frame, PxBox{(int16_t) (st.shadow_x - s), (int16_t) (sc.g.feet_y + s), (int16_t) (3 * s),
                                     (int16_t) s});
+  if (kick_kind(sc.args.kind)) {
+    const KickPlan k = kick_plan(sc);
+    if (t >= k.cross && t < k.cross + 600)
+      out[n++] = posts_box(sc);
+    if (t >= k.cross + 100 && t < k.cross + 100 + kCapWinMs)
+      out[n++] = good_box(sc);
+  }
   // The score moves under the word
   const uint32_t pm = play_ms(sc.args.kind);
   if (pm != 0 && t >= pm && t < pm + kCapWinMs) {
@@ -1256,6 +1445,8 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
     soccer_ball(p, sc, st);
   } else if (st.ball && st.ball_kind == 2) {
     puck(p, sc, st);
+  } else if (st.ball && st.ball_kind == 3) {
+    kicked_ball(p, sc, st);
   } else if (st.ball && st.ball_px > 0) {
     const int d = st.ball_px, x = st.bx - d / 2, y = st.by - d / 2;
     p.fill(x, y, d, d, rgb565(0xF0F0F0));
@@ -1281,6 +1472,19 @@ void scene_draw(Px565 &p, const Scene &sc, uint32_t t) {
     if (st.shade != 2)
       p.fill(x + 2 * s, y + s, s, s, lace);
   }
+  if (kick_kind(sc.args.kind)) {
+    // The near upright passes in front of the ball
+    const int post = post_x(sc.g);
+    p.fill(post + 2 * s, 3 * s, s, post_bar(sc) - 3 * s, rgb565(st.lit_posts ? 0xFFFFFF : kPost));
+    if (st.good) {
+      const PxBox b = good_box(sc);
+      const bool m = p.mirror;
+      p.mirror = false;
+      p.fill(b.x, b.y, b.w, b.h, 0);
+      px_text(p, b.x + s, b.y + s, kGood, rgb565(kPlusRgb), s);
+      p.mirror = m;
+    }
+  }
   draw_word(p, sc, t);
 }
 
@@ -1302,6 +1506,8 @@ ScenePose scene_pose(const Scene &sc, uint32_t t) {
   const CapAt c = cap_at(sc, t);
   r.cap[0] = c.a;
   r.cap[1] = c.b;
+  if (st.good)
+    r.cap[2] = good_box(sc);
   return r;
 }
 

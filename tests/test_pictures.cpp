@@ -29,6 +29,8 @@ int failures = 0;
     }                                                        \
   } while (0)
 
+bool kick_kind(AnimKind k) { return k == AnimKind::FIELD_GOAL || k == AnimKind::EXTRA_POINT; }
+
 GameSnapshot td(const std::string &type, const std::string &words) {
   GameSnapshot g;
   g.play_type = type;
@@ -43,10 +45,11 @@ void test_classifier() {
   for (const char *t : {"Interception Return Touchdown", "Fumble Return Touchdown", "Kickoff Return Touchdown",
                         "Punt Return Touchdown", "Blocked Punt Touchdown", "Fumble Recovery (Own) Touchdown"})
     PCHECK(anim_of(Alert::TOUCHDOWN, false, td(t, "")).kind == AnimKind::TD_RETURN);
-  // The try or the next play replaced it
-  for (const char *t : {"Extra Point Good", "Kickoff", "Two Point Pass", "Pass Reception"})
+  // The try or next play replaced it; kicks play
+  for (const char *t : {"Kickoff", "Two Point Pass", "Pass Reception"})
     PCHECK(anim_of(Alert::TOUCHDOWN, false, td(t, "pass deep right for 30 yards, TOUCHDOWN")).kind ==
            AnimKind::NONE);
+  PCHECK(anim_of(Alert::TOUCHDOWN, false, td("Extra Point Good", "(P. Durkin KICK)")).kind == AnimKind::EXTRA_POINT);
   // Words only, as the demo and the watcher send them
   PCHECK(anim_of(Alert::TOUCHDOWN, false, td("", "Pass deep right for 21 yards, TOUCHDOWN")).kind ==
          AnimKind::TD_PASS);
@@ -378,6 +381,83 @@ void test_captions() {
   }
 }
 
+// The read before cur: side has pts fewer
+GameSnapshot before_score(const GameSnapshot &cur, int side, int pts, const char *type, const char *words) {
+  GameSnapshot p = cur;
+  (side ? p.opp_score : p.team_score) -= pts;
+  p.play_type = type;
+  p.last_play = words;
+  p.play_id = "prev";
+  return p;
+}
+
+// Made kicks only, from ESPN's types and words
+void test_kicks() {
+  // TEX @ TXST: "Field Goal Good", college words
+  GameSnapshot fg = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401856667", 251);
+  PCHECK(fg.play_type == "Field Goal Good");
+  const int side = fg.team_abbr == "TEX" ? 0 : 1;
+  Splash s = decide_splash(before_score(fg, side, 3, "Rush", "rush for 2 yards"), fg, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::FIELD_GOAL && s.anim_dist == 48);
+  PCHECK(first_say(s.anim_say) == "SPETIC 48 YD FIELD GOAL" && ladder(s.anim_say));
+  PCHECK(s.anim_score == "TEX 52 +3");
+  // NFL words alone, and ESPN's summary
+  PCHECK(anim_of(Alert::FIELD_GOAL, false, td("", "J.Slye 46 yard field goal is GOOD, Center-M.Cox, Holder-T.Morstead."))
+             .dist == 46);
+  PCHECK(anim_of(Alert::FIELD_GOAL, true, td("", "Joey Slye 46 Yd Field Goal")).kind == AnimKind::FIELD_GOAL);
+  PCHECK((anim_of(Alert::FIELD_GOAL, true, td("Field Goal Good", "")).flags & kAnimMirror) != 0);
+  PCHECK(anim_of(Alert::FIELD_GOAL, false, td("Field Goal Good", "")).dist == 0);
+  // Never a miss, a block, a return or a fake
+  for (const char *t : {"Field Goal Missed", "Blocked Field Goal", "Missed Field Goal Return", "Kickoff",
+                        "Blocked Field Goal Touchdown", "Rush"})
+    PCHECK(anim_of(Alert::FIELD_GOAL, false, td(t, "J.Slye 46 yard field goal is GOOD")).kind == AnimKind::NONE);
+  for (const char *w : {"C.Boswell 57 yard field goal is No Good, Wide Left, Center-C.Kuntz, Holder-C.Johnston.",
+                        "T.Loop 34 yard field goal is BLOCKED (D.Hunter), RECOVERED by BLT", "Field goal missed",
+                        "End of the 2nd quarter", "FAKE FIELD GOAL. J.Stout pass to J.Tucker for 9 yards"})
+    PCHECK(anim_of(Alert::FIELD_GOAL, false, td("", w)).kind == AnimKind::NONE);
+
+  // CSU @ WYO: ESPN's own extra point play
+  GameSnapshot pat = from_scoreboard("fixtures/scoreboard_ncaa_live.json", "401860878", 36);
+  PCHECK(pat.play_type == "Extra Point Good" && pat.last_play == "(K. Nguma KICK)");
+  const int ps = pat.team_abbr == "CSU" ? 0 : 1;
+  s = decide_splash(before_score(pat, ps, 1, "Passing Touchdown", "pass for 9 yards, TOUCHDOWN"), pat, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::EXTRA_POINT && first_say(s.anim_say) == "NGUMA EXTRA POINT GOOD");
+  PCHECK(s.anim_score == "CSU 7 +1");
+  // Touchdown and kick in one read: the kick plays
+  s = decide_splash(before_score(pat, ps, 7, "Rush", "rush for 3 yards"), pat, true);
+  PCHECK(s.text.find("TOUCHDOWN") != std::string::npos && s.anim == (uint8_t) AnimKind::EXTRA_POINT);
+  PCHECK(s.anim_say == "TOUCHDOWN + PAT GOOD|TD + PAT GOOD|TD + PAT" && s.anim_score == "CSU 7 +7");
+  // Six with the kick's words: no scene, nothing guessed
+  s = decide_splash(before_score(pat, ps, 6, "Rush", "rush for 3 yards"), pat, true);
+  PCHECK(s.anim == 0);
+  // NFL: the kick joins the touchdown's words later
+  GameSnapshot td1 = before_score(pat, ps, 0, "Passing Touchdown",
+                                  "(Shotgun) J.Burrow pass deep middle to J.Chase for 30 yards, TOUCHDOWN.");
+  td1.play_id = "4018";
+  (ps ? td1.opp_score : td1.team_score) -= 1;
+  GameSnapshot td0 = before_score(td1, ps, 6, "Rush", "J.Burrow scrambles for 4 yards");
+  td0.play_id = "4017";
+  s = decide_splash(td0, td1, true);
+  PCHECK(s.anim == (uint8_t) AnimKind::TD_PASS);
+  GameSnapshot td2 = td1;
+  td2.last_play += " E.McPherson extra point is GOOD, Center-W.Wagner, Holder-R.Rehkow.";
+  (ps ? td2.opp_score : td2.team_score) += 1;
+  s = decide_splash(td1, td2, true);
+  PCHECK(s.text.find("EXTRA POINT") != std::string::npos && s.anim == (uint8_t) AnimKind::EXTRA_POINT);
+  PCHECK(first_say(s.anim_say) == "MCPHERSON EXTRA POINT GOOD");
+  // Its summary words, and a missed or blocked kick
+  PCHECK(anim_of(Alert::EXTRA_POINT, false, td("Rushing Touchdown", "Tony Pollard 40 Yd Rush (Joey Slye Kick)")).kind ==
+         AnimKind::EXTRA_POINT);
+  for (const char *w : {"... TOUCHDOWN. J.Slye extra point is No Good, Wide Right, Center-M.Cox.",
+                        "... TOUCHDOWN. J.Slye extra point is BLOCKED, Center-M.Cox.", "(Kick failed)",
+                        "... TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. C.Ward rushes left end. ATTEMPT SUCCEEDS."})
+    PCHECK(anim_of(Alert::EXTRA_POINT, false, td("Rushing Touchdown", w)).kind == AnimKind::NONE);
+  for (const char *t : {"Extra Point Missed", "Kickoff", "Two Point Pass"})
+    PCHECK(anim_of(Alert::EXTRA_POINT, false, td(t, "(P. Durkin KICK)")).kind == AnimKind::NONE);
+  PCHECK(std::string(anim_name(AnimKind::FIELD_GOAL)) == "fg" && std::string(anim_name(AnimKind::EXTRA_POINT)) == "pat");
+  PCHECK(scene_ms(AnimKind::EXTRA_POINT) < scene_ms(AnimKind::FIELD_GOAL));
+}
+
 // Lines fit the setup, clear of posts, word, ball
 void test_caption_fit() {
   for (const ScenePlay &p : kScenePlays)
@@ -388,7 +468,7 @@ void test_caption_fit() {
           const StageGeom &g = sc.g;
           PCHECK(sc.say[0] != 0 && sc.score[0] != 0);
           const bool football = sc.args.kind == AnimKind::TD_PASS || sc.args.kind == AnimKind::TD_RUN ||
-                                sc.args.kind == AnimKind::TD_RETURN;
+                                sc.args.kind == AnimKind::TD_RETURN || kick_kind(sc.args.kind);
           for (uint32_t t : scene_times(sc.args.kind)) {
             const ScenePose ps = scene_pose(sc, t);
             for (const PxBox &c : ps.cap) {
@@ -400,8 +480,8 @@ void test_caption_fit() {
                 PCHECK(m ? c.x >= 6 * g.s : c.x + c.w <= g.w - 6 * g.s);
               PCHECK(!box_overlap(c, ps.word));
               PCHECK(c.y + c.h <= g.crowd_y || (c.y >= g.crowd_y && c.y + c.h <= g.field_y));
-              // A pass flies under it
-              if (sc.args.kind == AnimKind::TD_PASS && ps.ball_free && c.y < g.crowd_y)
+              // A pass or a kick flies under it
+              if ((sc.args.kind == AnimKind::TD_PASS || kick_kind(sc.args.kind)) && ps.ball_free && c.y < g.crowd_y)
                 PCHECK(ps.ball_y - 2 * g.s >= c.y + c.h);
             }
           }
@@ -439,7 +519,7 @@ bool mirrored(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, in
     const bool text = !band.empty() && y >= band.y && y < band.y + band.h;
     for (int x = 0; x < w; x++) {
       int bx = text ? x : w - 1 - x;
-      for (int k = 0; k < 2; k++) {
+      for (int k = 0; k < 3; k++) {
         const PxBox &c = pa.cap[k];
         if (!c.empty() && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h)
           bx = pb.cap[k].x + (x - c.x);
@@ -504,6 +584,20 @@ uint32_t check_scene(const ScenePlay &play, int w, int h, const Kit2 &kit, bool 
     // The word fills the width, in the dark above
     PCHECK(!end.word.empty() && end.word.x >= 0 && end.word.x + end.word.w <= w);
     PCHECK(end.word.w >= w - 12 * sc.g.s && end.word.y + end.word.h <= sc.g.crowd_y);
+  } else if (kick_kind(kind)) {
+    // Through the uprights, above the bar, and gone
+    const int s = sc.g.s, post = w - 3 * s, bar = sc.g.crowd_y + 2 * s;
+    PCHECK(!end.ball_free);
+    bool through = false;
+    for (uint32_t t = 0; t < scene_ms(kind) && !through; t += 5) {
+      const ScenePose p = scene_pose(sc, t);
+      if (p.ball_free && p.ball_x >= post) {
+        through = true;
+        PCHECK(p.ball_y - 2 * s > 3 * s && p.ball_y + 2 * s < bar);
+      }
+    }
+    PCHECK(through);
+    PCHECK(!end.cap[2].empty());
   } else if (!hr) {
     PCHECK(end.hero_x >= sc.g.goal_x);
     PCHECK(end.hero_x + 9 * sc.g.s <= w);
@@ -514,7 +608,7 @@ uint32_t check_scene(const ScenePlay &play, int w, int h, const Kit2 &kit, bool 
     if (p.ball_free && p.ball_x > far)
       far = p.ball_x;
     if (p.ball_free && !hr)
-      PCHECK(p.ball_x >= 0 && p.ball_x < w && p.ball_y >= 0 && p.ball_y < h);
+      PCHECK(p.ball_x >= 0 && (p.ball_x < w || kick_kind(kind)) && p.ball_y >= 0 && p.ball_y < h);
   }
   if (hr)
     PCHECK(far >= w - (w / 10 < 6 ? 6 : w / 10 > 24 ? 24 : w / 10));
@@ -590,6 +684,7 @@ int run_picture_tests(int &total_checks) {
   test_classifier();
   test_goal_classifier();
   test_captions();
+  test_kicks();
   test_caption_fit();
   test_word();
   test_kits();

@@ -29,7 +29,8 @@ struct ScenePlay {
 };
 constexpr ScenePlay kScenePlays[] = {{"pass", "BUF", 21, "Chase"},  {"run", "BUF", 21, "Pollard"},
                                      {"ret", "BUF", 21, "Laube"},   {"hr", "NYY", 3, "Stanton"},
-                                     {"soccer", "ARS", 1, "Saka"},  {"hockey", "COL", 2, "MacKinnon"}};
+                                     {"soccer", "ARS", 1, "Saka"},  {"hockey", "COL", 2, "MacKinnon"},
+                                     {"fg", "BUF", 21, "Prater"},   {"pat", "BUF", 27, "Prater"}};
 
 // The kit's index picks the scorer's name or none
 inline Scene scene_of(const ScenePlay &p, int w, int h, const Kit2 &kit, bool named, bool mirror, int feet = 0) {

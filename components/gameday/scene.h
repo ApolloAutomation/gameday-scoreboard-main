@@ -65,7 +65,7 @@ struct ScenePose {
   bool ball_free{false};
   bool flash{false};  // a whole-word flash: a big redraw
   PxBox word{};       // on the picture, never mirrored
-  PxBox cap[2]{};     // the caption's lines, on the picture
+  PxBox cap[3]{};     // the caption's lines and IT'S GOOD!, on the picture
 };
 // Word length; glyph i: 0 G to 3 L
 int word_letters(const StageGeom &g);

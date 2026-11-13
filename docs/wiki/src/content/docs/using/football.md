@@ -62,19 +62,21 @@ A touchdown gets fireworks on black with the words in the team's color. The fire
 ### Play animations
 
 :::note[Coming in the next release]
-Before a touchdown's splash, the panel plays the touchdown across the whole screen for about 3 seconds, in pixel art, with players in the scoring team's colors on a field under the stadium lights:
+Before a touchdown's, a field goal's or an extra point's splash, the panel plays the score across the whole screen for about 3 seconds, in pixel art, with players in the scoring team's colors on a field under the stadium lights:
 
-| Touchdown | What plays |
+| Score | What plays |
 | --- | --- |
 | A passing touchdown | The quarterback drops back and throws, the ball flies across the panel, and the receiver catches it in the end zone past a diving defender. A deep pass flies higher and farther than a short one. |
 | A rushing touchdown | The running back takes the handoff and runs into the end zone, past a defender who dives and misses, with another chasing him. |
 | An interception, fumble, kickoff or punt return | The returner runs the length of the field into the end zone, past a defender who dives and misses, with another chasing him. |
+| A field goal | The snapper sends the ball back to the kneeling holder, who sets it down, and the kicker steps up and boots it. The ball turns end over end across the panel and through the uprights at the far end, which flash, and **IT'S GOOD!** shows under them while the kicker and holder raise their arms. On 128x64 and wider a rusher leaps at the line as the ball sails over him. A longer kick starts farther from the posts. |
+| An extra point | The same kick from closer in, and a little quicker. |
 
-While it plays, a caption across the top says what happened: the scorer's name when ESPN's words give it, the yards and the kind of touchdown, like **CHASE 30 YD TD PASS** or **LAUBE 95 YD KICKOFF RETURN TD**, with an interception return as a **PICK SIX**. Under it go the scoring team's abbreviation in its color, its new score, and the points in gold, like **CIN 21 +7**. A single panel and two rows of two show the shorter words that fit, like **30 YD TD PASS** or **KICK RET TD**; 128x64 and wider add the name. The caption stays clear of the goal post, and a pass flies under it.
+While it plays, a caption across the top says what happened: the scorer's name when ESPN's words give it, the yards and the kind of touchdown, like **CHASE 30 YD TD PASS** or **LAUBE 95 YD KICKOFF RETURN TD**, with an interception return as a **PICK SIX**. Under it go the scoring team's abbreviation in its color, its new score, and the points in gold, like **CIN 21 +7**. A single panel and two rows of two show the shorter words that fit, like **30 YD TD PASS** or **KICK RET TD**; 128x64 and wider add the name. A field goal says its yards, like **PRATER 47 YD FIELD GOAL** or **47 YD FG**, and an extra point **PAT GOOD**, with the kicker's name when there is room. The caption stays clear of the goal post, and a pass or a kick flies under it.
 
 The scoring team always runs from its own side of the board toward the end zone on the other side, so a touchdown by the team on the right runs right to left. On three or four panels in a row the play spans every panel, and on two rows of two it fills all four, with bigger players.
 
-Then the splash shows for its usual 7 seconds, fireworks and all. The panel tells the plays apart from ESPN's play type, and from the play's words when the type is missing. A play it can't tell, like a touchdown ESPN has already replaced with the extra point by the time the panel reads it, gets the splash on its own. **Play animations** in the Celebrations card turns them off; see [Celebrations](/using/device-page/#celebrations).
+Then the splash shows for its usual 7 seconds, fireworks and all. The panel tells the plays apart from ESPN's play type, and from the play's words when the type is missing. Only a made kick plays, never a missed or blocked one. A touchdown and its extra point in one update play the touchdown when ESPN's latest play is the touchdown; when ESPN has already moved on to the extra point, they play the kick, captioned **TOUCHDOWN + PAT GOOD** with **+7**. An extra point a read later plays its own short kick, never the touchdown again. A play it can't tell, like a touchdown ESPN has already replaced with the next kickoff, gets the splash on its own. **Play animations** in the Celebrations card turns them off; see [Celebrations](/using/device-page/#celebrations).
 :::
 
 The logo says whose play it was, so the other side's splash leaves its abbreviation out and says just TOUCHDOWN, in their color. The other side's splashes need **Opponent scores too** in the Celebrations card. The logo is the one already on the board. If it hasn't downloaded yet, the splash shows the team's abbreviation on a badge in its colors instead, so it never waits. See [Splashes](/using/panel-sizes/#splashes) for where each part goes on your panel.

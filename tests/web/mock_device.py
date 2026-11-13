@@ -11,7 +11,7 @@ routes with the response shapes from components/gameday/gameday.cpp:
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know
-                         (anim takes play=pass|run|ret|hr|soccer|hockey);
+                         (anim takes play=pass|run|ret|fg|pat|hr|soccer|hockey);
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
   POST /gameday/wifi     forget=<ssid>; 404 when it is not saved
