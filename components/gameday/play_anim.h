@@ -2,6 +2,7 @@
 // An unknown play gets none, never a guess
 #pragma once
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -188,15 +189,35 @@ inline std::string two_point_words(const std::string &low) {
   return "";
 }
 
+inline bool try_failed(const std::string &low) {
+  return low.find("fail") != std::string::npos || low.find("no good") != std::string::npos ||
+         low.find("unsuccessful") != std::string::npos;
+}
+
+// "Defensive Two-Point Attempt", "Defensive 2pt Conversion"
+inline size_t def_two_at(const std::string &low) {
+  size_t best = std::string::npos;
+  for (const char *w : {"defensive two", "defensive 2pt", "defensive 2-pt", "defensive 2 pt"})
+    best = std::min(best, low.find(w));
+  return best;
+}
+
 // The words say a made try; def: the defense's return
 inline bool two_point_made(const GameSnapshot &s, bool &run, bool &def) {
-  const std::string t = anim_lower(s.play_type), tw = two_point_words(t), w = two_point_words(anim_lower(s.last_play));
+  const std::string t = anim_lower(s.play_type), low = anim_lower(s.last_play);
+  const size_t dt = def_two_at(t), dw = def_two_at(low);
+  def = dt != std::string::npos || dw != std::string::npos;
+  // The offense's try failed first; judge the defense's
+  if (def)
+    return !try_failed(t) && (dw == std::string::npos || !try_failed(low.substr(dw)));
+  const std::string tw = two_point_words(t);
+  std::string w = two_point_words(low);
+  // A penalty's "Defensive Pass Interference" isn't the try
+  w = w.substr(0, w.find("penalty"));
   if (tw.empty() && w.empty())
     return false;
   const std::string all = tw + " | " + w;
-  def = all.find("defensive") != std::string::npos;
-  if (all.find("fail") != std::string::npos || all.find("no good") != std::string::npos ||
-      all.find("unsuccessful") != std::string::npos || (!def && try_missed(w)))
+  if (try_failed(all) || try_missed(w))
     return false;
   run = all.find("pass") == std::string::npos;
   return true;
@@ -359,21 +380,24 @@ inline void say_add(std::string &out, const std::string &c) {
   out += out.empty() ? c : "|" + c;
 }
 
+// The name, then its last word: "VAN DIJK", "DIJK"
+inline void say_named(std::string &out, const std::string &n, const std::string &a, const std::string &b = "") {
+  const size_t sp = n.rfind(' ');
+  for (const std::string &m : {n, sp == std::string::npos ? std::string() : n.substr(sp + 1)}) {
+    say_add(out, m + " " + a);
+    say_add(out, m + " " + b);
+  }
+}
+
 // Name, yards, the long words, then shorter
 inline void say_ladder(std::string &out, const std::string &n, const std::string &y, const char *lw, const char *sw) {
   const std::string l = lw, w = sw;
-  if (!n.empty() && !y.empty()) {
-    say_add(out, n + " " + y + " " + l);
-    say_add(out, n + " " + y + " " + w);
-  }
   if (!y.empty()) {
+    say_named(out, n, y + " " + l, y + " " + w);
     say_add(out, y + " " + l);
     say_add(out, y + " " + w);
   }
-  if (!n.empty()) {
-    say_add(out, n + " " + l);
-    say_add(out, n + " " + w);
-  }
+  say_named(out, n, l, w);
   say_add(out, l);
   say_add(out, w);
 }
@@ -418,17 +442,31 @@ inline bool name_suffix(const std::string &w) {
   return w == "Jr." || w == "Sr." || w == "Jr" || w == "Sr" || w == "II" || w == "III" || w == "IV";
 }
 
-// The capitalized word before at, past "Jr."
+// "van Dijk", "St. Brown": part of the surname
+inline bool name_particle(const std::string &w) {
+  for (const char *p : {"van", "von", "de", "der", "den", "del", "della", "da", "di", "du", "le", "la", "ter", "St.",
+                        "St"})
+    if (w == p)
+      return true;
+  return false;
+}
+
+// The word ending at e, from b
+inline std::string word_at(const std::string &t, size_t e, size_t &b) {
+  while (e > 0 && t[e - 1] == ' ')
+    e--;
+  b = e;
+  while (b > 0 && t[b - 1] != ' ' && t[b - 1] != '(')
+    b--;
+  return t.substr(b, e - b);
+}
+
+// The capitalized surname before at, past "Jr."
 inline std::string word_before(const std::string &t, size_t at) {
   at = at < t.size() ? at : t.size();
   for (int tries = 0; tries < 2 && at > 0; tries++) {
-    size_t e = at;
-    while (e > 0 && t[e - 1] == ' ')
-      e--;
-    size_t b = e;
-    while (b > 0 && t[b - 1] != ' ' && t[b - 1] != '(')
-      b--;
-    const std::string w = t.substr(b, e - b);
+    size_t b;
+    const std::string w = word_at(t, at, b);
     if (w.empty())
       return "";
     if (name_suffix(w)) {
@@ -437,12 +475,20 @@ inline std::string word_before(const std::string &t, size_t at) {
     }
     // "J.Doe" names the last part
     const size_t dot = w.find('.');
-    const std::string last = dot != std::string::npos && dot + 1 < w.size() ? w.substr(dot + 1) : w;
+    std::string last = dot != std::string::npos && dot + 1 < w.size() ? w.substr(dot + 1) : w;
     if (!isupper((unsigned char) last[0]))
       return "";
     for (char c : last)
       if (!name_char(c))
         return "";
+    for (int n = 0; dot == std::string::npos && n < 3 && b > 0; n++) {
+      size_t pb;
+      const std::string p = word_at(t, b, pb);
+      if (!name_particle(p))
+        break;
+      last = p + " " + last;
+      b = pb;
+    }
     return last;
   }
   return "";
@@ -504,9 +550,7 @@ inline std::string scorer(AnimKind k, const GameSnapshot &prev, const GameSnapsh
   } else if (k == AnimKind::SOCCER_GOAL) {
     if (cur.soc.goals.size() <= prev.soc.goals.size() || cur.soc.goals.back().own_goal)
       return "";
-    const std::string &g = cur.soc.goals.back().name;
-    const size_t sp = g.rfind(' ');
-    n = ascii_fold(sp == std::string::npos ? g : g.substr(sp + 1));
+    n = ascii_fold(cur.soc.goals.back().name);
   } else if (k == AnimKind::HOCKEY_GOAL) {
     if (!new_play(prev, cur))
       return "";
@@ -517,7 +561,15 @@ inline std::string scorer(AnimKind k, const GameSnapshot &prev, const GameSnapsh
       return "";
     n = word_before(ascii_fold(t.substr(0, at)), std::string::npos);
   }
-  return say_name(n);
+  const std::string whole = say_name(n);
+  if (!whole.empty())
+    return whole;
+  // Too long whole: its last word, as the goal row
+  size_t b;
+  std::string w = word_at(n, n.size(), b);
+  if (name_suffix(w))
+    w = word_at(n, b, b);
+  return b > 0 ? say_name(w) : "";
 }
 
 inline Say td_say(const GameSnapshot &cur) {
@@ -575,10 +627,7 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
         detail::say_add(out, "TD + PAT");
         break;
       }
-      if (!n.empty()) {
-        detail::say_add(out, n + " EXTRA POINT GOOD");
-        detail::say_add(out, n + " PAT GOOD");
-      }
+      detail::say_named(out, n, "EXTRA POINT GOOD", "PAT GOOD");
       detail::say_add(out, "EXTRA POINT GOOD");
       detail::say_add(out, "PAT GOOD");
       break;
@@ -589,10 +638,7 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
         detail::say_add(out, "TD + 2-PT");
         break;
       }
-      if (!n.empty()) {
-        detail::say_add(out, n + " 2-PT CONVERSION GOOD");
-        detail::say_add(out, n + " 2-PT GOOD");
-      }
+      detail::say_named(out, n, "2-PT CONVERSION GOOD", "2-PT GOOD");
       detail::say_add(out, "2-PT CONVERSION GOOD");
       detail::say_add(out, "2-PT GOOD");
       break;
@@ -610,18 +656,14 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
       const int field = (a.flags >> kAnimFieldShift) & 7;
       const std::string d = a.dist > 0 ? std::to_string(a.dist) + " FT" : "";
       const std::string f = !d.empty() && field > 0 && field < 6 ? std::string(kFields[field]) : "";
-      if (!n.empty()) {
-        detail::say_add(out, n + " " + wl + " " + d + f);
-        detail::say_add(out, n + " " + wl + " " + d);
-      }
+      detail::say_named(out, n, wl + " " + d + f, wl + " " + d);
       detail::say_add(out, wl + " " + d + f);
-      if (!n.empty())
-        detail::say_add(out, n + " " + wl);
       detail::say_add(out, wl + " " + d);
-      detail::say_add(out, wl);
-      if (!n.empty())
-        detail::say_add(out, n + " " + ws);
+      // The feet before the name: "2-RUN HR 410 FT"
       detail::say_add(out, ws + " " + d);
+      detail::say_named(out, n, wl);
+      detail::say_add(out, wl);
+      detail::say_named(out, n, ws);
       detail::say_add(out, ws);
       break;
     }
@@ -630,13 +672,11 @@ inline std::string say_words(const AnimArgs &a, Say what, const std::string &nam
       if (what == Say::OWN_GOAL) {
         detail::say_add(out, "OWN GOAL");
       } else if (what == Say::PENALTY) {
-        if (!n.empty())
-          detail::say_add(out, n + " PENALTY GOAL");
+        detail::say_named(out, n, "PENALTY GOAL");
         detail::say_add(out, "PENALTY GOAL");
         detail::say_add(out, "PEN GOAL");
       } else {
-        if (!n.empty())
-          detail::say_add(out, n + " GOAL");
+        detail::say_named(out, n, "GOAL");
         detail::say_add(out, "GOAL");
       }
       break;

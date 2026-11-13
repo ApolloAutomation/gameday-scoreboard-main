@@ -370,6 +370,27 @@ void test_captions() {
   PCHECK(decide_splash(hk, goal, true).anim_say == "LANDESKOG GOAL|GOAL");
   goal.last_play = "Faceoff won by WPG";
   PCHECK(decide_splash(hk, goal, true).anim_say == "GOAL");
+  goal.last_play = "James van Riemsdyk Goal (4) Wrist Shot";
+  PCHECK(decide_splash(hk, goal, true).anim_say == "VAN RIEMSDYK GOAL|RIEMSDYK GOAL|GOAL");
+  // A surname whole, its last word when long
+  GameSnapshot vd = end;
+  vd.soc.goals.back() = SoccerGoal{};
+  vd.soc.goals.back().ours = end.soc.goals.back().ours;
+  vd.soc.goals.back().name = "van Dijk";
+  PCHECK(first_say(decide_splash(before, vd, true).anim_say) == "VAN DIJK GOAL");
+  vd.soc.goals.back().name = "Giovanni van Bronckhorst Jr";
+  PCHECK(first_say(decide_splash(before, vd, true).anim_say) == "BRONCKHORST GOAL");
+  PCHECK(espn::detail::yd_name("Amon-Ra St. Brown 20 Yd pass from Jared Goff") == "St. Brown");
+  AnimArgs tdp{AnimKind::TD_PASS, 20, 0};
+  PCHECK(say_words(tdp, Say::PLAIN, "ST. BROWN").find("|BROWN 20 YD TD|") != std::string::npos);
+  // The feet fit a single panel and two rows of two
+  for (const auto &sz : kSceneScreens)
+    for (int named = 0; named < 2; named++) {
+      const Scene hr = scene_of(kScenePlays[3], sz[0], sz[1], kReviewKits[0], named != 0, false);
+      PCHECK(std::string(hr.say).find("410 FT") != std::string::npos);
+      if (sz[0] == 128 && sz[1] == 128)
+        PCHECK(std::string(hr.say) == "2-RUN HR 410 FT");
+    }
   // Score lines, with and without a team
   PCHECK(say_score("", -1, 6) == "+6" && say_score("TA&M", 7, 0) == "TA&M 7");
   PCHECK(say_score("BUF", 21, 6) == "BUF 21 +6");
@@ -519,6 +540,34 @@ void test_two_point() {
   splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::OPP);
   PCHECK(s.anim == (uint8_t) AnimKind::TD_RETURN && s.anim_say == "DEFENSIVE 2-PT RETURN|DEF 2-PT RETURN|DEF 2-PT");
   PCHECK(s.anim_score == "DET 23 +2");
+  // A blocked kick run back, ESPN's college type
+  for (const GameSnapshot &d :
+       {td("", "J.Tucker extra point is BLOCKED (S.Gardner), Center-N.Moore, Holder-J.Stout. DEFENSIVE TWO-POINT "
+               "ATTEMPT. S.Gardner for 98 yards. ATTEMPT SUCCEEDS."),
+        td("", "TWO-POINT CONVERSION ATTEMPT. J.Allen pass to S.Diggs INTERCEPTED by K.Joseph. ATTEMPT FAILS. "
+               "DEFENSIVE TWO-POINT ATTEMPT. K.Joseph for 100 yards. ATTEMPT SUCCEEDS."),
+        td("Defensive 2pt Conversion", "(Two-Point Conversion failed)"), td("Defensive 2pt Conversion", "")}) {
+    cur.play_type = d.play_type;
+    cur.last_play = d.last_play;
+    s = Splash{"DET 2-PT", 0, "DET", false, 4, "+2"};
+    splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::OPP);
+    PCHECK(s.anim == (uint8_t) AnimKind::TD_RETURN && first_say(s.anim_say) == "DEFENSIVE 2-PT RETURN");
+  }
+  PCHECK(anim_of(Alert::TWO_POINT, false, td("", "... DEFENSIVE TWO-POINT ATTEMPT. K.Joseph for 40 yards. ATTEMPT "
+                                                 "FAILS.")).kind == AnimKind::NONE);
+  // The offense's good try; the defense's penalty declined
+  cur.play_type.clear();
+  for (const char *pen : {"Defensive Offside", "Defensive Pass Interference"}) {
+    cur.last_play = std::string("TWO-POINT CONVERSION ATTEMPT. J.Hurts rushes up the middle. ATTEMPT SUCCEEDS. "
+                                "PENALTY on DAL-M.Parsons, ") +
+                    pen + ", declined.";
+    s = Splash{"2-PT!", 0, "PHI", false, 0, "+2"};
+    splash_anim(s, Alert::TWO_POINT, prev, cur, AlertSide::TEAM);
+    PCHECK(s.anim == (uint8_t) AnimKind::TWO_POINT && (s.anim_flags & kAnimTwoRun) != 0);
+    PCHECK(first_say(s.anim_say) == "HURTS 2-PT CONVERSION GOOD");
+  }
+  cur.last_play = "(Cam Ward Run for Two-Point Conversion) TEN Penalty, Defensive Pass Interference, declined";
+  PCHECK((anim_of(Alert::TWO_POINT, false, cur).flags & kAnimTwoRun) != 0);
   PCHECK(std::string(anim_name(AnimKind::TWO_POINT)) == "two");
   PCHECK(anim_sample("two", "", 0).args.kind == AnimKind::TWO_POINT && anim_sample("two", "", 0).score == "+2");
   PCHECK((anim_sample("tworun", "", 0).args.flags & kAnimTwoRun) != 0);
