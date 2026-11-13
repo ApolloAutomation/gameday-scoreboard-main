@@ -1,9 +1,11 @@
 #include "field.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string_view>
 
 #include "board_layout.h"
 #include "scene.h"
@@ -404,18 +406,70 @@ void put(std::vector<AppText> &out, int x, int y, int w, BoardFont f, AppAlign a
   out.push_back(std::move(t));
 }
 
-int px_of(const std::string &s, BoardFont f) { return (int) s.size() * font_px(f); }
+// One row (top empty), or period over time
+struct ClockForm {
+  std::string_view top, bottom;
+};
 
-// "8:44 2nd" as time and period; words stay whole
-void split_clock(const std::string &clock, std::string &time, std::string &period) {
-  const size_t sp = clock.find(' ');
-  if (sp != std::string::npos && clock.find(':') < sp) {
-    time = clock.substr(0, sp);
-    period = clock.substr(sp + 1);
-  } else {
-    time.clear();
-    period = clock == "Halftime" ? "Half" : clock;
+// Whole first, then two rows, then shorter; q holds "Q4"
+int clock_forms(std::string_view c, bool rows_first, char (&q)[2], ClockForm (&out)[4]) {
+  constexpr size_t kNone = std::string_view::npos;
+  int n = 0;
+  const size_t sp = c.find(' '), last = c.rfind(' ');
+  if (sp != kNone && c.find(':') < sp) {
+    const std::string_view time = c.substr(0, sp), period = c.substr(sp + 1);
+    if (!rows_first)
+      out[n++] = {{}, c};
+    out[n++] = {period, time};
+    // "4th" as "Q4"
+    if (period.size() == 3 && period[0] >= '1' && period[0] <= '4' && isalpha((unsigned char) period[1])) {
+      q[0] = 'Q';
+      q[1] = period[0];
+      out[n++] = {std::string_view(q, 2), time};
+    }
+    out[n++] = {{}, time};
+    return n;
   }
+  out[n++] = {{}, c};
+  // "End of 3rd": "End" over "3rd"
+  if (sp != kNone)
+    out[n++] = {c.substr(0, sp), c.substr(last + 1)};
+  out[n++] = {{}, c == "Halftime" ? std::string_view("Half") : c.substr(last == kNone ? 0 : last + 1)};
+  return n;
+}
+
+// Where a clock goes: one row, or two
+struct ClockBox {
+  int x{0}, w{0}, y12{-1}, y8{0};    // one row; y12 -1: S8 only
+  int top_x{0}, top_w{0}, top_y{0};  // two rows; top_w 0: none
+  int bot_x{0}, bot_w{0}, bot_y{0};
+};
+
+int px_of(std::string_view s, BoardFont f) { return (int) s.size() * font_px(f); }
+
+// The first form that fits; force: the last regardless
+bool place_clock(std::vector<AppText> &t, const std::string &clock, bool rows_first, const ClockBox &b, bool force) {
+  char q[2];
+  ClockForm forms[4];
+  const int n = clock_forms(clock, rows_first, q, forms);
+  for (int i = 0; i < n; i++) {
+    const ClockForm &f = forms[i];
+    if (f.top.empty()) {
+      const bool big = b.y12 >= 0 && px_of(f.bottom, BoardFont::S12) <= b.w;
+      if (big || px_of(f.bottom, BoardFont::S8) <= b.w || (force && i + 1 == n)) {
+        put(t, b.x, big ? b.y12 : b.y8, b.w, big ? BoardFont::S12 : BoardFont::S8, AppAlign::CENTER, 0xFFFFFF,
+            std::string(f.bottom));
+        return true;
+      }
+    } else if (b.top_w > 0 && px_of(f.top, BoardFont::S8) <= b.top_w && px_of(f.bottom, BoardFont::S8) <= b.bot_w) {
+      const bool timed = f.bottom.find(':') != std::string_view::npos;
+      put(t, b.top_x, b.top_y, b.top_w, BoardFont::S8, AppAlign::CENTER, timed ? 0xB4B4B4 : 0xFFFFFF,
+          std::string(f.top));
+      put(t, b.bot_x, b.bot_y, b.bot_w, BoardFont::S8, AppAlign::CENTER, 0xFFFFFF, std::string(f.bottom));
+      return true;
+    }
+  }
+  return false;
 }
 
 // Down, then where, as long as fits
@@ -499,7 +553,12 @@ void sport_frame(const GameSnapshot &g, const std::string &clock, int w, bool la
     p.pip_y = (int16_t) (ty - 6);
     p.pip_x[0] = (c - 16) / 2;
     p.pip_x[1] = (int16_t) (w - 1 - (c - 16) / 2);
-    put(t, c, 0, mid_w, BoardFont::S12, AppAlign::CENTER, white, clock);
+    ClockBox b;
+    b.x = c;
+    b.w = mid_w;
+    b.y12 = 0;
+    b.y8 = 2;
+    place_clock(t, clock, false, b, true);
     p.fx = (int16_t) c;
     p.fw = (int16_t) mid_w;
     p.fy = 13;
@@ -508,21 +567,30 @@ void sport_frame(const GameSnapshot &g, const std::string &clock, int w, bool la
         m.spot ? down_row(m, g, mid_w, false) : hidden_row(g, m, mid_w));
   } else if (w >= 128) {
     const int aw[2] = {px_of(abbr[0], BoardFont::S12), px_of(abbr[1], BoardFont::S12)};
-    const int sw[2] = {px_of(score[0], BoardFont::S16), px_of(score[1], BoardFont::S16)};
+    // Smaller scores only when the clock needs room
+    for (BoardFont sf : {BoardFont::S16, BoardFont::S12}) {
+      const int sw[2] = {px_of(score[0], sf), px_of(score[1], sf)};
+      const int left = aw[0] + 4 + sw[0] + 3, gap = w - 4 - aw[1] - sw[1] - 3 - left;
+      ClockBox b;
+      b.x = b.top_x = b.bot_x = left;
+      b.w = b.top_w = b.bot_w = gap;
+      b.y12 = 2;
+      b.y8 = 4;
+      b.bot_y = 8;
+      if (!place_clock(t, clock, false, b, sf == BoardFont::S12))
+        continue;
+      const int sy = sf == BoardFont::S16 ? 0 : 2;
+      put(t, aw[0] + 4, sy, sw[0], sf, AppAlign::LEFT, white, score[0]);
+      put(t, w - 4 - aw[1] - sw[1], sy, sw[1], sf, AppAlign::RIGHT, white, score[1]);
+      break;
+    }
     put(t, 1, 2, aw[0], BoardFont::S12, AppAlign::LEFT, abbr_rgb(g, 0), abbr[0]);
-    put(t, aw[0] + 4, 0, sw[0], BoardFont::S16, AppAlign::LEFT, white, score[0]);
     put(t, w - 1 - aw[1], 2, aw[1], BoardFont::S12, AppAlign::RIGHT, abbr_rgb(g, 1), abbr[1]);
-    put(t, w - 4 - aw[1] - sw[1], 0, sw[1], BoardFont::S16, AppAlign::RIGHT, white, score[1]);
     if (poss >= 0) {
       p.poss_x = (int16_t) (poss == 0 ? 1 : w - 1 - aw[1]);
       p.poss_y = 14;
       p.poss_w = (int16_t) aw[poss];
     }
-    const int left = aw[0] + 4 + sw[0] + 3, right = w - 4 - aw[1] - sw[1] - 3, gap = right - left;
-    if (px_of(clock, BoardFont::S12) <= gap)
-      put(t, left, 2, gap, BoardFont::S12, AppAlign::CENTER, white, clock);
-    else
-      put(t, left, 4, gap, BoardFont::S8, AppAlign::CENTER, white, clock);
     p.fx = 0;
     p.fw = (int16_t) w;
     p.fy = 17;
@@ -533,18 +601,20 @@ void sport_frame(const GameSnapshot &g, const std::string &clock, int w, bool la
     put(t, 20, ty - 9, w - 40, BoardFont::S8, AppAlign::CENTER, down_rgb,
         m.spot ? down_row(m, g, w - 40, false) : hidden_row(g, m, w - 40));
   } else {
-    std::string time, period;
-    split_clock(clock, time, period);
     put(t, 0, 0, 25, BoardFont::S8, AppAlign::LEFT, abbr_rgb(g, 0), abbr[0]);
     put(t, w - 25, 0, 25, BoardFont::S8, AppAlign::RIGHT, abbr_rgb(g, 1), abbr[1]);
     put(t, 0, 9, 24, BoardFont::S12, AppAlign::LEFT, white, score[0]);
     put(t, w - 24, 9, 24, BoardFont::S12, AppAlign::RIGHT, white, score[1]);
-    if (time.empty()) {
-      put(t, 12, 4, w - 24, BoardFont::S8, AppAlign::CENTER, white, period);
-    } else {
-      put(t, 20, 0, w - 40, BoardFont::S8, AppAlign::CENTER, 0xB4B4B4, period);
-      put(t, 13, 10, w - 26, BoardFont::S8, AppAlign::CENTER, white, time);
-    }
+    // Period between the names, time between the scores
+    const int aw = std::max(px_of(abbr[0], BoardFont::S8), px_of(abbr[1], BoardFont::S8));
+    const int sw = std::max(px_of(score[0], BoardFont::S12), px_of(score[1], BoardFont::S12)) + 1;
+    ClockBox b;
+    b.x = b.bot_x = sw;
+    b.w = b.bot_w = w - 2 * sw;
+    b.y8 = b.bot_y = 10;
+    b.top_x = aw;
+    b.top_w = std::max(0, w - 2 * aw);
+    place_clock(t, clock, true, b, true);
     if (poss >= 0) {
       const int bw = std::min(25, px_of(abbr[poss], BoardFont::S8)) - 1;
       p.poss_x = (int16_t) (poss == 0 ? 0 : w - bw);
@@ -579,24 +649,36 @@ void detail_frame(const GameSnapshot &g, const std::string &clock, int w, bool l
   p.w = (int16_t) w;
   p.h = (int16_t) ty;
   std::vector<AppText> &t = out.texts;
-  std::string row = m.spot ? down_row(m, g, w, narrow) : hidden_row(g, m, w);
-  if (row.empty())
-    row = clock;
-  put(t, 0, 0, w, BoardFont::S8, AppAlign::CENTER, m.red ? 0xFF3030 : 0xFFFFFF, row);
+  const std::string row = m.spot ? down_row(m, g, w, narrow) : hidden_row(g, m, w);
+  if (!row.empty()) {
+    put(t, 0, 0, w, BoardFont::S8, AppAlign::CENTER, m.red ? 0xFF3030 : 0xFFFFFF, row);
+  } else {
+    ClockBox b;
+    b.w = w;
+    place_clock(t, clock, false, b, true);
+  }
   p.fx = 0;
   p.fw = (int16_t) w;
   p.fy = 9;
   // Field, win bar, the drive, then the chance
   const int rest = ty - 9 - 4 - 9 - 9;
   p.fh = (int16_t) rest;
-  p.win_y = (int16_t) (p.fy + p.fh + 1);
-  if (m.brk && m.periods > 0)
-    line_score(t, m, p.fx, p.fy, p.fw, p.fh);
-  const int drive_y = p.win_y + 3, win_y = drive_y + 9;
+  const int drive_y = p.fy + p.fh + 4, win_y = drive_y + 9;
+  if (m.brk && m.periods > 0) {
+    // At a break the line score takes the drive's rows
+    line_score(t, m, p.fx, p.fy, p.fw, drive_y + 8 - p.fy);
+  } else {
+    p.win_y = (int16_t) (p.fy + p.fh + 1);
+  }
   const Football &f = g.fb;
   const bool drive = m.spot && f.drive_side == m.side + 1 && !f.drive_over;
   if (drive) {
-    std::string d = field_drive(f, narrow);
+    // Longest that fits: words, then letters, then no time
+    std::string d = field_drive(f, false);
+    if (px_of(d, BoardFont::S8) > w || narrow)
+      d = field_drive(f, true);
+    if (px_of(d, BoardFont::S8) > w && f.drive_secs >= 0)
+      d = d.substr(0, d.rfind(' '));
     if (!narrow && px_of("Drive: " + d, BoardFont::S8) <= w)
       d = "Drive: " + d;
     put(t, 0, drive_y, w, BoardFont::S8, AppAlign::CENTER, 0xB4B4B4, d);

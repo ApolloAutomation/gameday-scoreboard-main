@@ -93,7 +93,7 @@ constexpr uint32_t kFieldTryMs = 15000;
 GameSnapshot field_sample(const std::string &team, uint32_t team_rgb, const std::string &opp, uint32_t opp_rgb);
 
 namespace detail {
-// Single-event reads only (parse_event)
+// The board's own game reads only (parse_event)
 void fill_field_filter(JsonObject ev);
 void field_from_event(JsonObjectConst ev, GameSnapshot &s);
 // "7 plays, 38 yards, 1:36" into f

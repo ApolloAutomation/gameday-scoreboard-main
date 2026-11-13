@@ -1,6 +1,7 @@
 // Field view review images, drawn as the panel would
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -91,41 +92,81 @@ struct Canvas {
   }
 };
 
-// A label: clipped to its width, aligned in it
-inline void review_text(Canvas &cv, const ReviewFonts &fonts, const AppText &t) {
+// LVGL's wrap: at spaces, else mid-word
+template<typename Width> std::vector<std::string> review_lines(const std::string &s, int w, Width width) {
+  std::vector<std::string> lines;
+  std::string cur;
+  auto trim = [](std::string v) {
+    while (!v.empty() && v.back() == ' ')
+      v.pop_back();
+    return v;
+  };
+  size_t i = 0;
+  while (i < s.size()) {
+    size_t j = s.find(' ', i);
+    j = j == std::string::npos ? s.size() : j;
+    size_t k = j;
+    while (k < s.size() && s[k] == ' ')
+      k++;
+    const std::string word = s.substr(i, j - i);
+    if (width(trim(cur + word)) <= w) {
+      cur += s.substr(i, k - i);
+      i = k;
+    } else if (!cur.empty()) {
+      lines.push_back(trim(cur));
+      cur.clear();
+    } else {
+      size_t n = 1;
+      while (n < word.size() && width(word.substr(0, n + 1)) <= w)
+        n++;
+      lines.push_back(word.substr(0, n));
+      i += n;
+    }
+  }
+  if (!cur.empty() || lines.empty())
+    lines.push_back(trim(cur));
+  return lines;
+}
+
+// A label as LVGL draws it: wrapped, each line aligned
+inline void review_text(Canvas &cv, const ReviewFonts &fonts, const AppText &t, bool wrap = true) {
   const int fi = (int) t.font;
   const BdfFont &f = fonts.f[fi];
   const uint16_t c = rgb565(t.color);
   const int rows = esphome::gameday::font_rows(t.font);
-  if (!f.ok()) {
-    const int tw = std::min<int>(t.w, (int) t.text.size() * esphome::gameday::font_px(t.font));
+  auto width = [&](const std::string &v) {
+    return f.ok() ? bdf_width(f, v) : (int) v.size() * esphome::gameday::font_px(t.font);
+  };
+  const std::vector<std::string> lines = wrap ? review_lines(t.text, t.w, width) : std::vector<std::string>{t.text};
+  for (size_t n = 0; n < lines.size(); n++) {
+    const std::string &line = lines[n];
+    const int tw = width(line), y = t.y + (int) n * rows;
     const int x0 = t.align == AppAlign::LEFT ? t.x : t.align == AppAlign::RIGHT ? t.x + t.w - tw : t.x + (t.w - tw) / 2;
-    for (int x = x0; x < x0 + tw; x++) {
-      cv.put(x, t.y, c);
-      cv.put(x, t.y + rows - 1, c);
-    }
-    return;
-  }
-  const int tw = bdf_width(f, t.text);
-  int x = t.align == AppAlign::LEFT ? t.x : t.align == AppAlign::RIGHT ? t.x + t.w - tw : t.x + (t.w - tw) / 2;
-  if (t.align != AppAlign::LEFT && tw > t.w)
-    x = t.x;
-  const int base = t.y + f.ascent;
-  for (unsigned char ch : t.text) {
-    auto it = f.g.find(ch);
-    if (it == f.g.end())
+    if (!f.ok()) {
+      for (int x = std::max<int>(x0, t.x); x < std::min(x0 + tw, t.x + t.w); x++) {
+        cv.put(x, y, c);
+        cv.put(x, y + rows - 1, c);
+      }
       continue;
-    const BdfGlyph &g = it->second;
-    const int top = base - g.yo - g.h;
-    const int bytes = (g.w + 7) / 8;
-    for (int r = 0; r < g.h && r < (int) g.rows.size(); r++)
-      for (int b = 0; b < g.w; b++)
-        if ((g.rows[r] >> (8 * bytes - 1 - b)) & 1) {
-          const int px = x + g.xo + b;
-          if (px >= t.x && px < t.x + t.w)
-            cv.put(px, top + r, c);
-        }
-    x += g.dw;
+    }
+    int x = x0;
+    const int base = y + f.ascent;
+    for (unsigned char ch : line) {
+      auto it = f.g.find(ch);
+      if (it == f.g.end())
+        continue;
+      const BdfGlyph &g = it->second;
+      const int top = base - g.yo - g.h;
+      const int bytes = (g.w + 7) / 8;
+      for (int r = 0; r < g.h && r < (int) g.rows.size(); r++)
+        for (int b = 0; b < g.w; b++)
+          if ((g.rows[r] >> (8 * bytes - 1 - b)) & 1) {
+            const int px = x + g.xo + b;
+            if (px >= t.x && px < t.x + t.w)
+              cv.put(px, top + r, c);
+          }
+      x += g.dw;
+    }
   }
 }
 
@@ -155,7 +196,8 @@ inline Canvas review_frame(int w, const SportFrame &fr, const ReviewFonts &fonts
   tk.font = large ? esphome::gameday::BoardFont::S12 : esphome::gameday::BoardFont::S8;
   tk.y = (int16_t) (cv.h - esphome::gameday::font_rows(tk.font));
   tk.text = ticker;
-  review_text(cv, fonts, tk);
+  // The ticker scrolls: one line
+  review_text(cv, fonts, tk, false);
   return cv;
 }
 

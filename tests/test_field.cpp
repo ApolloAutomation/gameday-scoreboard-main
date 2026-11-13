@@ -6,12 +6,17 @@
 #include <vector>
 
 #include "ArduinoJson.h"
+#include "espn_parse.h"
+#include "espn_parse_impl.h"
 #include "field.h"
 #include "idle.h"
 #include "set_request.h"
 
 using namespace espn;
 using esphome::gameday::BoardFont;
+using esphome::gameday::font_desc_bottom;
+using esphome::gameday::font_ink_top;
+using esphome::gameday::font_px;
 using esphome::gameday::font_rows;
 using esphome::gameday::kBoardRows;
 
@@ -84,11 +89,16 @@ void test_parse() {
   d = Football();
   espn::detail::drive_numbers("no numbers here", d);
   FCHECK(d.drive_plays == 0);
-  // A day's scoreboard read and the watcher's carry no field
+  // A day's scoreboard read carries no field
   GameSnapshot sb;
   std::string day_json = slurp("fixtures/scoreboard_ncaa_live.json");
   FCHECK(parse_scoreboard(day_json, std::string("401858433"), 68, sb));
   FCHECK(sb.fb.yard_line < 0 && !field_ready(sb));
+  // Nor does the big-play watcher's event read
+  GameSnapshot watched;
+  const std::string nfl = slurp("fixtures/event_nfl_live.json");
+  FCHECK(parse_event(nfl, Sport::FOOTBALL, 2, watched, "", nullptr, false));
+  FCHECK(watched.valid && watched.fb.yard_line < 0 && watched.fb.leaders.empty() && !field_ready(watched));
   // Other sports never read it
   GameSnapshot nba;
   FCHECK(parse_event_str(slurp("fixtures/event_nba_live.json"), Sport::BASKETBALL, 0, nba) || true);
@@ -264,6 +274,115 @@ void test_frames() {
   FCHECK(!field_same(a.pic, b.pic));
 }
 
+// A label's inked box, where LVGL puts it
+struct Box {
+  int x0, y0, x1, y1;
+};
+
+Box ink(const AppText &t) {
+  const int tw = std::min<int>(t.w, (int) t.text.size() * font_px(t.font));
+  const int x = t.align == AppAlign::LEFT    ? t.x
+                : t.align == AppAlign::RIGHT ? t.x + t.w - tw
+                                             : t.x + (t.w - tw) / 2;
+  return {x, t.y + font_ink_top(t.font), x + tw, t.y + font_desc_bottom(t.font) + 1};
+}
+
+bool meet(const Box &a, const Box &b) { return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1; }
+
+// Each label fits its width, clear of the rest
+bool clear(const SportFrame &fr, const std::string &what) {
+  const FieldPic &p = fr.pic;
+  std::vector<Box> marks;
+  if (p.m.on && !(p.m.brk && p.m.periods > 0))
+    marks.push_back({p.fx, p.fy, p.fx + p.fw, p.fy + p.fh});
+  if (p.poss_y >= 0)
+    marks.push_back({p.poss_x, p.poss_y, p.poss_x + p.poss_w, p.poss_y + p.poss_h});
+  if (p.win_y >= 0 && p.m.win >= 0)
+    marks.push_back({p.fx, p.win_y, p.fx + p.fw, p.win_y + 2});
+  if (p.pip_y >= 0 && p.to[0] >= 0)
+    marks.push_back({p.pip_x[0], p.pip_y, p.pip_x[0] + 16, p.pip_y + 2});
+  if (p.pip_y >= 0 && p.to[1] >= 0)
+    marks.push_back({p.pip_x[1] - 15, p.pip_y, p.pip_x[1] + 1, p.pip_y + 2});
+  bool ok = true;
+  for (size_t i = 0; i < fr.texts.size(); i++) {
+    const AppText &t = fr.texts[i];
+    const Box b = ink(t);
+    bool fine = (int) t.text.size() * font_px(t.font) <= t.w;
+    for (size_t k = 0; k < i; k++)
+      fine = fine && !meet(b, ink(fr.texts[k]));
+    for (const Box &m : marks)
+      fine = fine && !meet(b, m);
+    if (!fine)
+      printf("  %s: \"%s\" at %d,%d w %d\n", what.c_str(), t.text.c_str(), t.x, t.y, t.w);
+    ok = ok && fine;
+  }
+  return ok;
+}
+
+// Long clocks, long names, two-digit scores, breaks
+void test_fit() {
+  const char *const clocks[] = {"12:36 4th", "End of 3rd", "Halftime", "10:00 OT", "15:00 2OT", "0:09 2nd",
+                                "Delayed",   "End of 4th", "4th",      ""};
+  const char *const teams[][2] = {{"DUKE", "TULN"}, {"BUF", "MIA"}, {"GB", "NO"}, {"UCLA", "GB"}};
+  const int scores[][2] = {{21, 17}, {7, 0}, {3, 24}, {44, 45}};
+  int bad = 0;
+  for (const auto &tm : teams)
+    for (const auto &sc : scores)
+      for (int brk = 0; brk < 2; brk++)
+        for (int side = 1; side <= 2; side++) {
+          GameSnapshot g = field_sample(tm[0], 0x003087, tm[1], 0xC8102E);
+          g.team_score = sc[0];
+          g.opp_score = sc[1];
+          g.possession = side;
+          g.held = brk == 1;
+          if (side == 2) {
+            // A long drive's words; a sure thing
+            g.fb.drive_side = 2;
+            g.fb.drive_plays = 12;
+            g.fb.drive_yards = -12;
+            g.fb.drive_secs = 636;
+            g.fb.home_win = 100;
+            g.fb.periods = 5;
+          }
+          for (const char *clock : clocks)
+            for (int large = 0; large < 2; large++) {
+              const std::string what = std::string(tm[0]) + " " + std::to_string(sc[0]) + " " + tm[1] + " " +
+                                       std::to_string(sc[1]) + " '" + clock + "'" + (brk ? " break" : "") +
+                                       (large ? " large" : "");
+              for (int w : {64, 128, 192, 256}) {
+                SportFrame fr;
+                sport_frame(g, clock, w, large, fr);
+                bad += !clear(fr, "board " + std::to_string(w) + " " + what);
+              }
+              for (int w : {64, 128}) {
+                SportFrame fr;
+                detail_frame(g, clock, w, large, fr);
+                bad += !clear(fr, "area " + std::to_string(w) + " " + what);
+              }
+            }
+        }
+  FCHECK(bad == 0);
+  // The clock keeps its period where it can
+  GameSnapshot g = field_sample("DUKE", 0x003087, "TULN", 0x006747);
+  g.team_score = 21;
+  g.opp_score = 17;
+  for (int w : {64, 128}) {
+    SportFrame fr;
+    sport_frame(g, "12:36 4th", w, false, fr);
+    bool time = false, period = false;
+    for (const AppText &t : fr.texts) {
+      time = time || t.text == "12:36";
+      period = period || t.text == "4th";
+    }
+    FCHECK(time && period);
+    sport_frame(g, "End of 3rd", w, false, fr);
+    bool end = false;
+    for (const AppText &t : fr.texts)
+      end = end || t.text == "End";
+    FCHECK(end);
+  }
+}
+
 uint32_t at(const std::vector<uint16_t> &buf, const FieldPic &p, int x, int y) {
   const uint16_t c = buf[(size_t) y * p.w + x];
   return ((uint32_t) (c >> 11) << 19) | ((uint32_t) ((c >> 5) & 63) << 10) | ((uint32_t) (c & 31) << 3);
@@ -342,6 +461,7 @@ int run_field_tests(int &total_checks) {
   test_model();
   test_words();
   test_frames();
+  test_fit();
   test_picture();
   test_sample();
   total_checks += checks;

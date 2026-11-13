@@ -62,6 +62,27 @@ inline int render_field_views(const std::string &dir, const std::string &fixture
       fprintf(stderr, "can't read %s\n", c.name);
   }
   games.emplace_back("sample", field_sample("BUF", 0x00338D, "MIA", 0x008E97));
+  // Long clocks beside four-letter names
+  GameSnapshot g = field_sample("DUKE", 0x003087, "TULN", 0x006747);
+  g.team_score = 21;
+  g.opp_score = 17;
+  g.period = 4;
+  g.display_clock = "12:36";
+  g.short_detail = "12:36 - 4th";
+  g.fb.periods = 4;
+  games.emplace_back("long_clock", g);
+  g = field_sample("BUF", 0x00338D, "MIA", 0x008E97);
+  g.status_name = "STATUS_END_PERIOD";
+  g.display_clock = "0:00";
+  g.short_detail = "End of 3rd";
+  games.emplace_back("end_3rd", g);
+  g = field_sample("UCLA", 0x2D68C4, "WASH", 0x4B2E83);
+  g.team_score = g.opp_score = 24;
+  g.period = 5;
+  g.display_clock = "10:00";
+  g.short_detail = "10:00 - OT";
+  g.fb.periods = 5;
+  games.emplace_back("overtime", g);
   for (const auto &[name, g] : games) {
     const std::string clock = board_clock_text(g, false, 0);
     const std::string ticker = field_ticker(g, true);

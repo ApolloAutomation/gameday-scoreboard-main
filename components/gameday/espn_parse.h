@@ -44,8 +44,7 @@ enum class Standing : uint8_t { RECORD = 0, SEED = 1, PLACE = 2 };
 
 enum class Half : uint8_t { NONE, TOP, MID, BOTTOM, END };
 
-// Football's field (field.h), from a single-event read only.
-// ESPN's yard lines: 0 home goal line, 100 away's
+// Football's field (field.h); ESPN yard 0 is home's goal
 struct Football {
   int8_t yard_line{-1};  // -1: not read
   int8_t down{-1}, distance{-1};

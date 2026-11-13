@@ -4860,7 +4860,7 @@ void GamedayComponent::run_watch_job_() {
   ContainerReader reader(container, this->espn_bytes_);
   if (!w.event_id.empty()) {
     GameSnapshot g;
-    w.ok = ::espn::parse_event(reader, sport, w.away_id, g, w.event_id);
+    w.ok = ::espn::parse_event(reader, sport, w.away_id, g, w.event_id, nullptr, false);
     if (w.ok)
       ::espn::watch_take(w, g);
   } else {

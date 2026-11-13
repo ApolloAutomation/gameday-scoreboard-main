@@ -342,7 +342,7 @@ INITIAL = {
     "autoupd": False, "beta": False, "standing": 0,
     # Clock size and Text size: 0 Normal, 1 Large.
     "clocksize": 0, "textsize": 0,
-    # Game board: 0 Scoreboard, 1 Field view; the area's Game details
+    # Game board 0/1, and the area's Game details
     "sportview": 0, "areadetail": False,
     # Big-play alert types on, as bit (type - 1).
     "alerts": (1 << LIMITS["kAlertBits"]) - 1, "alertfav": False, "anim": True,

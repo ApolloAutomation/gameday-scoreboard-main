@@ -98,8 +98,7 @@ inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash, uint32
   return at == SplitAt::BOTTOM && splash_up(now, board_splash, stay);
 }
 
-// DATE beside the board's clock; GAME, APP other displays.
-// DETAIL: the board's football game's field (field.h).
+// DATE: beside the board's clock. GAME, APP: displays. DETAIL: field.
 enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP, DETAIL };
 
 inline const char *area_view_key(AreaView v) {
