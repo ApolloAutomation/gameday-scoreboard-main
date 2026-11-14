@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "app_flights.h"
+#include "app_weather.h"
 #include "app_markets.h"
 #include "follow.h"
 #include "players.h"
@@ -57,13 +58,14 @@ struct Settings {
   // The main area's display, and the ones the firmware has
   int display{0};
   uint8_t displays{kGameDayOnly};
-  int clocksize{0}, textsize{0};
+  int clocksize{0}, textsize{0}, sportview{0};
+  bool areadetail{false};
   uint8_t team_league{0};
   // rotatesec: Switch every, in seconds.
   int mode{0}, rotatesec{60}, lockon{15}, release{30}, tz{1}, panels{1}, rows{1}, wiring{0}, standing{0};
   bool collide{false}, today{false}, tz_auto{true}, down{true}, count{true}, match{true}, play{true}, odds{true}, opp{true};
   bool bootaddr{true}, autoupd{false}, beta{false}, board{true}, final{false}, follow{false}, alertfav{false};
-  bool watch{true}, watchmine{false}, visit{false}, anim{true};
+  bool watch{true}, watchmine{false}, visit{false}, anim{true}, full{false};
   TeamRef favs[16];
   uint16_t live_mask{0};
   int alerts{(1 << kAlertBits) - 1};
@@ -78,6 +80,8 @@ struct Settings {
   MarketList markets;  // the Stocks & Crypto list (app_markets.h)
   // The Flight Tracker's own (app_flights.h)
   flights::Prefs flights;
+  // Weather's own (app_weather.h)
+  wx::Prefs weather;
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 4;
@@ -150,6 +154,8 @@ void load(Settings &s, JsonObjectConst o) {
   }
   num("clocksize", s.clocksize);
   num("textsize", s.textsize);
+  num("sportview", s.sportview);
+  flag("areadetail", s.areadetail);
   int collide = s.collide ? 1 : 0;
   num("collide", collide);
   s.collide = collide != 0;
@@ -215,6 +221,7 @@ void load(Settings &s, JsonObjectConst o) {
   flag("watch", s.watch);
   flag("watchmine", s.watchmine);
   flag("anim", s.anim);
+  flag("full", s.full);
   if (o["markets"].is<JsonArrayConst>()) {
     s.markets = MarketList{};
     for (JsonObjectConst m : o["markets"].as<JsonArrayConst>()) {
@@ -237,6 +244,8 @@ void load(Settings &s, JsonObjectConst o) {
     if (f["receiver"].is<const char *>())
       flights::prefs_set(s.flights, "flyreceiver", f["receiver"].as<const char *>());
   }
+  if (o["weather"].is<JsonObjectConst>())
+    s.weather.ticker = (uint8_t) (o["weather"]["ticker"] | 0);
   if (o["players"].is<JsonArrayConst>()) {
     for (auto &p : s.players)
       p = FavPlayer{};
@@ -340,6 +349,7 @@ void apply(Settings &s, const SetOp &op) {
     case SetKind::WATCHSTAY: s.watchstay = op.value; break;
     case SetKind::WATCHMINE: s.watchmine = op.on; break;
     case SetKind::ANIM: s.anim = op.on; break;
+    case SetKind::FULL: s.full = op.on; break;
     case SetKind::PLAYER:  // set_player_: nothing changes when every slot is in use
       player_put(s.players, make_player(op.team.league, op.athlete, op.team.id, op.name));
       break;
@@ -364,6 +374,8 @@ void apply(Settings &s, const SetOp &op) {
       break;
     case SetKind::CLOCK_SIZE: s.clocksize = op.value; break;
     case SetKind::TEXT_SIZE: s.textsize = op.value; break;
+    case SetKind::SPORT_VIEW: s.sportview = op.value; break;
+    case SetKind::AREA_DETAIL: s.areadetail = op.on; break;
     case SetKind::SPLIT_TEAM:  // set_split_team: never the panel's own team
       if (op.team.id == 0 || !(op.team == s.team))
         s.splitteam = op.team;
@@ -458,12 +470,18 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["watchstay"] = s.watchstay;
   doc["watchmine"] = s.watchmine;
   doc["anim"] = s.anim;
+  doc["full"] = s.full;
   doc["split"] = s.split;
   doc["display"] = s.display;
   doc["clocksize"] = s.clocksize;
   doc["textsize"] = s.textsize;
+  doc["sportview"] = s.sportview;
+  doc["areadetail"] = s.areadetail;
   doc["splitteam"] = team_str(s.splitteam);
   flights::prefs_state(s.flights, flights::units_for_zone(s.tz), doc["flights"].to<JsonObject>());
+  // WeatherApp::state's settings: the switch and the units
+  doc["weather"]["ticker"] = s.weather.ticker;
+  doc["weather"]["units"] = wx::units_for_zone(s.tz).f ? "imperial" : "metric";
   JsonArray players = doc["players"].to<JsonArray>();
   for (const FavPlayer &p : s.players) {
     if (player_empty(p))
@@ -511,6 +529,9 @@ void test_fixture_cases() {
     if (display_has(s.displays, (int) Display::FLIGHTS))
       for (const char *const *k = flights::kFlightSetKeys; *k != nullptr; k++)
         take(*k);
+    if (display_has(s.displays, (int) Display::WEATHER))
+      for (const char *const *k = wx::kWeatherSetKeys; *k != nullptr; k++)
+        take(*k);
     int status = kv.empty() ? 400 : 200;
     SCHECK(status == (c["status"] | 200), "%s: status %d", name, status);
     SetOp op;
@@ -519,6 +540,8 @@ void test_fixture_cases() {
         apply(s, op);
       else if (p.first.rfind("mkt", 0) == 0)  // app_set_: the display's own set
         markets_set(s.markets, market_defaults(), p.first, p.second);
+      else if (p.first == "wxticker" && (p.second == "0" || p.second == "1"))
+        s.weather.ticker = p.second == "1";
       else
         flights::prefs_set(s.flights, p.first, p.second);
     }
@@ -655,7 +678,11 @@ void test_parse_set() {
   for (const char *bad : {"2", "-1", "", "01", "1 ", "L", "large"}) {
     SCHECK(!parse_set("clocksize", bad, op, kFavMax), "clocksize %s", bad);
     SCHECK(!parse_set("textsize", bad, op, kFavMax), "textsize %s", bad);
+    SCHECK(!parse_set("sportview", bad, op, kFavMax), "sportview %s", bad);
   }
+  SCHECK(parse_set("sportview", "1", op, kFavMax) && op.kind == SetKind::SPORT_VIEW && op.value == 1, "sportview 1");
+  SCHECK(parse_set("sportview", "0", op, kFavMax) && op.value == 0, "sportview 0");
+  SCHECK(parse_set("areadetail", "1", op, kFavMax) && op.kind == SetKind::AREA_DETAIL && op.on, "areadetail 1");
 
   SCHECK(parse_set("idle", "4", op, kFavMax) && op.kind == SetKind::IDLE && op.value == 4, "idle 4");
   SCHECK(parse_set("idle", "0", op, kFavMax) && op.value == 0, "idle 0");
@@ -689,6 +716,8 @@ void test_parse_set() {
   SCHECK(parse_set("watch", "0", op, kFavMax) && op.kind == SetKind::WATCH && !op.on, "watch 0");
   SCHECK(parse_set("watchmine", "1", op, kFavMax) && op.kind == SetKind::WATCHMINE && op.on, "watchmine 1");
   SCHECK(parse_set("anim", "0", op, kFavMax) && op.kind == SetKind::ANIM && !op.on, "anim 0");
+  SCHECK(parse_set("full", "1", op, kFavMax) && op.kind == SetKind::FULL && op.on, "full 1");
+  SCHECK(parse_set("full", "2", op, kFavMax) && op.kind == SetKind::FULL && !op.on, "full 2 is off");
   SCHECK(parse_set("watchstay", "120", op, kFavMax) && op.kind == SetKind::WATCHSTAY && op.value == 120,
          "watchstay 120");
   SCHECK(parse_set("watchstay", "5", op, kFavMax) && op.value == kWatchStayMinSeconds, "watchstay floor");

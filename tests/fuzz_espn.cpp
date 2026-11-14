@@ -13,11 +13,16 @@
 #include <string>
 #include <vector>
 
+#include "app_frame_check.h"
 #include "captive.h"
 #include "espn_parse.h"
 #include "app_f1.h"
 #include "f1.h"
+#include "field.h"
+#include "app_flights.h"
+#include "app_weather.h"
 #include "flights.h"
+#include "map_canvas.h"
 #include "plane_photo.h"
 #include "logo_icon.h"
 #include "logo_lru.h"
@@ -182,6 +187,26 @@ size_t render(const GameSnapshot &prev, const GameSnapshot &g, int64_t now) {
   }
   if (g.sport == Sport::BASKETBALL)
     n += basketball_series(g).size();
+  // The Field view, every width, painted
+  if (field_ready(g)) {
+    n += field_ticker(g, true).size();
+    for (int w : {64, 128, 192, 256}) {
+      SportFrame fr;
+      sport_frame(g, clock_text(g), w, w == 128, fr);
+      std::vector<uint16_t> buf((size_t) fr.pic.w * fr.pic.h);
+      Px565 p;
+      p.px = buf.data();
+      p.w = p.stride = fr.pic.w;
+      p.h = fr.pic.h;
+      p.clip = PxBox{0, 0, p.w, p.h};
+      field_paint(p, fr.pic);
+      n += buf.empty() ? 0 : buf[buf.size() / 2] + fr.texts.size();
+      if (w <= 128) {
+        detail_frame(g, clock_text(g), w, w == 64, fr);
+        n += fr.texts.size();
+      }
+    }
+  }
   return n;
 }
 
@@ -550,6 +575,14 @@ size_t f1_app(const uint8_t *data, size_t size, int64_t now) {
           abort();
       n += f.ticker.size() + esphome::gameday::ticker_markup(esphome::gameday::panel_text(f.ticker), f.spans).size();
     }
+  // Full screen on a 2x2: every card inside 128x128
+  for (int64_t t = now; t < now + 60; t += 7) {
+    AppFrame f;
+    a.frame(128, 128, t, f);
+    if (!app_frame_problems(f, 128, 128).empty())
+      abort();
+    n += f.texts.size();
+  }
   return n + a.poll_ms(now) + (a.busy(now) ? 1 : 0);
 }
 
@@ -588,8 +621,9 @@ size_t markets(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
   found += parse_nasdaq_quotes(r3, list, now, q);
   if (found > 3 * kMarketSlots)
     abort();
-  for (int w : {64, 128, 256}) {
-    const MarketGeom g = market_geom(w, 64, true, true);
+  for (int w : {64, 128, 256, 128 + 1}) {
+    // 129 stands for full screen's 128x128
+    const MarketGeom g = w == 129 ? market_geom(128, 128, true, true, true, true) : market_geom(w, 64, true, true);
     const MarketFrame f = market_frame(list, q, g, now, 1, true);
     if (f.n > g.rows || f.page >= f.pages)
       abort();
@@ -711,6 +745,68 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   {
+    // Weather: sources, pages at every size, map steps.
+    static flights::FlightsApp *home_app = nullptr;
+    if (home_app == nullptr) {
+      home_app = new flights::FlightsApp();
+      espn::app_register(espn::app_slots(), home_app);
+      home_app->set("flyhome", "38.9399,-119.9772");
+    }
+    const int64_t now = 1794630600;
+    wx::WeatherApp app;
+    app.shown(true);
+    for (int k = 0; k < 6; k++) {
+      espn::AppRequest req;
+      if (!app.request(now, req))
+        break;
+      JsonDocument filter, doc;
+      const bool ok = app.filter(filter) &&
+                      !deserializeJson(doc, json, DeserializationOption::Filter(filter),
+                                       DeserializationOption::NestingLimit(40)) &&
+                      app.parse_doc(doc.as<JsonObjectConst>(), now);
+      app.ended(espn::AppResult{ok ? 200 : 500, false, 0});
+      app.apply(ok, now);
+    }
+    if (app.forecast().n_hours > wx::kHours || app.forecast().n_days > wx::kDays || app.alerts().n > wx::kAlerts ||
+        app.radar().n > wx::kFrames)
+      abort();
+    for (size_t i = 0; i < app.alerts().n; i++)
+      if (strlen(app.alerts().a[i].event) >= wx::kAlertEvent || strlen(app.alerts().a[i].text) >= wx::kAlertText)
+        abort();
+    static const int kSizes[][2] = {{64, 64}, {128, 64}, {192, 64}, {256, 64}, {128, 128}};
+    for (const auto &sz : kSizes)
+      for (int dt = 0; dt < 70; dt += 3) {
+        espn::AppFrame fr;
+        app.frame(sz[0], sz[1], now + dt, fr);
+        espn::app_frame_trim(fr);
+        for (const espn::AppText &t : fr.texts)
+          if (t.x < 0 || t.x + t.w > sz[0] || t.y < -4 || t.y > sz[1] - 8)
+            abort();
+        for (const espn::AppArt &a : fr.art)
+          if (a.x < 0 || a.y < 0 || a.x + a.w * a.scale > sz[0] || a.y + a.h * a.scale > sz[1] - 8)
+            abort();
+        if (fr.photo.w > 0 && (fr.photo.x + fr.photo.w > sz[0] || fr.photo.y + fr.photo.h > sz[1] - 8))
+          abort();
+        sink = sink + fr.ticker.size() + fr.texts.size();
+      }
+    const size_t cut = 4 + size % 300;
+    if (wx::tidy_alert(json.c_str(), cut).size() > cut)
+      abort();
+    espn::MapCanvas c;
+    const uint32_t sw = 1 + (uint32_t) (size % 300), sh = 1 + (uint32_t) (size / 3 % 300);
+    const int bw = 1 + (int) (size % 128), bh = 1 + (int) (size / 5 % 120);
+    if (c.setup(sw, sh, bw, bh)) {
+      std::vector<espn::MapCell> cells((size_t) bw * bh, espn::MapCell{});
+      c.cells = cells.data();
+      for (size_t i = 0; i + 4 <= size && i < 16384; i += 4)
+        c.paint((uint32_t) (i / 4) % sw, (uint32_t) (i / 4 / sw) % sh, 1 + data[i] % 3, 1 + data[i + 1] % 3, data + i);
+      std::vector<uint8_t> px((size_t) bw * bh * 2);
+      c.finish(px.data());
+      sink = sink + px[0];
+    }
+  }
+
+  {
     // Flight Tracker: planes, their routes, frames and the ticker.
     flights::Home home;
     home.lat = 40.64;
@@ -775,15 +871,20 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         abort();
       flights::FrameOpts o;
       o.w = 128 + (int) (size % 3) * 64;
+      o.h = o.w == 128 && size % 2 == 1 ? 128 : 64;
       o.photo = &ph;
       const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
       if (!f.photo.url.empty() && (f.photo.x + f.photo.w > o.w || f.photo.y + f.photo.h > o.h - 8 ||
                                    f.photo.at > f.ticker.size()))
         abort();
+      const int bw = 1 + (int) (size % 128), bh = 1 + (int) (size / 3 % 80);
       const flights::PhotoFit fit = flights::photo_fit(1 + (uint32_t) (size % 1100), 1 + (uint32_t) (size / 7 % 900),
-                                                       size & 1, 1 + (int) (size % 64), 1 + (int) (size / 3 % 32));
+                                                       size & 1, bw, bh);
       if (fit.ok()) {
-        if (fit.ow > fit.cw || fit.oh > fit.ch || fit.cy + fit.ch > fit.sh)
+        // Bigger than its cut only when grown to fill
+        const bool grown = 2 * fit.cw <= bw && 2 * fit.ch <= bh;
+        if ((!grown && (fit.ow > fit.cw || fit.oh > fit.ch)) || fit.ow > bw || fit.oh > bh ||
+            fit.cy + fit.ch > fit.sh)
           abort();
         std::vector<uint16_t> px((size_t) fit.sw * fit.sh, 0);
         memcpy(px.data(), data, std::min(size, px.size() * 2));

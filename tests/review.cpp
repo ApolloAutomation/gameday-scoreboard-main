@@ -1,9 +1,11 @@
 // Play animation GIFs for review: make -C tests review
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
 #include "gif_write.h"
+#include "review_field.h"
 #include "scene_render.h"
 
 using namespace espn;
@@ -46,6 +48,13 @@ void render(const std::string &dir, const ScenePlay &play, int w, int h, const K
 int main(int argc, char **argv) {
   const std::string dir = argc > 1 ? argv[1] : "build/review";
   const std::string only = argc > 2 ? argv[2] : "";
+  // Labels in spleen when REVIEW_FONTS names its BDFs
+  if (only.empty() || only == "field") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d field views\n", render_field_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "field")
+      return 0;
+  }
   for (const ScenePlay &p : kScenePlays) {
     const AnimKind k = anim_sample(p.play, "", 0).args.kind;
     if (!only.empty() && only != anim_name(k) && only != p.play)

@@ -46,17 +46,26 @@ inline SplitShow split_effective(uint8_t show, SplitAt at) {
   return s == SplitShow::OFF && at == SplitAt::BOTTOM ? SplitShow::CLOCK : s;
 }
 
+// Full screen: the main board's display takes the area too.
+inline bool split_full(bool full, bool main_app, SplitAt at) { return full && main_app && at != SplitAt::NONE; }
+
 // Beside an area, the main board is one 128x64 panel.
 struct SplitArea {
   bool on{false};
   int16_t main_w{64};
+  int16_t main_h{64};  // 128 for a 2x2 at full screen
   int16_t x{0}, y{0}, w{0}, h{0};
 };
 
-inline SplitArea split_area(int cols, int rows, uint8_t show) {
+// full: as split_full gives, the whole panel.
+inline SplitArea split_area(int cols, int rows, uint8_t show, bool full = false) {
   SplitArea a;
   a.main_w = (int16_t) (cols > 0 ? cols * 64 : 64);
   const SplitAt at = split_at(cols, rows);
+  if (full && at != SplitAt::NONE) {
+    a.main_h = (int16_t) (rows * 64);
+    return a;
+  }
   if (split_effective(show, at) == SplitShow::OFF)
     return a;
   a.on = true;
@@ -89,8 +98,8 @@ inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash, uint32
   return at == SplitAt::BOTTOM && splash_up(now, board_splash, stay);
 }
 
-// DATE beside the board's clock; GAME, APP other displays.
-enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP };
+// DATE: beside the board's clock. GAME, APP: displays. DETAIL: field.
+enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP, DETAIL };
 
 inline const char *area_view_key(AreaView v) {
   switch (v) {
@@ -108,6 +117,8 @@ inline const char *area_view_key(AreaView v) {
       return "game";
     case AreaView::APP:
       return "app";
+    case AreaView::DETAIL:
+      return "detail";
     default:
       return "";
   }
@@ -130,9 +141,11 @@ struct AreaInputs {
   Display main{Display::GAMEDAY};  // what the main area shows
   uint8_t displays{kGameDayOnly};  // the ones this firmware has
   bool app_busy{false};            // the area's display keeps up at night
+  // Game details on; the board's football game has a field
+  bool detail{false};
 };
 
-inline AreaView area_view(const AreaInputs &in) {
+inline AreaView area_view_shown(const AreaInputs &in) {
   const AreaView clock = in.main_clock ? AreaView::DATE : AreaView::CLOCK;
   switch (in.show) {
     case SplitShow::OFF:
@@ -162,6 +175,16 @@ inline AreaView area_view(const AreaInputs &in) {
       return AreaView::APP;
     }
   }
+}
+
+// Details replace only a clock, a date or scores
+inline AreaView area_view(const AreaInputs &in) {
+  const AreaView v = area_view_shown(in);
+  const bool mine = in.show == SplitShow::LIVE || in.show == SplitShow::TEAM || in.show == SplitShow::SCORES ||
+                    in.show == SplitShow::CLOCK;
+  if (in.detail && mine && !in.jump && (v == AreaView::CLOCK || v == AreaView::DATE || v == AreaView::SCORES))
+    return AreaView::DETAIL;
+  return v;
 }
 
 // The display drawn in the area for show, if any.

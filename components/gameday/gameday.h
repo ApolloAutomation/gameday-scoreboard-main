@@ -29,6 +29,7 @@
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"
+#include "field.h"
 #include "follow.h"
 #include "guard.h"
 #include "health.h"
@@ -169,6 +170,9 @@ struct UpdateFields {
   std::vector<::espn::AppArt> art;  // and its picture
   image::Image *photo_img{nullptr};  // or its loaded photo
   int16_t photo_xy[2]{};
+  // Football's field under the labels (field.h)
+  bool field{false};
+  ::espn::FieldPic field_pic;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -208,7 +212,8 @@ class GamedaySelect : public select::Select, public Component {
 //                                    lockon=5-120 (min) release=30-3600 (s) collide=0 stick|1 alternate
 //                                    autoupd=0/1 (install updates on its own, auto_update.h)
 //                                    beta=0/1 (follow the beta channel; release builds only)
-//   POST /gameday/action?do=refresh|qc|power_ok|anim (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+//   POST /gameday/action?do=refresh|qc|power_ok|anim|field (anim: play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
+//                                    field: a sample Field view for 15 s;
 //                                    qc: the factory check, firmware/pages/qc.yaml;
 //                                    power_ok: lifts the brownout brightness cap, guard.h)
 //   GET  /gameday/wifi               the saved Wi-Fi networks in the order they are tried,
@@ -354,6 +359,14 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool anim_on() const { return (this->prefs9_.flags & ALERT9_NOANIM) == 0; }
   void set_anim(bool on);
   void try_anim_(const std::string &play);
+  // Game board: 0 Scoreboard, 1 Field view (football)
+  bool field_view() const { return this->split_prefs_.game_board == 1; }
+  void set_sport_view(int view);
+  // The second area's Game details
+  bool area_detail() const { return this->split_prefs_.area_detail != 0; }
+  void set_area_detail(bool on);
+  // The Try it: a sample field for kFieldTryMs
+  void try_field_();
   void set_alerts(uint32_t on);
   void set_alerts_favorites_only(bool on);
   bool watch_on() const { return (this->prefs9_.flags & ALERT9_NOWATCH) == 0; }
@@ -384,10 +397,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // The main area's display; refuses one the firmware lacks.
   void set_display(int display);
   ::espn::SplitArea split_area() const {
-    return this->panels_ != nullptr
-               ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(), this->split_prefs_.show)
-               : ::espn::SplitArea{};
+    return this->panels_ != nullptr ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(),
+                                                         this->split_prefs_.show, this->full_on_)
+                                    : ::espn::SplitArea{};
   }
+  // A display on the main board fills the panel.
+  void set_full(bool on);
   void redraw_area() { this->emit_a2_({}); }
   void set_idle(int show);
   void set_idle_dim(int level);
@@ -586,6 +601,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // 128 px sizing also fits three or four wide.
   bool wide_() const { return this->panels_ != nullptr && this->panels_->cols() >= 2; }
   int board_px_() const { return this->panels_ != nullptr ? this->split_area().main_w : ::espn::kBoardPx; }
+  int board_h_() const { return this->split_area().main_h; }
   // Fixed size: resizing the blob resets every setting.
   struct IdlePrefs {
     uint8_t idle;
@@ -862,6 +878,15 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void emit_(const ::espn::Splash &splash);
   // countdown: a kickoff countdown replaces the clock.
   void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f, bool countdown = false);
+  // The Field view: g's game in progress, Field view picked
+  bool field_on_(const GameSnapshot &g) const {
+    return this->field_view() && ::espn::field_ready(g) && !this->demo_playing_();
+  }
+  // f's board becomes g's field, w wide; area: Game details
+  void field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area) const;
+  // The Try it's sample in place of f's board
+  void field_try_fields_(UpdateFields &f);
+  uint32_t field_try_ms_{0};
   // "Sun 3:25 PM" in the panel's time zone.
   std::string kickoff_of_(const GameSnapshot &g) const;
   // board: the game is a leaderboard.
@@ -1290,13 +1315,26 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t team_league;
     uint32_t team_id;     // 0 means no team
     uint8_t display;      // the main area's Display, 0 on older panels
-    uint8_t spare[9];
+    uint8_t full;         // 1: that display fills the panel
+    uint8_t game_board;   // 1 Field view; 0, older panels too, Scoreboard
+    uint8_t area_detail;  // Game details in the area; 0 off
+    uint8_t spare[6];
   } __attribute__((packed));
   static_assert(sizeof(SplitPrefs) == 16, "SplitPrefs keeps its size, or every setting in it resets");
   ESPPreferenceObject split_pref_;
   SplitPrefs split_prefs_{};
+  // Full screen as laid out; apply_full_ follows main_view_.
+  bool full_on_{false};
+  bool full_want_() const {
+    return this->panels_ != nullptr &&
+           ::espn::split_full(this->split_prefs_.full != 0, this->main_view_ == ::espn::MainView::APP,
+                              ::espn::split_at(this->panels_->cols(), this->panels_->rows()));
+  }
+  // Until then the old layout draws nothing.
+  bool relayout_due_() const { return this->full_want_() != this->full_on_; }
+  void apply_full_();
   ::espn::SplitShow a2_show_() const {
-    return this->panels_ != nullptr
+    return this->panels_ != nullptr && !this->full_on_
                ? ::espn::split_effective(this->split_prefs_.show,
                                          ::espn::split_at(this->panels_->cols(), this->panels_->rows()))
                : ::espn::SplitShow::OFF;
@@ -1400,9 +1438,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool app_on_screen_(::espn::Display d) const;
   bool app_night_(::espn::Display d) const;
   void apps_setup_();
-  // Per second: shown changes and timed redraws.
+  // Per second: shown changes.
   void apps_tick_();
+  // Each loop: timed redraws, some under a second.
+  void apps_redraw_();
   void app_redraw_(::espn::Display d, bool timed = false);
+  // A display's warning for every ticker; "" for none
+  std::string ticker_warning_(uint32_t &color) const;
+  // A changed warning redraws the main board's ticker.
+  void warn_check_(bool main_drawn);
+  uint32_t warn_key_{0};
   // A frame into fields the board or area draws.
   void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
   void draw_main_app_(bool quiet = false);

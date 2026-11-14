@@ -77,6 +77,10 @@ The ticker also says when something needs your attention:
 
 For the messages that take over the whole board, see [Panel messages](/help/panel-messages/).
 
+## Weather warnings
+
+With **Weather warnings in the ticker** on in the device page's Weather card, the National Weather Service's warnings and watches for your home lead the main board's ticker, in red for a warning and orange for a watch, like **Winter Storm Warning until 10a Sat**, whatever the board shows. It's off to start, and needs a home in the US. See [Weather](/using/weather/#warnings-in-the-ticker).
+
 ## The second area's ticker
 
 On two rows of two, the board's ticker runs along the bottom of the top half, and the bottom half, the [second area](/using/panel-sizes/#the-second-area), has a ticker of its own, in bigger letters under its clock. The **Too warm, dimming** or **Check power supply** line goes along the bottom edge.

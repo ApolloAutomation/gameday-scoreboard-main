@@ -181,6 +181,8 @@
             <div class="sub" id="splitTitle">Second area</div>
             <div class="ctl"><label for="split">Shows<small id="splitHint"></small></label><select id="split" aria-describedby="splitHint"></select></div>
             <div class="ctl" id="splitTeamRow" hidden><label>Second team<small>Any team but your own, not a golf tour or a racing series.</small></label><button class="btn" id="splitTeam">Pick a team</button></div>
+            <div class="ctl" id="fullRow" hidden><label>Full screen<small id="fullHint"></small></label><button class="sw" data-set="full" aria-label="Full screen" aria-describedby="fullHint"></button></div>
+            <div class="ctl" id="areaDetailRow" hidden><label>Game details<small>While your football game is on, its field, the drive and each side's chance to win take the place of the clock, the date or the scores here. Not while the main board shows the Field view.</small></label><button class="sw" data-set="areadetail" aria-label="Game details"></button></div>
             <p class="hint" id="splitNow" role="status"></p>
           </div>
         </div>
@@ -228,6 +230,10 @@
           <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The game clock during a game, and the time when the panel shows a clock: the off-season clock, the idle display's Clock, the Clock page and the second area's Clock and date. Large makes them bigger where they fit.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
           <div class="ctl"><label for="textsize">Text size<small id="textsizeHelp">The ticker along the bottom of the board, and of the second area's game. Large has bigger letters. A golf or racing leaderboard keeps the small ones, and the ticker under the second area's clock is big at either size.</small></label><select id="textsize" aria-label="Text size" aria-describedby="textsizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
         </div>
+        <div id="sportCtls" hidden>
+          <div class="ctl"><label for="sportview">Game board<small id="sportviewHelp">How a football game in progress shows on the main board. The Field view draws the field with the ball's spot, the line of scrimmage and the line to gain, the drive, and the score and the clock above it, and the ticker carries the game's leaders, the drive and each side's chance to win. Other sports, and football before the kickoff and after the final, keep the scoreboard.</small></label><select id="sportview" aria-label="Game board" aria-describedby="sportviewHelp"><option value="0">Scoreboard</option><option value="1">Field view</option></select></div>
+          <div class="ctl"><label>Try it<small>Shows a sample field on the Scoreboard page for 15 seconds, in your game's colors, then the panel goes back to what it showed.</small></label><button class="btn" id="fieldTry">Field view</button></div>
+        </div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="nightCtls" hidden>
           <div class="ctl"><label>Night hours<small>Dims the panel overnight and shows the idle display, with the clock in place of the scores or the next game. A game you follow still shows.</small></label><button class="sw" data-set="night" aria-label="Night hours"></button></div>
@@ -241,7 +247,7 @@
       <details class="card flightcard" id="flightCard" hidden>
         <summary><h2>Flight Tracker</h2><span class="peek sum" id="flightSum"></span></summary>
         <p class="hint">The planes in the sky near a spot you pick: the nearest one's flight, airline, route, type, height, speed and how far away it is, taking turns with a list of the nearest. Choose Flight Tracker under Showing, or for the second area.</p>
-        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it.</small></label></div>
+        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it. Weather uses it too.</small></label></div>
         <div class="flightrow"><input id="flightWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="flightFind">Find</button></div>
         <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
         <p class="betmsg" id="flightMsg" role="alert" hidden></p>
@@ -251,6 +257,17 @@
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
         <p class="hint" id="flightNow" role="status"></p>
         <figure class="flightphoto" id="flightPhoto" hidden><a id="flightPhotoLink" target="_blank" rel="noopener"><img id="flightPhotoImg" alt=""></a><figcaption><span id="flightPhotoOf"></span> <a id="flightPhotoBy" target="_blank" rel="noopener"></a></figcaption></figure>
+      </details>
+      <details class="card flightcard" id="wxCard" hidden>
+        <summary><h2>Weather</h2><span class="peek sum" id="wxSum"></span></summary>
+        <p class="hint">The weather at home: now, the next hours and days, radar, air quality and, in the US, the National Weather Service's warnings. Choose Weather under Showing, or for the second area.</p>
+        <div class="ctl"><label for="wxWhere">Home location<small>The Flight Tracker's home too: a town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78.</small></label></div>
+        <div class="flightrow"><input id="wxWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="wxFind">Find</button></div>
+        <div class="flightpicks" id="wxPicks" role="group" aria-label="Places found" hidden></div>
+        <p class="betmsg" id="wxMsg" role="alert" hidden></p>
+        <div class="ctl" id="wxHomeRow" hidden><label>Home<small id="wxHome"></small></label><button class="btn" id="wxClear">Clear</button></div>
+        <div class="ctl"><label>Weather warnings in the ticker<small>The National Weather Service's warnings and watches for home lead the ticker on any display. While this is on, the panel checks for them every 5 minutes.</small></label><button class="sw" id="wxTicker" aria-label="Weather warnings in the ticker"></button></div>
+        <p class="hint" id="wxNow" role="status"></p>
       </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
@@ -539,7 +556,7 @@
   const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
   const stateForm = {
     mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
-    clocksize: Number, textsize: Number,
+    clocksize: Number, textsize: Number, sportview: Number, areadetail: (v) => v === "1",
     down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
     bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
     follow: (v) => v === "1",
@@ -548,7 +565,7 @@
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
     split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
-    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String,
+    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -669,6 +686,7 @@
       toast("Device did not respond (" + (e.message || "network") + ")");
     }
   };
+  $("#fieldTry").onclick = () => doAction("field");
 
   // Every ping calls this; #conn is a live region, so only a flip touches it.
   const setConn = (on) => {
@@ -1134,7 +1152,18 @@
     $("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
     const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
     $("#splitTeamRow").hidden = show !== 2;
+    // Game details stand in for these choices only
+    $("#areaDetailRow").hidden = S.areadetail === undefined || show < 1 || show > 4;
     $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
+    // Full screen: the main board's display takes this area too
+    const others = otherDisplays();
+    $("#fullRow").hidden = S.full === undefined || !others.length;
+    const names = others.map((d) => d.name);
+    const which = names.length > 1 ? names.slice(0, -1).join(", ") + " or " + names[names.length - 1] : names[0] || "";
+    const area = S.split_at === "bottom" ? "the bottom half" : S.split_at === "right2" ? "the right two panels" : "the right panel";
+    const bottom = S.split_at === "bottom";
+    $("#fullHint").textContent = "With Showing on " + which + ", it fills " + (bottom ? "all four panels" : "the whole row")
+      + " instead of sharing " + (bottom ? "them" : "it") + " with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
     const n = Number(S.split_n) || 0;
     const now = S.split_now;
     let line = "";
@@ -1142,6 +1171,7 @@
     else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
     else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
     else if (now === "game") line = "Showing Game Day.";
+    else if (now === "detail") line = "Showing your game's details.";
     else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
     else if (now === "clock" || now === "date") {
       line = show === 2 && !t ? "Pick a team for it."
@@ -1154,6 +1184,7 @@
       if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
         : "Showing the clock: the night hours, or nothing to show yet.";
     }
+    if (S.full_now) line = (displayName(mainDisplay()) || "The display") + " fills the panel now: Full screen is on.";
     $("#splitNow").textContent = line;
   };
 
@@ -1161,7 +1192,7 @@
   const standingSel = $("#standing");
   standingSel.onchange = () => setGD({ standing: standingSel.value });
   // Clock size and Text size: Normal (0) or Large (1)
-  const sizeSels = ["clocksize", "textsize"].map((k) => {
+  const sizeSels = ["clocksize", "textsize", "sportview"].map((k) => {
     const sel = $("#" + k);
     sel.onchange = () => setGD({ [k]: sel.value });
     return sel;
@@ -1320,6 +1351,8 @@
     if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
     // Older firmware sends no sizes.
     $("#sizeCtls").hidden = S.clocksize === undefined;
+    // Nor the Game board
+    $("#sportCtls").hidden = S.sportview === undefined;
     sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
     // Nor watch; an unlisted stay gets its own option
     $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
@@ -2684,54 +2717,59 @@
       receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
     };
   };
-  const flightMsg = (t) => { const m = $("#flightMsg"); m.textContent = t || ""; m.hidden = !t; };
-  const setHome = (lat, lon, place) => {
-    flightMsg("");
-    $("#flightPicks").hidden = true;
-    $("#flightWhere").value = "";
-    setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
-  };
-  const findPlace = async () => {
-    const q = $("#flightWhere").value.trim();
-    const picks = $("#flightPicks");
-    picks.hidden = true;
-    if (!q) { flightMsg("Type a town, a ZIP code, or a latitude and longitude."); return; }
-    const c = COORDS.exec(q);
-    if (c) {
-      const lat = Number(c[1]), lon = Number(c[2]);
-      if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
-        flightMsg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+  // One home search for both cards
+  const homeSearch = (p) => {
+    const msg = (t) => { const m = $("#" + p + "Msg"); m.textContent = t || ""; m.hidden = !t; };
+    const setHome = (lat, lon, place) => {
+      msg("");
+      $("#" + p + "Picks").hidden = true;
+      $("#" + p + "Where").value = "";
+      setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+    };
+    const findPlace = async () => {
+      const q = $("#" + p + "Where").value.trim();
+      const picks = $("#" + p + "Picks");
+      picks.hidden = true;
+      if (!q) { msg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+      const c = COORDS.exec(q);
+      if (c) {
+        const lat = Number(c[1]), lon = Number(c[2]);
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+          msg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+          return;
+        }
+        setHome(lat, lon, "");
         return;
       }
-      setHome(lat, lon, "");
-      return;
-    }
-    flightMsg("Looking it up...");
-    let found = [];
-    try {
-      // Open-Meteo's place search: keyless, from this browser.
-      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      found = ((await r.json()).results || []).filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
-    } catch (_) {
-      flightMsg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
-      return;
-    }
-    if (!found.length) { flightMsg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
-    const label = (p) => [p.name, p.admin1, p.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
-    if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
-    flightMsg("");
-    picks.innerHTML = "";
-    for (const p of found) {
-      const b = el("button", "btn", label(p));
-      b.onclick = () => setHome(p.latitude, p.longitude, label(p));
-      picks.append(b);
-    }
-    picks.hidden = false;
+      msg("Looking it up...");
+      let found = [];
+      try {
+        // Open-Meteo's place search: keyless, from this browser.
+        const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        found = ((await r.json()).results || []).filter((x) => typeof x.latitude === "number" && typeof x.longitude === "number");
+      } catch (_) {
+        msg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+        return;
+      }
+      if (!found.length) { msg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+      const label = (x) => [x.name, x.admin1, x.country].filter((v, i, all) => v && all.indexOf(v) === i).join(", ");
+      if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+      msg("");
+      picks.innerHTML = "";
+      for (const x of found) {
+        const b = el("button", "btn", label(x));
+        b.onclick = () => setHome(x.latitude, x.longitude, label(x));
+        picks.append(b);
+      }
+      picks.hidden = false;
+    };
+    $("#" + p + "Find").onclick = findPlace;
+    $("#" + p + "Where").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+    $("#" + p + "Clear").onclick = () => setGD({ flyhome: "none" });
+    return msg;
   };
-  $("#flightFind").onclick = findPlace;
-  $("#flightWhere").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
-  $("#flightClear").onclick = () => setGD({ flyhome: "none" });
+  const flightMsg = homeSearch("flight");
   $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
   const saveRx = () => {
     const v = $("#flightRx").value.trim();
@@ -2822,11 +2860,48 @@
     showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
   };
 
+  // ---- the Weather card (components/gameday/app_weather.h) -----------------
+  const WX_ID = 4;
+  const WX_SOURCES = { "open-meteo": "Open-Meteo", "met-norway": "MET Norway" };
+  homeSearch("wx");
+  const wxTickerOn = () => (S && S.wxticker !== undefined ? S.wxticker : !!(S && S.weather && S.weather.ticker));
+  $("#wxTicker").setAttribute("role", "switch");
+  $("#wxTicker").onclick = () => setGD({ wxticker: wxTickerOn() ? 0 : 1 });
+  const renderWeather = () => {
+    const card = $("#wxCard");
+    const w = S && S.weather;
+    card.hidden = !w || !((S.displays || []).some((d) => d.id === WX_ID));
+    if (card.hidden) return;
+    // Shared home, pending posts included
+    const f = S.flights ? flightNow() : { home: w.home || "", place: w.place || "" };
+    const coords = (f.home || "").replace(",", ", ");
+    $("#wxSum").textContent = f.home ? f.place || coords : "No home yet";
+    $("#wxHomeRow").hidden = !f.home;
+    $("#wxHome").textContent = f.home ? (f.place ? f.place + " (" + coords + ")" : coords) : "";
+    setOn($("#wxTicker"), wxTickerOn(), "aria-checked");
+    const shown = S.display_now === "weather" || S.split_now === "weather";
+    const mine = (S.displays || []).find((d) => d.id === WX_ID);
+    const chosen = S.display === WX_ID || (mine && S.split === mine.split);
+    const n = Number(w.alerts) || 0;
+    let line = !f.home ? "Set a home location to see its weather."
+      : w.status === "failing" ? "Can't reach the weather right now. The panel keeps trying."
+        : w.status === "ok" && w.temp ? w.temp + ", " + w.sky + (WX_SOURCES[w.source] ? ", from " + WX_SOURCES[w.source] : "") + "."
+          : w.status === "old" && !shown ? "Not reading the weather now: the panel reads it only while Weather is on it."
+            : "Looking up the weather.";
+    if (f.home && w.status === "ok" && n) line += " " + n + (n === 1 ? " alert: " : " alerts, first: ") + w.alert + ".";
+    if (f.home && w.status === "ok" && w.aqi != null) line += " Air quality " + w.aqi + ".";
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+      line += " The clock is up for the night hours, and Weather comes back after them.";
+    else if (f.home && !chosen) line += " Choose Weather under Showing to put it on the panel.";
+    $("#wxNow").textContent = line;
+  };
+
   const renderAll = () => {
     renderBoard();
     renderBets();
     renderMarkets();
     renderFlights();
+    renderWeather();
     renderPlayers();
     renderUpNext();
     renderSplash();

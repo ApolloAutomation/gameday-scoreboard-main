@@ -471,7 +471,7 @@ bool F1App::request(int64_t now, AppRequest &out) {
     case Read::RESULTS: {
       static const F1Read kRead[] = {F1Read::NEXT, F1Read::DRIVERS, F1Read::CONSTRUCTORS, F1Read::LAST_RESULTS};
       out.url = f1_jolpica_url(kRead[(int) r - 1]);
-      out.headers.push_back({"User-Agent", kF1UserAgent});
+      app_header(out, "User-Agent", kF1UserAgent);
       host = HOST_JOLPICA;
       break;
     }
@@ -488,11 +488,11 @@ bool F1App::request(int64_t now, AppRequest &out) {
       const F1Host &om = this->host_[HOST_OPEN_METEO];
       if (om.backup() && now < om.out_until) {
         out.url = f1_met_url(this->req_lat_, this->req_lon_);
-        out.headers.push_back({"User-Agent", f1_met_agent(app_env().version)});
+        app_header(out, "User-Agent", f1_met_agent(app_env().version));
         host = HOST_MET;
       } else {
         out.url = f1_weather_url(this->req_lat_, this->req_lon_);
-        out.headers.push_back({"User-Agent", kF1UserAgent});
+        app_header(out, "User-Agent", kF1UserAgent);
         host = HOST_OPEN_METEO;
       }
       break;
@@ -789,14 +789,14 @@ void F1App::live_frame_(int w, int64_t now, AppFrame &out) const {
   out.ticker = racing_status_text(g, TickerOptions{}, when);
   // The flag first, then names in team colors.
   if (g.race.phase == RacePhase::LIVE && g.race.flag == 'R')
-    out.spans.push_back({"red flag", kRed});
+    app_span(out.spans, "red flag", kRed);
   else if (g.race.phase == RacePhase::LIVE && g.race.flag == 'Y')
-    out.spans.push_back({"yellow flag", kAmber});
+    app_span(out.spans, "yellow flag", kAmber);
   for (size_t i = 0; i < g.race.rows.size() && i < kRaceRows; i++)
-    out.spans.push_back({g.race.rows[i].name, car_color(this->live_.cars[i])});
+    app_span(out.spans, g.race.rows[i].name, car_color(this->live_.cars[i]));
   const bool wide = w >= 128, race = race_like(g.race.kind);
   out.rows.value_narrow = wide;
-  for (size_t i = 0; i < g.race.rows.size() && i < kRaceRows && i < kF1Rows; i++) {
+  for (size_t i = 0; i < g.race.rows.size() && i < kRaceRows && i < this->rows_; i++) {
     const RaceRow &rr = g.race.rows[i];
     const F1Car &car = this->live_.cars[i];
     std::string detail = racing_detail_text(rr);
@@ -892,9 +892,10 @@ void F1App::circuit_frame_(int w, int h, int64_t now, AppFrame &out) const {
     put_status(out, w, glyphs(full) <= 12 ? full : f1_short_name(brief, 12), kWhite);
   }
   const esphome::gameday::RowsGeom g = esphome::gameday::rows_geom(w);
-  // Right of the facts; one panel's whole board.
-  const int x0 = wide ? g.name.x + g.name.w + 3 : 2, x1 = wide ? w - 2 : w - 3;
-  const int y0 = 9, y1 = (h > 20 ? h : 64) - 10;
+  // Beside the facts, the whole panel, or full screen's top
+  const bool tall = esphome::gameday::tall_board(w, h);
+  const int x0 = tall ? 2 : wide ? g.name.x + g.name.w + 3 : 2, x1 = wide ? w - 2 : w - 3;
+  const int y0 = tall ? 11 : 9, y1 = tall ? 76 : (h > 20 ? h : 64) - 10;
   if (c != nullptr) {
     F1Point pts[kF1ShapeMax];
     const size_t n = f1_shape(*c, (int16_t) x0, (int16_t) y0, (int16_t) (x1 - x0 + 1), (int16_t) (y1 - y0 + 1), pts,
@@ -1025,7 +1026,7 @@ void F1App::standings_frame_(const F1Standings &s, int w, int64_t now, AppFrame 
       t = std::to_string(s.season) + " " + t;
     out.rows.title = detail::whole_words(t, title_room(out, w));
   }
-  for (size_t i = 0; i < s.n && i < kF1Rows; i++) {
+  for (size_t i = 0; i < s.n && i < this->rows_; i++) {
     const F1Standing &st = s.rows[i];
     const F1Team *team = f1_team(st.team);
     const std::string pos = st.pos > 0 && st.pos < 100 ? std::to_string(st.pos) : "-";
@@ -1049,7 +1050,7 @@ void F1App::results_frame_(int w, AppFrame &out) const {
   put_title(out, w, racing_event_name(res.race, title_room(out, w)));
   const bool wide = w >= 128;
   out.rows.value_narrow = wide;
-  for (size_t i = 0; i < res.n && i < kF1Rows; i++) {
+  for (size_t i = 0; i < res.n && i < this->rows_; i++) {
     const F1Result &x = res.rows[i];
     const std::string pos = x.pos > 0 && x.pos < 100 ? std::to_string(x.pos) : "-";
     const std::string detail = f1_result_detail(x, res.laps, kDetail);
@@ -1104,7 +1105,7 @@ std::string F1App::ticker_(int64_t now, std::vector<TickerSpan> &spans) const {
       const F1Team *team = f1_team(r.team);
       const std::string name = drivers || team == nullptr ? std::string(r.name) : std::string(team->name);
       line += (i == 0 ? " " : ", ") + std::to_string(r.pos) + " " + name + " " + f1_points_text(r.points10);
-      spans.push_back({name, f1_team_color(r.team)});
+      app_span(spans, name, f1_team_color(r.team));
     }
     const int64_t at = this->ok_[(int) (drivers ? Read::DRIVERS : Read::CONSTRUCTORS)];
     if (this->stale_standings_(now) && at != 0)
@@ -1118,7 +1119,7 @@ std::string F1App::ticker_(int64_t now, std::vector<TickerSpan> &spans) const {
     for (size_t i = 0; i < this->results_.n && i < 3; i++) {
       const F1Result &x = this->results_.rows[i];
       line += (i == 0 ? " " : ", ") + std::to_string(x.pos) + " " + x.name;
-      spans.push_back({x.name, f1_team_color(x.team)});
+      app_span(spans, x.name, f1_team_color(x.team));
     }
     add_part(t, line);
   }
@@ -1144,7 +1145,76 @@ std::string F1App::ticker_(int64_t now, std::vector<TickerSpan> &spans) const {
   return t;
 }
 
+void F1App::tall_(F1Screen s, int w, int64_t now, AppFrame &out) const {
+  if (s == F1Screen::CIRCUIT) {
+    app_rows_texts(out, w, 80, 8);
+    return;
+  }
+  if (s == F1Screen::WEATHER) {
+    // The temperature big over the rows
+    app_rows_texts(out, w, 34, 12);
+    AppText t;
+    t.x = 2;
+    t.y = 12;
+    t.w = (int16_t) (w - 4);
+    t.font = esphome::gameday::BoardFont::S16;
+    t.text = f1_temp_text(this->weather_.temp_c10, units());
+    out.texts.push_back(std::move(t));
+    return;
+  }
+  if (s != F1Screen::NEXT) {
+    app_rows_texts(out, w, 11, 11);
+    return;
+  }
+  // The next session and its countdown, big
+  const F1Schedule &sc = this->schedule(now);
+  const F1Session *next = nullptr;
+  for (size_t i = 0; i < sc.n && next == nullptr; i++)
+    if (sc.sessions[i].start > now)
+      next = &sc.sessions[i];
+  if (next != nullptr) {
+    out.rows.status.clear();
+    out.rows.title = racing_event_name(sc.race, (size_t) (w - 4) / 5);
+  }
+  app_rows_texts(out, w, 30, 11);
+  auto add = [&out](int x, int y, int tw, esphome::gameday::BoardFont font, AppAlign al, uint32_t color,
+                    std::string text) {
+    AppText t;
+    t.x = (int16_t) x;
+    t.y = (int16_t) y;
+    t.w = (int16_t) tw;
+    t.font = font;
+    t.align = al;
+    t.color = color;
+    t.text = std::move(text);
+    out.texts.push_back(std::move(t));
+  };
+  using esphome::gameday::BoardFont;
+  if (next != nullptr) {
+    const int64_t until = next->start - now;
+    const std::string when = next->timed ? f1_countdown(until, 7) : day_label(app_local(next->start), app_local(now));
+    const int ww = (int) glyphs(when) * 8;
+    add(w - 1 - ww, 11, ww, BoardFont::S16, AppAlign::RIGHT, until <= kHour ? kAmber : kWhite, when);
+    std::string what = racing_session_long(next->kind, next->number);
+    const size_t room = (size_t) std::max(0, (w - 6 - ww) / 6);
+    if (glyphs(what) > room)
+      what = racing_session_label(next->kind, next->number);
+    add(2, 13, w - 6 - ww, BoardFont::S12, AppAlign::LEFT, kGold, f1_fit(what, room));
+  }
+  // Where, under the sessions
+  const int y = 30 + 11 * (int) std::min<size_t>(sc.n, kF1Sessions) + 2;
+  if (y + 16 <= 120) {
+    add(2, y, w - 4, BoardFont::S8, AppAlign::LEFT, kGray, detail::whole_words(sc.circuit, (size_t) (w - 4) / 5));
+    std::string where = sc.locality;
+    if (sc.country[0] != '\0')
+      where += std::string(where.empty() ? "" : ", ") + sc.country;
+    add(2, y + 8, w - 4, BoardFont::S8, AppAlign::LEFT, kGray, detail::whole_words(where, (size_t) (w - 4) / 5));
+  }
+}
+
 void F1App::frame(int w, int h, int64_t now, AppFrame &out) const {
+  const bool tall = esphome::gameday::tall_board(w, h);
+  this->rows_ = tall ? kF1Keep : kF1Rows;
   F1Screen list[8];
   if (this->rotation(now, list, 8) == 0) {
     this->redraw_ = 60000;
@@ -1201,6 +1271,8 @@ void F1App::frame(int w, int h, int64_t now, AppFrame &out) const {
     out.spans.clear();
     out.ticker = this->ticker_(now, out.spans);
   }
+  if (tall)
+    this->tall_(s, w, now, out);
 }
 
 }

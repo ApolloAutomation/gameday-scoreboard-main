@@ -147,6 +147,9 @@ struct MarketCol {
 
 struct MarketGeom {
   int16_t w{64}, h{64};
+  // Full screen: spleen_12 rows as labels, 16 apart
+  bool tall{false};
+  uint8_t char_px{kMarketCharPx}, row_px{kMarketRowPx};
   // 2: symbol, price or percent; 3: percent; 4: change
   uint8_t cols{2};
   MarketCol logo, sym, price, change, pct;  // logo.w 0: no logos
@@ -165,14 +168,55 @@ struct MarketGeom {
 constexpr int kMarketLogoPx = 7;  // a row's logo, 1 px apart
 constexpr int kMarketLogoCol = kMarketLogoPx + 2;
 constexpr int kMarketFocusPx = 24;  // the charted symbol's logo
+// Full screen's row logo and charted symbol's logo.
+constexpr int kMarketTallLogoPx = 14, kMarketTallFocusPx = 32;
+
+// 128x128: four rows over the chart, else seven.
+inline MarketGeom market_geom_tall(int w, int bottom, bool spark, bool logos, bool focus) {
+  MarketGeom g;
+  g.w = (int16_t) w;
+  g.h = (int16_t) (bottom + kMarketRowPx);
+  g.tall = true;
+  g.char_px = 6;
+  g.row_px = 16;
+  g.cols = 3;
+  g.list = {0, (int16_t) w};
+  const int x0 = logos ? kMarketTallLogoPx + 1 : 1;
+  if (logos)
+    g.logo = {0, (int16_t) x0};
+  g.sym = {(int16_t) x0, 30};
+  g.price = {(int16_t) (x0 + 30), (int16_t) (w - 40 - x0 - 30)};
+  g.pct = {(int16_t) (w - 40), 40};
+  const int fit = (bottom - g.row_y) / g.row_px;
+  g.rows = (uint8_t) (fit < 1 ? 1 : fit > kMarketRowsMax ? kMarketRowsMax : fit);
+  if (!spark || g.rows < 5)
+    return g;
+  g.spark = true;
+  g.rows = 4;
+  const int top = g.row_y + g.rows * g.row_px + 2;
+  g.spark_y = (int16_t) top;
+  g.spark_h = (int16_t) (bottom - 1 - top);
+  g.spark_w = (int16_t) w;
+  if (focus) {
+    // Its logo left, its move under it
+    g.focus_y = (int16_t) top;
+    g.focus_px = (uint8_t) kMarketTallFocusPx;
+    g.move_at = {0, (int16_t) (top + kMarketTallFocusPx + 3), (int16_t) (kMarketTallFocusPx + 2)};
+    g.spark_x = (int16_t) (kMarketTallFocusPx + 3);
+    g.spark_w = (int16_t) (w - g.spark_x);
+  }
+  return g;
+}
 
 // ticker: 8 rows; logos: a column; focus: a big logo
 inline MarketGeom market_geom(int w, int h, bool ticker, bool spark, bool logos = false, bool focus = false) {
+  const int bottom = h - (ticker ? kMarketRowPx : 0);
+  if (esphome::gameday::tall_board(w, h))
+    return market_geom_tall(w, bottom, spark, logos, focus);
   MarketGeom g;
   g.w = (int16_t) w;
   g.h = (int16_t) h;
   g.list = {0, (int16_t) w};
-  const int bottom = h - (ticker ? kMarketRowPx : 0);
   const int fit = (bottom - g.row_y) / kMarketRowPx;
   g.rows = (uint8_t) (fit < 1 ? 1 : fit > kMarketRowsMax ? kMarketRowsMax : fit);
   int bx = 0;
@@ -273,7 +317,8 @@ inline std::string market_sym_text(const std::string &sym, size_t max) {
 // alt: two-column rows show percent, not price.
 inline MarketRow market_row(const MarketSymbol &s, const MarketQuote &q, const MarketGeom &g, int64_t now, bool alt) {
   MarketRow r;
-  r.sym = market_sym_text(s.sym, g.sym.chars());
+  auto chars = [&g](const MarketCol &c) { return (size_t) (c.w / g.char_px); };
+  r.sym = market_sym_text(s.sym, chars(g.sym));
   if (!q.valid) {
     r.price = "--";
     return r;
@@ -281,14 +326,14 @@ inline MarketRow market_row(const MarketSymbol &s, const MarketQuote &q, const M
   const double pct = market_percent(q);
   r.color = market_stale(q, (MarketKind) s.kind, now) ? kMarketStale : market_color(market_dir(q));
   if (g.cols == 2) {
-    r.price = alt && std::isfinite(pct) ? market_percent_text(pct, g.price.chars())
-                                        : market_price_text(q.price, g.price.chars());
+    r.price = alt && std::isfinite(pct) ? market_percent_text(pct, chars(g.price))
+                                        : market_price_text(q.price, chars(g.price));
     return r;
   }
-  r.price = market_price_text(q.price, g.price.chars());
-  r.pct = market_percent_text(pct, g.pct.chars());
+  r.price = market_price_text(q.price, chars(g.price));
+  r.pct = market_percent_text(pct, chars(g.pct));
   if (g.cols == 4 && q.prev != 0)
-    r.change = market_change_text(market_change(q), q.price, g.change.chars());
+    r.change = market_change_text(market_change(q), q.price, chars(g.change));
   return r;
 }
 
@@ -351,13 +396,11 @@ inline MarketFrame market_frame(const MarketBlob &b, const MarketQuote (&q)[kMar
     f.spark = f.line.n >= 2;
     f.slot = (int8_t) spark_slot;
     f.logo = market_has_logo(s.sym, s.kind);
-    if (g.name_at.w > 0) {
-      const size_t room = (size_t) (g.name_at.w / kMarketCharPx);
-      f.name = market_sym_text(s.sym, room);
-      if (sq.valid && sq.prev != 0) {
-        f.move = market_percent_text(market_percent(sq), room);
-        f.move_color = market_stale(sq, (MarketKind) s.kind, now) ? kMarketStale : market_color(market_dir(sq));
-      }
+    if (g.name_at.w > 0)
+      f.name = market_sym_text(s.sym, (size_t) (g.name_at.w / kMarketCharPx));
+    if (g.move_at.w > 0 && sq.valid && sq.prev != 0) {
+      f.move = market_percent_text(market_percent(sq), (size_t) (g.move_at.w / kMarketCharPx));
+      f.move_color = market_stale(sq, (MarketKind) s.kind, now) ? kMarketStale : market_color(market_dir(sq));
     }
   }
   if (!f.spark) {

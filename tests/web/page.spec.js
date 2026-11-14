@@ -641,6 +641,74 @@ test("clock size and text size: normal by default, each posts large and back, hi
   await expect(page.locator("#sizeCtls")).toBeHidden();
 });
 
+test("game board: the scoreboard by default, the Field view posts and back, Try it asks for a sample, hidden on older firmware", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#sportCtls")).toBeVisible();
+  const board = page.getByRole("combobox", { name: "Game board", exact: true });
+  await expect(board).toHaveAccessibleDescription(/^How a football game in progress shows on the main board\. .* keep the scoreboard\.$/);
+  await expect(board).toHaveValue("0");
+  await expect(board.locator("option")).toHaveText(["Scoreboard", "Field view"]);
+  await board.selectOption({ label: "Field view" });
+  await expectSet(request, { sportview: "1" });
+  await expect.poll(async () => (await deviceState(request)).sportview).toBe(1);
+  await page.reload();
+  await expect(board).toHaveValue("1");
+  await board.selectOption({ label: "Scoreboard" });
+  await expectSet(request, { sportview: "0" });
+  await expect.poll(async () => (await deviceState(request)).sportview).toBe(0);
+  // The sizes stay as they were
+  const s = await deviceState(request);
+  expect([s.clocksize, s.textsize]).toEqual([0, 0]);
+  await page.locator("#sportCtls").getByRole("button", { name: "Field view", exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q.do))
+    .toContain("field");
+  // Firmware from before the Field view sends no game board.
+  await reset(request, { sportview: null, areadetail: null });
+  await page.reload();
+  await expect(page.locator("#hostname")).not.toBeEmpty();
+  await expect(page.locator("#sportCtls")).toBeHidden();
+});
+
+test("game details: a switch under a second area's clock, scores, team or live games, off by default, never with a display", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2 });
+  await page.goto("/");
+  const sw = page.getByRole("switch", { name: "Game details", exact: true });
+  // Off on two rows of two is the clock
+  await expect(page.locator("#areaDetailRow")).toBeVisible();
+  await expect(sw).not.toBeChecked();
+  await sw.click();
+  await expectSet(request, { areadetail: "1" });
+  await expect(sw).toBeChecked();
+  await expect.poll(async () => (await deviceState(request)).areadetail).toBe(true);
+  // The choice under it stays
+  expect((await deviceState(request)).split).toBe(0);
+  const split = page.getByRole("combobox", { name: /^Shows/ });
+  for (const v of ["1", "2", "3", "4"]) {
+    await split.selectOption(v);
+    await expect(page.locator("#areaDetailRow")).toBeVisible();
+  }
+  await reset(request, { panels: 4, display: 1, split: 5, areadetail: true,
+                         displays: [{ id: 0, key: "gameday", name: "Game Day", split: 5 }, { id: 1, key: "f1", name: "F1", split: 6 }] });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+  // Nothing in the area: nothing to switch
+  await reset(request, { panels: 4, split: 0 });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+  await reset(request, { panels: 4, split: 4, split_now: "detail", areadetail: true });
+  await page.reload();
+  await expect(page.locator("#areaDetailRow")).toBeVisible();
+  // Older firmware: no switch
+  await reset(request, { panels: 4, split: 4, areadetail: null });
+  await page.reload();
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#areaDetailRow")).toBeHidden();
+});
+
 const PGA = { l: "pga", id: 1106, abbr: "PGA", name: "PGA Tour" };
 
 test("a golf tour is a team on the Golf tab, and its leaderboard shows on the board", async ({ page, request }) => {
@@ -2835,6 +2903,45 @@ test("Showing and the second area offer only the displays the firmware lists", a
   expect([st.display, st.display_now, st.split]).toEqual([0, "gameday", 7]);
 });
 
+test("Full screen lets a display fill a 2x2 and keeps the second area's choice for Game Day", async ({ page, request }) => {
+  const FLIGHTS = DISPLAYS.concat([{ id: 3, key: "flights", name: "Flight Tracker", split: 8 }]);
+  // No other displays: nothing to fill the panel with
+  await reset(request, { panels: 2, rows: 2 });
+  await page.goto("/");
+  await expect(page.locator("#splitCtls")).toBeVisible();
+  await expect(page.locator("#fullRow")).toBeHidden();
+
+  await reset(request, { panels: 2, rows: 2, displays: FLIGHTS, display: 0, split: 8 });
+  await page.reload();
+  const full = page.getByRole("switch", { name: "Full screen" });
+  await expect(full).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator("#fullHint")).toHaveText("With Showing on F1, Stocks & Crypto or Flight Tracker, it fills all "
+    + "four panels instead of sharing them with the bottom half. This choice comes back for the Scoreboard and the night hours' clock.");
+  await full.click();
+  await expectSet(request, { full: "1" });
+  await expect(full).toHaveAttribute("aria-checked", "true");
+  // Game Day on the board: the bottom half stays
+  await expect(page.locator("#splitNow")).toHaveText("Showing Flight Tracker.");
+  let st = await deviceState(request);
+  expect([st.full, st.full_now, st.split]).toEqual([true, false, 8]);
+
+  const showing = page.getByRole("combobox", { name: "Showing" });
+  await showing.selectOption({ label: "Flight Tracker" });
+  await expectSet(request, { display: "3" });
+  await expect(page.locator("#splitNow")).toHaveText("Flight Tracker fills the panel now: Full screen is on.");
+  st = await deviceState(request);
+  expect([st.full_now, st.split, st.split_now]).toEqual([true, 8, ""]);
+  // Off again: the bottom half comes back
+  await full.click();
+  await expectSet(request, { full: "0" });
+  await expect(page.locator("#splitNow")).toHaveText("The main board shows Flight Tracker, so this shows the clock.");
+
+  // Four wide: the whole row
+  await reset(request, { panels: 4, displays: FLIGHTS, split: 4 });
+  await page.reload();
+  await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing it with the right two panels.");
+});
+
 // The Stocks & Crypto card (components/gameday/app_markets.h).
 const mktRows = (page) => page.locator("#mktList .mktrow > label");
 
@@ -4295,4 +4402,78 @@ test.describe("cards that fold", () => {
       await page.evaluate(() => localStorage.clear());
     }
   });
+});
+
+// Weather (app_weather.h): the Flight Tracker's home, its own ticker switch.
+// Weather's firmware has the Flight Tracker, the home's keeper.
+const WX_DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 3, key: "flights", name: "Flight Tracker", split: 8 },
+  { id: 4, key: "weather", name: "Weather", split: 9 },
+];
+
+test("the Weather card finds a home, shares it and turns warnings in the ticker on", async ({ page, request }) => {
+  await reset(request, {});
+  await page.goto("/");
+  await expect(page.locator("#wxCard")).toBeHidden();
+  await reset(request, { displays: WX_DISPLAYS });
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.fulfill({ json: BROOKLYN }));
+  await page.reload();
+  await expect(page.locator("#wxCard")).toBeVisible();
+  await expect(page.locator("#wxSum")).toHaveText("No home yet");
+  await expect(page.locator("#wxNow")).toHaveText("Set a home location to see its weather.");
+  await page.locator("#wxWhere").fill("Brooklyn");
+  await page.locator("#wxFind").click();
+  const picks = page.locator("#wxPicks button");
+  await expect(picks).toHaveText(["Brooklyn, New York, United States", "Brooklyn, Iowa, United States"]);
+  await picks.nth(1).click();
+  await expectSet(request, { flyhome: "41.7336,-92.4455", flyplace: "Brooklyn, Iowa, United States" });
+  await expect(page.locator("#wxHome")).toHaveText("Brooklyn, Iowa, United States (41.7336, -92.4455)");
+  await expect(page.locator("#wxSum")).toHaveText("Brooklyn, Iowa, United States");
+  // The Flight Tracker's card shows the same home
+  await expect(page.locator("#flightSum")).toHaveText("Brooklyn, Iowa, United States");
+  await expect(page.locator("#wxNow")).toHaveText(
+    "Looking up the weather. Choose Weather under Showing to put it on the panel.");
+  const sw = page.getByRole("switch", { name: "Weather warnings in the ticker" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expectSet(request, { wxticker: "1" });
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  const st = await deviceState(request);
+  expect(st.weather).toEqual({ ticker: 1, units: "imperial", home: "41.7336,-92.4455",
+                               place: "Brooklyn, Iowa, United States" });
+  expect(st.flights.home).toBe("41.7336,-92.4455");
+  await page.getByRole("combobox", { name: "Showing" }).selectOption({ label: "Weather" });
+  await expectSet(request, { display: "4" });
+  await expect(page.locator("#wxNow")).toHaveText("Looking up the weather.");
+  await page.locator("#wxClear").click();
+  await expectSet(request, { flyhome: "none" });
+  await expect(page.locator("#wxHomeRow")).toBeHidden();
+});
+
+test("the Weather card says what the panel has", async ({ page, request }) => {
+  const home = { home: "38.9399,-119.9772", place: "South Lake Tahoe, California, United States" };
+  await reset(request, { displays: WX_DISPLAYS, display: 4, flights: home,
+                         weather: { status: "ok", temp: "31°F", sky: "Cloudy", source: "open-meteo", alerts: 1,
+                                    alert: "Winter Storm Warning", aqi: 41 } });
+  await page.goto("/");
+  await expect(page.locator("#wxNow")).toHaveText(
+    "31°F, Cloudy, from Open-Meteo. 1 alert: Winter Storm Warning. Air quality 41.");
+  await expect(page.locator("#wxSum")).toHaveText("South Lake Tahoe, California, United States");
+  await reset(request, { displays: WX_DISPLAYS, display: 4, flights: home, weather: { status: "failing" } });
+  await page.reload();
+  await expect(page.locator("#wxNow")).toHaveText("Can't reach the weather right now. The panel keeps trying.");
+  await reset(request, { displays: WX_DISPLAYS, flights: home, weather: { status: "old", ticker: 1 } });
+  await page.reload();
+  await expect(page.locator("#wxNow")).toHaveText("Not reading the weather now: the panel reads it only while "
+    + "Weather is on it. Choose Weather under Showing to put it on the panel.");
+  await expect(page.getByRole("switch", { name: "Weather warnings in the ticker" })).toHaveAttribute("aria-checked", "true");
+  // The second area's Shows offers it too
+  await reset(request, { panels: 4, displays: WX_DISPLAYS, flights: home });
+  await page.reload();
+  await expect(page.locator("#split option").last()).toHaveText("Weather");
+  await expect(page.locator("#fullHint")).toContainText("With Showing on Flight Tracker or Weather, it fills the whole row");
+  await page.getByRole("combobox", { name: /^Shows/ }).selectOption({ label: "Weather" });
+  await expectSet(request, { split: "9" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Weather.");
 });

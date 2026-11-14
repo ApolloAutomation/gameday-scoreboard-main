@@ -8,15 +8,15 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2808500,
+      "flash": 2895800,
       "static_ram": 173431
     },
     "moonhub75-2panel": {
-      "flash": 2808500,
+      "flash": 2895800,
       "static_ram": 173431
     },
     "scoreboard75": {
-      "flash": 2785000,
+      "flash": 2872000,
       "static_ram": 172568
     }
   },
@@ -143,7 +143,7 @@
     },
     "poll_ncaa_event_players": {
       "heap": 2000,
-      "json": 9400
+      "json": 10400
     },
     "poll_ncaa_scoreboard": {
       "heap": 1508,
@@ -151,7 +151,7 @@
     },
     "poll_nfl_event": {
       "heap": 1584,
-      "json": 7503
+      "json": 9000
     },
     "poll_nhl_event": {
       "heap": 1621,
@@ -252,6 +252,26 @@
     "watch_soccer_day": {
       "heap": 2800,
       "json": 29621
+    },
+    "weather_air": {
+      "heap": 1024,
+      "json": 6027
+    },
+    "weather_alerts": {
+      "heap": 2176,
+      "json": 6856
+    },
+    "weather_forecast": {
+      "heap": 1024,
+      "json": 6928
+    },
+    "weather_met": {
+      "heap": 1024,
+      "json": 50500
+    },
+    "weather_radar": {
+      "heap": 1024,
+      "json": 6023
     }
   }
 }

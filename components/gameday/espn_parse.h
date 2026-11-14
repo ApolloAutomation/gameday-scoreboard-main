@@ -44,6 +44,22 @@ enum class Standing : uint8_t { RECORD = 0, SEED = 1, PLACE = 2 };
 
 enum class Half : uint8_t { NONE, TOP, MID, BOTTOM, END };
 
+// Football's field (field.h); ESPN yard 0 is home's goal
+struct Football {
+  int8_t yard_line{-1};  // -1: not read
+  int8_t down{-1}, distance{-1};
+  int8_t play_start{-1}, play_end{-1}, drive_start{-1};
+  int8_t drive_side{0};  // lastPlay's team: 1 ours, 2 theirs
+  bool drive_over{false};
+  uint8_t drive_plays{0};
+  int16_t drive_yards{0};
+  int16_t drive_secs{-1};
+  int8_t home_win{-1};  // the home team's chance, percent
+  uint8_t periods{0};   // line score columns read
+  uint8_t line[2][5]{};  // ours, theirs: Q1-Q4, then overtime
+  std::string leaders;   // "J. Allen 5/12, 43 YDS | ..."
+};
+
 // Baseball's live state. Zero or -1 when the document has none (pre-game,
 // finals, between half innings).
 struct Baseball {
@@ -304,6 +320,7 @@ struct GameSnapshot {
   Soccer soc;
   Basketball nba;  // every basketball league
   Hockey nhl;
+  Football fb;
   Golf golf;
   Racing race;
   std::string game_name;  // "Rose Bowl", "Super Bowl LX"; empty for most games

@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.11.5"
+  version: "2026.11.6"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -222,12 +222,12 @@ font:
     glyphs: *panel_glyphs
   - id: !extend spleen_16
     glyphs: *panel_glyphs
-  # Large clock and splash digits; few glyphs save flash
+  # Large clock, splash and weather digits; few glyphs save flash
   - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-12x24.bdf"
     id: spleen_24
     size: 24
     glyphs: &digit_glyphs
-      - ' +0123456789:AMNPRSU'
+      - ' +-0123456789:AMNPRSU°'
   - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-16x32.bdf"
     id: spleen_32
     size: 32
@@ -798,6 +798,18 @@ switch:
       - lambda: 'id(gameday_ctl).set_anim(true);'
     turn_off_action:
       - lambda: 'id(gameday_ctl).set_anim(false);'
+  # Game board: on is the Field view, off the Scoreboard
+  - platform: template
+    name: "Field View"
+    id: gd_field_view
+    icon: "mdi:soccer-field"
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: 'return id(gameday_ctl).field_view();'
+    turn_on_action:
+      - lambda: 'id(gameday_ctl).set_sport_view(1);'
+    turn_off_action:
+      - lambda: 'id(gameday_ctl).set_sport_view(0);'
 number:
   - platform: template
     name: "Brightness"

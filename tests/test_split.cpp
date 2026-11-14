@@ -52,8 +52,38 @@ void test_split_area() {
   PCHECK(split_effective(0, SplitAt::RIGHT2) == SplitShow::OFF);
   PCHECK(split_effective(3, SplitAt::RIGHT1) == SplitShow::SCORES);
   // A junk byte is Off, or the clock on 2x2.
-  PCHECK(split_effective(9, SplitAt::RIGHT2) == SplitShow::OFF);
-  PCHECK(split_effective(9, SplitAt::BOTTOM) == SplitShow::CLOCK);
+  PCHECK(split_effective(10, SplitAt::RIGHT2) == SplitShow::OFF);
+  PCHECK(split_effective(10, SplitAt::BOTTOM) == SplitShow::CLOCK);
+}
+
+// Full screen: the main board's display takes the area.
+void test_split_full() {
+  struct Setup {
+    int cols, rows;
+  };
+  for (Setup st : {Setup{1, 1}, Setup{2, 1}, Setup{3, 1}, Setup{4, 1}, Setup{2, 2}}) {
+    const SplitAt at = split_at(st.cols, st.rows);
+    for (int show = 0; show < kSplitCount; show++) {
+      // Off, or Game Day on the main board: today's split
+      const SplitArea was = split_area(st.cols, st.rows, (uint8_t) show);
+      for (bool full : {false, true})
+        for (bool app : {false, true}) {
+          const bool on = split_full(full, app, at);
+          PCHECK(on == (full && app && at != SplitAt::NONE));
+          const SplitArea a = split_area(st.cols, st.rows, (uint8_t) show, on);
+          if (!on) {
+            PCHECK(a.on == was.on && a.main_w == was.main_w && a.main_h == 64 && a.x == was.x && a.y == was.y &&
+                   a.w == was.w && a.h == was.h);
+            continue;
+          }
+          PCHECK(!a.on && a.main_w == st.cols * 64 && a.main_h == st.rows * 64);
+        }
+    }
+  }
+  // 2x2: the display 128 by 128, a tall board
+  const SplitArea b = split_area(2, 2, 4, true);
+  PCHECK(!b.on && b.main_w == 128 && b.main_h == 128 && esphome::gameday::tall_board(b.main_w, b.main_h));
+  PCHECK(!esphome::gameday::tall_board(split_area(4, 1, 0, true).main_w, split_area(4, 1, 0, true).main_h));
 }
 
 void test_area_view() {
@@ -101,6 +131,40 @@ void test_area_view() {
   PCHECK(area_view(in) == AreaView::CLOCK);
   in.jump = true;  // a big play still shows at night
   PCHECK(area_view(in) == AreaView::LIVE);
+
+  // Game details replace only the clock, the date or scores
+  for (int show = 0; show < kSplitCount; show++) {
+    for (int k = 0; k < 4; k++) {
+      in = AreaInputs{};
+      in.show = (SplitShow) show;
+      in.main_clock = k == 1;
+      in.scores = k == 2;
+      in.team_set = in.team_card = k == 3;
+      in.displays = 0xF;
+      in.main = show == (int) SplitShow::GAMEDAY ? Display::F1 : Display::GAMEDAY;
+      const AreaView before = area_view(in);
+      in.detail = true;
+      const AreaView v = area_view(in);
+      const bool takes = show != (int) SplitShow::OFF && show < (int) SplitShow::GAMEDAY &&
+                         (before == AreaView::CLOCK || before == AreaView::DATE || before == AreaView::SCORES);
+      PCHECK(v == (takes ? AreaView::DETAIL : before));
+      // A big play's jump keeps the area
+      in.jump = true;
+      PCHECK(area_view(in) != AreaView::DETAIL);
+    }
+  }
+  in = AreaInputs{};
+  in.show = SplitShow::LIVE;
+  in.rot_games = true;
+  in.detail = true;
+  PCHECK(area_view(in) == AreaView::LIVE);  // rotating games stay
+  in.show = SplitShow::TEAM;
+  in.team_set = in.team_card = true;
+  PCHECK(area_view(in) == AreaView::TEAM);  // the second team's game stays
+  in.show = SplitShow::FLIGHTS;
+  in.displays = 0xF;
+  PCHECK(area_view(in) == AreaView::APP);  // a display stays
+  PCHECK(std::string(area_view_key(AreaView::DETAIL)) == "detail");
 }
 
 void test_scores_step() {
@@ -487,6 +551,7 @@ void test_recap_one_league() {
 
 int run_split_tests(int &total_checks) {
   test_split_area();
+  test_split_full();
   test_area_view();
   test_scores_step();
   test_next_logos();
