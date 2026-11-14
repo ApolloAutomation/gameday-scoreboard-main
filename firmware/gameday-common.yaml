@@ -798,6 +798,18 @@ switch:
       - lambda: 'id(gameday_ctl).set_anim(true);'
     turn_off_action:
       - lambda: 'id(gameday_ctl).set_anim(false);'
+  # Game board: on is the Field view, off the Scoreboard
+  - platform: template
+    name: "Field View"
+    id: gd_field_view
+    icon: "mdi:soccer-field"
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: 'return id(gameday_ctl).field_view();'
+    turn_on_action:
+      - lambda: 'id(gameday_ctl).set_sport_view(1);'
+    turn_off_action:
+      - lambda: 'id(gameday_ctl).set_sport_view(0);'
 number:
   - platform: template
     name: "Brightness"

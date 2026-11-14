@@ -2105,6 +2105,92 @@ void GamedayComponent::set_anim(bool on) {
   ESP_LOGI(TAG, "Play animations: %s", on ? "on" : "off");
 }
 
+void GamedayComponent::set_sport_view(int view) {
+  if (view < 0 || view > 1 || view == this->split_prefs_.game_board)
+    return;
+  this->split_prefs_.game_board = (uint8_t) view;
+  this->split_pref_.save(&this->split_prefs_);
+  ESP_LOGI(TAG, "Game board: %s", view ? "Field view" : "Scoreboard");
+  this->emit_({});
+}
+
+void GamedayComponent::set_area_detail(bool on) {
+  if (on == this->area_detail())
+    return;
+  this->split_prefs_.area_detail = on ? 1 : 0;
+  this->split_pref_.save(&this->split_prefs_);
+  ESP_LOGI(TAG, "Second area: game details %s", on ? "on" : "off");
+  this->emit_({});
+  this->emit_a2_({});
+}
+
+// The page's Try it: a sample field, then back
+void GamedayComponent::try_field_() {
+  if (this->main_view_ != ::espn::MainView::GAMEDAY) {
+    ESP_LOGI(TAG, "Field view: shows on Game Day only");
+    return;
+  }
+#ifdef USE_LVGL
+  BoardView *v = board_view();
+  if (v != nullptr && v->board != nullptr && lv_obj_get_screen(v->board) != lv_screen_active())
+    ESP_LOGI(TAG, "Field view: shows on the Scoreboard page only");
+#endif
+  ESP_LOGI(TAG, "Field view: a sample for %u s", (unsigned) (::espn::kFieldTryMs / 1000));
+  this->field_try_ms_ = millis() | 1;
+  this->set_timeout("field_try", ::espn::kFieldTryMs, [this]() {
+    this->field_try_ms_ = 0;
+    this->emit_({});
+  });
+  this->emit_({});
+}
+
+void GamedayComponent::field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area) const {
+  ::espn::SportFrame fr;
+  const std::string clock = ::espn::board_clock_text(g, false, 0);
+  if (area)
+    ::espn::detail_frame(g, clock, w, this->text_large(), fr);
+  else
+    ::espn::sport_frame(g, clock, w, this->text_large(), fr);
+  f.board = true;
+  f.board_card = false;
+  f.field = true;
+  f.field_pic = fr.pic;
+  f.texts = std::move(fr.texts);
+  for (::espn::AppText &t : f.texts)
+    t.text = panel_text(t.text);
+}
+
+void GamedayComponent::field_try_fields_(UpdateFields &f) {
+  // The board's teams, else made-up ones
+  const GameSnapshot &g = this->game_;
+  const bool teams = g.valid && !g.team_abbr.empty() && !g.opp_abbr.empty();
+  const GameSnapshot s = ::espn::field_sample(teams ? g.team_abbr : std::string(), ::espn::parse_color(g.team_color),
+                                              teams ? g.opp_abbr : std::string(), ::espn::parse_color(g.opp_color));
+  UpdateFields t;
+  this->game_fields_(s, {}, t);
+  t.status_text = ::espn::field_ticker(s, true);
+  t.ticker_spans.clear();
+  this->field_fields_(t, s, this->board_px_(), false);
+  // A splash still shows over it
+  t.splash_text = f.splash_text;
+  t.splash_color = f.splash_color;
+  t.splash_side = f.splash_side;
+  t.splash_lead = f.splash_lead;
+  t.splash_points = f.splash_points;
+  t.splash_anim = f.splash_anim;
+  t.splash_anim_dist = f.splash_anim_dist;
+  t.splash_anim_flags = f.splash_anim_flags;
+  t.splash_seq = f.splash_seq;
+  t.splash_say = f.splash_say;
+  t.splash_score = f.splash_score;
+  t.team_logo = f.team_logo;
+  t.opponent_logo = f.opponent_logo;
+  t.ha_status_text = f.ha_status_text;
+  t.ha_last_play = f.ha_last_play;
+  t.quiet = f.quiet;
+  f = std::move(t);
+}
+
 void GamedayComponent::set_alerts_favorites_only(bool on) {
   const uint8_t flags = on ? (this->prefs9_.flags | ALERT9_FAV) : (this->prefs9_.flags & ~ALERT9_FAV);
   if (flags == this->prefs9_.flags)
@@ -4774,7 +4860,7 @@ void GamedayComponent::run_watch_job_() {
   ContainerReader reader(container, this->espn_bytes_);
   if (!w.event_id.empty()) {
     GameSnapshot g;
-    w.ok = ::espn::parse_event(reader, sport, w.away_id, g, w.event_id);
+    w.ok = ::espn::parse_event(reader, sport, w.away_id, g, w.event_id, nullptr, false);
     if (w.ok)
       ::espn::watch_take(w, g);
   } else {
@@ -5156,6 +5242,10 @@ uint8_t GamedayComponent::a2_league_() const {
   const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
   in.rot_games = ::espn::rot_count(this->watch_, this->mode_league_(), mg.event_id) > 0;
   in.jump = this->jump_.active;
+  // Never a second copy of the board's Field view
+  in.detail = this->area_detail() && !this->demo_playing_() && this->main_view_ == ::espn::MainView::GAMEDAY &&
+              this->idle_view_ == ::espn::IdleView::BOARD && ::espn::field_ready(this->game_) &&
+              !this->field_on_(this->game_) && this->field_try_ms_ == 0;
   return ::espn::area_view(in);
 }
 
@@ -5206,9 +5296,23 @@ std::string GamedayComponent::a2_clock_line_() const {
 
 void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &splash, UpdateFields &f) {
   using ::espn::AreaView;
+  if (v == AreaView::DETAIL) {
+    const GameSnapshot &g = this->game_;
+    f.game_state = "IN";
+    f.team_abbr = g.team_abbr;
+    f.opponent_abbr = g.opp_abbr;
+    f.team_color = ::espn::parse_color(g.team_color);
+    f.opponent_color = ::espn::parse_color(g.opp_color);
+    f.team_timeouts = f.opponent_timeouts = -1;
+    f.status_text = ::espn::field_ticker(g, false);
+    this->field_fields_(f, g, this->split_area().w, true);
+    return;
+  }
   if (v == AreaView::GAME) {
     // The board's own fields; a splash only as it happens.
     f = this->last_fields_;
+    if (f.field)
+      this->field_fields_(f, this->game_, this->split_area().w, false);
     if (!this->a2_take_splash_)
       f.splash_text.clear();
     if (f.sport == (uint8_t) ::espn::Sport::BASEBALL && f.game_state == "IN" && f.outs >= 0)
@@ -6227,6 +6331,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   if (idle) {
     this->page_status_ = f.status_text;
     this->idle_fields_(f);
+  } else if (this->field_on_(g)) {
+    this->field_fields_(f, g, this->board_px_(), false);
   }
   // The device page's address, for the hints below: the IP rather than the
   // .local name, which many Android phones can't open; the boot screen's QR
@@ -6328,7 +6434,7 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   if (this->a2_show_() != ::espn::SplitShow::OFF) {
     const ::espn::AreaView v = this->a2_compute_();
     if (v != this->a2_view_ || v == ::espn::AreaView::CLOCK || v == ::espn::AreaView::DATE ||
-        v == ::espn::AreaView::GAME) {
+        v == ::espn::AreaView::GAME || v == ::espn::AreaView::DETAIL) {
       // The area's Game Day takes the board's splash.
       this->a2_take_splash_ = v == ::espn::AreaView::GAME;
       this->emit_a2_({});
@@ -6337,6 +6443,12 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   if (app_main)
     return;
+  if (this->field_try_ms_ != 0) {
+    this->field_try_fields_(this->last_fields_);
+    this->logo_held_ = false;
+    this->draw_(this->last_fields_);
+    return;
+  }
   if (this->hold_for_logos_(f))
     return;
   this->draw_(f);
@@ -6579,7 +6691,9 @@ void GamedayComponent::game_fields_(const GameSnapshot &g, const ::espn::Splash 
       f.next_line = ::espn::board_card_text(g, wide, card);
   }
   f.kickoff = kickoff;
-  f.status_text = ::espn::status_text(g, opts, kickoff);
+  // The Field view's: leaders, the drive, the chance to win
+  std::string ticker = &g == &this->game_ && this->field_on_(g) ? ::espn::field_ticker(g, opts.last_play) : "";
+  f.status_text = ticker.empty() ? ::espn::status_text(g, opts, kickoff) : std::move(ticker);
   f.ticker_spans.clear();
   // Players and bets only on the mode's own game.
   if (&g == &this->game_) {
@@ -7187,6 +7301,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   doc["standing"] = this->prefs8_.standing;
   doc["clocksize"] = this->clock_large() ? 1 : 0;
   doc["textsize"] = this->text_large() ? 1 : 0;
+  doc["sportview"] = this->field_view() ? 1 : 0;
+  doc["areadetail"] = this->area_detail();
 #if defined(USE_UPDATE) && !defined(GAMEDAY_BAR)
   // Left out where nothing can be installed (the demo build) or there is no
   // choice (the bar build), so the page and the app hide the switch.
@@ -7730,7 +7846,7 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
       request->send(400, "application/json", "{\"error\":\"do is required\"}");
       return;
     }
-    bool known = name == "refresh" || name == "qc" || name == "power_ok" || name == "anim";
+    bool known = name == "refresh" || name == "qc" || name == "power_ok" || name == "anim" || name == "field";
     const std::string play = request->arg("play");
 #ifdef GAMEDAY_DEMO
     known = known || name == "demo" || name == "demo_stop";
@@ -7744,6 +7860,8 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
         this->refresh_now();
       else if (name == "anim")
         this->try_anim_(play);
+      else if (name == "field")
+        this->try_field_();
       else if (name == "power_ok")
         this->clear_power_cap();
 #ifdef GAMEDAY_DEMO
@@ -7962,6 +8080,12 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::TEXT_SIZE:
         this->set_text_size(op.value);
+        break;
+      case ::espn::SetKind::SPORT_VIEW:
+        this->set_sport_view(op.value);
+        break;
+      case ::espn::SetKind::AREA_DETAIL:
+        this->set_area_detail(op.on);
         break;
       case ::espn::SetKind::IDLE:
         this->set_idle(op.value);

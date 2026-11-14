@@ -98,8 +98,8 @@ inline bool area_covered(SplitAt at, uint32_t now, uint32_t board_splash, uint32
   return at == SplitAt::BOTTOM && splash_up(now, board_splash, stay);
 }
 
-// DATE beside the board's clock; GAME, APP other displays.
-enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP };
+// DATE: beside the board's clock. GAME, APP: displays. DETAIL: field.
+enum class AreaView : uint8_t { NONE = 0, CLOCK, DATE, SCORES, TEAM, LIVE, GAME, APP, DETAIL };
 
 inline const char *area_view_key(AreaView v) {
   switch (v) {
@@ -117,6 +117,8 @@ inline const char *area_view_key(AreaView v) {
       return "game";
     case AreaView::APP:
       return "app";
+    case AreaView::DETAIL:
+      return "detail";
     default:
       return "";
   }
@@ -139,9 +141,11 @@ struct AreaInputs {
   Display main{Display::GAMEDAY};  // what the main area shows
   uint8_t displays{kGameDayOnly};  // the ones this firmware has
   bool app_busy{false};            // the area's display keeps up at night
+  // Game details on; the board's football game has a field
+  bool detail{false};
 };
 
-inline AreaView area_view(const AreaInputs &in) {
+inline AreaView area_view_shown(const AreaInputs &in) {
   const AreaView clock = in.main_clock ? AreaView::DATE : AreaView::CLOCK;
   switch (in.show) {
     case SplitShow::OFF:
@@ -171,6 +175,16 @@ inline AreaView area_view(const AreaInputs &in) {
       return AreaView::APP;
     }
   }
+}
+
+// Details replace only a clock, a date or scores
+inline AreaView area_view(const AreaInputs &in) {
+  const AreaView v = area_view_shown(in);
+  const bool mine = in.show == SplitShow::LIVE || in.show == SplitShow::TEAM || in.show == SplitShow::SCORES ||
+                    in.show == SplitShow::CLOCK;
+  if (in.detail && mine && !in.jump && (v == AreaView::CLOCK || v == AreaView::DATE || v == AreaView::SCORES))
+    return AreaView::DETAIL;
+  return v;
 }
 
 // The display drawn in the area for show, if any.

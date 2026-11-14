@@ -52,6 +52,20 @@ Before and after the game, a ranked college team's rank goes in front of its abb
 
 The off-season clock shows the date under the time, and the next game goes in the ticker. On the start-up screen, the QR code and the words take turns.
 
+### Field view
+
+:::note[Coming in the next release]
+With **Game board** set to **Field view**, a football game in progress shows as a field. See [Field view](/using/football/#field-view) for what's on it.
+
+| Arrangement | Where the parts go |
+| --- | --- |
+| 128x64, the top half of two rows of two, and the board beside a second area | Each team's abbreviation and score along the top, your team's on the left, with the clock and quarter between them: on one line where they fit, else the quarter over the clock, like "4th" over "12:36" or "End" over "3rd". The field across the whole width, about one light per yard, with the yard numbers along its bottom edge. Under it the down and distance and where the ball is, with each team's timeout pips at the ends, then the ticker. |
+| Three or four wide | Each team's abbreviation and its score in big digits at its own end, with its timeout pips under the score. The clock over the field in the middle, the field between the two ends, and the down and distance under it. On four wide the field is about one and a half lights per yard, with the yard numbers along both edges. The ticker runs along the whole bottom. |
+| One 64x64 panel | The abbreviations over the scores at the two sides, the quarter and the clock between them, a narrower field, and the down and distance in short, like "2&5 at BUF6". There's no room for the timeout pips or the yard numbers. |
+
+With **Text size** set to **Large**, the ticker's bigger letters take a few of the field's rows. The [second area](#the-second-area) can show the field beside the scoreboard instead, with **Game details**.
+:::
+
 ## The second area
 
 Two rows of two, and three or four panels in a row, can show something else beside the board, with a ticker of its own, so the two never show the same line.
@@ -76,6 +90,10 @@ One or two panels have no second area, and the device page doesn't offer one. Wi
 - **F1**, the [F1 display](/using/f1/): the running order during a session, then the next session, the circuit, the weather there, the championships and the last race.
 - **Stocks & Crypto**, see [Stocks & Crypto](/using/markets/): up to eight stocks, funds, indexes or coins with their prices and the day's change, a chart of one at a time and a ticker with them all. On a three-wide panel each row shows the price and the change in percent in turn, 4 seconds each.
 - **Flight Tracker**, see [Flight Tracker](/using/flights/): the planes flying near the home you set on the device page. On the right panel of three wide, the nearest plane's card and a list of the nearest take turns, about 8 seconds each, as on one 64x64 panel; on the right two panels of four wide and the bottom half of two rows of two they take turns at 128x64. On three or four wide with **Nothing** picked, the Flight Tracker on the main board puts the nearest plane's card on the left and the list beside it.
+
+:::note[Coming in the next release]
+**Game details**, a switch under **Shows**, puts your football game's field in the second area while the game is on and the board stays the scoreboard: the down and distance across the top, red in the red zone, the field under it with the ball, the lines and the drive, each side's chance to win as a bar in the two teams' colors, the drive's plays, yards and time, and the chance to win in each team's color, like "DUKE 84%". Its ticker has the game's leaders, the drive and the chance to win. On the right panel of three wide the same parts are in short, like "2&5 at BUF6" and "7P 38Y 1:36". At halftime, and between the 4th quarter and overtime, the line score takes the place of the field and the bar. It takes the place of **Clock and date** and **Today's scores**, the clock a second team's game shows when that team isn't playing, and the clock or the scores **Rotating live games** falls back to; a second team's game that's on, live games to rotate through, a big play in another game and the displays keep the area. It's off unless you turn it on, it shows only during a football game in progress on the board, and never while the board shows the [Field view](#field-view) itself, so the two never show the same field.
+:::
 
 While the main board shows one of these (**Showing** in the Panel card), **Shows** lists **Game Day** too, which puts the scoreboard the board would show in the second area: your team's game, or whatever the board would show, its celebrations included. The second area never shows the same display as the main board: when both would, it shows the clock. The panel reads a display's data between the board's own reads, as it does for the other choices.
 

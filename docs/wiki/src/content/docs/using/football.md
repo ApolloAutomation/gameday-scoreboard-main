@@ -42,6 +42,28 @@ When ESPN leaves a team's count out, which it does between some plays, the timeo
 
 On a single 64x64 panel, the logos sit side by side with the scores under them. During play the clock takes the abbreviations' place and the gold possession line goes under the score. There is no room for records, timeout pips or the down and distance row, so down and distance is only in the ticker.
 
+### Field view
+
+:::note[Coming in the next release]
+With **Game board** set to **Field view** in the Panel card on the device page, a game in progress shows as a field instead of the scoreboard. It starts on **Scoreboard**, and Home Assistant has it too, as **Field View**. Before the kickoff and after the final the board is the scoreboard, and so is every other sport.
+
+The field runs left to right. Your team defends the end zone on the left, which is in its color with its letters, and the other team the one on the right, in theirs. On it:
+
+- **The ball** where ESPN spots it, with an arrow in the color of the team with the ball, pointing the way it's going.
+- **The line of scrimmage** in blue through the ball, and **the line to gain** in yellow. A goal-to-go down has no yellow line.
+- **The yard lines** every 10 yards, the 50 a little brighter, with the yard numbers where the field is wide enough: along its bottom edge 128 wide, and along both edges on four panels in a row.
+- **The red zone**: the 20 yards in front of the end zone the team with the ball is going for turn dark red while the ball is in them.
+- **The drive**: a bar in the color of the team with the ball along the field's bottom edge, from where the drive started to the ball, and a thin line near the top for the last play's yards.
+
+Above the field are each team's abbreviation in its color and its score, a gold line under the team with the ball, and the clock and quarter. Under it is the down and distance with where the ball is, like "2nd & 5 at BUF 6", red in the red zone, with each team's timeout pips at the ends on 128 wide and wider. After a score, at a kickoff or during a timeout, the field shows without the ball, and the row under it gives ESPN's last play, like "Rushing Touchdown", where it fits. At halftime, and between the 4th quarter and overtime, the line score takes the field's place: each quarter's points and the total, in each team's color, until the next play. At the end of the 1st and 3rd quarters the field stays, with "End of 1st" or "End of 3rd" where the clock goes.
+
+The ticker carries the last play (with **Last play** on in the Ticker card), the game's passing, rushing and receiving leaders, like "J. Allen 21/34, 241 YDS, 2 TD", the drive so far, like "Drive: 7 plays, 38 yards, 1:36", and the team ESPN gives the better chance to win, like "DUKE 84% to win". Your favorite players' lines and your bets follow, as on the scoreboard.
+
+Splashes and play animations show over the field just as over the scoreboard, and the field comes back after them. **Try it** next to **Game board** shows a sample field on the panel for 15 seconds, in your game's colors, then the panel goes back to what it showed. See [Panel sizes and layouts](/using/panel-sizes/#field-view) for each layout.
+
+On two rows of two and on three or four panels in a row, **Game details** in the second area puts the field beside the scoreboard instead: the board stays the scoreboard, and the second area shows the field with the down and distance over it, each side's chance to win as a bar under it, the drive's plays, yards and time, and the chance to win in each team's color, with the leaders and the drive in its own ticker. It's off unless you turn it on, it takes the place of the clock, the date or today's scores only, and it doesn't show while the main board shows the Field view. See [The second area](/using/panel-sizes/#the-second-area).
+:::
+
 ## Scoring splashes
 
 When the score changes, the panel fills the screen with a splash for about 7 seconds, in the scoring team's color, with the logo of the team that scored and the points it gained:

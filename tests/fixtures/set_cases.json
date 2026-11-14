@@ -38,7 +38,8 @@
     "display and split refuse a display it lacks. full is Full screen: 1 on, anything else off; a",
     "display on the main board then fills the panel, and split keeps its choice for Game Day.",
     "clocksize and textsize are Clock size and Text size, 0 Normal or 1 Large, one digit and",
-    "nothing else.",
+    "nothing else. sportview is the Game board, 0 Scoreboard or 1 Field view, the same way;",
+    "areadetail is Game details in the second area, on or off.",
     "props lists the player prop bets by slot as entered: slot, league, ESPN athlete id, team id,",
     "the panel's name, the stat's key, side (over, under or yes) and the line in half points (0 for",
     "a yes prop). prop= into slot 0 takes the first empty slot and with every slot in use changes",
@@ -64,7 +65,7 @@
     "visit": false, "standing": 0,
     "idle": 0, "idledim": 0, "night": false, "nightstart": "22:00", "nightend": "07:00", "nightbri": 20,
     "bets": [], "props": [], "players": [], "split": 0, "splitteam": "", "clocksize": 0, "textsize": 0,
-    "display": 0, "full": false
+    "display": 0, "full": false, "sportview": 0, "areadetail": false
   },
   "cases": [
     {"name": "mode 5 is Live games", "set": [["mode", "5"]], "expect": {"mode": 5}},
@@ -381,6 +382,15 @@
     {"name": "a text size in words is refused", "set": [["textsize", "large"]], "expect": {"textsize": 0}},
     {"name": "a clock size with a space is refused", "set": [["clocksize", "1 "]], "expect": {"clocksize": 0}},
     {"name": "the sizes leave the standing alone", "start": {"standing": 2}, "set": [["clocksize", "1"]], "expect": {"clocksize": 1, "standing": 2}},
+    {"name": "the Field view", "set": [["sportview", "1"]], "expect": {"sportview": 1, "textsize": 0}},
+    {"name": "back to the Scoreboard", "start": {"sportview": 1}, "set": [["sportview", "0"]], "expect": {"sportview": 0}},
+    {"name": "a game board past the Field view is refused", "start": {"sportview": 1}, "set": [["sportview", "2"]], "expect": {"sportview": 1}},
+    {"name": "a game board in words is refused", "set": [["sportview", "field"]], "expect": {"sportview": 0}},
+    {"name": "a game board with a space is refused", "set": [["sportview", "1 "]], "expect": {"sportview": 0}},
+    {"name": "game details on", "set": [["areadetail", "1"]], "expect": {"areadetail": true, "split": 0}},
+    {"name": "game details off", "start": {"areadetail": true}, "set": [["areadetail", "0"]], "expect": {"areadetail": false}},
+    {"name": "game details leave the second area's choice alone", "start": {"split": 4}, "set": [["areadetail", "1"]], "expect": {"areadetail": true, "split": 4}},
+    {"name": "the Field view and game details in one request", "set": [["sportview", "1"], ["areadetail", "1"]], "expect": {"sportview": 1, "areadetail": true}},
 
     {"name": "the second area's choice", "set": [["split", "3"]], "expect": {"split": 3}},
     {"name": "the second area's clock and date", "start": {"split": 1}, "set": [["split", "4"]], "expect": {"split": 4}},
