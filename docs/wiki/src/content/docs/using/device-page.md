@@ -7,7 +7,7 @@ sidebar:
 
 Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
-The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the [Flight Tracker](/using/flights/)'s home (Weather's too, in the next release), from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
+The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
 ## The live board
 
@@ -66,9 +66,9 @@ The page puts what you change most at the top, and folds the rest away. From the
 
 1. **Quick settings**, right under the board: **Panel on**, **Brightness**, **Follow this game** while there's a game to follow, the **Idle display**, and on three or four panels in a row or two rows of two, what the second area **Shows**.
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
-3. The cards: **Panel**, **Flight Tracker** (and in the next release **Weather** after it), **Favorites**, **Favorite players**, **Bets** and **Stocks & Crypto**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
+3. The cards: **Panel**, **Flight Tracker**, **Weather**, **Favorites**, **Favorite players**, **Bets** and **Stocks & Crypto**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
 
-Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites** and **Favorite players** start open when they hold anything, and **Bets** when it holds a bet, with how many beside the name, like **3 of 16**. Otherwise they start folded, so **Bets** holding only player props starts folded, with how many beside it, like **1 prop**. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
+Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Weather**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites** and **Favorite players** start open when they hold anything, and **Bets** when it holds a bet, with how many beside the name, like **3 of 16**. Otherwise they start folded, so **Bets** holding only player props starts folded, with how many beside it, like **1 prop**. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
 
 The page remembers which cards you opened or folded, in that browser only, so another phone or computer starts the usual way. A private window starts the usual way every time. Nothing about it is saved on the panel.
 
@@ -90,14 +90,15 @@ The settings, in the order the page shows them:
 | **After the final** (Favorite teams) | How long a favorite's final stays up before the playlist moves on, 30 seconds to 60 minutes. Starts at 30 seconds. |
 | **Two games at once** (Favorite teams) | **Stick with the higher team** in your list, or **Alternate** between them, every 30 seconds or every 1 to 30 minutes, from the list next to it. |
 | **Ticker speed** (Panel) | How fast the ticker scrolls, 1 to 10. |
-| **Showing** (Panel) | The Scoreboard page, the Clock page, or another display: **F1**, **Stocks & Crypto** or **Flight Tracker**, and in the next release **Weather**. See below. |
+| **Showing** (Panel) | The Scoreboard page, the Clock page, or another display: **F1**, **Stocks & Crypto**, **Flight Tracker** or **Weather**. See below. |
 | **Clock size**, **Text size** (Panel) | **Normal**, where a panel starts, or **Large**: bigger digits for the clock, the Clock page and the game clock during a game, like "5:21 3rd" or "Halftime", wherever they fit without touching the logos, records, scores or the row under them, and bigger letters in the ticker. A change shows on the panel at once, with no restart. See [Clock size and text size](/using/brightness-and-clock/#clock-size-and-text-size). |
+| **Game board** (Panel) | **Scoreboard**, where a panel starts, or **Field view**, a football game in progress drawn as a field. See below. |
 | **Standing next to pro teams** (Panel) | **Record** (where a new panel starts), **Seed** or **Place**: what your pro team shows where its record goes. See below. |
 | **Night hours** (Panel) | Dims the panel overnight and shows the idle display, with the clock in place of **Scores**, **Next game** or **Team logo**. Off unless you turn it on. |
 | **From**, **To** (Night hours) | When the night hours start and end, 10 PM and 7 AM to start with. They can run past midnight. |
 | **Night brightness** (Night hours) | The brightness during the night hours, 1 to 255. Starts at 20. A Brightness change during the night hours lasts until they end. See [Night hours](/using/brightness-and-clock/#night-hours). |
 | Flight Tracker | **Home location**, **Within** and your own receiver. See [The Flight Tracker card](#the-flight-tracker-card). |
-| Weather (next release) | The same home and **Weather warnings in the ticker**. See [The Weather card](#the-weather-card). |
+| Weather | The same home and **Weather warnings in the ticker**. See [The Weather card](#the-weather-card). |
 | **Only today's games** (Favorites) | The Favorite teams playlist skips favorites that aren't playing today. |
 | Favorites list | Up to 16 teams in priority order. Move a team up or down, or remove it. The first four are buttons 1 to 4 on a WizMote. |
 | Favorite players | Up to 16 players. See [The Favorite players card](#the-favorite-players-card). |
@@ -118,11 +119,7 @@ The settings, in the order the page shows them:
 | **Follow beta** (Device) | Off unless you turn it on. Offers beta versions, test builds of the next release, instead of releases. See [Follow beta](#follow-beta). |
 | Wi-Fi networks (Device) | The networks the panel remembers, in the order it tries them, with **Forget** for each. See [Wi-Fi](/using/wifi/). |
 
-**Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)) and **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card) and [The Flight Tracker card](#the-flight-tracker-card).
-
-:::note[Coming in the next release]
-**Weather** joins the list: the weather at the home you set, see [Weather](/using/weather/). Its settings are in [The Weather card](#the-weather-card).
-:::
+**Showing** in the Panel card lists the other displays besides the Scoreboard and Clock pages: **F1** (the [F1 display](/using/f1/)), **Stocks & Crypto** (your stocks and coins, see [Stocks & Crypto](/using/markets/)), **Flight Tracker** (the planes near your home, see [Flight Tracker](/using/flights/)) and **Weather** (the weather at the home you set, see [Weather](/using/weather/)). Pick one to put it on the main board in place of the scoreboard, and **Scoreboard** to bring the games back. The board at the top of the page keeps showing your team's game, and Home Assistant keeps following it. F1 has no settings of its own; the others' are in [The Stocks & Crypto card](#the-stocks--crypto-card), [The Flight Tracker card](#the-flight-tracker-card) and [The Weather card](#the-weather-card).
 
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
@@ -130,9 +127,7 @@ Under **Idle display** a line says what the panel is doing about it now, like **
 
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
 
-:::note[Coming in the next release]
 **Game board**, in the Panel card under **Text size**, is **Scoreboard**, where a panel starts, or **Field view**: a football game in progress drawn as a field, with the ball's spot, the line of scrimmage, the line to gain, the red zone and the drive, and the scores and the clock above it. Other sports, and football before the kickoff and after the final, keep the scoreboard. A change shows on the panel at once. **Try it** next to it shows a sample field on the panel for 15 seconds, in the colors of the game on the board, while the Scoreboard page is up, then the panel goes back to what it showed. Home Assistant has the setting as **Field View**. See [Field view](/using/football/#field-view).
-:::
 
 **Standing next to pro teams** sets what your pro team shows where its record goes, under its logo on a 128x64 board, in the ticker and on this page's board, like "Seed 4" or "1st NFCE". The other team keeps its record. A minor league team always shows its record, since MLB has no seed or place for it, and so does an AHL or ECHL team, since HockeyTech has none either. It's hidden while your panel follows only college teams, minor league baseball, AHL or ECHL teams, golf or racing. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
@@ -144,18 +139,14 @@ On two rows of two, and three or four panels in a row, the Quick settings card h
 
 | Setting | What it does |
 | --- | --- |
-| **Shows** | **Rotating live games**, **A second team's game**, **Today's scores**, **Clock and date**, **F1**, **Stocks & Crypto** or **Flight Tracker** (and in the next release **Weather**), and on three and four wide **Nothing: the board fills the row**, where those start. While the main board shows another display, **Game Day** puts the scoreboard here. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
+| **Shows** | **Rotating live games**, **A second team's game**, **Today's scores**, **Clock and date**, **F1**, **Stocks & Crypto**, **Flight Tracker** or **Weather**, and on three and four wide **Nothing: the board fills the row**, where those start. While the main board shows another display, **Game Day** puts the scoreboard here. Two rows of two starts on **Clock and date**. The line under it says what the choice does. The panel lays itself out again at once, with no restart. |
 | **Second team** (A second team's game) | Opens the team chooser, without its **Golf** and **Racing** tabs; the **MiLB**, **AHL** and **ECHL** tabs are there. Your own team is refused with a message. The team is kept when you pick another choice. |
 
-:::note[Coming in the next release]
 **Game details**, a switch under **Shows** when it's **Rotating live games**, **A second team's game**, **Today's scores** or **Clock and date** (or **Nothing** on two rows of two, which is the clock there), puts your football game's field in the second area while the game is on, in place of the clock, the date or the scores. It's off unless you turn it on, and the line under it says **Showing your game's details.** while it shows. See [The second area](/using/panel-sizes/#the-second-area).
-:::
 
 A line under them says what the second area shows now, like **Rotating 3 live games**, **Showing PHI's game**, **No other live games: showing the clock**, **Showing F1.** or **Showing Game Day.** When the main board shows the display you picked here already, it says why the area shows the clock instead, like **The main board shows F1, so this shows the clock.** See [The second area](/using/panel-sizes/#the-second-area).
 
-:::note[Coming in the next release]
 **Full screen**, a switch under **Shows**, appears when the panel has F1, Stocks & Crypto, the Flight Tracker or Weather. With it on, the display picked under **Showing** fills the whole panel, all four panels on two rows of two, instead of sharing it with the second area. **Shows** keeps its choice for when **Showing** is back on the Scoreboard or the night hours' clock is up. While the display fills the panel, the line under the switch says so, like **Flight Tracker fills the panel now: Full screen is on.** It starts off. See [Full screen](/using/panel-sizes/#the-second-area).
-:::
 
 ### Celebrations
 
@@ -211,7 +202,6 @@ The line at the bottom says what the panel is doing: **Looking for planes.**, ho
 
 If a place can't be found, the card says so: try a town and state, or a ZIP code. If the place search can't be reached, type the latitude and longitude instead.
 
-:::note[Coming in the next release]
 The home is [Weather](/using/weather/)'s too: setting or clearing it in either card changes both.
 
 ## The Weather card
@@ -225,7 +215,6 @@ The **Weather** card comes after the Flight Tracker card, when the panel has [We
 | **Weather warnings in the ticker** | Off to start. On, the National Weather Service's warnings and watches for a home in the US lead the main board's ticker whatever it shows, and the panel checks for them every 5 minutes. See [Warnings in the ticker](/using/weather/#warnings-in-the-ticker). |
 
 The line at the bottom says what the panel has: **Looking up the weather.**, the weather now and where it came from, like **31°F, Cloudy, from Open-Meteo.**, with any alert and the air quality, or **Can't reach the weather right now.** While Weather is off the panel it says it isn't reading the weather. Until you choose Weather, it says to choose it under **Showing**; when you have and the night hours' clock is up instead, it says so.
-:::
 
 ## The Favorite players card
 
@@ -270,13 +259,13 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
 - **Free PSRAM**: how much of the panel's second, larger memory is left.
-- **Data used**: how much the panel has downloaded since it started, for anyone on a capped internet plan: from ESPN, from MLB and HockeyTech when it follows their teams, and what F1, Stocks & Crypto and the Flight Tracker read, and in the next release Weather too.
+- **Data used**: how much the panel has downloaded since it started, for anyone on a capped internet plan: from ESPN, from MLB and HockeyTech when it follows their teams, and what F1, Stocks & Crypto, the Flight Tracker and Weather read.
 
 ### Follow beta
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.6-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.7-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

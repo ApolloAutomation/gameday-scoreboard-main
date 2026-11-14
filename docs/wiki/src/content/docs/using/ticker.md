@@ -79,9 +79,7 @@ For the messages that take over the whole board, see [Panel messages](/help/pane
 
 ## Weather warnings
 
-:::note[Coming in the next release]
 With **Weather warnings in the ticker** on in the device page's Weather card, the National Weather Service's warnings and watches for your home lead the main board's ticker, in red for a warning and orange for a watch, like **Winter Storm Warning until 10a Sat**, whatever the board shows. It's off to start, and needs a home in the US. See [Weather](/using/weather/#warnings-in-the-ticker).
-:::
 
 ## The second area's ticker
 

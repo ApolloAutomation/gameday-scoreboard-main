@@ -5,15 +5,12 @@ sidebar:
   order: 10.9
 ---
 
-:::note[Coming in the next release]
 Weather is a display the panel can show in place of the scoreboard: the weather at the home you set for the [Flight Tracker](/using/flights/), page by page. Pick it for the main board under **Showing** in the Panel card on the device page, or for the [second area](/using/panel-sizes/#the-second-area) under **Shows**. There's nothing to sign up for: the weather comes from free services that need no account or key.
 
 Home Assistant's entities keep following the scoreboard's game while Weather is on the panel.
-:::
 
 ## Set it up
 
-:::note[Coming in the next release]
 The device page has a **Weather** card. Weather and the Flight Tracker share one home: set it in either card and both use it.
 
 1. Under **Home location**, type a town, a ZIP or postal code, or a latitude and longitude like **40.64, -73.78**, and tap **Find**.
@@ -25,11 +22,9 @@ The device page has a **Weather** card. Weather and the Flight Tracker share one
 The panel uses your time zone's units: Fahrenheit in the US time zones and Celsius elsewhere, and wind in mph in the US and UK time zones and km/h elsewhere.
 
 **Weather warnings in the ticker** is a switch, off to start. See [Warnings in the ticker](#warnings-in-the-ticker).
-:::
 
 ## What the panel shows
 
-:::note[Coming in the next release]
 Weather takes turns through its pages, about 10 seconds each, starting over each time it comes on screen:
 
 - **Warning** (12 seconds, first, only while the National Weather Service has an alert for home): the alert's name in its color, red for a warning, orange for a watch, yellow for an advisory and blue for a statement, and when it ends, like **Until 10a Sat**. With more than one, the most urgent shows, and **+1 more** names the next. On 128 wide and more a warning sign sits at the top right, and on three or four panels in a row and the full screen of two rows of two, the alert's own words follow, as many lines as fit.
@@ -57,19 +52,15 @@ The panel shows a message instead when it has no weather to show:
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes Weather's place until they end, and the device page says so.
 
 With the **Idle display** on **Off or dim** and Weather on the main board, the panel stays dark or dim except while the National Weather Service has a warning or a watch out for home. It keeps reading while it's dark, so an alert lights it.
-:::
 
 ## Warnings in the ticker
 
-:::note[Coming in the next release]
 With **Weather warnings in the ticker** on in the Weather card, the National Weather Service's warnings and watches for home lead the main board's ticker in red or orange whatever it shows, the scoreboard or any display, like **Winter Storm Warning until 10a Sat**. Advisories and statements stay on Weather's own pages. While it's on, the panel checks for alerts every 5 minutes, even with Weather off the panel; it reads nothing else for it. With it off, as it starts, the panel checks only while Weather is on screen.
 
 This needs a home in the US: the National Weather Service covers the 50 states and the territories. For a home elsewhere the panel never asks.
-:::
 
 ## Where the data comes from
 
-:::note[Coming in the next release]
 - **Forecast**: [Open-Meteo](https://open-meteo.com) (api.open-meteo.com), about every 10 minutes while Weather is on screen: the weather now, the next 24 hours and the next 7 days, about 2 KB a read. When it fails three times in a row, or turns the panel away, the panel reads [MET Norway](https://api.met.no)'s forecast (api.met.no) instead, about 40 KB, and goes back to Open-Meteo after 30 minutes, longer each time it fails again. MET Norway's forecast has no chance of rain and no sunrise or sunset, so those leave the pages while it's in use.
 - **Air quality**: Open-Meteo's air quality service (air-quality-api.open-meteo.com), about every 30 minutes, under 1 KB. Its page shows only with an answer from the last 2 hours.
 - **Alerts**: the National Weather Service (api.weather.gov), every 5 minutes, for a home in the US. When it says home isn't in its area, the panel stops asking for that home.
@@ -77,10 +68,7 @@ This needs a home in the US: the National Weather Service covers the 50 states a
 - **Nothing while it's off screen**: Weather reads only while it's on the main board or in the second area, besides the alert checks above when the switch is on. Off screen, the device page says it isn't reading.
 
 When a service fails, the panel waits longer each time before asking it again, and as long as it asks when it turns the panel away.
-:::
 
 ## Your location
 
-:::note[Coming in the next release]
 Weather uses the home the Flight Tracker keeps on the panel. Each weather service gets that spot rounded to two decimal places, about a kilometer, never the exact one. Radar images are centered on that rounded spot too. Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the home from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
-:::
