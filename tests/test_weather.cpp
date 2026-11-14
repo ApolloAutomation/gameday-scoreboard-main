@@ -1,6 +1,7 @@
 // The Weather display: sources, failover, icons, maps and frames.
 #include <ArduinoJson.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -419,7 +420,7 @@ void test_app() {
          (long long) (at - kNow));
   WCHECK(a->poll_ms(kNow + 121) == WeatherApp::kAlertsS * 1000, "poll: %u", a->poll_ms(kNow + 121));
 
-  // Pages
+  // Every page at every size
   const int64_t now = kNow + 130;
   Page list[kPages];
   const size_t n = a->rotation(now, list, kPages);
@@ -446,7 +447,7 @@ void test_app() {
         WCHECK(f.photo.w == std::min(sz[0], 128) && f.photo.h == sz[1] - 8 &&
                    f.photo.hold == rainviewer_url(a->radar(), kFrames - 1, 389399, -1199772) &&
                    f.photo.url.find("tilecache.rainviewer.com") != std::string::npos && f.bar.w == 2 &&
-                   f.line.pts.size() > 10 && a->redraw_ms() == WeatherApp::kStepMs,
+                   f.line.pts.size() > 10 && a->redraw_ms() <= WeatherApp::kStepMs,
                "%dx%d radar: the newest frame stands in, the home and its ring", sz[0], sz[1]);
     }
     for (int p = 0; p < kPages; p++)
@@ -477,6 +478,12 @@ void test_app() {
     WCHECK(f.photo.url == rainviewer_url(a->radar(), k, 389399, -1199772), "step %u shows frame %d", step_i, (int) k);
   }
   WCHECK(first == rainviewer_url(a->radar(), 0, 389399, -1199772), "it starts on the oldest");
+  g_ms = 1000 + 130;
+  {
+    espn::AppFrame f;
+    a->frame(128, 64, radar_at, f);
+    WCHECK(a->redraw_ms() == WeatherApp::kStepMs - 130, "redrawn as the next frame starts: %u", a->redraw_ms());
+  }
   g_ms = 0;
 
   WCHECK(a->lit(now) && !a->busy(now), "a warning keeps Off or dim lit, not the night hours away");
@@ -605,6 +612,57 @@ void test_failover() {
   const int64_t t2 = kNow + 2 * WeatherApp::kRadarOldS;
   const size_t n = a->radar_urls(t2, 64, 56, urls, kFrames);
   WCHECK(n == kFrames && urls[0].find("mesonet.agron.iastate.edu") != std::string::npos, "NEXRAD frames: %d", (int) n);
+  delete a;
+
+  // RainViewer's images failing in the US: Iowa State's, then none
+  a = new WeatherApp();
+  a->shown(true);
+  read_all(*a, kNow);
+  {
+    espn::AppFrame start;
+    a->frame(128, 64, kNow, start);
+  }
+  int64_t rt = kNow;
+  while (a->page(rt) != Page::RADAR && rt < kNow + 120)
+    rt++;
+  {
+    espn::AppFrame f;
+    a->frame(128, 64, rt, f);
+    WCHECK(f.photo.url.find("rainviewer") != std::string::npos, "RainViewer's frames first");
+  }
+  a->photo_failed(rt);
+  WCHECK(a->radar_urls(rt, 64, 56, urls, kFrames) == kFrames && urls[0].find("mesonet") != std::string::npos,
+         "failed images: Iowa State's");
+  {
+    espn::AppFrame f;
+    a->frame(128, 64, rt, f);
+    WCHECK(f.photo.url.find("mesonet") != std::string::npos, "the radar page draws Iowa State's");
+    JsonDocument sd;
+    a->state(sd.to<JsonObject>(), rt);
+    WCHECK(std::string(sd["radar"] | "") == "iem", "state: the backup radar");
+  }
+  a->photo_failed(rt);
+  Page pl[kPages];
+  size_t pn = a->rotation(rt, pl, kPages);
+  WCHECK(a->radar_urls(rt, 64, 56, urls, kFrames) == 0 && std::find(pl, pl + pn, Page::RADAR) == pl + pn,
+         "both failing: no radar page");
+  WCHECK(a->radar_urls(rt + WeatherApp::kImagesOutS, 64, 56, urls, kFrames) > 0 &&
+             urls[0].find("rainviewer") != std::string::npos,
+         "after a while, RainViewer's again");
+  delete a;
+
+  // A read dropped for new settings blames no host
+  a = new WeatherApp();
+  a->shown(true);
+  espn::AppRequest dq;
+  WCHECK(a->request(kNow, dq) && dq.url.find("api.open-meteo.com") != std::string::npos, "a forecast read");
+  a->dropped();
+  WCHECK(a->request(kNow, dq) && a->host(WeatherApp::HOST_OPEN_METEO).fails == 0 &&
+             a->host(WeatherApp::HOST_OPEN_METEO).wait_until <= kNow,
+         "dropped: no failure counted");
+  a->ended(espn::AppResult{});
+  a->apply(false, kNow);
+  WCHECK(a->host(WeatherApp::HOST_OPEN_METEO).fails == 1, "a real failure still counts");
   delete a;
 
   // Outside the US: no alerts, no NEXRAD

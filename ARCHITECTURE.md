@@ -436,10 +436,18 @@ for at the box's own size and extent, the US backup) both fit any area.
 pictures over it; the photo now sits under the frame's labels, line and
 pictures, so the home's dot (`AppFill`) and ring (`AppLine`) draw over the
 map. Radar frames step every 500 ms on `app_env().ms`, the component's
-`millis()`. With its switch on, `WeatherApp` also checks alerts while off
+`millis()`, and `redraw_ms` asks for the next step's start; the component
+checks timed redraws every loop (`apps_redraw_`), so one under a second
+holds. When neither a boxed photo nor its stand-in will draw (both failed),
+`App::photo_failed` says so, and Weather takes the radar from the other
+source for 10 minutes or leaves the page out. A read dropped by a settings
+change reaches `App::dropped` in place of `apply`, so no host is blamed for
+it. With its switch on, `WeatherApp` also checks alerts while off
 screen (`App::idle_poll_ms` and `night_poll_ms`), and `App::ticker_warning`
 hands warnings and watches to `draw_`, which puts them ahead of the main
-board's ticker (`board_ticker_lead`) unless that ticker already says them. A
+board's ticker (`board_ticker_lead`) unless that ticker already says them;
+`warn_check_` redraws that ticker when the warning changes, after a read and
+after a display's setting changes, like the switch or the shared home. A
 display's read now always counts as that display's in `open_`, so two
 displays can share a host, as F1 and Weather share Open-Meteo.
 

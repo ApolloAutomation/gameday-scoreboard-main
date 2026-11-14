@@ -589,7 +589,7 @@ def state_doc():
         # tz_fahrenheit(): the US zones alone
         tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
         STATE["weather"]["units"] = "imperial" if tz.startswith("US ") else "metric"
-        # The shared home, as the firmware reads it from the Flight Tracker
+        # The Flight Tracker's home, shared
         home = (STATE.get("flights") or {}).get("home", "")
         if home:
             STATE["weather"]["home"] = home

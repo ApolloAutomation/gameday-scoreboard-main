@@ -42,6 +42,8 @@ class WeatherApp final : public espn::App {
   // One radar frame's time, then the newest held.
   static constexpr uint32_t kStepMs = 500;
   static constexpr uint32_t kHoldSteps = 4;
+  // Radar images failing: the other source this long.
+  static constexpr int64_t kImagesOutS = 600;
 
   espn::Display id() const override { return espn::Display::WEATHER; }
   const char *const *hosts() const override;
@@ -62,8 +64,10 @@ class WeatherApp final : public espn::App {
   void ended(const espn::AppResult &r) override { this->result_ = r; }
   bool own_backoff() const override { return true; }
   void apply(bool ok, int64_t now) override;
+  void dropped() override;
   void frame(int w, int h, int64_t now, espn::AppFrame &out) const override;
   uint32_t redraw_ms() const override { return this->redraw_; }
+  void photo_failed(int64_t now) override;
   std::string ticker_warning(int64_t now, uint32_t &color) const override;
 
   // The pages to rotate now, in order.
@@ -86,6 +90,7 @@ class WeatherApp final : public espn::App {
   bool for_home_(Read r, int32_t lat, int32_t lon) const;
   bool fresh_(Read r, int64_t now) const;
   bool nws_(int32_t lat, int32_t lon) const;
+  bool rv_(int64_t now) const;
   bool iem_(int64_t now) const;
   int64_t due_(Read r, int64_t now, bool on) const;
   uint32_t off_poll_ms_(int64_t now) const;
@@ -119,6 +124,8 @@ class WeatherApp final : public espn::App {
   espn::F1Host host_[kHosts];
   // The home the NWS called outside its area
   int32_t no_nws_lat_{0}, no_nws_lon_{0};
+  // Until when RainViewer's, then Iowa State's, images failed
+  int64_t img_out_[2]{};
   uint8_t fails_{0};
   Read inflight_{Read::NONE};
   Host inflight_host_{HOST_OPEN_METEO};

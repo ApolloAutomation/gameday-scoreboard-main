@@ -745,7 +745,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
 
   {
-    // Weather: each source, the app's pages at every size, the map steps.
+    // Weather: sources, pages at every size, map steps.
     static flights::FlightsApp *home_app = nullptr;
     if (home_app == nullptr) {
       home_app = new flights::FlightsApp();

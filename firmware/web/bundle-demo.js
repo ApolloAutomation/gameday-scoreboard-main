@@ -2724,7 +2724,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
     };
   };
-  // The home search, the Flight Tracker's and Weather's: one home, keys fly*
+  // One home search for both cards
   const homeSearch = (p) => {
     const msg = (t) => { const m = $("#" + p + "Msg"); m.textContent = t || ""; m.hidden = !t; };
     const setHome = (lat, lon, place) => {
@@ -2879,7 +2879,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const w = S && S.weather;
     card.hidden = !w || !((S.displays || []).some((d) => d.id === WX_ID));
     if (card.hidden) return;
-    // The home is the Flight Tracker's, posts not shown yet included
+    // Shared home, pending posts included
     const f = S.flights ? flightNow() : { home: w.home || "", place: w.place || "" };
     const coords = (f.home || "").replace(",", ", ");
     $("#wxSum").textContent = f.home ? f.place || coords : "No home yet";

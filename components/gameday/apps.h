@@ -586,12 +586,16 @@ class App {
   virtual bool own_backoff() const { return false; }
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
+  // A read dropped by a settings change instead.
+  virtual void dropped() {}
   // Refused is 403 or 429; true reads another host now.
   virtual bool failed(bool /*refused*/) { return false; }
   // A w by h area's frame.
   virtual void frame(int w, int h, int64_t now, AppFrame &out) const = 0;
   // Redraws this often on its own; 0 after reads only.
   virtual uint32_t redraw_ms() const { return 0; }
+  // Its boxed photo failed, its stand-in too.
+  virtual void photo_failed(int64_t /*now*/) {}
 };
 
 // The displays this firmware has, by Display.

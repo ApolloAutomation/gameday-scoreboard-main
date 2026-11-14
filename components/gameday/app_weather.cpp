@@ -205,12 +205,14 @@ bool WeatherApp::nws_(int32_t lat, int32_t lon) const {
   return in_us(lat, lon) && !(lat == this->no_nws_lat_ && lon == this->no_nws_lon_);
 }
 
+bool WeatherApp::rv_(int64_t now) const { return now >= this->img_out_[0] && this->fresh_(Read::RADAR, now); }
+
 bool WeatherApp::iem_(int64_t now) const {
   int32_t lat, lon;
-  if (this->fresh_(Read::RADAR, now) || !this->home_(lat, lon) || !in_us(lat, lon))
+  if (this->rv_(now) || now < this->img_out_[1] || !this->home_(lat, lon) || !in_us(lat, lon))
     return false;
   const espn::F1Host &rv = this->host_[HOST_RAINVIEWER];
-  return rv.fails > 0 || rv.backup();
+  return rv.fails > 0 || rv.backup() || now < this->img_out_[0];
 }
 
 // One writer per value type, not one per call
@@ -256,7 +258,7 @@ void WeatherApp::state(JsonObject out, int64_t now) const {
   }
   std::string urls[1];
   if (this->radar_urls(now, 64, 56, urls, 1) > 0)
-    put_s(out, "radar", this->fresh_(Read::RADAR, now) ? "rainviewer" : "iem");
+    put_s(out, "radar", this->rv_(now) ? "rainviewer" : "iem");
 }
 
 bool WeatherApp::lit(int64_t now) const {
@@ -441,6 +443,16 @@ bool WeatherApp::parse_doc(JsonObjectConst root, int64_t now) {
   }
 }
 
+void WeatherApp::dropped() {
+  this->inflight_ = Read::NONE;
+  this->result_ = espn::AppResult{};
+}
+
+void WeatherApp::photo_failed(int64_t now) {
+  if (this->last_page_ == Page::RADAR)
+    this->img_out_[this->rv_(now) ? 0 : 1] = now + kImagesOutS;
+}
+
 void WeatherApp::fail_(Host h, int64_t now) {
   this->rnd_ = this->rnd_ * 1664525u + 1013904223u;
   const bool failover = h == HOST_OPEN_METEO || h == HOST_RAINVIEWER;
@@ -521,7 +533,7 @@ size_t WeatherApp::radar_urls(int64_t now, int w, int h, std::string *out, size_
   if (!this->home_(lat, lon))
     return 0;
   size_t n = 0;
-  if (this->fresh_(Read::RADAR, now)) {
+  if (this->rv_(now)) {
     for (size_t i = 0; i < this->rad_.n && n < cap; i++)
       out[n++] = rainviewer_url(this->rad_, i, lat, lon);
   } else if (this->iem_(now)) {
@@ -927,10 +939,12 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   const size_t n = this->radar_urls(now, bw, bh, urls, kFrames);
   if (n == 0)
     return;
-  const uint32_t step = (espn::app_ms() - this->radar_ms_) / kStepMs % ((uint32_t) n + kHoldSteps);
+  const uint32_t ms = espn::app_ms() - this->radar_ms_;
+  const uint32_t step = ms / kStepMs % ((uint32_t) n + kHoldSteps);
   const size_t k = std::min<size_t>(step, n - 1);
+  // Redrawn as the next step starts
   if (n > 1)
-    this->redraw_ = std::min<uint32_t>(this->redraw_, kStepMs);
+    this->redraw_ = std::min<uint32_t>(this->redraw_, kStepMs - ms % kStepMs);
   espn::AppPhoto &ph = out.photo;
   ph.w = (uint8_t) bw;
   ph.h = (uint8_t) bh;
@@ -940,7 +954,7 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   // Said until a frame draws
   ph.alt = (int8_t) out.texts.size();
   put(out, 0, bh / 2 - 4, bw, BoardFont::S8, AppAlign::CENTER, kGray, bw >= 70 ? "Loading radar" : "Loading");
-  const bool rv = this->fresh_(Read::RADAR, now);
+  const bool rv = this->rv_(now);
   const int64_t t = rv ? this->rad_.t[k] : iem_frame_time(now, k, kFrames);
   put(out, 1, 0, 30, BoardFont::S8, AppAlign::LEFT, k + 1 == n ? kWhite : kGray, clock_text(espn::app_local(t)));
   const Units u = units_for_zone(espn::app_env().tz);
