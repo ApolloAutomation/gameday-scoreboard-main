@@ -34,4 +34,4 @@ You control the panel from its **device page**, a web page the panel serves itse
 - [The F1 display](/using/f1/): the running order during a session, the next session's countdown, the circuit, the weather there, the championships and the last race, on the main board or in the second area.
 - [Stocks & Crypto](/using/markets/): up to eight stocks, funds, indexes and coins, on the main board or in the second area.
 - [Flight Tracker](/using/flights/): the planes flying near a spot you pick, on the main board or in the second area.
-- [Weather](/using/weather/) (next release): the weather at home, an animated radar, air quality and the National Weather Service's warnings, on the main board or in the second area.
+- [Weather](/using/weather/): the weather at home, an animated radar, air quality and the National Weather Service's warnings, on the main board or in the second area.

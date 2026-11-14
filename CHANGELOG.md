@@ -14,6 +14,18 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.6
+
+The panel can show the weather at home with an animated radar and the National Weather Service's warnings, a football game can show as a field with the ball and the line to gain, and F1, Stocks & Crypto, the Flight Tracker and Weather can fill the whole panel.
+
+- Weather, a new display under Showing in the Panel card and under Shows for the second area: the weather at the home you set for the Flight Tracker, page by page. Now, the next hours and the next days, an animated radar of the last hour, the air quality on the US Air Quality Index and, in the US, the National Weather Service's warnings, watches and advisories in their colors. A new Weather card on the device page sets it up, and setting or clearing the home in either card changes both.
+- The forecast comes from Open-Meteo, with MET Norway as the backup, and the radar from RainViewer, with Iowa State University's NEXRAD radar as the backup in the US. None needs a sign-up or a key, and each service gets your home rounded to about a kilometer, never the exact spot.
+- Weather warnings in the ticker, a switch in the Weather card, puts the National Weather Service's warnings and watches for your home at the front of the ticker in red or orange, whatever the panel shows. It starts off. With Weather on the main board and the idle display on Off or dim, a warning or a watch lights the panel.
+- Field view: a new Game board setting in the Panel card, Field View in Home Assistant, shows a football game in progress as a field instead of the scoreboard: the ball where ESPN spots it, the line of scrimmage, the line to gain, the red zone and the drive, with the scores and the clock above it and the down and distance under it. At halftime and before overtime the line score takes the field's place. Its ticker has the game's leaders, the drive so far and the chance to win. It starts on Scoreboard, and Try it shows a sample field for 15 seconds.
+- Game details, a new switch for the second area on two rows of two and three or four panels in a row, shows your football game's field beside the scoreboard, with the drive and the chance to win, in place of the clock, the date or today's scores. It starts off.
+- Full screen, a new switch under Shows, lets F1, Stocks & Crypto, the Flight Tracker or Weather fill the whole panel instead of sharing it with the second area. On two rows of two each gets a 128x128 layout: the plane's photo across the panel, or its picture two or three times as big, with the airline's logo 32 LEDs square; bigger market rows and a bigger chart; F1's top ten; and bigger weather pages. On three or four panels in a row the display fills the row. It starts off.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.5
 
 Touchdowns, kicks, home runs and goals play a short pixel-art animation before their splash, the Flight Tracker shows each plane's airline logo, its shape and a real photo of it, and Stocks & Crypto shows the charted symbol's logo big.
