@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 
+#include "app_frame_check.h"
 #include "app_markets.h"
 #include "board_layout.h"
 #include "logo_icon.h"
@@ -405,6 +406,52 @@ void test_focus() {
          "%s", g1.texts.empty() ? "" : g1.texts[0].text.c_str());
 }
 
+// Full screen on a 2x2: bigger rows, logos and chart.
+void test_tall() {
+  const MarketGeom g = market_geom(128, 128, true, true, true, true);
+  KCHECK(g.tall && g.rows == 4 && g.row_px == 16 && g.char_px == 6 && g.logo.w > kMarketTallLogoPx, "tall rows");
+  KCHECK(g.focus_px == kMarketTallFocusPx && g.focus_y >= g.row_y + 4 * 16 && g.spark_x >= g.focus_px &&
+             g.spark_h >= 40 && g.spark_y + g.spark_h <= 120 && g.move_at.y >= g.focus_y + g.focus_px,
+         "the big logo, its move under it, a taller line: %dx%d", g.spark_w, g.spark_h);
+  KCHECK(market_geom(128, 128, true, false, true).rows == 7 && !market_geom(128, 64, true, true, true).tall &&
+             !market_geom(256, 128, true, true, true).tall,
+         "seven rows without a line; other boards as before");
+  MarketBlob b{};
+  for (const char *t : {"AAPL", "SPY", "^GSPC", "BRK.B", "BTC", "ETH", "DOGE", "SHIB"})
+    market_put(b, 0, sym(t));
+  MarketQuote q[kMarketSlots];
+  std::string json = slurp("fixtures/markets_yahoo_spark.json");
+  parse_yahoo_quotes(json, b, q);
+  for (int n = 0; n < 8; n++) {
+    AppFrame f;
+    markets_frame(b, q, 128, 128, card_at(n), f);
+    for (const std::string &p : app_frame_problems(f, 128, 128))
+      KCHECK(false, "n%d: %s", n, p.c_str());
+    const int at = n % 4;
+    KCHECK(f.rows.name.empty() && !f.rows.title.empty() && f.bar.y == 8 + 16 * at && f.bar.h == 16,
+           "n%d: rows as labels, the bar on row %d", n, at);
+    const MarketSymbol &s = b.syms[n];
+    if (market_has_logo(s.sym, s.kind))
+      KCHECK(f.icons[0].px == kMarketTallFocusPx && strcmp(f.icons[0].key, s.sym) == 0, "n%d: %s big", n, s.sym);
+    for (size_t i = market_has_logo(s.sym, s.kind) ? 1 : 0; i < f.icons.size(); i++)
+      KCHECK(f.icons[i].px == kMarketTallLogoPx, "n%d: row logos", n);
+    int big = 0;
+    for (const AppText &t : f.texts)
+      big += t.font == esphome::gameday::BoardFont::S12 && t.y >= 8 && t.y < 8 + 4 * 16 ? 1 : 0;
+    KCHECK(big >= 9, "n%d: symbol, price and change in spleen 12: %d", n, big);
+  }
+  // Nothing read yet: dashes, no line
+  MarketQuote none[kMarketSlots];
+  AppFrame l;
+  markets_frame(market_defaults(), none, 128, 128, card_at(0), l);
+  for (const std::string &p : app_frame_problems(l, 128, 128))
+    KCHECK(false, "loading: %s", p.c_str());
+  size_t shown = 0;
+  for (const AppText &t : l.texts)
+    shown += t.text.empty() ? 0 : 1;
+  KCHECK(l.line.pts.empty() && shown == 8, "loading: four symbols and dashes: %zu", shown);
+}
+
 void test_app() {
   MarketsApp a;
   a.setup();
@@ -652,6 +699,7 @@ int run_markets_app_tests(int &total_checks) {
   test_merge();
   test_frames();
   test_focus();
+  test_tall();
   test_app();
   test_logos();
   total_checks += checks;

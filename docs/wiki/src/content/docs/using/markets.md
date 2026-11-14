@@ -32,6 +32,10 @@ Each symbol gets a row: its logo, where there's room, then the symbol, its price
 
 **The charted symbol's logo.** It shows big, 24 LEDs square, next to the chart: left of the chart under the rows, or, on four panels in a row, above the chart with the symbol and its change in percent beside it. The other rows keep their small logos, and the big logo shows on one panel even when a longer symbol keeps the small ones off. Until the big logo comes in, or when none of the sources has one, as for an index like **^GSPC**, the symbol shows in its place; on four panels in a row the change in percent stays beside it. The big logo is a second download of about a kilobyte, once per symbol.
 
+:::note[Coming in the next release]
+**Full screen on two rows of two.** With **Full screen** on under **Shows** (see [The second area](/using/panel-sizes/#the-second-area)), Stocks & Crypto fills all four panels, 128x128: four rows in bigger letters, each with a 14-LED logo, the symbol, the price and the change in percent, over the chart. The charted symbol's logo is 32 LEDs square, left of a chart about 45 LEDs tall, with the symbol's change in percent under the logo. With eight symbols the rows turn to the page with the charted one, as on the other boards. Until the panel has a chart, the rows fill the panels, seven to a page.
+:::
+
 **The ticker.** Every symbol with its price, change and percent, the change in green or red, like **AAPL 355.63 +7.12 +2.04% | BTC 73,738.65 -186.54 -0.25%**.
 
 **Big and small numbers.** A price too long for its column loses its commas, then its cents, then shortens to thousands, like **73,738.65**, **73738.65**, **73,739** or **74K**. A price under a dollar shows up to four digits after the zeros, like **0.06726**, fewer when its column is narrow, and a price too small for its column shows as a power of ten, like **4.3e-6** for 0.00000435.

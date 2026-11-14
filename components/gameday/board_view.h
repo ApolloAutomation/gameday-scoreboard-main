@@ -71,6 +71,7 @@ struct BoardView {
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout
+  int16_t h{64};         // its height: 128 when a display fills a 2x2
   int16_t splash_h{64};  // the splash's height: the screen's
   Sizes sizes;           // Clock size and Text size, from board_layout
   bool clock_split{false};  // time shows digits only; AM/PM goes in clock_ampm
@@ -104,7 +105,7 @@ void board_build(BoardView &v);
 // Whether board_build found LVGL reading the color marker
 bool ticker_colors_on();
 
-// splash_h may exceed h: a 2x2 splash covers all four
+// h: the board's; splash_h the screen's, a 2x2's all four
 void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);
 // Logos nullptr while downloading; the splash shows badges
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo = nullptr,

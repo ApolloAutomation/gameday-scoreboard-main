@@ -2497,6 +2497,9 @@ bool GamedayComponent::idle_update_() {
     s.dim = ::espn::app_main_dim(in.show, in.clock_valid, in.connected, this->app_lit_(shown), in.area2_busy);
   const bool main_changed = mv != this->main_view_;
   this->main_view_ = mv;
+  // Deferred: emit_ may be deep in fav_choose_.
+  if (this->relayout_due_())
+    this->defer("full", [this]() { this->apply_full_(); });
   const ::espn::IdleView v = this->idle_effective_(s.view);
   // The owner's change lasts until the night hours end.
   const bool was_override = this->night_.on;
@@ -4983,6 +4986,33 @@ void GamedayComponent::set_split(int show) {
   this->emit_a2_({});
 }
 
+void GamedayComponent::set_full(bool on) {
+  if (on == (this->split_prefs_.full != 0))
+    return;
+  this->split_prefs_.full = on ? 1 : 0;
+  this->split_pref_.save(&this->split_prefs_);
+  ESP_LOGI(TAG, "Full screen: %s", on ? "on" : "off");
+  this->apply_full_();
+  this->rebuild_state_(&this->last_fields_);
+}
+
+// The area off or back, as set_split does.
+void GamedayComponent::apply_full_() {
+  if (!this->relayout_due_())
+    return;
+  const bool was_rotating = this->rotation_on_();
+  this->full_on_ = !this->full_on_;
+  ESP_LOGI(TAG, "Main area %s", this->full_on_ ? "fills the panel" : "shares the panel");
+  this->a2_reset_();
+  if (was_rotating != this->rotation_on_() && this->watch_key_last_ != 0)
+    this->watch_reset_();
+  if (this->rotation_on_() && this->visit_.active)
+    this->end_visit_();
+  this->fire_action_("layout");
+  this->emit_({});
+  this->emit_a2_({});
+}
+
 void GamedayComponent::set_display(int display) {
   if (!::espn::display_has(::espn::app_slots().mask(), display)) {
     ESP_LOGW(TAG, "No display %d in this firmware", display);
@@ -5995,7 +6025,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {
-  if (this->main_app_ == nullptr)
+  if (this->main_app_ == nullptr || this->relayout_due_())
     return;
   UpdateFields &af = *this->main_app_;
   af = UpdateFields{};
@@ -6007,7 +6037,7 @@ void GamedayComponent::draw_main_app_(bool quiet) {
     af.clock = true;  // also during a visit, which skips it
     af.board = af.board_card = false;
   } else {
-    this->app_fields_(d, this->board_px_(), kBoardRows, af);
+    this->app_fields_(d, this->board_px_(), this->board_h_(), af);
     this->app_drawn_ms_[(int) d] = millis() | 1;
   }
   // Home Assistant keeps following Game Day.
@@ -6274,7 +6304,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   // No Game Day splash while another display has the board.
   if (this->main_view_ != ::espn::MainView::GAMEDAY || !this->anim_on())
     f.splash_anim = 0;
-  if (!f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY) {
+  const bool splash_now = !f.splash_text.empty() && this->main_view_ == ::espn::MainView::GAMEDAY;
+  if (splash_now) {
     ESP_LOGI(TAG, "Splash: %s%s%s", f.splash_text.c_str(), f.splash_anim ? ", scene " : "",
              f.splash_anim ? ::espn::anim_name((::espn::AnimKind) f.splash_anim) : "");
     this->splash_ms_ = millis() == 0 ? 1 : millis();
@@ -6286,6 +6317,9 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   this->last_fields_ = f;
   this->rebuild_state_(&f);
+  // apply_full_ draws it next, at the new size.
+  if (this->relayout_due_() && !splash_now)
+    return;
   // Before the area, which reads what the board shows.
   const bool app_main = this->main_view_ != ::espn::MainView::GAMEDAY;
   if (app_main)
@@ -7212,6 +7246,8 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   put_team(split_team, this->split_prefs_.team_league, this->split_prefs_.team_id);
   if (this->rotation_on_())
     doc["split_n"] = this->a2_n_doc_;
+  doc["full"] = this->split_prefs_.full != 0;
+  doc["full_now"] = this->full_on_;
   // The main area's display and those this firmware has.
   const ::espn::AppSlots &slots = ::espn::app_slots();
   doc["display"] = (int) this->main_display_();
@@ -7975,6 +8011,9 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
         break;
       case ::espn::SetKind::MAIN_DISPLAY:
         this->set_display(op.value);
+        break;
+      case ::espn::SetKind::FULL:
+        this->set_full(op.on);
         break;
       case ::espn::SetKind::WIRING:
         // Off a 2x2, no restart: the page needs new state.

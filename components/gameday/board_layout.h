@@ -43,6 +43,10 @@ struct Sizes {
   bool text{false};   // Large text size
 };
 
+// A display filling a 2x2 lays out 128 rows.
+static const int kTallRows = 128;
+inline bool tall_board(int w, int h) { return h >= kTallRows && w < 192; }
+
 // A 2x2 counts as two panels wide.
 inline int board_px(int panels) { return panels > 0 ? panels * kPanelPx : kPanelPx; }
 
@@ -72,9 +76,6 @@ static const int kGuardRows = 9, kGuardRowsLarge = 12;
 inline int guard_rows(bool large_text) { return large_text ? kGuardRowsLarge : kGuardRows; }
 inline int guard_line_y(int h, bool large_text = false) { return h - guard_rows(large_text); }
 inline int guard_label_y(bool large_text) { return (guard_rows(large_text) - kGuardRows + 1) / 2; }
-
-// A 2x2's second area has its own ticker.
-inline bool board_ticker(int h) { return h <= kBoardRows; }
 
 // Never repeat the clock card's time or date.
 static const int kLowerTimeY = 5, kLowerTimeRows = 16, kLowerDateRows = 12, kLowerTickerRows = 16;

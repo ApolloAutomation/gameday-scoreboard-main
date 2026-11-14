@@ -217,6 +217,39 @@ void test_frame_helpers() {
   ACHECK(photo("https://a/b.jpg", kAppPhotoMaxW + 1, 21, 0).url.empty());
 }
 
+// Full screen: the rows become labels at their own pitch.
+void test_rows_texts() {
+  AppFrame f;
+  f.rows.title = "Drivers";
+  f.rows.status = "Round 20";
+  f.rows.status_color = 0x00FF00;
+  for (int i = 0; i < 10; i++) {
+    f.rows.pos.push_back(std::to_string(i + 1));
+    f.rows.name.push_back("Name");
+    f.rows.value.push_back(i < 3 ? "1W" : "");
+    f.rows.detail.push_back("99");
+    f.rows.name_color.push_back(0xFF0000);
+    f.rows.value_color.push_back(0xA0A0A0);
+  }
+  app_rows_texts(f, 128, 11, 11);
+  ACHECK(f.rows.name.empty() && f.rows.title.empty() && f.rows.status.empty());
+  ACHECK(f.texts.size() == 2 + 10 * 3 + 3);
+  ACHECK(f.texts[0].text == "Drivers" && f.texts[0].x == 2 && f.texts[0].y == 0 && f.texts[0].align == AppAlign::LEFT);
+  ACHECK(f.texts[1].text == "Round 20" && f.texts[1].align == AppAlign::RIGHT && f.texts[1].color == 0x00FF00);
+  const AppText &last = f.texts.back();
+  ACHECK(last.text == "99" && last.y == 11 + 9 * 11 && last.x == 94 && last.align == AppAlign::RIGHT);
+  // The leaderboard's dimmer place and name, as gd_board draws them
+  ACHECK(f.texts[2].text == "1" && f.texts[2].color == 0x777777 && f.texts[3].color == 0xE60000);
+  ACHECK(app_frame_board(f));
+  // A display's own columns keep their colors.
+  AppFrame own;
+  own.rows.name = {"AAPL"};
+  own.rows.name_color = {0xFFFFFF};
+  own.rows.cols = {0, 0, 9, 30, 39, 49, 88, 40};
+  app_rows_texts(own, 128, 8, 16);
+  ACHECK(own.texts.size() == 1 && own.texts[0].x == 9 && own.texts[0].y == 8 && own.texts[0].color == 0xFFFFFF);
+}
+
 void test_rows_geom() {
   // The same places gameday-live.yaml gives the board's rows.
   const RowsGeom one = rows_geom(64);
@@ -414,6 +447,7 @@ int run_app_tests(int &total_checks) {
   test_area_views();
   test_frame_helpers();
   test_rows_geom();
+  test_rows_texts();
   test_units();
   test_hosts();
   test_timing();

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "app_f1.h"
+#include "app_frame_check.h"
 #include "board_layout.h"
 #include "panel_text.h"
 
@@ -169,15 +170,31 @@ void check_fits(const AppFrame &f, int w, const char *what) {
 }
 
 // The frame of screen s, found by stepping the clock.
-bool frame_of(const F1App &a, F1Screen s, int64_t from, int w, AppFrame &out) {
+bool frame_of(const F1App &a, F1Screen s, int64_t from, int w, AppFrame &out, int h = 64) {
   for (int64_t t = from; t < from + 120; t++) {
     if (a.screen(t) != s)
       continue;
     out = AppFrame{};
-    a.frame(w, 64, t, out);
+    a.frame(w, h, t, out);
     return true;
   }
   return false;
+}
+
+// The last label with s: big ones follow rows.
+const AppText *text_of(const AppFrame &f, const std::string &s) {
+  const AppText *found = nullptr;
+  for (const AppText &t : f.texts)
+    if (t.text == s)
+      found = &t;
+  return found;
+}
+
+// Full screen: every card fits 128x128, with more rows.
+void check_tall(const AppFrame &f, const char *what) {
+  for (const std::string &p : app_frame_problems(f, 128, 128))
+    PCHECK(false, "%s: %s", what, p.c_str());
+  PCHECK(app_frame_board(f) && f.rows.name.empty() && !f.ticker.empty(), "%s: labels and a ticker", what);
 }
 
 void test_helpers() {
@@ -402,7 +419,35 @@ void test_reads_and_screens() {
       PCHECK(app_frame_board(f), "screen %d at %d is a board", (int) s, w);
     }
 
+  const char *names[] = {"live", "next", "circuit", "weather", "drivers", "constructors", "last race"};
+  for (F1Screen s : {F1Screen::NEXT, F1Screen::CIRCUIT, F1Screen::WEATHER, F1Screen::DRIVERS, F1Screen::CONSTRUCTORS,
+                     F1Screen::LAST_RACE}) {
+    AppFrame tall;
+    PCHECK(frame_of(a, s, t0, 128, tall, 128), "tall %s found", names[(int) s]);
+    check_tall(tall, names[(int) s]);
+  }
+  AppFrame tall;
+  frame_of(a, F1Screen::DRIVERS, t0, 128, tall, 128);
+  PCHECK(text_of(tall, "10") != nullptr && text_of(tall, "Antonelli") != nullptr, "ten drivers");
+  frame_of(a, F1Screen::NEXT, t0, 128, tall, 128);
+  const AppText *when = text_of(tall, "7d 20h"), *what = text_of(tall, "Practice 1");
+  PCHECK(when != nullptr && when->font == esphome::gameday::BoardFont::S16 && what != nullptr &&
+             what->font == esphome::gameday::BoardFont::S12 && what->color == 0xFFD000,
+         "the next session and its countdown, big");
+  PCHECK(tall.rows.status.empty() && text_of(tall, "Race") != nullptr, "the countdown once, the sessions under it");
+  frame_of(a, F1Screen::CIRCUIT, t0, 128, tall, 128);
+  int top = 128, bottom = 0;
+  for (const AppPoint &p : tall.line.pts) {
+    top = std::min<int>(top, p.y);
+    bottom = std::max<int>(bottom, p.y);
+  }
+  PCHECK(tall.line.pts.size() >= 2 && bottom - top >= 40 && text_of(tall, "50 laps") != nullptr &&
+             text_of(tall, "50 laps")->y > bottom,
+         "the outline big, the facts under it: rows %d-%d", top, bottom);
+  // A 64-row card after a tall one: six rows again
   AppFrame f;
+  frame_of(a, F1Screen::DRIVERS, t0, 128, f);
+  PCHECK(f.rows.name.size() == 6 && f.texts.empty(), "six rows at 128x64");
   frame_of(a, F1Screen::NEXT, t0, 128, f);
   PCHECK_EQ(f.rows.name[0], "Practice 1");
   PCHECK_EQ(f.rows.value[0], "Fri");
@@ -504,6 +549,13 @@ void test_live() {
     check_fits(f, w, "live");
     PCHECK(f.rows.name.size() == 6, "six rows at %d", w);
   }
+  AppFrame tall;
+  a.frame(128, 128, t, tall);
+  check_tall(tall, "live");
+  int rows = 0;
+  for (const AppText &x : tall.texts)
+    rows += x.x == esphome::gameday::rows_geom(128).name.x ? 1 : 0;
+  PCHECK(rows == 10 && text_of(tall, "Lap 34/56") != nullptr, "the top ten on track: %d", rows);
   AppFrame f;
   a.frame(128, 64, t, f);
   PCHECK_EQ(f.rows.status, "Lap 34/56");

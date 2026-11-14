@@ -353,6 +353,8 @@ INITIAL = {
     "idle_view": "", "night_now": False, "dark": False,
     # split 0-8 (split.h); state_doc() derives split_at, split_now
     "split": 0, "splitteam": {}, "split_at": "", "split_now": "",
+    # Full screen: a main board display fills the panel
+    "full": False, "full_now": False,
     # The main area's display and those the firmware has
     "display": 0, "display_now": "gameday",
     "espn_kb": 412, "espn_reads": 23,
@@ -555,6 +557,13 @@ def state_doc():
         # main_view(): the night hours' clock over a display
         if STATE.get("night_now") and STATE["display"] != 0:
             STATE["display_now"] = "clock"
+    # split_full(): a display drawn beside a second area
+    if "full" in STATE:
+        STATE["full_now"] = bool(STATE["full"] and STATE.get("split_at") and
+                                 STATE.get("display_now") not in (None, "gameday", "clock"))
+        if STATE["full_now"]:
+            STATE["split_now"] = ""
+            STATE.pop("split_n", None)
     if isinstance(STATE.get("flights"), dict):
         # tz_miles(): the US and UK zones are imperial
         tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
@@ -857,7 +866,7 @@ def apply_set(kv):
         elif k == "tzauto":
             STATE["tz_auto"] = v == "1"
         elif k in ("down", "count", "match", "play", "odds", "opp", "bootaddr", "autoupd", "beta", "alertfav", "anim", "watch",
-                   "watchmine"):
+                   "watchmine", "full"):
             STATE[k] = v == "1"
             if k == "watch" and v != "1":
                 end_visit()

@@ -41,7 +41,7 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
   const MarketCol &value = g.cols == 4 ? g.change : g.price;
   const MarketCol &detail = g.cols >= 3 ? g.pct : none;
   r.cols = {pos.x, pos.w, g.sym.x, g.sym.w, value.x, value.w, detail.x, detail.w};
-  for (uint8_t i = 0; i < f.n; i++) {
+  for (uint8_t i = 0; i < f.n && !g.tall; i++) {
     const MarketRow &row = f.rows[i];
     const bool four = g.cols == 4;
     r.pos.push_back(four ? row.price : "");
@@ -55,8 +55,7 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
   }
   // The charted row stands out: a bar behind it
   if (f.active >= 0)
-    out.bar = AppFill{g.list.x, (int16_t) (g.row_y + f.active * kMarketRowPx), g.list.w, (int16_t) kMarketRowPx,
-                      kMarketBar};
+    out.bar = AppFill{g.list.x, (int16_t) (g.row_y + f.active * g.row_px), g.list.w, (int16_t) g.row_px, kMarketBar};
   auto logo = [&](const MarketSymbol &s, int x, int y, int px) -> AppIcon & {
     AppIcon ic;
     ic.x = (int16_t) x;
@@ -80,6 +79,14 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
     return (int8_t) (out.texts.size() - 1);
   };
   using esphome::gameday::font_px;
+  // Full screen: the rows in spleen_12
+  for (uint8_t i = 0; i < f.n && g.tall; i++) {
+    const MarketRow &row = f.rows[i];
+    const int y = g.row_y + i * g.row_px + 2;
+    text(g.sym.x, y, g.sym.w, MarketFont::S12, f.spark && !row.spark ? kMarketDim : kMarketFlat, row.sym);
+    out.texts[text(g.price.x, y, g.price.w, MarketFont::S12, kMarketFlat, row.price)].align = AppAlign::RIGHT;
+    out.texts[text(g.pct.x, y, g.pct.w, MarketFont::S12, row.color, row.pct)].align = AppAlign::RIGHT;
+  }
   // Its logo big, its name there until it draws
   if (f.slot >= 0 && g.focus_px > 0) {
     const MarketSymbol &s = b.syms[f.slot];
@@ -107,10 +114,11 @@ void markets_frame(const MarketBlob &b, const MarketQuote (&q)[kMarketSlots], in
   }
   if (g.logo.w > 0) {
     const int first = f.page * g.rows;
+    const int px = g.tall ? kMarketTallLogoPx : kMarketLogoPx;
     for (uint8_t i = 0; i < f.n; i++) {
       const MarketSymbol &s = b.syms[first + i];
       if (market_has_logo(s.sym, s.kind))
-        logo(s, g.logo.x, g.row_y + i * kMarketRowPx, kMarketLogoPx);
+        logo(s, g.logo.x, g.row_y + i * g.row_px + (g.row_px - px) / 2, px);
     }
   }
   if (f.spark) {

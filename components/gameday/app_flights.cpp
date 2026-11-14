@@ -93,6 +93,7 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     o.h = s->h;
     o.bits = s->bits;
     o.flip = a.flip;
+    o.scale = a.scale;
     o.ink[kArtBody - 1] = kColBody;
     o.ink[kArtTail - 1] = a.tail;
     o.ink[kArtDetail - 1] = kColDetail;
@@ -102,7 +103,7 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     espn::AppIcon ic;
     ic.x = l.x;
     ic.y = l.y;
-    ic.px = (uint8_t) kLogoPx;
+    ic.px = l.px;
     memcpy(ic.key, l.icao, sizeof l.icao);
     ic.url = logo_url;
     ic.alt = l.alt;

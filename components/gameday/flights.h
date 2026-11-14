@@ -659,14 +659,18 @@ struct Art {
   int16_t x{0}, y{0};
   PlaneKind kind{PlaneKind::NONE};
   bool flip{false};
+  uint8_t scale{1};
   uint32_t tail{kColTail};
 };
 
 static const int kLogoPx = 16;
+// Full screen's card logo.
+static const int kLogoBigPx = 32;
 
 // An airline logo's top left and whose.
 struct Logo {
   int16_t x{0}, y{0};
+  uint8_t px{kLogoPx};
   char icao[4]{};
   int8_t alt{-1};  // items index of the code shown meanwhile
 };
@@ -700,10 +704,13 @@ struct FrameOpts {
 
 // The photo's spot on a card 128 wide.
 static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
+// Full screen's: the panel's width, doubled pixels.
+static const int kPhotoTallX = 1, kPhotoTallY = 51, kPhotoTallW = 126, kPhotoTallH = 52;
 
 enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING };
 
 // Under 192 wide the card or the list; wider, both.
+// 128x128 (full screen): the tall card or list.
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s);
 Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
 // card_end: where the card plane's words end.

@@ -463,8 +463,8 @@ void logo_draw(BoardView &v, const UpdateFields &f, image::Image *img) {
 }
 
 uint32_t art_key(const ::espn::AppArt &a) {
-  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16), a.ink[0], a.ink[1],
-                        a.ink[2]};
+  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16 | a.scale << 17),
+                        a.ink[0], a.ink[1], a.ink[2]};
   return ::espn::logo_key(reinterpret_cast<const char *>(v), sizeof(v)) | 1;
 }
 
@@ -494,12 +494,13 @@ void put_art(BoardView &v, const UpdateFields &f) {
   if (key != v.art_key) {
     ::espn::app_art_paint(a, v.art_buf);
     lv_image_dsc_t &d = v.art_dsc;
+    const uint32_t w = (uint32_t) a.w * a.scale, h = (uint32_t) a.h * a.scale;
     d.header.magic = LV_IMAGE_HEADER_MAGIC;
     d.header.cf = LV_COLOR_FORMAT_RGB565A8;
-    d.header.w = a.w;
-    d.header.h = a.h;
-    d.header.stride = a.w * 2;
-    d.data_size = (uint32_t) a.w * a.h * 3;
+    d.header.w = w;
+    d.header.h = h;
+    d.header.stride = w * 2;
+    d.data_size = w * h * 3;
     d.data = v.art_buf;
     ::lv_image_set_src(v.art, &d);
     lv_obj_invalidate(v.art);
@@ -583,14 +584,15 @@ void board_build(BoardView &v) {
 
 void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   v.w = (int16_t) w;
+  v.h = (int16_t) (h > kBoardRows ? h : kBoardRows);
   v.splash_h = (int16_t) splash_h;
   v.sizes = sizes;
   const GameGeom g = game_geom(w, sizes.text, sizes.clock);
   const SplashBox sb = splash_box(w, splash_h);
-  show(v.ticker, board_ticker(h));
+  show(v.ticker, true);
   put_size(v.game, w, kBoardRows);
-  put_size(v.no_game, w, kBoardRows);
-  put_size(v.board, w, kBoardRows);
+  put_size(v.no_game, w, v.h);
+  put_size(v.board, w, v.h);
   put_size(v.splash, w, sb.height);
   put_width(v.splash_lbl, w);
   put_width(v.msg, w);
@@ -784,7 +786,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
       lv_obj_set_style_text_font(v.ticker, tf, 0);
       r.ticker_changed = true;
     }
-    const int ty = f.board ? kBoardRows - 8 : g.ticker_y;
+    const int ty = f.board ? v.h - 8 : g.ticker_y + v.h - kBoardRows;
     if (lv_obj_get_style_y(v.ticker, LV_PART_MAIN) != ty)
       lv_obj_set_y(v.ticker, ty);
     const char *cur = lv_label_get_text(v.ticker);

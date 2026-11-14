@@ -50,6 +50,15 @@ void test_fit() {
   // A panorama fills the width
   f = photo_fit(1000, 200, false, 56, 21);
   PPCHECK(f.ow == 56 && f.oh < 21 && f.ch == f.sh, "a panorama: %dx%d", f.ow, f.oh);
+  // Full screen's box: the first scan grown to fill it
+  f = photo_fit(420, 280, true, 126, 52);
+  PPCHECK(f.sw == 53 && f.cw == 53 && f.ch == 22 && f.ow == 125 && f.oh == 52, "grown: cut %dx%d, drawn %dx%d", f.cw,
+          f.ch, f.ow, f.oh);
+  f = photo_fit(448, 280, true, 126, 52);
+  PPCHECK(f.ow == 121 && f.oh == 52, "a wider one grown: %dx%d", f.ow, f.oh);
+  // Baseline decodes big enough instead
+  f = photo_fit(1024, 683, false, 126, 52);
+  PPCHECK(f.shift == 3 && f.ow == 126 && f.oh <= 52 && f.ow <= f.cw, "baseline 1024 at full screen: %dx%d", f.ow, f.oh);
   // Sizes it refuses outright
   PPCHECK(!photo_fit(0, 280, true, 56, 21).ok() && !photo_fit(420, 0, true, 56, 21).ok(), "empty");
   PPCHECK(!photo_fit(1025, 1024, false, 56, 21).ok() && photo_fit(1024, 1024, false, 56, 21).ok(), "the 1 MP cap");
@@ -59,15 +68,18 @@ void test_fit() {
   for (uint32_t w = 1; w <= 1100; w += 37)
     for (uint32_t h = 1; h <= 1100; h += 41)
       for (int prog = 0; prog < 2; prog++)
-        for (int bw : {56, 21, 64})
-          for (int bh : {21, 32, 56}) {
+        for (int bw : {56, 21, 64, 126})
+          for (int bh : {21, 32, 52, 56}) {
             const PhotoFit g = photo_fit(w, h, prog, bw, bh);
             if ((uint64_t) w * h > kPhotoMaxPixels) {
               bad += g.ok();
               continue;
             }
-            const bool in = g.ok() && g.ow <= bw && g.oh <= bh && g.ow <= g.cw && g.oh <= g.ch && g.cw == g.sw &&
-                            g.cy >= 0 && g.cy + g.ch <= g.sh && g.sw == (int) ((w + (1u << g.shift) - 1) >> g.shift);
+            // Never bigger than cut, unless grown to fill the box
+            const bool grown = 2 * g.cw <= bw && 2 * g.ch <= bh && (g.ow == bw || g.oh == bh);
+            const bool in = g.ok() && g.ow <= bw && g.oh <= bh && ((g.ow <= g.cw && g.oh <= g.ch) || grown) &&
+                            g.cw == g.sw && g.cy >= 0 && g.cy + g.ch <= g.sh &&
+                            g.sw == (int) ((w + (1u << g.shift) - 1) >> g.shift);
             // The shape kept to a pixel
             const bool shape = std::abs((int64_t) g.ow * g.ch - (int64_t) g.oh * g.cw) <= std::max(g.cw, g.ch);
             if (!in || !shape) {

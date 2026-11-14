@@ -384,10 +384,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // The main area's display; refuses one the firmware lacks.
   void set_display(int display);
   ::espn::SplitArea split_area() const {
-    return this->panels_ != nullptr
-               ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(), this->split_prefs_.show)
-               : ::espn::SplitArea{};
+    return this->panels_ != nullptr ? ::espn::split_area(this->panels_->cols(), this->panels_->rows(),
+                                                         this->split_prefs_.show, this->full_on_)
+                                    : ::espn::SplitArea{};
   }
+  // A display on the main board fills the panel.
+  void set_full(bool on);
   void redraw_area() { this->emit_a2_({}); }
   void set_idle(int show);
   void set_idle_dim(int level);
@@ -586,6 +588,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // 128 px sizing also fits three or four wide.
   bool wide_() const { return this->panels_ != nullptr && this->panels_->cols() >= 2; }
   int board_px_() const { return this->panels_ != nullptr ? this->split_area().main_w : ::espn::kBoardPx; }
+  int board_h_() const { return this->split_area().main_h; }
   // Fixed size: resizing the blob resets every setting.
   struct IdlePrefs {
     uint8_t idle;
@@ -1290,13 +1293,24 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     uint8_t team_league;
     uint32_t team_id;     // 0 means no team
     uint8_t display;      // the main area's Display, 0 on older panels
-    uint8_t spare[9];
+    uint8_t full;         // 1: that display fills the panel
+    uint8_t spare[8];
   } __attribute__((packed));
   static_assert(sizeof(SplitPrefs) == 16, "SplitPrefs keeps its size, or every setting in it resets");
   ESPPreferenceObject split_pref_;
   SplitPrefs split_prefs_{};
+  // Full screen as laid out; apply_full_ follows main_view_.
+  bool full_on_{false};
+  bool full_want_() const {
+    return this->panels_ != nullptr &&
+           ::espn::split_full(this->split_prefs_.full != 0, this->main_view_ == ::espn::MainView::APP,
+                              ::espn::split_at(this->panels_->cols(), this->panels_->rows()));
+  }
+  // Until then the old layout draws nothing.
+  bool relayout_due_() const { return this->full_want_() != this->full_on_; }
+  void apply_full_();
   ::espn::SplitShow a2_show_() const {
-    return this->panels_ != nullptr
+    return this->panels_ != nullptr && !this->full_on_
                ? ::espn::split_effective(this->split_prefs_.show,
                                          ::espn::split_at(this->panels_->cols(), this->panels_->rows()))
                : ::espn::SplitShow::OFF;

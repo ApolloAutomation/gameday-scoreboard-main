@@ -4414,8 +4414,10 @@ static void test_board_layout() {
   // The 9-row heat warning sits at the screen's bottom.
   CHECK_EQ(guard_line_y(kBoardRows), 55);
   CHECK_EQ(guard_line_y(2 * kBoardRows), 119);
-  CHECK(board_ticker(kBoardRows));
-  CHECK(!board_ticker(2 * kBoardRows));
+  // Only a display filling a 2x2 lays out 128 rows.
+  CHECK(!tall_board(128, kBoardRows));
+  CHECK(tall_board(128, 2 * kBoardRows));
+  CHECK(!tall_board(256, 2 * kBoardRows));
 
   // 2x2 bottom half: time, date, ticker above the warning.
   const LowerHalf board = lower_half(false, false);

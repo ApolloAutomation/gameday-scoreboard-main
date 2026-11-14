@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "app_frame_check.h"
 #include "captive.h"
 #include "espn_parse.h"
 #include "app_f1.h"
@@ -550,6 +551,14 @@ size_t f1_app(const uint8_t *data, size_t size, int64_t now) {
           abort();
       n += f.ticker.size() + esphome::gameday::ticker_markup(esphome::gameday::panel_text(f.ticker), f.spans).size();
     }
+  // Full screen on a 2x2: every card inside 128x128
+  for (int64_t t = now; t < now + 60; t += 7) {
+    AppFrame f;
+    a.frame(128, 128, t, f);
+    if (!app_frame_problems(f, 128, 128).empty())
+      abort();
+    n += f.texts.size();
+  }
   return n + a.poll_ms(now) + (a.busy(now) ? 1 : 0);
 }
 
@@ -588,8 +597,9 @@ size_t markets(const uint8_t *data, size_t size, size_t chunk, int64_t now) {
   found += parse_nasdaq_quotes(r3, list, now, q);
   if (found > 3 * kMarketSlots)
     abort();
-  for (int w : {64, 128, 256}) {
-    const MarketGeom g = market_geom(w, 64, true, true);
+  for (int w : {64, 128, 256, 128 + 1}) {
+    // 129 stands for full screen's 128x128
+    const MarketGeom g = w == 129 ? market_geom(128, 128, true, true, true, true) : market_geom(w, 64, true, true);
     const MarketFrame f = market_frame(list, q, g, now, 1, true);
     if (f.n > g.rows || f.page >= f.pages)
       abort();
@@ -775,15 +785,20 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         abort();
       flights::FrameOpts o;
       o.w = 128 + (int) (size % 3) * 64;
+      o.h = o.w == 128 && size % 2 == 1 ? 128 : 64;
       o.photo = &ph;
       const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
       if (!f.photo.url.empty() && (f.photo.x + f.photo.w > o.w || f.photo.y + f.photo.h > o.h - 8 ||
                                    f.photo.at > f.ticker.size()))
         abort();
+      const int bw = 1 + (int) (size % 128), bh = 1 + (int) (size / 3 % 80);
       const flights::PhotoFit fit = flights::photo_fit(1 + (uint32_t) (size % 1100), 1 + (uint32_t) (size / 7 % 900),
-                                                       size & 1, 1 + (int) (size % 64), 1 + (int) (size / 3 % 32));
+                                                       size & 1, bw, bh);
       if (fit.ok()) {
-        if (fit.ow > fit.cw || fit.oh > fit.ch || fit.cy + fit.ch > fit.sh)
+        // Bigger than its cut only when grown to fill
+        const bool grown = 2 * fit.cw <= bw && 2 * fit.ch <= bh;
+        if ((!grown && (fit.ow > fit.cw || fit.oh > fit.ch)) || fit.ow > bw || fit.oh > bh ||
+            fit.cy + fit.ch > fit.sh)
           abort();
         std::vector<uint16_t> px((size_t) fit.sw * fit.sh, 0);
         memcpy(px.data(), data, std::min(size, px.size() * 2));
