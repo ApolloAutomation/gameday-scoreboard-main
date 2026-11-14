@@ -259,6 +259,11 @@ void WeatherApp::state(JsonObject out, int64_t now) const {
     put_s(out, "radar", this->fresh_(Read::RADAR, now) ? "rainviewer" : "iem");
 }
 
+bool WeatherApp::lit(int64_t now) const {
+  const Alert *a[kAlerts];
+  return this->live_alerts_(now, a, kAlerts) > 0 && a[0]->level >= Level::WATCH;
+}
+
 void WeatherApp::shown(bool on) {
   this->on_ = on;
   if (on)

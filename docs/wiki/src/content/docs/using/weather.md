@@ -55,6 +55,8 @@ The panel shows a message instead when it has no weather to show:
 - **Can't reach weather data**: three forecast reads in a row failed, and the panel has no forecast from the last 3 hours. The panel keeps trying.
 
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes Weather's place until they end, and the device page says so.
+
+With the **Idle display** on **Off or dim** and Weather on the main board, the panel stays dark or dim except while the National Weather Service has a warning or a watch out for home. It keeps reading while it's dark, so an alert lights it.
 :::
 
 ## Warnings in the ticker

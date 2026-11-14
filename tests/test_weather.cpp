@@ -221,6 +221,8 @@ void test_aqi_alerts() {
          "severity colors");
   const std::string t = tidy_alert("* CHANGES...None.\n\n* WHAT...Heavy wet\nsnow...mostly.\n\n* WHERE...Here.", 300);
   WCHECK(t == "Heavy wet snow, mostly.", "the what alone: %s", t.c_str());
+  const std::string longer(5000, 'x');
+  WCHECK(tidy_alert(longer.c_str(), 300).size() <= 300, "a long one, read from its start");
   const std::string cut = tidy_alert("Plain words with no sections at all here", 20);
   WCHECK(cut.size() <= 20 && cut.substr(cut.size() - 3) == "...", "cut at a word: %s", cut.c_str());
 }
@@ -477,6 +479,7 @@ void test_app() {
   WCHECK(first == rainviewer_url(a->radar(), 0, 389399, -1199772), "it starts on the oldest");
   g_ms = 0;
 
+  WCHECK(a->lit(now) && !a->busy(now), "a warning keeps Off or dim lit, not the night hours away");
   // The warning in every ticker, only with the switch on
   uint32_t color = 0;
   WCHECK(a->ticker_warning(now, color).empty(), "switch off: no warning elsewhere");

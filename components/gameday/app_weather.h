@@ -51,6 +51,8 @@ class WeatherApp final : public espn::App {
   espn::AppSet set(const std::string &key, const std::string &value) override;
   void state(JsonObject out, int64_t now) const override;
   void shown(bool on) override;
+  // A warning or watch keeps Off or dim lit.
+  bool lit(int64_t now) const override;
   uint32_t poll_ms(int64_t now) const override;
   uint32_t night_poll_ms(int64_t now) const override { return this->off_poll_ms_(now); }
   uint32_t idle_poll_ms(int64_t now) const override { return this->off_poll_ms_(now); }

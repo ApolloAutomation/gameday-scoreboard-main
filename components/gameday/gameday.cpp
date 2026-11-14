@@ -6271,10 +6271,19 @@ void GamedayComponent::apply_app_job_() {
   const uint32_t key = warn.empty() ? 0 : fnv1_hash(warn);
   if (key != this->warn_key_) {
     this->warn_key_ = key;
-    if (this->main_view_ == ::espn::MainView::GAMEDAY)
-      this->draw_(this->last_fields_);
-    else if (this->main_display_() != d)
-      this->draw_main_app_(true);
+    if (this->main_view_ != ::espn::MainView::GAMEDAY) {
+      if (this->main_view_ == ::espn::MainView::CLOCK || this->main_display_() != d)
+        this->draw_main_app_(true);
+    } else if (this->splash_ms_ == 0 || millis() - this->splash_ms_ >= this->splash_stay_ms_) {
+      // Not over a splash, and never one again
+      UpdateFields &f = this->last_fields_;
+      f.splash_text.clear();
+      f.splash_anim = 0;
+      const bool quiet = f.quiet;
+      f.quiet = true;
+      this->draw_(f);
+      f.quiet = quiet;
+    }
   }
   this->rebuild_state_(&this->last_fields_);  // the page's copy too
 }

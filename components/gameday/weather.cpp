@@ -530,7 +530,8 @@ uint32_t level_color(Level l) {
 
 std::string tidy_alert(const char *desc, size_t max) {
   std::string out;
-  for (const char *c = desc != nullptr ? desc : ""; *c != '\0'; c++) {
+  // Its start only: some run to many KB
+  for (const char *c = desc != nullptr ? desc : ""; *c != '\0' && out.size() < 1024; c++) {
     const char ch = *c == '\n' || *c == '\r' || *c == '\t' ? ' ' : *c;
     if (ch != ' ' || (!out.empty() && out.back() != ' '))
       out += ch;
