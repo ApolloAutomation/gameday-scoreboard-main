@@ -92,17 +92,21 @@ One or two panels have no second area, and the device page doesn't offer one. Wi
 - **Flight Tracker**, see [Flight Tracker](/using/flights/): the planes flying near the home you set on the device page. On the right panel of three wide, the nearest plane's card and a list of the nearest take turns, about 8 seconds each, as on one 64x64 panel; on the right two panels of four wide and the bottom half of two rows of two they take turns at 128x64. On three or four wide with **Nothing** picked, the Flight Tracker on the main board puts the nearest plane's card on the left and the list beside it.
 
 :::note[Coming in the next release]
+- **Weather**, see [Weather](/using/weather/): the weather at the home you set on the device page, page by page: now, the next hours, the next days, an animated radar, the air quality and, in the US, the National Weather Service's alerts. The right panel of three wide gets the 64x64 pages, and the right two panels of four wide and the bottom half of two rows of two the 128x64 ones.
+:::
+
+:::note[Coming in the next release]
 **Game details**, a switch under **Shows**, puts your football game's field in the second area while the game is on and the board stays the scoreboard: the down and distance across the top, red in the red zone, the field under it with the ball, the lines and the drive, each side's chance to win as a bar in the two teams' colors, the drive's plays, yards and time, and the chance to win in each team's color, like "DUKE 84%". Its ticker has the game's leaders, the drive and the chance to win. On the right panel of three wide the same parts are in short, like "2&5 at BUF6" and "7P 38Y 1:36". At halftime, and between the 4th quarter and overtime, the line score takes the place of the field and the bar. It takes the place of **Clock and date** and **Today's scores**, the clock a second team's game shows when that team isn't playing, and the clock or the scores **Rotating live games** falls back to; a second team's game that's on, live games to rotate through, a big play in another game and the displays keep the area. It's off unless you turn it on, it shows only during a football game in progress on the board, and never while the board shows the [Field view](#field-view) itself, so the two never show the same field.
 :::
 
 While the main board shows one of these (**Showing** in the Panel card), **Shows** lists **Game Day** too, which puts the scoreboard the board would show in the second area: your team's game, or whatever the board would show, its celebrations included. The second area never shows the same display as the main board: when both would, it shows the clock. The panel reads a display's data between the board's own reads, as it does for the other choices.
 
 :::note[Coming in the next release]
-**Full screen.** Under **Shows**, a **Full screen** switch lets F1, Stocks & Crypto or the Flight Tracker take the whole panel when it's the one picked under **Showing**, instead of sharing it with the second area. It starts off, so nothing changes until you turn it on.
+**Full screen.** Under **Shows**, a **Full screen** switch lets F1, Stocks & Crypto, the Flight Tracker or Weather take the whole panel when it's the one picked under **Showing**, instead of sharing it with the second area. It starts off, so nothing changes until you turn it on.
 
 | Arrangement | With Full screen on and a display under Showing |
 | --- | --- |
-| Two rows of two | The display fills all four panels, 128x128, with its own full-screen layout: see [Flight Tracker](/using/flights/), [Stocks & Crypto](/using/markets/) and [F1](/using/f1/). Its ticker runs along the bottom edge. |
+| Two rows of two | The display fills all four panels, 128x128, with its own full-screen layout: see [Flight Tracker](/using/flights/), [Stocks & Crypto](/using/markets/), [F1](/using/f1/) and [Weather](/using/weather/). Its ticker runs along the bottom edge. |
 | Three or four wide | The display fills the whole row, as with **Nothing** picked. |
 | One or two panels | Nothing changes: the display already fills the panel. |
 

@@ -199,7 +199,7 @@ inline int64_t boot_log_fault_ago(const BootLog &log, int64_t now, int64_t uptim
 }
 
 // The other displays' hosts (apps.h), each under its key.
-constexpr int kHealthApps = 3;
+constexpr int kHealthApps = 4;
 
 // Everything the health block says, gathered by the caller.
 struct Health {

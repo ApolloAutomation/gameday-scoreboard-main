@@ -18,6 +18,10 @@ The device page has a **Flight Tracker** card. It needs a home location before i
 3. Pick how far from home a plane can be under **Within**: 5 to 100 miles, or 5 to 150 km outside the US and UK. A new panel starts at 10 miles.
 4. Choose **Flight Tracker** under **Showing** in the Panel card, or under **Shows** for the second area.
 
+:::note[Coming in the next release]
+The home is [Weather](/using/weather/)'s too: setting or clearing it in the Flight Tracker card or the Weather card changes both.
+:::
+
 **Planes near** shows the spot the panel has, with **Clear** to remove it. The line at the bottom of the card says what the panel is doing, like **12 planes nearby, from Flightradar24.**
 
 Under that line, the card shows a photo of the plane on the panel's card, from Planespotters.net, with its callsign and the photographer's name. Tap the photo or the name to open the photo's page on Planespotters.net. Your browser looks the photo up itself, by the plane's address and then its registration, and keeps what it found while the page is open. A plane with no photo there shows none.

@@ -228,7 +228,7 @@ bool MarketsApp::request(int64_t now, AppRequest &out) {
             : this->src_ == MarketSource::NASDAQ ? market_nasdaq_url(b)
                                                  : market_spark_url(b);
   // Yahoo and Nasdaq turn curl away
-  out.headers.push_back(AppHeader{"User-Agent", kMarketsUserAgent});
+  app_header(out, "User-Agent", kMarketsUserAgent);
   return !out.url.empty();
 }
 

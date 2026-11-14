@@ -222,12 +222,12 @@ font:
     glyphs: *panel_glyphs
   - id: !extend spleen_16
     glyphs: *panel_glyphs
-  # Large clock and splash digits; few glyphs save flash
+  # Large clock, splash and weather digits; few glyphs save flash
   - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-12x24.bdf"
     id: spleen_24
     size: 24
     glyphs: &digit_glyphs
-      - ' +0123456789:AMNPRSU'
+      - ' +-0123456789:AMNPRSU°'
   - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-16x32.bdf"
     id: spleen_32
     size: 32

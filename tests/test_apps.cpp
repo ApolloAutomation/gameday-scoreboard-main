@@ -39,8 +39,10 @@ void test_displays() {
   ACHECK(std::string(display_key(Display::FLIGHTS)) == "flights");
   ACHECK(std::string(display_name(Display::MARKETS)) == "Stocks & Crypto");
   ACHECK(std::string(display_name(Display::FLIGHTS)) == "Flight Tracker");
+  ACHECK(std::string(display_key(Display::WEATHER)) == "weather");
+  ACHECK(std::string(display_name(Display::WEATHER)) == "Weather");
   // Saved bytes: a display the firmware lacks shows Game Day.
-  ACHECK(display_has(kGameDayOnly, 0) && !display_has(kGameDayOnly, 1) && !display_has(0xFF, 4));
+  ACHECK(display_has(kGameDayOnly, 0) && !display_has(kGameDayOnly, 1) && !display_has(0xFF, 5));
   ACHECK(!display_has(0xFF, -1));
   ACHECK(display_effective(0, kGameDayOnly) == Display::GAMEDAY);
   ACHECK(display_effective(2, kGameDayOnly) == Display::GAMEDAY);
@@ -51,7 +53,8 @@ void test_displays() {
   ACHECK(display_source(Display::F1) == Source::F1);
   ACHECK(display_source(Display::MARKETS) == Source::MARKETS);
   ACHECK(display_source(Display::FLIGHTS) == Source::FLIGHTS);
-  ACHECK((size_t) Source::FLIGHTS + 1 == kSourceCount && kGameSourceCount == 3);
+  ACHECK(display_source(Display::WEATHER) == Source::WEATHER);
+  ACHECK((size_t) Source::WEATHER + 1 == kSourceCount && kGameSourceCount == 3);
 }
 
 void test_main_view() {
@@ -74,6 +77,7 @@ void test_main_view() {
 void test_split_values() {
   // Appended: the old values keep their numbers.
   ACHECK((int) SplitShow::CLOCK == 4 && (int) SplitShow::GAMEDAY == 5 && (int) SplitShow::FLIGHTS == 8);
+  ACHECK((int) SplitShow::WEATHER == 9 && split_of_display(Display::WEATHER) == SplitShow::WEATHER);
   Display d = Display::F1;
   ACHECK(!split_display(SplitShow::CLOCK, d) && d == Display::F1);
   ACHECK(split_display(SplitShow::GAMEDAY, d) && d == Display::GAMEDAY);
@@ -82,13 +86,14 @@ void test_split_values() {
   ACHECK(!area_app(SplitShow::GAMEDAY, d) && area_app(SplitShow::F1, d) && d == Display::F1);
   for (int s = 0; s <= 5; s++)
     ACHECK(split_allowed(s, kGameDayOnly));
-  ACHECK(!split_allowed(6, kGameDayOnly) && !split_allowed(9, 0xFF) && !split_allowed(-1, 0xFF));
+  ACHECK(!split_allowed(6, kGameDayOnly) && !split_allowed(10, 0xFF) && !split_allowed(-1, 0xFF));
   ACHECK(split_allowed(7, 0b101) && !split_allowed(6, 0b101));
   SetOp op;
   ACHECK(parse_set("display", "3", op, 16) && op.kind == SetKind::MAIN_DISPLAY && op.value == 3);
-  ACHECK(!parse_set("display", "4", op, 16) && !parse_set("display", "", op, 16));
+  ACHECK(parse_set("display", "4", op, 16) && op.value == 4);
+  ACHECK(!parse_set("display", "5", op, 16) && !parse_set("display", "", op, 16));
   ACHECK(!parse_set("display", "01", op, 16) && !parse_set("display", "1 ", op, 16));
-  ACHECK(parse_set("split", "8", op, 16) && op.value == 8 && !parse_set("split", "9", op, 16));
+  ACHECK(parse_set("split", "9", op, 16) && op.value == 9 && !parse_set("split", "10", op, 16));
   bool listed = false;
   for (const char *k : kSetKeys)
     listed = listed || std::string(k) == "display";

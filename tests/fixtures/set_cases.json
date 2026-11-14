@@ -54,7 +54,10 @@
     "place the name the page found it by, radius with radius_unit (mi, km or nm; capped at 250 mi,",
     "400 km or 200 nm), receiver the owner's ADS-B receiver address, and units, imperial in the US",
     "and UK time zones and metric elsewhere. Its keys flyhome, flyplace, flyradius and flyreceiver",
-    "come after kSetKeys and only when displays has 3; flyhome=none clears the place too."
+    "come after kSetKeys and only when displays has 3; flyhome=none clears the place too.",
+    "weather (Weather, display 4) holds its settings: ticker, 1 when the National Weather Service's",
+    "warnings lead every display's ticker (wxticker=0 or 1, only when displays has 4), and units,",
+    "imperial in the US time zones alone. Its home is the Flight Tracker's, set with flyhome."
   ],
   "base": {
     "team": "nfl:6", "team_league": "nfl", "mode": 0, "rotate": 1, "lockon": 15, "release": 30, "collide": 0,
@@ -544,6 +547,15 @@
     {"name": "the UK is in miles", "start": {"displays": [0, 3], "tz": 10}, "set": [["flyradius", "5"]], "expect": {"flights": {"home": "", "place": "", "radius": 5, "radius_unit": "mi", "receiver": "", "units": "imperial"}}},
     {"name": "the Flight Tracker's keys need the display", "set": [["flyhome", "40.6413,-73.7781"]], "status": 400, "expect": {"flights": {"home": "", "place": "", "radius": 10, "radius_unit": "mi", "receiver": "", "units": "imperial"}}},
     {"name": "the main area shows the Flight Tracker", "start": {"displays": [0, 3]}, "set": [["display", "3"], ["flyradius", "20"]], "expect": {"display": 3, "flights": {"home": "", "place": "", "radius": 20, "radius_unit": "mi", "receiver": "", "units": "imperial"}}},
-    {"name": "the second area shows the Flight Tracker", "start": {"displays": [0, 3]}, "set": [["split", "8"]], "expect": {"split": 8}}
+    {"name": "the second area shows the Flight Tracker", "start": {"displays": [0, 3]}, "set": [["split", "8"]], "expect": {"split": 8}},
+    {"name": "Weather's ticker switch turns on", "start": {"displays": [0, 4]}, "set": [["wxticker", "1"]], "expect": {"weather": {"ticker": 1, "units": "imperial"}}},
+    {"name": "Weather's ticker switch turns off", "start": {"displays": [0, 4], "weather": {"ticker": 1}}, "set": [["wxticker", "0"]], "expect": {"weather": {"ticker": 0, "units": "imperial"}}},
+    {"name": "the ticker switch is 0 or 1", "start": {"displays": [0, 4], "weather": {"ticker": 1}}, "set": [["wxticker", "yes"]], "expect": {"weather": {"ticker": 1, "units": "imperial"}}},
+    {"name": "Weather's key needs the display", "set": [["wxticker", "1"]], "status": 400, "expect": {"weather": {"ticker": 0, "units": "imperial"}}},
+    {"name": "Weather is Celsius outside the US, the UK too", "start": {"displays": [0, 4], "tz": 10}, "set": [["wxticker", "1"]], "expect": {"weather": {"ticker": 1, "units": "metric"}}},
+    {"name": "the main area shows Weather", "start": {"displays": [0, 4]}, "set": [["display", "4"]], "expect": {"display": 4}},
+    {"name": "the second area shows Weather", "start": {"displays": [0, 4]}, "set": [["split", "9"]], "expect": {"split": 9}},
+    {"name": "the second area refuses Weather the firmware lacks", "set": [["split", "9"]], "expect": {"split": 0}},
+    {"name": "Weather shares the Flight Tracker's home", "start": {"displays": [0, 3, 4]}, "set": [["flyhome", "38.9399,-119.9772"], ["wxticker", "1"]], "expect": {"flights": {"home": "38.9399,-119.9772", "place": "", "radius": 10, "radius_unit": "mi", "receiver": "", "units": "imperial"}}}
   ]
 }

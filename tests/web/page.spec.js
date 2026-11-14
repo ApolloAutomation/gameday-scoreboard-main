@@ -4403,3 +4403,77 @@ test.describe("cards that fold", () => {
     }
   });
 });
+
+// Weather (app_weather.h): the Flight Tracker's home, its own ticker switch.
+// Weather's firmware has the Flight Tracker, the home's keeper.
+const WX_DISPLAYS = [
+  { id: 0, key: "gameday", name: "Game Day", split: 5 },
+  { id: 3, key: "flights", name: "Flight Tracker", split: 8 },
+  { id: 4, key: "weather", name: "Weather", split: 9 },
+];
+
+test("the Weather card finds a home, shares it and turns warnings in the ticker on", async ({ page, request }) => {
+  await reset(request, {});
+  await page.goto("/");
+  await expect(page.locator("#wxCard")).toBeHidden();
+  await reset(request, { displays: WX_DISPLAYS });
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.fulfill({ json: BROOKLYN }));
+  await page.reload();
+  await expect(page.locator("#wxCard")).toBeVisible();
+  await expect(page.locator("#wxSum")).toHaveText("No home yet");
+  await expect(page.locator("#wxNow")).toHaveText("Set a home location to see its weather.");
+  await page.locator("#wxWhere").fill("Brooklyn");
+  await page.locator("#wxFind").click();
+  const picks = page.locator("#wxPicks button");
+  await expect(picks).toHaveText(["Brooklyn, New York, United States", "Brooklyn, Iowa, United States"]);
+  await picks.nth(1).click();
+  await expectSet(request, { flyhome: "41.7336,-92.4455", flyplace: "Brooklyn, Iowa, United States" });
+  await expect(page.locator("#wxHome")).toHaveText("Brooklyn, Iowa, United States (41.7336, -92.4455)");
+  await expect(page.locator("#wxSum")).toHaveText("Brooklyn, Iowa, United States");
+  // The Flight Tracker's card shows the same home
+  await expect(page.locator("#flightSum")).toHaveText("Brooklyn, Iowa, United States");
+  await expect(page.locator("#wxNow")).toHaveText(
+    "Looking up the weather. Choose Weather under Showing to put it on the panel.");
+  const sw = page.getByRole("switch", { name: "Weather warnings in the ticker" });
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+  await sw.click();
+  await expectSet(request, { wxticker: "1" });
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  const st = await deviceState(request);
+  expect(st.weather).toEqual({ ticker: 1, units: "imperial", home: "41.7336,-92.4455",
+                               place: "Brooklyn, Iowa, United States" });
+  expect(st.flights.home).toBe("41.7336,-92.4455");
+  await page.getByRole("combobox", { name: "Showing" }).selectOption({ label: "Weather" });
+  await expectSet(request, { display: "4" });
+  await expect(page.locator("#wxNow")).toHaveText("Looking up the weather.");
+  await page.locator("#wxClear").click();
+  await expectSet(request, { flyhome: "none" });
+  await expect(page.locator("#wxHomeRow")).toBeHidden();
+});
+
+test("the Weather card says what the panel has", async ({ page, request }) => {
+  const home = { home: "38.9399,-119.9772", place: "South Lake Tahoe, California, United States" };
+  await reset(request, { displays: WX_DISPLAYS, display: 4, flights: home,
+                         weather: { status: "ok", temp: "31°F", sky: "Cloudy", source: "open-meteo", alerts: 1,
+                                    alert: "Winter Storm Warning", aqi: 41 } });
+  await page.goto("/");
+  await expect(page.locator("#wxNow")).toHaveText(
+    "31°F, Cloudy, from Open-Meteo. 1 alert: Winter Storm Warning. Air quality 41.");
+  await expect(page.locator("#wxSum")).toHaveText("South Lake Tahoe, California, United States");
+  await reset(request, { displays: WX_DISPLAYS, display: 4, flights: home, weather: { status: "failing" } });
+  await page.reload();
+  await expect(page.locator("#wxNow")).toHaveText("Can't reach the weather right now. The panel keeps trying.");
+  await reset(request, { displays: WX_DISPLAYS, flights: home, weather: { status: "old", ticker: 1 } });
+  await page.reload();
+  await expect(page.locator("#wxNow")).toHaveText("Not reading the weather now: the panel reads it only while "
+    + "Weather is on it. Choose Weather under Showing to put it on the panel.");
+  await expect(page.getByRole("switch", { name: "Weather warnings in the ticker" })).toHaveAttribute("aria-checked", "true");
+  // The second area's Shows offers it too
+  await reset(request, { panels: 4, displays: WX_DISPLAYS, flights: home });
+  await page.reload();
+  await expect(page.locator("#split option").last()).toHaveText("Weather");
+  await expect(page.locator("#fullHint")).toContainText("With Showing on Flight Tracker or Weather, it fills the whole row");
+  await page.getByRole("combobox", { name: /^Shows/ }).selectOption({ label: "Weather" });
+  await expectSet(request, { split: "9" });
+  await expect(page.locator("#splitNow")).toHaveText("Showing Weather.");
+});

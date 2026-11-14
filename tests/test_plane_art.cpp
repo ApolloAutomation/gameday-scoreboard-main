@@ -200,14 +200,17 @@ void test_sprites() {
   a.w = 2;
 
   espn::AppFrame f;
-  f.art.push_back(a);
-  f.art.push_back(a);
+  for (size_t i = 0; i <= espn::kAppArt; i++)
+    f.art.push_back(a);
   espn::app_frame_trim(f);
-  PCHECK(f.art.size() == 1 && f.art[0].w == 2, "trimmed to one");
+  PCHECK(f.art.size() == espn::kAppArt && f.art[0].w == 2, "trimmed to the pool");
   PCHECK(espn::app_frame_board(f), "a picture alone is a board");
+  f.art.resize(2);
   f.art[0].w = espn::kAppArtMaxW + 1;
   espn::app_frame_trim(f);
-  PCHECK(f.art.empty(), "too big to draw: dropped");
+  PCHECK(f.art.size() == 1 && f.art[0].w == 2, "too big to draw: dropped, the rest kept");
+  f.art.clear();
+  f.art.push_back(a);
   // The drawn size counts, scale included
   a.w = 56;
   a.h = 15;

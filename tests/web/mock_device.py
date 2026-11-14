@@ -7,7 +7,7 @@ routes with the response shapes from components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
   POST /gameday/set      only the keys in SET_KEYS, then each listed display's own (Stocks &
-                         Crypto's, the Flight Tracker's); 400 when none match (player= and
+                         Crypto's, the Flight Tracker's, Weather's); 400 when none match (player= and
                          playerdel= keep the favorite players in their slots, as players.h does,
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know
@@ -121,6 +121,10 @@ FLIGHT_MAX = {k: int(v) for k, v in zip(("km", "nm", "mi"), re.search(
     r"radius_max\(DistUnit u\) \{ return u == DistUnit::KM \? (\d+) : u == DistUnit::NM \? (\d+) : (\d+);",
     FLIGHTS_CPP).groups())}
 FLIGHT_LIMITS = {k: int(v) for k, v in re.findall(r"static const \w+ (k\w+) = (\d+);", FLIGHTS_H)}
+# Weather's own keys (app_weather.h); its home is the Flight Tracker's
+WEATHER_H = (REPO / "components/gameday/app_weather.h").read_text(encoding="utf-8")
+WEATHER_SET_KEYS = tuple(re.findall(r'"(\w+)"', re.search(r"kWeatherSetKeys\[\] = \{(.*?)\};", WEATHER_H, re.S).group(1)))
+WEATHER_ID = int(DISPLAY_IDS["WEATHER"])
 COORDS_RE = re.compile(r"[ \t]*([+-]?)([0-9]{1,3})(?:\.([0-9]*))?(?:[ \t]*,[ \t]*|[ \t]+)"
                        r"([+-]?)([0-9]{1,3})(?:\.([0-9]*))?[ \t]*\Z")
 
@@ -129,6 +133,11 @@ def flights_doc():
     """prefs_state(): the Flight Tracker's settings, as a fresh panel has them."""
     return {"home": "", "place": "", "radius": FLIGHT_LIMITS["kRadiusDefault"], "radius_unit": "mi",
             "receiver": "", "units": "imperial"}
+
+
+def weather_doc():
+    """WeatherApp::state()'s settings: the ticker switch (0 or 1) and the units."""
+    return {"ticker": 0, "units": "imperial"}
 
 
 def parse_coords(v):
@@ -177,7 +186,8 @@ def flights_set(k, v):
 def set_keys():
     """handle_set_()'s keys: kSetKeys, then each display's the firmware has."""
     ids = display_ids()
-    return SET_KEYS + (MARKET_KEYS if MARKETS in ids else ()) + (FLIGHT_SET_KEYS if FLIGHTS_ID in ids else ())
+    return SET_KEYS + (MARKET_KEYS if MARKETS in ids else ()) + (FLIGHT_SET_KEYS if FLIGHTS_ID in ids else ()) + \
+        (WEATHER_SET_KEYS if WEATHER_ID in ids else ())
 
 
 def display_doc(d):
@@ -416,6 +426,8 @@ FIRMWARE = next(e for e in ENTITIES if e["name"] == "Firmware")
 INITIAL["displays"] = [display_doc(0)]
 # Flight Tracker settings; resets may add status and planes
 INITIAL["flights"] = flights_doc()
+# Weather settings; resets may add status, temp and alerts
+INITIAL["weather"] = weather_doc()
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -437,6 +449,8 @@ def reset_state(overrides):
     STATE.update(overrides)
     if isinstance(overrides.get("flights"), dict):
         STATE["flights"] = {**flights_doc(), **overrides["flights"]}
+    if isinstance(overrides.get("weather"), dict):
+        STATE["weather"] = {**weather_doc(), **overrides["weather"]}
     # rotate and rotatesec are one setting
     if isinstance(overrides.get("rotate"), int) and "rotatesec" not in overrides:
         STATE["rotatesec"] = clamp(overrides["rotate"], "kRotateMinMinutes", "kRotateMaxMinutes") * 60
@@ -571,6 +585,18 @@ def state_doc():
         # tz_miles(): the US and UK zones are imperial
         tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
         STATE["flights"]["units"] = "imperial" if tz.startswith(("US ", "UK ")) else "metric"
+    if isinstance(STATE.get("weather"), dict):
+        # tz_fahrenheit(): the US zones alone
+        tz = TZS[STATE.get("tz", 1)] if 0 <= STATE.get("tz", 1) < len(TZS) else ""
+        STATE["weather"]["units"] = "imperial" if tz.startswith("US ") else "metric"
+        # The shared home, as the firmware reads it from the Flight Tracker
+        home = (STATE.get("flights") or {}).get("home", "")
+        if home:
+            STATE["weather"]["home"] = home
+            STATE["weather"]["place"] = STATE["flights"].get("place", "")
+        else:
+            for k in ("home", "place"):
+                STATE["weather"].pop(k, None)
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
     if MARKETS in display_ids():
@@ -956,6 +982,9 @@ def apply_set(kv):
             markets_set(k, v)
         elif k in FLIGHT_SET_KEYS:
             flights_set(k, v)
+        elif k in WEATHER_SET_KEYS:
+            if v in ("0", "1"):
+                STATE.setdefault("weather", weather_doc())["ticker"] = int(v)
 
 
 def selftest():

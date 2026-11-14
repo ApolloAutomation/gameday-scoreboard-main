@@ -65,7 +65,7 @@ class LogoCache {
   image::Image *get(std::string_view url, uint8_t icon = 0, bool mark = false) {
     return this->get_(url, icon, mark, 0, 0);
   }
-  // A JPEG photo fit into w by h; its own entry
+  // A JPEG photo or PNG map in w by h
   image::Image *photo(std::string_view url, uint8_t w, uint8_t h) { return this->get_(url, 0, false, w, h); }
   // That photo loaded at any box; never downloads.
   bool photo_ready(std::string_view url);
@@ -130,6 +130,8 @@ class LogoCache {
   int decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out);
   // A JPEG photo's; -1 for one it can't read
   int decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out);
+  // A PNG map's (map_canvas.h); -1 for one it can't read
+  int decode_map_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out);
   void make_room_(uint32_t now);  // now: millis()
   void make_photo_room_(uint32_t now);
   void start_task_();
@@ -155,7 +157,7 @@ class LogoCache {
   std::vector<Url, PsramAllocator<Url>> pending_;  // prefetches for the main loop
   uint32_t seq_{0};
   std::string pinned_[8];  // board pair, previous pair, then second area's two
-  static constexpr size_t ICON_PINS = 9;  // a display's eight logos and a photo
+  static constexpr size_t ICON_PINS = 10;  // a display's eight logos, a photo and its stand-in
   uint32_t icon_pins_[2][ICON_PINS]{};  // this set, then the last
   uint8_t icon_pin_n_[2]{};
   uint32_t retry_check_ms_{0};
