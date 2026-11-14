@@ -330,6 +330,16 @@ inline void baseball_from_event(JsonObjectConst ev, GameSnapshot &s) {
   s.possession = we_bat ? 1 : 2;
 }
 
+// A filter array's one element, shared by every filter
+inline JsonObject filter_first(JsonObject o, const char *name) {
+  // A literal: kept as a pointer, never copied
+  const JsonString key(name, true);
+  if (!o[key].is<JsonArray>())
+    return o[key].to<JsonArray>().add<JsonObject>();
+  JsonArray a = o[key].as<JsonArray>();
+  return a.size() > 0 && a[0].is<JsonObject>() ? a[0].as<JsonObject>() : a.add<JsonObject>();
+}
+
 // Hockey: none, ESPN names no athletes there.
 inline void fill_player_filter(JsonObject ev, Sport sport) {
   JsonObject comp = ev["competitions"][0];
@@ -346,9 +356,9 @@ inline void fill_player_filter(JsonObject ev, Sport sport) {
   who["id"] = true;
   who["team"]["id"] = true;
   auto leaders = [](JsonObject o) {
-    JsonObject cat = o["leaders"].add<JsonObject>();
+    JsonObject cat = filter_first(o, "leaders");
     cat["name"] = true;
-    JsonObject l = cat["leaders"].add<JsonObject>();
+    JsonObject l = filter_first(cat, "leaders");
     l["displayValue"] = true;
     l["athlete"]["id"] = true;
   };
@@ -402,6 +412,9 @@ void basketball_from_event(JsonObjectConst ev, GameSnapshot &s);
 // Hockey's extra filter fields and their parse (sport_hockey.cpp)
 void fill_hockey_filter(JsonObject ev);
 void hockey_from_event(JsonObjectConst ev, GameSnapshot &s);
+// Football's field: the board's own game reads only.
+void fill_field_filter(JsonObject ev);
+void field_from_event(JsonObjectConst ev, GameSnapshot &s);
 // The leaderboard sports' JSON helpers (sport_golf.cpp), one call per field
 // read rather than the lookup inlined at every one. keep sets each key to
 // true in a filter object; field, text, when and flag read one key (a string,
@@ -744,11 +757,15 @@ int parse_team_game(TInput &input, uint32_t our_team_id, const std::string &skip
 // when our team is not in it, or when event_id is given and the document is
 // some other game.
 // players: with any, also keep leader lines and athletes.
+// field: football's field view (the watcher skips it).
 template<typename TInput>
 bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot &out,
-                 const std::string &event_id = "", const PlayerWatch *players = nullptr) {
+                 const std::string &event_id = "", const PlayerWatch *players = nullptr, bool field = true) {
+  field = field && sport == Sport::FOOTBALL;
   JsonDocument filter(detail::json_allocator());
   detail::fill_game_filter(filter.to<JsonObject>(), sport);
+  if (field)
+    detail::fill_field_filter(filter.as<JsonObject>());
   const bool watch = players != nullptr && players->n > 0;
   if (watch)
     detail::fill_player_filter(filter.as<JsonObject>(), sport);
@@ -761,6 +778,8 @@ bool parse_event(TInput &input, Sport sport, uint32_t our_team_id, GameSnapshot 
     return false;
   if (!detail::game_from_event(doc.as<JsonObjectConst>(), sport, our_team_id, out))
     return false;
+  if (field)
+    detail::field_from_event(doc.as<JsonObjectConst>(), out);
   if (watch)
     detail::players_from_event(doc.as<JsonObjectConst>(), *players, sport, out);
   return true;

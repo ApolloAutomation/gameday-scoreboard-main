@@ -379,3 +379,21 @@ tar1090's and PiAware's `aircraft.json` have readsb's shape without `dst`,
 `flights_readsb_ord.json` rather than keeping a separate file. adsb.im's
 routeset answers 403 over https unless approved; over plain http it
 answered these.
+
+Weather, recorded 2026-11-14 around 04:30 UTC with the project's User-Agent,
+each with the exact query `weather.cpp` builds (homes rounded to 0.01 degree):
+South Lake Tahoe (38.94, -119.98) under a Winter Storm Warning, Seattle
+(47.61, -122.33) in rain, London (51.51, -0.13) and New Delhi (28.61, 77.21).
+Each file is the whole answer as sent. MET Norway's backup is
+`met_vegas.json`, above. The radar images used for the review renders are
+not committed.
+
+| File | Source |
+| --- | --- |
+| `weather_om_tahoe.json`, `weather_om_seattle.json`, `weather_om_london.json`, `weather_om_delhi.json` | `api.open-meteo.com/v1/forecast?...&timezone=auto&timeformat=unixtime&forecast_days=7&forecast_hours=24`: now, 24 hours and 7 days, times as Unix seconds |
+| `weather_aq_tahoe.json`, `weather_aq_seattle.json`, `weather_aq_delhi.json` | `air-quality-api.open-meteo.com/v1/air-quality?...&current=us_aqi,pm2_5,us_aqi_pm2_5,...`: AQI 41 (mostly ozone), 68 and 190 (mostly PM2.5) |
+| `weather_nws_tahoe.json` | `api.weather.gov/alerts/active?point=38.94,-119.98` (geo+json): one Winter Storm Warning, ending 2026-11-14T10:00:00-08:00 |
+| `weather_nws_reno.json` | The same at 39.53, -119.81: a Wind Advisory that ended 2026-11-13T22:00:00-08:00 |
+| `weather_nws_seattle.json` | The same at 47.61, -122.33: no alerts |
+| `weather_nws_outside.json` | The same for London: the NWS's 400, "out of bounds" |
+| `weather_rainviewer.json` | `api.rainviewer.com/public/weather-maps.json`: the host and 13 past radar frames, 10 minutes apart |

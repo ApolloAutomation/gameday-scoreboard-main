@@ -93,6 +93,7 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     o.h = s->h;
     o.bits = s->bits;
     o.flip = a.flip;
+    o.scale = a.scale;
     o.ink[kArtBody - 1] = kColBody;
     o.ink[kArtTail - 1] = a.tail;
     o.ink[kArtDetail - 1] = kColDetail;
@@ -102,7 +103,7 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     espn::AppIcon ic;
     ic.x = l.x;
     ic.y = l.y;
-    ic.px = (uint8_t) kLogoPx;
+    ic.px = l.px;
     memcpy(ic.key, l.icao, sizeof l.icao);
     ic.url = logo_url;
     ic.alt = l.alt;
@@ -324,6 +325,16 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
     out["nearest_reg"] = p.reg;
 }
 
+bool FlightsApp::home(int32_t &lat_e4, int32_t &lon_e4, std::string *place) const {
+  if (this->prefs_.lat_e4 == kNoCoord || this->prefs_.lon_e4 == kNoCoord)
+    return false;
+  lat_e4 = this->prefs_.lat_e4;
+  lon_e4 = this->prefs_.lon_e4;
+  if (place != nullptr)
+    *place = this->prefs_.place;
+  return true;
+}
+
 bool FlightsApp::lit(int64_t now) const {
   return prefs_home(this->prefs_).valid() && this->got_s_ != 0 && now - this->got_s_ <= kOldS && this->near_.n > 0;
 }
@@ -460,14 +471,14 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
       this->ask_ = route_asks(this->near_, this->routes_, (uint32_t) now);
       out.url = kRoutesetUrl;
       out.body = routeset_body(this->ask_);
-      out.headers.push_back({"Content-Type", "application/json"});
+      espn::app_header(out, "Content-Type", "application/json");
       this->im_last_ms_ = now_ms | 1;
       this->pending_routes_ = this->routes_;
       break;
     case Read::PHOTO:
       this->photo_ask_(now, this->photo_key_);
       out.url = photo_url(this->photo_key_);
-      out.headers.push_back({"User-Agent", photo_agent(espn::app_env().version)});
+      espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version));
       this->photo_last_ms_ = now_ms | 1;
       this->pending_photo_ = PlanePhoto();
       break;

@@ -143,7 +143,8 @@ script:
           const gameday::Sizes sizes = id(gameday_ctl).sizes();
           const int W = area.main_w;
           const int screen_h = lv_disp_get_ver_res(lv_disp_get_default());
-          const int H = area.on ? 64 : screen_h;
+          // 128 on a 2x2 whose display fills the panel
+          const int H = area.main_h;
           const bool wide = W >= 128;
           if (gameday::board_view() == nullptr)
             id(tt_bind_view).execute();

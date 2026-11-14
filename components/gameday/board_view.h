@@ -12,6 +12,7 @@
 
 #include "apps.h"
 #include "board_layout.h"
+#include "field.h"
 
 namespace esphome::gameday {
 
@@ -61,16 +62,26 @@ struct BoardView {
   // Another display's labels, made on first use
   lv_obj_t *text[::espn::kAppTexts]{};
   lv_obj_t *icon[::espn::kAppIcons]{};  // another display's logos
-  // Another display's picture, painted into PSRAM
-  lv_obj_t *art{nullptr};
-  uint8_t *art_buf{nullptr};
-  lv_image_dsc_t art_dsc{};
-  uint32_t art_key{0};
+  // Another display's pictures, painted into PSRAM
+  struct Art {
+    lv_obj_t *obj{nullptr};
+    uint8_t *buf{nullptr};
+    uint32_t cap{0};
+    lv_image_dsc_t dsc{};
+    uint32_t key{0};
+  };
+  Art art[::espn::kAppArt];
   lv_obj_t *bar{nullptr};  // its box, under the rows
-  lv_obj_t *photo{nullptr};  // its photo, over the art's spot
+  lv_obj_t *photo{nullptr};  // its photo, under the rest
+  // Football's field under the labels, made on first use
+  lv_obj_t *field{nullptr};
+  uint16_t *field_buf{nullptr}, *field_next{nullptr};  // shown, and painted
+  size_t field_px{0};
+  ::espn::FieldPic field_shown{};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout
+  int16_t h{64};         // its height: 128 when a display fills a 2x2
   int16_t splash_h{64};  // the splash's height: the screen's
   Sizes sizes;           // Clock size and Text size, from board_layout
   bool clock_split{false};  // time shows digits only; AM/PM goes in clock_ampm
@@ -103,8 +114,10 @@ BoardView *board_view_set(const BoardView &bound);
 void board_build(BoardView &v);
 // Whether board_build found LVGL reading the color marker
 bool ticker_colors_on();
+// A warning leading the main board's ticker; "" none
+void board_ticker_lead(const std::string &text, uint32_t rgb);
 
-// splash_h may exceed h: a 2x2 splash covers all four
+// h: the board's; splash_h the screen's, a 2x2's all four
 void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes);
 // Logos nullptr while downloading; the splash shows badges
 DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_logo = nullptr,

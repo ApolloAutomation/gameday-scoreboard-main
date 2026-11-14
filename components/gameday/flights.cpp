@@ -1455,34 +1455,37 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
 
 std::string pick_fit(const std::string &a, const std::string &b, size_t max) { return a.size() <= max ? a : cut(b, max); }
 
-// The plane centered in the box, if it fits.
-void put_art(Frame &f, const Card &c, int x, int y, int w, int h) {
+// The plane centered in the box, scaled, if it fits.
+void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1) {
   const PlaneSprite *s = plane_sprite(c.kind);
-  if (s == nullptr || s->w > w || s->h > h)
+  if (s == nullptr || s->w * scale > w || s->h * scale > h)
     return;
   Art a;
-  a.x = (int16_t) (x + (w - s->w) / 2);
-  a.y = (int16_t) (y + (h - s->h) / 2);
+  a.x = (int16_t) (x + (w - s->w * scale) / 2);
+  a.y = (int16_t) (y + (h - s->h * scale) / 2);
   a.kind = c.kind;
   a.flip = c.flip;
+  a.scale = (uint8_t) scale;
   a.tail = c.tail_color;
   f.art.push_back(a);
 }
 
 // The airline's code, then its logo over it.
-void put_logo(Frame &f, const Card &c, int x, int y) {
+void put_logo(Frame &f, const Card &c, int x, int y, int px = kLogoPx) {
   if (c.brand == nullptr)
     return;
   const size_t at = f.items.size();
-  if (c.chip.size() <= 2)
-    put(f, x, y + 2, kLogoPx, BoardFont::S12, Align::CENTER, c.brand_color, c.chip);
+  const BoardFont big = px >= kLogoBigPx ? BoardFont::S16 : BoardFont::S12;
+  if (c.chip.size() <= (size_t) (px / font_px(big)))
+    put(f, x, y + (px - font_rows(big)) / 2, px, big, Align::CENTER, c.brand_color, c.chip);
   else
-    put(f, x, y + 4, kLogoPx, BoardFont::S8, Align::CENTER, c.brand_color, c.chip);
+    put(f, x, y + (px - font_rows(BoardFont::S8)) / 2, px, BoardFont::S8, Align::CENTER, c.brand_color, c.chip);
   if (c.brand->logo == kLogoNone)
     return;
   Logo l;
   l.x = (int16_t) x;
   l.y = (int16_t) y;
+  l.px = (uint8_t) px;
   memcpy(l.icao, c.brand->icao, sizeof l.icao);
   l.alt = f.items.size() > at ? (int8_t) at : (int8_t) -1;
   f.logos.push_back(l);
@@ -1575,6 +1578,55 @@ void card_left(Frame &f, const Card &c) {
   put(f, 66, 46, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
 }
 
+// Full screen: logo, big flight and route, the picture doubled.
+void card_tall(Frame &f, const Card &c) {
+  const int x0 = c.brand != nullptr ? kLogoBigPx + 3 : 1, tw = 127 - x0;
+  put_logo(f, c, 0, 0, kLogoBigPx);
+  put(f, x0, 0, tw, BoardFont::S16, Align::LEFT, c.label_color, c.label);
+  put(f, x0, 17, tw, BoardFont::S8, Align::LEFT, kColAirline, fit_words(c.who, (size_t) tw / 5));
+  const std::string type = type_fit(c, (size_t) tw / 5);
+  if (type != c.who)
+    put(f, x0, 25, tw, BoardFont::S8, Align::LEFT, kColType, type);
+  // The biggest font that holds the route.
+  const BoardFont rf = c.sub.size() * 8 <= 127 ? BoardFont::S16 : c.sub.size() * 6 <= 127 ? BoardFont::S12 : BoardFont::S8;
+  put(f, 1, 34 + (16 - font_rows(rf)) / 2, 127, rf, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+  // The flight number beside a short route
+  const int rx = 4 + (int) c.sub.size() * font_px(rf);
+  if (c.route && !c.tail.empty() && rx + (int) c.tail.size() * 5 <= 127)
+    put(f, rx, 38, 127 - rx, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+  // Small planes bigger, still under an airliner
+  const PlaneSprite *sp = plane_sprite(c.kind);
+  put_art(f, c, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
+  put(f, 1, 104, 62, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
+  put(f, 64, 104, 63, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
+  put(f, 1, 112, 70, BoardFont::S8, Align::LEFT, kColDist, pick_fit(c.where_full, c.where_short, 14));
+  put(f, 72, 112, 55, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
+}
+
+// Full screen's list: each plane's logo and two lines.
+void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o, uint32_t now_s) {
+  put(f, 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
+  put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
+  const int limit = o.ticker ? o.h - 8 : o.h;
+  int y = 8;
+  for (uint8_t i = 0; i < n.n && y + 16 <= limit; i++, y += 16) {
+    const Plane &p = n.planes[i];
+    const AirlineName *a = logo_airline(p);
+    if (a != nullptr && a->logo != kLogoNone) {
+      Logo l;
+      l.x = 0;
+      l.y = (int16_t) y;
+      memcpy(l.icao, a->icao, sizeof l.icao);
+      f.logos.push_back(l);
+    }
+    put(f, 18, y, 45, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColCallsign, plane_label(p));
+    put(f, 64, y, 63, BoardFont::S8, Align::RIGHT, kColDist, where_text(p, o.units.dist, Fmt::SHORT));
+    put(f, 18, y + 8, 22, BoardFont::S8, Align::LEFT, kColType, p.type);
+    put(f, 42, y + 8, 40, BoardFont::S8, Align::LEFT, kColRoute, route_text(p, routes, now_s, "-"));
+    put(f, 82, y + 8, 45, BoardFont::S8, Align::RIGHT, kColDim, alt_text(p, o.units.alt, Fmt::SHORT));
+  }
+}
+
 void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   card_left(f, c);
   const int x0 = 128, lw = o.w - 128;
@@ -1598,7 +1650,12 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   if (opts.card >= near.n)
     opts.card = 0;
   const Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
-  if (opts.w >= 192)
+  const bool tall = esphome::gameday::tall_board(opts.w, opts.h);
+  if (tall && opts.list)
+    list_tall(f, near, routes, opts, now_s);
+  else if (tall)
+    card_tall(f, c);
+  else if (opts.w >= 192)
     card_wide(f, c, near, opts);
   else if (opts.list)
     list_frame(f, near, opts);
@@ -1611,7 +1668,12 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   if (opts.w >= 128 && ph != nullptr && ph->state == PhotoState::KNOWN && ph->url[0] != '\0') {
     f.photo.url = ph->url;
     f.photo.credit = std::string(" | Photo: ") + (ph->by[0] != '\0' ? ph->by : "Planespotters.net");
-    if (opts.w >= 192 || !opts.list) {
+    if (tall && !opts.list) {
+      f.photo.x = (int16_t) kPhotoTallX;
+      f.photo.y = (int16_t) kPhotoTallY;
+      f.photo.w = (uint8_t) kPhotoTallW;
+      f.photo.h = (uint8_t) kPhotoTallH;
+    } else if (!tall && (opts.w >= 192 || !opts.list)) {
       f.photo.x = (int16_t) kPhotoX;
       f.photo.y = (int16_t) kPhotoY;
       f.photo.w = (uint8_t) kPhotoW;

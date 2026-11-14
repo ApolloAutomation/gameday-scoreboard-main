@@ -88,6 +88,16 @@ bool recolor_works(lv_obj_t *label) {
 bool ticker_colors_on() { return ticker_colors; }
 
 namespace {
+std::string lead_text;
+uint32_t lead_rgb = 0;
+}  // namespace
+
+void board_ticker_lead(const std::string &text, uint32_t rgb) {
+  lead_text = text;
+  lead_rgb = rgb;
+}
+
+namespace {
 
 std::string ticker_line(const UpdateFields &f) {
   const std::string line = panel_text(f.status_text);
@@ -368,6 +378,8 @@ void put_bar(BoardView &v, const UpdateFields &f) {
       return;
     v.bar = plain_bar(v.board, b.color);
     lv_obj_move_to_index(v.bar, 0);
+    if (v.photo != nullptr)
+      lv_obj_move_to_index(v.photo, 0);
   }
   if (on) {
     if (lv_obj_get_style_x(v.bar, LV_PART_MAIN) != b.x || lv_obj_get_style_y(v.bar, LV_PART_MAIN) != b.y)
@@ -463,51 +475,131 @@ void logo_draw(BoardView &v, const UpdateFields &f, image::Image *img) {
 }
 
 uint32_t art_key(const ::espn::AppArt &a) {
-  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16), a.ink[0], a.ink[1],
-                        a.ink[2]};
+  const uint32_t v[] = {(uint32_t) (uintptr_t) a.bits, (uint32_t) (a.w | a.h << 8 | a.flip << 16 | a.scale << 17),
+                        a.ink[0], a.ink[1], a.ink[2]};
   return ::espn::logo_key(reinterpret_cast<const char *>(v), sizeof(v)) | 1;
 }
 
 // Repainted in place: LVGL must not cache it.
 static_assert(LV_CACHE_DEF_SIZE == 0, "put_art repaints one buffer; drop it from the image cache");
 
-// The frame's picture; repainted only when it changes
+// The frame's pictures; each repainted only when it changes
 void put_art(BoardView &v, const UpdateFields &f) {
-  if (!f.board || f.art.empty()) {
-    show(v.art, false);
+  const size_t n = f.board ? std::min(f.art.size(), ::espn::kAppArt) : 0;
+  for (size_t i = 0; i < ::espn::kAppArt; i++) {
+    BoardView::Art &slot = v.art[i];
+    if (i >= n) {
+      if (slot.obj == nullptr)
+        break;
+      show(slot.obj, false);
+      continue;
+    }
+    const ::espn::AppArt &a = f.art[i];
+    const uint32_t w = (uint32_t) a.w * a.scale, h = (uint32_t) a.h * a.scale, bytes = w * h * 3;
+    // Grown to fit; never shrunk
+    if (bytes > slot.cap) {
+      uint8_t *buf = static_cast<uint8_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+      if (buf == nullptr)
+        return;
+      if (slot.obj != nullptr)
+        ::lv_image_set_src(slot.obj, nullptr);
+      heap_caps_free(slot.buf);
+      slot.buf = buf;
+      slot.cap = bytes;
+      slot.key = 0;
+    }
+    if (slot.obj == nullptr) {
+      if (v.board == nullptr)
+        return;
+      slot.obj = lv_image_create(v.board);
+      lv_obj_remove_style_all(slot.obj);
+    }
+    const uint32_t key = art_key(a);
+    if (key != slot.key) {
+      ::espn::app_art_paint(a, slot.buf);
+      lv_image_dsc_t &d = slot.dsc;
+      d.header.magic = LV_IMAGE_HEADER_MAGIC;
+      d.header.cf = LV_COLOR_FORMAT_RGB565A8;
+      d.header.w = w;
+      d.header.h = h;
+      d.header.stride = w * 2;
+      d.data_size = bytes;
+      d.data = slot.buf;
+      ::lv_image_set_src(slot.obj, &d);
+      lv_obj_invalidate(slot.obj);
+      slot.key = key;
+    }
+    if (lv_obj_get_style_x(slot.obj, LV_PART_MAIN) != a.x || lv_obj_get_style_y(slot.obj, LV_PART_MAIN) != a.y)
+      lv_obj_set_pos(slot.obj, a.x, a.y);
+    show(slot.obj, true);
+  }
+}
+
+// Only the pixels that changed redraw
+void put_field(BoardView &v, const UpdateFields &f) {
+  const ::espn::FieldPic &pic = f.field_pic;
+  if (!f.board || !f.field || pic.w <= 0 || pic.h <= 0) {
+    show(v.field, false);
     return;
   }
-  const ::espn::AppArt &a = f.art[0];
-  if (v.art_buf == nullptr) {
-    v.art_buf = static_cast<uint8_t *>(
-        heap_caps_malloc(::espn::kAppArtMaxW * ::espn::kAppArtMaxH * 3, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (v.art_buf == nullptr)
+  const size_t n = (size_t) pic.w * pic.h;
+  if (n > v.field_px) {
+    heap_caps_free(v.field_buf);
+    heap_caps_free(v.field_next);
+    v.field_buf = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    v.field_next = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    v.field_px = v.field_buf != nullptr && v.field_next != nullptr ? n : 0;
+    v.field_shown = ::espn::FieldPic();
+    if (v.field_px == 0) {
+      show(v.field, false);
       return;
+    }
   }
-  if (v.art == nullptr) {
+  if (v.field == nullptr) {
     if (v.board == nullptr)
       return;
-    v.art = lv_image_create(v.board);
-    lv_obj_remove_style_all(v.art);
+    v.field = lv_canvas_create(v.board);
+    lv_obj_remove_flag(v.field, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    lv_obj_move_to_index(v.field, 0);
   }
-  const uint32_t key = art_key(a);
-  if (key != v.art_key) {
-    ::espn::app_art_paint(a, v.art_buf);
-    lv_image_dsc_t &d = v.art_dsc;
-    d.header.magic = LV_IMAGE_HEADER_MAGIC;
-    d.header.cf = LV_COLOR_FORMAT_RGB565A8;
-    d.header.w = a.w;
-    d.header.h = a.h;
-    d.header.stride = a.w * 2;
-    d.data_size = (uint32_t) a.w * a.h * 3;
-    d.data = v.art_buf;
-    ::lv_image_set_src(v.art, &d);
-    lv_obj_invalidate(v.art);
-    v.art_key = key;
+  const ::espn::FieldPic &was = v.field_shown;
+  const bool fresh = was.w != pic.w || was.h != pic.h || was.x != pic.x || was.y != pic.y;
+  if (fresh) {
+    lv_canvas_set_buffer(v.field, v.field_buf, pic.w, pic.h, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(v.field, pic.x, pic.y);
+    lv_obj_set_size(v.field, pic.w, pic.h);
   }
-  if (lv_obj_get_style_x(v.art, LV_PART_MAIN) != a.x || lv_obj_get_style_y(v.art, LV_PART_MAIN) != a.y)
-    lv_obj_set_pos(v.art, a.x, a.y);
-  show(v.art, true);
+  if (fresh || !::espn::field_same(pic, v.field_shown)) {
+    ::espn::Px565 p;
+    p.px = v.field_next;
+    p.w = p.stride = pic.w;
+    p.h = pic.h;
+    p.clip = ::espn::PxBox{0, 0, pic.w, pic.h};
+    ::espn::field_paint(p, pic);
+    int x0 = pic.w, y0 = pic.h, x1 = -1, y1 = -1;
+    for (int y = 0; y < pic.h; y++)
+      for (int x = 0; x < pic.w; x++) {
+        const size_t i = (size_t) y * pic.w + x;
+        if (!fresh && v.field_buf[i] == v.field_next[i])
+          continue;
+        x0 = std::min(x0, x);
+        x1 = std::max(x1, x);
+        y0 = std::min(y0, y);
+        y1 = std::max(y1, y);
+        v.field_buf[i] = v.field_next[i];
+      }
+    if (fresh) {
+      lv_obj_invalidate(v.field);
+    } else if (x1 >= 0) {
+      // LVGL takes screen coordinates: the area's are offset
+      lv_area_t c, a;
+      lv_obj_get_coords(v.field, &c);
+      lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
+      lv_obj_invalidate_area(v.field, &a);
+    }
+    v.field_shown = pic;
+  }
+  show(v.field, true);
 }
 
 // The frame's photo, from the logo cache
@@ -521,6 +613,8 @@ void put_photo(BoardView &v, const UpdateFields &f) {
       return;
     v.photo = lv_image_create(v.board);
     lv_obj_remove_style_all(v.photo);
+    // Under the labels, lines and pictures
+    lv_obj_move_to_index(v.photo, 0);
   }
   const lv_image_dsc_t *src = f.photo_img->get_lv_image_dsc();
   if (lv_image_get_src(v.photo) != src)
@@ -583,14 +677,15 @@ void board_build(BoardView &v) {
 
 void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
   v.w = (int16_t) w;
+  v.h = (int16_t) (h > kBoardRows ? h : kBoardRows);
   v.splash_h = (int16_t) splash_h;
   v.sizes = sizes;
   const GameGeom g = game_geom(w, sizes.text, sizes.clock);
   const SplashBox sb = splash_box(w, splash_h);
-  show(v.ticker, board_ticker(h));
+  show(v.ticker, true);
   put_size(v.game, w, kBoardRows);
-  put_size(v.no_game, w, kBoardRows);
-  put_size(v.board, w, kBoardRows);
+  put_size(v.no_game, w, v.h);
+  put_size(v.board, w, v.h);
   put_size(v.splash, w, sb.height);
   put_width(v.splash_lbl, w);
   put_width(v.msg, w);
@@ -714,7 +809,12 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   const bool live = f.game_state == "IN";
   // panel_text() so missing glyphs never draw as boxes
   const std::string abbr[2] = {panel_text(f.team_abbr), panel_text(f.opponent_abbr)};
-  const std::string status = ticker_line(f);
+  std::string status = ticker_line(f);
+  // The main board's warning, unless its ticker says it already
+  if (&v == page_view && !lead_text.empty() && f.status_text.find(lead_text) == std::string::npos) {
+    const std::string lead = panel_text(lead_text);
+    status = (ticker_colors ? ticker_markup(lead, {{lead, lead_rgb}}) : lead) + (status.empty() ? "" : " | ") + status;
+  }
   const std::string clock_text = panel_text(f.clock_text);
   const std::string down = panel_text(f.down_distance);
   const std::string rec[2] = {panel_text(f.team_record), panel_text(f.opponent_record)};
@@ -779,12 +879,14 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
 
   // Rewriting restarts the scroll; leaderboards fit only spleen_8
   if (v.ticker != nullptr) {
-    const lv_font_t *tf = f.board ? v.f8 : font_of(v, g.ticker_font);
+    // The Field view keeps the Text size
+    const bool rows = f.board && !f.field;
+    const lv_font_t *tf = rows ? v.f8 : font_of(v, g.ticker_font);
     if (tf != nullptr && lv_obj_get_style_text_font(v.ticker, LV_PART_MAIN) != tf) {
       lv_obj_set_style_text_font(v.ticker, tf, 0);
       r.ticker_changed = true;
     }
-    const int ty = f.board ? kBoardRows - 8 : g.ticker_y;
+    const int ty = rows ? v.h - 8 : g.ticker_y + v.h - kBoardRows;
     if (lv_obj_get_style_y(v.ticker, LV_PART_MAIN) != ty)
       lv_obj_set_y(v.ticker, ty);
     const char *cur = lv_label_get_text(v.ticker);
@@ -830,6 +932,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_icons(v, f);
   put_art(v, f);
   put_photo(v, f);
+  put_field(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -1281,8 +1384,8 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   // Leaderboards fit only spleen_8, on the last row
   if (f.board)
     rows_draw(a.rows, f, a.w);
-  r.ticker_changed = f.board ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
-                             : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
+  r.ticker_changed = f.board && !f.field ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
+                                         : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
   if (r.splash) {
     // Fireworks when the board isn't using them
     a.splash_color = f.splash_color;

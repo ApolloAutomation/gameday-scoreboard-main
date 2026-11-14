@@ -179,15 +179,48 @@ void test_sprites() {
   espn::app_art_paint(a, two);
   PCHECK(two[4] == 0 && two[5] == 0, "clear stays clear");
 
+  // Doubled: each bit two by two, flipped whole
+  a.bits = bits;
+  a.w = 3;
+  a.flip = false;
+  a.scale = 2;
+  uint8_t big[6 * 2 * 3];
+  espn::app_art_paint(a, big);
+  const int n = 12;
+  PCHECK(big[0] == 0x00 && big[1] == 0xF8 && big[2] == 0x00 && big[3] == 0xF8 && big[4] == 0xE0 && big[5] == 0x07,
+         "doubled across");
+  PCHECK(big[12] == 0x00 && big[13] == 0xF8 && big[22] == 0x1F && big[23] == 0x00 && big[2 * n + 11] == 0xFF,
+         "doubled down");
+  a.flip = true;
+  espn::app_art_paint(a, big);
+  PCHECK(big[0] == 0x1F && big[2] == 0x1F && big[10] == 0x00 && big[11] == 0xF8, "doubled and flipped");
+  a.scale = 1;
+  a.flip = false;
+  a.bits = clear;
+  a.w = 2;
+
   espn::AppFrame f;
-  f.art.push_back(a);
-  f.art.push_back(a);
+  for (size_t i = 0; i <= espn::kAppArt; i++)
+    f.art.push_back(a);
   espn::app_frame_trim(f);
-  PCHECK(f.art.size() == 1 && f.art[0].w == 2, "trimmed to one");
+  PCHECK(f.art.size() == espn::kAppArt && f.art[0].w == 2, "trimmed to the pool");
   PCHECK(espn::app_frame_board(f), "a picture alone is a board");
+  f.art.resize(2);
   f.art[0].w = espn::kAppArtMaxW + 1;
   espn::app_frame_trim(f);
-  PCHECK(f.art.empty(), "too big to draw: dropped");
+  PCHECK(f.art.size() == 1 && f.art[0].w == 2, "too big to draw: dropped, the rest kept");
+  f.art.clear();
+  f.art.push_back(a);
+  // The drawn size counts, scale included
+  a.w = 56;
+  a.h = 15;
+  a.scale = 2;
+  f.art = {a};
+  espn::app_frame_trim(f);
+  PCHECK(f.art.size() == 1, "a jumbo doubled fits");
+  f.art[0].scale = 3;
+  espn::app_frame_trim(f);
+  PCHECK(f.art.empty(), "tripled it doesn't");
 }
 
 // One RGB565 + alpha image, filled per pixel.

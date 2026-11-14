@@ -3650,6 +3650,8 @@ int run_markets_app_tests(int &checks);
 int run_logo_decode_tests(int &checks);
 int run_picture_tests(int &checks);
 int run_plane_photo_tests(int &checks);  // test_plane_photo.cpp
+int run_field_tests(int &checks);        // test_field.cpp
+int run_weather_tests(int &checks);      // test_weather.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -4414,8 +4416,10 @@ static void test_board_layout() {
   // The 9-row heat warning sits at the screen's bottom.
   CHECK_EQ(guard_line_y(kBoardRows), 55);
   CHECK_EQ(guard_line_y(2 * kBoardRows), 119);
-  CHECK(board_ticker(kBoardRows));
-  CHECK(!board_ticker(2 * kBoardRows));
+  // Only a display filling a 2x2 lays out 128 rows.
+  CHECK(!tall_board(128, kBoardRows));
+  CHECK(tall_board(128, 2 * kBoardRows));
+  CHECK(!tall_board(256, 2 * kBoardRows));
 
   // 2x2 bottom half: time, date, ticker above the warning.
   const LowerHalf board = lower_half(false, false);
@@ -9334,6 +9338,8 @@ int main() {
   failures += run_logo_decode_tests(checks);
   failures += run_picture_tests(checks);
   failures += run_plane_photo_tests(checks);
+  failures += run_field_tests(checks);
+  failures += run_weather_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

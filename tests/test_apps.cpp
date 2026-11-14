@@ -39,8 +39,10 @@ void test_displays() {
   ACHECK(std::string(display_key(Display::FLIGHTS)) == "flights");
   ACHECK(std::string(display_name(Display::MARKETS)) == "Stocks & Crypto");
   ACHECK(std::string(display_name(Display::FLIGHTS)) == "Flight Tracker");
+  ACHECK(std::string(display_key(Display::WEATHER)) == "weather");
+  ACHECK(std::string(display_name(Display::WEATHER)) == "Weather");
   // Saved bytes: a display the firmware lacks shows Game Day.
-  ACHECK(display_has(kGameDayOnly, 0) && !display_has(kGameDayOnly, 1) && !display_has(0xFF, 4));
+  ACHECK(display_has(kGameDayOnly, 0) && !display_has(kGameDayOnly, 1) && !display_has(0xFF, 5));
   ACHECK(!display_has(0xFF, -1));
   ACHECK(display_effective(0, kGameDayOnly) == Display::GAMEDAY);
   ACHECK(display_effective(2, kGameDayOnly) == Display::GAMEDAY);
@@ -51,7 +53,8 @@ void test_displays() {
   ACHECK(display_source(Display::F1) == Source::F1);
   ACHECK(display_source(Display::MARKETS) == Source::MARKETS);
   ACHECK(display_source(Display::FLIGHTS) == Source::FLIGHTS);
-  ACHECK((size_t) Source::FLIGHTS + 1 == kSourceCount && kGameSourceCount == 3);
+  ACHECK(display_source(Display::WEATHER) == Source::WEATHER);
+  ACHECK((size_t) Source::WEATHER + 1 == kSourceCount && kGameSourceCount == 3);
 }
 
 void test_main_view() {
@@ -74,6 +77,7 @@ void test_main_view() {
 void test_split_values() {
   // Appended: the old values keep their numbers.
   ACHECK((int) SplitShow::CLOCK == 4 && (int) SplitShow::GAMEDAY == 5 && (int) SplitShow::FLIGHTS == 8);
+  ACHECK((int) SplitShow::WEATHER == 9 && split_of_display(Display::WEATHER) == SplitShow::WEATHER);
   Display d = Display::F1;
   ACHECK(!split_display(SplitShow::CLOCK, d) && d == Display::F1);
   ACHECK(split_display(SplitShow::GAMEDAY, d) && d == Display::GAMEDAY);
@@ -82,13 +86,14 @@ void test_split_values() {
   ACHECK(!area_app(SplitShow::GAMEDAY, d) && area_app(SplitShow::F1, d) && d == Display::F1);
   for (int s = 0; s <= 5; s++)
     ACHECK(split_allowed(s, kGameDayOnly));
-  ACHECK(!split_allowed(6, kGameDayOnly) && !split_allowed(9, 0xFF) && !split_allowed(-1, 0xFF));
+  ACHECK(!split_allowed(6, kGameDayOnly) && !split_allowed(10, 0xFF) && !split_allowed(-1, 0xFF));
   ACHECK(split_allowed(7, 0b101) && !split_allowed(6, 0b101));
   SetOp op;
   ACHECK(parse_set("display", "3", op, 16) && op.kind == SetKind::MAIN_DISPLAY && op.value == 3);
-  ACHECK(!parse_set("display", "4", op, 16) && !parse_set("display", "", op, 16));
+  ACHECK(parse_set("display", "4", op, 16) && op.value == 4);
+  ACHECK(!parse_set("display", "5", op, 16) && !parse_set("display", "", op, 16));
   ACHECK(!parse_set("display", "01", op, 16) && !parse_set("display", "1 ", op, 16));
-  ACHECK(parse_set("split", "8", op, 16) && op.value == 8 && !parse_set("split", "9", op, 16));
+  ACHECK(parse_set("split", "9", op, 16) && op.value == 9 && !parse_set("split", "10", op, 16));
   bool listed = false;
   for (const char *k : kSetKeys)
     listed = listed || std::string(k) == "display";
@@ -215,6 +220,39 @@ void test_frame_helpers() {
   ACHECK(bare.url == "https://a/b.jpg" && bare.w == 0 && bare.h == 0 && bare.credit == " | Photo: B");
   ACHECK(photo("", 56, 21, 12).credit.empty() && photo("https://a/b.jpg", 56, 21, 13).url.empty());
   ACHECK(photo("https://a/b.jpg", kAppPhotoMaxW + 1, 21, 0).url.empty());
+}
+
+// Full screen: the rows become labels at their own pitch.
+void test_rows_texts() {
+  AppFrame f;
+  f.rows.title = "Drivers";
+  f.rows.status = "Round 20";
+  f.rows.status_color = 0x00FF00;
+  for (int i = 0; i < 10; i++) {
+    f.rows.pos.push_back(std::to_string(i + 1));
+    f.rows.name.push_back("Name");
+    f.rows.value.push_back(i < 3 ? "1W" : "");
+    f.rows.detail.push_back("99");
+    f.rows.name_color.push_back(0xFF0000);
+    f.rows.value_color.push_back(0xA0A0A0);
+  }
+  app_rows_texts(f, 128, 11, 11);
+  ACHECK(f.rows.name.empty() && f.rows.title.empty() && f.rows.status.empty());
+  ACHECK(f.texts.size() == 2 + 10 * 3 + 3);
+  ACHECK(f.texts[0].text == "Drivers" && f.texts[0].x == 2 && f.texts[0].y == 0 && f.texts[0].align == AppAlign::LEFT);
+  ACHECK(f.texts[1].text == "Round 20" && f.texts[1].align == AppAlign::RIGHT && f.texts[1].color == 0x00FF00);
+  const AppText &last = f.texts.back();
+  ACHECK(last.text == "99" && last.y == 11 + 9 * 11 && last.x == 94 && last.align == AppAlign::RIGHT);
+  // The leaderboard's dimmer place and name, as gd_board draws them
+  ACHECK(f.texts[2].text == "1" && f.texts[2].color == 0x777777 && f.texts[3].color == 0xE60000);
+  ACHECK(app_frame_board(f));
+  // A display's own columns keep their colors.
+  AppFrame own;
+  own.rows.name = {"AAPL"};
+  own.rows.name_color = {0xFFFFFF};
+  own.rows.cols = {0, 0, 9, 30, 39, 49, 88, 40};
+  app_rows_texts(own, 128, 8, 16);
+  ACHECK(own.texts.size() == 1 && own.texts[0].x == 9 && own.texts[0].y == 8 && own.texts[0].color == 0xFFFFFF);
 }
 
 void test_rows_geom() {
@@ -414,6 +452,7 @@ int run_app_tests(int &total_checks) {
   test_area_views();
   test_frame_helpers();
   test_rows_geom();
+  test_rows_texts();
   test_units();
   test_hosts();
   test_timing();

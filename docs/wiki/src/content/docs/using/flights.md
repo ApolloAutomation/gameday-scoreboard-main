@@ -18,6 +18,8 @@ The device page has a **Flight Tracker** card. It needs a home location before i
 3. Pick how far from home a plane can be under **Within**: 5 to 100 miles, or 5 to 150 km outside the US and UK. A new panel starts at 10 miles.
 4. Choose **Flight Tracker** under **Showing** in the Panel card, or under **Shows** for the second area.
 
+The home is [Weather](/using/weather/)'s too: setting or clearing it in the Flight Tracker card or the Weather card changes both.
+
 **Planes near** shows the spot the panel has, with **Clear** to remove it. The line at the bottom of the card says what the panel is doing, like **12 planes nearby, from Flightradar24.**
 
 Under that line, the card shows a photo of the plane on the panel's card, from Planespotters.net, with its callsign and the photographer's name. Tap the photo or the name to open the photo's page on Planespotters.net. Your browser looks the photo up itself, by the plane's address and then its registration, and keeps what it found while the page is open. A plane with no photo there shows none.
@@ -53,6 +55,11 @@ The list of the nearest planes, nearest first, has each one's callsign, type cod
 | 64x64 (one panel, or the right panel of three wide) | The card and the list take turns, about 8 seconds each. A speed too wide for the card, like 1185 km/h, shows as the number alone. |
 | 128x64 (one 128x64 panel, the right two panels of four wide, either half of two rows of two) | The card and the list take turns, about 8 seconds each. |
 | Three or four panels in a row, with no second area | The card on the left and the list beside it, together. |
+
+**Full screen on two rows of two.** With **Full screen** on under **Shows** (see [The second area](/using/panel-sizes/#the-second-area)), the Flight Tracker fills all four panels, 128x128, and the card and the list still take turns, about 8 seconds each:
+
+- **The card**: the airline's logo big, 32 LEDs square, at the top left, the callsign in big letters beside it with the airline's name and the plane's type under it, then the route in big letters, like **ATL-BDL**, with the flight number at its right. The plane's photo fills the width of the panel under that, about 126 by 52 LEDs, cut to that shape, and until it comes in, or with no photo, the plane's picture shows there at twice its size, or three times for a small plane like a business jet or a helicopter. Under the picture are the altitude and the speed, then how far away and in which direction, and whether it's climbing, level or descending.
+- **The list**: the nearest seven planes, each with its airline's logo and two lines: the callsign and the distance, then the type, the route and the altitude.
 
 The ticker along the bottom says how many planes are nearby, then the nearest three, with the airline, the type, the route, the altitude, the speed and where each one is.
 

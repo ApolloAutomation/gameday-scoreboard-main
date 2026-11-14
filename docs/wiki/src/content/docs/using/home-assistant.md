@@ -58,10 +58,11 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 | **Firmware** | The firmware update, so Home Assistant shows when a new release is out. |
 | **Install Updates Automatically** | The same switch as on the device page. See [Firmware updates](/using/updates/). |
 | **Play Animations** | The Celebrations card's switch for the pixel-art play before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash. See [Play animations](/using/football/#play-animations). |
+| **Field View** | The Panel card's **Game board**: on for the [Field view](/using/football/#field-view), a football game in progress drawn as a field, and off for the scoreboard, where a panel starts. |
 | **Check for Updates**, **Refresh Now**, **Reboot** | The device page's buttons. |
 | **Reset Wi-Fi**, **Factory Reset** | The resets. See [The boot button and resets](/using/buttons-and-resets/). |
 | **WizMote Auto-Discovery**, **WizMote MAC Address**, **WizMote Status**, **Clear WizMote Pairing** | Pairing a WizMote. See [WizMote remote](/using/remote/). |
-| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, from MLB and HockeyTech for minor league baseball, AHL and ECHL teams, and what F1, Stocks & Crypto and the Flight Tracker read. It keeps its name, though the device page calls it **Data used**. |
+| **IP**, **ESPN Data** | The panel's IP address, and how much it has downloaded since it started: from ESPN, from MLB and HockeyTech for minor league baseball, AHL and ECHL teams, and what F1, Stocks & Crypto, the Flight Tracker and Weather read. It keeps its name, though the device page calls it **Data used**. |
 | **Chip Temperature** | The controller's temperature, the reading the panel uses to dim itself when it runs hot. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection). |
 
 For a minor league baseball, AHL or ECHL team, **Game Status** follows the game the same way. See [Baseball: minor leagues](/using/minor-league-baseball/) and [Hockey: AHL and ECHL](/using/minor-league-hockey/).
@@ -74,7 +75,7 @@ A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are the
 
 The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
 
-Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues, the panel layout and the newer settings, like the idle display, the night hours, the second area, favorite players and bets, have no entities. Set them on the device page. Game Status leaves out bets, favorite players' stat lines and the address line the ticker shows after joining Wi-Fi.
+Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues, the panel layout and the newer settings, like the idle display, the night hours, the second area and its **Full screen** switch, favorite players, bets and [Weather](/using/weather/) with its **Weather warnings in the ticker** switch, have no entities. Set them on the device page. Game Status leaves out bets, favorite players' stat lines and the address line the ticker shows after joining Wi-Fi.
 
 ## What you can automate
 

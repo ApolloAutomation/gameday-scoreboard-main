@@ -642,15 +642,26 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
     FCHECK(s != nullptr, "%s: a picture of something", what);
     if (s == nullptr)
       continue;
-    const Box b{a.x, a.x + s->w, a.y, a.y + s->h - 1};
+    const Box b{a.x, a.x + s->w * a.scale, a.y, a.y + s->h * a.scale - 1};
+    FCHECK(a.scale >= 1 && s->w * a.scale <= espn::kAppArtMaxW && s->h * a.scale <= espn::kAppArtMaxH,
+           "%s: the picture drawable", what);
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the picture inside", what);
     for (const Box &t : boxes)
       FCHECK(apart(b, t), "%s: the picture clear of text", what);
     pics.push_back(b);
   }
-  FCHECK(f.art.size() <= 1 && f.logos.size() <= 1, "%s: one picture, one logo", what);
+  // The photo's box, where it's drawn
+  if (f.photo.w > 0) {
+    const Box b{f.photo.x, f.photo.x + f.photo.w, f.photo.y, f.photo.y + f.photo.h - 1};
+    FCHECK(f.photo.w <= espn::kAppPhotoMaxW && f.photo.h <= espn::kAppPhotoMaxH, "%s: the photo drawable", what);
+    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the photo inside", what);
+    for (const Box &t : boxes)
+      FCHECK(apart(b, t), "%s: the photo clear of text", what);
+  }
+  const bool tall_list = o.list && esphome::gameday::tall_board(o.w, o.h);
+  FCHECK(f.art.size() <= 1 && (f.logos.size() <= 1 || tall_list), "%s: one picture, one logo", what);
   for (const Logo &l : f.logos) {
-    const Box b{l.x, l.x + kLogoPx, l.y, l.y + kLogoPx - 1};
+    const Box b{l.x, l.x + l.px, l.y, l.y + l.px - 1};
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
     FCHECK(airline_by_icao(l.icao) != nullptr, "%s: a logo to load", what);
     for (size_t i = 0; i < boxes.size(); i++)
@@ -803,6 +814,72 @@ void test_frames() {
   const Frame ff = flight_frame(fast, nullptr, om, 100);
   FCHECK(find_text(ff, "1185") != nullptr && find_text(ff, "1185km/") == nullptr, "the speed whole");
   FCHECK(flight_frame(Nearby(), nullptr, o, 0).items.empty(), "no planes, no frame");
+}
+
+// Full screen on a 2x2: the tall card and list.
+void test_tall_frames() {
+  const Nearby n = read("fixtures/flights_adsbfi_jfk.json", jfk());
+  RouteCache cache;
+  parse_routeset(slurp("fixtures/flights_routeset_jfk.json"), recorded_ask(), cache, 100);
+  PlanePhoto photo;
+  strcpy(photo.url, "https://t.plnspttrs.net/1/2_t.jpg");
+  photo.state = PhotoState::KNOWN;
+  for (int metric = 0; metric < 2; metric++)
+    for (bool list : {false, true})
+      for (bool with_photo : {false, true})
+        for (uint8_t card = 0; card < n.n; card++) {
+          FrameOpts o;
+          o.w = o.h = 128;
+          o.card = card;
+          o.list = list;
+          o.photo = with_photo ? &photo : nullptr;
+          if (metric)
+            o.units = units_metric();
+          char what[64];
+          snprintf(what, sizeof(what), "128x128%s%s%s card %u", metric ? " metric" : "", list ? " list" : "",
+                   with_photo ? " photo" : "", card);
+          const Frame f = flight_frame(n, &cache, o, 100);
+          check_frame(f, o, what);
+          // The list shows the nearest seven
+          if (!list || card < 7)
+            FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
+          FCHECK(!f.ticker.empty(), "%s: ticker", what);
+          if (list) {
+            FCHECK(f.art.empty() && f.photo.w == 0, "%s: the list has no pictures", what);
+            for (const Logo &l : f.logos)
+              FCHECK(l.px == kLogoPx && l.x == 0, "%s: a 16 px logo per row", what);
+            continue;
+          }
+          FCHECK(f.items[0].font == BoardFont::S16 || (f.items.size() > 1 && f.items[1].font == BoardFont::S16),
+                 "%s: the big callsign", what);
+          for (const Logo &l : f.logos)
+            FCHECK(l.px == kLogoBigPx, "%s: the big logo", what);
+          for (const Art &a : f.art)
+            FCHECK(a.scale >= 2, "%s: the picture doubled at least", what);
+          FCHECK(!with_photo || (f.photo.w == kPhotoTallW && f.photo.h == kPhotoTallH), "%s: the wide photo", what);
+        }
+  FrameOpts o;
+  o.w = o.h = 128;
+  Frame f = flight_frame(n, &cache, o, 100);
+  const Text *route = find_text(f, "JFK-CDG");
+  FCHECK(route != nullptr && route->font == BoardFont::S16 && route->color == kColRoute, "the route big");
+  FCHECK(find_text(f, "JetBlue") != nullptr && find_text(f, "Airbus A321neo") != nullptr, "airline and type");
+  FCHECK(find_text(f, "1,525 ft") != nullptr && find_text(f, "203 mph") != nullptr &&
+             find_text(f, "1.5 mi SE") != nullptr && find_text(f, "Climbing") != nullptr,
+         "altitude, speed, where and climb");
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoBigPx && f.art.size() == 1 && f.art[0].scale == 2,
+         "a 32 px logo, the airliner doubled");
+  o.list = true;
+  f = flight_frame(n, &cache, o, 100);
+  FCHECK(find_text(f, "Nearby") != nullptr && find_text(f, "23 planes") != nullptr, "the list's head");
+  FCHECK(find_text(f, "JBU1407") != nullptr && find_text(f, "JBU416") != nullptr && find_text(f, "CNS482") == nullptr,
+         "seven planes, two lines each");
+  // 128 by 64 keeps today's card
+  o.h = 64;
+  o.list = false;
+  f = flight_frame(n, &cache, o, 100);
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.size() == 1 && f.art[0].scale == 1,
+         "the split card unchanged");
 }
 
 void test_notes() {
@@ -1593,6 +1670,7 @@ int run_flight_tests(int &total_checks) {
   test_cache();
   test_pick();
   test_frames();
+  test_tall_frames();
   test_notes();
   test_ticker();
   total_checks += checks;

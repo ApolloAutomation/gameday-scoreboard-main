@@ -32,9 +32,9 @@ constexpr const char *kSetKeys[] = {"follow",    "team",       "mode",      "rot
                                     "lockon",    "release",    "collide",   "favs",     "today",      "live",
                                     "autoupd",   "count",      "match",     "beta",     "alerts",     "alertfav",
                                     "anim",      "watch",     "watchstay",  "watchmine", "standing", "clocksize",  "textsize",
-                                    "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
+                                    "sportview", "idle",      "idledim",    "night",     "nightstart", "nightend", "nightbri",
                                     "betdel",    "bet",        "propdel",   "prop",     "playerdel",  "player",
-                                    "display",   "splitteam",  "split"};
+                                    "display",   "splitteam",  "split",     "full",     "areadetail"};
 
 // LIVE (5) follows live games in the leagues of the live mask; modes 1-3 are
 // the football-only live modes from before, kept for panels that saved them.
@@ -54,12 +54,14 @@ enum class SplitShow : uint8_t {
   GAMEDAY = 5,
   F1 = 6,
   MARKETS = 7,
-  FLIGHTS = 8
+  FLIGHTS = 8,
+  WEATHER = 9
 };
-constexpr int kSplitCount = 9;
+constexpr int kSplitCount = 10;
 static_assert((int) SplitShow::GAMEDAY + kDisplayCount == kSplitCount, "a SplitShow per display, in Display order");
 static_assert((int) SplitShow::F1 == (int) SplitShow::GAMEDAY + (int) Display::F1, "SplitShow follows Display");
 static_assert((int) SplitShow::FLIGHTS == (int) SplitShow::GAMEDAY + (int) Display::FLIGHTS, "SplitShow follows Display");
+static_assert((int) SplitShow::WEATHER == (int) SplitShow::GAMEDAY + (int) Display::WEATHER, "SplitShow follows Display");
 
 // A display choice, and which display it is.
 inline bool split_display(SplitShow s, Display &d) {
@@ -283,6 +285,9 @@ enum class SetKind : uint8_t {
   TEXT_SIZE,    // value, 0 Normal or 1 Large: the ticker's letters
   MAIN_DISPLAY, // value, apps.h's Display: what the main area shows
   ANIM,         // on, play animations before big plays' splashes
+  FULL,         // on: a display on the main board fills the panel
+  SPORT_VIEW,   // value, 0 Scoreboard or 1 Field view: the game board
+  AREA_DETAIL,  // on, the game's details in the second area
 };
 
 struct TeamRef {
@@ -619,6 +624,13 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     return on(SetKind::ALERTFAV);
   if (k == "anim")
     return on(SetKind::ANIM);
+  if (k == "areadetail")
+    return on(SetKind::AREA_DETAIL);
+  if (k == "sportview") {
+    op.kind = SetKind::SPORT_VIEW;
+    op.value = v.size() == 1 && (v[0] == '0' || v[0] == '1') ? v[0] - '0' : -1;
+    return op.value >= 0;
+  }
   if (k == "idle") {
     op.kind = SetKind::IDLE;
     op.value = read_int(v);
@@ -673,6 +685,8 @@ inline bool parse_set(const std::string &k, const std::string &v, SetOp &op, siz
     op.value = v.size() == 1 && v[0] >= '0' && v[0] < '0' + kSplitCount ? v[0] - '0' : -1;
     return op.value >= 0;
   }
+  if (k == "full")
+    return on(SetKind::FULL);
   if (k == "display") {
     // One digit, as for split; unknown displays dropped later.
     op.kind = SetKind::MAIN_DISPLAY;

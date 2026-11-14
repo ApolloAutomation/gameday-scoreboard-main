@@ -109,6 +109,8 @@ class F1App final : public App {
   void weather_frame_(int w, int64_t now, AppFrame &out) const;
   void standings_frame_(const F1Standings &s, int w, int64_t now, AppFrame &out) const;
   void results_frame_(int w, AppFrame &out) const;
+  // Full screen: the rows spread, the next session big.
+  void tall_(F1Screen s, int w, int64_t now, AppFrame &out) const;
   std::string ticker_(int64_t now, std::vector<esphome::gameday::TickerSpan> &spans) const;
   std::string place_(int64_t now) const;
 
@@ -146,6 +148,8 @@ class F1App final : public App {
   uint32_t rnd_{0x2545F491};
   // Until the drawn frame changes: its card or countdown.
   mutable uint32_t redraw_{1000};
+  // Rows a card lists: more at full screen
+  mutable size_t rows_{kF1Rows};
 };
 
 }

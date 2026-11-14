@@ -59,7 +59,7 @@ While that version is the one on offer, the Firmware box says **The update to** 
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
 
-A beta carries the number of a coming release, plus a build number, like 2026.11.6-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.6 is newer than any 2026.11.6 beta.
+A beta carries the number of a coming release, plus a build number, like 2026.11.7-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.7 is newer than any 2026.11.7 beta.
 
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
 
