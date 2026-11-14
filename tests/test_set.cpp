@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "app_flights.h"
+#include "app_weather.h"
 #include "app_markets.h"
 #include "follow.h"
 #include "players.h"
@@ -79,6 +80,8 @@ struct Settings {
   MarketList markets;  // the Stocks & Crypto list (app_markets.h)
   // The Flight Tracker's own (app_flights.h)
   flights::Prefs flights;
+  // Weather's own (app_weather.h)
+  wx::Prefs weather;
 };
 constexpr int kFavMax = 16;
 constexpr int kMaxCols = 4;
@@ -241,6 +244,8 @@ void load(Settings &s, JsonObjectConst o) {
     if (f["receiver"].is<const char *>())
       flights::prefs_set(s.flights, "flyreceiver", f["receiver"].as<const char *>());
   }
+  if (o["weather"].is<JsonObjectConst>())
+    s.weather.ticker = (uint8_t) (o["weather"]["ticker"] | 0);
   if (o["players"].is<JsonArrayConst>()) {
     for (auto &p : s.players)
       p = FavPlayer{};
@@ -474,6 +479,9 @@ void state_doc(const Settings &s, JsonDocument &doc) {
   doc["areadetail"] = s.areadetail;
   doc["splitteam"] = team_str(s.splitteam);
   flights::prefs_state(s.flights, flights::units_for_zone(s.tz), doc["flights"].to<JsonObject>());
+  // WeatherApp::state's settings: the switch and the units
+  doc["weather"]["ticker"] = s.weather.ticker;
+  doc["weather"]["units"] = wx::units_for_zone(s.tz).f ? "imperial" : "metric";
   JsonArray players = doc["players"].to<JsonArray>();
   for (const FavPlayer &p : s.players) {
     if (player_empty(p))
@@ -521,6 +529,9 @@ void test_fixture_cases() {
     if (display_has(s.displays, (int) Display::FLIGHTS))
       for (const char *const *k = flights::kFlightSetKeys; *k != nullptr; k++)
         take(*k);
+    if (display_has(s.displays, (int) Display::WEATHER))
+      for (const char *const *k = wx::kWeatherSetKeys; *k != nullptr; k++)
+        take(*k);
     int status = kv.empty() ? 400 : 200;
     SCHECK(status == (c["status"] | 200), "%s: status %d", name, status);
     SetOp op;
@@ -529,6 +540,8 @@ void test_fixture_cases() {
         apply(s, op);
       else if (p.first.rfind("mkt", 0) == 0)  // app_set_: the display's own set
         markets_set(s.markets, market_defaults(), p.first, p.second);
+      else if (p.first == "wxticker" && (p.second == "0" || p.second == "1"))
+        s.weather.ticker = p.second == "1";
       else
         flights::prefs_set(s.flights, p.first, p.second);
     }

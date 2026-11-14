@@ -54,12 +54,14 @@ enum class SplitShow : uint8_t {
   GAMEDAY = 5,
   F1 = 6,
   MARKETS = 7,
-  FLIGHTS = 8
+  FLIGHTS = 8,
+  WEATHER = 9
 };
-constexpr int kSplitCount = 9;
+constexpr int kSplitCount = 10;
 static_assert((int) SplitShow::GAMEDAY + kDisplayCount == kSplitCount, "a SplitShow per display, in Display order");
 static_assert((int) SplitShow::F1 == (int) SplitShow::GAMEDAY + (int) Display::F1, "SplitShow follows Display");
 static_assert((int) SplitShow::FLIGHTS == (int) SplitShow::GAMEDAY + (int) Display::FLIGHTS, "SplitShow follows Display");
+static_assert((int) SplitShow::WEATHER == (int) SplitShow::GAMEDAY + (int) Display::WEATHER, "SplitShow follows Display");
 
 // A display choice, and which display it is.
 inline bool split_display(SplitShow s, Display &d) {

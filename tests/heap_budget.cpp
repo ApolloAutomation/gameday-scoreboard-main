@@ -28,6 +28,7 @@
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
 #include "source_markets.h"
+#include "weather.h"
 
 using namespace espn;
 
@@ -362,6 +363,42 @@ int main() {
       F1Weather w;
       return parse_met_weather(json, parse_iso8601_z("2026-11-12T05:04:00Z"), w) == 1;
     });
+  }
+  {
+    // Weather's reads (weather.h), the forecast at its largest
+    const int64_t now = 1794630600;
+    std::string om = slurp("fixtures/weather_om_tahoe.json");
+    measure("weather_forecast", [&] {
+      wx::Forecast f{};
+      return wx::parse_with(om, wx::detail::fill_forecast_filter,
+                            [&f](JsonObjectConst r) { return wx::detail::forecast_from_doc(r, f); });
+    });
+    std::string met = slurp("fixtures/met_vegas.json");
+    measure("weather_met", [&] {
+      wx::Forecast f{};
+      return wx::parse_with(met, wx::detail::fill_met_filter, [&f](JsonObjectConst r) {
+        return wx::detail::met_from_doc(r, parse_iso8601_z("2026-11-12T05:04:00Z"), f);
+      });
+    });
+    std::string nws = slurp("fixtures/weather_nws_reno.json");
+    measure("weather_alerts", [&] {
+      wx::Alerts a{};
+      return wx::parse_with(nws, wx::detail::fill_alerts_filter,
+                            [&a](JsonObjectConst r) { return wx::detail::alerts_from_doc(r, 1794600000, a); });
+    });
+    std::string aq = slurp("fixtures/weather_aq_delhi.json");
+    measure("weather_air", [&] {
+      wx::Air a{};
+      return wx::parse_with(aq, wx::detail::fill_air_filter,
+                            [&a](JsonObjectConst r) { return wx::detail::air_from_doc(r, a); });
+    });
+    std::string rv = slurp("fixtures/weather_rainviewer.json");
+    measure("weather_radar", [&] {
+      wx::Radar r{};
+      return wx::parse_with(rv, wx::detail::fill_radar_filter,
+                            [&r](JsonObjectConst x) { return wx::detail::radar_from_doc(x, r); });
+    });
+    (void) now;
   }
   {
     std::string json = slurp("fixtures/team_nfl_dal.json");

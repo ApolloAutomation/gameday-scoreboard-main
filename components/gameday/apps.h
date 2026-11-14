@@ -28,8 +28,8 @@
 namespace espn {
 
 // Saved as a byte: append only, never renumber.
-enum class Display : uint8_t { GAMEDAY = 0, F1 = 1, MARKETS = 2, FLIGHTS = 3 };
-constexpr int kDisplayCount = 4;
+enum class Display : uint8_t { GAMEDAY = 0, F1 = 1, MARKETS = 2, FLIGHTS = 3, WEATHER = 4 };
+constexpr int kDisplayCount = 5;
 static_assert(kGameSourceCount + kDisplayCount - 1 == kSourceCount, "a Source per display but Game Day");
 static_assert(kHealthApps == kDisplayCount - 1, "the health block has a slot per display but Game Day");
 
@@ -42,6 +42,8 @@ inline const char *display_key(Display d) {
       return "markets";
     case Display::FLIGHTS:
       return "flights";
+    case Display::WEATHER:
+      return "weather";
     default:
       return "gameday";
   }
@@ -56,6 +58,8 @@ inline const char *display_name(Display d) {
       return "Stocks & Crypto";
     case Display::FLIGHTS:
       return "Flight Tracker";
+    case Display::WEATHER:
+      return "Weather";
     default:
       return "Game Day";
   }
@@ -155,19 +159,23 @@ struct AppArt {
   uint8_t scale{1};              // each bit drawn scale by scale
   uint32_t ink[3]{};
 };
-constexpr size_t kAppArt = 1;
+constexpr size_t kAppArt = 8;
 // Drawn size, scale included.
-constexpr int kAppArtMaxW = 128, kAppArtMaxH = 32;
+constexpr int kAppArtMaxW = 128, kAppArtMaxH = 48;
 
 // A boxed photo; it hides the art once loaded.
+// A PNG is a map: its middle, over black, unlit.
 struct AppPhoto {
   int16_t x{0}, y{0};
   uint8_t w{0}, h{0};  // 0: credited, not drawn
   std::string url;  // empty when there is none
   std::string credit;  // into the ticker at `at` once loaded
   size_t at{0};
+  std::string hold;  // drawn while url loads, if loaded
+  int8_t alt{-1};    // texts index shown only while none draws
+  bool keep_art{false};  // the art stays over it
 };
-constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 80;
+constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 120;
 
 // RGB565 then alpha, as runtime_image lays logos out.
 inline void app_art_paint(const AppArt &a, uint8_t *out) {
@@ -279,9 +287,12 @@ inline void app_frame_trim(AppFrame &f) {
   if (f.art.size() > kAppArt)
     f.art.resize(kAppArt);
   // One that can't be drawn goes
-  if (!f.art.empty() && (f.art[0].bits == nullptr || f.art[0].w == 0 || f.art[0].h == 0 || f.art[0].scale < 1 ||
-                         f.art[0].w * f.art[0].scale > kAppArtMaxW || f.art[0].h * f.art[0].scale > kAppArtMaxH))
-    f.art.clear();
+  for (size_t i = f.art.size(); i-- > 0;) {
+    const AppArt &a = f.art[i];
+    if (a.bits == nullptr || a.w == 0 || a.h == 0 || a.scale < 1 || a.w * a.scale > kAppArtMaxW ||
+        a.h * a.scale > kAppArtMaxH)
+      f.art.erase(f.art.begin() + i);
+  }
   AppPhoto &p = f.photo;
   if (p.url.empty() || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH || p.at > f.ticker.size())
     f.photo = AppPhoto();
@@ -362,6 +373,15 @@ struct AppRequest {
   std::string body;  // POST when set
   std::vector<AppHeader> headers;
 };
+
+// One copy of each, shared by every display.
+__attribute__((noinline)) inline void app_header(AppRequest &r, const char *name, std::string value) {
+  r.headers.push_back(AppHeader{name, std::move(value)});
+}
+__attribute__((noinline)) inline void app_span(std::vector<esphome::gameday::TickerSpan> &v, std::string text,
+                                               uint32_t rgb) {
+  v.push_back({std::move(text), rgb});
+}
 
 // One response body, read once on the fetch task.
 class AppStream {
@@ -483,12 +503,15 @@ struct AppEnv {
   struct tm (*local)(int64_t epoch){nullptr};  // null reads UTC
   uint8_t tz{0};  // index into kTimezones
   std::string version;  // the firmware's, "2026.11.2"
+  uint32_t (*ms)(){nullptr};  // millis(), for animations; null is 0
 };
 
 inline AppEnv &app_env() {
   static AppEnv e;
   return e;
 }
+
+inline uint32_t app_ms() { return app_env().ms != nullptr ? app_env().ms() : 0; }
 
 // US and UK zones: miles, mph and feet.
 inline bool tz_miles(int tz) {
@@ -543,6 +566,12 @@ class App {
   virtual uint32_t poll_ms(int64_t now) const = 0;
   // Picked, but the night clock shows: 0 never reads.
   virtual uint32_t night_poll_ms(int64_t /*now*/) const { return 0; }
+  // Neither on screen nor behind the clock: 0 never reads.
+  virtual uint32_t idle_poll_ms(int64_t /*now*/) const { return 0; }
+  // A home it keeps for others; false for none.
+  virtual bool home(int32_t & /*lat_e4*/, int32_t & /*lon_e4*/, std::string * /*place*/) const { return false; }
+  // A warning for every display's ticker; "" for none.
+  virtual std::string ticker_warning(int64_t /*now*/, uint32_t & /*color*/) const { return ""; }
   // The next read; false for none now.
   virtual bool request(int64_t now, AppRequest &out) = 0;
   // Fetch task: into its own result, in PSRAM.
@@ -557,12 +586,16 @@ class App {
   virtual bool own_backoff() const { return false; }
   // After a read under the current settings.
   virtual void apply(bool ok, int64_t now) = 0;
+  // A read dropped by a settings change instead.
+  virtual void dropped() {}
   // Refused is 403 or 429; true reads another host now.
   virtual bool failed(bool /*refused*/) { return false; }
   // A w by h area's frame.
   virtual void frame(int w, int h, int64_t now, AppFrame &out) const = 0;
   // Redraws this often on its own; 0 after reads only.
   virtual uint32_t redraw_ms() const { return 0; }
+  // Its boxed photo failed, its stand-in too.
+  virtual void photo_failed(int64_t /*now*/) {}
 };
 
 // The displays this firmware has, by Display.
@@ -613,6 +646,14 @@ inline Display app_for_key(const AppSlots &slots, const std::string &key) {
         return (Display) d;
   }
   return Display::GAMEDAY;
+}
+
+// The first home a display keeps, as degrees times 10,000.
+inline bool app_home(const AppSlots &slots, int32_t &lat_e4, int32_t &lon_e4, std::string *place = nullptr) {
+  for (int d = 1; d < kDisplayCount; d++)
+    if (slots.app[d] != nullptr && slots.app[d]->home(lat_e4, lon_e4, place))
+      return true;
+  return false;
 }
 
 // One display object in the PSRAM heap, never freed.

@@ -471,7 +471,7 @@ bool F1App::request(int64_t now, AppRequest &out) {
     case Read::RESULTS: {
       static const F1Read kRead[] = {F1Read::NEXT, F1Read::DRIVERS, F1Read::CONSTRUCTORS, F1Read::LAST_RESULTS};
       out.url = f1_jolpica_url(kRead[(int) r - 1]);
-      out.headers.push_back({"User-Agent", kF1UserAgent});
+      app_header(out, "User-Agent", kF1UserAgent);
       host = HOST_JOLPICA;
       break;
     }
@@ -488,11 +488,11 @@ bool F1App::request(int64_t now, AppRequest &out) {
       const F1Host &om = this->host_[HOST_OPEN_METEO];
       if (om.backup() && now < om.out_until) {
         out.url = f1_met_url(this->req_lat_, this->req_lon_);
-        out.headers.push_back({"User-Agent", f1_met_agent(app_env().version)});
+        app_header(out, "User-Agent", f1_met_agent(app_env().version));
         host = HOST_MET;
       } else {
         out.url = f1_weather_url(this->req_lat_, this->req_lon_);
-        out.headers.push_back({"User-Agent", kF1UserAgent});
+        app_header(out, "User-Agent", kF1UserAgent);
         host = HOST_OPEN_METEO;
       }
       break;
@@ -789,11 +789,11 @@ void F1App::live_frame_(int w, int64_t now, AppFrame &out) const {
   out.ticker = racing_status_text(g, TickerOptions{}, when);
   // The flag first, then names in team colors.
   if (g.race.phase == RacePhase::LIVE && g.race.flag == 'R')
-    out.spans.push_back({"red flag", kRed});
+    app_span(out.spans, "red flag", kRed);
   else if (g.race.phase == RacePhase::LIVE && g.race.flag == 'Y')
-    out.spans.push_back({"yellow flag", kAmber});
+    app_span(out.spans, "yellow flag", kAmber);
   for (size_t i = 0; i < g.race.rows.size() && i < kRaceRows; i++)
-    out.spans.push_back({g.race.rows[i].name, car_color(this->live_.cars[i])});
+    app_span(out.spans, g.race.rows[i].name, car_color(this->live_.cars[i]));
   const bool wide = w >= 128, race = race_like(g.race.kind);
   out.rows.value_narrow = wide;
   for (size_t i = 0; i < g.race.rows.size() && i < kRaceRows && i < this->rows_; i++) {
@@ -1105,7 +1105,7 @@ std::string F1App::ticker_(int64_t now, std::vector<TickerSpan> &spans) const {
       const F1Team *team = f1_team(r.team);
       const std::string name = drivers || team == nullptr ? std::string(r.name) : std::string(team->name);
       line += (i == 0 ? " " : ", ") + std::to_string(r.pos) + " " + name + " " + f1_points_text(r.points10);
-      spans.push_back({name, f1_team_color(r.team)});
+      app_span(spans, name, f1_team_color(r.team));
     }
     const int64_t at = this->ok_[(int) (drivers ? Read::DRIVERS : Read::CONSTRUCTORS)];
     if (this->stale_standings_(now) && at != 0)
@@ -1119,7 +1119,7 @@ std::string F1App::ticker_(int64_t now, std::vector<TickerSpan> &spans) const {
     for (size_t i = 0; i < this->results_.n && i < 3; i++) {
       const F1Result &x = this->results_.rows[i];
       line += (i == 0 ? " " : ", ") + std::to_string(x.pos) + " " + x.name;
-      spans.push_back({x.name, f1_team_color(x.team)});
+      app_span(spans, x.name, f1_team_color(x.team));
     }
     add_part(t, line);
   }

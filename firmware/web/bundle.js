@@ -254,7 +254,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       <details class="card flightcard" id="flightCard" hidden>
         <summary><h2>Flight Tracker</h2><span class="peek sum" id="flightSum"></span></summary>
         <p class="hint">The planes in the sky near a spot you pick: the nearest one's flight, airline, route, type, height, speed and how far away it is, taking turns with a list of the nearest. Choose Flight Tracker under Showing, or for the second area.</p>
-        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it.</small></label></div>
+        <div class="ctl"><label for="flightWhere">Home location<small>A town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78. The panel keeps the spot and asks the flight data for the planes in a box around it. Weather uses it too.</small></label></div>
         <div class="flightrow"><input id="flightWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="flightFind">Find</button></div>
         <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
         <p class="betmsg" id="flightMsg" role="alert" hidden></p>
@@ -264,6 +264,17 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
         <p class="hint" id="flightNow" role="status"></p>
         <figure class="flightphoto" id="flightPhoto" hidden><a id="flightPhotoLink" target="_blank" rel="noopener"><img id="flightPhotoImg" alt=""></a><figcaption><span id="flightPhotoOf"></span> <a id="flightPhotoBy" target="_blank" rel="noopener"></a></figcaption></figure>
+      </details>
+      <details class="card flightcard" id="wxCard" hidden>
+        <summary><h2>Weather</h2><span class="peek sum" id="wxSum"></span></summary>
+        <p class="hint">The weather at home: now, the next hours and days, radar, air quality and, in the US, the National Weather Service's warnings. Choose Weather under Showing, or for the second area.</p>
+        <div class="ctl"><label for="wxWhere">Home location<small>The Flight Tracker's home too: a town, a ZIP or postal code, or a latitude and longitude like 40.64, -73.78.</small></label></div>
+        <div class="flightrow"><input id="wxWhere" autocomplete="off" placeholder="Town, ZIP or lat, lon" aria-label="Home location"><button class="btn" id="wxFind">Find</button></div>
+        <div class="flightpicks" id="wxPicks" role="group" aria-label="Places found" hidden></div>
+        <p class="betmsg" id="wxMsg" role="alert" hidden></p>
+        <div class="ctl" id="wxHomeRow" hidden><label>Home<small id="wxHome"></small></label><button class="btn" id="wxClear">Clear</button></div>
+        <div class="ctl"><label>Weather warnings in the ticker<small>The National Weather Service's warnings and watches for home lead the ticker on any display. While this is on, the panel checks for them every 5 minutes.</small></label><button class="sw" id="wxTicker" aria-label="Weather warnings in the ticker"></button></div>
+        <p class="hint" id="wxNow" role="status"></p>
       </details>
       <details class="card" id="favCard">
         <summary><h2>Favorites</h2><span class="peek sum" id="favSum"></span></summary>
@@ -561,7 +572,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
     split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
-    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String,
+    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
     favs: (v) => v.split(",").filter(Boolean).map(ref),
@@ -2713,54 +2724,59 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
       receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
     };
   };
-  const flightMsg = (t) => { const m = $("#flightMsg"); m.textContent = t || ""; m.hidden = !t; };
-  const setHome = (lat, lon, place) => {
-    flightMsg("");
-    $("#flightPicks").hidden = true;
-    $("#flightWhere").value = "";
-    setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
-  };
-  const findPlace = async () => {
-    const q = $("#flightWhere").value.trim();
-    const picks = $("#flightPicks");
-    picks.hidden = true;
-    if (!q) { flightMsg("Type a town, a ZIP code, or a latitude and longitude."); return; }
-    const c = COORDS.exec(q);
-    if (c) {
-      const lat = Number(c[1]), lon = Number(c[2]);
-      if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
-        flightMsg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+  // One home search for both cards
+  const homeSearch = (p) => {
+    const msg = (t) => { const m = $("#" + p + "Msg"); m.textContent = t || ""; m.hidden = !t; };
+    const setHome = (lat, lon, place) => {
+      msg("");
+      $("#" + p + "Picks").hidden = true;
+      $("#" + p + "Where").value = "";
+      setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+    };
+    const findPlace = async () => {
+      const q = $("#" + p + "Where").value.trim();
+      const picks = $("#" + p + "Picks");
+      picks.hidden = true;
+      if (!q) { msg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+      const c = COORDS.exec(q);
+      if (c) {
+        const lat = Number(c[1]), lon = Number(c[2]);
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+          msg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+          return;
+        }
+        setHome(lat, lon, "");
         return;
       }
-      setHome(lat, lon, "");
-      return;
-    }
-    flightMsg("Looking it up...");
-    let found = [];
-    try {
-      // Open-Meteo's place search: keyless, from this browser.
-      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      found = ((await r.json()).results || []).filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
-    } catch (_) {
-      flightMsg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
-      return;
-    }
-    if (!found.length) { flightMsg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
-    const label = (p) => [p.name, p.admin1, p.country].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
-    if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
-    flightMsg("");
-    picks.innerHTML = "";
-    for (const p of found) {
-      const b = el("button", "btn", label(p));
-      b.onclick = () => setHome(p.latitude, p.longitude, label(p));
-      picks.append(b);
-    }
-    picks.hidden = false;
+      msg("Looking it up...");
+      let found = [];
+      try {
+        // Open-Meteo's place search: keyless, from this browser.
+        const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        found = ((await r.json()).results || []).filter((x) => typeof x.latitude === "number" && typeof x.longitude === "number");
+      } catch (_) {
+        msg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+        return;
+      }
+      if (!found.length) { msg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+      const label = (x) => [x.name, x.admin1, x.country].filter((v, i, all) => v && all.indexOf(v) === i).join(", ");
+      if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+      msg("");
+      picks.innerHTML = "";
+      for (const x of found) {
+        const b = el("button", "btn", label(x));
+        b.onclick = () => setHome(x.latitude, x.longitude, label(x));
+        picks.append(b);
+      }
+      picks.hidden = false;
+    };
+    $("#" + p + "Find").onclick = findPlace;
+    $("#" + p + "Where").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+    $("#" + p + "Clear").onclick = () => setGD({ flyhome: "none" });
+    return msg;
   };
-  $("#flightFind").onclick = findPlace;
-  $("#flightWhere").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
-  $("#flightClear").onclick = () => setGD({ flyhome: "none" });
+  const flightMsg = homeSearch("flight");
   $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
   const saveRx = () => {
     const v = $("#flightRx").value.trim();
@@ -2851,11 +2867,48 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
   };
 
+  // ---- the Weather card (components/gameday/app_weather.h) -----------------
+  const WX_ID = 4;
+  const WX_SOURCES = { "open-meteo": "Open-Meteo", "met-norway": "MET Norway" };
+  homeSearch("wx");
+  const wxTickerOn = () => (S && S.wxticker !== undefined ? S.wxticker : !!(S && S.weather && S.weather.ticker));
+  $("#wxTicker").setAttribute("role", "switch");
+  $("#wxTicker").onclick = () => setGD({ wxticker: wxTickerOn() ? 0 : 1 });
+  const renderWeather = () => {
+    const card = $("#wxCard");
+    const w = S && S.weather;
+    card.hidden = !w || !((S.displays || []).some((d) => d.id === WX_ID));
+    if (card.hidden) return;
+    // Shared home, pending posts included
+    const f = S.flights ? flightNow() : { home: w.home || "", place: w.place || "" };
+    const coords = (f.home || "").replace(",", ", ");
+    $("#wxSum").textContent = f.home ? f.place || coords : "No home yet";
+    $("#wxHomeRow").hidden = !f.home;
+    $("#wxHome").textContent = f.home ? (f.place ? f.place + " (" + coords + ")" : coords) : "";
+    setOn($("#wxTicker"), wxTickerOn(), "aria-checked");
+    const shown = S.display_now === "weather" || S.split_now === "weather";
+    const mine = (S.displays || []).find((d) => d.id === WX_ID);
+    const chosen = S.display === WX_ID || (mine && S.split === mine.split);
+    const n = Number(w.alerts) || 0;
+    let line = !f.home ? "Set a home location to see its weather."
+      : w.status === "failing" ? "Can't reach the weather right now. The panel keeps trying."
+        : w.status === "ok" && w.temp ? w.temp + ", " + w.sky + (WX_SOURCES[w.source] ? ", from " + WX_SOURCES[w.source] : "") + "."
+          : w.status === "old" && !shown ? "Not reading the weather now: the panel reads it only while Weather is on it."
+            : "Looking up the weather.";
+    if (f.home && w.status === "ok" && n) line += " " + n + (n === 1 ? " alert: " : " alerts, first: ") + w.alert + ".";
+    if (f.home && w.status === "ok" && w.aqi != null) line += " Air quality " + w.aqi + ".";
+    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+      line += " The clock is up for the night hours, and Weather comes back after them.";
+    else if (f.home && !chosen) line += " Choose Weather under Showing to put it on the panel.";
+    $("#wxNow").textContent = line;
+  };
+
   const renderAll = () => {
     renderBoard();
     renderBets();
     renderMarkets();
     renderFlights();
+    renderWeather();
     renderPlayers();
     renderUpNext();
     renderSplash();

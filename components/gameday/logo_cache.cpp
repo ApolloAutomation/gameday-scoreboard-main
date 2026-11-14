@@ -10,6 +10,7 @@
 #include "logo_decode.h"
 #include "logo_icon.h"
 #include "logo_lru.h"
+#include "map_canvas.h"
 #include "plane_photo.h"
 #include "psram_tasks.h"
 
@@ -22,8 +23,8 @@ static const char *const TAG = "gameday.logo";
 static const char *const USER_AGENT = ::espn::kUserAgent;  // the same as every ESPN read (poll_timing.h)
 // Rotating live games plus today's scores, ~3 KB each
 static const size_t MAX_LOGOS = 128;
-// Plane photos kept; a new one replaces the oldest
-static const size_t MAX_PHOTOS = 4;
+// Plane photos and radar frames; the oldest goes first
+static const size_t MAX_PHOTOS = 8;
 static const size_t MAX_PENDING = 8;
 // ESPN's PNGs are a few KB; anything far bigger is not a logo.
 static const size_t MAX_BODY = 128 * 1024;
@@ -566,8 +567,96 @@ int jpeg_draw(JPEGDRAW *d) {
 
 }  // namespace
 
+namespace {
+
+// One map decode, for pngle's callbacks
+struct MapJob {
+  ::espn::MapCanvas canvas;
+  std::vector<::espn::MapCell, PsramAllocator<::espn::MapCell>> *cells{nullptr};
+  bool bad{false};
+  uint32_t px{0};
+  uint32_t rest_ms{0};
+};
+
+void map_init(pngle_t *p, uint32_t w, uint32_t h) {
+  auto *job = static_cast<MapJob *>(pngle_get_user_data(p));
+  const int bw = job->canvas.bw, bh = job->canvas.bh;
+  if (!job->canvas.setup(w, h, bw, bh)) {
+    job->bad = true;
+    return;
+  }
+  job->cells->assign((size_t) bw * bh, ::espn::MapCell{});
+  job->canvas.cells = job->cells->data();
+}
+
+void map_draw(pngle_t *p, uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint8_t rgba[4]) {
+  auto *job = static_cast<MapJob *>(pngle_get_user_data(p));
+  job->canvas.paint(x, y, w, h, rgba);
+  if ((++job->px & 1023) == 0 && ::espn::logo_rest_due(job->rest_ms, millis())) {
+    vTaskDelay(1);
+    job->rest_ms = millis();
+  }
+}
+
+}  // namespace
+
+int LogoCache::decode_map_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out) {
+  uint32_t w = 0, h = 0;
+  if (!::espn::png_size(body.data(), body.size(), w, h) || w > ::espn::kMapMaxSide || h > ::espn::kMapMaxSide)
+    return -1;
+  if (this->png_ == nullptr) {
+    void *p = heap_caps_malloc_prefer(PNGLE_T_SIZE, 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
+    if (p == nullptr) {
+      ESP_LOGW(TAG, "No room for the PNG decoder");
+      return 0;
+    }
+    memset(p, 0, PNGLE_T_SIZE);
+    this->png_ = static_cast<pngle_t *>(p);
+    pngle_reset(this->png_);
+  }
+  std::vector<::espn::MapCell, PsramAllocator<::espn::MapCell>> cells;
+  MapJob job;
+  job.canvas.bw = box_w;
+  job.canvas.bh = box_h;
+  job.cells = &cells;
+  job.rest_ms = millis();
+  pngle_set_init_callback(this->png_, map_init);
+  pngle_set_draw_callback(this->png_, map_draw);
+  pngle_set_user_data(this->png_, &job);
+  bool ok = true;
+  size_t offset = 0;
+  while (offset < body.size() && !job.bad) {
+    int used = pngle_feed(this->png_, body.data() + offset, std::min<size_t>(body.size() - offset, 4096));
+    if (used < 0) {
+      ESP_LOGW(TAG, "Map decode error: %s", pngle_error(this->png_));
+      ok = false;
+    }
+    if (used <= 0)
+      break;
+    offset += (size_t) used;
+  }
+  pngle_reset(this->png_);
+  // Back to the logos' own
+  pngle_set_init_callback(this->png_, png_init);
+  pngle_set_draw_callback(this->png_, png_draw);
+  if (job.bad || job.canvas.cells == nullptr)
+    return -1;
+  if (!ok)
+    return 0;
+  out.pixels.assign((size_t) box_w * box_h * 2, 0);
+  job.canvas.finish(out.pixels.data());
+  out.w = box_w;
+  out.h = box_h;
+  out.src_w = w;
+  out.src_h = h;
+  return 1;
+}
+
 // JPEGDEC itself; progressive ones decode their first scan
 int LogoCache::decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out) {
+  uint32_t pw = 0, ph = 0;
+  if (::espn::png_size(body.data(), body.size(), pw, ph))
+    return this->decode_map_(body, box_w, box_h, out);
   if (body.size() < 4 || body[0] != 0xFF || body[1] != 0xD8)
     return -1;
   if (this->jpeg_ == nullptr) {

@@ -13,7 +13,7 @@ namespace esphome::gameday {
 static const int kPanelPx = 64;   // one panel, each way
 static const int kBoardRows = 64;  // the board's height on every arrangement
 
-// spleen_24/32 hold only clock and points glyphs.
+// spleen_24/32 hold only clock, points and temperature glyphs.
 enum class BoardFont : uint8_t { S8, S12, S16, S24, S32 };
 // Metrics measured from the fonts' own bitmaps.
 inline int font_px(BoardFont f) {

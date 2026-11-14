@@ -52,8 +52,8 @@ void test_split_area() {
   PCHECK(split_effective(0, SplitAt::RIGHT2) == SplitShow::OFF);
   PCHECK(split_effective(3, SplitAt::RIGHT1) == SplitShow::SCORES);
   // A junk byte is Off, or the clock on 2x2.
-  PCHECK(split_effective(9, SplitAt::RIGHT2) == SplitShow::OFF);
-  PCHECK(split_effective(9, SplitAt::BOTTOM) == SplitShow::CLOCK);
+  PCHECK(split_effective(10, SplitAt::RIGHT2) == SplitShow::OFF);
+  PCHECK(split_effective(10, SplitAt::BOTTOM) == SplitShow::CLOCK);
 }
 
 // Full screen: the main board's display takes the area.

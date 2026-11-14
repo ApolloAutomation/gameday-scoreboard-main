@@ -81,7 +81,7 @@ The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, al
 Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues, the panel layout and the newer settings, like the idle display, the night hours, the second area, favorite players and bets, have no entities. Set them on the device page. Game Status leaves out bets, favorite players' stat lines and the address line the ticker shows after joining Wi-Fi.
 
 :::note[Coming in the next release]
-The second area's new **Full screen** switch has no entity either: like the other displays and the second area, it's set on the device page.
+The second area's new **Full screen** switch has no entity either: like the other displays and the second area, it's set on the device page. Neither do [Weather](/using/weather/) and its **Weather warnings in the ticker** switch, and what Weather reads counts in **ESPN Data** with the other displays'.
 :::
 
 ## What you can automate

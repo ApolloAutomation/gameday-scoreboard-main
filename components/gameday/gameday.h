@@ -1438,9 +1438,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool app_on_screen_(::espn::Display d) const;
   bool app_night_(::espn::Display d) const;
   void apps_setup_();
-  // Per second: shown changes and timed redraws.
+  // Per second: shown changes.
   void apps_tick_();
+  // Each loop: timed redraws, some under a second.
+  void apps_redraw_();
   void app_redraw_(::espn::Display d, bool timed = false);
+  // A display's warning for every ticker; "" for none
+  std::string ticker_warning_(uint32_t &color) const;
+  // A changed warning redraws the main board's ticker.
+  void warn_check_(bool main_drawn);
+  uint32_t warn_key_{0};
   // A frame into fields the board or area draws.
   void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
   void draw_main_app_(bool quiet = false);
