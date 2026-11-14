@@ -34,14 +34,14 @@ class WeatherApp final : public espn::App {
   enum Host : uint8_t { HOST_OPEN_METEO, HOST_MET, HOST_AIR, HOST_NWS, HOST_RAINVIEWER, kHosts };
 
   // Seconds between reads while on screen.
-  static const int64_t kForecastS = 600, kAirS = 1800, kAlertsS = 300, kRadarS = 600;
+  static constexpr int64_t kForecastS = 600, kAirS = 1800, kAlertsS = 300, kRadarS = 600;
   // Data this old isn't shown.
-  static const int64_t kOldS = 3 * 3600, kAirOldS = 2 * 3600, kRadarOldS = 30 * 60, kAlertsOldS = 3600;
+  static constexpr int64_t kOldS = 3 * 3600, kAirOldS = 2 * 3600, kRadarOldS = 30 * 60, kAlertsOldS = 3600;
   // Failed forecast reads in a row before "Can't reach".
-  static const uint8_t kNoDataFails = 3;
+  static constexpr uint8_t kNoDataFails = 3;
   // One radar frame's time, then the newest held.
-  static const uint32_t kStepMs = 500;
-  static const uint32_t kHoldSteps = 4;
+  static constexpr uint32_t kStepMs = 500;
+  static constexpr uint32_t kHoldSteps = 4;
 
   espn::Display id() const override { return espn::Display::WEATHER; }
   const char *const *hosts() const override;

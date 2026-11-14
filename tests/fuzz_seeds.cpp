@@ -17,6 +17,7 @@
 #include "espn_parse.h"
 #include "f1.h"
 #include "flights.h"
+#include "weather.h"
 #include "source_hockeytech.h"
 #include "source_markets.h"
 #include "source_mlbstats.h"
@@ -86,6 +87,10 @@ int main(int argc, char **argv) {
       },
       [](JsonDocument &f) { flights::fill_routeset_filter(f); },
       [](JsonDocument &f) { flights::fill_adsbdb_filter(f); },
+      [](JsonDocument &f) { wx::detail::fill_forecast_filter(f); },
+      [](JsonDocument &f) { wx::detail::fill_air_filter(f); },
+      [](JsonDocument &f) { wx::detail::fill_alerts_filter(f); },
+      [](JsonDocument &f) { wx::detail::fill_radar_filter(f); },
   };
   std::set<std::string> seen;
   size_t espn_seeds = 0;

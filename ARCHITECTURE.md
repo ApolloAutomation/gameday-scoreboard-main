@@ -125,7 +125,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
-  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
+  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
+  `weather.cpp/.h`, `weather_art.cpp`, `map_canvas.h` and `app_weather.cpp/.h` (Weather), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
   downloads and decodes logos on its own task, never the main loop: some of
@@ -404,14 +405,43 @@ picture's place and its credit goes into the ticker after the card's
 plane. Under 192 wide the list frame carries the photo without a box, so
 the credit stays in the ticker while the card and the list take turns and
 the ticker's text doesn't change every screen. The logo cache keeps at
-most four photos (`MAX_PHOTOS`): a new one replaces the oldest photo that
-is off screen and not downloading (`pick_photo_evict_in` in `logo_lru.h`),
-before any logo, so photos hold at most four of its 128 places.
+most eight photos (`MAX_PHOTOS`), Weather's radar frames among them: a new
+one replaces the oldest photo that is off screen and not downloading
+(`pick_photo_evict_in` in `logo_lru.h`), before any logo, so photos hold at
+most eight of its 128 places.
 Planespotters' JPEGs are progressive, so the logo task decodes their first
 scan alone with JPEGDEC, at 1/8, keeps the whole width and at least 60% of
 the height, trimmed mostly from the bottom, scales that into the box and
 dims what matches each row's ends (`plane_photo.h`), resting like the PNG
 decoder.
+
+**Weather.** `WeatherApp` (`app_weather.h`) reads the forecast from
+Open-Meteo, failing over to MET Norway (`F1Host`, as F1's weather does),
+the air quality from Open-Meteo's own service, the National Weather
+Service's alerts for a US home, and RainViewer's list of radar frames; each
+host backs off on its own. It keeps no home of its own: `App::home` lets
+the Flight Tracker lend its saved one (`app_home`), and every read and
+datum carries the home it was for, so a new home reads at once and an old
+answer is dropped. Its parsers, URLs, words and map math are `weather.h`,
+its icons `weather_art.cpp`, 2-bit pictures packed at compile time as the
+planes are; a frame may now place up to eight (`kAppArt`), each in a PSRAM
+buffer of its own size. The radar is a frame's `AppPhoto` naming a PNG:
+`LogoCache::decode_map_` decodes it on the logo task with the logo
+decoder's pngle into `MapCanvas` (`map_canvas.h`), the middle cut to the
+box's shape and averaged over black with faint colors raised, so RainViewer's
+256-pixel images centered on home and Iowa State's NEXRAD mosaic (asked
+for at the box's own size and extent, the US backup) both fit any area.
+`AppPhoto::hold` names the newest frame to draw while an older one loads,
+`alt` a label shown until one draws, and `keep_art` leaves the frame's
+pictures over it; the photo now sits under the frame's labels, line and
+pictures, so the home's dot (`AppFill`) and ring (`AppLine`) draw over the
+map. Radar frames step every 500 ms on `app_env().ms`, the component's
+`millis()`. With its switch on, `WeatherApp` also checks alerts while off
+screen (`App::idle_poll_ms` and `night_poll_ms`), and `App::ticker_warning`
+hands warnings and watches to `draw_`, which puts them ahead of the main
+board's ticker (`board_ticker_lead`) unless that ticker already says them. A
+display's read now always counts as that display's in `open_`, so two
+displays can share a host, as F1 and Weather share Open-Meteo.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -854,7 +884,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   frames), `test_markets_app.cpp` (the Stocks & Crypto display's list,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
   feeds, sources and failover, routes, photo lookups, screens, settings and
-  the display's reads), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  the display's reads), `test_weather.cpp` (Weather: each source, failover,
+  units, icons, the radar's map math, pages and frames at every size), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
   decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
   (the photo's cut, scaling and lighting) and `test_networks.cpp`
