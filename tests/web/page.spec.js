@@ -406,6 +406,69 @@ test("the team picker searches the team list and posts the team", async ({ page,
   await expect(page.locator("#curName")).toHaveText("Philadelphia Eagles");
 });
 
+test("the board lifts a dark team color the way the panel does, so the name shows on black", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  await reset(request, { game: { ...g, ...LIVE, tc: "000000", oc: "021018" } });
+  await page.goto("/");
+  await expect(page.locator("#tA .abbr")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(page.locator("#tB .abbr")).toHaveCSS("color", "rgb(16, 128, 192)");
+  // A bright color stays as it is
+  await reset(request, { game: { ...g, ...LIVE, tc: "FFB612", oc: "C0C0C0" } });
+  await page.reload();
+  await expect(page.locator("#tA .abbr")).toHaveCSS("color", "rgb(255, 182, 18)");
+  await expect(page.locator("#tB .abbr")).toHaveCSS("color", "rgb(192, 192, 192)");
+});
+
+// A phone, with no ESPHome page script
+test.describe("a phone", () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+
+  test("the page sets its own phone width, language and title", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#tA .abbr")).toHaveText("DAL");
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", "width=device-width, initial-scale=1");
+    expect(await page.evaluate(() => [innerWidth, matchMedia("(max-width: 560px)").matches])).toEqual([375, true]);
+    await expect(page).toHaveTitle("Game Day Scoreboard 2f6a70");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length)).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("the status word clears the logo, hints get their row and a switch's words flip it", async ({ page, request }) => {
+    await reset(request);
+    const g = (await deviceState(request)).game;
+    for (const s of ["PRE", "IN"]) {
+      await reset(request, { game: { ...g, s } });
+      await page.goto("/");
+      await expect(page.locator("#gstate")).toHaveText(s === "IN" ? "LIVE" : "UPCOMING");
+      const [word, logo] = await Promise.all([page.locator("#gstate").boundingBox(), page.locator("#tA img").boundingBox()]);
+      expect(word.y + word.height).toBeLessThanOrEqual(logo.y);
+    }
+    // A hinted select goes under its words
+    const [label, select] = await Promise.all([page.locator('label[for="idle"]').boundingBox(), page.locator("#idle").boundingBox()]);
+    expect(label.width).toBeGreaterThan(300);
+    expect(select.y).toBeGreaterThanOrEqual(label.y + label.height);
+    expect(await page.locator("#idle").evaluate((n) => getComputedStyle(n).fontSize)).toBe("16px");
+    // The words and the hint beside a switch flip it
+    await page.locator("#nightCtls .ctl label").first().click();
+    await expectSet(request, { night: "1" });
+    await expect(page.getByRole("switch", { name: "Night hours" })).toHaveAttribute("aria-checked", "true");
+    await page.locator("#nightCtls .ctl label small").first().click();
+    await expectSet(request, { night: "0" });
+    // Not a button's words
+    await page.locator("#animTryRow label").click();
+    await sleep(300);
+    expect((await (await request.get("/_log")).json()).filter((q) => q.path === "/gameday/action")).toEqual([]);
+    // No game: no empty logo frames
+    await reset(request, { game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+    await page.reload();
+    await expect(page.locator("#gstate")).toHaveText("NO GAME");
+    await expect(page.locator("#tA img")).toHaveCSS("visibility", "hidden");
+  });
+});
+
 test("the picker opens on today's live games and follows a side", async ({ page, request }) => {
   const side = (homeAway, id, abbr, name, score) => ({ homeAway, score, team: { id, abbreviation: abbr, shortDisplayName: name } });
   await page.route("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard*", (route) =>
@@ -430,6 +493,23 @@ test("the picker opens on today's live games and follows a side", async ({ page,
   await page.locator("#tiles .side", { hasText: "Eagles" }).click();
   await expectSet(request, { team: "nfl:21" });
   await expect(page.locator("#modal")).not.toHaveClass(/open/);
+});
+
+test("the picker opens within a second when ESPN doesn't answer, and On now gives up on it", async ({ page, request }) => {
+  // ESPN's scoreboards never answer
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/**", () => {});
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#curName")).toHaveText("Dallas Cowboys");
+  const t0 = Date.now();
+  await page.locator("#pick").click();
+  await expect(page.locator("#modal")).toHaveClass(/open/, { timeout: 1800 });
+  expect(Date.now() - t0).toBeLessThan(1800);
+  await expect(page.locator(".tabs button.on")).toHaveText("NFL");
+  await expect(page.locator("#tiles .tile.on .n")).toHaveText("Dallas Cowboys");
+  await page.getByRole("tab", { name: "On now" }).click();
+  await expect(page.locator("#tiles")).toHaveText("Loading today's games");
+  await expect(page.locator("#tiles")).toHaveText("No games today", { timeout: 9000 });
 });
 
 test("the On now tab asks ESPN for every college game, not the Top 25", async ({ page, request }) => {
@@ -1047,6 +1127,44 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(page.locator("#alertFavRow")).toBeHidden();
   await expect(page.locator("#animRow")).toBeHidden();
   await expect(page.locator("#animTryRow")).toBeHidden();
+});
+
+test("Try it says what it plays, and plays nothing off the Scoreboard page", async ({ page, request }) => {
+  const actions = async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q);
+  await reset(request);
+  await page.goto("/");
+  const row = page.locator("#animTryRow");
+  // The hint keeps the row; the buttons go under it
+  const [label, buttons] = await Promise.all([row.locator("label").boundingBox(), row.locator(".trybtns").boundingBox()]);
+  expect(label.width).toBeGreaterThan(300);
+  expect(buttons.y).toBeGreaterThanOrEqual(label.y + label.height);
+  await row.getByRole("button", { name: "Extra point" }).click();
+  await expect(page.locator("#toast")).toHaveText("Playing on the panel");
+  await expect.poll(actions).toContainEqual({ do: "anim", play: "pat" });
+  await row.getByRole("button", { name: "Return" }).click();
+  await expect.poll(actions).toContainEqual({ do: "anim", play: "ret" });
+  await page.locator("#fieldTry").click();
+  await expect(page.locator("#toast")).toHaveText("Showing a sample field on the panel");
+  await expect.poll(actions).toContainEqual({ do: "field" });
+
+  // Weather on the main board: no sample field
+  await reset(request, { displays: WX_DISPLAYS, display: 4 });
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Showing" })).toHaveValue("display:4");
+  await page.locator("#fieldTry").click();
+  await expect(page.locator("#toast")).toHaveText("Set Showing to Scoreboard to try it");
+  // The Clock page: no play either
+  await reset(request);
+  const clock = { id: "select/Select Page", domain: "select", name: "Select Page", state: "Clock", value: "Clock", option: ["Scoreboard", "Clock"] };
+  await page.route("**/events", (route) => route.fulfill({
+    status: 200, contentType: "text/event-stream", body: "event: state\ndata: " + JSON.stringify(clock) + "\n\n",
+  }));
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Showing" })).toHaveValue("Clock");
+  await row.getByRole("button", { name: "Pass" }).click();
+  await expect(page.locator("#toast")).toHaveText("Set Showing to Scoreboard to try it");
+  await sleep(300);
+  expect(await actions()).toEqual([]);
 });
 
 test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {
@@ -2417,6 +2535,13 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await page.reload();
   await expect(page.locator("#hHtRow")).toBeVisible();
   await expect(page.locator("#hHt")).toHaveText("OK, 12 s ago");
+  // A row per listed display, once it has read
+  await expect(page.locator("#health .happ")).toHaveCount(0);
+  await reset(request, { displays: WX_DISPLAYS, health: { ...h, f1: 200, f1_ago: 5, flights: 0, flights_ago: 30, weather: 200, weather_ago: 150 } });
+  await page.reload();
+  await expect(page.locator("#health .happ label")).toHaveText(["Last Flight Tracker read", "Last Weather read"]);
+  await expect(page.locator("#health .happ .val")).toHaveText(["No answer, 30 s ago", "OK, 3 min ago"]);
+  await expect(page.locator("#health .happ").first()).toHaveCSS("border-top-style", "solid");
 
   // A brownout whose time isn't known, before the first ESPN read.
   await reset(request, {
@@ -2766,6 +2891,10 @@ test("the idle display says what the panel shows now, and hides on firmware with
                                     { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
+  await reset(request, { idle: 4, idle_view: "clock", dark: true, display: 4, displays: WX_DISPLAYS });
+  await page.reload();
+  await expect(page.locator("#idleNow"))
+    .toHaveText("The panel is dark until the National Weather Service has a warning or a watch out for home.");
   await reset(request, { idle: 5, idle_view: "logo" });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("Showing your team's logo until a game you follow starts.");
@@ -2940,6 +3069,21 @@ test("Full screen lets a display fill a 2x2 and keeps the second area's choice f
   await reset(request, { panels: 4, displays: FLIGHTS, split: 4 });
   await page.reload();
   await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing it with the right two panels.");
+});
+
+test("Full screen flips on each tap before the panel's next read, so a second tap undoes the first", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2, displays: DISPLAYS, split: 6 });
+  await page.goto("/");
+  const full = page.getByRole("switch", { name: "Full screen" });
+  await expect(full).toHaveAttribute("aria-checked", "false");
+  await slowReads(page, 1500);
+  await full.click();
+  expect(await full.getAttribute("aria-checked")).toBe("true");
+  await full.click();
+  expect(await full.getAttribute("aria-checked")).toBe("false");
+  await expect.poll(() => sets(request)).toEqual([{ full: "1" }, { full: "0" }]);
+  await staysAs(page.locator('.sw.on[data-set="full"]'), [], 2000);
+  expect((await deviceState(request)).full).toBe(false);
 });
 
 // The Stocks & Crypto card (components/gameday/app_markets.h).

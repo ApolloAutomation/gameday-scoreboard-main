@@ -35,6 +35,16 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     n.setAttribute(attr, String(on));
   };
 
+  // ESPHome's hosted page script set these; it may not load
+  if (!$('meta[name="viewport"]')) {
+    const vp = el("meta");
+    vp.name = "viewport";
+    vp.content = "width=device-width, initial-scale=1";
+    document.head.appendChild(vp);
+  }
+  document.documentElement.lang = "en";
+  document.title = "Game Day Scoreboard";
+
   // Where the project lives. SITE_URL is the installer and changelog site,
   // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
   // address" lists every place it is set); REPO is the GitHub repository.
@@ -231,7 +241,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     <div class="grid">
       <div class="col">
       <details class="card" id="panelCard" open>
-        <summary><h2>Panel</h2><span class="peek">Ticker speed, sizes, night hours</span></summary>
+        <summary><h2>Panel</h2><span class="peek">Showing, ticker speed, sizes, night hours</span></summary>
         <div id="panelCtls"></div>
         <div id="sizeCtls" hidden>
           <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The game clock during a game, and the time when the panel shows a clock: the off-season clock, the idle display's Clock, the Clock page and the second area's Clock and date. Large makes them bigger where they fit.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
@@ -345,7 +355,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
           <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the pass or the run into the end zone, the kick through the uprights, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL, with a caption across the top that says what happened and the score. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
-          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="fg">Field goal</button> <button class="btn" data-anim="two">2-pt</button> <button class="btn" data-anim="hr">Home run</button> <button class="btn" data-anim="soccer">Goal (soccer)</button> <button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
+          <div class="ctl drop" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span class="trybtns"><button class="btn" data-anim="pass">Pass</button><button class="btn" data-anim="run">Run</button><button class="btn" data-anim="ret">Return</button><button class="btn" data-anim="fg">Field goal</button><button class="btn" data-anim="pat">Extra point</button><button class="btn" data-anim="two">2-pt</button><button class="btn" data-anim="hr">Home run</button><button class="btn" data-anim="soccer">Goal (soccer)</button><button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
@@ -461,7 +471,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
           <div class="ctl"><label>Wi-Fi drops<small id="wifiLast"></small></label><span class="val" id="wifiDrops"></span></div>
         </div>
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
-        <div class="ctl"><label>Data used<small>Scores and logos from ESPN, MLB and HockeyTech since the panel started</small></label><span class="val" id="espnData"></span></div>
+        <div class="ctl"><label>Data used<small>Everything the panel has downloaded since it started: scores, logos and what its displays read</small></label><span class="val" id="espnData"></span></div>
         <div class="sub">Restart and reset</div>
         <div class="actions" id="dangerActions"></div>
       </details>
@@ -571,7 +581,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
-    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
+    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number, full: (v) => v === "1",
     flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
@@ -677,23 +687,28 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     setQueue = run;
     return run;
   };
-  document.querySelectorAll("[data-anim]").forEach((b) => b.addEventListener("click", async () => {
+  const doAction = async (name, done) => {
     try {
-      const r = await fetch("/gameday/action?do=anim&play=" + encodeURIComponent(b.dataset.anim), { method: "POST" });
+      const r = await fetch("/gameday/action?do=" + name, { method: "POST" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-    } catch (e) {
-      toast("Device did not respond (" + (e.message || "network") + ")");
-    }
-  }));
-  const doAction = async (name) => {
-    try {
-      const r = await fetch("/gameday/action?do=" + encodeURIComponent(name), { method: "POST" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (done) toast(done);
     } catch (e) {
       toast("Device did not respond (" + (e.message || "network") + ")");
     }
   };
-  $("#fieldTry").onclick = () => doAction("field");
+  // Try it plays nothing off the Scoreboard page
+  const tryIt = (field, name, done) => {
+    const page = pageOf();
+    if ((page && page !== "Scoreboard") || (field && S && S.display_now && S.display_now !== "gameday")) {
+      toast("Set Showing to Scoreboard to try it");
+      return;
+    }
+    doAction(name, done);
+  };
+  document.querySelectorAll("[data-anim]").forEach((b) => {
+    b.onclick = () => tryIt(false, "anim&play=" + encodeURIComponent(b.dataset.anim), "Playing on the panel");
+  });
+  $("#fieldTry").onclick = () => tryIt(true, "field", "Showing a sample field on the panel");
 
   // Every ping calls this; #conn is a live region, so only a flip touches it.
   const setConn = (on) => {
@@ -741,6 +756,15 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
   };
   window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
+  // board_layout.h's lift_color: dark colors vanish on black
+  const liftColor = (hex) => {
+    const c = parseInt(hex, 16) || 0;
+    let r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+    const m = Math.max(r, g, b);
+    if (!m) return "ffffff";
+    if (m < 0xc0) [r, g, b] = [r, g, b].map((x) => Math.floor((x * 0xc0) / m));
+    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+  };
   const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
     const img = node.querySelector("img");
     // No id: a side with no team yet, or the demo build's made-up teams.
@@ -753,7 +777,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
     fitRank(node);
     a.classList.toggle("poss", !!poss);
-    a.style.color = "#" + (color || "ffffff");
+    a.style.color = "#" + liftColor(color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
     // Football only; -1 (ESPN sent none) hides the pips
     node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
@@ -1101,7 +1125,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     }
     const now = { clock: "the clock", scores: "recent scores", today: "today's game", logo: "your team's logo" }[S.idle_view];
     const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
-    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
+    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near",
+      weather: "the National Weather Service has a warning or a watch out for home" }[main];
     $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
         : S.night_now ? "In the night hours." : "";
@@ -1208,6 +1233,13 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     sw.setAttribute("role", "switch");
     setOn(sw, false, "aria-checked");
     sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
+  });
+  // The words beside a switch flip it too
+  document.addEventListener("click", (ev) => {
+    const lab = ev.target.closest(".ctl > label:not([for])");
+    if (!lab || ev.target.closest("a, button, input, select")) return;
+    const sws = lab.parentElement.querySelectorAll(":scope > .sw");
+    if (sws.length === 1 && !sws[0].disabled) sws[0].click();
   });
   // Order matches the bits of the "alerts" mask
   const ALERTS = [
@@ -1591,6 +1623,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   };
   let games = null;        // [{league, id, state, detail, away:{...}, home:{...}}]
   let gamesAt = 0;
+  let gamesLoading = null; // the reads in flight, shared
   const teamById = (lg, id) => TEAMS.find((t) => t[0] === lg && t[1] === id);
   const easternDate = () => {
     // ESPN's dates parameter is US Eastern
@@ -1598,8 +1631,12 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const g = (t) => p.find((x) => x.type === t).value;
     return g("year") + g("month") + g("day");
   };
-  const loadGames = async (force) => {
-    if (!force && games && Date.now() - gamesAt < 60000) return games;
+  const loadGames = (force) => {
+    if (!force && games && Date.now() - gamesAt < 60000) return Promise.resolve(games);
+    if (!gamesLoading) gamesLoading = readGames().finally(() => { gamesLoading = null; });
+    return gamesLoading;
+  };
+  const readGames = async () => {
     const d = easternDate();
     // Golf's and racing's scoreboards have no home and away (golf's is
     // hundreds of kilobytes): not On now.
@@ -1608,8 +1645,11 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         : `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
     const out = [];
     await Promise.all(urls.map(async ([lg, u]) => {
+      // A league that hangs gives up after 5 s
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 5000);
       try {
-        const j = await (await fetch(u)).json();
+        const j = await (await fetch(u, { signal: ctl.signal })).json();
         if (isMlb(lg)) {
           for (const day of j.dates || []) for (const g of day.games || []) out.push(mlbGame(lg, g));
           return;
@@ -1629,7 +1669,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
           const state = type.state === "post" && type.completed === false ? "off" : type.state || "pre";
           out.push({ league: lg, id: ev.id, state, detail: type.shortDetail || "", away: side("away"), home: side("home"), date: ev.date });
         }
-      } catch (_) { /* one league failing should not hide the other */ }
+      } catch (_) { /* one league failing should not hide the other */ } finally { clearTimeout(timer); }
     }));
     const rank = { in: 0, pre: 1, post: 2, off: 3 };
     out.sort((a, b) => (rank[a.state] - rank[b.state]) || (a.date < b.date ? -1 : 1));
@@ -2484,10 +2524,9 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf/Racing only for My team; players need ESPN leagues
     tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
-    try {
-      const list = await loadGames(false);
-      if (list.some((g) => g.state === "in")) league = "now";
-    } catch (_) {}
+    // Waits a second at most for On now's games
+    const list = await Promise.race([loadGames(false), new Promise((res) => setTimeout(res, 1000))]).catch(() => null);
+    if (list && list.some((g) => g.state === "in")) league = "now";
     $$tabs(league);
     $("#q").value = "";
     renderTiles();
@@ -2920,7 +2959,12 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     renderIdle();
     renderPanels();
     renderTime();
-    if (S && S.name) $("#hostname").textContent = S.name + ".local";
+    if (S && S.name) {
+      $("#hostname").textContent = S.name + ".local";
+      // Its six characters tell two panels' tabs apart
+      const tail = S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
+      document.title = "Game Day Scoreboard" + (tail ? " " + tail : "");
+    }
     renderData();
     renderHealth();
     renderWifi();
@@ -2976,6 +3020,14 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     // Shown once the panel has read from HockeyTech
     $("#hHtRow").hidden = h.ht == null;
     if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
+    // A row per display once it has read
+    document.querySelectorAll("#health .happ").forEach((n) => n.remove());
+    for (const d of otherDisplays()) {
+      if (h[d.key] == null) continue;
+      const row = el("div", "ctl happ");
+      row.append(el("label", null, "Last " + d.name + " read"), el("span", "val", answer(h[d.key], h[d.key + "_ago"])));
+      $("#hFw").parentElement.before(row);
+    }
     const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
     // The build time comes in Unix seconds; shown in the browser's own time
     const b = h.built ? new Date(h.built * 1000) : null;
