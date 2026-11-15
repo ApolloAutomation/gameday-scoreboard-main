@@ -20,6 +20,7 @@
 #include "idle.h"
 #include "leagues.h"
 #include "panel_text.h"
+#include "poll_timing.h"
 #include "recap.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
@@ -597,6 +598,26 @@ struct AppSlots {
 inline AppSlots &app_slots() {
   static AppSlots s;
   return s;
+}
+
+// start_app_job_'s test: now is millis(), epoch the display's clock.
+inline bool app_read_due(const App &a, bool on, bool night, const HostWait &w, uint32_t last_ms, uint32_t now,
+                         int64_t epoch) {
+  const uint32_t every = on ? a.poll_ms(epoch) : night ? a.night_poll_ms(epoch) : a.idle_poll_ms(epoch);
+  return (on || every != 0) && !w.waiting(now) && app_due(now, last_ms, every);
+}
+
+// A failed read: the host's wait, 0 for none.
+inline uint32_t app_read_failed(App *a, HostWait &w, bool refused, uint32_t retry_after_ms, uint32_t rnd,
+                                uint32_t now) {
+  if (a != nullptr && a->own_backoff())
+    return 0;
+  const bool other = a != nullptr && a->failed(refused);
+  const uint32_t ms = w.fail(refused, retry_after_ms, rnd, now);
+  if (!other)
+    return ms;
+  w.end_wait();  // its backup host, without the wait
+  return 0;
 }
 
 // False for Game Day's slot or one taken.

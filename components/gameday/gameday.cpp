@@ -6202,11 +6202,8 @@ int GamedayComponent::start_app_job_(uint32_t now, uint32_t due) {
     if (a == nullptr)
       continue;
     const bool on = this->app_on_screen_(d);
-    const uint32_t every = on                    ? a->poll_ms(tnow)
-                           : this->app_night_(d) ? a->night_poll_ms(tnow)
-                                                 : a->idle_poll_ms(tnow);
-    if ((!on && every == 0) || this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
-        !::espn::app_due(now, this->app_last_ms_[i], every))
+    if (!::espn::app_read_due(*a, on, !on && this->app_night_(d), this->host_wait_[(size_t) ::espn::display_source(d)],
+                              this->app_last_ms_[i], now, tnow))
       continue;
     if (!::espn::watch_read_fits(now, due, this->app_times_.expect(d))) {
       this->app_times_.skip(d);
@@ -6257,17 +6254,11 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
   ::espn::App *a = ::espn::app_slots().get(d);
+  const uint32_t ms = ::espn::app_read_failed(a, this->host_wait_[(size_t) src], h.throttled, h.retry_after_ms,
+                                              random_uint32(), millis());
   if (a != nullptr && a->own_backoff()) {
     ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
     return;
-  }
-  const bool other = a != nullptr && a->failed(h.throttled);
-  ::espn::HostWait &w = this->host_wait_[(size_t) src];
-  uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
-  if (other) {
-    // Its backup host, without the wait
-    w.end_wait();
-    ms = 0;
   }
   ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
            (unsigned) (ms / 1000));
