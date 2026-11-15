@@ -471,7 +471,7 @@ bool F1App::request(int64_t now, AppRequest &out) {
     case Read::RESULTS: {
       static const F1Read kRead[] = {F1Read::NEXT, F1Read::DRIVERS, F1Read::CONSTRUCTORS, F1Read::LAST_RESULTS};
       out.url = f1_jolpica_url(kRead[(int) r - 1]);
-      app_header(out, "User-Agent", kF1UserAgent);
+      app_header(out, "User-Agent", f1_met_agent(app_env().version));
       host = HOST_JOLPICA;
       break;
     }
@@ -492,7 +492,7 @@ bool F1App::request(int64_t now, AppRequest &out) {
         host = HOST_MET;
       } else {
         out.url = f1_weather_url(this->req_lat_, this->req_lon_);
-        app_header(out, "User-Agent", kF1UserAgent);
+        app_header(out, "User-Agent", f1_met_agent(app_env().version));
         host = HOST_OPEN_METEO;
       }
       break;

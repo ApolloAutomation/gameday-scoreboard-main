@@ -1,5 +1,5 @@
 {
-  "about": "Ceilings in bytes for CI's Size budget job (scripts/size_budget.py). Seeded 2026-10-17 from dev's figures plus 10% (at least 1 KB). firmware: flash is the OTA image, static_ram the ELF's internal data RAM (ESPHome's RAM line). host: tests/heap_budget.cpp on the CI runner, json the JSON documents (PSRAM on the panel), heap everything else (internal RAM on the panel). max_growth: the most one PR may add to a figure against the base branch. Raise an entry only in the PR that needs it, and say why there.",
+  "about": "Ceilings in bytes for CI's Size budget job (scripts/size_budget.py). Seeded 2026-10-17 from dev's figures plus 10% (at least 1 KB). firmware: flash is the OTA image, static_ram the ELF's internal data RAM (ESPHome's RAM line). host: tests/heap_budget.cpp on the CI runner, json the JSON documents (PSRAM on the panel), heap everything else (internal RAM on the panel). flash: the build's figure plus about 3 KB, static_ram: CI's figure plus about 2 KB (2026-11-15), as internal RAM is the scarce one. max_growth: the most one PR may add to a figure against the base branch; a PR that needs more carries the size-growth-ok label instead of raising it, and a PR into main fails unless it matches GROWTH_DEFAULTS in size_budget.py. Raise an entry only in the PR that needs it, and say why there.",
   "max_growth": {
     "flash": 40960,
     "static_ram": 4096,
@@ -8,16 +8,16 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2895800,
-      "static_ram": 173431
+      "flash": 2889800,
+      "static_ram": 150000
     },
     "moonhub75-2panel": {
-      "flash": 2895800,
-      "static_ram": 173431
+      "flash": 2889800,
+      "static_ram": 150000
     },
     "scoreboard75": {
-      "flash": 2872000,
-      "static_ram": 172568
+      "flash": 2866200,
+      "static_ram": 149200
     }
   },
   "host": {

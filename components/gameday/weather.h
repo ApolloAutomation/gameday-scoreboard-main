@@ -184,6 +184,8 @@ bool met_day(const char *symbol);
 
 // "Rain", "Pt cloudy"; within max characters.
 std::string sky_text(uint8_t code, bool day, size_t max);
+// A chance of snow, not rain
+bool snowy(uint8_t code);
 
 // AQI bands: 0 Good to 5 Hazardous.
 int aqi_band(int aqi);

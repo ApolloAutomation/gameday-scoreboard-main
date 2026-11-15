@@ -444,18 +444,7 @@ void test_feed() {
   feed_done(l, Source::LOCAL, 200, true, 0, 0, 30300);
   p = feed_pick(l, true, kLocalPollMs + 30000);
   FCHECK(p.source == Source::LOCAL && p.in_ms == 0, "every 10 s");
-
-  feed_lol_limits(f, "498", "72122");
-  FCHECK(f.lol_gap_ms == kLolMinMs, "plenty left: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "10", "3600");
-  FCHECK(f.lol_gap_ms == 360000, "spread over the window: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "0", "3600");
-  FCHECK(f.lol_gap_ms == 3600000, "none left: wait for the reset");
-  feed_lol_limits(f, "0", "200000");
-  FCHECK(f.lol_gap_ms == kLolMaxMs, "at most a day: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "0", "3600");
-  feed_lol_limits(f, "x", "3600");
-  FCHECK(f.lol_gap_ms == 3600000, "garbage ignored");
+  FCHECK(feed_gap_ms(Source::ADSBLOL) == kLolMinMs, "adsb.lol every 3 minutes");
 }
 
 RouteAsk recorded_ask() {
@@ -1150,16 +1139,24 @@ void test_prefs() {
 
 // ---- The display ------------------------------------------------------------------
 
+std::string agent_of(const espn::AppRequest &r) {
+  for (const espn::AppHeader &h : r.headers)
+    if (h.name == "User-Agent")
+      return h.value;
+  return "";
+}
+
 struct Reads {
   FlightsApp app;
   int64_t now{kFr24Now};
-  std::string last_url;
+  std::string last_url, last_agent;
   // One read the way the firmware runs it.
   bool step(int status, const std::string &body, uint32_t retry_ms = 0) {
     espn::AppRequest r;
     if (!this->app.request(this->now, r))
       return false;
     this->last_url = r.url;
+    this->last_agent = agent_of(r);
     bool ok = false;
     if (status == 200) {
       espn::AppTextStream in(body);
@@ -1330,20 +1327,24 @@ void test_app() {
   FCHECK(r.step(503, ""), "a failure");
   r.wait();
   FCHECK(r.step(-1, "") && r.last_url.find("flightradar24") != std::string::npos, "tried again");
+  FCHECK(r.last_agent.empty(), "Flightradar24 gets the panel's agent");
   r.wait();
   FCHECK(r.step(200, fi) && r.last_url.find("opendata.adsb.fi") != std::string::npos, "then adsb.fi: %s",
          r.last_url.c_str());
+  FCHECK(r.last_agent.find("GameDayScoreboard/") == 0, "adsb.fi learns who's asking");
   FCHECK(r.app.source() == Source::ADSBFI, "planes from adsb.fi");
   // Its planes need routes: adsb.im's batch comes next.
   r.wait();
   espn::AppRequest rr;
   FCHECK(r.app.request(r.now, rr) && rr.url == kRoutesetUrl && rr.body.find("\"planes\"") != std::string::npos &&
-             rr.headers.size() == 1 && rr.headers[0].value == "application/json",
+             rr.headers.size() == 2 && rr.headers[0].value == "application/json" &&
+             agent_of(rr).find("(+https://github.com/ApolloAutomation/") != std::string::npos,
          "the routes batch: %s", rr.url.c_str());
   r.app.ended(espn::AppResult{403, true, 0});
   r.app.apply(false, r.now);
   r.wait();
-  FCHECK(r.app.request(r.now, rr) && rr.url.find("api.adsbdb.com/v0/callsign/") != std::string::npos,
+  FCHECK(r.app.request(r.now, rr) && rr.url.find("api.adsbdb.com/v0/callsign/") != std::string::npos &&
+             agent_of(rr).find("GameDayScoreboard/") == 0,
          "adsbdb while adsb.im refuses: %s", rr.url.c_str());
   r.app.ended(espn::AppResult{404, false, 0});
   r.app.apply(false, r.now);

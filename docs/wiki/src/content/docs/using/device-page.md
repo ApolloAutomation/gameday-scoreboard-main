@@ -7,7 +7,11 @@ sidebar:
 
 Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
-The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
+The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). In firmware v2026.11.7 and earlier, your browser also loads ESPHome's standard device page script from ESPHome's own site (oi.esphome.io). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
+
+:::note[Coming in the next release]
+The page no longer loads ESPHome's script from oi.esphome.io: it loads everything else from the panel. Until now that script loaded each time the page opened, asked Iconify (api.iconify.design) for its icons and kept a second connection to the panel open, and a phone that couldn't reach ESPHome's server showed the page small, like a desktop page.
+:::
 
 ## The live board
 
@@ -18,6 +22,10 @@ While a golf tour is your team, the board shows its tournament's leaderboard in 
 While a racing series is your team, the board shows the order of the session on track or the latest one: the session, then up to 10 rows with the place, the name, the car number and the gap. Before and between sessions it shows the next session and when it starts, and after the race the next race weekend. See [Racing](/using/racing/).
 
 A ranked college team shows its rank in front of its abbreviation on the board, like "#5 OSU", and so do the Favorite teams list and the **On now** list. A college football team's Up next list shows a ranked opponent's rank too, like "@ #17 SMU". On a phone whose screen is too narrow for the rank beside the abbreviation, the board leaves it out. See [Ranks and standings](/using/ticker/#ranks-and-standings).
+
+:::note[Coming in the next release]
+A dark team color shows lighter on the page's board, the way the panel draws it, so a black or navy abbreviation, like the Raiders' or the Cowboys', stays readable. On a phone, **UPCOMING** or **LIVE** sits above the logos instead of over the left one.
+:::
 
 Under the board are tags for the game on it:
 
@@ -35,6 +43,10 @@ Three warnings can appear on the board:
 When the panel holds its brightness down by itself, a notice under the board says why: **Too warm, dimming**, or **Check the power supply** with a **Clear** button to press once you've fixed the supply. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 
 The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
+
+:::note[Coming in the next release]
+When the connection drops, the page reconnects by itself: after 2 seconds, then waiting twice as long after each try that fails, up to a minute. It reconnects right away when you come back to the page, like when your phone wakes, and when the panel answers again after it couldn't be reached. A page in a tab you aren't looking at waits until you look at it. With one connection for each open page, where there were two, the panel has room for more phones and computers on the page at once.
+:::
 
 ## Follow this game
 
@@ -54,6 +66,10 @@ Tap **Change team** to open the team chooser. It has a search box and a **Close*
 
 The first tab, **On now**, lists today's games in every league except golf, racing, the AHL and the ECHL, under **Live now**, **Later today**, **Final** and **Postponed or canceled**. Its minor league games come from MLB's stats service. HockeyTech's feed doesn't answer your browser, so AHL and ECHL games aren't in it. Tap the side you want to follow. The chooser opens on **On now** when a game is live, and on your team's league otherwise.
 
+:::note[Coming in the next release]
+The chooser opens within a second, even when ESPN or MLB is slow to answer your browser: if today's games haven't come in by then, it opens on your team's league, and **On now** lists them when they do. A league that hasn't answered in 5 seconds is left out of **On now**.
+:::
+
 The same chooser adds favorites: **Add a favorite** in the Favorites card opens it, and a tap adds the team to the end of your list. The **Golf** and **Racing** tabs are hidden there, since a tour or a series can't be a favorite yet. See [Favorite teams](/using/favorites/).
 
 **Pick a team** in the Bets card opens the chooser too, to pick the team for a new bet. The **Golf** and **Racing** tabs are hidden there as well.
@@ -67,6 +83,10 @@ The page puts what you change most at the top, and folds the rest away. From the
 1. **Quick settings**, right under the board: **Panel on**, **Brightness**, **Follow this game** while there's a game to follow, the **Idle display**, and on three or four panels in a row or two rows of two, what the second area **Shows**.
 2. The mode buttons, **My team**, **Live games** and **Favorite teams**, with the mode's own bar under them, then the **Up next** list.
 3. The cards: **Panel**, **Flight Tracker**, **Weather**, **Favorites**, **Favorite players**, **Bets** and **Stocks & Crypto**, then **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device**. On a wide screen they sit in two columns, with Ticker to Device on the right.
+
+:::note[Coming in the next release]
+Tapping the words beside a switch flips it too, not just the switch. On a phone, a setting with a description and a list or a slider puts the list or the slider under the words, so the description has the width of the screen.
+:::
 
 Every card but Quick settings folds into its name: tap the name to open the card, and tap it again to fold it. **Flight Tracker**, **Weather**, **Ticker**, **Celebrations**, **Remote**, **Setup** and **Device** start folded, with a few words beside the name saying what's inside, like the place the Flight Tracker watches, or **No location yet**. **Device** opens by itself when an update is out; see [The Device card](#the-device-card). **Panel** starts open. **Favorites** and **Favorite players** start open when they hold anything, and **Bets** when it holds a bet, with how many beside the name, like **3 of 16**. Otherwise they start folded, so **Bets** holding only player props starts folded, with how many beside it, like **1 prop**. **Stocks & Crypto** starts open while the main board or the second area shows Stocks & Crypto. See [The Flight Tracker card](#the-flight-tracker-card) and [The Stocks & Crypto card](#the-stocks--crypto-card).
 
@@ -123,6 +143,10 @@ The settings, in the order the page shows them:
 
 Under **Idle display** a line says what the panel is doing about it now, like **Showing the clock, in the night hours, until a game you follow starts** or **The panel is dark until a game you follow starts**. The board at the top of the page keeps showing the game the mode follows, such as your team's next game, with that game's ticker under it, while the panel shows the idle display. Each change shows on the page at once and stays there while the panel takes it.
 
+:::note[Coming in the next release]
+With Weather on the main board and **Off or dim** dark, the line says **The panel is dark until the National Weather Service has a warning or a watch out for home**, since an alert is what lights it.
+:::
+
 **Switch every** and the time next to **Alternate** are one setting, so a change in one shows in the other. In Live games 30 seconds uses about twice the data of 1 minute, since each switch reads the leagues' games again. The Game Day app, where it works with this firmware, shows 30 seconds as 1 minute. See [Live games](/using/modes/#live-games) and [Favorite teams](/using/favorites/#when-a-game-is-on).
 
 Only the ticker switches for sports your panel follows are shown. Hockey, basketball, golf and racing have no game situation line, so they have no switch of their own.
@@ -169,6 +193,10 @@ They all start on. The sport pages say what each one shows: [football](/using/fo
 
 **Play animations**, the first switch in the card, plays a short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the quarterback's pass flying into the end zone, the run in, the kick through the uprights, the dive over the pile, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL. The splash follows for its usual 7 seconds. It starts on, and Home Assistant has it too, as **Play Animations**. Each one has a caption across the top that says what happened and the score, like **CHASE 30 YD TD PASS** over **CIN 21 +7**. **Try it** under it plays one on the panel now, in your team's colors, with a sample caption and your team's abbreviation and score, and no splash, while the Scoreboard page is up: **Pass**, **Run**, **Field goal**, **2-pt**, **Home run**, **Goal (soccer)** or **Goal (hockey)**. See [Play animations](/using/football/#play-animations), [home runs](/using/baseball/#runs-home-runs-grand-slams-and-walk-offs), [soccer goals](/using/soccer/#goal-animation) and [hockey goals](/using/hockey/#goal-animation).
 
+:::note[Coming in the next release]
+**Try it** adds **Return**, a kick return touchdown, and **Extra point**, and its buttons sit under its description. A tap says **Playing on the panel**. With **Showing** on the Clock page, it says **Set Showing to Scoreboard to try it** and plays nothing. The Field view's **Try it** says **Showing a sample field on the panel**, or the same **Set Showing to Scoreboard to try it** while another display, like Weather, is on the main board.
+:::
+
 **Favorite teams only** keeps the big-play splashes in Live games to games with your team or one of your favorites on either side. In My team and Favorite teams the game on the board is always one of yours, so it changes nothing there. The victory splash has no switch and still shows for every game.
 
 Three more controls under it are for big plays in other games:
@@ -186,6 +214,10 @@ A splash fits 10 letters a line on a single 64x64 panel and 16 on a 128x64 panel
 ### Timezone
 
 The Time line in the Setup card names the panel's timezone. While it follows your browser, opening the page from a browser in another zone moves the panel to that zone. Tap **choose manually** to pick one from the list instead; the page then leaves it alone until you tap **follow this browser**. The list covers the US zones (Eastern, Central, Mountain, Arizona, Pacific, Alaska and Hawaii), Canada Atlantic and Newfoundland, Mexico City, UK and Ireland, Central Europe, Australia Eastern and UTC. A new panel starts on US Central.
+
+:::note[Coming in the next release]
+The list also has Canada Pacific, Canada Mountain, Canada Central and Canada Eastern, after UTC. British Columbia, Alberta and Manitoba no longer turn their clocks back in November, so Canada Pacific stays 7 hours behind UTC all year, Canada Mountain 6 and Canada Central 5, while Canada Eastern changes for summer like US Eastern. A panel following a browser in Canada moves to the Canadian zone with the same clock the next time the device page is opened there, and with it Weather, F1 and the Flight Tracker switch to Celsius, km/h and kilometers. Saskatchewan's clock matches Canada Mountain all year and Yukon's Canada Pacific, so the Time line names those. Cambridge Bay, Rankin Inlet, Resolute and Blanc-Sablon have no zone with their clock in the list, so pick one by hand there. A zone picked by hand stays until you change it.
+:::
 
 ## The Flight Tracker card
 
@@ -246,6 +278,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 
 When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt-take), the card opens by itself with the **Install** button in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say what needs you in it, in place of what it holds: **Update available** and the version, **Update didn't take**, **Installing** and the version, or **Weak signal**.
 
+:::note[Coming in the next release]
+An install that didn't start, or failed without the panel restarting, opens the card too, and the words beside **Device** say **Update didn't install**. See [Installing an update](/using/updates/#installing-an-update).
+:::
+
 ### Diagnostics
 
 **Diagnostics** helps you, or support, work out why a panel misbehaves.
@@ -257,6 +293,11 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 - **Power dips**: how many times the panel has restarted because its power dipped, and **brightness capped** while it holds its brightness down for that.
 - **Last ESPN read**: how the last read from ESPN went, **OK**, **No answer** or an HTTP error like **HTTP 503**, and how long ago.
 - **Last MLB read** and **Last HockeyTech read**: the same for minor league baseball, from MLB's stats service, and for the AHL and the ECHL, from HockeyTech. Each shows once the panel has read from it.
+
+:::note[Coming in the next release]
+- **Last F1 read**, **Last Stocks & Crypto read**, **Last Flight Tracker read** and **Last Weather read**: the same for each display the panel has, once it has read for that display.
+:::
+
 - **Firmware**: the version, then **stable**, or **beta** while **Follow beta** is on, and when it was built.
 - **Signal**: the Wi-Fi signal now, in dBm. Under it, a graph of the last day of signal, with a dashed line where it gets weak (below -75 dBm) and red ticks where the panel was off Wi-Fi. When the signal has been weak over the last half hour, the page says **Weak signal. Move the panel closer to the router, or the router closer to the panel.**
 - **Wi-Fi drops**: how many times the panel lost its Wi-Fi in the last 24 hours, or since it started if that was less than a day ago. The line under it gives the cause of the last one, like **signal lost** or **dropped by the router**, how long ago it was and how soon the panel was back.
@@ -272,5 +313,9 @@ With **Follow beta** on, the Firmware box and **Check for updates** show the lat
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
 - Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the next release comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
+
+:::note[Coming in the next release]
+Right after you flip **Follow beta**, the Firmware box says **Checking for the latest beta**, or **Checking for the latest release**, with no **Install** button, until the panel has read that list.
+:::
 
 See [Firmware updates](/using/updates/#beta-versions).

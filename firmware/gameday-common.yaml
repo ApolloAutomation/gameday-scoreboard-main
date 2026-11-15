@@ -34,6 +34,8 @@ substitutions:
   # hub75-studio packages (ESPHome version, theme, clock page). Pinned to a
   # commit so a release always builds the same thing.
   hub75_studio_ref: "2c121972321cc1e3c2c87d9647fd3beb9a5e2271"
+  # Spleen fonts at tag 2.1.0's commit
+  spleen_url: "https://github.com/fcambus/spleen/raw/c3b655c5718757863e828c02115e96b149281159"
 
   # HockeyTech public site keys, from theahl.com and echl.com
   hockeytech_ahl_key: "50c2cd9b5e18e390"
@@ -178,10 +180,11 @@ external_components:
     # to five Wi-Fi networks where ESPHome keeps one. crash_report keeps the
     # last crash's backtrace in flash.
     components: [gameday, panel_layout, improv_ble, saved_networks, crash_report]
-  - source: github://pavlov-net/lvgl-page-manager@v0.3.0
+  # v0.3.0, pinned to its commit
+  - source: github://pavlov-net/lvgl-page-manager@2f202e6069ba0fb8f9acf0ab6885492e7c3096d8
     components: [lvgl_page_manager]
-  # Fireworks behind the touchdown and win splashes
-  - source: github://pavlov-net/lvgl-canvas-fx@v0.4.1
+  # Fireworks behind the touchdown and win splashes (v0.4.1)
+  - source: github://pavlov-net/lvgl-canvas-fx@92e9cecbbf68447fce1a1e3789c7c8bf6872282f
     components: [lvgl_canvas_fx]
 
 packages:
@@ -211,6 +214,7 @@ packages:
 # here that a font lacks fails the build rather than drawing a box.
 font:
   - id: !extend spleen_8
+    file: "${spleen_url}/spleen-5x8.bdf"
     glyphs: &panel_glyphs
       - ' !"#$%&''()*+,-./0123456789:;<=>?@'
       - 'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`'
@@ -219,16 +223,18 @@ font:
       - 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß'
       - 'àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ'
   - id: !extend spleen_12
+    file: "${spleen_url}/spleen-6x12.bdf"
     glyphs: *panel_glyphs
   - id: !extend spleen_16
+    file: "${spleen_url}/spleen-8x16.bdf"
     glyphs: *panel_glyphs
   # Large clock, splash and weather digits; few glyphs save flash
-  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-12x24.bdf"
+  - file: "${spleen_url}/spleen-12x24.bdf"
     id: spleen_24
     size: 24
     glyphs: &digit_glyphs
       - ' +-0123456789:AMNPRSU°'
-  - file: "https://github.com/fcambus/spleen/raw/refs/tags/2.1.0/spleen-16x32.bdf"
+  - file: "${spleen_url}/spleen-16x32.bdf"
     id: spleen_32
     size: 32
     glyphs: *digit_glyphs
@@ -504,6 +510,8 @@ web_server:
   # Custom page (firmware/web). Regenerate bundle.js with scripts/build_web.py.
   js_include: web/bundle.js
   css_include: web/app.css
+  # No ESPHome page script: it opened a second stream
+  js_url: ""
 
 http_request:
   id: http_client

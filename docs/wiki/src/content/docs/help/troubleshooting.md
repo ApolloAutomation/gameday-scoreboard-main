@@ -146,3 +146,11 @@ Nothing needs doing. The panel is running the version it had before, and it work
 If you want to try the update again, press **Install**. A newer version installs as normal.
 
 **Why:** when a new version crashes as it starts, the panel goes back to the firmware it had. It remembers that version and doesn't install it on its own again, so it doesn't restart into the same bad update every night. See [Updates](/using/updates/#an-update-that-didnt-take).
+
+## The device page says an update didn't install
+
+:::note[Coming in the next release]
+The Firmware box says **The update to** the new version **didn't install**, with **The panel is still on** the version it runs **. Install tries again.** under it. The download didn't start, or failed before the panel restarted, and the panel kept running what it had.
+
+Press **Install** to try again. The panel has already checked for the newest version, so the next try takes the latest one. If it keeps failing, look at the Wi-Fi signal under **Diagnostics**, or wait a few minutes: right after a new version comes out, the update site can take a few minutes to settle.
+:::

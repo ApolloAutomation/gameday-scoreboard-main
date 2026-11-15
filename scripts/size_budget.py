@@ -10,9 +10,13 @@ branch, with the numbers in the error and in the job summary.
         build: the folder build-action leaves, with its .ota.bin and .elf.
     python3 scripts/size_budget.py host <heap.json> <out.json>
         The parser figures `make -C tests heap` printed (tests/heap_budget.cpp).
-    python3 scripts/size_budget.py check <sizes dir> [--base <dir>] [--base-label <text>]
+    python3 scripts/size_budget.py check <sizes dir> [--base <dir>] [--base-label <text>] [--growth-ok]
         Every *.json under the sizes dir against the budget; with --base, also
-        against the base branch's figures.
+        against the base branch's figures. --growth-ok (the PR's size-growth-ok
+        label) lets a figure grow more than max_growth, with a warning.
+    python3 scripts/size_budget.py growth-defaults
+        Fails when budget.json's max_growth isn't GROWTH_DEFAULTS, as a
+        release needs.
     python3 scripts/size_budget.py seed <sizes dir>
         Prints a budget with 10% headroom (at least 1 KB) over those figures.
     python3 scripts/size_budget.py --selftest
@@ -36,6 +40,8 @@ DRAM = (0x3FC88000, 0x3FD00000)
 SHF_ALLOC = 0x2
 HEADROOM = 0.10
 HEADROOM_MIN = 1024  # so a 20 B read is not over budget at its next 16-letter string
+# max_growth a release ships with
+GROWTH_DEFAULTS = {"flash": 40960, "static_ram": 4096, "json": 20480, "heap": 20480}
 
 # What each figure is, for the summary and the errors.
 LABELS = {
@@ -80,9 +86,9 @@ def fmt(n) -> str:
     return "" if n is None else f"{n:,}"
 
 
-def check(budget: dict, sizes: dict, base: dict, base_label: str) -> tuple:
-    """Returns (errors, summary rows)."""
-    errors, rows = [], []
+def check(budget: dict, sizes: dict, base: dict, base_label: str, growth_ok: bool = False) -> tuple:
+    """Returns (errors, summary rows, warnings)."""
+    errors, rows, warnings = [], [], []
     growth = budget.get("max_growth", {})
     for group in ("firmware", "host"):
         limits = budget.get(group, {})
@@ -107,16 +113,22 @@ def check(budget: dict, sizes: dict, base: dict, base_label: str) -> tuple:
                 elif now > cap:
                     errors.append(f"{what} is {now:,} B, over its budget of {cap:,} B by {now - cap:,} B")
                 if was is not None and metric in growth and now - was > growth[metric]:
-                    errors.append(f"{what} grew {now - was:,} B ({was:,} to {now:,} B) against {base_label}; "
-                                  f"one change may add at most {growth[metric]:,} B")
+                    msg = (f"{what} grew {now - was:,} B ({was:,} to {now:,} B) against {base_label}; "
+                           f"one change may add at most {growth[metric]:,} B")
+                    if growth_ok:
+                        warnings.append(msg)
+                    else:
+                        errors.append(f"{msg}. If this growth is intended, the maintainer adds the "
+                                      "size-growth-ok label to the PR and re-runs the Size budget job.")
                 rows.append((name, LABELS.get(metric, metric), was, now, cap))
-    return errors, rows
+    return errors, rows, warnings
 
 
-def summary(rows: list, errors: list, base_label: str) -> str:
+def summary(rows: list, errors: list, base_label: str, warnings: list = ()) -> str:
     lines = ["## Size budget", ""]
     lines.append("Over budget:" if errors else "Everything is within the budget in firmware/budget.json.")
     lines += [f"- {e}" for e in errors]
+    lines += [f"- Allowed by the size-growth-ok label: {w}" for w in warnings]
     lines += ["", f"Base: {base_label}" if base_label else "No base figures (not a pull request, or none found).", ""]
     lines += ["| Build or read | Figure | Base | Now | Change | Budget | Left |", "|---|---|--:|--:|--:|--:|--:|"]
     for name, label, was, now, cap in rows:
@@ -142,8 +154,9 @@ def run_check(args: list) -> int:
     base = load_sizes(base_dir) if base_dir and base_dir.is_dir() else {}
     if not base:
         base_label = ""
-    errors, rows = check(budget, load_sizes(sizes_dir), base, base_label or "the base branch")
-    text = summary(rows, errors, base_label)
+    errors, rows, warnings = check(budget, load_sizes(sizes_dir), base, base_label or "the base branch",
+                                   "--growth-ok" in args)
+    text = summary(rows, errors, base_label, warnings)
     out = os.environ.get("GITHUB_STEP_SUMMARY")
     if out:
         with open(out, "a", encoding="utf-8") as f:
@@ -151,7 +164,17 @@ def run_check(args: list) -> int:
     print(text)
     for e in errors:
         print(f"::error file=firmware/budget.json::{e}")
+    for w in warnings:
+        print(f"::warning file=firmware/budget.json::size-growth-ok label: {w}")
     return 1 if errors else 0
+
+
+def growth_defaults(budget: dict) -> list:
+    """Errors when max_growth isn't what a release ships with."""
+    have = budget.get("max_growth", {})
+    return [f"max_growth.{k} is {have.get(k)}, a release needs {v} (size_budget.py GROWTH_DEFAULTS)"
+            for k, v in sorted(GROWTH_DEFAULTS.items()) if have.get(k) != v] + \
+           [f"max_growth.{k} isn't in GROWTH_DEFAULTS" for k in sorted(set(have) - set(GROWTH_DEFAULTS))]
 
 
 def selftest() -> None:
@@ -166,19 +189,26 @@ def selftest() -> None:
     assert static_ram(bytes(head) + body) == 300
 
     budget = {"max_growth": {"flash": 100}, "firmware": {"a": {"flash": 1000, "static_ram": 50}}}
-    ok, rows = check(budget, {"firmware": {"a": {"flash": 900, "static_ram": 50}}}, {}, "dev")
+    ok, rows, _ = check(budget, {"firmware": {"a": {"flash": 900, "static_ram": 50}}}, {}, "dev")
     assert ok == [] and len(rows) == 2
-    over, _ = check(budget, {"firmware": {"a": {"flash": 1001, "static_ram": 50}}}, {}, "dev")
+    over, _, _ = check(budget, {"firmware": {"a": {"flash": 1001, "static_ram": 50}}}, {}, "dev")
     assert len(over) == 1 and "over its budget" in over[0]
-    grew, _ = check(budget, {"firmware": {"a": {"flash": 950, "static_ram": 50}}},
-                    {"firmware": {"a": {"flash": 800}}}, "dev")
-    assert len(grew) == 1 and "grew 150 B" in grew[0]
-    new, _ = check(budget, {"firmware": {"a": {"flash": 1, "static_ram": 1}, "b": {"flash": 1}}}, {}, "dev")
+    grew, _, _ = check(budget, {"firmware": {"a": {"flash": 950, "static_ram": 50}}},
+                       {"firmware": {"a": {"flash": 800}}}, "dev")
+    assert len(grew) == 1 and "grew 150 B" in grew[0] and "re-runs the Size budget job" in grew[0], grew
+    # The label turns growth into a warning, never the ceiling.
+    grew, _, warned = check(budget, {"firmware": {"a": {"flash": 1950, "static_ram": 50}}},
+                            {"firmware": {"a": {"flash": 800}}}, "dev", growth_ok=True)
+    assert len(grew) == 1 and "over its budget" in grew[0] and len(warned) == 1 and "grew" in warned[0], (grew, warned)
+    assert "label" not in warned[0], warned
+    new, _, _ = check(budget, {"firmware": {"a": {"flash": 1, "static_ram": 1}, "b": {"flash": 1}}}, {}, "dev")
     assert len(new) == 1 and "no budget" in new[0]
-    gone, _ = check(budget, {}, {}, "dev")
+    gone, _, _ = check(budget, {}, {}, "dev")
     assert len(gone) == 1 and "nothing measured" in gone[0]
+    assert growth_defaults({"max_growth": dict(GROWTH_DEFAULTS)}) == []
+    assert len(growth_defaults({"max_growth": {**GROWTH_DEFAULTS, "flash": 1}})) == 1
     # A figure the budget caps but the build no longer reports is not a pass.
-    half, rows = check(budget, {"firmware": {"a": {"flash": 900}}}, {}, "dev")
+    half, rows, _ = check(budget, {"firmware": {"a": {"flash": 900}}}, {}, "dev")
     assert len(half) == 1 and "a.static_ram" in half[0] and "nothing measured" in half[0], half
     assert len(rows) == 1
     assert seed({"host": {"x": {"json": 20000, "heap": 18}}}) == {"firmware": {}, "host": {"x": {"json": 22000, "heap": 1042}}}
@@ -209,6 +239,11 @@ def main(argv: list) -> int:
         return 0
     if argv[:1] == ["check"] and len(argv) >= 2:
         return run_check(argv[1:])
+    if argv[:1] == ["growth-defaults"] and len(argv) == 1:
+        errors = growth_defaults(json.loads(BUDGET.read_text(encoding="utf-8")))
+        for e in errors:
+            print(f"::error file=firmware/budget.json::{e}. Put it back before the release.")
+        return 1 if errors else 0
     if argv[:1] == ["seed"] and len(argv) == 2:
         print(json.dumps(seed(load_sizes(Path(argv[1]))), indent=2))
         return 0

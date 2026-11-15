@@ -28,6 +28,16 @@
     n.setAttribute(attr, String(on));
   };
 
+  // ESPHome's shell has no viewport, language or title
+  if (!$('meta[name="viewport"]')) {
+    const vp = el("meta");
+    vp.name = "viewport";
+    vp.content = "width=device-width, initial-scale=1";
+    document.head.appendChild(vp);
+  }
+  document.documentElement.lang = "en";
+  document.title = "Game Day Scoreboard";
+
   // Where the project lives. SITE_URL is the installer and changelog site,
   // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
   // address" lists every place it is set); REPO is the GitHub repository.
@@ -224,7 +234,7 @@
     <div class="grid">
       <div class="col">
       <details class="card" id="panelCard" open>
-        <summary><h2>Panel</h2><span class="peek">Ticker speed, sizes, night hours</span></summary>
+        <summary><h2>Panel</h2><span class="peek">Showing, ticker speed, sizes, night hours</span></summary>
         <div id="panelCtls"></div>
         <div id="sizeCtls" hidden>
           <div class="ctl"><label for="clocksize">Clock size<small id="clocksizeHelp">The game clock during a game, and the time when the panel shows a clock: the off-season clock, the idle display's Clock, the Clock page and the second area's Clock and date. Large makes them bigger where they fit.</small></label><select id="clocksize" aria-label="Clock size" aria-describedby="clocksizeHelp"><option value="0">Normal</option><option value="1">Large</option></select></div>
@@ -338,7 +348,7 @@
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
           <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the pass or the run into the end zone, the kick through the uprights, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL, with a caption across the top that says what happened and the score. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
-          <div class="ctl" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span><button class="btn" data-anim="pass">Pass</button> <button class="btn" data-anim="run">Run</button> <button class="btn" data-anim="fg">Field goal</button> <button class="btn" data-anim="two">2-pt</button> <button class="btn" data-anim="hr">Home run</button> <button class="btn" data-anim="soccer">Goal (soccer)</button> <button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
+          <div class="ctl drop" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span class="trybtns"><button class="btn" data-anim="pass">Pass</button><button class="btn" data-anim="run">Run</button><button class="btn" data-anim="ret">Return</button><button class="btn" data-anim="fg">Field goal</button><button class="btn" data-anim="pat">Extra point</button><button class="btn" data-anim="two">2-pt</button><button class="btn" data-anim="hr">Home run</button><button class="btn" data-anim="soccer">Goal (soccer)</button><button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
@@ -454,7 +464,7 @@
           <div class="ctl"><label>Wi-Fi drops<small id="wifiLast"></small></label><span class="val" id="wifiDrops"></span></div>
         </div>
         <div class="ctl"><label>Free PSRAM</label><span class="val" id="psram"></span></div>
-        <div class="ctl"><label>Data used<small>Scores and logos from ESPN, MLB and HockeyTech since the panel started</small></label><span class="val" id="espnData"></span></div>
+        <div class="ctl"><label>Data used<small>Everything the panel has downloaded since it started: scores, logos and what its displays read</small></label><span class="val" id="espnData"></span></div>
         <div class="sub">Restart and reset</div>
         <div class="actions" id="dangerActions"></div>
       </details>
@@ -564,7 +574,7 @@
     idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
     nightstart: String, nightend: String,
     watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
-    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number,
+    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number, full: (v) => v === "1",
     flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
     live: (v) => v.split(",").filter(Boolean),
     team: (v) => ref(v),
@@ -602,10 +612,8 @@
     try {
       const r = await fetch("/gameday/state?_=" + left, { cache: "no-store", signal: ctl.signal });
       reached = true;
+      streamCheck(downSince);
       answered();
-      // The event stream retries every 30 seconds, and never after an HTTP
-      // error. The panel is back, so reopen it now.
-      if (!connected && !restart && Date.now() - streamAt > 10000) connect();
       if (r.ok) {
         D = await r.json();
         stateLeft = left;
@@ -670,23 +678,28 @@
     setQueue = run;
     return run;
   };
-  document.querySelectorAll("[data-anim]").forEach((b) => b.addEventListener("click", async () => {
+  const doAction = async (name, done) => {
     try {
-      const r = await fetch("/gameday/action?do=anim&play=" + encodeURIComponent(b.dataset.anim), { method: "POST" });
+      const r = await fetch("/gameday/action?do=" + name, { method: "POST" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-    } catch (e) {
-      toast("Device did not respond (" + (e.message || "network") + ")");
-    }
-  }));
-  const doAction = async (name) => {
-    try {
-      const r = await fetch("/gameday/action?do=" + encodeURIComponent(name), { method: "POST" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (done) toast(done);
     } catch (e) {
       toast("Device did not respond (" + (e.message || "network") + ")");
     }
   };
-  $("#fieldTry").onclick = () => doAction("field");
+  // Try it plays nothing off the Scoreboard page
+  const tryIt = (field, name, done) => {
+    const page = pageOf();
+    if ((page && page !== "Scoreboard") || (field && S && S.display_now && S.display_now !== "gameday")) {
+      toast("Set Showing to Scoreboard to try it");
+      return;
+    }
+    doAction(name, done);
+  };
+  document.querySelectorAll("[data-anim]").forEach((b) => {
+    b.onclick = () => tryIt(false, "anim&play=" + encodeURIComponent(b.dataset.anim), "Playing on the panel");
+  });
+  $("#fieldTry").onclick = () => tryIt(true, "field", "Showing a sample field on the panel");
 
   // Every ping calls this; #conn is a live region, so only a flip touches it.
   const setConn = (on) => {
@@ -734,6 +747,15 @@
     rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
   };
   window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
+  // board_layout.h's lift_color: dark colors vanish on black
+  const liftColor = (hex) => {
+    const c = parseInt(hex, 16) || 0;
+    let r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+    const m = Math.max(r, g, b);
+    if (!m) return "ffffff";
+    if (m < 0xc0) [r, g, b] = [r, g, b].map((x) => Math.floor((x * 0xc0) / m));
+    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+  };
   const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
     const img = node.querySelector("img");
     // No id: a side with no team yet, or the demo build's made-up teams.
@@ -746,7 +768,7 @@
     if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
     fitRank(node);
     a.classList.toggle("poss", !!poss);
-    a.style.color = "#" + (color || "ffffff");
+    a.style.color = "#" + liftColor(color || "ffffff");
     node.querySelector(".rec").textContent = rec || "";
     // Football only; -1 (ESPN sent none) hides the pips
     node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
@@ -1094,7 +1116,8 @@
     }
     const now = { clock: "the clock", scores: "recent scores", today: "today's game", logo: "your team's logo" }[S.idle_view];
     const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
-    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near" }[main];
+    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near",
+      weather: "the National Weather Service has a warning or a watch out for home" }[main];
     $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
       : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
         : S.night_now ? "In the night hours." : "";
@@ -1201,6 +1224,13 @@
     sw.setAttribute("role", "switch");
     setOn(sw, false, "aria-checked");
     sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
+  });
+  // The words beside a switch flip it too
+  document.addEventListener("click", (ev) => {
+    const lab = ev.target.closest(".ctl > label:not([for])");
+    if (!lab || ev.target.closest("a, button, input, select")) return;
+    const sws = lab.parentElement.querySelectorAll(":scope > .sw");
+    if (sws.length === 1 && !sws[0].disabled) sws[0].click();
   });
   // Order matches the bits of the "alerts" mask
   const ALERTS = [
@@ -1584,6 +1614,7 @@
   };
   let games = null;        // [{league, id, state, detail, away:{...}, home:{...}}]
   let gamesAt = 0;
+  let gamesLoading = null; // the reads in flight, shared
   const teamById = (lg, id) => TEAMS.find((t) => t[0] === lg && t[1] === id);
   const easternDate = () => {
     // ESPN's dates parameter is US Eastern
@@ -1591,8 +1622,12 @@
     const g = (t) => p.find((x) => x.type === t).value;
     return g("year") + g("month") + g("day");
   };
-  const loadGames = async (force) => {
-    if (!force && games && Date.now() - gamesAt < 60000) return games;
+  const loadGames = (force) => {
+    if (!force && games && Date.now() - gamesAt < 60000) return Promise.resolve(games);
+    if (!gamesLoading) gamesLoading = readGames().finally(() => { gamesLoading = null; });
+    return gamesLoading;
+  };
+  const readGames = async () => {
     const d = easternDate();
     // Golf's and racing's scoreboards have no home and away (golf's is
     // hundreds of kilobytes): not On now.
@@ -1601,8 +1636,11 @@
         : `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
     const out = [];
     await Promise.all(urls.map(async ([lg, u]) => {
+      // A league that hangs gives up after 5 s
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 5000);
       try {
-        const j = await (await fetch(u)).json();
+        const j = await (await fetch(u, { signal: ctl.signal })).json();
         if (isMlb(lg)) {
           for (const day of j.dates || []) for (const g of day.games || []) out.push(mlbGame(lg, g));
           return;
@@ -1622,7 +1660,7 @@
           const state = type.state === "post" && type.completed === false ? "off" : type.state || "pre";
           out.push({ league: lg, id: ev.id, state, detail: type.shortDetail || "", away: side("away"), home: side("home"), date: ev.date });
         }
-      } catch (_) { /* one league failing should not hide the other */ }
+      } catch (_) { /* one league failing should not hide the other */ } finally { clearTimeout(timer); }
     }));
     const rank = { in: 0, pre: 1, post: 2, off: 3 };
     out.sort((a, b) => (rank[a.state] - rank[b.state]) || (a.date < b.date ? -1 : 1));
@@ -2485,10 +2523,9 @@
     league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
     // Golf/Racing only for My team; players need ESPN leagues
     tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
-    try {
-      const list = await loadGames(false);
-      if (list.some((g) => g.state === "in")) league = "now";
-    } catch (_) {}
+    // Waits a second at most for On now's games
+    const list = await Promise.race([loadGames(false), new Promise((res) => setTimeout(res, 1000))]).catch(() => null);
+    if (list && list.some((g) => g.state === "in")) league = "now";
     $$tabs(league);
     $("#q").value = "";
     renderTiles();
@@ -2563,21 +2600,24 @@
   // entry plus a few common aliases here. Same-zone cities all map to the
   // same POSIX rule, so a near match is still the right choice.
   const TZ_ALIASES = {
-    "America/Detroit": "America/New_York", "America/Toronto": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
-    "America/Kentucky/Louisville": "America/New_York", "America/Montreal": "America/New_York", "America/Nassau": "America/New_York",
-    "America/Winnipeg": "America/Chicago", "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
+    "America/Detroit": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
+    "America/Kentucky/Louisville": "America/New_York", "America/Nassau": "America/New_York",
+    "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
     "America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago", "America/Ojinaga": "America/Chicago",
-    "America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver",
-    "America/Vancouver": "America/Los_Angeles", "America/Tijuana": "America/Los_Angeles",
+    "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver", "America/Tijuana": "America/Los_Angeles",
     "America/Juneau": "America/Anchorage", "America/Sitka": "America/Anchorage", "America/Nome": "America/Anchorage",
+    "America/Montreal": "America/Toronto", "America/Nipigon": "America/Toronto", "America/Thunder_Bay": "America/Toronto",
+    "America/Iqaluit": "America/Toronto", "America/Rainy_River": "America/Winnipeg", "America/Yellowknife": "America/Edmonton",
+    "America/Inuvik": "America/Edmonton", "America/Dawson_Creek": "America/Vancouver", "America/Fort_Nelson": "America/Vancouver",
+    "America/Creston": "America/Vancouver", "America/Whitehorse": "America/Vancouver", "America/Dawson": "America/Vancouver",
+    "America/Regina": "America/Edmonton", "America/Swift_Current": "America/Edmonton", "America/Atikokan": "America/Winnipeg",
+    "America/Coral_Harbour": "America/Winnipeg", "America/Moncton": "America/Halifax", "America/Glace_Bay": "America/Halifax",
+    "America/Goose_Bay": "America/Halifax",
     "Europe/Dublin": "Europe/London", "Europe/Paris": "Europe/Berlin", "Europe/Madrid": "Europe/Berlin", "Europe/Rome": "Europe/Berlin",
     "Europe/Amsterdam": "Europe/Berlin", "Europe/Brussels": "Europe/Berlin", "Europe/Vienna": "Europe/Berlin", "Europe/Zurich": "Europe/Berlin",
     "Europe/Stockholm": "Europe/Berlin", "Europe/Oslo": "Europe/Berlin", "Europe/Copenhagen": "Europe/Berlin", "Europe/Warsaw": "Europe/Berlin",
-    "Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin", "Europe/Helsinki": "Europe/Athens", "Europe/Kiev": "Europe/Athens",
-    "Europe/Kyiv": "Europe/Athens", "Europe/Bucharest": "Europe/Athens", "Europe/Sofia": "Europe/Athens",
-    "Asia/Hong_Kong": "Asia/Shanghai", "Asia/Taipei": "Asia/Shanghai", "Asia/Manila": "Asia/Singapore", "Asia/Kuala_Lumpur": "Asia/Singapore",
+    "Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin",
     "Australia/Melbourne": "Australia/Sydney", "Australia/Hobart": "Australia/Sydney", "Australia/Canberra": "Australia/Sydney",
-    "Australia/Darwin": "Australia/Adelaide",
   };
   const browserZoneName = () => {
     let iana = "";
@@ -2921,7 +2961,12 @@
     renderIdle();
     renderPanels();
     renderTime();
-    if (S && S.name) $("#hostname").textContent = S.name + ".local";
+    if (S && S.name) {
+      $("#hostname").textContent = S.name + ".local";
+      // Its six characters tell two panels' tabs apart
+      const tail = S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
+      document.title = "Game Day Scoreboard" + (tail ? " " + tail : "");
+    }
     renderData();
     renderHealth();
     renderWifi();
@@ -2977,6 +3022,14 @@
     // Shown once the panel has read from HockeyTech
     $("#hHtRow").hidden = h.ht == null;
     if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
+    // A row per display once it has read
+    document.querySelectorAll("#health .happ").forEach((n) => n.remove());
+    for (const d of otherDisplays()) {
+      if (h[d.key] == null) continue;
+      const row = el("div", "ctl happ");
+      row.append(el("label", null, "Last " + d.name + " read"), el("span", "val", answer(h[d.key], h[d.key + "_ago"])));
+      $("#hFw").parentElement.before(row);
+    }
     const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
     // The build time comes in Unix seconds; shown in the browser's own time
     const b = h.built ? new Date(h.built * 1000) : null;
@@ -3073,21 +3126,18 @@
     $("#wifiLast").textContent = line;
   };
 
-  // After an install the device reboots. The event stream only retries every
-  // 30 seconds, so poll the root page instead and reload as soon as it answers.
-  let es = null;
-  let streamAt = 0;
   const showRestart = (line) => {
     restart = line;
     renderGone();
   };
   // Reboot, the resets and the panel picker are far down the page; the line is on the board.
   const toBoard = () => $("#board").scrollIntoView({ behavior: "smooth", block: "start" });
-  const waitForReboot = (fromVersion, line) => {
+  // tried: the version an install wants, "" for a restart
+  const waitForReboot = (fromVersion, line, tried = "") => {
     const started = Date.now();
     let sawDown = false;
-    if (es) { es.close(); es = null; }
-    setConn(false);
+    // The reload below opens a new stream
+    closeStream();
     showRestart(line);
     // Ask the device which version it runs; reload as soon as that changes.
     // A connection to a rebooting device can hang, so each probe gets 1.5s.
@@ -3103,6 +3153,8 @@
           const settled = !String(j.state || "").toUpperCase().includes("INSTALLING");
           // Once the device has been seen down, a settled answer means it is back.
           if (changed || (sawDown && settled)) { location.reload(); return; }
+          // Up all along, same version, not installing: it didn't install
+          if (tried && settled && !sawDown && j.current_version === fromVersion) { installMissed(j, tried); return; }
         }
       } catch (_) { sawDown = true; }
       clearTimeout(timer);
@@ -3120,14 +3172,27 @@
     };
     setTimeout(tick, 3000);
   };
+  // Say so now and bring Install back
+  const installMissed = (j, tried) => {
+    restart = "";
+    renderGone();
+    installing = false;
+    fwMissed = tried;
+    const uid = byName["Firmware"];
+    if (uid) {
+      ents[uid] = Object.assign(ents[uid] || {}, j, { id: uid });
+      renderUpdate(ents[uid]);
+    }
+    toast("The update didn't install");
+    connect();
+  };
   // Both resets blank the saved network, so the panel comes back as its own
   // setup hotspot and never on this one. Stop asking it.
   const intoSetup = (why) => {
     stopped = true;
-    if (es) { es.close(); es = null; }
+    closeStream();
     clearInterval(pollTimer);
     clearTimeout(stateTimer);
-    setConn(false);
     const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
     showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
   };
@@ -3158,7 +3223,9 @@
         const st = String(j.state || "").toUpperCase();
         // The firmware row shows the result; only shout when there is something to
         // do. The device offers any different version, an older one included.
-        if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
+        // Still the other feed's offer: this feed didn't answer
+        if (offChannel(j)) toast("Could not reach the update server. Try again in a minute.");
+        else if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
         else if (st.includes("INSTALLING")) { /* the install is running; nothing to say */ }
         else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
       } else if (uid) {
@@ -3243,9 +3310,12 @@
     return /^https:\/\//i.test(url) ? url : "";
   };
   let installing = false;
+  let fwMissed = "";  // the version whose install just failed
   let fwChecking = false;  // Check for updates is waiting for the panel's answer
   // What the firmware box reads from the state document, and what it last drew with.
-  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
+  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar), !!S.beta] : null);
+  // Follow beta just changed; the other feed's offer remains
+  const offChannel = (u) => !!S && S.beta !== undefined && !S.bar && !!u.value && /-beta\.\d+$/.test(String(u.value)) !== !!S.beta;
   let fwDrawn = fwInputs();
   // Folded Device card's peek shows alerts, not contents
   let fwNote = "";
@@ -3266,10 +3336,14 @@
     const sub = $("#fwSub");
     btn.hidden = true;
     fwDrawn = fwInputs();
+    const stale = !st.includes("INSTALLING") && !installing && offChannel(u);
     if (st.includes("INSTALLING") || installing) {
       fwNote = "Installing " + (latest || "update");
       $("#fwText").textContent = fwNote;
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
+    } else if (stale) {
+      $("#fwText").textContent = "Checking for the latest " + (S.beta ? "beta" : "release");
+      sub.textContent = "Install comes back once the panel has read it.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
       // Only the beta feeds carry "-beta.<build>" versions (scripts/beta_version.sh),
@@ -3282,10 +3356,15 @@
       // The panel rolled back from this very version (a crash in its first
       // minute); it won't install it on its own again, but Install still tries.
       const failed = !!(S && S.update_failed && S.update_failed === u.value);
+      const missed = !failed && fwMissed !== "" && fwMissed === String(u.value || "");
       if (failed) {
         fwNote = "Update didn't take";
         $("#fwText").textContent = "The update to " + latest + " didn't take and the panel went back to " + (cur || "its old version");
         sub.textContent = "Install tries it again." + (S.autoupd || S.bar ? " It won't install this one on its own." : "");
+      } else if (missed) {
+        fwNote = "Update didn't install";
+        $("#fwText").textContent = "The update to " + latest + " didn't install";
+        sub.textContent = (cur ? "The panel is still on " + cur + ". " : "") + "Install tries again.";
       } else {
         fwNote = "Update available: " + latest;
         $("#fwText").textContent = fwNote;
@@ -3294,11 +3373,12 @@
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
       // Wait for the running version: the offer may be older
-      if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
+      if (failed || missed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
       btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;
         installing = true;
+        fwMissed = "";
         renderUpdate(u);
         // Only an install the panel took is waited out; a failed post has said so.
         if (!(await post(u.id, "install"))) {
@@ -3307,7 +3387,7 @@
           return;
         }
         toast("Installing " + latest);
-        waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
+        waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.", String(u.value || ""));
       };
     } else if (st.includes("NO UPDATE")) {
       $("#fwText").textContent = "You're up to date, " + cur;
@@ -3317,7 +3397,7 @@
       sub.textContent = "Not checked yet. It checks a few seconds after the clock syncs, or tap Check for updates.";
     }
     const notesUrl = notesLink(u);
-    if (notesUrl && !st.includes("INSTALLING")) {
+    if (notesUrl && !st.includes("INSTALLING") && !stale) {
       const a = el("a", null, "Release notes");
       a.href = notesUrl;
       a.target = "_blank";
@@ -3398,13 +3478,36 @@
     }
   };
 
-  const connect = () => {
+  // One stream, reopened by the page, never the browser
+  let es = null;
+  let streamAt = 0;   // when it was opened
+  let heardAt = 0;    // its last event
+  let retryMs = 0;    // the last wait before reopening
+  let retryTimer = 0;
+  // The panel marks its streams in use each second
+  const RETRY_FIRST = 2000;
+  const RETRY_MAX = 60000;
+  // The panel pings every 10 s
+  const SILENT_MS = 35000;
+  const closeStream = () => {
+    clearTimeout(retryTimer);
     if (es) es.close();
-    streamAt = Date.now();
+    es = null;
+    setConn(false);
+  };
+  const heard = () => {
+    heardAt = Date.now();
+    setConn(true);
+    answered();
+  };
+  // Each new stream makes the panel resend every entity
+  const connect = () => {
+    if (stopped) return;
+    closeStream();
+    streamAt = heardAt = Date.now();
     es = new EventSource("/events");
     es.addEventListener("ping", (ev) => {
-      setConn(true);
-      answered();
+      heard();
       if (!ev.data) return;
       try {
         const p = JSON.parse(ev.data);
@@ -3413,13 +3516,49 @@
       } catch (_) {}
     });
     es.addEventListener("state", (ev) => {
+      heard();
       try { onState(JSON.parse(ev.data)); } catch (_) {}
     });
-    es.onopen = () => { setConn(true); answered(); fetchState(); };
+    es.onopen = () => { heard(); fetchState(); };
     // A dropped stream is often only a phone waking up; ask the panel before
     // saying it's gone.
-    es.onerror = () => { setConn(false); fetchState(); };
+    es.onerror = () => { streamLost(); fetchState(); };
   };
+  const reopenAfter = (ms) => {
+    clearTimeout(retryTimer);
+    // A hidden page reopens once it's shown
+    retryTimer = setTimeout(() => { if (!document.hidden) connect(); }, ms);
+  };
+  // Closed, reopened after 2 s, doubling to 60 s
+  const streamLost = () => {
+    // Only a stream heard for a minute starts over
+    if (heardAt - streamAt >= RETRY_MAX) retryMs = 0;
+    retryMs = Math.min(retryMs * 2 || RETRY_FIRST, RETRY_MAX);
+    closeStream();
+    reopenAfter(retryMs);
+  };
+  // Reopens now, but never twice within RETRY_FIRST
+  const reopenNow = () => {
+    if (restart || document.hidden) return;
+    const wait = streamAt + RETRY_FIRST - Date.now();
+    if (wait <= 0) connect();
+    else if (!es) reopenAfter(wait);
+  };
+  // A state read answered, so the panel is there
+  const streamCheck = (wasDown) => {
+    if (wasDown) reopenNow();
+    else if (es && Date.now() - heardAt > SILENT_MS) streamLost();
+  };
+  // A phone waking up gets its stream back at once
+  const wake = () => {
+    if (document.hidden) return;
+    fetchState();
+    if (!connected || Date.now() - heardAt > SILENT_MS) reopenNow();
+  };
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("online", wake);
+  // The back/forward cache drops the stream
+  window.addEventListener("pageshow", (ev) => { if (ev.persisted) { closeStream(); wake(); } });
   connect();
   fetchState();
   loadNetworks();

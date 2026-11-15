@@ -2,6 +2,7 @@
 // this table, so keep each entry on one line in this exact shape:
 //     {"Display name", "POSIX TZ string", "IANA/Zone"},
 // The IANA name is what browsers report; the page uses it to suggest a zone.
+// Saved by position: add new zones at the end.
 #pragma once
 
 #include <cstddef>
@@ -31,6 +32,10 @@ constexpr Timezone kTimezones[] = {
     {"Central Europe", "CET-1CEST,M3.5.0,M10.5.0/3", "Europe/Berlin"},
     {"Australia Eastern", "AEST-10AEDT,M10.1.0,M4.1.0/3", "Australia/Sydney"},
     {"UTC", "UTC0", "UTC"},
+    {"Canada Pacific", "MST7", "America/Vancouver"},
+    {"Canada Mountain", "CST6", "America/Edmonton"},
+    {"Canada Central", "EST5", "America/Winnipeg"},
+    {"Canada Eastern", "EST5EDT,M3.2.0,M11.1.0", "America/Toronto"},
 };
 
 constexpr size_t kTimezoneCount = sizeof(kTimezones) / sizeof(kTimezones[0]);
