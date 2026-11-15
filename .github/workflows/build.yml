@@ -71,6 +71,14 @@ jobs:
             echo "summary=Development build" >> "$GITHUB_OUTPUT"
           fi
           cat notes.md
+      # Warns when the manifest's summary would be cut.
+      - name: Release summary fits the update manifest
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
+        run: |
+          v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
+          if grep -q "^## v$v\s*$" CHANGELOG.md; then
+            python scripts/release_notes.py "v$v" --summary
+          fi
       # The site's /changelog page is rendered at deploy; fail here first.
       - name: Changelog page renders
         run: |
