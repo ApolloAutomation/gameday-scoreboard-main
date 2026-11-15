@@ -118,6 +118,9 @@ static const uint32_t AUTO_UPDATE_TICK = 10 * 1000;
 static const uint32_t AUTO_UPDATE_CHECK_WAIT = 2 * MINUTE;
 // Longest an install waits on downloads under way
 static const uint32_t INSTALL_QUIET_WAIT = 25 * 1000;
+static const uint32_t UPDATE_RECHECK_DELAY = 2 * 1000;
+// Follow beta: retry a missed read this often
+static const uint32_t CHANNEL_RETRY = 30 * 1000;
 // After an install, how long the new firmware runs before the update counts
 // as taken: past safe_mode's one minute, when the bootloader can no longer
 // roll it back.
@@ -1675,6 +1678,9 @@ void GamedayComponent::loop() {
   if (millis() - this->auto_update_ms_ >= AUTO_UPDATE_TICK) {
     this->auto_update_ms_ = millis();
     this->auto_update_tick_();
+#ifdef GAMEDAY_BETA_CHANNEL
+    this->channel_tick_();
+#endif
     if (!this->power_settled_ && millis() >= ::espn::kPowerSettledMs) {
       // A settled run: the next brownout starts a new streak
       this->power_settled_ = true;
@@ -2817,8 +2823,10 @@ void GamedayComponent::set_follow_beta(bool on) {
   ESP_LOGI(TAG, "Follow beta: %s", on ? "on" : "off");
   this->apply_channel_();
   // Read the new manifest now, so the page shows what this channel offers.
-  if (this->beta_update_ != nullptr)
+  if (this->beta_update_ != nullptr) {
+    this->channel_read_ms_ = millis();
     this->beta_update_->update();
+  }
   this->rebuild_state_(&this->last_fields_);
 #else
   (void) on;  // no beta channel in this build
@@ -2832,6 +2840,23 @@ void GamedayComponent::apply_channel_() {
 #endif
   if (this->beta_update_ != nullptr)
     this->beta_update_->set_source_url(this->follow_beta() ? this->beta_source_ : this->stable_source_);
+}
+
+// Still the other channel's offer, read before the switch
+bool GamedayComponent::offer_off_channel_() const {
+  if (this->beta_update_ == nullptr)
+    return false;
+  const std::string &v = this->beta_update_->update_info.latest_version;
+  return !v.empty() && ::espn::offer_from_beta(v) != this->follow_beta();
+}
+
+// The switch's read was skipped or failed: again
+void GamedayComponent::channel_tick_() {
+  if (this->install_hold_ || !this->offer_off_channel_() || millis() - this->channel_read_ms_ < CHANNEL_RETRY)
+    return;
+  this->channel_read_ms_ = millis();
+  ESP_LOGI(TAG, "Follow beta: reading the %s manifest again", this->follow_beta() ? "beta" : "release");
+  this->beta_update_->update();
 }
 #endif
 
@@ -2992,6 +3017,13 @@ void GamedayComponent::update_state_changed_() {
     this->update_mark_.installing[0] = '\0';
     this->update_mark_pref_.save(&this->update_mark_);
     this->install_hold_end_();
+    // The offer may predate the newest publish
+    bool recheck = true;
+#ifdef GAMEDAY_UPDATE_MIRROR
+    recheck = this->mirror_update_ == nullptr;  // mirror_tick_ reads on the error
+#endif
+    if (recheck)
+      this->set_timeout("update_recheck", UPDATE_RECHECK_DELAY, [u]() { u->check(); });
   }
 #endif
 }
@@ -3063,6 +3095,10 @@ void GamedayComponent::auto_update_tick_() {
   in.slot = ::espn::auto_update_slot(mac[4], mac[5]);
   in.check_done = millis() - this->auto_update_check_ms_ >= AUTO_UPDATE_CHECK_WAIT;
   in.available = u->state == update::UPDATE_STATE_AVAILABLE;
+#ifdef GAMEDAY_BETA_CHANNEL
+  if (this->offer_off_channel_())
+    in.available = false;
+#endif
   in.newer = ::espn::version_newer(u->update_info.latest_version, u->update_info.current_version);
   in.live = this->followed_game_live_();
   in.failed = ::espn::update_failed_here(this->update_mark_, u->update_info.latest_version);

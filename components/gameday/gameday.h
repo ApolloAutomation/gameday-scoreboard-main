@@ -1129,6 +1129,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject beta_pref_;
   uint8_t follow_beta_{0};  // 1 = read the beta manifest
   void apply_channel_();
+  uint32_t channel_read_ms_{0};  // last read asked of this channel
+  bool offer_off_channel_() const;
+  void channel_tick_();
 #endif
 #ifdef GAMEDAY_UPDATE_MIRROR
   http_request::HttpRequestUpdate *mirror_update_{nullptr};

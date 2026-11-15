@@ -36,6 +36,10 @@ While it installs, the box says **Installing** and the version, with **Keep the 
 
 If the power goes out or the download fails partway through, the panel keeps running the firmware it had. A new version only starts once it's fully downloaded and checked.
 
+:::note[Coming in the next release]
+If an install doesn't start, or its download fails while the panel stays on, the page says so as soon as the panel answers, instead of waiting for a restart that isn't coming. The Firmware box says **The update to** that version **didn't install**, with **The panel is still on** the version it runs **. Install tries again.** under it, and **Install** is back. While the Device card is folded, the words beside **Device** say **Update didn't install**. The panel also checks for the newest version again right away, so the next **Install** takes the latest one.
+:::
+
 You can install an update at any time, during a game too. Your team, favorites and settings stay as they were.
 
 ## Install updates automatically
@@ -66,6 +70,10 @@ Beta versions are test builds of the next release, for test panels. They can hav
 A beta carries the number of a coming release, plus a build number, like 2026.11.7-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.7 is newer than any 2026.11.7 beta.
 
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
+
+:::note[Coming in the next release]
+Right after you turn **Follow beta** on or off, the Firmware box says **Checking for the latest beta**, or **Checking for the latest release**, until the panel has read that list, usually within a second or two. **Install** comes back then, so an update from the list you just left can't be installed by mistake. If the panel can't read the list, it tries again every 30 seconds.
+:::
 
 Turn **Follow beta** on while the panel runs a release, and it waits for a beta of the next release. The betas of the release it already runs are older, so they aren't offered, and the Firmware box says **You're ahead of the latest beta** until a newer beta is out.
 

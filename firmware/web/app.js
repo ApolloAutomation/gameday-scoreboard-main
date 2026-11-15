@@ -3075,7 +3075,8 @@
   };
   // Reboot, the resets and the panel picker are far down the page; the line is on the board.
   const toBoard = () => $("#board").scrollIntoView({ behavior: "smooth", block: "start" });
-  const waitForReboot = (fromVersion, line) => {
+  // tried: the version an install wants, "" for a restart
+  const waitForReboot = (fromVersion, line, tried = "") => {
     const started = Date.now();
     let sawDown = false;
     if (es) { es.close(); es = null; }
@@ -3095,6 +3096,8 @@
           const settled = !String(j.state || "").toUpperCase().includes("INSTALLING");
           // Once the device has been seen down, a settled answer means it is back.
           if (changed || (sawDown && settled)) { location.reload(); return; }
+          // Up all along, same version, not installing: it didn't install
+          if (tried && settled && !sawDown && j.current_version === fromVersion) { installMissed(j, tried); return; }
         }
       } catch (_) { sawDown = true; }
       clearTimeout(timer);
@@ -3111,6 +3114,20 @@
       connect();
     };
     setTimeout(tick, 3000);
+  };
+  // Say so now and bring Install back
+  const installMissed = (j, tried) => {
+    restart = "";
+    renderGone();
+    installing = false;
+    fwMissed = tried;
+    const uid = byName["Firmware"];
+    if (uid) {
+      ents[uid] = Object.assign(ents[uid] || {}, j, { id: uid });
+      renderUpdate(ents[uid]);
+    }
+    toast("The update didn't install");
+    connect();
   };
   // Both resets blank the saved network, so the panel comes back as its own
   // setup hotspot and never on this one. Stop asking it.
@@ -3150,7 +3167,7 @@
         const st = String(j.state || "").toUpperCase();
         // The firmware row shows the result; only shout when there is something to
         // do. The device offers any different version, an older one included.
-        if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
+        if (st.includes("AVAILABLE")) { if (!offChannel(j) && isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
         else if (st.includes("INSTALLING")) { /* the install is running; nothing to say */ }
         else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
       } else if (uid) {
@@ -3235,9 +3252,12 @@
     return /^https:\/\//i.test(url) ? url : "";
   };
   let installing = false;
+  let fwMissed = "";  // the version whose install just failed
   let fwChecking = false;  // Check for updates is waiting for the panel's answer
   // What the firmware box reads from the state document, and what it last drew with.
-  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
+  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar), !!S.beta] : null);
+  // Follow beta just changed; the other feed's offer remains
+  const offChannel = (u) => !!S && S.beta !== undefined && !S.bar && !!u.value && /-beta\.\d+$/.test(String(u.value)) !== !!S.beta;
   let fwDrawn = fwInputs();
   // Folded Device card's peek shows alerts, not contents
   let fwNote = "";
@@ -3258,10 +3278,14 @@
     const sub = $("#fwSub");
     btn.hidden = true;
     fwDrawn = fwInputs();
+    const stale = !st.includes("INSTALLING") && !installing && offChannel(u);
     if (st.includes("INSTALLING") || installing) {
       fwNote = "Installing " + (latest || "update");
       $("#fwText").textContent = fwNote;
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
+    } else if (stale) {
+      $("#fwText").textContent = "Checking for the latest " + (S.beta ? "beta" : "release");
+      sub.textContent = "Install comes back once the panel has read it.";
     } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
       // The device offers any different version; a lower one is a downgrade.
       // Only the beta feeds carry "-beta.<build>" versions (scripts/beta_version.sh),
@@ -3274,10 +3298,15 @@
       // The panel rolled back from this very version (a crash in its first
       // minute); it won't install it on its own again, but Install still tries.
       const failed = !!(S && S.update_failed && S.update_failed === u.value);
+      const missed = !failed && fwMissed !== "" && fwMissed === String(u.value || "");
       if (failed) {
         fwNote = "Update didn't take";
         $("#fwText").textContent = "The update to " + latest + " didn't take and the panel went back to " + (cur || "its old version");
         sub.textContent = "Install tries it again." + (S.autoupd || S.bar ? " It won't install this one on its own." : "");
+      } else if (missed) {
+        fwNote = "Update didn't install";
+        $("#fwText").textContent = "The update to " + latest + " didn't install";
+        sub.textContent = (cur ? "The panel is still on " + cur + ". " : "") + "Install tries again.";
       } else {
         fwNote = "Update available: " + latest;
         $("#fwText").textContent = fwNote;
@@ -3286,11 +3315,12 @@
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
       // Wait for the running version: the offer may be older
-      if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
+      if (failed || missed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
       btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;
         installing = true;
+        fwMissed = "";
         renderUpdate(u);
         // Only an install the panel took is waited out; a failed post has said so.
         if (!(await post(u.id, "install"))) {
@@ -3299,7 +3329,7 @@
           return;
         }
         toast("Installing " + latest);
-        waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
+        waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.", String(u.value || ""));
       };
     } else if (st.includes("NO UPDATE")) {
       $("#fwText").textContent = "You're up to date, " + cur;
@@ -3309,7 +3339,7 @@
       sub.textContent = "Not checked yet. It checks a few seconds after the clock syncs, or tap Check for updates.";
     }
     const notesUrl = notesLink(u);
-    if (notesUrl && !st.includes("INSTALLING")) {
+    if (notesUrl && !st.includes("INSTALLING") && !stale) {
       const a = el("a", null, "Release notes");
       a.href = notesUrl;
       a.target = "_blank";

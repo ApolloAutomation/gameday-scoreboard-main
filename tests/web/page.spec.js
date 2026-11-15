@@ -1701,7 +1701,7 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812. Nothing to install.");
 });
 
-test("Follow beta doesn't rename what the firmware box found until the beta feed answers", async ({ page, request }) => {
+test("Follow beta says the firmware box is checking until the beta feed answers", async ({ page, request }) => {
   await reset(request, { beta: false });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
   let entity = { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" };
@@ -1710,7 +1710,7 @@ test("Follow beta doesn't rename what the firmware box found until the beta feed
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
   await page.locator('.sw[data-set="beta"]').click();
   await expectSet(request, { beta: "1" });
-  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 2000);
+  await staysAs(page.locator("#fwText"), ["Checking for the latest beta"], 2000);
   // The beta feed answers.
   entity = { ...fw, value: "1.5.6-beta.812", current_version: "1.5.6-beta.813" };
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
@@ -1734,7 +1734,7 @@ test("a Follow beta flip made on another page reaches the firmware box with the 
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812.");
 });
 
-test("a check right after a Follow beta flip that still finds the release feed's answer keeps the release wording", async ({ page, request }) => {
+test("a check right after a Follow beta flip that still finds the release feed's answer keeps checking", async ({ page, request }) => {
   await reset(request, { beta: false });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
@@ -1746,8 +1746,74 @@ test("a check right after a Follow beta flip that still finds the release feed's
   const checked = page.waitForResponse((r) => r.url().includes("/update/Firmware"), { timeout: 8000 });
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
   await checked;
-  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 2000);
-  await expect(page.locator("#fwSub")).toContainText("The newest release is v1.5.5.");
+  await staysAs(page.locator("#fwText"), ["Checking for the latest beta"], 2000);
+  await expect(page.locator("#fwInstall")).toBeHidden();
+});
+
+test("after a Follow beta flip the other feed's update can't be installed until this feed answers", async ({ page, request }) => {
+  await reset(request, { beta: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  await page.locator('.sw[data-set="beta"]').click();
+  await expectSet(request, { beta: "1" });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
+  await expect(page.locator("#fwInstall")).toBeHidden();
+  await expect(page.locator("#fwSub")).not.toContainText("Release notes");
+  // A check that still finds the release says nothing about it.
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta", { timeout: 8000 });
+  await expect(page.locator("#toast")).not.toContainText("Update available");
+  // The beta feed answers.
+  entity = { ...fw, value: "1.5.7-beta.3", current_version: "1.5.5" };
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7-beta.3", { timeout: 8000 });
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  // And back off: the beta stays until the release feed answers.
+  await page.locator('.sw[data-set="beta"]').click();
+  await expectSet(request, { beta: "0" });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest release");
+  await expect(page.locator("#fwInstall")).toBeHidden();
+});
+
+test("an install that doesn't start or fails says so at once and brings Install back", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  const entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#fwText")).toHaveText("Installing v1.5.6");
+  await expect(page.locator("#gone")).toContainText("Installing v1.5.6");
+  // The panel never went down and still offers it: no install.
+  await expect(page.locator("#fwText")).toHaveText("The update to v1.5.6 didn't install", { timeout: 8000 });
+  await expect(page.locator("#fwSub")).toContainText("The panel is still on v1.5.5. Install tries again.");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#devicePeek")).toHaveText("Update didn't install");
+  // The panel reads the feed again; a newer offer reads as new.
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...entity, value: "1.5.7" } }));
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7", { timeout: 8000 });
+});
+
+test("an install still running keeps waiting for the panel", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  entity = { ...entity, state: "INSTALLING" };
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await staysAs(page.locator("#fwText"), ["Installing v1.5.6"], 6000);
+  await expect(page.locator("#gone")).toContainText("Installing v1.5.6");
 });
 
 test("a setting changed during Check for updates leaves the firmware box checking", async ({ page, request }) => {
@@ -1837,21 +1903,27 @@ test("an update that rolled back says so and still offers Install", async ({ pag
   await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
 });
 
-test("an install that never restarts the panel stops saying Installing once the page gives up waiting", async ({ page, request }) => {
+test("an install that never restarts the panel stops the restart line once the page gives up waiting", async ({ page, request }) => {
   await reset(request);
-  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
-                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  let entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                 release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
   await page.clock.install();
   await page.goto("/");
   await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  // The panel says it is installing and never restarts.
+  entity = { ...entity, state: "INSTALLING" };
   page.once("dialog", (d) => d.accept());
   await page.locator("#fwInstall").click();
   await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
   await expect(page.locator("#gone")).toHaveText("Installing v2026.10.1. This page reloads when the panel is back.");
-  // The download failed: the panel stays up, still offering the same version.
   await page.clock.fastForward("05:01");
   await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
+  // It ends, still offering the same version: Install is back.
+  entity = { ...entity, state: "UPDATE AVAILABLE" };
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await page.clock.fastForward("00:05");
   await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
   await expect(page.locator("#fwInstall")).toBeVisible();
 });
