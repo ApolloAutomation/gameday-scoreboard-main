@@ -17,11 +17,7 @@ concatenated here. bundle-demo.js is the same plus demo.js, for the demo
 build only (firmware/pages/demo.yaml). Run after editing firmware/web/app.js
 or demo.js or regenerating components/gameday/teams.h, and commit both bundles.
 
-The bundles carry app.js and demo.js without their comments, indentation and
-blank lines (strip_js), which the panel would otherwise keep in flash and send
-on every page load. Strings, template literals and regexes are copied as they
-are and every remaining line break stays, so the code reads the same. When
-Node is installed, the build stops if a stripped file no longer parses.
+Bundles carry app.js and demo.js stripped (strip_js).
 """
 
 import json
