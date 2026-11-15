@@ -1104,8 +1104,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject update_mark_pref_;
   ::espn::UpdateMark update_mark_{};
   bool update_installing_{false};  // the update entity is installing, mark written
+  // No new downloads from install start to its end
+  bool install_hold_{false};
+  void install_hold_end_();
   void settle_update_mark_();
   void update_state_changed_();
+#ifndef GAMEDAY_BAR
+  ESPPreferenceObject update_seen_pref_;
+  ::espn::UpdateSeen update_seen_{};
+  int32_t auto_update_new_{0};  // the night it last logged WAIT_NEW
+#endif
 #ifdef GAMEDAY_BAR
   // fnv1_hash() of the version last installed through "Install now"
   // (auto_update.h), saved before the install so a crash or power cut
@@ -1122,6 +1130,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject beta_pref_;
   uint8_t follow_beta_{0};  // 1 = read the beta manifest
   void apply_channel_();
+  uint32_t channel_read_ms_{0};  // last read asked of this channel
+  uint8_t channel_retries_{0};
+  bool offer_off_channel_() const;
+  void channel_tick_();
 #endif
 #ifdef GAMEDAY_UPDATE_MIRROR
   http_request::HttpRequestUpdate *mirror_update_{nullptr};

@@ -250,6 +250,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 
 When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt-take), the card opens by itself with the **Install** button in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say what needs you in it, in place of what it holds: **Update available** and the version, **Update didn't take**, **Installing** and the version, or **Weak signal**.
 
+:::note[Coming in the next release]
+An install that didn't start, or failed without the panel restarting, opens the card too, and the words beside **Device** say **Update didn't install**. See [Installing an update](/using/updates/#installing-an-update).
+:::
+
 ### Diagnostics
 
 **Diagnostics** helps you, or support, work out why a panel misbehaves.
@@ -276,5 +280,9 @@ With **Follow beta** on, the Firmware box and **Check for updates** show the lat
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
 - Turn **Follow beta** off while on a beta and the panel stays on that beta, and the Firmware box says **You're ahead of the latest release**, until the next release comes out. Then the panel is offered that release, and installs it overnight if **Install updates automatically** is on.
+
+:::note[Coming in the next release]
+Right after you flip **Follow beta**, the Firmware box says **Checking for the latest beta**, or **Checking for the latest release**, with no **Install** button, until the panel has read that list.
+:::
 
 See [Firmware updates](/using/updates/#beta-versions).

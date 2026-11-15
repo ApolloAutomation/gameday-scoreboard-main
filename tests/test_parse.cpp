@@ -5883,6 +5883,75 @@ static void test_auto_update_edges() {
   CHECK(auto_update_step(in) == AutoUpdateStep::IDLE);
 }
 
+// A release waits a night before installing on its own.
+static void test_auto_update_new_release() {
+  CHECK(offer_from_beta("2026.11.7-beta.20"));
+  CHECK(!offer_from_beta("2026.11.6"));
+  CHECK(!offer_from_beta(""));
+  CHECK_EQ(kAutoUpdateNightShiftHours, 19);  // 4:59 AM stays that day, 5 AM moves on
+
+  const int32_t n1 = auto_update_day(2026, 319);
+  const int32_t n2 = auto_update_day(2026, 320);
+  UpdateSeen s{};
+  CHECK(!update_seen_tonight(s, "2026.11.6", n1));  // nothing noted yet
+  CHECK(update_seen_note(s, "2026.11.6", n1));
+  CHECK(!update_seen_note(s, "2026.11.6", n2));  // the first night sticks
+  CHECK(update_seen_tonight(s, "2026.11.6", n1));
+  CHECK(!update_seen_tonight(s, "2026.11.6", n2));
+  CHECK(!update_seen_tonight(s, "2026.11.7", n1));  // a different release
+  CHECK(update_seen_note(s, "2026.11.7", n2));  // a newer one starts over
+  CHECK(update_seen_tonight(s, "2026.11.7", n2));
+  CHECK(!update_seen_note(s, "", n2));
+  CHECK(!update_seen_note(s, "2026.11.8-beta.3", n2));  // betas don't wait
+  CHECK(!update_seen_tonight(s, "2026.11.8-beta.3", n2));
+  CHECK_EQ(std::string(s.version), std::string("2026.11.7"));
+  // Too long for the record: noted only once.
+  const std::string longer = "2026.11.7.1234567890123456789";
+  CHECK(update_seen_note(s, longer, n1));
+  CHECK(!update_seen_note(s, longer, n2));
+  CHECK(update_seen_tonight(s, longer, n1));
+  // Flash can hold anything; the record still ends.
+  memset(&s, 'x', sizeof(s));
+  CHECK(!update_seen_tonight(s, "2026.11.6", n1));
+  CHECK(update_seen_note(s, "2026.11.6", n1));
+  CHECK(update_seen_tonight(s, "2026.11.6", n1));
+
+  // 3:20 AM, first seen tonight: waits a night.
+  AutoUpdateInputs in;
+  in.enabled = true;
+  in.clock_valid = true;
+  in.hour = 3;
+  in.minute = 20;
+  in.today = n1;
+  in.tried_day = auto_update_day(2026, 300);
+  in.checked_day = in.today;
+  in.check_done = true;
+  in.available = true;
+  in.newer = true;
+  in.fresh = true;
+  CHECK(auto_update_step(in) == AutoUpdateStep::WAIT_NEW);
+  AutoUpdateInputs t = in;
+  t.live = true;
+  CHECK(auto_update_step(t) == AutoUpdateStep::WAIT_NEW);
+  t = in;
+  t.failed = true;  // rolled back here: still skipped
+  CHECK(auto_update_step(t) == AutoUpdateStep::SKIP_FAILED);
+  t = in;
+  t.check_done = false;
+  CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
+  t = in;
+  t.hour = 15;  // outside the window, nothing
+  CHECK(auto_update_step(t) == AutoUpdateStep::IDLE);
+  t = in;
+  t.now = true;  // a bar's Install now goes right away
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL_NOW);
+  t = in;
+  t.today = n2;  // the next night it installs
+  t.checked_day = n2;
+  t.fresh = false;
+  CHECK(auto_update_step(t) == AutoUpdateStep::INSTALL);
+}
+
 static void test_update_mirror() {
   // On the primary: nothing until a read or install fails.
   MirrorInputs in;
@@ -9351,6 +9420,7 @@ int main() {
   test_cup_backoff();
   test_auto_update();
   test_auto_update_edges();
+  test_auto_update_new_release();
   test_update_mirror();
   test_update_mark();
   test_boot_log();

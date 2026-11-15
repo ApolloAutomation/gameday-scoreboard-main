@@ -26,6 +26,7 @@
 #include "esphome/components/time/posix_tz.h"
 #endif
 #ifdef USE_UPDATE
+#include "esphome/components/http_request/update/http_request_update.h"
 #include "esphome/components/update/update_entity.h"
 #include <esp_ota_ops.h>
 #include <esp_system.h>
@@ -114,6 +115,12 @@ static const uint32_t NO_LIVE_RESCAN = 2 * MINUTE;
 // update_mirror.h).
 static const uint32_t AUTO_UPDATE_TICK = 10 * 1000;
 static const uint32_t AUTO_UPDATE_CHECK_WAIT = 2 * MINUTE;
+// Longest an install waits on downloads under way
+static const uint32_t INSTALL_QUIET_WAIT = 25 * 1000;
+static const uint32_t UPDATE_RECHECK_DELAY = 2 * 1000;
+// Follow beta: retry a missed read this often
+static const uint32_t CHANNEL_RETRY = 30 * 1000;
+static const uint8_t CHANNEL_RETRIES = 4;  // then the 6-hourly read
 // After an install, how long the new firmware runs before the update counts
 // as taken: past safe_mode's one minute, when the bootloader can no longer
 // roll it back.
@@ -1669,6 +1676,9 @@ void GamedayComponent::loop() {
   if (millis() - this->auto_update_ms_ >= AUTO_UPDATE_TICK) {
     this->auto_update_ms_ = millis();
     this->auto_update_tick_();
+#ifdef GAMEDAY_BETA_CHANNEL
+    this->channel_tick_();
+#endif
     if (!this->power_settled_ && millis() >= ::espn::kPowerSettledMs) {
       // A settled run: the next brownout starts a new streak
       this->power_settled_ = true;
@@ -1702,6 +1712,9 @@ void GamedayComponent::loop() {
     for (int i = 0; i < 7; i++)
       portal->loop();
 #endif
+  // No new reads while an install starts
+  if (this->install_hold_)
+    return;
 #ifdef GAMEDAY_DEMO
   // While the scripted game plays, nothing new is fetched. A fetch already
   // running still finishes below, and is discarded as belonging to before.
@@ -2808,8 +2821,11 @@ void GamedayComponent::set_follow_beta(bool on) {
   ESP_LOGI(TAG, "Follow beta: %s", on ? "on" : "off");
   this->apply_channel_();
   // Read the new manifest now, so the page shows what this channel offers.
-  if (this->beta_update_ != nullptr)
+  if (this->beta_update_ != nullptr) {
+    this->channel_read_ms_ = millis();
+    this->channel_retries_ = CHANNEL_RETRIES;
     this->beta_update_->update();
+  }
   this->rebuild_state_(&this->last_fields_);
 #else
   (void) on;  // no beta channel in this build
@@ -2823,6 +2839,28 @@ void GamedayComponent::apply_channel_() {
 #endif
   if (this->beta_update_ != nullptr)
     this->beta_update_->set_source_url(this->follow_beta() ? this->beta_source_ : this->stable_source_);
+}
+
+// Still the other channel's offer, read before the switch
+bool GamedayComponent::offer_off_channel_() const {
+  if (this->beta_update_ == nullptr)
+    return false;
+  const std::string &v = this->beta_update_->update_info.latest_version;
+  return !v.empty() && ::espn::offer_from_beta(v) != this->follow_beta();
+}
+
+// The switch's read was skipped or failed: again
+void GamedayComponent::channel_tick_() {
+  if (this->channel_retries_ == 0 || this->install_hold_ || millis() - this->channel_read_ms_ < CHANNEL_RETRY)
+    return;
+  if (!this->offer_off_channel_()) {
+    this->channel_retries_ = 0;
+    return;
+  }
+  this->channel_retries_--;
+  this->channel_read_ms_ = millis();
+  ESP_LOGI(TAG, "Follow beta: reading the %s manifest again", this->follow_beta() ? "beta" : "release");
+  this->beta_update_->update();
 }
 #endif
 
@@ -2842,7 +2880,7 @@ void GamedayComponent::use_primary_() {
 // fails in well under a second.
 void GamedayComponent::mirror_tick_() {
   http_request::HttpRequestUpdate *u = this->mirror_update_;
-  if (u == nullptr)
+  if (u == nullptr || this->install_hold_)
     return;
   ::espn::MirrorInputs in;
   in.on_mirror = this->on_mirror_;
@@ -2932,9 +2970,26 @@ void GamedayComponent::settle_update_mark_() {
     this->update_mark_pref_.save(&this->update_mark_);
   if (this->update_mark_.failed[0] != '\0')
     ESP_LOGW(TAG, "Update %s rolled back on this panel before", this->update_mark_.failed);
+#ifndef GAMEDAY_BAR
+  this->update_seen_pref_ = global_preferences->make_preference<::espn::UpdateSeen>(fnv1_hash("gameday_update_seen_v1"));
+  if (!this->update_seen_pref_.load(&this->update_seen_))
+    this->update_seen_ = ::espn::UpdateSeen{};
+#endif
   App.get_updates()[0]->add_on_state_callback([this]() { this->update_state_changed_(); });
 #endif
 }
+
+#if defined(USE_UPDATE) && defined(ESPHOME_PROJECT_VERSION)
+namespace {
+// Reaches the entity's protected state from outside
+struct UpdateStateAccess : update::UpdateEntity {
+  static void republish_installing(update::UpdateEntity *u) {
+    u->*(&UpdateStateAccess::state_) = update::UPDATE_STATE_INSTALLING;
+    u->publish_state();
+  }
+};
+}  // namespace
+#endif
 
 void GamedayComponent::update_state_changed_() {
 #if defined(USE_UPDATE) && defined(ESPHOME_PROJECT_VERSION)
@@ -2948,15 +3003,55 @@ void GamedayComponent::update_state_changed_() {
     ::espn::update_mark_set(this->update_mark_.installing, u->update_info.latest_version);
     this->update_mark_pref_.save(&this->update_mark_);
     global_preferences->sync();
+    // Other tasks' requests cut the download's watchdog to 5 s
+    this->install_hold_ = true;
+    this->logos_.pause(true);
+    // Queued ahead of the download's own defer
+    this->defer([this]() {
+      const uint32_t start = millis();
+      while (this->install_hold_ && ((this->busy_ && !this->job_done_) || this->logos_.busy())) {
+        if (millis() - start >= INSTALL_QUIET_WAIT) {
+          ESP_LOGW(TAG, "Install: a download is still running; going ahead");
+          break;
+        }
+        App.feed_wdt();
+        delay(20);
+      }
+      if (millis() - start >= 100)
+        ESP_LOGI(TAG, "Install: waited %u ms for downloads to finish", (unsigned) (millis() - start));
+      // Queued behind the download, so runs once it ends
+      this->defer([this]() { this->install_hold_end_(); });
+    });
   } else if (this->update_installing_) {
+    // A manifest read landing before the download starts
+    if (this->install_hold_ && !static_cast<http_request::HttpRequestUpdate *>(u)->status_has_error()) {
+      // Page and Home Assistant keep seeing it install
+      UpdateStateAccess::republish_installing(u);
+      return;
+    }
     // Back from installing with no restart: it failed before the new image
     // was in place, and this firmware runs on. Not a rollback.
     ESP_LOGI(TAG, "Update to %s didn't install; still on %s", this->update_mark_.installing, ESPHOME_PROJECT_VERSION);
     this->update_installing_ = false;
     this->update_mark_.installing[0] = '\0';
     this->update_mark_pref_.save(&this->update_mark_);
+    this->install_hold_end_();
+    // The offer may predate the newest publish
+    bool recheck = true;
+#ifdef GAMEDAY_UPDATE_MIRROR
+    recheck = this->mirror_update_ == nullptr;  // mirror_tick_ reads on the error
+#endif
+    if (recheck)
+      this->set_timeout("update_recheck", UPDATE_RECHECK_DELAY, [u]() { u->check(); });
   }
 #endif
+}
+
+void GamedayComponent::install_hold_end_() {
+  if (!this->install_hold_)
+    return;
+  this->install_hold_ = false;
+  this->logos_.pause(false);
 }
 
 bool GamedayComponent::board_live() const {
@@ -2991,10 +3086,21 @@ bool GamedayComponent::followed_game_live_() const {
 
 void GamedayComponent::auto_update_tick_() {
 #ifdef USE_UPDATE
-  if (!this->auto_update() || this->time_ == nullptr || App.get_updates().empty())
+  if (this->install_hold_ || this->time_ == nullptr || App.get_updates().empty())
     return;
   update::UpdateEntity *u = App.get_updates()[0];
   ESPTime now = this->time_->now();
+#ifndef GAMEDAY_BAR
+  // Noted with the setting off too
+  if (now.is_valid() && u->state == update::UPDATE_STATE_AVAILABLE) {
+    const ESPTime ahead = ESPTime::from_epoch_local(now.timestamp + ::espn::kAutoUpdateNightShiftHours * 3600);
+    if (::espn::update_seen_note(this->update_seen_, u->update_info.latest_version,
+                                 ::espn::auto_update_day(ahead.year, ahead.day_of_year)))
+      this->update_seen_pref_.save(&this->update_seen_);
+  }
+#endif
+  if (!this->auto_update())
+    return;
   ::espn::AutoUpdateInputs in;
   in.enabled = true;
   in.clock_valid = now.is_valid();
@@ -3008,9 +3114,16 @@ void GamedayComponent::auto_update_tick_() {
   in.slot = ::espn::auto_update_slot(mac[4], mac[5]);
   in.check_done = millis() - this->auto_update_check_ms_ >= AUTO_UPDATE_CHECK_WAIT;
   in.available = u->state == update::UPDATE_STATE_AVAILABLE;
+#ifdef GAMEDAY_BETA_CHANNEL
+  if (this->offer_off_channel_())
+    in.available = false;
+#endif
   in.newer = ::espn::version_newer(u->update_info.latest_version, u->update_info.current_version);
   in.live = this->followed_game_live_();
   in.failed = ::espn::update_failed_here(this->update_mark_, u->update_info.latest_version);
+#ifndef GAMEDAY_BAR
+  in.fresh = ::espn::update_seen_tonight(this->update_seen_, u->update_info.latest_version, in.today);
+#endif
 #ifdef GAMEDAY_BAR
   in.now = in.available && ::espn::install_now_listed(u->update_info.summary, this->hostname()) &&
            fnv1_hash(u->update_info.latest_version) != this->now_tried_;
@@ -3039,6 +3152,14 @@ void GamedayComponent::auto_update_tick_() {
         ESP_LOGI(TAG, "Auto update: %s rolled back on this panel, not installing it on its own",
                  u->update_info.latest_version.c_str());
       this->auto_update_skipped_ = in.today;
+      break;
+    case ::espn::AutoUpdateStep::WAIT_NEW:
+#ifndef GAMEDAY_BAR
+      if (this->auto_update_new_ != in.today)
+        ESP_LOGI(TAG, "Auto update: %s is new tonight; it installs tomorrow night",
+                 u->update_info.latest_version.c_str());
+      this->auto_update_new_ = in.today;
+#endif
       break;
     case ::espn::AutoUpdateStep::INSTALL:
       // Saved, and written to flash now, before the install starts: a power

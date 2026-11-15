@@ -86,6 +86,8 @@ class LogoCache {
   enum Surface : uint8_t { MAIN = 0, AREA2 = 1 };
   void pin_icons(Surface s, const uint32_t *keys, size_t n);
   bool busy() const { return this->task_running_; }
+  // Holds new downloads; the one under way finishes.
+  void pause(bool on);
   // Retries on-screen failed logos; true when one became ready.
   // failed: one failed or proved unreadable instead.
   bool loop(bool &failed);
@@ -161,6 +163,7 @@ class LogoCache {
   ::espn::IconPins icon_pins_[2];  // indexed by Surface
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
+  bool paused_{false};
   std::atomic<bool> loaded_{false};
   std::atomic<bool> failed_{false};  // a logo failed since loop()
   std::atomic<bool> pending_any_{false};
