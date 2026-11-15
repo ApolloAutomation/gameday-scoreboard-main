@@ -128,6 +128,13 @@ void field_from_event(JsonObjectConst ev, GameSnapshot &s) {
 
 // ---- The model -------------------------------------------------------------------
 
+namespace {
+
+// ESPN drops possession after kicks; use the play's end team
+int ball_side(const GameSnapshot &g) { return g.possession != 0 ? g.possession : g.play_side; }
+
+}  // namespace
+
 bool field_same(const FieldPic &a, const FieldPic &b) { return memcmp(&a, &b, sizeof(FieldPic)) == 0; }
 
 int field_left(const GameSnapshot &g, int yard_line) {
@@ -160,7 +167,8 @@ FieldModel field_model(const GameSnapshot &g) {
   if (f.home_win >= 0)
     m.win = (int8_t) (g.team_home ? f.home_win : 100 - f.home_win);
   m.brk = football_break(g) ? 1 : 0;
-  const int side = g.possession == 1 ? 0 : g.possession == 2 ? 1 : -1;
+  const int held = ball_side(g);
+  const int side = held == 1 ? 0 : held == 2 ? 1 : -1;
   const int ball = field_left(g, f.yard_line);
   if (m.brk || side < 0 || f.down < 1 || ball <= 0 || ball >= 100)
     return m;
@@ -371,7 +379,7 @@ std::string field_ticker(const GameSnapshot &g, bool last_play) {
     detail::add_last_play(out, g.last_play);
   detail::add_part(out, g.fb.leaders);
   const Football &f = g.fb;
-  const int side = g.possession == 1 ? 1 : g.possession == 2 ? 2 : 0;
+  const int side = ball_side(g);
   if (side != 0 && f.drive_side == side && !f.drive_over && !football_break(g)) {
     const std::string d = field_drive(f, false);
     if (!d.empty())
@@ -535,7 +543,8 @@ void sport_frame(const GameSnapshot &g, const std::string &clock, int w, bool la
   const std::string abbr[2] = {g.team_abbr, g.opp_abbr};
   const std::string score[2] = {std::to_string(m.score[0]), std::to_string(m.score[1])};
   const uint32_t white = 0xFFFFFF, down_rgb = m.red ? 0xFF3030 : white;
-  const int poss = m.brk ? -1 : g.possession == 1 ? 0 : g.possession == 2 ? 1 : -1;
+  const int held = ball_side(g);
+  const int poss = m.brk ? -1 : held == 1 ? 0 : held == 2 ? 1 : -1;
   std::vector<AppText> &t = out.texts;
   if (w >= 192) {
     const int c = 40, mid_w = w - 2 * c;

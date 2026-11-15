@@ -3998,10 +3998,14 @@ static void test_timezone_index() {
   CHECK_EQ(espn::timezone_index("Australia Eastern"), 12);
   CHECK_EQ(espn::timezone_index("Australia/Sydney"), 12);
   CHECK_EQ(espn::timezone_index("UTC"), 13);
+  // Canada's rows came later, after UTC
+  CHECK_EQ(espn::timezone_index("America/Vancouver"), 14);
+  CHECK_EQ(espn::timezone_index("Canada Eastern"), 17);
   // Positions still work for the device page, which is built from this list.
   CHECK_EQ(espn::timezone_index("0"), 0);
   CHECK_EQ(espn::timezone_index("13"), 13);
-  CHECK_EQ(espn::timezone_index("14"), -1);
+  CHECK_EQ(espn::timezone_index("17"), 17);
+  CHECK_EQ(espn::timezone_index("18"), -1);
   CHECK_EQ(espn::timezone_index("99999999999999999999"), -1);
   // Nothing close enough to guess at.
   CHECK_EQ(espn::timezone_index("us central"), -1);

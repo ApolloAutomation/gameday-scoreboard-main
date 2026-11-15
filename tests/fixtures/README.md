@@ -19,6 +19,7 @@ Recorded from ESPN on 2026-09-05 with a `curl/8.0` User-Agent (ESPN returns
 | `event_ncaa_live.json` | `.../college-football/scoreboard/401871053`, one game on its own: FIU @ JXST, 0:33 left in the 4th (recorded 2026-10-13) |
 | `event_nfl_pre.json` | `.../football/nfl/scoreboard/401872999`, CHI @ ATL a week out, with odds (recorded 2026-10-13) |
 | `event_nfl_super_bowl.json` | `.../football/nfl/scoreboard/401772988`, Super Bowl LX on its own (recorded 2026-10-13) |
+| `event_nfl_kickoff_return.json` | `.../football/nfl/scoreboard/401873053`, NE vs DET, 12:57 2nd, just after a kickoff return to NE 30: the situation has the down and spot but no `possession`; `lastPlay.end.team` is NE (recorded 2026-11-15) |
 
 Event ids the tests rely on are listed at the top of `test_parse.cpp`.
 

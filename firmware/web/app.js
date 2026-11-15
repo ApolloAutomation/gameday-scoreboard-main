@@ -2563,21 +2563,24 @@
   // entry plus a few common aliases here. Same-zone cities all map to the
   // same POSIX rule, so a near match is still the right choice.
   const TZ_ALIASES = {
-    "America/Detroit": "America/New_York", "America/Toronto": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
-    "America/Kentucky/Louisville": "America/New_York", "America/Montreal": "America/New_York", "America/Nassau": "America/New_York",
-    "America/Winnipeg": "America/Chicago", "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
+    "America/Detroit": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
+    "America/Kentucky/Louisville": "America/New_York", "America/Nassau": "America/New_York",
+    "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
     "America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago", "America/Ojinaga": "America/Chicago",
-    "America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver",
-    "America/Vancouver": "America/Los_Angeles", "America/Tijuana": "America/Los_Angeles",
+    "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver", "America/Tijuana": "America/Los_Angeles",
     "America/Juneau": "America/Anchorage", "America/Sitka": "America/Anchorage", "America/Nome": "America/Anchorage",
+    "America/Montreal": "America/Toronto", "America/Nipigon": "America/Toronto", "America/Thunder_Bay": "America/Toronto",
+    "America/Iqaluit": "America/Toronto", "America/Rainy_River": "America/Winnipeg", "America/Yellowknife": "America/Edmonton",
+    "America/Inuvik": "America/Edmonton", "America/Dawson_Creek": "America/Vancouver", "America/Fort_Nelson": "America/Vancouver",
+    "America/Creston": "America/Vancouver", "America/Whitehorse": "America/Vancouver", "America/Dawson": "America/Vancouver",
+    "America/Regina": "America/Edmonton", "America/Swift_Current": "America/Edmonton", "America/Atikokan": "America/Winnipeg",
+    "America/Coral_Harbour": "America/Winnipeg", "America/Moncton": "America/Halifax", "America/Glace_Bay": "America/Halifax",
+    "America/Goose_Bay": "America/Halifax",
     "Europe/Dublin": "Europe/London", "Europe/Paris": "Europe/Berlin", "Europe/Madrid": "Europe/Berlin", "Europe/Rome": "Europe/Berlin",
     "Europe/Amsterdam": "Europe/Berlin", "Europe/Brussels": "Europe/Berlin", "Europe/Vienna": "Europe/Berlin", "Europe/Zurich": "Europe/Berlin",
     "Europe/Stockholm": "Europe/Berlin", "Europe/Oslo": "Europe/Berlin", "Europe/Copenhagen": "Europe/Berlin", "Europe/Warsaw": "Europe/Berlin",
-    "Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin", "Europe/Helsinki": "Europe/Athens", "Europe/Kiev": "Europe/Athens",
-    "Europe/Kyiv": "Europe/Athens", "Europe/Bucharest": "Europe/Athens", "Europe/Sofia": "Europe/Athens",
-    "Asia/Hong_Kong": "Asia/Shanghai", "Asia/Taipei": "Asia/Shanghai", "Asia/Manila": "Asia/Singapore", "Asia/Kuala_Lumpur": "Asia/Singapore",
+    "Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin",
     "Australia/Melbourne": "Australia/Sydney", "Australia/Hobart": "Australia/Sydney", "Australia/Canberra": "Australia/Sydney",
-    "Australia/Darwin": "Australia/Adelaide",
   };
   const browserZoneName = () => {
     let iana = "";

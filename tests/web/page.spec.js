@@ -2298,6 +2298,47 @@ test.describe("a browser in Ciudad Juarez", () => {
   });
 });
 
+// Canada's own zones, appended after UTC
+for (const [iana, name, tz] of [
+  ["America/Vancouver", "Canada Pacific", "14"],
+  ["America/Edmonton", "Canada Mountain", "15"],
+  ["America/Winnipeg", "Canada Central", "16"],
+  ["America/Toronto", "Canada Eastern", "17"],
+  ["America/Montreal", "Canada Eastern", "17"],
+  ["America/Regina", "Canada Mountain", "15"],
+  ["America/Whitehorse", "Canada Pacific", "14"],
+  ["America/Atikokan", "Canada Central", "16"],
+  ["America/Moncton", "Canada Atlantic", "7"],
+]) {
+  test.describe(`a browser in ${iana}`, () => {
+    test.use({ timezoneId: iana });
+    test(`sets the panel to ${name}`, async ({ page, request }) => {
+      await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+      await page.goto("/");
+      await expectSet(request, { tz });
+      await expect(page.locator("#toast")).toHaveText(`Timezone set to ${name} from this browser`);
+    });
+  });
+}
+
+test("every timezone alias names a zone the panel has", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const root = path.join(__dirname, "..", "..");
+  const app = fs.readFileSync(path.join(root, "firmware/web/app.js"), "utf8");
+  const block = app.match(/const TZ_ALIASES = \{([\s\S]*?)\};/)[1];
+  const aliases = [...block.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]);
+  const rows = fs.readFileSync(path.join(root, "components/gameday/timezones.h"), "utf8")
+    .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  const zones = [...rows.matchAll(/\{"[^"]+",\s*"[^"]+",\s*"([^"]+)"\}/g)].map((m) => m[1]);
+  expect(zones).toContain("America/Toronto");
+  expect(aliases.length).toBeGreaterThan(20);
+  for (const [from, to] of aliases) {
+    expect(zones, `${from} goes to ${to}`).toContain(to);
+    expect(zones, `${from} has a row of its own`).not.toContain(from);
+  }
+});
+
 test("the timezone line's choose manually and follow this browser work from the keyboard", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");

@@ -463,6 +463,8 @@ Icon icon_for(uint8_t c, bool day) {
   return Icon::NONE;
 }
 
+bool snowy(uint8_t code) { return icon_for(code, true) == Icon::SNOW; }
+
 Icon now_icon(const Now &n) {
   const bool windy = n.wind_kmh10 >= 400 || n.gust_kmh10 >= 650;
   return windy && n.code <= 3 ? Icon::WIND : icon_for(n.code, n.day);
