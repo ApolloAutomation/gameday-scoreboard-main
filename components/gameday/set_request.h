@@ -475,6 +475,11 @@ inline bool parse_prop(const std::string &v, uint8_t &slot, Prop &p) {
     p.side = (uint8_t) PropSide::YES;
     return f[6] == "yes" && f[7].empty();
   }
+  // plus: at least N, a whole number.
+  if (f[6] == "plus") {
+    p.side = (uint8_t) PropSide::PLUS;
+    return parse_bet_line(f[7], false, p.line) && p.line % 2 == 0;
+  }
   if (f[6] != "over" && f[6] != "under")
     return false;
   p.side = (uint8_t) (f[6] == "over" ? PropSide::OVER : PropSide::UNDER);

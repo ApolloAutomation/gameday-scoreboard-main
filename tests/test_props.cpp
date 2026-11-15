@@ -218,8 +218,28 @@ void test_parse_prop() {
              op.prop.line == 0 && prop_valid(op.prop),
          "a yes prop has no line");
   RCHECK(parse_set("prop", "0,epl,280555,359,SAKA,goal,yes,", op, 4) && prop_valid(op.prop), "soccer's anytime goal");
+  RCHECK(parse_set("prop", "0,nba,4432174,17,THOMAS,threes,plus,3", op, 4) &&
+             op.prop.side == (uint8_t) PropSide::PLUS && op.prop.line == 6 && prop_valid(op.prop),
+         "3+ threes: at least 3, in half units");
+  RCHECK(parse_set("prop", "0,nfl,4429795,8,GIBBS,rushyds,plus,75", op, 4) && op.prop.line == 150 &&
+             prop_valid(op.prop),
+         "75+ rushing yards");
+  RCHECK(parse_set("prop", "0,nfl,4429795,8,GIBBS,rec,plus,1", op, 4) && op.prop.line == 2 && prop_valid(op.prop),
+         "1+ is the smallest");
+  RCHECK(parse_set("prop", "0,nfl,3918298,2,ALLEN,passyds,plus,999", op, 4) && op.prop.line == 1998 &&
+             prop_valid(op.prop),
+         "999+ is the largest");
   const char *refused[] = {
       "0,nfl,3918298,2,ALLEN,passyds,over,",          // no line given
+      "0,nba,4432174,17,THOMAS,threes,plus,2.5",      // N+ takes a whole number
+      "0,nba,4432174,17,THOMAS,threes,plus,0",        // 0+ is no bet
+      "0,nba,4432174,17,THOMAS,threes,plus,-3",       // a sign on N
+      "0,nba,4432174,17,THOMAS,threes,plus,+3",       // a plus sign first
+      "0,nba,4432174,17,THOMAS,threes,plus,3+",       // the plus goes in the side
+      "0,nba,4432174,17,THOMAS,threes,plus,",         // no number given
+      "0,nfl,3918298,2,ALLEN,passyds,plus,1000",      // a number past 999+
+      "0,nfl,3918298,2,ALLEN,td,plus,1",              // N+ on a yes stat
+      "0,nfl,3918298,2,ALLEN,passyds,PLUS,250",       // sides are lower case
       "0,nfl,3918298,2,ALLEN,passyds,over,250.25",    // quarter points are refused
       "0,nfl,3918298,2,ALLEN,passyds,over,0",         // a line of 0
       "0,nfl,3918298,2,ALLEN,passyds,over,-10.5",     // a sign on the line
@@ -294,6 +314,22 @@ void test_text() {
   RCHECK_EQ(prop_ticker(y, PropStatus::HIT, 2), "TUTEN ANY TD HIT");
   RCHECK_EQ(prop_ticker(y, PropStatus::NOT_YET, 0), "TUTEN ANY TD NOT YET");
   RCHECK_EQ(prop_side_key(y), "yes");
+  // N+ reads as the sportsbook writes it.
+  Prop t = prop("0,nba,4432174,17,THOMAS,threes,plus,3");
+  RCHECK_EQ(prop_label(t), "THOMAS 3+ 3PM");
+  RCHECK_EQ(prop_side_key(t), "plus");
+  RCHECK_EQ(prop_ticker(t, PropStatus::PRE, kPropNoValue), "PROP THOMAS 3+ 3PM");
+  RCHECK_EQ(prop_ticker(t, PropStatus::ON_TRACK, 4), "THOMAS 3+ 3PM 2 ON TRACK");
+  RCHECK_EQ(prop_ticker(t, PropStatus::HIT, 6), "THOMAS 3+ 3PM 3 HIT");
+  t.final_half = 6;
+  RCHECK_EQ(prop_ticker(t, PropStatus::WON, kPropNoValue), "THOMAS 3+ 3PM 3 WON");
+  RCHECK_EQ(prop_ticker(t, PropStatus::VOID, 0), "THOMAS 3+ 3PM VOID");
+  RCHECK_EQ(prop_label(prop("0,nfl,4429795,8,GIBBS,rushyds,plus,75")), "GIBBS 75+ RUSH YDS");
+  RCHECK_EQ(prop_label(prop("0,nfl,4429795,8,GIBBS,recyds,plus,25")), "GIBBS 25+ REC YDS");
+  RCHECK_EQ(prop_label(prop("0,nfl,3918298,2,ALLEN,passyds,plus,250")), "ALLEN 250+ PASS YDS");
+  RCHECK_EQ(prop_label(prop("0,nfl,4429795,8,GIBBS,rec,plus,4")), "GIBBS 4+ REC");
+  RCHECK_EQ(prop_label(prop("0,mlb,1,15,JUDGE,hits,plus,2")), "JUDGE 2+ HITS");
+  RCHECK_EQ(prop_label(prop("0,nhl,3114727,6,DRAISAITL,sog,plus,4")), "DRAISAITL 4+ SOG");
   RCHECK_EQ(prop_status_key(PropStatus::OFF_TRACK), "off_track");
   RCHECK_EQ(prop_status_key(PropStatus::VOID), "void");
 }
@@ -332,6 +368,25 @@ void test_status() {
   RCHECK(prop_status(rush, &live, -6, 500, KICK + 60) == PropStatus::ON_TRACK, "-3 rushing yards at the half");
   rush.side = (uint8_t) PropSide::OVER;
   RCHECK(prop_status(rush, &live, -6, 500, KICK + 60) == PropStatus::OFF_TRACK, "an over on it is off track");
+  // N+: reaching N is a hit, and never a push.
+  Prop n = prop("0,nfl,4429795,8,GIBBS,rushyds,plus,75");
+  n.event = p.event;
+  RCHECK(prop_status(n, &live, kPropNoValue, 500, KICK + 60) == PropStatus::LIVE, "no number yet on N+");
+  RCHECK(prop_status(n, &live, 40, 50, KICK + 60) == PropStatus::LIVE, "too early to call N+");
+  RCHECK(prop_status(n, &live, 80, 500, KICK + 60) == PropStatus::ON_TRACK, "40 at the half: on pace for 80");
+  RCHECK(prop_status(n, &live, 60, 500, KICK + 60) == PropStatus::OFF_TRACK, "30 at the half: on pace for 60");
+  RCHECK(prop_status(n, &live, 148, 900, KICK + 60) == PropStatus::ON_TRACK, "74, one short, late on");
+  RCHECK(prop_status(n, &live, 150, 400, KICK + 60) == PropStatus::HIT, "75 is a hit on 75+");
+  RCHECK(prop_status(n, &live, 300, 600, KICK + 60) == PropStatus::HIT, "150 is far past it");
+  RCHECK(prop_status(n, &fin, 150, -1, KICK + 4 * 3600) == PropStatus::HIT, "75 at the final, before grading");
+  RCHECK(prop_status(n, &fin, 148, -1, KICK + 4 * 3600) == PropStatus::OFF_TRACK, "74 at the final: no push");
+  Prop t = prop("0,nba,4432174,17,THOMAS,threes,plus,3");
+  t.event = p.event;
+  RCHECK(prop_status(t, &live, 4, 750, KICK + 60) == PropStatus::OFF_TRACK, "2 threes at 3/4 is short of 3");
+  rec.side = (uint8_t) PropSide::OVER;
+  rec.line = 5;
+  RCHECK(prop_status(rec, &live, 4, 750, KICK + 60) == PropStatus::ON_TRACK, "while over 2.5 is on pace");
+  RCHECK(prop_status(t, &live, 4, 600, KICK + 60) == PropStatus::ON_TRACK, "2 threes at 60%% is on pace for 3");
   Prop y = prop("0,nfl,3918298,2,ALLEN,td,yes,");
   y.event = p.event;
   RCHECK(prop_status(y, &live, 0, 900, KICK) == PropStatus::NOT_YET, "no touchdown yet");
@@ -360,6 +415,17 @@ void test_grade() {
   prop_grade(y, true, 0, KICK, MIDNIGHT);
   RCHECK(y.result == (uint8_t) PropResult::LOST, "none");
   RCHECK(!prop_expired(o, MIDNIGHT - 1) && prop_expired(o, MIDNIGHT), "graded props go at midnight");
+  // N+ wins on N or more, else loses.
+  Prop t = prop("0,nba,4432174,17,THOMAS,threes,plus,3");
+  RCHECK(prop_grade(t, true, 6, KICK, MIDNIGHT) && t.result == (uint8_t) PropResult::WON && t.final_half == 6,
+         "exactly 3 threes wins 3+");
+  RCHECK(prop_grade(t, true, 4, KICK, MIDNIGHT) && t.result == (uint8_t) PropResult::LOST, "2 threes is one short");
+  RCHECK(prop_grade(t, true, 20, KICK, MIDNIGHT) && t.result == (uint8_t) PropResult::WON, "10 threes is far above");
+  RCHECK(prop_grade(t, true, 0, KICK, MIDNIGHT) && t.result == (uint8_t) PropResult::LOST, "none loses");
+  RCHECK(prop_grade(t, false, 0, KICK, MIDNIGHT) && t.result == (uint8_t) PropResult::VOID, "didn't play: void");
+  Prop sacks = prop("0,nfl,4565190,16,TURNER,sacks,plus,1");
+  prop_grade(sacks, true, 1, KICK, MIDNIGHT);
+  RCHECK(sacks.result == (uint8_t) PropResult::LOST, "half a sack is short of 1+");
   Prop neg = prop("0,nfl,3139477,12,MAHOMES,rushyds,under,20.5");
   RCHECK(prop_grade(neg, true, -6, KICK, MIDNIGHT) && neg.result == (uint8_t) PropResult::WON && neg.final_half == -6,
          "-3 rushing yards keeps its number");
@@ -393,6 +459,9 @@ void test_grade_box() {
   Prop over = prop("0,nfl,7,33,KOLAR,rec,over,0.5");
   prop_grade_box(over, nfl, KICK, MIDNIGHT);
   RCHECK(over.result == (uint8_t) PropResult::LOST, "an over on no catches loses");
+  Prop plus = prop("0,nfl,7,33,KOLAR,rec,plus,1");
+  prop_grade_box(plus, nfl, KICK, MIDNIGHT);
+  RCHECK(plus.result == (uint8_t) PropResult::LOST && plus.final_half == 0, "1+ on no catches loses");
   Prop under = prop("0,nfl,7,33,KOLAR,rec,under,1.5");
   prop_grade_box(under, nfl, KICK, MIDNIGHT);
   RCHECK(under.result == (uint8_t) PropResult::WON, "an under wins");
@@ -407,6 +476,15 @@ void test_grade_box() {
   Prop dnp = prop("0,nba,5176517,5,DNP,pts,under,10.5");
   prop_grade_box(dnp, nba, KICK, MIDNIGHT);
   RCHECK(dnp.result == (uint8_t) PropResult::VOID, "didNotPlay voids it");
+  Prop dnp_plus = prop("0,nba,5176517,5,DNP,threes,plus,1");
+  prop_grade_box(dnp_plus, nba, KICK, MIDNIGHT);
+  RCHECK(dnp_plus.result == (uint8_t) PropResult::VOID, "an N+ on a player who didn't play");
+  Prop reid = prop("0,nba,4396971,16,REID,pts,plus,25");
+  RCHECK(prop_grade_box(reid, nba, KICK, MIDNIGHT) && reid.result == (uint8_t) PropResult::WON && reid.final_half == 50,
+         "25 points on 25+");
+  Prop reid26 = prop("0,nba,4396971,16,REID,pts,plus,26");
+  prop_grade_box(reid26, nba, KICK, MIDNIGHT);
+  RCHECK(reid26.result == (uint8_t) PropResult::LOST, "but not 26+");
   Prop absent = prop("0,nba,9,5,ABSENT,pts,under,10.5");
   prop_grade_box(absent, nba, KICK, MIDNIGHT);
   RCHECK(absent.result == (uint8_t) PropResult::VOID, "a basketball player not listed");
@@ -458,7 +536,15 @@ void test_store() {
   b.props[5].side = (uint8_t) PropSide::YES;
   b.props[6].name[0] = 'a';
   b.props[7].league = (uint8_t) League::MILB;
+  RCHECK(prop_put(b.props, 9, prop("0,nba,4432174,17,THOMAS,threes,plus,3")) == 9, "an N+ prop");
+  b.props[9] = b.props[8];
+  b.props[9].line = 5;  // 2.5+ isn't a pick
+  b.props[10] = b.props[8];
+  b.props[10].side = 5;  // a side from newer firmware
   props_loaded(b);
+  RCHECK(!prop_empty(b.props[8]) && b.props[8].side == (uint8_t) PropSide::PLUS && b.props[8].line == 6,
+         "an N+ prop reads back");
+  RCHECK(prop_empty(b.props[9]) && prop_empty(b.props[10]), "a half N or an unknown side is emptied");
   RCHECK(!prop_empty(b.props[0]) && prop_empty(b.props[4]) && prop_empty(b.props[5]) && prop_empty(b.props[6]) &&
              prop_empty(b.props[7]),
          "bad slots read back are emptied");

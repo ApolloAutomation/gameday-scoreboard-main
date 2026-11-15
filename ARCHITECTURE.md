@@ -560,7 +560,8 @@ from while the board was away unsplashed, as it does the team's.
 **Player props.** The owner types props in on the device page (`prop=`,
 `propdel=`, slot 0 the first empty), picking the player from a roster the
 browser reads, or from the favorite players: over or under a half-point
-line on one stat, or a yes prop. `props.h` holds up to 16 `Prop`
+line on one stat, N+ (`PropSide::PLUS`, at least a whole number N, saved as
+2N half units, a hit at N and never a push), or a yes prop. `props.h` holds up to 16 `Prop`
 records in `PropBlob`, saved as two 8-slot halves (`PropHalf`) the way the
 favorite players are (`gameday_props_v1` for slots 1-8,
 `gameday_props2_v1` for 9-16, `prop_half_bit`), and the stats
