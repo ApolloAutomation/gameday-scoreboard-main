@@ -91,7 +91,6 @@ static const uint32_t PRE_NEAR_INTERVAL = MINUTE;
 // (max-age 1) gains little from going faster.
 static const uint32_t IN_INTERVAL = 10 * 1000;
 static const uint32_t POST_INTERVAL = MINUTE;
-static const uint32_t POST_LINGER = 30 * MINUTE;
 // For the panel's own trouble (a fetch task that never finished or could not
 // start). A failed ESPN read backs off instead (back_off_).
 static const uint32_t RETRY_INTERVAL = MINUTE;
@@ -125,15 +124,10 @@ static const uint32_t WIFI_SAMPLE_INTERVAL = 10 * 1000;
 // next kickoff instead of re-reading every 2 minutes, but never longer than
 // this, so a moved kickoff or the next day's slate is still picked up.
 static const uint32_t NO_GAMES_RESCAN = 3 * 60 * MINUTE;
-// How long the loop waits on a worker task before writing it off. A job chains
-// at most two requests (schedule then game, or the NFL then the NCAA
-// scoreboard). http_request in gameday-common.yaml allows each one 20s, with a
-// 30s watchdog_timeout as the hard ceiling, so two requests can legitimately
-// spend 60s on the network alone. Add the TLS handshakes and the streamed
-// parse of a Saturday NCAA scoreboard and the old 60s deadline was under the
-// worst honest case, not over it. 2 x watchdog_timeout for the network plus
-// 60s for handshakes and parsing leaves only a genuinely wedged worker here.
+// For two requests; loop() adds 60 s per further request.
 static const uint32_t WORKER_DEADLINE = 120 * 1000;
+// A cut worker ends after its current 1 KB read.
+static const uint32_t WORKER_PARK_WAIT = 10 * MINUTE;
 // Days of league scoreboards read to find a team's next game when ESPN's team
 // endpoint still names a finished one (leagues without a season list).
 static const int LOOKAHEAD_DAYS = 3;
@@ -206,8 +200,11 @@ class ContainerReader {
   bool fill_() {
     if (this->pos_ < this->len_)
       return true;
-    if (this->eof_)
+    // A worker given up on stops reading.
+    if (this->eof_ || PsramTasks::cut_self()) {
+      this->eof_ = true;
       return false;
+    }
     int n = this->container_->read(this->buf_, sizeof(this->buf_));
     if (n <= 0) {
       this->eof_ = true;
@@ -1560,7 +1557,7 @@ void GamedayComponent::apply_box_job_() {
     this->box_failed_(j.took_ms);
     if (j.throttled) {
       // ESPN refused: every gap read waits.
-      this->gap_hold_until_ = (now + std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE)) | 1;
+      this->gap_hold_.start(now, std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE));
       this->watch_refused_(now);
     }
     return;
@@ -1683,6 +1680,7 @@ void GamedayComponent::loop() {
       this->boot_clock_noted_ = true;
       ::espn::boot_log_clock(boot_log, (int64_t) this->time_->now().timestamp - esp_timer_get_time() / 1000000);
     }
+    this->gap_hold_.on(millis());  // ends a passed hold while reads pause
     // A graded bet goes at local midnight (bets.h).
     if (this->bets_tick_())
       this->rebuild_state_(&this->last_fields_);
@@ -1722,9 +1720,7 @@ void GamedayComponent::loop() {
     if (!this->job_done_) {
       // A worker that died without setting job_done_ would block the loop
       // forever and Refresh Now could never clear it. Give up eventually, but
-      // not before a slow-but-honest job could have finished: abandoning a
-      // live worker is what makes the accepted run_job_/job_ write race
-      // reachable, and that must stay out of reach on a merely slow network.
+      // not before a slow-but-honest job could have finished.
       // A Live games scan reads one scoreboard per league, so past two
       // leagues it gets the same allowance per request (60 s) as the rest.
       uint32_t deadline = WORKER_DEADLINE;
@@ -1746,8 +1742,8 @@ void GamedayComponent::loop() {
         this->busy_ = false;
         this->busy_since_ms_ = 0;
         this->worker_seq_++;  // a late finisher must not signal job_done_
-        // Wait a full retry before starting another worker rather than
-        // stacking a second one on top of a task that may still be alive.
+        // Per-read timeouts let a trickle run on: cut it.
+        PsramTasks::cut(this->worker_id_);
         const uint32_t now = millis();
         this->worker_gave_up_ms_ = now == 0 ? 1 : now;
         this->watch_hold_until_ = (now + RETRY_INTERVAL) | 1;
@@ -1801,12 +1797,13 @@ void GamedayComponent::loop() {
     return;
   }
   if (this->worker_gave_up_ms_ != 0) {
-    // An abandoned worker may still run: wait a full retry.
     const uint32_t since = millis() - this->worker_gave_up_ms_;
-    if (since < RETRY_INTERVAL) {
-      this->schedule_next_(RETRY_INTERVAL - since);
+    if (this->worker_held_(millis())) {
+      this->schedule_next_(since < RETRY_INTERVAL ? RETRY_INTERVAL - since : NOT_READY_INTERVAL);
       return;
     }
+    if (PsramTasks::running(this->worker_id_))
+      ESP_LOGE(TAG, "The fetch task given up on never ended; starting another");
     this->worker_gave_up_ms_ = 0;
   }
   if (!network::is_connected() || !this->clock_set_()) {
@@ -3176,6 +3173,9 @@ bool GamedayComponent::live_leagues_changed_(const std::vector<League> &before) 
 
 std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::string &url,
                                                                     const ::espn::AppRequest *app) {
+  // Given up on: no more requests.
+  if (PsramTasks::cut_self())
+    return nullptr;
   std::vector<http_request::Header> headers = {
       {"User-Agent", USER_AGENT},
       {"Accept", "application/json"},
@@ -3192,10 +3192,9 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
     }
   }
   // Each host's answers and refusals are tracked apart.
-  ::espn::Source src = ::espn::url_source(url, this->app_hosts_, this->app_host_n_);
   // A display's read is its own, shared host or not.
-  if (app != nullptr)
-    src = ::espn::display_source((::espn::Display) this->job_.app);
+  const ::espn::Source src =
+      app != nullptr ? ::espn::display_source((::espn::Display) this->job_.app) : ::espn::url_source(url);
   const bool espn = src == ::espn::Source::ESPN;
   Job::HostJob &side = this->job_.host[(size_t) src];
   (espn ? this->job_.read_espn : side.read) = true;
@@ -3247,14 +3246,13 @@ static esp_err_t probe_event(esp_http_client_event_t *evt) {
   return ESP_OK;
 }
 
-// Probe task. Its own esp_http_client rather than http_request, which follows
+// Its own esp_http_client rather than http_request, which follows
 // redirects: a portal's redirect is the answer, and following it to an HTTPS
 // sign-in page with its own certificate would only fail.
-void GamedayComponent::probe_task_(void *arg) {
-  auto *self = static_cast<GamedayComponent *>(arg);
+static ::espn::Probe run_probe(const char *url) {
   ProbeHeaders h;
   esp_http_client_config_t cfg = {};
-  cfg.url = self->probe_url_.load();
+  cfg.url = url;
   cfg.timeout_ms = 10000;
   cfg.disable_auto_redirect = true;
   cfg.event_handler = &probe_event;
@@ -3279,7 +3277,13 @@ void GamedayComponent::probe_task_(void *arg) {
   const bool redirect = status >= 300 && status < 400 && !h.location.empty();
   ESP_LOGI(TAG, "Wi-Fi check: %s (HTTP %d%s%s)", ::espn::probe_name(r), status, redirect ? ", to " : "",
            redirect ? ::espn::detail::url_host(h.location).c_str() : "");
-  self->probe_result_ = (uint8_t) r;
+  return r;
+}
+
+// park() never returns: free the strings first.
+void GamedayComponent::probe_task_(void *arg) {
+  auto *self = static_cast<GamedayComponent *>(arg);
+  self->probe_result_ = (uint8_t) run_probe(self->probe_url_.load());
   self->probe_done_ = true;
   PsramTasks::park();
 }
@@ -3997,7 +4001,7 @@ void GamedayComponent::start_worker_() {
   this->busy_since_ms_ = millis() == 0 ? 1 : millis();
   // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom.
   // Stack in PSRAM; loop() frees it once parked.
-  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this)) {
+  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this, &this->worker_id_)) {
     ESP_LOGW(TAG, "Could not start the fetch task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->busy_ = false;
@@ -4005,13 +4009,20 @@ void GamedayComponent::start_worker_() {
   }
 }
 
+// A worker given up on owns job_ until it parks.
+bool GamedayComponent::worker_held_(uint32_t now) const {
+  if (this->worker_gave_up_ms_ == 0)
+    return false;
+  const uint32_t since = now - this->worker_gave_up_ms_;
+  return since < RETRY_INTERVAL || (since < WORKER_PARK_WAIT && PsramTasks::running(this->worker_id_));
+}
+
 void GamedayComponent::worker_(void *arg) {
   auto *self = static_cast<GamedayComponent *>(arg);
   uint32_t mine = self->worker_seq_;
   const uint32_t start = millis();
   self->run_job_();
-  // A worker the loop gave up on must not hand back a result: the Job it
-  // was writing into belongs to a later cycle by now.
+  // Given up on: the loop no longer reads this Job.
   if (self->worker_seq_ == mine) {
     self->job_.took_ms = millis() - start;
     self->job_done_ = true;
@@ -5324,7 +5335,7 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
   if (v == AreaView::APP) {
     ::espn::Display d;
     if (::espn::area_app(this->a2_show_(), d))
-      this->app_fields_(d, this->split_area().w, this->split_area().h, f);
+      this->app_fields_(d, this->split_area().w, this->split_area().h, f, LogoCache::AREA2);
     return;
   }
   if (v == AreaView::CLOCK || v == AreaView::DATE) {
@@ -5600,7 +5611,7 @@ bool GamedayComponent::gap_ok_(uint32_t now) const {
   if (!network::is_connected() || !this->clock_set_() || !this->selects_published_ || this->busy_ ||
       this->demo_playing_())
     return false;
-  if (this->worker_gave_up_ms_ != 0 && now - this->worker_gave_up_ms_ < RETRY_INTERVAL)
+  if (this->worker_held_(now))
     return false;
   if (this->logos_.busy() && this->panels_ != nullptr && this->panels_->cols() * this->panels_->rows() > 2 &&
       heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) < 24 * 1024)
@@ -5609,8 +5620,9 @@ bool GamedayComponent::gap_ok_(uint32_t now) const {
 }
 
 // Minor league second teams use their own host's wait.
-bool GamedayComponent::espn_gap_ok_(uint32_t now) const {
-  return !this->backing_off_() && !(this->gap_hold_until_ != 0 && (int32_t) (now - this->gap_hold_until_) < 0);
+bool GamedayComponent::espn_gap_ok_(uint32_t now) {
+  const bool held = this->gap_hold_.on(now);
+  return !held && !this->backing_off_();
 }
 
 // A due second-area read that doesn't fit blocks others.
@@ -5750,7 +5762,7 @@ void GamedayComponent::a2_failed_(const Job &j) {
     const uint32_t ms = this->back_off_();
     bool hold_board;
     if (host == ::espn::Source::ESPN) {
-      this->gap_hold_until_ = (now + std::max<uint32_t>(retry, 5 * MINUTE)) | 1;
+      this->gap_hold_.start(now, std::max<uint32_t>(retry, 5 * MINUTE));
       hold_board = ::espn::watch_refusal_holds_board(this->favorites_mode_(), this->live_mode_(), this->mode_league_());
     } else {
       hold_board = !this->favorites_mode_() && !this->live_mode_() &&
@@ -5954,7 +5966,6 @@ void GamedayComponent::apps_setup_() {
     env.version.erase(0, 1);
   this->logos_.set_photo_agent(::flights::photo_agent(env.version));
   ::espn::register_apps(slots);
-  this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];
     if (a == nullptr)
@@ -6035,7 +6046,7 @@ void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
     this->emit_a2_({});
 }
 
-void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f) {
+void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f, LogoCache::Surface pin) {
   ::espn::App *a = ::espn::app_slots().get(d);
   ::espn::AppFrame fr;
   const int64_t now = this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0;
@@ -6081,6 +6092,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.bar = fr.bar;
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons + 2];
+  static_assert(::espn::kAppIcons + 2 <= ::espn::IconPins::kMax, "every shown picture gets a pin");
   char url[160];
   f.icon_n = 0;
   for (const ::espn::AppIcon &ic : fr.icons) {
@@ -6151,7 +6163,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
         f.texts[ph.alt].text.clear();
     }
   }
-  this->logos_.pin_icons(shown, pins);
+  this->logos_.pin_icons(pin, shown, pins);
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {
@@ -6167,7 +6179,7 @@ void GamedayComponent::draw_main_app_(bool quiet) {
     af.clock = true;  // also during a visit, which skips it
     af.board = af.board_card = false;
   } else {
-    this->app_fields_(d, this->board_px_(), this->board_h_(), af);
+    this->app_fields_(d, this->board_px_(), this->board_h_(), af, LogoCache::MAIN);
     this->app_drawn_ms_[(int) d] = millis() | 1;
   }
   // Home Assistant keeps following Game Day.
@@ -6189,11 +6201,8 @@ int GamedayComponent::start_app_job_(uint32_t now, uint32_t due) {
     if (a == nullptr)
       continue;
     const bool on = this->app_on_screen_(d);
-    const uint32_t every = on                    ? a->poll_ms(tnow)
-                           : this->app_night_(d) ? a->night_poll_ms(tnow)
-                                                 : a->idle_poll_ms(tnow);
-    if ((!on && every == 0) || this->host_wait_[(size_t) ::espn::display_source(d)].waiting(now) ||
-        !::espn::app_due(now, this->app_last_ms_[i], every))
+    if (!::espn::app_read_due(*a, on, !on && this->app_night_(d), this->host_wait_[(size_t) ::espn::display_source(d)],
+                              this->app_last_ms_[i], now, tnow))
       continue;
     if (!::espn::watch_read_fits(now, due, this->app_times_.expect(d))) {
       this->app_times_.skip(d);
@@ -6244,17 +6253,11 @@ void GamedayComponent::app_failed_(::espn::Display d, uint32_t took_ms) {
   const ::espn::Source src = ::espn::display_source(d);
   const Job::HostJob &h = this->job_.host[(size_t) src];
   ::espn::App *a = ::espn::app_slots().get(d);
+  const uint32_t ms = ::espn::app_read_failed(a, this->host_wait_[(size_t) src], h.throttled, h.retry_after_ms,
+                                              random_uint32(), millis());
   if (a != nullptr && a->own_backoff()) {
     ESP_LOGW(TAG, "%s: read failed%s", ::espn::display_name(d), h.throttled ? ", refused" : "");
     return;
-  }
-  const bool other = a != nullptr && a->failed(h.throttled);
-  ::espn::HostWait &w = this->host_wait_[(size_t) src];
-  uint32_t ms = w.fail(h.throttled, h.retry_after_ms, random_uint32(), millis());
-  if (other) {
-    // Its backup host, without the wait
-    w.end_wait();
-    ms = 0;
   }
   ESP_LOGW(TAG, "%s: read failed%s, next try in %us", ::espn::display_name(d), h.throttled ? ", refused" : "",
            (unsigned) (ms / 1000));

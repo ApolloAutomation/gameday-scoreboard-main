@@ -660,6 +660,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: make -C tests
+      - name: Unit checks under ASan and UBSan
+        run: make -C tests sanitize
       - name: Replay tool builds
         run: make -C tests replay
       - name: Memory each ESPN read takes

@@ -255,7 +255,7 @@ espn::AppSet prefs_set(Prefs &p, const std::string &key, const std::string &valu
 void prefs_state(const Prefs &p, const Units &u, JsonObject out) {
   out["home"] = coord_text(p.lat_e4, p.lon_e4);
   out["place"] = (const char *) p.place;
-  out["radius"] = p.radius;
+  out["radius"] = (uint16_t) p.radius;  // a copy: Prefs is packed
   out["radius_unit"] = dist_unit_key((DistUnit) p.radius_unit);
   out["receiver"] = (const char *) p.receiver;
   out["units"] = u.dist == DistUnit::MILES ? "imperial" : "metric";

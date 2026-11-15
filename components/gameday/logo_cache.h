@@ -82,8 +82,9 @@ class LogoCache {
   // dropped, so nothing LVGL may still point at is freed.
   void pin(const std::string &team, const std::string &opponent) { this->pin_at_(0, team, opponent); }
   void pin_a2(const std::string &team, const std::string &opponent) { this->pin_at_(4, team, opponent); }
-  // On-screen row logos by logo_key; keeps the last set.
-  void pin_icons(const uint32_t *keys, size_t n);
+  // On-screen pictures by logo_key per surface, last set kept.
+  enum Surface : uint8_t { MAIN = 0, AREA2 = 1 };
+  void pin_icons(Surface s, const uint32_t *keys, size_t n);
   bool busy() const { return this->task_running_; }
   // Retries on-screen failed logos; true when one became ready.
   // failed: one failed or proved unreadable instead.
@@ -157,9 +158,7 @@ class LogoCache {
   std::vector<Url, PsramAllocator<Url>> pending_;  // prefetches for the main loop
   uint32_t seq_{0};
   std::string pinned_[8];  // board pair, previous pair, then second area's two
-  static constexpr size_t ICON_PINS = 10;  // a display's eight logos, a photo and its stand-in
-  uint32_t icon_pins_[2][ICON_PINS]{};  // this set, then the last
-  uint8_t icon_pin_n_[2]{};
+  ::espn::IconPins icon_pins_[2];  // indexed by Surface
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
   std::atomic<bool> loaded_{false};

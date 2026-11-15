@@ -212,26 +212,18 @@ bool LogoCache::pinned_url_(std::string_view url) const {
     if (!p.empty() && p == url)
       return true;
   }
-  if (this->icon_pin_n_[0] == 0 && this->icon_pin_n_[1] == 0)
+  if (this->icon_pins_[0].empty() && this->icon_pins_[1].empty())
     return false;
   const uint32_t key = url_key(url);
-  for (int s = 0; s < 2; s++)
-    for (uint8_t i = 0; i < this->icon_pin_n_[s]; i++)
-      if (this->icon_pins_[s][i] == key)
-        return true;
-  return false;
+  return this->icon_pins_[0].has(key) || this->icon_pins_[1].has(key);
 }
 
-void LogoCache::pin_icons(const uint32_t *keys, size_t n) {
-  n = std::min(n, ICON_PINS);
-  if (this->lock_ == nullptr ||
-      (n == this->icon_pin_n_[0] && std::equal(keys, keys + n, this->icon_pins_[0])))
+void LogoCache::pin_icons(Surface s, const uint32_t *keys, size_t n) {
+  // Only the main loop writes them: no lock to compare
+  if (this->lock_ == nullptr || s > AREA2 || this->icon_pins_[s].same(keys, n))
     return;
   Locked guard(this->lock_);
-  std::copy(this->icon_pins_[0], this->icon_pins_[0] + ICON_PINS, this->icon_pins_[1]);
-  this->icon_pin_n_[1] = this->icon_pin_n_[0];
-  std::copy(keys, keys + n, this->icon_pins_[0]);
-  this->icon_pin_n_[0] = (uint8_t) n;
+  this->icon_pins_[s].set(keys, n);
 }
 
 // Main loop. A failed logo still on screen is asked for again on its own, so

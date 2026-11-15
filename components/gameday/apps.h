@@ -20,6 +20,7 @@
 #include "idle.h"
 #include "leagues.h"
 #include "panel_text.h"
+#include "poll_timing.h"
 #include "recap.h"
 #include "source_hockeytech.h"
 #include "source_mlbstats.h"
@@ -430,29 +431,12 @@ inline std::string url_host(const std::string &url) {
   return host;
 }
 
-// The host itself, or one under it.
-inline bool host_is(const std::string &host, const char *name) {
-  const size_t n = strlen(name);
-  if (n == 0 || host.size() < n || host.compare(host.size() - n, n, name) != 0)
-    return false;
-  return host.size() == n || host[host.size() - n - 1] == '.';
-}
-
-struct AppHost {
-  const char *host{nullptr};
-  Source source{Source::ESPN};
-};
-
-// Which host's accounting a read goes to.
-inline Source url_source(const std::string &url, const AppHost *hosts, size_t n) {
+// A Game Day read's host accounting; displays use display_source.
+inline Source url_source(const std::string &url) {
   if (is_mlb_url(url))
     return Source::MLB_STATS;
   if (is_ht_url(url))
     return Source::HOCKEYTECH;
-  const std::string host = url_host(url);
-  for (size_t i = 0; i < n; i++)
-    if (hosts[i].host != nullptr && host_is(host, hosts[i].host))
-      return hosts[i].source;
   return Source::ESPN;
 }
 
@@ -616,6 +600,26 @@ inline AppSlots &app_slots() {
   return s;
 }
 
+// start_app_job_'s test: now is millis(), epoch the display's clock.
+inline bool app_read_due(const App &a, bool on, bool night, const HostWait &w, uint32_t last_ms, uint32_t now,
+                         int64_t epoch) {
+  const uint32_t every = on ? a.poll_ms(epoch) : night ? a.night_poll_ms(epoch) : a.idle_poll_ms(epoch);
+  return (on || every != 0) && !w.waiting(now) && app_due(now, last_ms, every);
+}
+
+// A failed read: the host's wait, 0 for none.
+inline uint32_t app_read_failed(App *a, HostWait &w, bool refused, uint32_t retry_after_ms, uint32_t rnd,
+                                uint32_t now) {
+  if (a != nullptr && a->own_backoff())
+    return 0;
+  const bool other = a != nullptr && a->failed(refused);
+  const uint32_t ms = w.fail(refused, retry_after_ms, rnd, now);
+  if (!other)
+    return ms;
+  w.end_wait();  // its backup host, without the wait
+  return 0;
+}
+
 // False for Game Day's slot or one taken.
 inline bool app_register(AppSlots &slots, App *a) {
   if (a == nullptr || a->id() == Display::GAMEDAY || (int) a->id() >= kDisplayCount ||
@@ -623,18 +627,6 @@ inline bool app_register(AppSlots &slots, App *a) {
     return false;
   slots.app[(int) a->id()] = a;
   return true;
-}
-
-// Every display's hosts, for url_source; returns the count.
-inline size_t app_hosts(const AppSlots &slots, AppHost *out, size_t max) {
-  size_t n = 0;
-  for (int d = 1; d < kDisplayCount; d++) {
-    const App *a = slots.app[d];
-    const char *const *h = a != nullptr ? a->hosts() : nullptr;
-    for (; h != nullptr && *h != nullptr && n < max; h++)
-      out[n++] = AppHost{*h, display_source((Display) d)};
-  }
-  return n;
 }
 
 // The display claiming a set key; GAMEDAY for none.

@@ -3652,6 +3652,7 @@ int run_picture_tests(int &checks);
 int run_plane_photo_tests(int &checks);  // test_plane_photo.cpp
 int run_field_tests(int &checks);        // test_field.cpp
 int run_weather_tests(int &checks);      // test_weather.cpp
+int run_app_poll_tests(int &checks);     // test_app_polls.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -3708,6 +3709,43 @@ static void test_photo_evict() {
   CHECK_EQ(espn::pick_photo_evict_in(std::vector<S>{{0xFFFFFF00u, false, false, true}, {0x100u, false, false, true}},
                                      2, 8, 0x200u),
            0);
+}
+
+// Each surface keeps its own two picture sets.
+static void test_icon_pins() {
+  espn::IconPins main, area;
+  const uint32_t photo[] = {7, 8};
+  CHECK(main.empty() && !main.has(7));
+  CHECK(area.set(photo, 2) && !area.set(photo, 2));
+  // The main board's radar turns a frame each draw.
+  for (uint32_t frame = 100; frame < 120; frame++) {
+    const uint32_t keys[] = {frame};
+    CHECK(main.set(keys, 1));
+  }
+  CHECK(area.has(7) && area.has(8));
+  CHECK(main.has(119) && main.has(118) && !main.has(117));
+  // One shared history would have dropped the photo.
+  espn::IconPins shared;
+  shared.set(photo, 2);
+  const uint32_t a[] = {100}, b[] = {101};
+  shared.set(a, 1);
+  shared.set(b, 1);
+  CHECK(!shared.has(7));
+  // The last set stays pinned while the next goes up.
+  const uint32_t next[] = {9};
+  area.set(next, 1);
+  CHECK(area.has(9) && area.has(7) && area.has(8));
+  // More than fit: the first ten.
+  uint32_t many[12];
+  for (uint32_t i = 0; i < 12; i++)
+    many[i] = 200 + i;
+  area.set(many, 12);
+  CHECK(area.n[0] == espn::IconPins::kMax && area.has(209) && !area.has(210));
+  CHECK(area.same(many, 12) && area.same(many, 10) && !area.same(many, 9));
+  // An empty set still keeps the last one.
+  const uint32_t none[1] = {0};
+  area.set(none, 0);
+  CHECK(!area.empty() && area.has(200));
 }
 
 // Ties in the logo cache go to the first slot, and the plain-logo fallback
@@ -5524,6 +5562,28 @@ static void test_backoff_windows() {
   CHECK_EQ(parse_retry_after_ms("-1"), 0u);
   CHECK_EQ(parse_retry_after_ms("1.5"), 0u);
   CHECK_EQ(parse_retry_after_ms("12a"), 0u);
+}
+
+static void test_hold() {
+  Hold h;
+  CHECK(!h.on(0) && !h.on(0x80000000u));
+  // Across millis()'s wrap, and 25 days on it stays over.
+  const uint32_t t0 = 0xFFFFF000u;
+  h.start(t0, 5 * 60 * 1000);
+  CHECK(h.on(t0) && h.on(t0 + 1000) && h.on(t0 + 5 * 60 * 1000 - 1));
+  CHECK(!h.on(t0 + 5 * 60 * 1000));
+  CHECK(!h.on(t0 + 0x80000000u) && !h.on(t0 + 0x80001000u) && !h.on(t0 + 0xFFFFF000u));
+  // Unseen 30 days, then seen once: over for good.
+  h.start(1000, 5 * 60 * 1000);
+  CHECK(!h.on(1000 + 30u * 86400u * 1000u));
+  CHECK(!h.on(1000 + 1000) && !h.on(1000 + 0x80000000u));
+  // A later refusal restarts it, as long as asked.
+  h.start(1000, 60 * 60 * 1000);
+  h.start(2000, 5 * 60 * 1000);
+  CHECK(h.on(2000 + 5 * 60 * 1000 - 1) && !h.on(2000 + 5 * 60 * 1000));
+  // The longest Retry-After the header can carry: 11.6 days.
+  h.start(0xF0000000u, parse_retry_after_ms("999999"));
+  CHECK(h.on(0xF0000000u + 999999000u - 1) && !h.on(0xF0000000u + 999999000u));
 }
 
 static void test_cup_backoff() {
@@ -9262,6 +9322,7 @@ int main() {
   failures += run_football_golden();
   test_logo_lru();
   test_photo_evict();
+  test_icon_pins();
   test_logo_lru_edges();
   test_logo_backoff();
   test_logo_order();
@@ -9286,6 +9347,7 @@ int main() {
   test_backoff();
   test_miss_count();
   test_backoff_windows();
+  test_hold();
   test_cup_backoff();
   test_auto_update();
   test_auto_update_edges();
@@ -9340,6 +9402,7 @@ int main() {
   failures += run_plane_photo_tests(checks);
   failures += run_field_tests(checks);
   failures += run_weather_tests(checks);
+  failures += run_app_poll_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
