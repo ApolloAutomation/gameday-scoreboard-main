@@ -240,6 +240,10 @@ jobs:
             echo "$found" | while read -r f; do echo "::error file=$f::Private notes don't belong in this public repo. Remove the file."; done
             exit 1
           fi
+      # A raised max_growth goes back before a release.
+      - name: The size budget's max_growth is at its defaults
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: python3 scripts/size_budget.py growth-defaults
       - name: Release tags are on main
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -331,6 +335,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # The size-growth-ok label
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -388,10 +394,21 @@ jobs:
           fi
           echo "label=$best" >> "$GITHUB_OUTPUT"
           echo "Base figures from $best"
+      # size-growth-ok lifts max_growth for one PR, never the ceilings.
       - name: Check the budget
         env:
           BASE_LABEL: ${{ steps.base.outputs.label }}
-        run: python3 scripts/size_budget.py check sizes --base base --base-label "$BASE_LABEL"
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          growth=""
+          if [ "$BASE_REF" = dev ]; then
+            labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.labels[].name')
+            if grep -qxF size-growth-ok <<< "$labels"; then growth=--growth-ok; fi
+          fi
+          python3 scripts/size_budget.py check sizes --base base --base-label "$BASE_LABEL" $growth
 
   build-demo:
     # The demo build (firmware/pages/demo.yaml) for showing panels in bars and

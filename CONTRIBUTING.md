@@ -160,6 +160,12 @@ If you edit `firmware/web/app.js`, `app.css` or `demo.js`, run
 `python3 scripts/build_web.py` and commit the regenerated `bundle.js` and
 `bundle-demo.js`. CI fails the PR if either is stale.
 
+A pull request that has to grow a firmware or parser figure by more than
+`max_growth` in `firmware/budget.json` gets the maintainer's
+`size-growth-ok` label instead of raising `max_growth`; the budget
+ceilings still apply. A PR into `main` fails while `max_growth` differs
+from `GROWTH_DEFAULTS` in `scripts/size_budget.py`.
+
 If you change what the panel does, run it on a panel for a while
 (during a game if the change touches live scoring) and say in the PR
 what you tested on: controller, layout, how long, what it showed.
