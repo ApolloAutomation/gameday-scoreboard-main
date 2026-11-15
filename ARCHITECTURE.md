@@ -867,13 +867,18 @@ state document.
 ## Scripts
 
 Generators (`build_web.py`, `build_teams.py`, `build_team_colors.py`,
-`build_timezones.py`), release and site helpers (`release_notes.py`,
+`build_timezones.py`, `build_circuits.py` for `circuits.h`,
+`build_airlines.py` for `flight_airlines.h`, and `build_sprites.py`, which
+packs the play animations' art in `firmware/art/sprites/*.txt` into
+`sprites.h`), release and site helpers (`release_notes.py`,
 `site_seo.py`, `check_site_firmware.sh`, `add_beta_channel.sh`,
 `beta_version.sh`, `set_manifest_name.sh`, `publish_mirror.sh`), the size
 budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 `burnin_monitor.py`, `improv_scan.py`, `crash_report.py`,
-`bar_report_qr.sh`). The Python tools and `beta_version.sh` have
-`--selftest`.
+`bar_report_qr.sh`). Every Python tool but the generators has
+`--selftest`, and so do `build_airlines.py`, `build_sprites.py` and
+`beta_version.sh`; CI's `build_sprites.py --check` fails a stale
+`sprites.h`.
 
 ## Tests (`tests/`)
 
