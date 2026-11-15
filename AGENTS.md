@@ -75,10 +75,16 @@ the same ground for people; this file is the short version.
   `make -C tests replay` and runs the `--selftest` of
   `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
   `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`,
-  `build_airlines.py`, `build_sprites.py`,
-  `scripts/beta_version.sh` and `tests/web/mock_device.py`. The last checks
-  the device page's mock against `tests/fixtures/set_cases.json`, the same
-  table the host tests run through `components/gameday/set_request.h`.
+  `build_airlines.py`, `build_sprites.py`, `check_docs_links.py`,
+  `scripts/beta_version.sh`, `set_manifest_name.sh`,
+  `keep_previous_ota.sh`, `check_live_feed.sh` and
+  `tests/web/mock_device.py`. The last checks the device page's mock
+  against `tests/fixtures/set_cases.json`, the same table the host tests
+  run through `components/gameday/set_request.h`.
+- CI also runs `make -C tests sanitize`: the unit checks built with the
+  address and undefined behavior sanitizers. Apple clang's ASan won't
+  start, so on a Mac `make -C tests sanitize SANITIZE=undefined` runs
+  them under UBSan alone.
 - A panel that restarted from a crash, a watchdog or a brownout keeps the
   report in flash (`components/crash_report`, `GET /gameday/crash`).
   `python3 scripts/crash_report.py <panel>` prints it and decodes the

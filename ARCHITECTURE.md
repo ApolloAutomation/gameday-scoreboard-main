@@ -882,8 +882,9 @@ state document.
   - Size budget against `firmware/budget.json` (flash, static internal RAM,
     and the parser's memory per ESPN read), with a growth limit per PR into
     `dev` that the `size-growth-ok` label lifts.
-  - Parser tests: `make -C tests`, `replay`, `heap`, the script selftests,
-    the site check and the device page mock check. The fuzzers run beside
+  - Parser tests: `make -C tests`, `sanitize` (the unit checks under ASan
+    and UBSan), `replay`, `heap`, the script selftests, the site check and
+    the device page mock check. The fuzzers run beside
     it, and the play animation review GIFs on PRs.
   - Device page tests: bundle freshness and Playwright.
   - On `beta`: publish the beta channels to the rolling `beta-firmware`
