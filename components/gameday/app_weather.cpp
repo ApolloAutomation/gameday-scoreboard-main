@@ -364,14 +364,13 @@ bool WeatherApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out.body.clear();
   out.headers.clear();
-  const std::string agent = ::flights::photo_agent(espn::app_env().version);
+  espn::app_header(out, "User-Agent", ::flights::photo_agent(espn::app_env().version));
   Host host = HOST_OPEN_METEO;
   switch (r) {
     case Read::FORECAST: {
       const espn::F1Host &om = this->host_[HOST_OPEN_METEO];
       if (om.backup() && now < om.out_until) {
         out.url = met_url(this->req_lat_, this->req_lon_);
-        espn::app_header(out, "User-Agent", agent);
         host = HOST_MET;
       } else {
         out.url = forecast_url(this->req_lat_, this->req_lon_);
@@ -380,7 +379,6 @@ bool WeatherApp::request(int64_t now, espn::AppRequest &out) {
     }
     case Read::ALERTS:
       out.url = alerts_url(this->req_lat_, this->req_lon_);
-      espn::app_header(out, "User-Agent", agent);
       espn::app_header(out, "Accept", "application/geo+json");
       host = HOST_NWS;
       break;

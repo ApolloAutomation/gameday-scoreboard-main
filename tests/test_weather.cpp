@@ -62,11 +62,22 @@ template<typename From, typename Fill> bool parse_file(const char *file, Fill fi
   return parse_with(body, fill, from);
 }
 
+// Reads sent without the project's User-Agent
+int unnamed = 0;
+
+void count_agent(const espn::AppRequest &req) {
+  bool named = false;
+  for (const espn::AppHeader &h : req.headers)
+    named = named || (h.name == "User-Agent" && h.value.find("GameDayScoreboard/") == 0);
+  unnamed += named ? 0 : 1;
+}
+
 // One read as run_app_job_ makes it, from a fixture.
 bool step(WeatherApp &a, int64_t now, std::string &url, const char *file, int status = 200, bool refused = false) {
   espn::AppRequest req;
   if (!a.request(now, req))
     return false;
+  count_agent(req);
   url = req.url;
   bool ok = false;
   if (file != nullptr && status == 200) {
@@ -103,6 +114,7 @@ int read_all(WeatherApp &a, int64_t now) {
     espn::AppRequest req;
     if (!a.request(now, req))
       break;
+    count_agent(req);
     const char *file = fixture_for(req.url);
     JsonDocument filter, doc;
     const bool ok = a.filter(filter) &&
@@ -416,6 +428,7 @@ void test_app() {
   WCHECK(read_all(*a, kNow) == 2, "radar and air");
   read_all(*a, kNow + 120);
   WCHECK(a->alerts().n == 1 && a->air().aqi == 41 && a->radar().n == kFrames && a->forecast().valid, "all read");
+  WCHECK(unnamed == 0, "every read names the panel: %d without", unnamed);
   r = a->next_read(kNow + 121, true, at);
   WCHECK(r == WeatherApp::Read::ALERTS && at == kNow + 120 + WeatherApp::kAlertsS, "alerts every 5 minutes: %lld",
          (long long) (at - kNow));
