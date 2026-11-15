@@ -1449,7 +1449,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void warn_check_(bool main_drawn);
   uint32_t warn_key_{0};
   // A frame into fields the board or area draws.
-  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f, LogoCache::Surface pins);
   void draw_main_app_(bool quiet = false);
   // 1 started, -1 doesn't fit before due, 0 none.
   int start_app_job_(uint32_t now, uint32_t due);

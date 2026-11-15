@@ -5330,7 +5330,7 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
   if (v == AreaView::APP) {
     ::espn::Display d;
     if (::espn::area_app(this->a2_show_(), d))
-      this->app_fields_(d, this->split_area().w, this->split_area().h, f);
+      this->app_fields_(d, this->split_area().w, this->split_area().h, f, LogoCache::AREA2);
     return;
   }
   if (v == AreaView::CLOCK || v == AreaView::DATE) {
@@ -6042,7 +6042,7 @@ void GamedayComponent::app_redraw_(::espn::Display d, bool timed) {
     this->emit_a2_({});
 }
 
-void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f) {
+void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields &f, LogoCache::Surface pin) {
   ::espn::App *a = ::espn::app_slots().get(d);
   ::espn::AppFrame fr;
   const int64_t now = this->clock_set_() ? (int64_t) this->time_->timestamp_now() : 0;
@@ -6088,6 +6088,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.bar = fr.bar;
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons + 2];
+  static_assert(::espn::kAppIcons + 2 <= ::espn::IconPins::kMax, "every shown picture gets a pin");
   char url[160];
   f.icon_n = 0;
   for (const ::espn::AppIcon &ic : fr.icons) {
@@ -6158,7 +6159,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
         f.texts[ph.alt].text.clear();
     }
   }
-  this->logos_.pin_icons(shown, pins);
+  this->logos_.pin_icons(pin, shown, pins);
 }
 
 void GamedayComponent::draw_main_app_(bool quiet) {
@@ -6174,7 +6175,7 @@ void GamedayComponent::draw_main_app_(bool quiet) {
     af.clock = true;  // also during a visit, which skips it
     af.board = af.board_card = false;
   } else {
-    this->app_fields_(d, this->board_px_(), this->board_h_(), af);
+    this->app_fields_(d, this->board_px_(), this->board_h_(), af, LogoCache::MAIN);
     this->app_drawn_ms_[(int) d] = millis() | 1;
   }
   // Home Assistant keeps following Game Day.

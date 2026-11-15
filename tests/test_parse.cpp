@@ -3710,6 +3710,43 @@ static void test_photo_evict() {
            0);
 }
 
+// Each surface keeps its own two picture sets.
+static void test_icon_pins() {
+  espn::IconPins main, area;
+  const uint32_t photo[] = {7, 8};
+  CHECK(main.empty() && !main.has(7));
+  CHECK(area.set(photo, 2) && !area.set(photo, 2));
+  // The main board's radar turns a frame each draw.
+  for (uint32_t frame = 100; frame < 120; frame++) {
+    const uint32_t keys[] = {frame};
+    CHECK(main.set(keys, 1));
+  }
+  CHECK(area.has(7) && area.has(8));
+  CHECK(main.has(119) && main.has(118) && !main.has(117));
+  // One shared history would have dropped the photo.
+  espn::IconPins shared;
+  shared.set(photo, 2);
+  const uint32_t a[] = {100}, b[] = {101};
+  shared.set(a, 1);
+  shared.set(b, 1);
+  CHECK(!shared.has(7));
+  // The last set stays pinned while the next goes up.
+  const uint32_t next[] = {9};
+  area.set(next, 1);
+  CHECK(area.has(9) && area.has(7) && area.has(8));
+  // More than fit: the first ten.
+  uint32_t many[12];
+  for (uint32_t i = 0; i < 12; i++)
+    many[i] = 200 + i;
+  area.set(many, 12);
+  CHECK(area.n[0] == espn::IconPins::kMax && area.has(209) && !area.has(210));
+  CHECK(area.same(many, 12) && area.same(many, 10) && !area.same(many, 9));
+  // An empty set still keeps the last one.
+  const uint32_t none[1] = {0};
+  area.set(none, 0);
+  CHECK(!area.empty() && area.has(200));
+}
+
 // Ties in the logo cache go to the first slot, and the plain-logo fallback
 // only rewrites a dark logo's path.
 static void test_logo_lru_edges() {
@@ -9284,6 +9321,7 @@ int main() {
   failures += run_football_golden();
   test_logo_lru();
   test_photo_evict();
+  test_icon_pins();
   test_logo_lru_edges();
   test_logo_backoff();
   test_logo_order();
