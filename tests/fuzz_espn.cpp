@@ -693,21 +693,25 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     for (size_t stat = 0; stat < kPropStatCount; stat++) {
       if (kPropStats[stat].sport != sport)
         continue;
-      Prop pr{};
-      pr.athlete = lines.empty() ? 1 : lines[0].athlete;
-      pr.stat = (uint8_t) stat;
-      pr.side = (uint8_t) (kPropStats[stat].yes ? PropSide::YES : PropSide::OVER);
-      pr.line = kPropStats[stat].yes ? 0 : 49;
-      strncpy(pr.name, "ALLEN", kPropNameMax);
-      for (const BoxLine &l : lines) {
-        const int v = prop_value(pr, l);
-        BetGame g;
-        g.event = 1;
-        g.phase = BetPhase::LIVE;
-        pr.event = 1;
-        sink = sink + prop_ticker(pr, prop_status(pr, &g, v, 500, now), v).size();
-        prop_grade(pr, l.played, v, now, now + 3600);
-        sink = sink + prop_ticker(pr, PropStatus::WON, v).size();
+      for (const PropSide side : {PropSide::OVER, PropSide::PLUS}) {
+        if (kPropStats[stat].yes && side == PropSide::PLUS)
+          continue;
+        Prop pr{};
+        pr.athlete = lines.empty() ? 1 : lines[0].athlete;
+        pr.stat = (uint8_t) stat;
+        pr.side = (uint8_t) (kPropStats[stat].yes ? PropSide::YES : side);
+        pr.line = kPropStats[stat].yes ? 0 : side == PropSide::PLUS ? 50 : 49;
+        strncpy(pr.name, "ALLEN", kPropNameMax);
+        for (const BoxLine &l : lines) {
+          const int v = prop_value(pr, l);
+          BetGame g;
+          g.event = 1;
+          g.phase = BetPhase::LIVE;
+          pr.event = 1;
+          sink = sink + prop_ticker(pr, prop_status(pr, &g, v, 500, now), v).size();
+          prop_grade(pr, l.played, v, now, now + 3600);
+          sink = sink + prop_ticker(pr, PropStatus::WON, v).size();
+        }
       }
     }
   }

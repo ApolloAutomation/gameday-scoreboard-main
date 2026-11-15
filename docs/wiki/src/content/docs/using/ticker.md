@@ -24,6 +24,8 @@ Bets you typed into the device page's **Bets** card go at the end of the ticker 
 
 Player props come after the bets: the prop before the start, like **PROP ALLEN O 250.5 PASS YDS**, then the player's number so far and whether it's **ON TRACK** or **OFF TRACK**, like **ALLEN O 250.5 PASS YDS 187 ON TRACK**, or **HIT** once an over is past its line. A yes prop reads **ALLEN ANY TD NOT YET** until it's **HIT**. After the final the prop says **WON**, **LOST** or **PUSH**, with the final number for an over or under, or **VOID**, until midnight. Props scroll in the same colors as bets, with **NOT YET** in gold. See [Player props](/using/bets/#player-props).
 
+An N+ prop reads **PROP THOMAS 3+ 3PM** before the start, then its number so far with **ON TRACK** or **OFF TRACK**, and **HIT** as soon as the player reaches the number, like **THOMAS 3+ 3PM 3 HIT**. After the final it says **WON** or **LOST** with the final number, or **VOID**, and never **PUSH**.
+
 ## Ranks and standings
 
 **College teams.** In college football and men's college basketball, a ranked team gets its rank in front of its abbreviation, like "#5 OSU". It's the rank ESPN shows next to the team, so it changes when ESPN's does. Unranked teams have none.

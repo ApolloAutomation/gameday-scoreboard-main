@@ -22,7 +22,8 @@ constexpr int kPropNameMax = 10;
 constexpr int kPropMaxLineHalf = kBetMaxTotalHalf;
 constexpr uint8_t kNoAtom = 0xFF;
 
-enum class PropSide : uint8_t { OVER = 1, UNDER = 2, YES = 3 };
+// PLUS: at least N, saved as 2N.
+enum class PropSide : uint8_t { OVER = 1, UNDER = 2, YES = 3, PLUS = 4 };
 // VOID: the player didn't play, or no game.
 enum class PropResult : uint8_t { NONE = 0, WON = 1, LOST = 2, PUSH = 3, VOID = 4 };
 
@@ -179,21 +180,28 @@ inline bool prop_valid(const Prop &p) {
     return false;
   if (s->yes)
     return p.side == (uint8_t) PropSide::YES && p.line == 0;
+  if (p.side == (uint8_t) PropSide::PLUS)
+    return p.line >= 2 && p.line % 2 == 0 && p.line <= kPropMaxLineHalf;
   return (p.side == (uint8_t) PropSide::OVER || p.side == (uint8_t) PropSide::UNDER) && p.line >= 1 &&
          p.line <= kPropMaxLineHalf;
 }
 
 inline const char *prop_side_key(const Prop &p) {
-  return p.side == (uint8_t) PropSide::YES ? "yes" : p.side == (uint8_t) PropSide::UNDER ? "under" : "over";
+  return p.side == (uint8_t) PropSide::YES     ? "yes"
+         : p.side == (uint8_t) PropSide::UNDER ? "under"
+         : p.side == (uint8_t) PropSide::PLUS  ? "plus"
+                                               : "over";
 }
 
-// e.g. "ALLEN O 250.5 PASS YDS", "ALLEN ANY TD".
+// e.g. "ALLEN O 250.5 PASS YDS", "THOMAS 3+ 3PM".
 inline std::string prop_label(const Prop &p) {
   const PropStatInfo *s = prop_stat_info(p.stat);
   const char *label = s != nullptr ? s->label : "";
   std::string out(p.name, strnlen(p.name, sizeof(p.name)));
   if (p.side == (uint8_t) PropSide::YES)
     return out + " " + label;
+  if (p.side == (uint8_t) PropSide::PLUS)
+    return out + " " + bet_points(p.line, false) + "+ " + label;
   return out + (p.side == (uint8_t) PropSide::UNDER ? " U " : " O ") + bet_points(p.line, false) + " " + label;
 }
 
@@ -251,7 +259,7 @@ enum class PropStatus : uint8_t {
   LIVE,       // on, no number yet or too early to tell
   ON_TRACK,
   OFF_TRACK,
-  HIT,        // an over or a yes is already there
+  HIT,        // an over, N+ or yes is already there
   NOT_YET,    // a yes prop still waiting
   WON,
   LOST,
@@ -300,9 +308,10 @@ inline PropStatus prop_status(const Prop &p, const BetGame *g, int value, int pr
     return PropStatus::LIVE;
   if (p.side == (uint8_t) PropSide::YES)
     return value >= 2 ? PropStatus::HIT : PropStatus::NOT_YET;
-  const bool over = p.side == (uint8_t) PropSide::OVER;
-  if (value > p.line)
-    return over ? PropStatus::HIT : PropStatus::OFF_TRACK;
+  const bool under = p.side == (uint8_t) PropSide::UNDER;
+  // N+ hits on N itself.
+  if (value > p.line || (p.side == (uint8_t) PropSide::PLUS && value == p.line))
+    return under ? PropStatus::OFF_TRACK : PropStatus::HIT;
   if (g->phase == BetPhase::FINAL) {
     // Ungraded on the line: a push, not a pace.
     if (value == p.line)
@@ -312,7 +321,7 @@ inline PropStatus prop_status(const Prop &p, const BetGame *g, int value, int pr
   if (progress < kPropPaceFrom)
     return PropStatus::LIVE;
   const int64_t pace = (int64_t) value * 1000 / progress;
-  return (over ? pace >= p.line : pace <= p.line) ? PropStatus::ON_TRACK : PropStatus::OFF_TRACK;
+  return (under ? pace <= p.line : pace >= p.line) ? PropStatus::ON_TRACK : PropStatus::OFF_TRACK;
 }
 
 // e.g. "ALLEN O 250.5 PASS YDS 187 ON TRACK".
@@ -352,7 +361,8 @@ inline uint32_t prop_color(PropStatus s) {
 inline bool prop_grade(Prop &p, bool played, int value, int64_t now, int64_t midnight) {
   PropResult r = PropResult::VOID;
   if (played) {
-    const int m = p.side == (uint8_t) PropSide::YES ? (value >= 2 ? 1 : -1)
+    const int m = p.side == (uint8_t) PropSide::YES     ? (value >= 2 ? 1 : -1)
+                  : p.side == (uint8_t) PropSide::PLUS  ? (value >= p.line ? 1 : -1)
                   : p.side == (uint8_t) PropSide::UNDER ? p.line - value
                                                         : value - p.line;
     r = m > 0 ? PropResult::WON : m < 0 ? PropResult::LOST : PropResult::PUSH;

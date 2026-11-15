@@ -730,6 +730,10 @@ def parse_prop(v):
         side, half = ("yes", 0) if f[6] == "yes" and f[7] == "" else (None, None)
     elif f[6] in ("over", "under"):
         side, half = f[6], bet_line(f[7], False)
+    elif f[6] == "plus":
+        # N+: a whole number, kept as 2N
+        half = bet_line(f[7], False)
+        side, half = ("plus", half) if half is not None and half % 2 == 0 else (None, None)
     else:
         side, half = None, None
     if side is None or half is None:
@@ -740,8 +744,12 @@ def parse_prop(v):
 def prop_doc(slot, lg, athlete, team_id, name, stat, side, half):
     """One "props" entry of rebuild_state_(), for a prop with no game yet."""
     label = PROP_STATS[(SPORT_OF[lg].lower(), stat)][0]
-    text = name + " " + label if side == "yes" else name + (" U " if side == "under" else " O ") + \
-        bet_points(half, False) + " " + label
+    if side == "yes":
+        text = name + " " + label
+    elif side == "plus":
+        text = name + " " + bet_points(half, False) + "+ " + label
+    else:
+        text = name + (" U " if side == "under" else " O ") + bet_points(half, False) + " " + label
     return {"slot": slot, "l": lg, "id": athlete, "team": team_id, "name": name, "stat": stat, "side": side,
             "half": half, "text": text, "st": "waiting"}
 

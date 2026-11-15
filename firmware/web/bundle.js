@@ -305,7 +305,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
         <div id="propRows" hidden>
           <div class="ctl drop"><label for="propPick">Player<small id="propPickHint"></small></label><div class="proppick"><select id="propPick"></select><button type="button" class="btn" id="propFavs" aria-pressed="false">Favorite players</button></div></div>
           <div class="ctl"><label for="propStat">Stat</label><select id="propStat"></select></div>
-          <div class="ctl" id="propSideRow"><label for="propSide">Pick</label><select id="propSide"><option value="over">Over</option><option value="under">Under</option></select></div>
+          <div class="ctl" id="propSideRow"><label for="propSide">Pick</label><select id="propSide"><option value="plus">N+ (at least)</option><option value="over">Over</option><option value="under">Under</option></select></div>
           <p class="hint">While the game is on, the panel reads its box score from ESPN about once a minute, and once more after the final to settle the prop.</p>
         </div>
         <div class="ctl drop" id="betLineRow"><label for="betLine">Line<small id="betLineHint"></small></label><div class="betlinebox">
@@ -2111,8 +2111,10 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     $("#propSideRow").hidden = yes;
     $("#betLineRow").hidden = yes;
     $("#betSign").hidden = true;
-    $("#betLineHint").textContent = "The sportsbook's line for the stat, like 24.5. A whole number can push";
-    $("#betLine").placeholder = "24.5";
+    const plus = $("#propSide").value === "plus";
+    $("#betLineHint").textContent = plus ? "The number in the bet, like 3 for 3+"
+      : "The sportsbook's line for the stat, like 24.5. A whole number can push";
+    $("#betLine").placeholder = plus ? "3" : "24.5";
   };
   const loadPropRoster = async () => {
     const t = teamByKey(betTeam);
@@ -2136,18 +2138,23 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   };
   $("#propPick").onchange = () => { betSay(""); renderPropForm(); };
   $("#propStat").onchange = () => { betSay(""); renderPropForm(); };
-  // A prop's line has no sign; half numbers only
-  const propHalf = (raw) => {
-    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
-    if (!v) return "Type the line, like 24.5.";
-    if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like 24.5.";
+  $("#propSide").onchange = () => { betSay(""); renderPropForm(); };
+  // No sign; N+ takes whole numbers, others halves
+  const propHalf = (raw, plus) => {
+    let v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "");
+    if (plus) v = v.replace(/^(\d[\d.,]*)\+$/, "$1");  // "3+" as the sportsbook writes it
+    v = v.replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+    const eg = plus ? "3" : "24.5";
+    if (!v) return plus ? "Type the number in the bet, like 3 for 3+." : "Type the line, like 24.5.";
+    if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like " + eg + ".";
     const m = /^(\d+)(?:\.(\d+))?$/.exec(v);
-    if (!m) return "That isn't a number. Type it like 24.5.";
+    if (!m) return "That isn't a number. Type it like " + eg + ".";
     const frac = (m[2] || "").replace(/0+$/, "");
+    if (plus && frac) return "N+ takes a whole number, like 3 for 3+. For a line like 2.5, pick Over or Under.";
     if (frac && frac !== "5") return "Lines go in whole or half numbers, like 6 or 6.5.";
     const half = Number(m[1]) * 2 + (frac ? 1 : 0);
-    if (!half) return "A line is more than 0.";
-    if (half > 1999) return "The panel takes lines up to 999.5.";
+    if (!half) return plus ? "N+ starts at 1, like 1 for 1+." : "A line is more than 0.";
+    if (half > 1999) return plus ? "The panel takes up to 999+." : "The panel takes lines up to 999.5.";
     return half;
   };
   const addProp = async () => {
@@ -2161,7 +2168,7 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const st = statsFor(pl.l).find((x) => x[1] === $("#propStat").value);
     if (!st) return betSay("Pick the stat.");
     const side = st[3] ? "yes" : $("#propSide").value;
-    const half = st[3] ? 0 : propHalf($("#betLine").value);
+    const half = st[3] ? 0 : propHalf($("#betLine").value, side === "plus");
     if (typeof half === "string") {
       betSay(half);
       $("#betLine").focus();
@@ -2187,7 +2194,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     const mine = { ...want, at: Date.now() };
     propPending.push(mine);
     const line = st[3] ? "" : betPoints(half, false);
-    const label = pl.panel + (st[3] ? " " + st[2] : (side === "under" ? " U " : " O ") + line + " " + st[2]);
+    const label = pl.panel + (st[3] ? " " + st[2] : side === "plus" ? " " + line + "+ " + st[2]
+      : (side === "under" ? " U " : " O ") + line + " " + st[2]);
     setGD({ prop: [0, pl.l, pl.id, pl.team, pl.panel, st[1], side, line].join(",") }).then((ok) => {
       if (!ok) propPending = propPending.filter((x) => x !== mine);
       else toast("Added " + label);

@@ -14,6 +14,14 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.7
+
+Player props can be entered the way sportsbooks write them, as N+, like 3+ threes or 75+ rushing yards.
+
+- Player props get a new pick, N+ (at least), first in the Bets card's Pick menu and picked for a new prop. Type the number from the bet, like 3 for 3+ threes or 75 for 75+ rushing yards, instead of turning it into an over. The panel shows it as THOMAS 3+ 3PM, then ON TRACK or OFF TRACK, HIT as soon as the player reaches the number, and WON or LOST after the final. It never pushes.
+- Over, under and anytime props work as before, and the props you saved stay put.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.6
 
 The panel can show the weather at home with an animated radar and the National Weather Service's warnings, a football game can show as a field with the ball and the line to gain, and F1, Stocks & Crypto, the Flight Tracker and Weather can fill the whole panel.

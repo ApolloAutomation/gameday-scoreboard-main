@@ -3887,6 +3887,7 @@ test("the Bets card adds a player prop on a player from the team's roster", asyn
   await expect(page.locator("#propStat option", { hasText: "Rebounds" })).toHaveCount(0);
   await page.locator("#propPick").selectOption("nfl:3918298");
   await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#propSide").selectOption("over");
   await expect(page.locator("#betLine")).toHaveAttribute("inputmode", "decimal");
   await page.locator("#betLine").fill("250.5");
   await page.locator("#betAdd").click();
@@ -3929,6 +3930,7 @@ test("the Bets card fills all 16 prop slots, removes slot 12 and fills it again"
   await pickPropTeam(page, "Buffalo Bills");
   await page.locator("#propPick").selectOption("nfl:3918298");
   await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#propSide").selectOption("over");
   const line = (i) => 200 + i + ".5";
   for (let i = 0; i < 16; i++) {
     await page.locator("#betLine").fill(line(i));
@@ -4023,6 +4025,7 @@ test("a favorite player no longer on their saved team's roster takes no prop", a
   await page.locator("#propFavs").click();
   await page.locator("#propPick").selectOption("nfl:3918298");
   await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#propSide").selectOption("over");
   await page.locator("#betLine").fill("250.5");
   await page.locator("#betAdd").click();
   await expect(page.locator("#betMsg")).toHaveText(
@@ -4037,6 +4040,7 @@ test("a favorite player no longer on their saved team's roster takes no prop", a
   await page.locator("#propFavs").click();
   await page.locator("#propPick").selectOption("nfl:3918298");
   await page.locator("#propStat").selectOption("passyds");
+  await page.locator("#propSide").selectOption("over");
   await page.locator("#betLine").fill("250.5");
   await page.locator("#betAdd").click();
   await expectSet(request, { prop: "0,nfl,3918298,2,ALLEN,passyds,over,250.5" });
@@ -4069,6 +4073,7 @@ test("the Bets card says what's wrong with a prop before posting it", async ({ p
   await pickPropTeam(page, "Buffalo Bills");
   await expect(msg).toBeHidden();
   await page.locator("#propPick").selectOption("nfl:3918298");
+  await page.locator("#propSide").selectOption("over");
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("Type the line, like 24.5.");
   await expect(page.locator("#betLine")).toBeFocused();
@@ -4087,6 +4092,83 @@ test("the Bets card says what's wrong with a prop before posting it", async ({ p
   await page.locator("#betLine").fill("250.5");
   await page.locator("#betAdd").click();
   await expect(msg).toHaveText("You have that prop already.");
+});
+
+test("a new prop's pick is N+, with its own hint, whole numbers only", async ({ page, request }) => {
+  await reset(request);
+  await page.route(BILLS_URL, (route) => route.fulfill({ json: BILLS_ROSTER }));
+  await page.goto("/");
+  await openBets(page);
+  await page.locator("#betType").selectOption("prop");
+  await pickPropTeam(page, "Buffalo Bills");
+  await page.locator("#propPick").selectOption("nfl:4379399");
+  await page.locator("#propStat").selectOption("rushyds");
+  // Sportsbooks list props as N+, so it comes first.
+  await expect(page.locator("#propSide option")).toHaveText(["N+ (at least)", "Over", "Under"]);
+  await expect(page.locator("#propSide")).toHaveValue("plus");
+  await expect(page.locator("#betLineHint")).toHaveText("The number in the bet, like 3 for 3+");
+  await expect(page.locator("#betLine")).toHaveAttribute("placeholder", "3");
+  await page.locator("#propSide").selectOption("over");
+  await expect(page.locator("#betLineHint")).toHaveText("The sportsbook's line for the stat, like 24.5. A whole number can push");
+  await expect(page.locator("#betLine")).toHaveAttribute("placeholder", "24.5");
+  await page.locator("#propSide").selectOption("plus");
+  await expect(page.locator("#betLineHint")).toHaveText("The number in the bet, like 3 for 3+");
+  const msg = page.locator("#betMsg");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("Type the number in the bet, like 3 for 3+.");
+  for (const [line, says] of [
+    ["2.5", "N+ takes a whole number, like 3 for 3+. For a line like 2.5, pick Over or Under."],
+    ["2,5", "N+ takes a whole number, like 3 for 3+. For a line like 2.5, pick Over or Under."],
+    ["0", "N+ starts at 1, like 1 for 1+."], ["-3", "A prop's line has no + or -. Type it like 3."],
+    ["lots", "That isn't a number. Type it like 3."], ["1000", "The panel takes up to 999+."]]) {
+    await page.locator("#betLine").fill(line);
+    await page.locator("#betAdd").click();
+    await expect(msg).toHaveText(says);
+  }
+  await sleep(300);
+  expect((await sets(request)).filter((q) => q.prop)).toEqual([]);
+  await page.locator("#betLine").fill("75");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,rushyds,plus,75" });
+  await expect(page.locator("#toast")).toHaveText("Added COOK 75+ RUSH YDS");
+  await expect(page.locator("#betList .proprow label")).toContainText("COOK 75+ RUSH YDS");
+  await expect(msg).toBeHidden();
+  // Typed as the sportsbook writes it
+  await page.locator("#propStat").selectOption("rec");
+  await page.locator("#betLine").fill("3+");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,rec,plus,3" });
+  await expect(page.locator("#toast")).toHaveText("Added COOK 3+ REC");
+  const props = (await deviceState(request)).props;
+  expect(props.map((p) => [p.side, p.half, p.text])).toEqual([["plus", 150, "COOK 75+ RUSH YDS"], ["plus", 6, "COOK 3+ REC"]]);
+  // Over 74.5 is another bet than 75+.
+  await page.locator("#propStat").selectOption("rushyds");
+  await page.locator("#betLine").fill("75");
+  await page.locator("#betAdd").click();
+  await expect(msg).toHaveText("You have that prop already.");
+  await page.locator("#propSide").selectOption("over");
+  await page.locator("#betLine").fill("74.5");
+  await page.locator("#betAdd").click();
+  await expectSet(request, { prop: "0,nfl,4379399,2,COOK,rushyds,over,74.5" });
+  // A yes prop still has no pick.
+  await page.locator("#propStat").selectOption("td");
+  await expect(page.locator("#propSideRow")).toBeHidden();
+});
+
+test("an N+ prop on the board's game shows its number and whether it's hit", async ({ page, request }) => {
+  const live = { slot: 1, l: "nba", id: 4432174, team: 17, name: "THOMAS", stat: "threes", side: "plus", half: 6,
+    text: "THOMAS 3+ 3PM", st: "hit", v: 6, ev: "401810001", kick: 1792531500, oa: "BOS" };
+  const done = { slot: 2, l: "nba", id: 4432174, team: 17, name: "THOMAS", stat: "pts", side: "plus", half: 50,
+    text: "THOMAS 25+ PTS", st: "lost", v: 48, ev: "401810000", kick: 1791926700, oa: "NYK" };
+  await reset(request, { game: { s: "IN", l: "nba", ta: "BKN", ti: 17, ts: 80, oa: "BOS", oi: 2, os: 77, id: "401810001" },
+    props: [live, done] });
+  await page.goto("/");
+  await openBets(page);
+  await expect(page.locator("#betline .bet")).toHaveText(["THOMAS 3+ 3PM 3 HIT"]);
+  await expect(page.locator("#betline .bet")).toHaveClass(/good/);
+  await expect(page.locator("#betList .proprow label")).toContainText(["THOMAS 3+ 3PM", "THOMAS 25+ PTS"]);
+  await expect(page.locator("#betList .proprow small")).toHaveText(["BKN vs BOS · 3 so far", "BKN vs NYK · Final, 24"]);
+  await expect(page.locator("#betList .proprow .bet")).toHaveText(["HIT", "LOST"]);
 });
 
 test("the Bets card says when ESPN's roster can't be read for a prop", async ({ page, request }) => {

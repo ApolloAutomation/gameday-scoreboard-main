@@ -78,6 +78,8 @@ Bets are saved on the panel, so they stay through a restart or an update.
 
 A player prop is a bet on one player's numbers in a game: over or under a line on one of their stats, like Josh Allen over 250.5 passing yards, or a yes bet, like Josh Allen to score a touchdown. You type it into the same **Bets** card, and the ticker follows it like a bet. As with bets, the panel never connects to a sportsbook and never asks for an account or a password: it reads the game's box score from ESPN and compares it with the line you typed in.
 
+**N+ props.** Sportsbooks usually list a player prop as N+, like **3+ threes** or **75+ rushing yards**: the player needs at least that many. Pick **N+ (at least)** and type the number from the bet, like 3 for 3+, with no need to turn it into an over 2.5 first. Every stat in the **Over or under** column below takes an N+ pick.
+
 **What you can enter.** Any player on a team in the leagues below, picked from the team's roster:
 
 | Sport | Over or under | Yes |
@@ -102,6 +104,8 @@ Lines are whole or half numbers, like 6 or 24.5, from 0.5 to 999.5, with no + or
 4. For an over or under, pick **Over** or **Under** and type the line, like 250.5. A yes prop has neither.
 5. Tap **Add bet**.
 
+**Pick** has three choices, **N+ (at least)**, **Over** and **Under**, and starts on **N+ (at least)**, since that's how sportsbooks show most props. For an N+ prop, type the number in the bet: 3 for 3+ threes, 75 for 75+ rushing yards. You can type the plus too, like 3+. The number is a whole number from 1 to 999. A line with a half, like 2.5, is an over or under: the card says **N+ takes a whole number, like 3 for 3+. For a line like 2.5, pick Over or Under.**
+
 If something is missing or doesn't fit, the card says so before anything is saved, like **Pick the player first.**, **A prop's line has no + or -. Type it like 24.5.**, **You have that prop already.** or **All 16 props are in use. Remove one first.** To take a prop off, tap the remove button (✕) next to it.
 
 **Which game.** A prop is for the player's team's game that's on now, or its next game, and the panel follows it only on games it's already showing, exactly as for a bet: the game on the board, and in Favorite teams your favorites' games. Its card says **Starts when the panel shows a BUF game** until then. If the player moves to another team, the prop keeps the team you picked them from.
@@ -114,11 +118,15 @@ If something is missing or doesn't fit, the card says so before anything is save
 | During the game | The player's number so far and how it's going: **ALLEN O 250.5 PASS YDS 187 ON TRACK** or **OFF TRACK**, and **HIT** once an over is already past its line. A yes prop says **ALLEN ANY TD NOT YET**, then **HIT**. |
 | After the final | **WON**, **LOST** or **PUSH**, with the final number for an over or under, like **ALLEN O 250.5 PASS YDS 262 WON**, or **VOID** with no number, until midnight. |
 
+An N+ prop reads the way the sportsbook writes it, with the stat's usual short name: **PROP THOMAS 3+ 3PM** before the start, then **GIBBS 75+ RUSH YDS 48 ON TRACK** or **OFF TRACK** by the pace, **HIT** as soon as the player reaches the number, and after the final **WON** or **LOST** with the final number, like **THOMAS 3+ 3PM 3 WON**, or **VOID**. The device page's Bets card lists it the same way.
+
 Each prop scrolls in its device page color: green while it's on track, once it's hit and after a win, red while it's off track or after a loss, and gold for **NOT YET**, a push or a void. Before the start, and early in the game while the ticker shows the number alone, it's the ticker's usual color.
 
 **On track** looks at the pace: the number so far, stretched over the whole game by how much of it has been played. 120 passing yards at halftime is on pace for 240, so an over 250.5 is off track and an under on track. In baseball the game's share is counted in innings and outs, and in overtime or extra innings the number so far is the whole game's. In the first few minutes the ticker shows the number alone, since a pace means little that early. A pitcher who leaves early, or a starter who sits out the fourth quarter, keeps the pace they had, so take **ON TRACK** as a guide, not a forecast.
 
 **How it's settled.** Half a minute after ESPN calls the game final, the panel reads the box score once more and settles the prop on the final's numbers: an over wins above the line, an under below it, and a whole-number line hit exactly is a **PUSH**. A yes prop wins with at least one. A number can be below zero, like a quarterback's -3 rushing yards after kneel-downs. In basketball, baseball and hockey the box score lists who played, so a player who didn't play makes the prop **VOID**, as most sportsbooks treat them; check your sportsbook's own rule. A football box score lists only players who had a stat, and a soccer game says nothing about who played, so in those sports a player the box score leaves out counts as zero: a yes prop or an over loses and an under wins. If your football player was ruled out before the game, your sportsbook voids the bet, so remove it from the card. Between ESPN's final and that last read, a number sitting exactly on a whole-number line shows no word, since it's headed for a push. A game that's postponed or canceled makes it **VOID** too. A prop goes away at midnight after its final, or a day and a half after its game's start if the panel stops showing the game before the final.
+
+An N+ prop wins when the player ends with at least the number and loses otherwise, so it never pushes: 3 threes wins 3+, and 2 loses it. Its pace has to reach the number itself: 2 threes with a quarter to play is on pace for about 2.7, so 3+ is **OFF TRACK** while over 2.5 is **ON TRACK**. A player who didn't play makes it **VOID**, as for an over.
 
 **The device page.** The Bets card lists each prop with its game and the player's number so far, and the board's tags show the props on its game: green while on track, once it's hit and after a win, red while off track or after a loss, and gold for **NOT YET**, a push or a void.
 

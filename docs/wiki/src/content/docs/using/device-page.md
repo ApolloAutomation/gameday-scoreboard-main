@@ -226,6 +226,8 @@ The **Bets** card comes after the Favorite players card. It starts open while it
 
 The kind of bet has a fifth choice, **Player prop**. Pick the player's team, and your browser reads its roster from ESPN; or tap **Favorite players** to list just your favorite players, from every team. Then pick the player, the **Stat** (the ones for the player's sport), **Over** or **Under** and the line, like 24.5, and tap **Add bet**. A yes prop, like an anytime touchdown, has no side or line. Minor league, AHL and ECHL teams are left out of the chooser for a prop, since ESPN has no rosters or box scores for them. The card lists props after the bets, with the player's number so far, and the number beside the card's name counts them too, like **2 of 8 · 1 prop**. See [Player props](/using/bets/#player-props).
 
+**Pick** has a third choice, first and picked for a new prop: **N+ (at least)**, for a prop like 3+ threes or 75+ rushing yards. Type the number in the bet, like 3 for 3+; the line's hint says so. See [Player props](/using/bets/#player-props).
+
 ## The Stocks & Crypto card
 
 The **Stocks & Crypto** card comes after the Bets card. It lists the symbols the display shows, up to eight, each with its price and the day's change in green or red, its kind and whether its market is open, and **▲**, **▼** and **✕** to move it or remove it. The number beside the card's name says how many are in use, like **4 of 8**, with **the starting list** while it's still SPY, AAPL, BTC and ETH. To add one, type it under **Symbol**, like **AAPL**, **^GSPC** or **BTC**, pick its **Kind** if it's a symbol that's both a coin and a stock, and tap **Add symbol**. The line under **Symbol** says what the panel will save before you add it, and a symbol Yahoo Finance doesn't list says so once the panel has read it. A line under the hint says when the panel is reading Kraken and Nasdaq while Yahoo Finance is out, or, when nothing listed is on them, that the prices wait for Yahoo Finance. Whether a market is open is as of now, and when the prices are more than half an hour old, because the display isn't on screen, a line says when they were read. **▲**, **▼** and **✕** wait until the panel has made the change, so a double tap acts once. See [Stocks & Crypto](/using/markets/).
@@ -265,7 +267,7 @@ When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.7-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.8-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.
