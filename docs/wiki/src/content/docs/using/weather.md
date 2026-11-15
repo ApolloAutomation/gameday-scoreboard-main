@@ -22,7 +22,7 @@ The device page has a **Weather** card. Weather and the Flight Tracker share one
 The panel uses your time zone's units: Fahrenheit in the US time zones and Celsius elsewhere, and wind in mph in the US and UK time zones and km/h elsewhere.
 
 :::note[Coming in the next release]
-Canada has its own Pacific, Mountain, Central and Eastern time zones, so a panel in Canada shows Celsius and km/h. See [Timezone](/using/device-page/#timezone).
+Canada has its own Pacific, Mountain, Central and Eastern time zones, so a panel on a Canadian zone shows Celsius and km/h. See [Timezone](/using/device-page/#timezone).
 :::
 
 **Weather warnings in the ticker** is a switch, off to start. See [Warnings in the ticker](#warnings-in-the-ticker).

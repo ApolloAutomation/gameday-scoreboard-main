@@ -2230,6 +2230,10 @@ for (const [iana, name, tz] of [
   ["America/Winnipeg", "Canada Central", "16"],
   ["America/Toronto", "Canada Eastern", "17"],
   ["America/Montreal", "Canada Eastern", "17"],
+  ["America/Regina", "Canada Mountain", "15"],
+  ["America/Whitehorse", "Canada Pacific", "14"],
+  ["America/Atikokan", "Canada Central", "16"],
+  ["America/Moncton", "Canada Atlantic", "7"],
 ]) {
   test.describe(`a browser in ${iana}`, () => {
     test.use({ timezoneId: iana });
