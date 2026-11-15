@@ -126,7 +126,7 @@ static const uint32_t WIFI_SAMPLE_INTERVAL = 10 * 1000;
 static const uint32_t NO_GAMES_RESCAN = 3 * 60 * MINUTE;
 // For two requests; loop() adds 60 s per further request.
 static const uint32_t WORKER_DEADLINE = 120 * 1000;
-// A cut worker ends within one read timeout.
+// A cut worker ends after its current 1 KB read.
 static const uint32_t WORKER_PARK_WAIT = 10 * MINUTE;
 // Days of league scoreboards read to find a team's next game when ESPN's team
 // endpoint still names a finished one (leagues without a season list).
@@ -4022,8 +4022,7 @@ void GamedayComponent::worker_(void *arg) {
   uint32_t mine = self->worker_seq_;
   const uint32_t start = millis();
   self->run_job_();
-  // A worker the loop gave up on must not hand back a result: the Job it
-  // was writing into belongs to a later cycle by now.
+  // Given up on: the loop no longer reads this Job.
   if (self->worker_seq_ == mine) {
     self->job_.took_ms = millis() - start;
     self->job_done_ = true;
