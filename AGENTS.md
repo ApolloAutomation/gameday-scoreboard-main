@@ -97,7 +97,9 @@ the same ground for people; this file is the short version.
   against `firmware/budget.json`. A PR fails when a figure goes over its
   budget, or (into `dev`) grows more than the file's `max_growth` against
   dev's last build; the job summary has the table. A change that needs
-  more raises that one entry in the same PR and says why.
+  more raises that one entry in the same PR and says why. Growth past
+  `max_growth` takes the maintainer's `size-growth-ok` label on the PR and
+  a re-run of the Size budget job, not an edit to `max_growth`.
   `python3 scripts/size_budget.py seed <sizes folder>` prints figures with
   10% headroom (at least 1 KB).
 - Device page tests: in `tests/web`, `npm ci` and

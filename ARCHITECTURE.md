@@ -840,28 +840,39 @@ state document.
 
 ## CI (`.github/workflows`)
 
-- `build.yml`, on PRs, pushes to `dev`, `beta` and `main`, and `v*` tags:
+- `build.yml`, on PRs, pushes to `dev` and `beta`, `v*` tags, and weekly
+  on `dev` (a failed weekly run opens or adds to an issue):
   - Release notes (the CHANGELOG section must exist for a tag; the
     changelog page must render).
   - Branch rules: `beta` takes PRs only from `dev`, `main` only from `beta`;
-    `main` and tags need a final ESPHome; no private notes files; tags must
-    be on `main`.
+    `main` and tags need a final ESPHome and a night on the beta channel
+    (`no-soak-ok` skips it), and a PR into `main` the default `max_growth`;
+    the docs name `ESPHOME_VERSION`; no private notes files; tags must be on
+    `main`.
   - Builds: the three release variants, the two demo and two bar builds, and
-    an allowed-to-fail build on the next ESPHome beta.
+    an allowed-to-fail build on the next ESPHome beta (the weekly run
+    fails on it). The manifests name each OTA image with its version and
+    the first 8 characters of its md5, so a rebuild never reuses a name.
   - Size budget against `firmware/budget.json` (flash, static internal RAM,
     and the parser's memory per ESPN read), with a growth limit per PR into
-    `dev`.
+    `dev` that the `size-growth-ok` label lifts.
   - Parser tests: `make -C tests`, `replay`, `heap`, the script selftests,
-    the site check, the device page mock check and the fuzzers.
+    the site check and the device page mock check. The fuzzers run beside
+    it, and the play animation review GIFs on PRs.
   - Device page tests: bundle freshness and Playwright.
   - On `beta`: publish the beta channels to the rolling `beta-firmware`
     prerelease, and ask `site.yml` on `main` to republish (skipped while
     there is no release).
-  - On a tag: build the site, deploy it to Pages, create the release with
-    the factory images and manifest zips.
+  - On a tag: build the site (keeping the previous OTA images the live
+    manifests named, leaving the debug ELFs off), deploy it to Pages, wait
+    until every manifest and OTA image is live, and create the release with
+    the factory images and manifest zips. Publishing waits for the size
+    budget.
 - `site.yml`: republishes `docs/site` from `main` with the latest release's
-  firmware, skipped while a release is pending or none exists.
-- `docs.yml`: builds `docs/wiki` on PRs that touch it.
+  firmware, skipped while a release is pending or none exists, then waits
+  until the update feed is live.
+- `docs.yml`: builds `docs/wiki` on PRs that touch it and checks every link
+  and anchor between its pages.
 - `docs-check.yml`: a PR into `dev` that changes `firmware/` or
   `components/` must change a docs page or carry `docs: not needed`.
 
@@ -873,12 +884,14 @@ Generators (`build_web.py`, `build_teams.py`, `build_team_colors.py`,
 packs the play animations' art in `firmware/art/sprites/*.txt` into
 `sprites.h`), release and site helpers (`release_notes.py`,
 `site_seo.py`, `check_site_firmware.sh`, `add_beta_channel.sh`,
-`beta_version.sh`, `set_manifest_name.sh`, `publish_mirror.sh`), the size
+`beta_version.sh`, `set_manifest_name.sh`, `keep_previous_ota.sh`,
+`check_live_feed.sh`, `publish_mirror.sh`, `check_docs_links.py`), the size
 budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 `burnin_monitor.py`, `improv_scan.py`, `crash_report.py`,
 `bar_report_qr.sh`). Every Python tool but the generators has
-`--selftest`, and so do `build_airlines.py`, `build_sprites.py` and
-`beta_version.sh`; CI's `build_sprites.py --check` fails a stale
+`--selftest`, and so do `build_airlines.py`, `build_sprites.py`,
+`beta_version.sh`, `set_manifest_name.sh`, `keep_previous_ota.sh` and
+`check_live_feed.sh`; CI's `build_sprites.py --check` fails a stale
 `sprites.h`.
 
 ## Tests (`tests/`)
