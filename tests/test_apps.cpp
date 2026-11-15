@@ -282,6 +282,9 @@ void test_units() {
   ACHECK(tz_miles(0) && tz_fahrenheit(0) && tz_miles(6) && tz_fahrenheit(6));
   ACHECK(tz_miles(10) && !tz_fahrenheit(10));
   ACHECK(!tz_miles(7) && !tz_fahrenheit(7) && !tz_miles(13) && !tz_miles(-1) && !tz_fahrenheit(200));
+  // Every Canadian row: Celsius and km
+  for (int tz = 14; tz <= 17; tz++)
+    ACHECK(strncmp(kTimezones[tz].name, "Canada ", 7) == 0 && !tz_miles(tz) && !tz_fahrenheit(tz));
 }
 
 void test_hosts() {
