@@ -675,6 +675,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/add_beta_channel.sh site
+      # An offer read before this deploy still installs.
+      - name: Keep the previous OTA images
+        run: bash scripts/keep_previous_ota.sh site
+      # crash_report.py reads ELFs from the release zips.
+      - name: Leave the debug ELFs off the site
+        run: find site/firmware -name '*.elf' -print -delete
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
@@ -683,6 +689,9 @@ jobs:
           include-hidden-files: true
       - id: deployment
         uses: actions/deploy-pages@v5
+      # No release until panels can see it.
+      - name: The update feed is live
+        run: bash scripts/check_live_feed.sh site
       - name: Create the release with notes and binaries
         env:
           GH_TOKEN: ${{ github.token }}
