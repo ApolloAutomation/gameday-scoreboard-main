@@ -201,6 +201,7 @@ void test_icons() {
   WCHECK(sky_text(2, true, 12) == "Pt cloudy" && sky_text(2, true, 20) == "Partly cloudy" &&
              sky_text(0, false, 12) == "Clear" && sky_text(73, true, 12) == "Snow",
          "words: %s", sky_text(73, true, 12).c_str());
+  WCHECK(snowy(75) && snowy(85) && !snowy(61) && !snowy(66) && !snowy(95) && !snowy(0), "snow's codes");
 }
 
 void test_aqi_alerts() {
@@ -443,6 +444,16 @@ void test_app() {
       WCHECK(espn::app_frame_board(f), "%dx%d page %d draws", sz[0], sz[1], (int) p);
       WCHECK(f.ticker.compare(0, 34, "Winter Storm Warning until 10a Sat") == 0, "ticker: %s",
              f.ticker.substr(0, 40).c_str());
+      // Tahoe's heavy snow day
+      WCHECK(f.ticker.find("% chance of snow") != std::string::npos && f.ticker.find("of rain") == std::string::npos,
+             "snow in the ticker");
+      if (p == Page::NOW && (sz[0] == 256 || sz[1] == 128)) {
+        const char *label = sz[1] == 128 ? "Snow" : "Snow today";
+        bool snow = false;
+        for (const espn::AppText &t : f.texts)
+          snow = snow || t.text == label;
+        WCHECK(snow && !has_text(f, "Rain"), "%dx%d says %s", sz[0], sz[1], label);
+      }
       if (p == Page::RADAR)
         WCHECK(f.photo.w == std::min(sz[0], 128) && f.photo.h == sz[1] - 8 &&
                    f.photo.hold == rainviewer_url(a->radar(), kFrames - 1, 389399, -1199772) &&

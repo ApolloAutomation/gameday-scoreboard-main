@@ -47,6 +47,10 @@ Weather takes turns through its pages, about 10 seconds each, starting over each
 
 The ticker along the bottom keeps the same words through the pages: any alerts first, in their colors, with what each one says, then home's temperature, sky and what it feels like, today's high and low with the chance of rain, sunrise and sunset, the wind and gusts, the humidity and the air quality in its band's color.
 
+:::note[Coming in the next release]
+On a day of snow the ticker says the chance of snow instead, like **99% chance of snow**, and the **Now** page's label reads **Snow** or **Snow today** in place of **Rain** or **Rain today**. The radar page's column of the next hours says **Snow** when the first of them is snowy.
+:::
+
 The panel shows a message instead when it has no weather to show:
 
 - **Set your home on the device page**: there's no home yet.
