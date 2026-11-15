@@ -14,6 +14,21 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.8
+
+Panels set to British Columbia, Alberta or Manitoba time show the right clock again, an update that doesn't install now says so, and the device page keeps one connection to the panel and reads better on a phone.
+
+- Panels in British Columbia, Alberta and Manitoba have run an hour slow since 1 November, when those provinces stopped turning their clocks back. The timezone list now has Canada Pacific, Canada Mountain, Canada Central and Canada Eastern. A panel there that follows your browser picks the right clock once its device page is opened; for a zone picked by hand, pick the Canadian one in the Setup card.
+- On a Canadian zone, Weather, F1 and the Flight Tracker use Celsius, km/h and kilometers.
+- An update that doesn't install now says so: the device page tells you as soon as the panel answers and brings Install back, and the next try takes the newest version. Before, an update offered just before a newer one came out could fail without a word.
+- With Install updates automatically on, a new release waits a night before the panel installs it on its own, so there's time to pull one with a problem. Install still installs it right away.
+- Right after you turn Follow beta on or off, the Firmware box checks the new list before it offers Install, so an update from the list you left can't be installed by mistake.
+- The device page keeps one connection to the panel instead of two, so more phones and computers can have it open at once, reconnects by itself when the connection drops, and no longer loads a script from ESPHome's site. Each visit also downloads about 10 KB less from the panel.
+- On the device page, dark team colors show lighter on the board, the team chooser opens at once even when ESPN is slow, the layout fits a phone, tapping a switch's words flips it, and Try it says what each button does, with Return and Extra point added to Play animations. Weather shows in the idle line, Data used and Diagnostics.
+- The Field view keeps the ball after a kickoff or punt return, and Weather's ticker says the chance of snow on a snowy day instead of rain.
+- A panel on a Wi-Fi network with a sign-in page no longer slowly runs out of memory, and a few rare stalls are fixed, like a panel restarting partway through an install on a slow network.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.7
 
 Player props can be entered the way sportsbooks write them, as N+, like 3+ threes or 75+ rushing yards.

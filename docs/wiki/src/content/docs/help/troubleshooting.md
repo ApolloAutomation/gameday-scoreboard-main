@@ -149,8 +149,6 @@ If you want to try the update again, press **Install**. A newer version installs
 
 ## The device page says an update didn't install
 
-:::note[Coming in the next release]
 The Firmware box says **The update to** the new version **didn't install**, with **The panel is still on** the version it runs **. Install tries again.** under it. The download didn't start, or failed before the panel restarted, and the panel kept running what it had.
 
 Press **Install** to try again. The panel has already checked for the newest version, so the next try takes the latest one. If it keeps failing, look at the Wi-Fi signal under **Diagnostics**, or wait a few minutes: right after a new version comes out, the update site can take a few minutes to settle.
-:::

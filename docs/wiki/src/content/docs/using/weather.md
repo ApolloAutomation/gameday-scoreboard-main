@@ -21,9 +21,7 @@ The device page has a **Weather** card. Weather and the Flight Tracker share one
 
 The panel uses your time zone's units: Fahrenheit in the US time zones and Celsius elsewhere, and wind in mph in the US and UK time zones and km/h elsewhere.
 
-:::note[Coming in the next release]
 Canada has its own Pacific, Mountain, Central and Eastern time zones, so a panel on a Canadian zone shows Celsius and km/h. See [Timezone](/using/device-page/#timezone).
-:::
 
 **Weather warnings in the ticker** is a switch, off to start. See [Warnings in the ticker](#warnings-in-the-ticker).
 
@@ -47,9 +45,7 @@ Weather takes turns through its pages, about 10 seconds each, starting over each
 
 The ticker along the bottom keeps the same words through the pages: any alerts first, in their colors, with what each one says, then home's temperature, sky and what it feels like, today's high and low with the chance of rain, sunrise and sunset, the wind and gusts, the humidity and the air quality in its band's color.
 
-:::note[Coming in the next release]
 On a day of snow the ticker says the chance of snow instead, like **99% chance of snow**, and the **Now** page's label reads **Snow** or **Snow today** in place of **Rain** or **Rain today**. The radar page's column of the next hours says **Snow** when the first of them is snowy.
-:::
 
 The panel shows a message instead when it has no weather to show:
 
