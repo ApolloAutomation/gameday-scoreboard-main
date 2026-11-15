@@ -155,3 +155,9 @@ the same ground for people; this file is the short version.
   label `docs: not needed`. Describe behavior `main` doesn't have yet in a
   `:::note[Coming in the next release]` aside. `npm run build` in
   `docs/wiki` must pass.
+
+## Code comments
+
+- Keep every comment 3–10 words max.
+- Never mention conversation history, chats, or decisions made with the user.
+- Never state whether something was or wasn't tested.
