@@ -65,7 +65,7 @@ Team changes take effect immediately and survive reboots. Wrong panel size? Clic
 
 ## The device page
 
-The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, rosters from ESPN when you add a favorite player or a player prop, Open-Meteo's place search when you look up the home the Flight Tracker and Weather share, and Planespotters.net for the photo of the plane on the Flight Tracker card. With firmware v2026.11.6 and earlier, the browser also loads ESPHome's standard device page script from oi.esphome.io; later firmware leaves it out. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
+The device serves its own page: a live board that mirrors the panel (logos, score, clock, down and distance or the count and outs, timeout pips, last play), a team chooser with logos, search and a tab per league plus an "On now" tab listing today's games from ESPN and MLB (tap the side you want to follow), and the settings grouped in plain language: the ones changed most in a Quick settings card under the board, the rest in cards that fold. It is plain HTML and JavaScript embedded in the firmware, so it works with no internet beyond what your browser reads itself: logos from ESPN, MLB and HockeyTech, the "On now" tab from ESPN and MLB, rosters from ESPN when you add a favorite player or a player prop, Open-Meteo's place search when you look up the home the Flight Tracker and Weather share, and Planespotters.net for the photo of the plane on the Flight Tracker card. With firmware v2026.11.7 and earlier, the browser also loads ESPHome's standard device page script from oi.esphome.io; later firmware leaves it out. The page reads one JSON document from the device (`GET /gameday/state`) and writes settings back to `POST /gameday/set`, so it is not limited to what an ESPHome entity can carry.
 
 | Setting | What it does |
 | --- | --- |
@@ -92,7 +92,7 @@ It comes with the controls worth automating: Team, Mode, Power, Brightness, Scro
 
 ## Build it yourself
 
-Build `main`, which holds the latest release, or a release tag like `v2026.11.6`, with the ESPHome version CI pins: `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.2 today. `dev`, the default branch, is where new work lands and may need an ESPHome beta.
+Build `main`, which holds the latest release, or a release tag like `v2026.11.7`, with the ESPHome version CI pins: `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.2 today. `dev`, the default branch, is where new work lands and may need an ESPHome beta.
 
 ```
 git clone --branch main https://github.com/ApolloAutomation/gameday-scoreboard-main

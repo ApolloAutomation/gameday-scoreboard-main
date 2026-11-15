@@ -28,7 +28,7 @@ body:
     attributes:
       label: Firmware version
       description: The Firmware row on the panel's page.
-      placeholder: "2026.11.6"
+      placeholder: "2026.11.7"
     validations:
       required: true
   - type: dropdown

@@ -67,7 +67,7 @@ Clone `main`, which holds the latest release:
 git clone --branch main https://github.com/ApolloAutomation/gameday-scoreboard-main
 ```
 
-To build one particular release, put its tag in place of `main`, like `--branch v2026.11.6`. The default branch, `dev`, is where new work lands before a release. It may need an ESPHome beta, and a build from it shows the last release's version number.
+To build one particular release, put its tag in place of `main`, like `--branch v2026.11.7`. The default branch, `dev`, is where new work lands before a release. It may need an ESPHome beta, and a build from it shows the last release's version number.
 
 ```sh
 cd gameday-scoreboard-main
