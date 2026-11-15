@@ -733,6 +733,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void start_worker_();
   static void worker_(void *arg);
   void run_job_();
+  bool worker_held_(uint32_t now) const;
   void apply_job_();
   void start_clock_job_();
   void apply_clock_job_();
@@ -1542,8 +1543,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Empty means show the record.
   std::string standing_text_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
-  // No worker starts for RETRY_INTERVAL after; 0 never.
+  // No worker starts until worker_held_ ends; 0 never.
   uint32_t worker_gave_up_ms_{0};
+  uint32_t worker_id_{0};  // PsramTasks' id of the last worker started
   // Bumped by the main loop when it abandons a worker, read by the worker.
   std::atomic<uint32_t> worker_seq_{0};
   Job job_;

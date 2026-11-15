@@ -125,15 +125,10 @@ static const uint32_t WIFI_SAMPLE_INTERVAL = 10 * 1000;
 // next kickoff instead of re-reading every 2 minutes, but never longer than
 // this, so a moved kickoff or the next day's slate is still picked up.
 static const uint32_t NO_GAMES_RESCAN = 3 * 60 * MINUTE;
-// How long the loop waits on a worker task before writing it off. A job chains
-// at most two requests (schedule then game, or the NFL then the NCAA
-// scoreboard). http_request in gameday-common.yaml allows each one 20s, with a
-// 30s watchdog_timeout as the hard ceiling, so two requests can legitimately
-// spend 60s on the network alone. Add the TLS handshakes and the streamed
-// parse of a Saturday NCAA scoreboard and the old 60s deadline was under the
-// worst honest case, not over it. 2 x watchdog_timeout for the network plus
-// 60s for handshakes and parsing leaves only a genuinely wedged worker here.
+// For two requests; loop() adds 60 s per further request.
 static const uint32_t WORKER_DEADLINE = 120 * 1000;
+// A cut worker ends within one read timeout.
+static const uint32_t WORKER_PARK_WAIT = 10 * MINUTE;
 // Days of league scoreboards read to find a team's next game when ESPN's team
 // endpoint still names a finished one (leagues without a season list).
 static const int LOOKAHEAD_DAYS = 3;
@@ -206,8 +201,11 @@ class ContainerReader {
   bool fill_() {
     if (this->pos_ < this->len_)
       return true;
-    if (this->eof_)
+    // A worker given up on stops reading.
+    if (this->eof_ || PsramTasks::cut_self()) {
+      this->eof_ = true;
       return false;
+    }
     int n = this->container_->read(this->buf_, sizeof(this->buf_));
     if (n <= 0) {
       this->eof_ = true;
@@ -1723,9 +1721,7 @@ void GamedayComponent::loop() {
     if (!this->job_done_) {
       // A worker that died without setting job_done_ would block the loop
       // forever and Refresh Now could never clear it. Give up eventually, but
-      // not before a slow-but-honest job could have finished: abandoning a
-      // live worker is what makes the accepted run_job_/job_ write race
-      // reachable, and that must stay out of reach on a merely slow network.
+      // not before a slow-but-honest job could have finished.
       // A Live games scan reads one scoreboard per league, so past two
       // leagues it gets the same allowance per request (60 s) as the rest.
       uint32_t deadline = WORKER_DEADLINE;
@@ -1747,8 +1743,8 @@ void GamedayComponent::loop() {
         this->busy_ = false;
         this->busy_since_ms_ = 0;
         this->worker_seq_++;  // a late finisher must not signal job_done_
-        // Wait a full retry before starting another worker rather than
-        // stacking a second one on top of a task that may still be alive.
+        // Per-read timeouts let a trickle run on: cut it.
+        PsramTasks::cut(this->worker_id_);
         const uint32_t now = millis();
         this->worker_gave_up_ms_ = now == 0 ? 1 : now;
         this->watch_hold_until_ = (now + RETRY_INTERVAL) | 1;
@@ -1802,12 +1798,13 @@ void GamedayComponent::loop() {
     return;
   }
   if (this->worker_gave_up_ms_ != 0) {
-    // An abandoned worker may still run: wait a full retry.
     const uint32_t since = millis() - this->worker_gave_up_ms_;
-    if (since < RETRY_INTERVAL) {
-      this->schedule_next_(RETRY_INTERVAL - since);
+    if (this->worker_held_(millis())) {
+      this->schedule_next_(since < RETRY_INTERVAL ? RETRY_INTERVAL - since : NOT_READY_INTERVAL);
       return;
     }
+    if (PsramTasks::running(this->worker_id_))
+      ESP_LOGE(TAG, "The fetch task given up on never ended; starting another");
     this->worker_gave_up_ms_ = 0;
   }
   if (!network::is_connected() || !this->clock_set_()) {
@@ -3177,6 +3174,9 @@ bool GamedayComponent::live_leagues_changed_(const std::vector<League> &before) 
 
 std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::string &url,
                                                                     const ::espn::AppRequest *app) {
+  // Given up on: no more requests.
+  if (PsramTasks::cut_self())
+    return nullptr;
   std::vector<http_request::Header> headers = {
       {"User-Agent", USER_AGENT},
       {"Accept", "application/json"},
@@ -4003,12 +4003,20 @@ void GamedayComponent::start_worker_() {
   this->busy_since_ms_ = millis() == 0 ? 1 : millis();
   // TLS plus a nested JSON parse needs a roomy stack; 16KB has headroom.
   // Stack in PSRAM; loop() frees it once parked.
-  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this)) {
+  if (!PsramTasks::start(&GamedayComponent::worker_, "gameday_fetch", 16384, this, &this->worker_id_)) {
     ESP_LOGW(TAG, "Could not start the fetch task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->busy_ = false;
     this->schedule_next_(RETRY_INTERVAL);
   }
+}
+
+// A worker given up on owns job_ until it parks.
+bool GamedayComponent::worker_held_(uint32_t now) const {
+  if (this->worker_gave_up_ms_ == 0)
+    return false;
+  const uint32_t since = now - this->worker_gave_up_ms_;
+  return since < RETRY_INTERVAL || (since < WORKER_PARK_WAIT && PsramTasks::running(this->worker_id_));
 }
 
 void GamedayComponent::worker_(void *arg) {
@@ -5606,7 +5614,7 @@ bool GamedayComponent::gap_ok_(uint32_t now) const {
   if (!network::is_connected() || !this->clock_set_() || !this->selects_published_ || this->busy_ ||
       this->demo_playing_())
     return false;
-  if (this->worker_gave_up_ms_ != 0 && now - this->worker_gave_up_ms_ < RETRY_INTERVAL)
+  if (this->worker_held_(now))
     return false;
   if (this->logos_.busy() && this->panels_ != nullptr && this->panels_->cols() * this->panels_->rows() > 2 &&
       heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) < 24 * 1024)
