@@ -3009,7 +3009,12 @@ void GamedayComponent::update_state_changed_() {
     // Queued ahead of the download's own defer
     this->defer([this]() {
       const uint32_t start = millis();
-      while (this->install_hold_ && ((this->busy_ && !this->job_done_) || this->logos_.busy())) {
+      // A cut fetch still ends its current read
+      const auto busy = [this]() {
+        return (this->busy_ && !this->job_done_) || this->logos_.busy() ||
+               (this->worker_gave_up_ms_ != 0 && PsramTasks::running(this->worker_id_));
+      };
+      while (this->install_hold_ && busy()) {
         if (millis() - start >= INSTALL_QUIET_WAIT) {
           ESP_LOGW(TAG, "Install: a download is still running; going ahead");
           break;
