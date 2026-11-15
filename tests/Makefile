@@ -112,6 +112,18 @@ fuzz: build/fuzz_espn build/fuzz_set build/seeds/.done
 fuzz-long:
 	$(MAKE) fuzz FUZZ_TIME=$(FUZZ_LONG_TIME)
 
+# Not part of `all`: unit checks under ASan and UBSan.
+# Apple clang's ASan won't start: SANITIZE=undefined.
+SANITIZE ?= address,undefined
+SAN_CXXFLAGS = -std=c++17 -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZE) -fno-sanitize-recover=all \
+	-D_GLIBCXX_ASSERTIONS -I../components/gameday -I.
+build/test_parse_san: $(SRCS) $(wildcard ../components/gameday/*.h) $(wildcard ../components/crash_report/*.h) ../components/panel_layout/layouts.h
+	@mkdir -p build
+	$(FUZZ_CXX) $(SAN_CXXFLAGS) $(SRCS) -o $@
+
+sanitize: build/test_parse_san
+	./build/test_parse_san
+
 clean:
 	rm -rf build
-.PHONY: review all clean replay heap fuzz fuzz-long
+.PHONY: review all clean replay heap fuzz fuzz-long sanitize
