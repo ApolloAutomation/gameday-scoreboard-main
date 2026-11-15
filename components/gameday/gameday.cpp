@@ -2982,6 +2982,18 @@ void GamedayComponent::settle_update_mark_() {
 #endif
 }
 
+#if defined(USE_UPDATE) && defined(ESPHOME_PROJECT_VERSION)
+namespace {
+// Reaches the entity's protected state from outside
+struct UpdateStateAccess : update::UpdateEntity {
+  static void republish_installing(update::UpdateEntity *u) {
+    u->*(&UpdateStateAccess::state_) = update::UPDATE_STATE_INSTALLING;
+    u->publish_state();
+  }
+};
+}  // namespace
+#endif
+
 void GamedayComponent::update_state_changed_() {
 #if defined(USE_UPDATE) && defined(ESPHOME_PROJECT_VERSION)
   update::UpdateEntity *u = App.get_updates()[0];
@@ -3015,8 +3027,11 @@ void GamedayComponent::update_state_changed_() {
     });
   } else if (this->update_installing_) {
     // A manifest read landing before the download starts
-    if (this->install_hold_ && !static_cast<http_request::HttpRequestUpdate *>(u)->status_has_error())
+    if (this->install_hold_ && !static_cast<http_request::HttpRequestUpdate *>(u)->status_has_error()) {
+      // Page and Home Assistant keep seeing it install
+      UpdateStateAccess::republish_installing(u);
       return;
+    }
     // Back from installing with no restart: it failed before the new image
     // was in place, and this firmware runs on. Not a rollback.
     ESP_LOGI(TAG, "Update to %s didn't install; still on %s", this->update_mark_.installing, ESPHOME_PROJECT_VERSION);
