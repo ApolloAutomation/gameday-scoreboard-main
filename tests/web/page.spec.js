@@ -2617,7 +2617,215 @@ test("a dropped stream alone doesn't call the panel gone", async ({ page, reques
   await expect(page.locator("#gone")).toBeHidden();
 });
 
+// Logs each stream: opened at, others open, failed at
+const watchStreams = (page) => page.addInitScript(() => {
+  const Real = window.EventSource;
+  window.__streams = [];
+  window.EventSource = class extends Real {
+    constructor(...args) {
+      const open = window.__streams.filter((s) => s.es.readyState !== 2).length;
+      super(...args);
+      const rec = { at: Date.now(), open, failed: 0, es: this };
+      window.__streams.push(rec);
+      this.addEventListener("error", () => { if (!rec.failed) rec.failed = Date.now(); });
+    }
+  };
+});
+const streams = (page) => page.evaluate(() => window.__streams.map(({ es, ...r }) => ({ ...r, state: es.readyState })));
+// Waits until the nth stream fails, then its read
+const failed = async (page, n) => {
+  await expect.poll(async () => {
+    const s = await streams(page);
+    return s.length === n && s[n - 1].failed > 0;
+  }, { timeout: 15000 }).toBe(true);
+  await sleep(300);
+};
+// The panel pings the page's stream
+const ping = (page) => page.evaluate(() => window.__streams.at(-1).es.dispatchEvent(new MessageEvent("ping")));
+// A phone locking (true) or waking (false)
+const setHidden = (page, hidden) => page.evaluate((h) => {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (h ? "hidden" : "visible") });
+  document.dispatchEvent(new Event("visibilitychange"));
+}, hidden);
+
+test("the page loads no script but the panel's own and opens one event stream", async ({ page, request, baseURL }) => {
+  await watchStreams(page);
+  await reset(request);
+  const scripts = [];
+  page.on("request", (r) => { if (r.resourceType() === "script") scripts.push(r.url()); });
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  // ESPHome's shell, without its own page app
+  const shell = await (await request.get("/")).text();
+  expect(shell.match(/<script[^>]*>/g)).toEqual(["<script type=module src=/0.js>"]);
+  expect(scripts).toEqual([baseURL + "/0.js"]);
+  await sleep(1000);
+  expect(await streams(page)).toEqual([expect.objectContaining({ open: 0, failed: 0, state: 1 })]);
+  // ESPHome's page app set these
+  await expect(page).toHaveTitle("Game Day Scoreboard");
+  const root = await page.evaluate(() => [document.documentElement.lang, getComputedStyle(document.documentElement).colorScheme]);
+  expect(root).toEqual(["en", "light dark"]);
+});
+
+test.describe("on a phone", () => {
+  // Chromium reads the viewport meta only when mobile
+  const { defaultBrowserType, ...phone } = base.devices["iPhone 13"];
+  test.use(phone);
+  test("the page is as wide as the phone's screen, not a zoomed-out desktop page", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+    expect(await page.evaluate(() => [window.innerWidth, window.visualViewport.scale])).toEqual([390, 1]);
+  });
+});
+
+test("a stream the panel keeps dropping is closed and reopened after 2 s, then 4 s, doubling up to a minute, one at a time, and one that held a minute starts over at 2 s", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+
+  // Every session ends right after its first events.
+  await reset(request, {}, ["events_end"]);
+  await failed(page, 3);
+  let s = await streams(page);
+  expect(s[1].at - s[0].failed).toBeGreaterThanOrEqual(1900);
+  expect(s[1].at - s[0].failed).toBeLessThan(3500);
+  expect(s[2].at - s[1].failed).toBeGreaterThanOrEqual(3900);
+  expect(s[2].at - s[1].failed).toBeLessThan(5500);
+  // Longer waits on a faked clock: none 3 s early
+  let n = 3;
+  for (const wait of [8000, 16000, 32000, 60000, 60000]) {
+    await page.clock.fastForward(wait - 3000);
+    await sleep(200);
+    expect((await streams(page)).length).toBe(n);
+    await page.clock.fastForward(3000);
+    await failed(page, ++n);
+  }
+  await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
+
+  // The next one holds and is heard for a minute
+  await reset(request);
+  await page.clock.fastForward(60000);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  for (let heard = 0; heard < 3; heard++) {
+    await sleep(300);
+    await page.clock.fastForward(21000);
+    await ping(page);
+  }
+  await sleep(300);
+  expect((await streams(page)).length).toBe(++n);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // Dropped now, it's reopened after 2 s again
+  await reset(request, {}, ["events"]);
+  await failed(page, n + 1);
+  s = await streams(page);
+  expect(s[n].at - s[n - 1].failed).toBeGreaterThanOrEqual(1900);
+  expect(s[n].at - s[n - 1].failed).toBeLessThan(3500);
+  // Never two at once, each closed by the page
+  expect(s.map((x) => x.open)).toEqual(s.map(() => 0));
+  expect(s.map((x) => x.state)).toEqual(s.map(() => 2));
+});
+
+test("a quiet stream is dropped when the panel answers a state read, and reopened", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await sleep(300);
+  // 36 s unheard, then the regular re-read is answered
+  await page.clock.fastForward(36000);
+  await expect.poll(async () => (await streams(page))[0].state).toBe(2);
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 5000 });
+  expect(await streams(page)).toEqual([
+    expect.objectContaining({ open: 0, failed: 0, state: 2 }), expect.objectContaining({ open: 0, state: 1 })]);
+});
+
+test("a panel that answers again after not answering gets its stream back at once, not after the wait", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await reset(request, {}, ["down"]);
+  await expect(page.locator("#gone")).toHaveText(/^Panel not answering since/);
+  // Four more tries fail: the next is 32 s off
+  let n = 1;
+  for (const wait of [2000, 4000, 8000, 16000]) {
+    await failed(page, n++);
+    await page.clock.fastForward(wait);
+  }
+  await failed(page, n);
+  // The panel is back: the regular re-read finds it
+  await reset(request);
+  await page.clock.fastForward(15000);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 3000 });
+  await expect(page.locator("#gone")).toBeHidden();
+  const s = await streams(page);
+  expect(s.length).toBe(n + 1);
+  expect(s[n].at - s[n - 1].failed).toBeLessThan(20000);
+  expect(s.map((x) => x.open)).toEqual(s.map(() => 0));
+});
+
+test("a stream that drops while the page is hidden waits until the page is shown, then reopens at once", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // Shown again with its stream fine: nothing reopens.
+  await setHidden(page, true);
+  await setHidden(page, false);
+  await sleep(500);
+  expect((await streams(page)).length).toBe(1);
+
+  // Hidden, the stream drops; the panel recovers meanwhile
+  await setHidden(page, true);
+  await reset(request, {}, ["events"]);
+  await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
+  await reset(request);
+  await sleep(3000);
+  expect((await streams(page)).length).toBe(1);
+  await setHidden(page, false);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 1500 });
+  expect((await streams(page)).length).toBe(2);
+});
+
+test("a stream gone quiet while the phone slept is reopened when the page is shown, and so is one the browser's back/forward cache dropped", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // A minute passes unheard: the session died during sleep
+  const woke = await page.evaluate(() => {
+    const now = Date.now;
+    Date.now = () => now() + 60000;
+    document.dispatchEvent(new Event("visibilitychange"));
+    return Date.now();
+  });
+  await expect.poll(async () => (await streams(page)).length).toBe(2);
+  expect((await streams(page))[1].at - woke).toBeLessThan(500);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+
+  // Restored from the cache: reopened once 2 s have passed
+  const dot = await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    return document.querySelector("#conn").className;
+  });
+  expect(dot).not.toMatch(/\bon\b/);
+  await expect.poll(async () => (await streams(page)).length).toBe(3);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  const s = await streams(page);
+  expect(s[2].at - s[1].at).toBeGreaterThanOrEqual(1900);
+  expect(s.map((x) => [x.open, x.failed, x.state])).toEqual([[0, 0, 2], [0, 0, 2], [0, 0, 1]]);
+});
+
 test("Reboot says it's restarting and reloads when the panel is back", async ({ page, request }) => {
+  await watchStreams(page);
   await reset(request);
   page.on("dialog", (d) => d.accept());
   await page.goto("/");
@@ -2632,6 +2840,9 @@ test("Reboot says it's restarting and reloads when the panel is back", async ({ 
   await reset(request, {}, ["down"]);
   await sleep(4500);
   await expect(page.locator("#gone")).toHaveText(restarting);
+  // No stream meanwhile, not even when the network comes back
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  expect(await streams(page)).toEqual([expect.objectContaining({ state: 2 })]);
   const reloaded = page.waitForEvent("load", { timeout: 10000 });
   await reset(request);
   await reloaded;
@@ -2661,6 +2872,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   // The mock still answers, but the page has stopped asking it.
   const asked = [];
   page.on("request", (r) => { if (r.url().startsWith(baseURL)) asked.push(r.url()); });
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await sleep(1500);
   expect(asked).toEqual([]);
   await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);

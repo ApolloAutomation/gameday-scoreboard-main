@@ -1,9 +1,11 @@
 """Mock of the scoreboard's web server for the device page tests.
 
 Serves firmware/web/bundle.js and app.css at /0.js and /0.css (where ESPHome's
-web_server puts js_include and css_include), the ESPHome /events stream for
-the entities the page builds controls from, and the gameday component's
-routes with the response shapes from components/gameday/gameday.cpp:
+web_server puts js_include and css_include) under the page shell ESPHome
+builds for firmware/gameday-common.yaml's web_server options, the ESPHome
+/events stream for the entities the page builds controls from, and the
+gameday component's routes with the response shapes from
+components/gameday/gameday.cpp:
 
   GET  /gameday/state    the document rebuild_state_() writes
   POST /gameday/set      only the keys in SET_KEYS, then each listed display's own (Stocks &
@@ -25,10 +27,11 @@ Test hooks: POST /_reset with an optional JSON body
 state back, merges the overrides and makes the named routes answer 500. Two
 more fail names drop the connection with no answer, the way a panel that has
 gone does: "events" for the event stream (an open one ends within half a
-second), "down" for every route but the test hooks. "wifi" replaces the saved
-network list; null stands for firmware without the list, whose /gameday/wifi
-answers 404. GET /_log lists the /gameday/set, /gameday/action and
-/gameday/wifi requests seen since the last reset.
+second), "down" for every route but the test hooks. "events_end" ends each
+stream after its first events. "wifi" replaces the saved network list; null
+stands for firmware without the list, whose /gameday/wifi answers 404. GET
+/_log lists the /gameday/set, /gameday/action and /gameday/wifi requests seen
+since the last reset.
 
 Started by playwright.config.js. Run by hand with `python mock_device.py 8765`
 and open http://127.0.0.1:8765/.
@@ -37,7 +40,9 @@ The set keys, their limits and the Live auto pick come from
 components/gameday/set_request.h, the bet limits from bets.h, and the prop
 limits and stats from props.h. `python mock_device.py --selftest` runs
 tests/fixtures/set_cases.json, the table the firmware's host tests also
-check, through apply_set, so the mock can't drift from the panel.
+check, through apply_set, so the mock can't drift from the panel. It also
+checks that the events the page reads fit the panel's stream (events_ok) and
+that the shell loads no script but the bundle (shell_ok).
 """
 import copy
 import itertools
@@ -428,6 +433,26 @@ INITIAL["displays"] = [display_doc(0)]
 INITIAL["flights"] = flights_doc()
 # Weather settings; resets may add status, temp and alerts
 INITIAL["weather"] = weather_doc()
+
+
+def web_server_option(key):
+    """A web_server option in gameday-common.yaml; None when unset."""
+    block = re.search(r"^web_server:\n((?:[ \t]+.*\n)*)", COMMON, re.M)[1]
+    found = re.search(rf'^  {key}:[ \t]*"?([^"\n#]*)', block, re.M)
+    return found[1].strip() if found else None
+
+
+def index_html(js="/0.js"):
+    """The page shell, as ESPHome's web_server builds it (build_index_html)."""
+    js_url = web_server_option("js_url")
+    if js_url is None:
+        # ESPHome's own page app, which opens its own /events stream
+        js_url = f"https://oi.esphome.io/v{web_server_option('version') or 2}/www.js"
+    return ("<!DOCTYPE html><html><head><meta charset=UTF-8><link rel=icon href=data:>"
+            "<link rel=stylesheet href=/0.css></head><body>"
+            f"<script type=module src={js}></script><esp-app></esp-app>"
+            + (f'<script src="{js_url}"></script>' if js_url else "") + "</body></html>")
+
 
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
@@ -1048,6 +1073,77 @@ def selftest():
     return bad == 0
 
 
+# Room for one state event (web_server_idf.h)
+EVENT_ROOM = 5120 + 128 + 6 - 30 - 6
+APP_JS = (REPO / "firmware/web/app.js").read_text(encoding="utf-8")
+
+
+def component_selects():
+    """Team and Mode selects: (name, icon, Home Assistant options)."""
+    init = (REPO / "components/gameday/__init__.py").read_text(encoding="utf-8")
+    skip = set(re.findall(r'"(\w+)"', re.search(r"_HA_SKIP_LEAGUES = \{(.*?)\}", init)[1]))
+    prefix = dict(re.findall(r'\{League::(\w+),\s*"\w+",\s*"[^"]+",\s*"([^"]+)",', LEAGUES_H))
+    teams_h = (REPO / "components/gameday/teams.h").read_text(encoding="utf-8")
+    options = {
+        "team": [f"{prefix[lg]}: {name}" for lg, _tid, _abbr, name, _ in TEAM_RE.findall(teams_h) if lg not in skip],
+        "mode": re.findall(r'"([^"]+)"', re.search(r"MODE_OPTIONS = \[(.*?)\]", (
+            REPO / "components/gameday/select.py").read_text(encoding="utf-8"), re.S)[1]),
+    }
+    out = []
+    for block in re.split(r"\n  - platform: ", "\n" + re.search(r"^select:\n((?:  .*\n)*)", COMMON, re.M)[1]):
+        kind = re.search(r"^\s*type: (\w+)", block, re.M)
+        if block.startswith("gameday") and kind:
+            out.append((re.search(r'name: "([^"]+)"', block)[1], re.search(r'icon: "([^"]+)"', block)[1],
+                        options[kind[1]]))
+    return out
+
+
+def select_event_bytes(name, icon, options):
+    """Bytes of a select's first /events event, longest option on."""
+    on = max(options, key=lambda o: len(o.encode()))
+    doc = {"id": "select/" + name, "domain": "select", "name": name, "icon": icon,
+           "entity_category": 0, "value": on, "state": on, "option": options}
+    return len(json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode())
+
+
+def page_event_names():
+    """Entities app.js reads from /events."""
+    defs = re.search(r"const controlDefs = \[(.*?)\n  \];", APP_JS, re.S)[1]
+    on_state = re.search(r"const onState = .*?\n  \};", APP_JS, re.S)[0]
+    return set(re.findall(r'name: "([^"]+)"', defs)) | set(re.findall(r'case "([^"]+)":', on_state))
+
+
+def events_ok():
+    """The events the page reads fit the panel's stream."""
+    used = page_event_names()
+    selects = component_selects()
+    bad = 0 if {n for n, _i, _o in selects} >= {"Team", "Mode"} else 1
+    if bad:
+        print("FAIL firmware/gameday-common.yaml: the Team and Mode selects weren't found")
+    for name, icon, options in selects:
+        size = select_event_bytes(name, icon, options)
+        fits = size < EVENT_ROOM
+        print(f"{name} select, {len(options)} options: first event {size} bytes"
+              f" ({'fits' if fits else 'dropped; Home Assistant lists it over the API'})")
+        if not fits and name in used:
+            bad += 1
+            print(f"FAIL the page reads {name} from /events, but the panel drops its event")
+    for e in ENTITIES:
+        if len(json.dumps(e, separators=(",", ":")).encode()) >= EVENT_ROOM:
+            bad += 1
+            print(f"FAIL the mock sends {e['name']}, too long for the panel's stream")
+    return bad == 0
+
+
+def shell_ok():
+    """The page shell loads the bundle and no other script."""
+    scripts = re.findall(r'<script[^>]* src="?([^" >]+)', index_html())
+    if scripts != ["/0.js"]:
+        print(f"FAIL the page shell loads {scripts}: web_server in firmware/gameday-common.yaml needs"
+              ' js_url: "", or ESPHome\'s own page app loads too and opens a second /events stream')
+    return scripts == ["/0.js"]
+
+
 # The demo build's /gameday/demo (components/gameday/demo.cpp), with the
 # stock matchups and made-up teams from demo.h.
 DEMO_KEYS = ("do", "kind", "pro_home", "pro_away", "college_home", "college_away", "madeup")
@@ -1115,10 +1211,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._gone(u.path):
             return
         if u.path == "/":
-            js = "/0.js?demo" if "demo" in parse_qs(u.query, keep_blank_values=True) else "/0.js"
-            html = ("<!DOCTYPE html><html><head><meta charset=UTF-8><link rel=icon href=data:>"
-                    "<link rel=stylesheet href=/0.css></head><body><script src=" + js + "></script></body></html>")
-            return self._send(200, "text/html", html)
+            demo = "demo" in parse_qs(u.query, keep_blank_values=True)
+            return self._send(200, "text/html", index_html("/0.js?demo" if demo else "/0.js"))
         if u.path == "/0.js":
             bundle = "bundle-demo.js" if "demo" in parse_qs(u.query, keep_blank_values=True) else "bundle.js"
             return self._send(200, "text/javascript", (WEB / bundle).read_bytes())
@@ -1149,16 +1243,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             ping = {"title": "Game Day Scoreboard", "comment": STATE["version"]}
-            self.wfile.write(("event: ping\ndata: " + json.dumps(ping) + "\n\n").encode())
+            self.wfile.write(("retry: 30000\nevent: ping\ndata: " + json.dumps(ping) + "\n\n").encode())
             for e in ENTITIES:
                 self.wfile.write(("event: state\ndata: " + json.dumps(e) + "\n\n").encode())
             self.wfile.flush()
+            if "events_end" in FAIL:
+                return
             for tick in itertools.count():
                 time.sleep(0.5)
-                if "down" in FAIL or "events" in FAIL:
+                if "down" in FAIL or "events" in FAIL or "events_end" in FAIL:
                     return
                 if tick % 10 == 9:
-                    self.wfile.write(b"event: ping\ndata: \n\n")
+                    self.wfile.write(b'retry: 30000\nevent: ping\ndata: {"uptime":%d}\n\n' % (tick // 2))
                     self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             return
@@ -1227,6 +1323,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--selftest"]:
-        sys.exit(0 if selftest() else 1)
+        sys.exit(0 if all([selftest(), events_ok(), shell_ok()]) else 1)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

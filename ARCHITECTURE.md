@@ -755,6 +755,26 @@ browser's localStorage (`gd.cards`) and nowhere else, and `gd.expand` set to
 `tests/fixtures/set_cases.json` is the shared table of settings cases that
 the host tests, the page's mock and the fuzzer all use.
 
+The page keeps one event stream and reopens it itself. `js_url: ""` leaves
+ESPHome's own page app out of the shell: it opened a second stream on every
+page view, and the HTTP server has seven sockets and closes the least
+recently used one for each connection past that, so a few views were enough
+to keep cutting off each other's streams. That app also gave the page its
+viewport meta, its tab title and language, and a `color-scheme` that follows
+the OS, none of which ESPHome's shell has, so `app.js` and `app.css` set
+them now. A new stream also makes ESPHome send every entity's full state to
+every open stream, and the Team select's document, about 10 KB, is over the
+stream's 5,218-byte limit, so it is built and dropped once per open stream
+(the `State event does not fit` warning); the page takes its teams from the
+bundle. So the page closes a stream that errors, where the browser would
+retry by itself, and reopens it 2 s later, doubling to 60 s until one has
+been heard from for a minute; at once when the page is shown again or the
+panel answers after not answering; and not at all while the page is hidden.
+The first wait is longer than the second ESPHome lets pass between marking a
+stream as in use, so a reopening takes an idle connection's socket and not
+another view's stream. A stream that goes 35 s without an event (the panel
+pings every 10 s) is taken as gone at the next state read.
+
 ## Wi-Fi, Bluetooth and setup
 
 Wi-Fi and Bluetooth share one radio. Bluetooth stays off at boot (it slowed

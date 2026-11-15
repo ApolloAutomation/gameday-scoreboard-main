@@ -9,6 +9,10 @@ Every panel serves its own web page. Open it in a browser on any phone or comput
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
+:::note[Coming in the next release]
+The page loads everything else from the panel. Until now it also loaded a script from ESPHome's server (oi.esphome.io) each time it opened. That script asked Iconify (api.iconify.design) for its icons and kept a second connection to the panel open, and a phone that couldn't reach ESPHome's server showed the page small, like a desktop page.
+:::
+
 ## The live board
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.
@@ -35,6 +39,10 @@ Three warnings can appear on the board:
 When the panel holds its brightness down by itself, a notice under the board says why: **Too warm, dimming**, or **Check the power supply** with a **Clear** button to press once you've fixed the supply. See [Heat and power protection](/using/brightness-and-clock/#heat-and-power-protection).
 
 The dot at the top right says **live** while the page is connected to the panel and **offline** when it isn't.
+
+:::note[Coming in the next release]
+When the connection drops, the page reconnects by itself: after 2 seconds, then waiting twice as long after each try that fails, up to a minute. It reconnects right away when you come back to the page, like when your phone wakes, and when the panel answers again after it couldn't be reached. A page in a tab you aren't looking at waits until you look at it. With one connection for each open page, where there were two, the panel has room for more phones and computers on the page at once.
+:::
 
 ## Follow this game
 
