@@ -101,6 +101,8 @@ jobs:
       contents: read
       # The override label on a promotion PR.
       pull-requests: read
+      # When the beta channel published the PR's commit.
+      actions: read
     steps:
       - name: PRs into beta come from dev
         if: github.event_name == 'pull_request' && github.base_ref == 'beta'
@@ -162,6 +164,58 @@ jobs:
           done
           echo "::error file=.github/workflows/build.yml::ESPHOME_VERSION is $ESPHOME_VERSION, a beta. main and release tags build only on a final ESPHome release: move the pin to a final release on dev, then promote again. To ship this beta anyway, the maintainer adds the esphome-beta-ok label to the promotion PR and re-runs this job."
           exit 1
+      # Customers get what the beta channel ran overnight (CONTRIBUTING.md).
+      # The no-soak-ok label skips the wait for one PR.
+      - name: The beta channel ran this build for a night
+        if: (github.event_name == 'pull_request' && github.base_ref == 'main') || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SOAK_HOURS: "12"
+        run: |
+          set -euo pipefail
+          if [ -n "$PR" ]; then
+            prs=$PR
+          else
+            prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+                    --jq '.[] | select(.base.ref == "main" and .merged_at != null) | .number')
+          fi
+          heads=""
+          for n in $prs; do
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
+            if jq -e '.labels[] | select(.name == "no-soak-ok")' <<< "$pr" > /dev/null; then
+              echo "::warning::PR #$n has the no-soak-ok label, so this reaches main without a night on the beta channel."
+              exit 0
+            fi
+            heads="$heads $(jq -r .head.sha <<< "$pr")"
+          done
+          [ -n "$heads" ] || heads=$GITHUB_SHA
+          how="Re-run this job once it has. For a fix that can't wait, the maintainer adds the no-soak-ok label to the promotion PR and re-runs this job."
+          for sha in $heads; do
+            at=""
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$sha&branch=beta&per_page=20" \
+                          --jq '.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch") | .id'); do
+              t=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=50" \
+                    --jq '.jobs[] | select(.name == "Publish the beta channel" and .conclusion == "success") | .completed_at')
+              for x in $t; do
+                if [ -z "$at" ] || [[ "$x" < "$at" ]]; then at=$x; fi
+              done
+            done
+            if [ -z "$at" ]; then
+              echo "::error::The beta channel never published ${sha::7}. Promote dev to beta and let the bar panels run it for a night first. $how"
+              exit 1
+            fi
+            # 08:00-13:00 UTC spans 3-5 AM in US zones.
+            read -r hours night < <(jq -nr --arg t "$at" '
+              ($t | fromdateiso8601) as $p
+              | ((($p - 28800) / 86400 | ceil) * 86400 + 28800) as $start
+              | "\(((now - $p) / 3600) | floor) \(now >= $start + 18000)"')
+            if [ "$hours" -lt "$SOAK_HOURS" ] || [ "$night" != true ]; then
+              echo "::error::The beta channel published ${sha::7} at $at, $hours hours ago. main takes it after $SOAK_HOURS hours that include the bar panels' 3 to 5 AM install window (08:00 to 13:00 UTC). $how"
+              exit 1
+            fi
+            echo "The beta channel has run ${sha::7} since $at, $hours hours."
+          done
       - uses: actions/checkout@v7
         with:
           # Tags need history for the main check. The quotes matter: a bare 0
