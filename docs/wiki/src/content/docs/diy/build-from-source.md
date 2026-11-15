@@ -33,7 +33,7 @@ The components in `components/` are:
 
 ## Install ESPHome
 
-Use the ESPHome version CI builds with. It's `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.2 on the `dev` branch. Install it in a Python virtual environment.
+Use the ESPHome version CI builds with. It's `ESPHOME_VERSION` at the top of `.github/workflows/build.yml` in the code you clone, 2026.10.2 for the latest release. Install it in a Python virtual environment.
 
 ```sh
 python -m venv esphome-venv
@@ -61,9 +61,13 @@ The `dev` and `beta` branches may build on an ESPHome beta. `main`, which every 
 
 ## Get the code
 
+Clone `main`, which holds the latest release:
+
 ```sh
-git clone https://github.com/ApolloAutomation/gameday-scoreboard-main
+git clone --branch main https://github.com/ApolloAutomation/gameday-scoreboard-main
 ```
+
+To build one particular release, put its tag in place of `main`, like `--branch v2026.11.6`. The default branch, `dev`, is where new work lands before a release. It may need an ESPHome beta, and a build from it shows the last release's version number.
 
 ```sh
 cd gameday-scoreboard-main

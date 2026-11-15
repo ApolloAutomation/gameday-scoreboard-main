@@ -92,8 +92,10 @@ It comes with the controls worth automating: Team, Mode, Power, Brightness, Scro
 
 ## Build it yourself
 
+Build `main`, which holds the latest release, or a release tag like `v2026.11.6`, with the ESPHome version CI pins: `ESPHOME_VERSION` at the top of `.github/workflows/build.yml`, 2026.10.2 today. `dev`, the default branch, is where new work lands and may need an ESPHome beta.
+
 ```
-git clone https://github.com/ApolloAutomation/gameday-scoreboard-main
+git clone --branch main https://github.com/ApolloAutomation/gameday-scoreboard-main
 cd gameday-scoreboard-main/firmware
 esphome run gameday.yaml
 ```
