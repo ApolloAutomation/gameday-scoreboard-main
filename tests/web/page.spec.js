@@ -1960,13 +1960,15 @@ test("release notes link to the release's section of the site changelog, a beta 
   await page.reload();
   await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.0");
 
+  // Follow beta on: a beta's notes.
+  await reset(request, { beta: true });
   entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: commit };
   await page.reload();
   await expect(link).toHaveAttribute("href", commit);
 });
 
 test("release notes link only to an https address", async ({ page, request }) => {
-  await reset(request);
+  await reset(request, { beta: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };
   let entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: "javascript:alert(1)" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
@@ -1977,6 +1979,7 @@ test("release notes link only to an https address", async ({ page, request }) =>
   await expect(link).toHaveCount(0);
 
   // A release still links to its changelog section.
+  await reset(request, { beta: false });
   entity = { ...entity, value: "2026.10.1" };
   await page.reload();
   await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.1");
@@ -4390,7 +4393,7 @@ test.describe("cards that fold", () => {
 
   test("an update on offer opens Device, and a folded Device says an update, one that didn't take or a weak signal beside its name", async ({ page, request }) => {
     await page.setViewportSize({ width: 375, height: 800 });
-    await reset(request, { autoupd: false });
+    await reset(request, { autoupd: false, beta: true });
     const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
     let entity = { ...fw, value: "2026.11.0-beta.812", current_version: "2026.10.2" };
     await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
