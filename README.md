@@ -88,7 +88,7 @@ The device runs on its own, but it is a normal ESPHome device. If Home Assistant
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=esphome)
 
-It comes with the controls worth automating: Team, Mode, Power, Brightness, Scroll Speed, Select Page, Field View, Game Status, Last Play, Firmware, Install Updates Automatically, Refresh Now, Reboot and the WizMote pairing switches. Favorites, timezone, ticker options, splashes and the panel count are set from the device page only. Men's college basketball and minor league baseball teams aren't in Home Assistant's Team list (it would be too long for an entity); pick them on the device page. The API has no encryption key in the prebuilt binary; build from YAML if you want one.
+It comes with the controls worth automating: Team, Mode, Power, Brightness, Scroll Speed, Select Page, Play Animations, Field View, Game Status, Last Play, Firmware, Install Updates Automatically, Refresh Now, Reboot and the WizMote pairing switches. Favorites, timezone, ticker options, splashes and the panel count are set from the device page only. Men's college basketball and minor league baseball teams aren't in Home Assistant's Team list (it would be too long for an entity); pick them on the device page. The API has no encryption key in the prebuilt binary; build from YAML if you want one.
 
 ## Build it yourself
 

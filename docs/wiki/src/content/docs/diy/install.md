@@ -51,4 +51,4 @@ Each build has a variant name, and the variant names the folder the panel reads 
 
 The 128x64 build reads its updates from the `moonhub75` folder too. The panel saves its layout the first time it starts, so that update keeps it two panels wide.
 
-Each release on [GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/releases) also carries the MoonHub75 factory image, `gameday-scoreboard-<version>.factory.bin`, and a zip of each variant's folder.
+Each release on [GitHub](https://github.com/ApolloAutomation/gameday-scoreboard-main/releases) also carries two factory images, `gameday-scoreboard-<version>.factory.bin` for the MoonHub75 pinout and `gameday-scoreboard-<version>-scoreboard75.factory.bin` for the scoreboard75 controller board, and a zip of each variant's folder.
