@@ -850,7 +850,8 @@ state document.
     `main`.
   - Builds: the three release variants, the two demo and two bar builds, and
     an allowed-to-fail build on the next ESPHome beta (the weekly run
-    fails on it). The manifests name each OTA image with its version.
+    fails on it). The manifests name each OTA image with its version and
+    the first 8 characters of its md5, so a rebuild never reuses a name.
   - Size budget against `firmware/budget.json` (flash, static internal RAM,
     and the parser's memory per ESPN read), with a growth limit per PR into
     `dev` that the `size-growth-ok` label lifts.

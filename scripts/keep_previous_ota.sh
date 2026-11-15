@@ -10,10 +10,15 @@ newer() { # true when $1 sorts after $2
   [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
 }
 
+otas() { # a manifest's OTA paths and md5s
+  jq -c '[.builds[].ota | select(.path) | [.path, (.md5 // "" | ascii_downcase)]] | unique' "$1"
+}
+
 keep() {
   local site=$1 base=$2 rel=$3 new tmp nv lv src pv path md5 has n=0
   new="$site/$rel"
   tmp=$(mktemp -d)
+  mkdir "$tmp/keep"
   nv=$(jq -r '.version // empty' "$new/manifest.json")
   if ! curl -fsS "$base/$rel/manifest.json?keep=${GITHUB_RUN_ID:-local}" -o "$tmp/live.json" 2> /dev/null ||
      ! lv=$(jq -er '.version' "$tmp/live.json" 2> /dev/null); then
@@ -21,7 +26,12 @@ keep() {
     rm -rf "$tmp"
     return
   fi
-  if [ "$lv" = "$nv" ]; then
+  if newer "$lv" "$nv"; then
+    echo "$rel: live $lv is newer than $nv (taken back), so it isn't kept"
+    rm -rf "$tmp"
+    return
+  fi
+  if [ "$(otas "$tmp/live.json")" = "$(otas "$new/manifest.json")" ]; then
     # Same build again: carry what it kept.
     if ! curl -fsS "$base/$rel/previous.json" -o "$tmp/src.json" 2> /dev/null; then
       echo "$rel: $nv again, with no previous build kept"
@@ -29,43 +39,42 @@ keep() {
       return
     fi
     src=$tmp/src.json
-  elif newer "$lv" "$nv"; then
-    echo "$rel: live $lv is newer than $nv (taken back), so it isn't kept"
-    rm -rf "$tmp"
-    return
   else
     src=$tmp/live.json
   fi
   pv=$(jq -r '.version // empty' "$src")
-  if [ -z "$pv" ] || [ "$pv" = "$nv" ]; then
-    rm -rf "$tmp"
-    return
-  fi
   while read -r path md5; do
     [ -n "$path" ] || continue
-    if [[ "$path" == */* || "$path" == .* || -e "$new/$path" ]] || ! [[ "$md5" =~ ^[0-9a-fA-F]{32}$ ]]; then
+    md5=$(tr 'A-F' 'a-f' <<< "$md5")
+    if [[ "$path" == */* || "$path" == .* ]] || ! [[ "$md5" =~ ^[0-9a-f]{32}$ ]]; then
       echo "::warning::$rel: can't keep $pv's $path next to $nv"
       rm -rf "$tmp"
       return
     fi
-    if ! curl -fsS "$base/$rel/$path" -o "$tmp/$path" 2> /dev/null; then
+    if [ -e "$new/$path" ]; then
+      [ "$(md5sum < "$new/$path" | cut -d' ' -f1)" = "$md5" ] && continue
+      echo "::warning::$rel: $nv's $path has other bytes than $pv's, so an offer read before this deploy fails its MD5 check"
+      rm -rf "$tmp"
+      return
+    fi
+    if ! curl -fsS "$base/$rel/$path" -o "$tmp/keep/$path" 2> /dev/null; then
       echo "::warning::$rel: couldn't download $pv's $path, so it isn't kept"
       rm -rf "$tmp"
       return
     fi
-    has=$(md5sum < "$tmp/$path" | cut -d' ' -f1)
-    if [ "$has" != "$(tr 'A-F' 'a-f' <<< "$md5")" ]; then
+    has=$(md5sum < "$tmp/keep/$path" | cut -d' ' -f1)
+    if [ "$has" != "$md5" ]; then
       echo "::warning::$rel: $pv's $path has md5 $has, its manifest says $md5; not kept"
       rm -rf "$tmp"
       return
     fi
     n=$((n + 1))
-  done < <(jq -r '.builds[].ota | select(.path) | "\(.path) \(.md5 // "-")"' "$src")
+  done < <(jq -r '.builds[].ota | select(.path) | "\(.path) \(.md5 // "-")"' "$src" | sort -u)
   if [ $n = 0 ]; then
     rm -rf "$tmp"
     return
   fi
-  jq -r '.builds[].ota.path // empty' "$src" | while read -r path; do mv "$tmp/$path" "$new/$path"; done
+  mv "$tmp/keep/"* "$new/"
   cp "$src" "$new/previous.json"
   echo "$rel: kept $pv's OTA image beside $nv"
   rm -rf "$tmp"
@@ -109,6 +118,21 @@ manifest.json" ] || fail "a folder new to the site changed"
   folder "$t/new2/firmware/a" 1.0.1 g-1.0.1.ota.bin new
   run "$t/new2" "file://$t/live2" > /dev/null
   [ "$(cat "$t/new2/firmware/a/g.ota.bin" 2> /dev/null)" = old ] || fail "a republish drops the kept build"
+  # A rebuild of one version keeps the live bytes.
+  folder "$t/live3/firmware/a" 1.0.1 g-1.0.1-aaaa.ota.bin first
+  folder "$t/new3/firmware/a" 1.0.1 g-1.0.1-bbbb.ota.bin rebuilt
+  run "$t/new3" "file://$t/live3" > /dev/null
+  [ "$(cat "$t/new3/firmware/a/g-1.0.1-aaaa.ota.bin" 2> /dev/null)" = first ] || fail "a same-version rebuild drops the live build"
+  [ "$(jq -r '.builds[0].ota.path' "$t/new3/firmware/a/previous.json")" = g-1.0.1-aaaa.ota.bin ] || fail "rebuild previous.json"
+  # Same bytes, new name: the old name stays.
+  folder "$t/new4/firmware/a" 1.0.1 g-1.0.1-cccc.ota.bin first
+  run "$t/new4" "file://$t/live3" > /dev/null
+  [ "$(cat "$t/new4/firmware/a/g-1.0.1-aaaa.ota.bin" 2> /dev/null)" = first ] || fail "a renamed build drops the old name"
+  # One name with other bytes is never overwritten.
+  folder "$t/new5/firmware/a" 1.0.1 g-1.0.1-aaaa.ota.bin other
+  run "$t/new5" "file://$t/live3" > "$t/log5"
+  [ "$(cat "$t/new5/firmware/a/g-1.0.1-aaaa.ota.bin")" = other ] && [ ! -e "$t/new5/firmware/a/previous.json" ] || fail "a reused name was overwritten"
+  grep -q "fails its MD5 check" "$t/log5" || fail "no warning for a reused name"
   echo "keep_previous_ota selftest ok"
   exit 0
 fi

@@ -5,7 +5,8 @@
 # ApolloAutomation.gameday-scoreboard, which stays as it is: panels advertise
 # it over mDNS and factory_flash.py reads "gameday-scoreboard version" from
 # it in the boot log.
-# Also puts the manifest's version in the OTA file name.
+# Also names each OTA file by version and md5 prefix,
+# so a rebuild of one version gets a new name.
 # check_site_firmware.sh still checks every renamed file.
 # Usage: scripts/set_manifest_name.sh <dir>
 #        scripts/set_manifest_name.sh --selftest
@@ -14,7 +15,7 @@ set -euo pipefail
 name="Game Day Scoreboard"
 
 one() {
-  local m=$1 dir v p n
+  local m=$1 dir v p n h
   dir=$(dirname "$m")
   jq --arg n "$name" '.name = $n' "$m" > "$m.tmp"
   mv "$m.tmp" "$m"
@@ -29,8 +30,7 @@ one() {
         echo "::error::$m names OTA file $p outside its folder"
         return 1
         ;;
-      *-"$v".ota.bin) continue ;;
-      *.ota.bin) n="${p%.ota.bin}-$v.ota.bin" ;;
+      *.ota.bin) ;;
       *)
         echo "::error::$m names OTA file $p, not a .ota.bin"
         return 1
@@ -40,6 +40,11 @@ one() {
       echo "::error::$m points at $p, which is not in $dir"
       return 1
     fi
+    h=$(md5sum < "$dir/$p" | cut -c1-8)
+    case "$p" in
+      *-"$v-$h".ota.bin) continue ;;
+    esac
+    n="${p%.ota.bin}-$v-$h.ota.bin"
     mv "$dir/$p" "$dir/$n"
     jq --arg o "$p" --arg n "$n" '.builds |= map(if .ota.path == $o then .ota.path = $n else . end)' "$m" > "$m.tmp"
     mv "$m.tmp" "$m"
@@ -50,7 +55,8 @@ one() {
 if [ "${1:-}" = --selftest ]; then
   t=$(mktemp -d)
   trap 'rm -rf "$t"' EXIT
-  mkdir -p "$t/a" "$t/b"
+  h8() { md5sum < "$1" | cut -c1-8; }
+  mkdir -p "$t/a" "$t/b" "$t/c"
   echo one > "$t/a/gameday-esp32s3.ota.bin"
   echo factory > "$t/a/gameday-esp32s3.factory.bin"
   cat > "$t/a/manifest.json" <<'EOF'
@@ -58,17 +64,25 @@ if [ "${1:-}" = --selftest ]; then
  "ota": {"path": "gameday-esp32s3.ota.bin", "md5": "m"},
  "parts": [{"path": "gameday-esp32s3.factory.bin", "offset": 0}]}]}
 EOF
+  ha=$(h8 "$t/a/gameday-esp32s3.ota.bin")
   echo two > "$t/b/gameday-esp32s3.ota.bin"
+  hb=$(h8 "$t/b/gameday-esp32s3.ota.bin")
   echo '{"version": "2026.11.7", "builds": [{"ota": {"path": "gameday-esp32s3.ota.bin"}}]}' > "$t/b/manifest.json"
+  # The same version rebuilt with other bytes.
+  echo three > "$t/c/gameday-esp32s3.ota.bin"
+  hc=$(h8 "$t/c/gameday-esp32s3.ota.bin")
+  cp "$t/b/manifest.json" "$t/c/manifest.json"
   bash "$0" "$t" > /dev/null
   bash "$0" "$t" > /dev/null
   got=$(jq -c '[.name, .builds[0].ota.path, .builds[0].parts[0].path]' "$t/a/manifest.json")
-  want='["Game Day Scoreboard","gameday-esp32s3-2026.11.7-beta.191.ota.bin","gameday-esp32s3.factory.bin"]'
+  want="[\"Game Day Scoreboard\",\"gameday-esp32s3-2026.11.7-beta.191-$ha.ota.bin\",\"gameday-esp32s3.factory.bin\"]"
   [ "$got" = "$want" ] || { echo "FAIL: beta manifest is $got"; exit 1; }
-  [ "$(cat "$t/a/gameday-esp32s3-2026.11.7-beta.191.ota.bin")" = one ] || { echo "FAIL: beta OTA not renamed"; exit 1; }
+  [ "$(cat "$t/a/gameday-esp32s3-2026.11.7-beta.191-$ha.ota.bin")" = one ] || { echo "FAIL: beta OTA not renamed"; exit 1; }
   [ ! -e "$t/a/gameday-esp32s3.ota.bin" ] || { echo "FAIL: old OTA name left behind"; exit 1; }
   [ -f "$t/a/gameday-esp32s3.factory.bin" ] || { echo "FAIL: factory image moved"; exit 1; }
-  [ "$(jq -r '.builds[0].ota.path' "$t/b/manifest.json")" = gameday-esp32s3-2026.11.7.ota.bin ] || { echo "FAIL: release manifest"; exit 1; }
+  [ "$(jq -r '.builds[0].ota.path' "$t/b/manifest.json")" = "gameday-esp32s3-2026.11.7-$hb.ota.bin" ] || { echo "FAIL: release manifest"; exit 1; }
+  [ "$(jq -r '.builds[0].ota.path' "$t/c/manifest.json")" = "gameday-esp32s3-2026.11.7-$hc.ota.bin" ] && [ "$hb" != "$hc" ] ||
+    { echo "FAIL: a rebuild of one version reuses its file name"; exit 1; }
   echo '{"version": "1.0", "builds": [{"ota": {"path": "../x.ota.bin"}}]}' > "$t/b/manifest.json"
   if bash "$0" "$t/b" > /dev/null 2>&1; then echo "FAIL: took a path outside the folder"; exit 1; fi
   echo "set_manifest_name selftest ok"
