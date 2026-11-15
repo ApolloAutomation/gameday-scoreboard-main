@@ -1763,10 +1763,10 @@ test("after a Follow beta flip the other feed's update can't be installed until 
   await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
   await expect(page.locator("#fwInstall")).toBeHidden();
   await expect(page.locator("#fwSub")).not.toContainText("Release notes");
-  // A check that still finds the release says nothing about it.
+  // A check that still finds the release: the beta feed didn't answer.
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
-  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta", { timeout: 8000 });
-  await expect(page.locator("#toast")).not.toContainText("Update available");
+  await expect(page.locator("#toast")).toHaveText("Could not reach the update server. Try again in a minute.", { timeout: 8000 });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
   // The beta feed answers.
   entity = { ...fw, value: "1.5.7-beta.3", current_version: "1.5.5" };
   await page.locator("#actions button", { hasText: "Check for updates" }).click();

@@ -121,6 +121,7 @@ static const uint32_t INSTALL_QUIET_WAIT = 25 * 1000;
 static const uint32_t UPDATE_RECHECK_DELAY = 2 * 1000;
 // Follow beta: retry a missed read this often
 static const uint32_t CHANNEL_RETRY = 30 * 1000;
+static const uint8_t CHANNEL_RETRIES = 4;  // then the 6-hourly read
 // After an install, how long the new firmware runs before the update counts
 // as taken: past safe_mode's one minute, when the bootloader can no longer
 // roll it back.
@@ -2825,6 +2826,7 @@ void GamedayComponent::set_follow_beta(bool on) {
   // Read the new manifest now, so the page shows what this channel offers.
   if (this->beta_update_ != nullptr) {
     this->channel_read_ms_ = millis();
+    this->channel_retries_ = CHANNEL_RETRIES;
     this->beta_update_->update();
   }
   this->rebuild_state_(&this->last_fields_);
@@ -2852,8 +2854,13 @@ bool GamedayComponent::offer_off_channel_() const {
 
 // The switch's read was skipped or failed: again
 void GamedayComponent::channel_tick_() {
-  if (this->install_hold_ || !this->offer_off_channel_() || millis() - this->channel_read_ms_ < CHANNEL_RETRY)
+  if (this->channel_retries_ == 0 || this->install_hold_ || millis() - this->channel_read_ms_ < CHANNEL_RETRY)
     return;
+  if (!this->offer_off_channel_()) {
+    this->channel_retries_ = 0;
+    return;
+  }
+  this->channel_retries_--;
   this->channel_read_ms_ = millis();
   ESP_LOGI(TAG, "Follow beta: reading the %s manifest again", this->follow_beta() ? "beta" : "release");
   this->beta_update_->update();

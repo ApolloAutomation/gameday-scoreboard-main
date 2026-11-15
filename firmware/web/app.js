@@ -3167,7 +3167,9 @@
         const st = String(j.state || "").toUpperCase();
         // The firmware row shows the result; only shout when there is something to
         // do. The device offers any different version, an older one included.
-        if (st.includes("AVAILABLE")) { if (!offChannel(j) && isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
+        // Still the other feed's offer: this feed didn't answer
+        if (offChannel(j)) toast("Could not reach the update server. Try again in a minute.");
+        else if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
         else if (st.includes("INSTALLING")) { /* the install is running; nothing to say */ }
         else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
       } else if (uid) {

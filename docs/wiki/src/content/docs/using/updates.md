@@ -72,7 +72,7 @@ A beta carries the number of a coming release, plus a build number, like 2026.11
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
 
 :::note[Coming in the next release]
-Right after you turn **Follow beta** on or off, the Firmware box says **Checking for the latest beta**, or **Checking for the latest release**, until the panel has read that list, usually within a second or two. **Install** comes back then, so an update from the list you just left can't be installed by mistake. If the panel can't read the list, it tries again every 30 seconds.
+Right after you turn **Follow beta** on or off, the Firmware box says **Checking for the latest beta**, or **Checking for the latest release**, until the panel has read that list, usually within a second or two. **Install** comes back then, so an update from the list you just left can't be installed by mistake. If the panel can't read the list, it tries a few more times over the next two minutes, then at its next check, or when you tap **Check for updates**.
 :::
 
 Turn **Follow beta** on while the panel runs a release, and it waits for a beta of the next release. The betas of the release it already runs are older, so they aren't offered, and the Firmware box says **You're ahead of the latest beta** until a newer beta is out.
