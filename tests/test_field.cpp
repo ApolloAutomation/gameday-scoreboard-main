@@ -265,7 +265,7 @@ void test_frames() {
   FCHECK(red);
   // Possession's gold bar under the side with the ball
   FCHECK(fr.pic.poss_y >= 0 && fr.pic.poss_x < 64);
-  // After a kickoff return: the down and spot, the returner's bar
+  // After a kickoff return: down, spot and returner's bar
   const GameSnapshot ret = event("event_nfl_kickoff_return.json", 17);
   sport_frame(ret, board_clock_text(ret, false, 0), 128, false, fr);
   bool down = false, kick = false;

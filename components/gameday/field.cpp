@@ -130,7 +130,7 @@ void field_from_event(JsonObjectConst ev, GameSnapshot &s) {
 
 namespace {
 
-// ESPN drops possession after kicks; the play's end team has it
+// ESPN drops possession after kicks; use the play's end team
 int ball_side(const GameSnapshot &g) { return g.possession != 0 ? g.possession : g.play_side; }
 
 }  // namespace
