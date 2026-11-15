@@ -193,7 +193,7 @@ inline const char *prop_side_key(const Prop &p) {
                                                : "over";
 }
 
-// e.g. "ALLEN O 250.5 PASS YDS", "THOMAS 3+ 3PM", "ALLEN ANY TD".
+// e.g. "ALLEN O 250.5 PASS YDS", "THOMAS 3+ 3PM".
 inline std::string prop_label(const Prop &p) {
   const PropStatInfo *s = prop_stat_info(p.stat);
   const char *label = s != nullptr ? s->label : "";
