@@ -522,6 +522,8 @@ http_request:
   # verified.
   verify_ssl: true
   buffer_size_rx: 2048
+  # The request line and User-Agent share this
+  buffer_size_tx: 1024
 
 # Over-the-air updates from the release manifest. Checked every 6 hours and
 # on demand from the device page.
