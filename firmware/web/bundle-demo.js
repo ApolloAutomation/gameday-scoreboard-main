@@ -124,6 +124,9 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     + Array.from({ length: 30 }, (_, i) => '<option value="' + (i + 1) * 60 + '">' + (i + 1) + " min</option>").join("");
 
   // ---- DOM -------------------------------------------------------------
+  // ESPHome's shell has no viewport meta or language
+  document.head.insertAdjacentHTML("beforeend", '<meta name=viewport content="width=device-width, initial-scale=1,user-scalable=no">');
+  document.documentElement.lang = "en";
   document.body.innerHTML = `
   <div class="wrap">
     <header class="top">
@@ -609,10 +612,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     try {
       const r = await fetch("/gameday/state?_=" + left, { cache: "no-store", signal: ctl.signal });
       reached = true;
+      streamCheck(downSince);
       answered();
-      // The event stream retries every 30 seconds, and never after an HTTP
-      // error. The panel is back, so reopen it now.
-      if (!connected && !restart && Date.now() - streamAt > 10000) connect();
       if (r.ok) {
         D = await r.json();
         stateLeft = left;
@@ -3083,10 +3084,6 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     $("#wifiLast").textContent = line;
   };
 
-  // After an install the device reboots. The event stream only retries every
-  // 30 seconds, so poll the root page instead and reload as soon as it answers.
-  let es = null;
-  let streamAt = 0;
   const showRestart = (line) => {
     restart = line;
     renderGone();
@@ -3097,8 +3094,8 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   const waitForReboot = (fromVersion, line, tried = "") => {
     const started = Date.now();
     let sawDown = false;
-    if (es) { es.close(); es = null; }
-    setConn(false);
+    // The reload below opens a new stream
+    closeStream();
     showRestart(line);
     // Ask the device which version it runs; reload as soon as that changes.
     // A connection to a rebooting device can hang, so each probe gets 1.5s.
@@ -3151,10 +3148,9 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
   // setup hotspot and never on this one. Stop asking it.
   const intoSetup = (why) => {
     stopped = true;
-    if (es) { es.close(); es = null; }
+    closeStream();
     clearInterval(pollTimer);
     clearTimeout(stateTimer);
-    setConn(false);
     const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
     showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
   };
@@ -3440,28 +3436,87 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     }
   };
 
-  const connect = () => {
+  // One stream, reopened by the page, never the browser
+  let es = null;
+  let streamAt = 0;   // when it was opened
+  let heardAt = 0;    // its last event
+  let retryMs = 0;    // the last wait before reopening
+  let retryTimer = 0;
+  // The panel marks its streams in use each second
+  const RETRY_FIRST = 2000;
+  const RETRY_MAX = 60000;
+  // The panel pings every 10 s
+  const SILENT_MS = 35000;
+  const closeStream = () => {
+    clearTimeout(retryTimer);
     if (es) es.close();
-    streamAt = Date.now();
+    es = null;
+    setConn(false);
+  };
+  const heard = () => {
+    heardAt = Date.now();
+    setConn(true);
+    answered();
+  };
+  // Each new stream makes the panel resend every entity
+  const connect = () => {
+    if (stopped) return;
+    closeStream();
+    streamAt = heardAt = Date.now();
     es = new EventSource("/events");
     es.addEventListener("ping", (ev) => {
-      setConn(true);
-      answered();
+      heard();
       if (!ev.data) return;
       try {
         const p = JSON.parse(ev.data);
-        if (p.title) $("#devname").textContent = p.title;
+        if (p.title) document.title = $("#devname").textContent = p.title;
         if (p.comment) $("#ver").textContent = p.comment;
       } catch (_) {}
     });
     es.addEventListener("state", (ev) => {
+      heard();
       try { onState(JSON.parse(ev.data)); } catch (_) {}
     });
-    es.onopen = () => { setConn(true); answered(); fetchState(); };
+    es.onopen = () => { heard(); fetchState(); };
     // A dropped stream is often only a phone waking up; ask the panel before
     // saying it's gone.
-    es.onerror = () => { setConn(false); fetchState(); };
+    es.onerror = () => { streamLost(); fetchState(); };
   };
+  const reopenAfter = (ms) => {
+    clearTimeout(retryTimer);
+    // A hidden page reopens once it's shown
+    retryTimer = setTimeout(() => { if (!document.hidden) connect(); }, ms);
+  };
+  // Closed, reopened after 2 s, doubling to 60 s
+  const streamLost = () => {
+    // Only a stream heard for a minute starts over
+    if (heardAt - streamAt >= RETRY_MAX) retryMs = 0;
+    retryMs = Math.min(retryMs * 2 || RETRY_FIRST, RETRY_MAX);
+    closeStream();
+    reopenAfter(retryMs);
+  };
+  // Reopens now, but never twice within RETRY_FIRST
+  const reopenNow = () => {
+    if (restart || document.hidden) return;
+    const wait = streamAt + RETRY_FIRST - Date.now();
+    if (wait <= 0) connect();
+    else if (!es) reopenAfter(wait);
+  };
+  // A state read answered, so the panel is there
+  const streamCheck = (wasDown) => {
+    if (wasDown) reopenNow();
+    else if (es && Date.now() - heardAt > SILENT_MS) streamLost();
+  };
+  // A phone waking up gets its stream back at once
+  const wake = () => {
+    if (document.hidden) return;
+    fetchState();
+    if (!connected || Date.now() - heardAt > SILENT_MS) reopenNow();
+  };
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("online", wake);
+  // The back/forward cache drops the stream
+  window.addEventListener("pageshow", (ev) => { if (ev.persisted) { closeStream(); wake(); } });
   connect();
   fetchState();
   loadNetworks();

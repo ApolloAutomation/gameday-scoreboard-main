@@ -510,6 +510,8 @@ web_server:
   # Custom page (firmware/web). Regenerate bundle.js with scripts/build_web.py.
   js_include: web/bundle.js
   css_include: web/app.css
+  # No ESPHome page script: it opened a second stream
+  js_url: ""
 
 http_request:
   id: http_client
