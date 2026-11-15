@@ -444,18 +444,7 @@ void test_feed() {
   feed_done(l, Source::LOCAL, 200, true, 0, 0, 30300);
   p = feed_pick(l, true, kLocalPollMs + 30000);
   FCHECK(p.source == Source::LOCAL && p.in_ms == 0, "every 10 s");
-
-  feed_lol_limits(f, "498", "72122");
-  FCHECK(f.lol_gap_ms == kLolMinMs, "plenty left: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "10", "3600");
-  FCHECK(f.lol_gap_ms == 360000, "spread over the window: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "0", "3600");
-  FCHECK(f.lol_gap_ms == 3600000, "none left: wait for the reset");
-  feed_lol_limits(f, "0", "200000");
-  FCHECK(f.lol_gap_ms == kLolMaxMs, "at most a day: %u", f.lol_gap_ms);
-  feed_lol_limits(f, "0", "3600");
-  feed_lol_limits(f, "x", "3600");
-  FCHECK(f.lol_gap_ms == 3600000, "garbage ignored");
+  FCHECK(feed_gap_ms(Source::ADSBLOL) == kLolMinMs, "adsb.lol every 3 minutes");
 }
 
 RouteAsk recorded_ask() {

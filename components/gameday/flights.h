@@ -43,7 +43,6 @@ static const uint32_t kFr24PollMs = 20 * 1000;
 static const uint32_t kFiPollMs = 20 * 1000;
 static const uint32_t kLocalPollMs = 10 * 1000;
 static const uint32_t kLolMinMs = 180 * 1000;  // 500 a day per address
-static const uint32_t kLolMaxMs = 24 * 3600 * 1000;
 static const uint32_t kRoutesetGapMs = 30 * 1000;  // adsb.im wants batches
 static const uint32_t kAdsbdbGapMs = 5 * 1000;
 // Ordinary failures in a row before the next source.
@@ -80,7 +79,6 @@ struct Feed {
   espn::HostWait wait[kSources];
   uint32_t last_ms[kSources]{};
   bool read_once[kSources]{};
-  uint32_t lol_gap_ms{kLolMinMs};
 };
 
 struct FeedPick {
@@ -88,7 +86,7 @@ struct FeedPick {
   uint32_t in_ms{0};  // 0: read now
 };
 
-uint32_t feed_gap_ms(const Feed &f, Source s);
+uint32_t feed_gap_ms(Source s);
 // Out after kFailoverStreak failures or a refusal.
 bool feed_out(const Feed &f, Source s, uint32_t now_ms);
 // Receiver, Flightradar24, adsb.fi, adsb.lol; each while earlier ones are out.
@@ -96,8 +94,6 @@ FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms, bool fr24 = true)
 void feed_started(Feed &f, Source s, uint32_t now_ms);
 // status: HTTP status, 0 or less when never answered.
 void feed_done(Feed &f, Source s, int status, bool parsed, uint32_t retry_after_ms, uint32_t rnd, uint32_t now_ms);
-// adsb.lol's x-ratelimit-remaining and x-ratelimit-reset (seconds).
-void feed_lol_limits(Feed &f, const std::string &remaining, const std::string &reset_s);
 
 // ---- Units -------------------------------------------------------------------
 
