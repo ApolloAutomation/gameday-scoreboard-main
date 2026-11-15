@@ -257,7 +257,7 @@ jobs:
           spots = [
               ("AGENTS.md", r"ESPHome (\S+), the version CI pins"),
               ("CONTRIBUTING.md", r"\[ESPHome\]\(https://esphome\.io/\) (\S+), the version CI builds with"),
-              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"`\.github/workflows/build\.yml`, (\S+) on the `dev` branch"),
+              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"`\.github/workflows/build\.yml` in the code you clone, (\S+) for the latest release"),
               ("docs/wiki/src/content/docs/diy/build-from-source.md", r"pip install esphome==(\S+)"),
           ]
           bad = 0
