@@ -5,136 +5,85 @@ const FOLD="AAAAAA*CEEEEIIIIDNOOOOOxOUUUUY**aaaaaa*ceeeeiiiidnooooo/ouuuuy*yAaAa
 const FOLD2={"198":"AE","222":"Th","223":"ss","230":"ae","254":"th","306":"IJ","307":"ij","338":"OE","339":"oe","536":"S","537":"s","538":"T","539":"t","8211":"-","8212":"-","8216":"'","8217":"'","8220":"\"","8221":"\""};
 const PROP_STATS=[["football","passyds","PASS YDS",false],["football","passtd","PASS TD",false],["football","cmp","CMP",false],["football","int","INT",false],["football","rushyds","RUSH YDS",false],["football","rushatt","RUSH ATT",false],["football","recyds","REC YDS",false],["football","rec","REC",false],["football","rryds","RUSH+REC YDS",false],["football","td","ANY TD",true],["football","tackles","TACKLES",false],["football","sacks","SACKS",false],["football","kickpts","KICK PTS",false],["basketball","pts","PTS",false],["basketball","reb","REB",false],["basketball","ast","AST",false],["basketball","threes","3PM",false],["basketball","stl","STL",false],["basketball","blk","BLK",false],["basketball","pra","PTS+REB+AST",false],["basketball","pr","PTS+REB",false],["basketball","pa","PTS+AST",false],["basketball","ra","REB+AST",false],["baseball","hits","HITS",false],["baseball","runs","RUNS",false],["baseball","rbi","RBI",false],["baseball","hrr","H+R+RBI",false],["baseball","hr","HR",true],["baseball","k","K",false],["baseball","hitsallowed","HITS ALLOWED",false],["baseball","er","ER",false],["baseball","outs","OUTS",false],["hockey","pts","PTS",false],["hockey","goal","ANY GOAL",true],["hockey","ast","AST",false],["hockey","sog","SOG",false],["hockey","blk","BLK",false],["hockey","saves","SAVES",false],["soccer","goal","ANY GOAL",true]];
 const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK","AVAX","SHIB","XLM","BCH","ATOM","TRX","UNI","SUI","PEPE","POL","TON"],"indexes":["SPX","GSPC","DJI","DJIA","IXIC","NASDAQ","NDX","RUT","VIX"],"yahoo":{"SPX":"GSPC","GSPC":"GSPC","DJI":"DJI","DJIA":"DJI","DOW":"DJI","IXIC":"IXIC","NASDAQ":"IXIC","COMP":"IXIC","NDX":"NDX","RUT":"RUT","VIX":"VIX"},"alias":{"XBT":"BTC","XDG":"DOGE","MATIC":"POL"}};
-// Game Day Scoreboard device page.
-// Scores and settings come from the gameday component's own routes:
-//   GET  /gameday/state           one JSON document with the game and every setting
-//   POST /gameday/set?key=value   change settings (team=nfl:6, mode=1, fav2=ncaa:333, tz=3 ...)
-//   POST /gameday/action?do=name  refresh, power_ok (clears the brownout cap), anim&play=pass|run|fg|two|hr|soccer|hockey
-// The ESPHome event stream (/events) still carries the entities that stay
-// for Home Assistant (Power, Brightness, Firmware, WizMote...) and its
-// "Game Status" event, sent on every board update, is the cue to re-read the
-// state document.
-// Bundled with the team table by scripts/build_web.py, which defines
-// TEAMS = [[league, espnId, abbr, name], ...] and TZS = [[name, iana], ...].
-// Also FOLD and FOLD2, the firmware's ASCII folding tables.
-
 (() => {
-  "use strict";
-
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const el = (tag, cls, text) => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text !== undefined) n.textContent = text;
-    return n;
-  };
-  // A button whose state is a CSS class also says it to screen readers:
-  // switches with aria-checked, the other on/off buttons with aria-pressed.
-  const setOn = (n, on, attr) => {
-    n.classList.toggle("on", on);
-    n.setAttribute(attr, String(on));
-  };
-
-  // ESPHome's hosted page script set these; it may not load
-  if (!$('meta[name="viewport"]')) {
-    const vp = el("meta");
-    vp.name = "viewport";
-    vp.content = "width=device-width, initial-scale=1";
-    document.head.appendChild(vp);
-  }
-  document.documentElement.lang = "en";
-  document.title = "Game Day Scoreboard";
-
-  // Where the project lives. SITE_URL is the installer and changelog site,
-  // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
-  // address" lists every place it is set); REPO is the GitHub repository.
-  const SITE_URL = "https://apolloautomation.github.io/gameday-scoreboard-main";
-  const REPO = "ApolloAutomation/gameday-scoreboard-main";
-
-  // The leagues the firmware knows (components/gameday/leagues.h), in tab
-  // order. prefix: team list label; tab: picker tab (leagues with the same
-  // one share it); name: the long name; path: ESPN's; byId: logo files named
-  // by team id; file: one logo for the whole league ("" for none); scan:
-  // extra query for today's scoreboard; board: a leaderboard sport ("golf"
-  // for a golf tour, "racing" for a racing series), followed like a team but
-  // never a favorite, a Live games league or in On now. scripts/build_web.py
-  // checks prefix, path, logo and byId against leagues.h and stops the build
-  // when they differ.
-  // source: "mlb" or "hockeytech" for non-ESPN leagues, with sport.
-  const LEAGUES = {
-    nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
-    ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
-    mlb: { prefix: "MLB", tab: "MLB", name: "MLB", path: "baseball/mlb", logo: "mlb", byId: false, scan: "" },
-    milb: { prefix: "MiLB", tab: "MiLB", name: "Minor league baseball", path: "mlbstats/milb", logo: "milb", byId: true, scan: "", source: "mlb", sport: "baseball" },
-    mls: { prefix: "MLS", tab: "MLS", name: "MLS", path: "soccer/usa.1", logo: "soccer", byId: true, scan: "" },
-    epl: { prefix: "EPL", tab: "EPL", name: "Premier League", path: "soccer/eng.1", logo: "soccer", byId: true, scan: "" },
-    nba: { prefix: "NBA", tab: "NBA", name: "NBA", path: "basketball/nba", logo: "nba", byId: false, scan: "" },
-    wnba: { prefix: "WNBA", tab: "WNBA", name: "WNBA", path: "basketball/wnba", logo: "wnba", byId: false, scan: "" },
-    mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&", college: true },
-    nhl: { prefix: "NHL", tab: "NHL", name: "NHL", path: "hockey/nhl", logo: "nhl", byId: false, scan: "" },
-    ahl: { prefix: "AHL", tab: "AHL", name: "AHL", path: "hockeytech/ahl", logo: "ahl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
-    echl: { prefix: "ECHL", tab: "ECHL", name: "ECHL", path: "hockeytech/echl", logo: "echl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
-    pga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/pga", logo: "leagues", byId: false, file: "pgatour", scan: "", board: "golf" },
-    lpga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/lpga", logo: "leagues", byId: false, file: "lpga", scan: "", board: "golf" },
-    f1: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/f1", logo: "leagues", byId: false, file: "f1", scan: "", board: "racing" },
-    // ESPN has no NASCAR logo (its own icon is a dark flag the page can't show)
-    nascar: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/nascar-premier", logo: "leagues", byId: false, file: "", scan: "", board: "racing" },
-  };
-  const lgInfo = (lg) => LEAGUES[lg] || LEAGUES.nfl;
-  // A golf tour or a racing series: its board is a leaderboard
-  const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
-  const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
-  // Games and logos from MLB's own servers (minor league baseball)
-  const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
-  // Only ESPN leagues have rosters for favorite players
-  const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
-  // HockeyTech blocks browsers (CORS), so not in On now
-  const isHt = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "hockeytech");
-  // "football", "baseball": the sport's situation switch and splashes
-  const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
-  // Only ESPN pro teams have a seed and place
-  const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !LEAGUES[lg].source;
-  // "#5 OSU": a college team's rank (1-25) before its abbreviation
-  const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
-  // MiLB level is TEAMS row's fifth field, MLB sport id
-  const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
-  const levelOf = (t) => (t && isMlb(t[0]) && LEVELS[t[4]]) || "";
-  // The picker tab a league is on: the first league with the same tab text.
-  const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
-  // "" for a league with no logo: its image stays hidden.
-  const logoUrl = (league, id, abbr) => {
-    const l = lgInfo(league);
-    if (l.file === "") return "";
-    if (l.source === "mlb") return `https://midfield.mlbstatic.com/v1/team/${id}/spots/64`;
-    if (l.source === "hockeytech") {
-      // Fifth field: logo season, plus 0x10000 when no small logo
-      const t = TEAMS.find((x) => x[0] === league && x[1] === id);
-      const g = (t && t[4]) || 0;
-      return `https://assets.leaguestat.com/${l.logo}/logos/${g & 0x10000 ? "" : "50x50/"}${id}${g & 0xffff ? "_" + (g & 0xffff) : ""}.png`;
-    }
-    return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.file || (l.byId ? id : String(abbr).toLowerCase())}.png`;
-  };
-  const keyOf = (t) => t[0] + ":" + t[1];
-  const teamByKey = (key) => TEAMS.find((t) => keyOf(t) === key);
-  const refKey = (r) => (r && r.id ? r.l + ":" + r.id : "");
-
-  // ---- state -----------------------------------------------------------
-  const ents = {};       // id -> last event payload ({id, name, state, value, option...})
-  const byName = {};     // name -> id
-  let D = null;          // /gameday/state document as the device last sent it
-  let S = null;          // D with the page's unconfirmed posts on top; every render reads this
-  let game = null;       // S.game
-  let connected = false;
-  let downSince = 0;     // page clock when the panel stopped answering, 0 while it answers
-  let restart = "";      // what the board says while a reboot or reset runs
-  let stopped = false;   // reset into setup: the panel won't be back on this network
-
-  // Shared by Switch every and Alternate every, in seconds
-  const ROTATE_OPTIONS = '<option value="30">30 s</option>'
-    + Array.from({ length: 30 }, (_, i) => '<option value="' + (i + 1) * 60 + '">' + (i + 1) + " min</option>").join("");
-
-  // ---- DOM -------------------------------------------------------------
-  document.body.innerHTML = `
+"use strict";
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, cls, text) => {
+const n = document.createElement(tag);
+if (cls) n.className = cls;
+if (text !== undefined) n.textContent = text;
+return n;
+};
+const setOn = (n, on, attr) => {
+n.classList.toggle("on", on);
+n.setAttribute(attr, String(on));
+};
+if (!$('meta[name="viewport"]')) {
+const vp = el("meta");
+vp.name = "viewport";
+vp.content = "width=device-width, initial-scale=1";
+document.head.appendChild(vp);
+}
+document.documentElement.lang = "en";
+document.title = "Game Day Scoreboard";
+const SITE_URL = "https://apolloautomation.github.io/gameday-scoreboard-main";
+const REPO = "ApolloAutomation/gameday-scoreboard-main";
+const LEAGUES = {
+nfl: { prefix: "NFL", tab: "NFL", name: "NFL", path: "football/nfl", logo: "nfl", byId: false, scan: "" },
+ncaa: { prefix: "NCAAF", tab: "NCAAF", name: "College football", path: "football/college-football", logo: "ncaa", byId: true, scan: "groups=80&limit=300&", college: true },
+mlb: { prefix: "MLB", tab: "MLB", name: "MLB", path: "baseball/mlb", logo: "mlb", byId: false, scan: "" },
+milb: { prefix: "MiLB", tab: "MiLB", name: "Minor league baseball", path: "mlbstats/milb", logo: "milb", byId: true, scan: "", source: "mlb", sport: "baseball" },
+mls: { prefix: "MLS", tab: "MLS", name: "MLS", path: "soccer/usa.1", logo: "soccer", byId: true, scan: "" },
+epl: { prefix: "EPL", tab: "EPL", name: "Premier League", path: "soccer/eng.1", logo: "soccer", byId: true, scan: "" },
+nba: { prefix: "NBA", tab: "NBA", name: "NBA", path: "basketball/nba", logo: "nba", byId: false, scan: "" },
+wnba: { prefix: "WNBA", tab: "WNBA", name: "WNBA", path: "basketball/wnba", logo: "wnba", byId: false, scan: "" },
+mcbb: { prefix: "NCAAM", tab: "NCAAM", name: "Men's college basketball", path: "basketball/mens-college-basketball", logo: "ncaa", byId: true, scan: "groups=50&limit=300&", college: true },
+nhl: { prefix: "NHL", tab: "NHL", name: "NHL", path: "hockey/nhl", logo: "nhl", byId: false, scan: "" },
+ahl: { prefix: "AHL", tab: "AHL", name: "AHL", path: "hockeytech/ahl", logo: "ahl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
+echl: { prefix: "ECHL", tab: "ECHL", name: "ECHL", path: "hockeytech/echl", logo: "echl", byId: true, scan: "", source: "hockeytech", sport: "hockey" },
+pga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/pga", logo: "leagues", byId: false, file: "pgatour", scan: "", board: "golf" },
+lpga: { prefix: "Golf", tab: "Golf", name: "Golf", path: "golf/lpga", logo: "leagues", byId: false, file: "lpga", scan: "", board: "golf" },
+f1: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/f1", logo: "leagues", byId: false, file: "f1", scan: "", board: "racing" },
+nascar: { prefix: "Racing", tab: "Racing", name: "Racing", path: "racing/nascar-premier", logo: "leagues", byId: false, file: "", scan: "", board: "racing" },
+};
+const lgInfo = (lg) => LEAGUES[lg] || LEAGUES.nfl;
+const isBoard = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board);
+const isRacing = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].board === "racing");
+const isMlb = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "mlb");
+const fromEspn = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].source;
+const isHt = (lg) => !!(LEAGUES[lg] && LEAGUES[lg].source === "hockeytech");
+const sportOf = (lg) => lgInfo(lg).sport || lgInfo(lg).path.split("/")[0];
+const isPro = (lg) => !!LEAGUES[lg] && !LEAGUES[lg].board && !LEAGUES[lg].college && !LEAGUES[lg].source;
+const ranked = (rank, abbr) => (rank ? "#" + rank + " " : "") + (abbr || "");
+const LEVELS = { 11: "Triple-A", 12: "Double-A", 13: "High-A", 14: "Single-A" };
+const levelOf = (t) => (t && isMlb(t[0]) && LEVELS[t[4]]) || "";
+const tabKey = (lg) => Object.keys(LEAGUES).find((k) => LEAGUES[k].tab === lgInfo(lg).tab) || lg;
+const logoUrl = (league, id, abbr) => {
+const l = lgInfo(league);
+if (l.file === "") return "";
+if (l.source === "mlb") return `https://midfield.mlbstatic.com/v1/team/${id}/spots/64`;
+if (l.source === "hockeytech") {
+const t = TEAMS.find((x) => x[0] === league && x[1] === id);
+const g = (t && t[4]) || 0;
+return `https://assets.leaguestat.com/${l.logo}/logos/${g & 0x10000 ? "" : "50x50/"}${id}${g & 0xffff ? "_" + (g & 0xffff) : ""}.png`;
+}
+return `https://a.espncdn.com/i/teamlogos/${l.logo}/500-dark/${l.file || (l.byId ? id : String(abbr).toLowerCase())}.png`;
+};
+const keyOf = (t) => t[0] + ":" + t[1];
+const teamByKey = (key) => TEAMS.find((t) => keyOf(t) === key);
+const refKey = (r) => (r && r.id ? r.l + ":" + r.id : "");
+const ents = {};
+const byName = {};
+let D = null;
+let S = null;
+let game = null;
+let connected = false;
+let downSince = 0;
+let restart = "";
+let stopped = false;
+const ROTATE_OPTIONS = '<option value="30">30 s</option>'
++ Array.from({ length: 30 }, (_, i) => '<option value="' + (i + 1) * 60 + '">' + (i + 1) + " min</option>").join("");
+document.body.innerHTML = `
   <div class="wrap">
     <header class="top">
       <div class="brand">
@@ -496,2984 +445,2660 @@ const MARKETS={"coins":["BTC","ETH","SOL","DOGE","XRP","ADA","LTC","DOT","LINK",
     </div>
   </div>
   <div class="toast" id="toast" role="status"></div>`;
-
-  // ---- cards that fold ---------------------------------------------------
-  // localStorage "gd.expand" opens every card, for tests
-  let folds = {};
-  let expandAll = false;
-  try {
-    const v = JSON.parse(localStorage.getItem("gd.cards"));
-    if (v && typeof v === "object") folds = v;
-    expandAll = localStorage.getItem("gd.expand") === "1";
-  } catch (_) {}
-  const folded = (id) => (expandAll ? true : folds[id]);
-  document.querySelectorAll("details.card").forEach((d) => {
-    if (typeof folded(d.id) === "boolean") d.open = folded(d.id);
-    // Fires before the toggle, so d.open is the old state
-    d.firstElementChild.addEventListener("click", () => {
-      folds[d.id] = !d.open;
-      try { localStorage.setItem("gd.cards", JSON.stringify(folds)); } catch (_) {}
-    });
-  });
-  // First state document only; later changes don't refold
-  let foldsSet = false;
-  const renderFolds = () => {
-    if (!S || foldsSet) return;
-    foldsSet = true;
-    const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets, mktCard: showsMarkets() ? [1] : [] };
-    for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
-  };
-  const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
-
-  // ---- helpers ---------------------------------------------------------
-  let toastTimer;
-  const toast = (t) => {
-    const n = $("#toast");
-    n.textContent = t;
-    n.classList.add("on");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => n.classList.remove("on"), 1800);
-  };
-
-  // Entity ids come as "domain/Name" (ESPHome 2026.x) or "domain-object_id"
-  // (older builds). Control URLs are /{domain}/{entity name}/{action}, matched
-  // against the entity's name, so the name is what goes in the URL.
-  const domainOf = (e) => e.domain || String(e.id || "").split(/[\/-]/)[0];
-  const post = async (id, action, params, attempt = 0) => {
-    const e = ents[id] || { id };
-    const domain = domainOf(e);
-    const target = e.name || String(id).split("/")[1] || String(id).split("-").slice(1).join("-");
-    const qs = params
-      ? "?" + Object.entries(params).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&")
-      : "";
-    try {
-      const r = await fetch(`/${domain}/${encodeURIComponent(target)}/${action}${qs}`, { method: "POST" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return true;
-    } catch (e) {
-      if (attempt < 1) {
-        // The device only has a handful of sockets; a busy moment is normal.
-        await new Promise((res) => setTimeout(res, 500));
-        return post(id, action, params, attempt + 1);
-      }
-      toast("Device did not respond (" + (e.message || "network") + "). Try again.");
-      return false;
-    }
-  };
-
-  // ---- gameday routes ----------------------------------------------------
-  const qs = (params) => Object.entries(params).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
-  // A tap redraws from what it posted, not from the device's last answer: a
-  // state read that left before the device applied the post still carries
-  // the old value. Each posted setting is held here until a read shows it,
-  // or a read that left after the device answered the post (APPLY_MS for
-  // its main loop to apply it) comes back. Then the device's value wins.
-  const APPLY_MS = 300;
-  const held = {};       // key -> {v: the value as the state document has it, ack: when the post was answered}
-  const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
-  const stateForm = {
-    mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
-    clocksize: Number, textsize: Number, sportview: Number, areadetail: (v) => v === "1",
-    down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
-    bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
-    follow: (v) => v === "1",
-    alerts: Number, alertfav: (v) => v === "1", anim: (v) => v === "1",
-    idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
-    nightstart: String, nightend: String,
-    watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
-    split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number, full: (v) => v === "1",
-    flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
-    live: (v) => v.split(",").filter(Boolean),
-    team: (v) => ref(v),
-    favs: (v) => v.split(",").filter(Boolean).map(ref),
-  };
-  const sameForm = {
-    mode: (a, b) => (a || 0) === (b || 0),
-    team: (a, b) => refKey(a) === refKey(b),
-    splitteam: (a, b) => refKey(a) === refKey(b),
-    live: (a, b) => (a || []).slice().sort().join(",") === (b || []).slice().sort().join(","),
-    favs: (a, b) => (a || []).map(refKey).filter(Boolean).join(",") === (b || []).map(refKey).filter(Boolean).join(","),
-  };
-  const same = (k, a, b) => (sameForm[k] ? sameForm[k](a, b) : a === b);
-  const overlay = () => {
-    if (!D) return;
-    S = Object.assign({}, D);
-    for (const k of Object.keys(held)) S[k] = held[k].v;
-    game = S.game || null;
-  };
-
-  let stateTimer = null;
-  let stateLeft = 0;     // when the last drawn read was sent
-  let stateInflight = false;
-  let stateAgain = false;
-  const fetchState = async () => {
-    if (stopped) return;
-    // A read asked for during another one runs after it, so it sees the latest post.
-    if (stateInflight) { stateAgain = true; return; }
-    stateInflight = true;
-    const left = Date.now();
-    // A panel that lost power never closes the connection, so give up on it.
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 8000);
-    let reached = false;
-    try {
-      const r = await fetch("/gameday/state?_=" + left, { cache: "no-store", signal: ctl.signal });
-      reached = true;
-      answered();
-      // The event stream retries every 30 seconds, and never after an HTTP
-      // error. The panel is back, so reopen it now.
-      if (!connected && !restart && Date.now() - streamAt > 10000) connect();
-      if (r.ok) {
-        D = await r.json();
-        stateLeft = left;
-        for (const k of Object.keys(held)) {
-          const h = held[k];
-          if (h.ack && (same(k, D[k], h.v) || left > h.ack + APPLY_MS)) delete held[k];
-        }
-        overlay();
-        renderAll();
-        if (Object.values(held).some((h) => h.ack)) scheduleState(APPLY_MS + 100);
-      }
-    } catch (_) {
-      // The poll comes back around.
-      if (!reached) unanswered();
-    }
-    clearTimeout(timer);
-    stateInflight = false;
-    if (stateAgain) { stateAgain = false; fetchState(); }
-  };
-  const scheduleState = (ms) => { clearTimeout(stateTimer); stateTimer = setTimeout(fetchState, ms); };
-  const postSet = async (params, attempt = 0) => {
-    try {
-      const r = await fetch("/gameday/set?" + qs(params), { method: "POST" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return true;
-    } catch (e) {
-      if (attempt < 1) {
-        await new Promise((res) => setTimeout(res, 500));
-        return postSet(params, attempt + 1);
-      }
-      toast("Device did not respond (" + (e.message || "network") + "). Try again.");
-      return false;
-    }
-  };
-  // Settings post. Posts go one at a time, in tap order, so a slow one (or its
-  // retry) never lands after a later one. The device applies them on its main
-  // loop, so re-read shortly after.
-  let setQueue = Promise.resolve();
-  const setGD = (params) => {
-    const mine = {};
-    for (const k of Object.keys(params)) {
-      if (!stateForm[k]) continue;
-      mine[k] = held[k] = { v: stateForm[k](String(params[k])), ack: 0 };
-    }
-    // A league list turns automatic off and an empty one turns it back on.
-    // The automatic list itself is the device's to work out, so hold only the flag.
-    if (mine.live) {
-      mine.live_auto = held.live_auto = { v: !mine.live.v.length, ack: 0 };
-      if (!mine.live.v.length) { delete mine.live; delete held.live; }
-    }
-    if (Object.keys(mine).length) { overlay(); renderAll(); }
-    const run = setQueue.then(() => postSet(params)).then((ok) => {
-      for (const k of Object.keys(mine)) {
-        if (held[k] !== mine[k]) continue;  // a later tap posted this key again
-        if (ok) held[k].ack = Date.now();
-        else delete held[k];
-      }
-      if (!ok) { overlay(); renderAll(); }
-      scheduleState(APPLY_MS + 100);
-      return ok;
-    });
-    setQueue = run;
-    return run;
-  };
-  const doAction = async (name, done) => {
-    try {
-      const r = await fetch("/gameday/action?do=" + name, { method: "POST" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      if (done) toast(done);
-    } catch (e) {
-      toast("Device did not respond (" + (e.message || "network") + ")");
-    }
-  };
-  // Try it plays nothing off the Scoreboard page
-  const tryIt = (field, name, done) => {
-    const page = pageOf();
-    if ((page && page !== "Scoreboard") || (field && S && S.display_now && S.display_now !== "gameday")) {
-      toast("Set Showing to Scoreboard to try it");
-      return;
-    }
-    doAction(name, done);
-  };
-  document.querySelectorAll("[data-anim]").forEach((b) => {
-    b.onclick = () => tryIt(false, "anim&play=" + encodeURIComponent(b.dataset.anim), "Playing on the panel");
-  });
-  $("#fieldTry").onclick = () => tryIt(true, "field", "Showing a sample field on the panel");
-
-  // Every ping calls this; #conn is a live region, so only a flip touches it.
-  const setConn = (on) => {
-    if (on === connected) return;
-    connected = on;
-    const c = $("#conn");
-    c.classList.toggle("on", on);
-    c.querySelector("span").textContent = on ? "live" : "offline";
-  };
-
-  // The panel's own miss count can't say it has gone, so the page keeps its
-  // own: a state read that gets no answer while the stream is down, or two in
-  // a row while the stream still looks open (a panel that lost power).
-  let readFails = 0;
-  let firstFailAt = 0;
-  const renderGone = () => {
-    const line = $("#gone");
-    line.textContent = restart
-      || (downSince ? "Panel not answering since " + new Date(downSince).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
-    line.hidden = !line.textContent;
-    $("#board").classList.toggle("dim", !line.hidden);
-  };
-  const answered = () => {
-    readFails = 0;
-    if (downSince) { downSince = 0; renderGone(); }
-  };
-  const unanswered = () => {
-    if (!readFails++) firstFailAt = Date.now();
-    if (downSince || (connected && readFails < 2)) return;
-    downSince = firstFailAt;
-    setConn(false);
-    renderGone();
-  };
-
-  // ---- board rendering ---------------------------------------------------
-  // ESPN also ends a postponed, suspended or canceled game in POST, without
-  // marking it done; its detail says which.
-  const endedAs = (g) => (g.done === false && g.detail ? g.detail : "Final");
-
-  // Rank shows only where it fits, as on the panel
-  const fitRank = (node) => {
-    const rk = node.querySelector(".abbr .rk");
-    if (!rk) return;
-    rk.hidden = false;
-    rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
-  };
-  window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
-  // board_layout.h's lift_color: dark colors vanish on black
-  const liftColor = (hex) => {
-    const c = parseInt(hex, 16) || 0;
-    let r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
-    const m = Math.max(r, g, b);
-    if (!m) return "ffffff";
-    if (m < 0xc0) [r, g, b] = [r, g, b].map((x) => Math.floor((x * 0xc0) / m));
-    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
-  };
-  const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
-    const img = node.querySelector("img");
-    // No id: a side with no team yet, or the demo build's made-up teams.
-    const src = id ? logoUrl(league, id, abbr) : "";
-    if (img.getAttribute("src") !== src) img.src = src;
-    img.style.visibility = src ? "visible" : "hidden";
-    const a = node.querySelector(".abbr");
-    a.textContent = abbr || "---";
-    // A college team's rank before its abbreviation, like a broadcast
-    if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
-    fitRank(node);
-    a.classList.toggle("poss", !!poss);
-    a.style.color = "#" + liftColor(color || "ffffff");
-    node.querySelector(".rec").textContent = rec || "";
-    // Football only; -1 (ESPN sent none) hides the pips
-    node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
-    node.querySelectorAll(".pips i").forEach((p, i) => p.classList.toggle("on", i < (timeouts || 0)));
-  };
-  // The situation line under the clock: down and distance for football, the
-  // count and outs for baseball, the latest goal or a playoff series otherwise.
-  const situation = (g) => {
-    if (!g.sport) return g.d || "";
-    if (g.sport === 1 && g.outs >= 0) return (g.sit ? g.sit + ", " : "") + g.outs + (g.outs === 1 ? " out" : " outs");
-    return g.sit || "";
-  };
-
-  // An event's days, "Nov 12-15" or "Oct 29-Nov 1", in the panel's zone: a
-  // golf event's first and last day (midnight Eastern, read at noon Eastern,
-  // shift 43200) or a race weekend's (real times, shift 0).
-  const golfDates = (start, end, shift = 43200) => {
-    if (!start) return "";
-    const zone = (S && S.tz_iana) || undefined;
-    const part = (t) => {
-      try {
-        const p = new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short", day: "numeric" }).formatToParts(new Date((t + shift) * 1000));
-        return { m: p.find((x) => x.type === "month").value, d: p.find((x) => x.type === "day").value };
-      } catch (_) { return { m: "", d: "" }; }
-    };
-    const a = part(start), z = part(end || start);
-    if (a.m === z.m && a.d === z.d) return a.m + " " + a.d;
-    return a.m + " " + a.d + "-" + (a.m === z.m ? "" : z.m + " ") + z.d;
-  };
-  // Golf (sport 5): the tour's leaderboard in place of the two teams.
-  const renderGolf = (g) => {
-    const golf = g.golf || {};
-    const st = $("#gstate");
-    const ph = golf.ph || 0;  // 0 before, 1 round on, 2 between rounds, 3 final, 4 canceled
-    st.classList.toggle("live", ph === 1);
-    st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(golf.st || "").toUpperCase();
-    $("#golfSt").textContent = ph === 0 ? "" : golf.st || "";
-    const next = golf.next;
-    $("#golfWhen").textContent = ph === 0 ? golfDates(golf.start, golf.end)
-      : next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end) : "";
-    const ol = $("#golfRows");
-    ol.innerHTML = "";
-    for (const r of golf.rows || []) {
-      const li = el("li", r.w ? "w" : null);
-      li.appendChild(el("span", "p", r.p || ""));
-      li.appendChild(el("span", "n", r.n || ""));
-      const sc = String(r.s || "");
-      li.appendChild(el("span", "s " + (sc[0] === "-" ? "u" : sc[0] === "+" ? "o" : sc === "E" ? "e" : ""), sc));
-      li.appendChild(el("span", "t", r.t || ""));
-      ol.appendChild(li);
-    }
-  };
-  // "Sat 9:30 AM" in the panel's zone
-  const dayTime = (t) => {
-    if (!t) return "";
-    try {
-      return new Intl.DateTimeFormat("en-US", { timeZone: (S && S.tz_iana) || undefined, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(t * 1000));
-    } catch (_) { return ""; }
-  };
-  // Racing (sport 6): the session's order in golf's place, the car numbers
-  // and gaps in its score and thru columns.
-  const renderRace = (g) => {
-    const race = g.race || {};
-    const st = $("#gstate");
-    const ph = race.ph || 0;  // 0 before, 1 on track, 2 between sessions, 3 the race's final, 4 canceled
-    st.classList.toggle("live", ph === 1);
-    st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(race.st || "").toUpperCase();
-    $("#golfSt").textContent = ph === 0 ? "" : race.st || "";
-    const nx = race.nx ? race.nx + ", " + dayTime(race.at) : "";
-    const next = race.next;
-    $("#golfWhen").textContent = ph === 0 ? nx || golfDates(race.start, race.end, 0)
-      : ph === 1 || ph === 2 ? (nx ? "Next: " + nx : "")
-        : next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end, 0) : "";
-    const ol = $("#golfRows");
-    ol.innerHTML = "";
-    for (const r of race.rows || []) {
-      const li = el("li", r.w ? "w" : null);
-      li.appendChild(el("span", "p", r.p || ""));
-      li.appendChild(el("span", "n", r.n || ""));
-      li.appendChild(el("span", "s", r.v || ""));
-      li.appendChild(el("span", "t", r.d || ""));
-      ol.appendChild(li);
-    }
-  };
-
-  const renderBoard = () => {
-    const b = $("#board");
-    const g = game;
-    // A leaderboard (golf, sport 5; racing, 6) in place of the two teams
-    const lboard = !!(g && g.s !== "NOT_FOUND" && (g.sport === 5 || g.sport === 6));
-    b.classList.toggle("golfing", lboard);
-    $("#golf").hidden = !lboard;
-    $("#golf").classList.toggle("race", lboard && g.sport === 6);
-    b.querySelector(".row").hidden = lboard;
-    const st = $("#gstate");
-    const msg = $("#msg");
-    // misses is top level in the state document, not in game. Three in a row is
-    // where the firmware adds "no update" to the ticker, with or without a game.
-    // captive: the panel's Wi-Fi answered with a sign-in page, which the
-    // panel can't get past, so say how to fix it rather than "data stale".
-    const captive = !!(S && S.captive);
-    const stale = $("#stale");
-    stale.textContent = captive ? "Wi-Fi needs a sign-in" : "data stale";
-    stale.classList.toggle("on", captive || ((S && S.misses) || 0) >= 3);
-    // Bowl or playoff name, when ESPN gives the game one
-    const gname = $("#gname");
-    gname.textContent = (g && g.s !== "NOT_FOUND" && g.gn) || "";
-    gname.hidden = !gname.textContent;
-    if (!g || g.s === "NOT_FOUND") {
-      b.classList.add("empty");
-      st.textContent = g ? "NO GAME" : "WAITING";
-      st.classList.remove("live");
-      msg.hidden = false;
-      const mode = S ? String(S.mode || 0) : "0";
-      const favMode = mode === "4" && S && (S.favs || []).some(refKey);
-      // With no team picked the panel runs the live board, unless Favorites
-      // has teams. Favorites with none follows the team, like My team.
-      const liveMode = S && !favMode && (isLive(mode) || S.recap || !(S.team && S.team.id));
-      // why is the panel's own reason ("Can't reach ESPN", "Getting ready"),
-      // sent only when its board says something other than its default.
-      msg.textContent = !g ? "Waiting for the first fetch"
-        : captive ? "This Wi-Fi needs a sign-in. Use a home network or a hotspot."
-        : g.why ? g.why
-        : favMode ? "None of your favorites has a game coming up"
-          : liveMode ? "No live games right now"
-            : S && S.team && isRacing(S.team.l) ? "No upcoming race for this series"
-              : S && S.team && isBoard(S.team.l) ? "No upcoming event for this tour" : "No upcoming game for this team";
-      $("#clock").innerHTML = "&nbsp;";
-      $("#down").textContent = "";
-      return;
-    }
-    b.classList.remove("empty");
-    msg.hidden = true;
-    if (lboard) {
-      if (g.sport === 6) renderRace(g);
-      else renderGolf(g);
-      $("#clock").innerHTML = "&nbsp;";
-      $("#down").textContent = "";
-      return;
-    }
-    st.classList.toggle("live", g.s === "IN");
-    st.textContent = g.s === "IN" ? "LIVE" : g.s === "POST" ? endedAs(g).toUpperCase() : "UPCOMING";
-    const football = !g.sport;
-    renderTeam($("#tA"), g.l, g.ti, g.ta, g.tr, football ? g.tt : null, g.p === 1, g.tc, g.trk);
-    renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc, g.ork);
-    $("#sA").textContent = g.ts;
-    $("#sB").textContent = g.os;
-    const clock = $("#clock");
-    if (g.s === "IN") clock.textContent = g.c || "In progress";
-    else if (g.s === "POST") clock.textContent = endedAs(g);
-    else clock.textContent = g.k || "Upcoming";
-    const d = $("#down");
-    d.textContent = g.s === "IN" ? situation(g) : g.s === "PRE" && g.tv ? "on " + g.tv : "";
-    d.classList.toggle("rz", g.s === "IN" && !!g.rz);
-  };
-
-  // ---- mode pills ----------------------------------------------------------------
-  // Device modes: 0 my team, 4 favorite teams, 5 live games in the chosen
-  // leagues. 1-3 are the older football-only live modes; the page shows them
-  // as Live games and a chip tap moves the panel to mode 5.
-  const isLive = (m) => m === "1" || m === "2" || m === "3" || m === "5";
-  const modeButtons = Array.from(document.querySelectorAll("#modes button"));
-  modeButtons.forEach((b) => {
-    b.onclick = () => {
-      const cur = S ? String(S.mode || 0) : "";
-      if (cur === b.dataset.mode || (b.dataset.mode === "5" && isLive(cur))) return;
-      setGD({ mode: b.dataset.mode });
-      toast(b.textContent);
-    };
-  });
-  // Switch every, posted in seconds: 30, or whole minutes.
-  const rotateSelect = $("#rotate");
-  rotateSelect.onchange = () => setGD({ rotatesec: rotateSelect.value });
-  // Favorite teams mode settings (mode 4).
-  const lockonInput = $("#lockon");
-  lockonInput.onchange = () => {
-    const v = Math.min(120, Math.max(5, Number(lockonInput.value) || 15));
-    lockonInput.value = v;
-    setGD({ lockon: v });
-  };
-  const releaseSelect = $("#release");
-  releaseSelect.onchange = () => setGD({ release: releaseSelect.value });
-  // Stay on a big play (components/gameday/watch.h), in seconds.
-  const staySelect = $("#watchstay");
-  staySelect.onchange = () => setGD({ watchstay: staySelect.value });
-  const collideSelect = $("#collide");
-  // Alternate every: the same setting as Switch every.
-  const favRotate = $("#favrotate");
-  const showFavRotate = () => {
-    favRotate.hidden = collideSelect.value !== "1";
-  };
-  collideSelect.onchange = () => {
-    showFavRotate();
-    setGD({ collide: collideSelect.value });
-  };
-  favRotate.onchange = () => setGD({ rotatesec: favRotate.value });
-  // Leagues Live mode follows. An old football live mode reads as its leagues.
-  const liveKeys = () => {
-    const m = String(S.mode || 0);
-    if (m === "1") return ["nfl"];
-    if (m === "2") return ["ncaa"];
-    if (m === "3") return ["nfl", "ncaa"];
-    return S.live || [];
-  };
-  // No leagues picked: the device follows the leagues of the team and the
-  // favorites, and that list changes by itself when a favorite is added.
-  const liveAuto = () => String(S.mode || 0) === "5" && !!S.live_auto;
-  $("#liveAuto").onclick = () => {
-    setGD({ live: "" });
-    toast("Leagues follow your team and favorites");
-  };
-  const renderLiveBar = () => {
-    const auto = liveAuto();
-    // With nothing live the device shows the saved team's card, or with no
-    // team a rotation of recent finals, and keeps scanning.
-    // Follow this game (in Quick settings) holds the game up.
-    $("#liveName").textContent = S.fallback ? "No live game right now, showing your team until one starts"
-      : S.recap ? "No live game right now, showing recent finals"
-        : S.follow ? "Staying on the game you follow"
-          : "Following a random game in progress";
-    $("#liveLg").textContent = (S.fallback || S.recap || S.follow ? "" : "Moves on when it ends, or after Switch every. ")
-      + (auto ? "Leagues follow your team and favorites. Tap a league to choose by hand:" : "Leagues:");
-    $("#liveChips").classList.toggle("auto", auto);
-    $("#liveAuto").hidden = auto || String(S.mode || 0) !== "5";
-    renderLiveChips();
-  };
-  // One chip per league with teams, built once: a redraw only sets each one's
-  // state, so it never takes the keyboard focus off the chip it is on.
-  const liveChips = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && TEAMS.some((t) => t[0] === lg)).map((lg) => {
-    const b = el("button", "chip", LEAGUES[lg].tab);
-    setOn(b, false, "aria-pressed");
-    // From the list as it is now, not as it was when the chips were drawn:
-    // a second tap can come before the redraw.
-    b.onclick = () => {
-      const cur = liveKeys();
-      const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
-      if (!next.length) return toast("Pick at least one league");
-      const params = { live: next.join(",") };
-      if (String(S.mode || 0) !== "5") params.mode = 5;
-      setGD(params);
-    };
-    $("#liveChips").appendChild(b);
-    return [lg, b];
-  });
-  const renderLiveChips = () => {
-    const on = liveKeys();
-    for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
-  };
-  // During a visit it follows the game shown before
-  const renderFollow = (mode) => {
-    const favMode = mode === "4" && (S.favs || []).some(refKey);
-    const liveGame = isLive(mode) && !S.fallback && !S.recap;
-    const g = game;
-    const on = !!S.follow;
-    const up = S.visit
-      ? !!S.visit_follow || on
-      : !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
-    // Firmware from before the switch leaves follow out.
-    $("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
-    $("#followbar").classList.toggle("on", on);
-    $("#followName").textContent = on ? "Following this game" : "Follow this game";
-    const until = favMode ? "until its final has been up for After the final" : "until it ends";
-    $("#followLg").textContent = on
-      ? "The panel stays on this game " + until + ". Turn this off to go back to "
-        + (favMode ? "your favorites." : "switching games.")
-      : S.visit
-        ? "The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel " + until + "."
-        : "Keep this game on the panel " + until + ", instead of "
-          + (favMode ? "moving to another favorite." : "switching to another game.");
-  };
-  const renderMode = () => {
-    if (!S) return;
-    const mode = String(S.mode || 0);
-    modeButtons.forEach((b) => setOn(b, b.dataset.mode === mode || (b.dataset.mode === "5" && isLive(mode)), "aria-pressed"));
-    const live = isLive(mode);
-    if (live) renderLiveBar();
-    const favs = mode === "4";
-    $("#teambar").hidden = live || favs;
-    $("#livebar").hidden = !live;
-    $("#favbar").hidden = !favs;
-    // Older firmware sends only rotate, in minutes
-    const rotateSec = String(S.rotatesec || (S.rotate || 1) * 60);
-    if (document.activeElement !== rotateSelect) rotateSelect.value = rotateSec;
-    if (document.activeElement !== favRotate) favRotate.value = rotateSec;
-    if (document.activeElement !== lockonInput) lockonInput.value = S.lockon || 15;
-    if (document.activeElement !== releaseSelect) releaseSelect.value = String(S.release || 30);
-    if (document.activeElement !== collideSelect) {
-      collideSelect.value = String(S.collide || 0);
-      showFavRotate();
-    }
-    if (favs) {
-      const set = (S.next || []).filter((n) => n.t && n.t.id).length;
-      const shown = (S.next || []).find((n) => n.slot === S.shown);
-      $("#favName").textContent = !set
-        ? "No favorites set yet"
-        : S.follow && shown
-          ? "Following " + (shown.t.name || shown.t.abbr)
-          : S.locked && shown
-            ? "Locked on " + (shown.t.name || shown.t.abbr)
-            : "Cycling through your favorites";
-    }
-    renderFollow(mode);
-  };
-
-  // ---- idle display and night hours -------------------------------------
-  const IDLE_HINTS = [
-    "What each mode shows anyway: your team's next game, your favorites, or recent scores.",
-    "The time in your team's colors, and its next game on a wide panel.",
-    "Recent final scores and the games still to come today, for your team's and your favorites' leagues.",
-    "On game day the matchup with a countdown to the start, then the final until midnight. Other days, the clock.",
-    "The panel goes dark, or as dim as you set below, without turning it off.",
-    "Your team's logo, big, in its colors, with its name and its next game or last result. In Favorite teams, the one playing next.",
-  ];
-  const idleSelect = $("#idle");
-  idleSelect.onchange = () => setGD({ idle: idleSelect.value });
-  const idleDim = $("#idledim");
-  idleDim.oninput = () => ($("#idledimVal").textContent = idleDim.value);
-  idleDim.onchange = () => setGD({ idledim: idleDim.value });
-  const nightBri = $("#nightbri");
-  nightBri.oninput = () => ($("#nightbriVal").textContent = nightBri.value);
-  nightBri.onchange = () => setGD({ nightbri: nightBri.value });
-  // Cleared time fields give ""; don't post those
-  ["nightstart", "nightend"].forEach((key) => {
-    const input = $("#" + key);
-    input.onchange = () => { if (/^\d\d:\d\d$/.test(input.value)) setGD({ [key]: input.value }); };
-  });
-  const renderIdle = () => {
-    // Firmware from before the setting leaves idle out.
-    $("#idleCtls").hidden = $("#nightCtls").hidden = !S || S.idle === undefined;
-    if ($("#idleCtls").hidden) return;
-    const show = Number(S.idle) || 0;
-    if (document.activeElement !== idleSelect) idleSelect.value = String(show);
-    $("#idleHint").textContent = IDLE_HINTS[show] || "";
-    $("#idleDimRow").hidden = show !== 4;
-    if (document.activeElement !== idleDim) {
-      idleDim.value = S.idledim || 0;
-      $("#idledimVal").textContent = String(S.idledim || 0);
-    }
-    $("#nightRows").hidden = !S.night;
-    for (const key of ["nightstart", "nightend"])
-      if (document.activeElement !== $("#" + key)) $("#" + key).value = S[key] || "";
-    if (document.activeElement !== nightBri) {
-      nightBri.value = S.nightbri || 1;
-      $("#nightbriVal").textContent = String(S.nightbri || 1);
-    }
-    const now = { clock: "the clock", scores: "recent scores", today: "today's game", logo: "your team's logo" }[S.idle_view];
-    const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
-    const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near",
-      weather: "the National Weather Service has a warning or a watch out for home" }[main];
-    $("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
-      : now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
-        : S.night_now ? "In the night hours." : "";
-  };
-
-  // ---- the second area (Quick settings) -------------------------------------
-  // One or two panels, or older firmware: no split
-  const SPLIT_TITLES = { bottom: "Bottom half", right2: "Right two panels", right1: "Right panel" };
-  const SPLIT_CHOICES = [
-    ["Nothing: the board fills the row", "The board stretches across every panel, as before."],
-    ["Rotating live games", "The other live games in the leagues you follow, about 8 seconds each, leaving out minor league baseball, AHL and ECHL games. With Switch to big plays in other games on, a big play there shows in this area and the main board stays on its game. Uses more data."],
-    ["A second team's game", "Another team's next game, its live game with its own celebrations, and its final. Uses more data while it plays."],
-    ["Today's scores", "Recent final scores and the games still to come today, for your team's and your favorites' leagues."],
-    ["Clock and date", "The time and the date, with your next games underneath."],
-  ];
-  const WATCH_HINT = "The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.";
-  const WATCH_HINT_SPLIT = "A big play in another live game shows in the second area for the time below, and the main board stays on its game, even while you follow one.";
-  // On a 2x2, Off means the clock (4)
-  const splitShows = () => {
-    if (!S || S.split === undefined || !S.split_at) return -1;
-    const show = Number(S.split) || 0;
-    return S.split_at === "bottom" && show === 0 ? 4 : show;
-  };
-  // The displays besides Game Day the firmware lists (apps.h)
-  const otherDisplays = () => ((S && S.displays) || []).filter((d) => d.id !== 0);
-  const displayName = (id) => (((S && S.displays) || []).find((d) => d.id === id) || {}).name || "";
-  const mainDisplay = () => Number((S && S.display) || 0);
-  // [value, label, hint]: old choices, Game Day, then displays
-  const splitOffered = (show) => {
-    const out = (S.split_at === "bottom" ? "1234" : "01234").split("").map((c) => [Number(c), ...SPLIT_CHOICES[c]]);
-    if (mainDisplay() !== 0 || show === 5)
-      out.push([5, "Game Day", "The scoreboard: your team's game, and what the main board would show, while the main board shows " + (displayName(mainDisplay()) || "another display") + "."]);
-    for (const d of otherDisplays())
-      out.push([d.split, d.name, d.name + ", while the main board shows something else. The clock when the main board shows it too."]);
-    return out;
-  };
-  const splitSelect = $("#split");
-  splitSelect.onchange = () => setGD({ split: splitSelect.value });
-  $("#splitTeam").onclick = () => openPicker(false, false, false, true);
-  let splitOptions = "";
-  const renderSplit = () => {
-    const show = splitShows();
-    $("#splitCtls").hidden = show < 0;
-    if (show < 0) return;
-    $("#splitTitle").textContent = SPLIT_TITLES[S.split_at] || "Second area";
-    // Nothing is offered on three and four wide only.
-    const offered = splitOffered(show);
-    const key = offered.map((o) => o[0] + o[1]).join("|");
-    if (splitOptions !== key) {
-      splitOptions = key;
-      splitSelect.innerHTML = "";
-      for (const [v, label] of offered) splitSelect.add(new Option(label, String(v)));
-    }
-    if (document.activeElement !== splitSelect) splitSelect.value = String(show);
-    $("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
-    const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
-    $("#splitTeamRow").hidden = show !== 2;
-    // Game details stand in for these choices only
-    $("#areaDetailRow").hidden = S.areadetail === undefined || show < 1 || show > 4;
-    $("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
-    // Full screen: the main board's display takes this area too
-    const others = otherDisplays();
-    $("#fullRow").hidden = S.full === undefined || !others.length;
-    const names = others.map((d) => d.name);
-    const which = names.length > 1 ? names.slice(0, -1).join(", ") + " or " + names[names.length - 1] : names[0] || "";
-    const area = S.split_at === "bottom" ? "the bottom half" : S.split_at === "right2" ? "the right two panels" : "the right panel";
-    const bottom = S.split_at === "bottom";
-    $("#fullHint").textContent = "With Showing on " + which + ", it fills " + (bottom ? "all four panels" : "the whole row")
-      + " instead of sharing " + (bottom ? "them" : "it") + " with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
-    const n = Number(S.split_n) || 0;
-    const now = S.split_now;
-    let line = "";
-    if (now === "live") line = n === 1 ? "Showing the one other live game." : "Rotating " + n + " live games.";
-    else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
-    else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
-    else if (now === "game") line = "Showing Game Day.";
-    else if (now === "detail") line = "Showing your game's details.";
-    else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
-    else if (now === "clock" || now === "date") {
-      line = show === 2 && !t ? "Pick a team for it."
-        : show === 2 ? "Showing the clock: " + t.abbr + " isn't on now, or is on the main board."
-          : show === 1 ? "No other live games: showing the clock."
-            : show === 3 ? "No scores yet: showing the clock."
-              : "";
-      if (now === "date" && show === 4) line = "The main board has the time, so this shows the date.";
-      if (show === 5) line = "The main board shows Game Day, so this shows the clock.";
-      if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
-        : "Showing the clock: the night hours, or nothing to show yet.";
-    }
-    if (S.full_now) line = (displayName(mainDisplay()) || "The display") + " fills the panel now: Full screen is on.";
-    $("#splitNow").textContent = line;
-  };
-
-  // ---- toggles and favorites (static controls on the state document) --------
-  const standingSel = $("#standing");
-  standingSel.onchange = () => setGD({ standing: standingSel.value });
-  // Clock size and Text size: Normal (0) or Large (1)
-  const sizeSels = ["clocksize", "textsize", "sportview"].map((k) => {
-    const sel = $("#" + k);
-    sel.onchange = () => setGD({ [k]: sel.value });
-    return sel;
-  });
-  document.querySelectorAll(".sw[data-set]").forEach((sw) => {
-    sw.setAttribute("role", "switch");
-    setOn(sw, false, "aria-checked");
-    sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
-  });
-  // The words beside a switch flip it too
-  document.addEventListener("click", (ev) => {
-    const lab = ev.target.closest(".ctl > label:not([for])");
-    if (!lab || ev.target.closest("a, button, input, select")) return;
-    const sws = lab.parentElement.querySelectorAll(":scope > .sw");
-    if (sws.length === 1 && !sws[0].disabled) sws[0].click();
-  });
-  // Order matches the bits of the "alerts" mask
-  const ALERTS = [
-    ["football", "Football", [
-      ["Touchdown"], ["Field goal"], ["Extra point"],
-      ["2-point conversion", "Two points after a touchdown, and any two points that aren't clearly a safety."],
-      ["Safety", "Two points ESPN calls a safety, or that come in the middle of a drive."],
-      ["Interception"],
-      ["Fumble recovery", "Only a fumble the other team recovers."]]],
-    ["baseball", "Baseball", [
-      ["Runs", "Runs that aren't a home run, and every minor league run: MLB doesn't say how those scored."],
-      ["Home run", "MLB games."],
-      ["Grand slam", "A home run that scores four, in MLB games."],
-      ["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game. In a minor league doubleheader's 7-inning game, the 7th."]]],
-    ["hockey", "Hockey", [["Goal", "Every goal the same way, AHL and ECHL games too: neither ESPN nor HockeyTech says which came on a power play or into an empty net."]]],
-    ["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
-    ["basketball", "Basketball", [
-      ["Lead change", "The team that was behind goes ahead, in the last 2 minutes or in overtime."],
-      ["Buzzer beater", "A basket in the last second of a period that ties the game or takes the lead."],
-      ["Overtime", "When overtime starts."],
-      ["Final", "When the game ends, unless your team won: then the victory splash."]]],
-    // Not a sport: shown whenever the firmware has favorite players.
-    ["players", "Favorite players", [
-      ["Scores", "Names a favorite player who scores, in place of the team's splash. Football, baseball, soccer and hockey; in basketball only a late lead change or a buzzer beater."]]],
-  ];
-  const alertSws = [];
-  for (const [sport, name, kinds] of ALERTS) {
-    const group = el("div", "alertSport");
-    group.dataset.sport = sport;
-    group.append(el("div", "sub", name));
-    for (const [label, hint] of kinds) {
-      const row = el("div", "ctl");
-      const lab = el("label", "", label);
-      if (hint) lab.append(el("small", "", hint));
-      const sw = el("button", "sw");
-      const bit = alertSws.length;
-      sw.setAttribute("role", "switch");
-      sw.setAttribute("aria-label", name + ": " + label);
-      setOn(sw, false, "aria-checked");
-      sw.onclick = () => S && S.alerts !== undefined && setGD({ alerts: (S.alerts ^ (1 << bit)) >>> 0 });
-      row.append(lab, sw);
-      group.append(row);
-      alertSws.push(sw);
-    }
-    $("#alertCtls").append(group);
-  }
-  // Favorites: one row per team in priority order. Every change posts the
-  // whole list (favs=) so the device always sees one ordered list.
-  let favKeys = [];
-  // Each favorite's slot on the panel, which is its WizMote button for the
-  // first four. A slot emptied on its own (fav1=none, as the app can post)
-  // leaves a gap the list skips.
-  let favSlots = [];
-  const favMax = () => (S && S.favmax) || 4;
-  // renderSettings() redraws the list from S, which already carries the post.
-  const postFavs = (keys) => setGD({ favs: keys.join(",") });
-  const renderFavs = () => {
-    const host = $("#favCtls");
-    // Where the keyboard was, so the rebuilt list puts it back: the same
-    // button on the same team's row, or on the row now in a removed one's place.
-    const a = document.activeElement;
-    const was = a && host.contains(a) && a.closest(".ctl.fav")
-      ? { key: a.closest(".ctl.fav").dataset.key, title: a.title, at: Array.from(host.children).indexOf(a.closest(".ctl.fav")) }
-      : null;
-    host.innerHTML = "";
-    favKeys.forEach((key, i) => {
-      const t = teamByKey(key);
-      const row = el("div", "ctl fav");
-      row.dataset.key = key;
-      const img = el("img");
-      img.loading = "lazy";
-      img.alt = "";
-      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
-      if (src) img.src = src;
-      else img.style.visibility = "hidden";
-      row.appendChild(img);
-      const name = el("label", null, (i + 1) + ". " + (t ? t[3] : key));
-      const slot = favSlots[i] ?? i;
-      if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (slot < 4 ? " · remote button " + (slot + 1) : "")));
-      row.appendChild(name);
-      const ctl = el("span", "favmove");
-      const mk = (label, title, fn) => {
-        const b = el("button", null, label);
-        b.title = title;
-        b.setAttribute("aria-label", title);
-        b.onclick = fn;
-        ctl.appendChild(b);
-      };
-      const swap = (j) => {
-        if (j < 0 || j >= favKeys.length) return;
-        const next = favKeys.slice();
-        next[i] = favKeys[j];
-        next[j] = favKeys[i];
-        postFavs(next);
-      };
-      mk("\u25B2", "Move up", () => swap(i - 1));
-      mk("\u25BC", "Move down", () => swap(i + 1));
-      mk("\u2715", "Remove", () => postFavs(favKeys.filter((_, k) => k !== i)));
-      row.appendChild(ctl);
-      host.appendChild(row);
-    });
-    if (!favKeys.length) host.appendChild(el("p", "hint", "No favorites yet."));
-    $("#favAdd").hidden = favKeys.length >= favMax();
-    if (was) {
-      const rows = Array.from(host.querySelectorAll(".ctl.fav"));
-      const row = rows.find((r) => r.dataset.key === was.key) || rows[Math.min(was.at, rows.length - 1)];
-      const b = row && Array.from(row.querySelectorAll("button")).find((x) => x.title === was.title);
-      (b || $("#favAdd")).focus();
-    }
-  };
-  const addFav = (t) => {
-    const key = keyOf(t);
-    if (favKeys.includes(key)) return toast(t[3] + " is already a favorite");
-    if (favKeys.length >= favMax()) return toast("That's the most favorites the panel holds");
-    postFavs(favKeys.concat([key]));
-    toast("Added the " + t[3]);
-  };
-  const renderSettings = () => {
-    if (!S) return;
-    document.querySelectorAll(".sw[data-set]").forEach((sw) => setOn(sw, !!S[sw.dataset.set], "aria-checked"));
-    const keys = [], slots = [];
-    (S.favs || []).forEach((t, i) => { if (refKey(t)) { keys.push(refKey(t)); slots.push(i); } });
-    if (keys.join(",") !== favKeys.join(",") || slots.join(",") !== favSlots.join(",")) {
-      favKeys = keys;
-      favSlots = slots;
-      renderFavs();
-    } else {
-      $("#favAdd").hidden = favKeys.length >= favMax();
-    }
-    $("#favSum").textContent = favKeys.length ? favKeys.length + " of " + favMax() : "";
-    // A situation switch for each sport the panel follows (team, favorites,
-    // Live games leagues picked by hand), all of them before anything is
-    // picked. The automatic Live list is no help here: it never comes back
-    // empty (NFL on a new panel). Hockey and basketball have no situation
-    // line, so no switch.
-    const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
-      .concat(S.live_auto ? [] : S.live || []).map(sportOf));
-    document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
-      row.hidden = row.dataset.sport === "players" ? S.players === undefined : sports.size > 0 && !sports.has(row.dataset.sport);
-    });
-    // Firmware from before big-play alerts has neither.
-    $("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
-    $("#animRow").hidden = $("#animTryRow").hidden = S.anim === undefined;
-    alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
-    // Older firmware sends no standing; college teams have ranks
-    const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
-    $("#standingRow").hidden = S.standing === undefined || (followed.length > 0 && !followed.some((t) => isPro(t.l)));
-    if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
-    // Older firmware sends no sizes.
-    $("#sizeCtls").hidden = S.clocksize === undefined;
-    // Nor the Game board
-    $("#sportCtls").hidden = S.sportview === undefined;
-    sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
-    // Nor watch; an unlisted stay gets its own option
-    $("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
-    // Rotating second area takes big plays; main board stays
-    const rotating = splitShows() === 1;
-    $("#watchHint").textContent = rotating ? WATCH_HINT_SPLIT : WATCH_HINT;
-    if (rotating) $("#watchMineRow").hidden = true;
-    if (document.activeElement !== staySelect && S.watchstay) {
-      const v = String(S.watchstay);
-      if (![...staySelect.options].some((o) => o.value === v)) staySelect.add(new Option(v + " s", v));
-      staySelect.value = v;
-    }
-    // Firmware that can't install updates (older, or the demo build) leaves it out.
-    $("#autoupdRow").hidden = S.autoupd === undefined;
-    // Older firmware and the bar and demo builds have no beta to follow.
-    $("#betaRow").hidden = S.beta === undefined;
-    // The firmware box's rollback line and overnight note read this document,
-    // which can land after the update entity does. A check in progress keeps
-    // saying so; its answer redraws the box.
-    if (!fwChecking && fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
-    // The bar build: a note, and an email to us with the panel's name in it.
-    $("#barRow").hidden = !S.bar;
-    if (S.bar) {
-      const who = S.name || "this panel";
-      $("#barReport").href = "mailto:" + S.bar.report + "?subject=" + encodeURIComponent("Bar panel " + who) +
-        "&body=" + encodeURIComponent("Panel: " + who + "\nWhat's wrong:\n");
-    }
-    $("#ticker").textContent = S.status || "";
-    $("#play").textContent = game && game.lp ? "Last play: " + game.lp : "";
-  };
-
-  // ---- panel picker ------------------------------------------------------------
-  // rows 2 means the 2x2; older firmware omits rows, wiring
-  const PANEL_SIZES = { 1: "64x64", 2: "128x64", 3: "192x64", 4: "256x64", "2x2": "128x128" };
-  const restartAs = (as) => {
-    toast(as);
-    waitForReboot("", as + ". This page reconnects when the panel is back.");
-    toBoard();
-  };
-  const renderPanels = () => {
-    if (!S || !S.panels) return;
-    const cur = (S.rows || 1) > 1 ? S.panels + "x" + S.rows : String(S.panels);
-    const picks = document.querySelectorAll("#panels .panelpick");
-    const sel = $("#wiringSel");
-    picks.forEach((b) => {
-      setOn(b, b.dataset.cols === cur, "aria-pressed");
-      b.onclick = async () => {
-        if (b.dataset.cols === cur) return;
-        const size = PANEL_SIZES[b.dataset.cols];
-        if (!confirm("Restart the panel as " + size + "?")) return;
-        picks.forEach((x) => (x.disabled = true));
-        // Keep the saved wiring; change it after the restart
-        const params = { panels: b.dataset.cols };
-        if (b.dataset.cols === "2x2") params.wiring = String(S.wiring || 0);
-        // Only a layout the panel took restarts it; a failed post has said so.
-        if (!(await setGD(params))) {
-          picks.forEach((x) => (x.disabled = false));
-          return;
-        }
-        restartAs("Restarting as " + size);
-      };
-    });
-    // Wiring matters on the 2x2 only
-    $("#wiringRow").hidden = cur !== "2x2" || S.wiring === undefined;
-    if (document.activeElement !== sel) sel.value = String(S.wiring || 0);
-    sel.onchange = async () => {
-      const was = String(S.wiring || 0);
-      if (!confirm("Restart the panel with the new wiring?")) {
-        sel.value = was;
-        return;
-      }
-      sel.disabled = true;
-      const ok = await setGD({ wiring: sel.value });
-      sel.disabled = false;
-      if (!ok) {
-        sel.value = was;
-        return;
-      }
-      restartAs("Restarting with the new wiring");
-    };
-  };
-
-  // ---- controls --------------------------------------------------------
-  const controlDefs = [
-    { name: "Power", into: "#quickCtls", label: "Panel on" },
-    { name: "Brightness", into: "#quickCtls", label: "Brightness" },
-    { name: "Scroll Speed", into: "#panelCtls", label: "Ticker speed" },
-    { name: "Select Page", into: "#panelCtls", label: "Showing" },
-    { name: "WizMote Auto-Discovery", into: "#remoteCtls", label: "Discovery" },
-    { name: "Clear WizMote Pairing", into: "#remoteActions", label: "Unpair remote", danger: true },
-    { name: "Refresh Now", into: "#actions", label: "Refresh scores" },
-    { name: "Check for Updates", into: "#actions", label: "Check for updates" },
-    // restart: "" waits for the panel to come back; otherwise the panel
-    // restarts into setup and this says why.
-    { name: "Reboot", into: "#dangerActions", label: "Reboot", danger: true, restart: "" },
-    { name: "Reset Wi-Fi", into: "#dangerActions", label: "Reset Wi-Fi", danger: true,
-      restart: "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept, and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows." },
-    { name: "Factory Reset", into: "#dangerActions", label: "Factory reset", danger: true,
-      restart: "The panel is restarting into setup with everything erased, so this page won't reconnect." },
-  ];
-  const built = {};
-  // "Showing": the panel's pages, and each display the firmware lists
-  let showing = null;
-  const pageOf = () => (showing && (showing.ent.value || showing.ent.state)) || "";
-  const pickShowing = (v) => {
-    const page = pageOf();
-    if (v.startsWith("display:")) {
-      setGD({ display: v.slice(8) });
-      if (page !== "Scoreboard") post(showing.ent.id, "set", { option: "Scoreboard" });
-      return;
-    }
-    if (v === "Scoreboard" && mainDisplay() !== 0) setGD({ display: "0" });
-    if (v !== page) post(showing.ent.id, "set", { option: v });
-  };
-  const renderShowing = () => {
-    if (!showing) return;
-    const { sel, ent } = showing;
-    const opts = (ent.option || []).map((o) => [o, o]);
-    for (const d of otherDisplays()) opts.push(["display:" + d.id, d.name]);
-    const key = opts.map((o) => o[0]).join("|");
-    if (sel.dataset.key !== key) {
-      sel.dataset.key = key;
-      sel.innerHTML = "";
-      for (const [v, label] of opts) sel.add(new Option(label, v));
-    }
-    const page = pageOf();
-    const cur = page === "Scoreboard" && mainDisplay() !== 0 && otherDisplays().length ? "display:" + mainDisplay() : page;
-    if (document.activeElement !== sel) sel.value = cur;
-  };
-
-  const buildControl = (def, e) => {
-    const domain = domainOf(e);
-    const host = $(def.into);
-    if (domain === "button") {
-      const b = el("button", "btn" + (def.danger ? " danger" : ""), def.label);
-      b.onclick = async () => {
-        if (def.danger && !confirm(def.label + "?")) return;
-        const sent = post(e.id, "press");
-        if (def.name === "Check for Updates") { checkForUpdates(b); return; }
-        toast(def.label);
-        if (def.restart === undefined || !(await sent)) return;
-        if (def.restart === "") waitForReboot("", "Restarting. This page reconnects when the panel is back.");
-        else intoSetup(def.restart);
-        toBoard();
-      };
-      host.appendChild(b);
-      return { update() {} };
-    }
-    const row = el("div", "ctl");
-    const label = el("label", null, def.label);
-    const id = "ctl-" + def.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    row.appendChild(label);
-    if (domain === "switch") {
-      const sw = el("button", "sw");
-      sw.setAttribute("role", "switch");
-      sw.setAttribute("aria-label", def.label);
-      setOn(sw, false, "aria-checked");
-      sw.onclick = () => {
-        const on = !sw.classList.contains("on");
-        setOn(sw, on, "aria-checked");
-        post(e.id, on ? "turn_on" : "turn_off");
-      };
-      row.appendChild(sw);
-      host.appendChild(row);
-      return { update(ev) { setOn(sw, ev.value === true || ev.state === "ON", "aria-checked"); } };
-    }
-    if (domain === "number") {
-      const val = el("span", "val");
-      val.setAttribute("aria-hidden", "true");
-      const r = el("input");
-      r.id = label.htmlFor = id;
-      r.type = "range";
-      r.min = e.min_value ?? 0;
-      r.max = e.max_value ?? 100;
-      r.step = e.step ?? 1;
-      r.oninput = () => (val.textContent = r.value);
-      r.onchange = () => post(e.id, "set", { value: r.value });
-      row.appendChild(r);
-      row.appendChild(val);
-      host.appendChild(row);
-      return { update(ev) { if (document.activeElement !== r) { r.value = ev.value; val.textContent = ev.value; } } };
-    }
-    if (domain === "select" && def.name === "Select Page") {
-      const s = el("select");
-      s.id = label.htmlFor = id;
-      row.appendChild(s);
-      host.appendChild(row);
-      showing = { sel: s, ent: e };
-      s.onchange = () => pickShowing(s.value);
-      return { update(ev) { showing.ent = ev; renderShowing(); } };
-    }
-    if (domain === "select") {
-      const s = el("select");
-      s.id = label.htmlFor = id;
-      (e.option || []).forEach((o) => s.appendChild(el("option", null, o)));
-      s.onchange = () => post(e.id, "set", { option: s.value });
-      row.appendChild(s);
-      host.appendChild(row);
-      return { update(ev) { if (ev.option) { s.innerHTML = ""; ev.option.forEach((o) => s.appendChild(el("option", null, o))); } s.value = ev.value; } };
-    }
-    return { update() {} };
-  };
-
-  // ---- today's games (fetched by the browser, not the device) -------------
-  const ESPN = "https://site.api.espn.com/apis/site/v2/sports/";
-  // MiLB's four levels, as the panel's Live games scan
-  const MLB_DAY = "https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&hydrate=team,linescore"
-    + "&fields=dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
-    + "teamName,score,linescore,currentInning,inningState,scheduledInnings&date=";
-  const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
-  // Doubleheader game 2 has startTimeTBD: show "TBD" like the panel
-  const mlbGame = (lg, g) => {
-    const c = String((g.status || {}).codedGameState || "S")[0];
-    const state = "IMN".includes(c) ? "in" : "FOQR".includes(c) ? "post" : "DCTU".includes(c) ? "off" : "pre";
-    const ls = g.linescore || {};
-    const half = { Top: "Top", Bottom: "Bot", Middle: "Mid", End: "End" }[ls.inningState];
-    const inning = Number(ls.currentInning) || 0;
-    const detail = state === "in" ? (half && inning ? half + " " + ordinal(inning) : "In Progress")
-      : state === "post" ? (inning && ls.scheduledInnings && inning !== ls.scheduledInnings ? "Final/" + inning : "Final")
-      : state === "off" ? ({ D: "Postponed", C: "Canceled" }[c] || "Suspended")
-      : (g.status || {}).startTimeTBD ? "TBD"
-      : new Date(g.gameDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const side = (k) => {
-      const x = (g.teams || {})[k] || {};
-      const t = x.team || {};
-      return { id: Number(t.id), abbr: t.abbreviation || "", score: String(x.score ?? 0), name: t.teamName || t.name || "" };
-    };
-    return { league: lg, id: String(g.gamePk), state, detail, away: side("away"), home: side("home"), date: g.gameDate };
-  };
-  let games = null;        // [{league, id, state, detail, away:{...}, home:{...}}]
-  let gamesAt = 0;
-  let gamesLoading = null; // the reads in flight, shared
-  const teamById = (lg, id) => TEAMS.find((t) => t[0] === lg && t[1] === id);
-  const easternDate = () => {
-    // ESPN's dates parameter is US Eastern
-    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-    const g = (t) => p.find((x) => x.type === t).value;
-    return g("year") + g("month") + g("day");
-  };
-  const loadGames = (force) => {
-    if (!force && games && Date.now() - gamesAt < 60000) return Promise.resolve(games);
-    if (!gamesLoading) gamesLoading = readGames().finally(() => { gamesLoading = null; });
-    return gamesLoading;
-  };
-  const readGames = async () => {
-    const d = easternDate();
-    // Golf's and racing's scoreboards have no home and away (golf's is
-    // hundreds of kilobytes): not On now.
-    const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && !isHt(lg))
-      .map((lg) => [lg, isMlb(lg) ? MLB_DAY + d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6)
-        : `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
-    const out = [];
-    await Promise.all(urls.map(async ([lg, u]) => {
-      // A league that hangs gives up after 5 s
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 5000);
-      try {
-        const j = await (await fetch(u, { signal: ctl.signal })).json();
-        if (isMlb(lg)) {
-          for (const day of j.dates || []) for (const g of day.games || []) out.push(mlbGame(lg, g));
-          return;
-        }
-        for (const ev of j.events || []) {
-          const c = ev.competitions?.[0];
-          if (!c) continue;
-          const side = (ha) => {
-            const x = c.competitors.find((k) => k.homeAway === ha) || {};
-            // curatedRank: a college team's rank, 99 when unranked
-            const rank = Number(x.curatedRank?.current);
-            return { id: Number(x.team?.id), abbr: x.team?.abbreviation || "", score: x.score || "0", name: x.team?.shortDisplayName || x.team?.displayName || "",
-              rank: rank >= 1 && rank < 99 ? rank : 0 };
-          };
-          const type = ev.status?.type || {};
-          // "off": ended without being completed, so postponed, canceled or suspended
-          const state = type.state === "post" && type.completed === false ? "off" : type.state || "pre";
-          out.push({ league: lg, id: ev.id, state, detail: type.shortDetail || "", away: side("away"), home: side("home"), date: ev.date });
-        }
-      } catch (_) { /* one league failing should not hide the other */ } finally { clearTimeout(timer); }
-    }));
-    const rank = { in: 0, pre: 1, post: 2, off: 3 };
-    out.sort((a, b) => (rank[a.state] - rank[b.state]) || (a.date < b.date ? -1 : 1));
-    games = out;
-    gamesAt = Date.now();
-    return out;
-  };
-
-  const renderGames = async () => {
-    const tiles = $("#tiles");
-    tiles.className = "games";
-    tiles.innerHTML = "";
-    tiles.appendChild(el("div", "none", "Loading today's games"));
-    const list = await loadGames(false);
-    if (league !== "now") return;  // the user moved on while we were loading
-    tiles.innerHTML = "";
-    const q = $("#q").value.trim().toLowerCase();
-    const shown = list.filter((g) => !q || (g.away.name + " " + g.home.name + " " + g.away.abbr + " " + g.home.abbr).toLowerCase().includes(q));
-    if (!shown.length) {
-      tiles.appendChild(el("div", "none", list.length ? "No game matches" : "No games today"));
-      return;
-    }
-    const cur = S ? refKey(S.team) : "";
-    let lastState = null;
-    for (const g of shown) {
-      if (g.state !== lastState) {
-        lastState = g.state;
-        const heading = { in: "Live now", pre: "Later today", post: "Final", off: "Postponed or canceled" };
-        tiles.appendChild(el("div", "gh", heading[g.state] || "Final"));
-      }
-      const card = el("div", "game" + (g.state === "in" ? " live" : ""));
-      const mkSide = (s) => {
-        const t = teamById(g.league, s.id);
-        const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
-        // Player picks need an ESPN roster
-        b.disabled = !t || ((pickPlayer || pickProp) && !fromEspn(t[0]));
-        b.title = t ? "Follow the " + t[3] : "Not in the team list";
-        const img = el("img");
-        img.loading = "lazy";
-        img.src = logoUrl(g.league, s.id, s.abbr);
-        img.alt = "";
-        b.appendChild(img);
-        const txt = el("div", "st");
-        txt.appendChild(el("div", "n", s.name));
-        txt.appendChild(el("div", "a", ranked(s.rank, s.abbr)));
-        b.appendChild(txt);
-        b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
-        b.onclick = () => {
-          if (!t) return;
-          if (pickFav || pickBet || pickPlayer || pickSplit) return choose(t);
-          setGD({ team: keyOf(t) });
-          toast("Now following the " + t[3]);
-          closePicker();
-        };
-        return b;
-      };
-      card.appendChild(mkSide(g.away));
-      const mid = el("div", "gm");
-      mid.appendChild(el("div", "at", "@"));
-      mid.appendChild(el("div", "det", g.detail));
-      card.appendChild(mid);
-      card.appendChild(mkSide(g.home));
-      tiles.appendChild(card);
-    }
-  };
-
-  // ---- bets: typed by hand, no sportsbook --------------------------------------
-  // Slot 0 lets the firmware pick, so pages never collide
-  let betTeam = "";      // the add form's team, "nfl:2"
-  let betSign = "";      // spread sign from the buttons, "" until tapped
-  let betDrawn = null;   // the list as last drawn
-  let betPending = [];   // posted, not yet listed by the panel
-  const sameBet = (a, b) => a.l === b.l && a.id === b.id && a.type === b.type && a.half === b.half;
-  const BET_WORDS = { covering: "COVERING", not_covering: "NOT COVERING", level: "PUSH", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
-  const betTone = (st) => (st === "covering" || st === "won" ? "good" : st === "not_covering" || st === "lost" ? "bad" : BET_WORDS[st] ? "even" : "");
-  const betPoints = (half, sign) => (sign && half > 0 ? "+" : half < 0 ? "-" : "") + Math.floor(Math.abs(half) / 2) + (Math.abs(half) % 2 ? ".5" : "");
-  // Half points, or an error; comma-decimal locales type "3,5"
-  const betHalf = (raw, spread) => {
-    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
-    if (spread && /^(pk|pick|pickem|pick'em)$/i.test(v)) return 0;
-    if (!v) return spread ? "Type the spread, like 3.5." : "Type the total, like 47.5.";
-    if (!spread && /^[+-]/.test(v)) return "A total has no + or -. Type it like 47.5.";
-    const m = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(v);
-    if (!m) return "That isn't a number. Type it like " + (spread ? "3.5." : "47.5.");
-    const frac = (m[3] || "").replace(/0+$/, "");
-    if (frac && frac !== "5") return "Lines go in whole or half points, like 3 or 3.5.";
-    const half = (Number(m[2]) * 2 + (frac ? 1 : 0)) * (m[1] === "-" ? -1 : 1);
-    if (spread && Math.abs(half) > 199) return "The panel takes spreads up to 99.5.";
-    if (!spread && !half) return "A total is more than 0.";
-    if (half > 1999) return "The panel takes totals up to 999.5.";
-    return half;
-  };
-  const betGame = (b) => {
-    if (!b.ev) return "Starts when the panel shows a " + b.abbr + " game";
-    const vs = b.abbr + " vs " + (b.oa || "?") + " \u00b7 ";
-    const score = b.ts + "-" + b.os;
-    if (b.st === "pre") return vs + (b.kick * 1000 > Date.now() ? kickLabel(b.kick) : "Waiting for the start");
-    if (b.st === "unread") return vs + "Started, not on the panel right now";
-    if (b.st === "void") return vs + "Postponed or canceled";
-    if (b.st === "won" || b.st === "lost" || b.st === "push") return vs + "Final " + score;
-    return vs + score;
-  };
-  const betChip = (b, text) => el("span", "bet " + betTone(b.st), text);
-  const PROP_WORDS = { on_track: "ON TRACK", off_track: "OFF TRACK", hit: "HIT", not_yet: "NOT YET", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
-  const propTone = (st) => (st === "on_track" || st === "hit" || st === "won" ? "good" : st === "off_track" || st === "lost" ? "bad" : PROP_WORDS[st] ? "even" : "");
-  // As the ticker: the line, the player's number, the word
-  const propText = (p) => p.text + (p.v !== undefined && p.side !== "yes" ? " " + betPoints(p.v, false) : "")
-    + (PROP_WORDS[p.st] ? " " + PROP_WORDS[p.st] : "");
-  const propGame = (p) => {
-    const t = teamById(p.l, p.team);
-    const abbr = t ? t[2] : "";
-    if (!p.ev) return "Starts when the panel shows a " + abbr + " game";
-    const vs = abbr + " vs " + (p.oa || "?") + " \u00b7 ";
-    const n = p.v !== undefined && p.side !== "yes" ? betPoints(p.v, false) : "";
-    if (p.st === "pre") return vs + (p.kick * 1000 > Date.now() ? kickLabel(p.kick) : "Waiting for the start");
-    if (p.st === "unread") return vs + "Started, not on the panel right now";
-    if (p.st === "void") return vs + "Void: postponed, or the player didn't play";
-    if (p.st === "won" || p.st === "lost" || p.st === "push") return vs + "Final" + (n ? ", " + n : "");
-    return vs + (n ? n + " so far" : "Live");
-  };
-  const renderBets = () => {
-    const card = $("#betCard");
-    // Firmware from before bets sends none.
-    card.hidden = !S || S.bets === undefined;
-    const list = (S && S.bets) || [];
-    const props = (S && S.props) || [];
-    // The board: the bets on its game.
-    const live = game && game.id && game.s !== "NOT_FOUND";
-    const on = live ? list.filter((b) => b.ev === String(game.id)) : [];
-    const propsOn = live ? props.filter((p) => p.ev === String(game.id)) : [];
-    const line = $("#betline");
-    line.textContent = "";
-    for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
-    for (const p of propsOn) line.appendChild(el("span", "bet " + propTone(p.st), propText(p)));
-    line.hidden = !on.length && !propsOn.length;
-    if (card.hidden) return;
-    renderPropForm();
-    $("#betSum").textContent = [list.length ? list.length + " of " + (S.betmax || 8) : "",
-      props.length ? props.length + (props.length > 1 ? " props" : " prop") : ""].filter(Boolean).join(" \u00b7 ");
-    const sig = JSON.stringify([list, props]);
-    if (sig === betDrawn) return;
-    betDrawn = sig;
-    const host = $("#betList");
-    const focused = host.contains(document.activeElement);
-    host.textContent = "";
-    for (const b of list) {
-      const row = el("div", "ctl betrow");
-      const img = el("img");
-      img.alt = "";
-      img.loading = "lazy";
-      const src = logoUrl(b.l, b.id, b.abbr);
-      if (src) img.src = src;
-      else img.style.visibility = "hidden";
-      row.appendChild(img);
-      const name = el("label", null, b.text);
-      name.appendChild(el("small", null, betGame(b)));
-      row.appendChild(name);
-      if (BET_WORDS[b.st]) row.appendChild(betChip(b, BET_WORDS[b.st]));
-      const x = el("button", "betdel", "\u2715");
-      x.title = "Remove " + b.text;
-      x.setAttribute("aria-label", x.title);
-      x.onclick = () => setGD({ betdel: b.slot }).then((ok) => ok && toast("Removed " + b.text));
-      row.appendChild(x);
-      host.appendChild(row);
-    }
-    for (const pr of props) {
-      const row = el("div", "ctl betrow proprow");
-      const t = teamById(pr.l, pr.team);
-      const img = el("img");
-      img.alt = "";
-      img.loading = "lazy";
-      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
-      if (src) img.src = src;
-      else img.style.visibility = "hidden";
-      row.appendChild(img);
-      const name = el("label", null, pr.text);
-      name.appendChild(el("small", null, propGame(pr)));
-      row.appendChild(name);
-      if (PROP_WORDS[pr.st]) row.appendChild(el("span", "bet " + propTone(pr.st), PROP_WORDS[pr.st]));
-      const x = el("button", "betdel", "\u2715");
-      x.title = "Remove " + pr.text;
-      x.setAttribute("aria-label", x.title);
-      x.onclick = () => setGD({ propdel: pr.slot }).then((ok) => ok && toast("Removed " + pr.text));
-      row.appendChild(x);
-      host.appendChild(row);
-    }
-    if (!list.length && !props.length) host.appendChild(el("p", "hint", "No bets yet."));
-    if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
-  };
-  const typedSign = (v) => {
-    const m = /^\s*([+\-\u2212])/.exec(v);
-    return m ? (m[1] === "+" ? "+" : "-") : "";
-  };
-  const signButtons = Array.from(document.querySelectorAll("#betSign button"));
-  const renderBetForm = () => {
-    const t = teamByKey(betTeam);
-    $("#betTeam").textContent = t ? t[3] : "Pick a team";
-    const type = $("#betType").value;
-    $("#betTeamHint").textContent = type === "prop" ? "The player's team. Minor league teams have no player props."
-      : "For a total, either team in the game";
-    $("#betLineRow").hidden = type === "ml";
-    $("#betSign").hidden = type !== "spread";
-    signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
-    $("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
-      : "Total points in the game, like 47.5";
-    $("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
-    renderPropForm();
-  };
-  const betSay = (t) => {
-    $("#betMsg").textContent = t;
-    $("#betMsg").hidden = !t;
-  };
-  $("#betTeam").onclick = () => openPicker(false, true, false, false, $("#betType").value === "prop");
-  $("#betType").onchange = () => {
-    betSay("");
-    renderBetForm();
-    if ($("#betType").value === "prop") loadPropRoster();
-  };
-  $("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
-  // Typed sign and buttons stay in sync both ways
-  $("#betLine").oninput = () => {
-    const s = typedSign($("#betLine").value);
-    if (s && s !== betSign) { betSign = s; renderBetForm(); }
-  };
-  signButtons.forEach((b) => {
-    b.onclick = () => {
-      betSign = b.dataset.sign;
-      const f = $("#betLine");
-      if (typedSign(f.value)) f.value = betSign + f.value.replace(/^\s*[+\-\u2212]\s*/, "");
-      betSay("");
-      renderBetForm();
-      f.focus();
-    };
-  });
-  $("#betAdd").onclick = () => {
-    if (!S) return;
-    if ($("#betType").value === "prop") return addProp();
-    const t = teamByKey(betTeam);
-    if (!t) return betSay("Pick the team first.");
-    const type = $("#betType").value;
-    let raw = $("#betLine").value;
-    if (type === "spread" && !typedSign(raw) && betSign && /^\s*\d/.test(raw)) raw = betSign + raw.trim();
-    const half = type === "ml" ? 0 : betHalf(raw, type === "spread");
-    if (typeof half === "string") {
-      betSay(half);
-      $("#betLine").focus();
-      return;
-    }
-    // Never guess a spread's side; the owner picks
-    if (type === "spread" && half !== 0 && !typedSign(raw)) return betSay("Tap \u2212 if the team is the favorite or + if it's the underdog.");
-    const list = S.bets || [];
-    // Count pending posts so a double tap adds once
-    betPending = betPending.filter((p) => Date.now() - p.at < 5000 && !list.some((b) => sameBet(b, p)));
-    const want = { l: t[0], id: t[1], type, half };
-    if (list.concat(betPending).some((b) => sameBet(b, want))) return betSay("You have that bet already.");
-    const max = S.betmax || 8;
-    if (list.length + betPending.length >= max) return betSay("All " + max + " bets are in use. Remove one first.");
-    betSay("");
-    const mine = { ...want, at: Date.now() };
-    betPending.push(mine);
-    const value = type === "ml" ? "" : betPoints(half, type === "spread");
-    setGD({ bet: [0, t[0], t[1], type, value].join(",") }).then((ok) => {
-      if (!ok) betPending = betPending.filter((p) => p !== mine);
-      else toast("Added " + (type === "ml" ? t[2] + " ML" : type === "spread" ? t[2] + " " + (half ? value : "PK") : type.toUpperCase() + " " + value));
-    });
-    $("#betLine").value = "";
-    betSign = "";
-    renderBetForm();
-  };
-
-  // ---- Stocks & Crypto: the display's symbols ---------------------------------
-  const MKT_ID = 2;  // apps.h's Display::MARKETS, by number
-  const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
-  const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
-  const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };
-  const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
-  let mktDrawn = null;
-  let mktPending = [];  // posted, not yet listed by the panel
-  let mktLock = 0;      // a move or remove's post time
-  const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
-  // parse_market_symbol (markets.h): [symbol, kind], or null
-  const mktParse = (text, kind) => {
-    let s = "";
-    for (const c of text) {
-      if (c === " ") continue;
-      s += c >= "a" && c <= "z" ? c.toUpperCase() : c;
-      if (new TextEncoder().encode(s).length > 16) return null;
-    }
-    if (s.startsWith("$")) s = s.slice(1);
-    if (s.startsWith("^")) {
-      if (kind && kind !== "index") return null;
-      s = s.slice(1);
-      kind = "index";
-    }
-    const coinOk = !kind || kind === "crypto";
-    if (coinOk && s.length > 4 && /[-/]USD$/.test(s)) {
-      s = s.slice(0, -4);
-      kind = "crypto";
-    }
-    if (coinOk) {
-      s = MARKETS.alias[s] || s;
-      if (!kind && MARKETS.coins.includes(s)) kind = "crypto";
-    }
-    if (!kind) kind = MARKETS.indexes.includes(s) ? "index" : "stock";
-    if (kind === "stock") {
-      s = s.replace(/\//g, ".");
-      if (/^.+-[A-Z]$/.test(s)) s = s.slice(0, -2) + "." + s.slice(-1);
-    }
-    const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
-    return s.length <= 10 && ok.test(s) ? [s, kind] : null;
-  };
-  // market_same (markets.h): SPX and GSPC are one index
-  const mktSame = (a, b) => a.kind === b.kind && (a.sym === b.sym
-    || (a.kind === "index" && !!MARKETS.yahoo[a.sym] && MARKETS.yahoo[a.sym] === MARKETS.yahoo[b.sym]));
-  const renderMarkets = () => {
-    const card = $("#mktCard");
-    card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
-    if (card.hidden) return;
-    const m = S.markets;
-    const list = m.syms || [];
-    $("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
-    $("#mktSrc").hidden = m.src !== "backup";
-    $("#mktRetry").hidden = m.src !== "retry";
-    // Off screen, nothing reads them
-    const old = m.read && Date.now() / 1000 - m.read > 30 * 60;
-    $("#mktOld").hidden = !old;
-    if (old) $("#mktOld").textContent = "Prices as of " + new Date(m.read * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) + ". The panel reads them only while Stocks & Crypto is up.";
-    const sig = JSON.stringify(list);
-    // Slots stay old until the panel has the tap
-    if (mktLock && sig === mktDrawn && stateLeft <= mktLock + APPLY_MS) return;
-    const unlock = mktLock !== 0;
-    mktLock = 0;
-    if (sig === mktDrawn && !unlock) return;
-    mktDrawn = sig;
-    const host = $("#mktList");
-    const focused = host.contains(document.activeElement);
-    host.textContent = "";
-    list.forEach((sy, i) => {
-      const row = el("div", "ctl betrow mktrow");
-      const name = el("label", null, sy.sym);
-      name.appendChild(el("small", null, sy.miss ? "Yahoo Finance doesn't know this symbol"
-        : [MKT_KIND[sy.kind], MKT_ST[sy.st]].filter(Boolean).join(" \u00b7 ")));
-      row.appendChild(name);
-      if (sy.price) row.appendChild(el("span", "bet " + (sy.dir > 0 ? "good" : sy.dir < 0 ? "bad" : ""), sy.price + (sy.pct ? " " + sy.pct : "")));
-      const tools = el("span", "mkttools");
-      const button = (text, label, on, params, done) => {
-        const b = el("button", "betdel", text);
-        b.title = label;
-        b.setAttribute("aria-label", label);
-        b.disabled = !on;
-        b.onclick = () => {
-          mktLock = Infinity;
-          host.querySelectorAll("button").forEach((x) => { x.disabled = true; });
-          setGD(params).then((ok) => {
-            mktLock = ok ? Date.now() : 0;
-            if (!ok) { mktDrawn = null; renderMarkets(); }
-            if (ok && done) toast(done);
-          });
-        };
-        tools.appendChild(b);
-      };
-      button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
-      button("\u25bc", "Move " + sy.sym + " down", i < list.length - 1, { mktmove: sy.slot + "," + (sy.slot + 1) });
-      button("\u2715", "Remove " + sy.sym, true, { mktdel: sy.slot }, "Removed " + sy.sym);
-      row.appendChild(tools);
-      host.appendChild(row);
-    });
-    if (focused && !host.contains(document.activeElement)) $("#mktSym").focus();
-  };
-  const mktSay = (t) => {
-    $("#mktMsg").textContent = t;
-    $("#mktMsg").hidden = !t;
-  };
-  // What the panel will save, as it's typed
-  const mktPreview = () => {
-    const raw = $("#mktSym").value;
-    const got = raw.trim() ? mktParse(raw, $("#mktKind").value) : null;
-    $("#mktHint").textContent = !raw.trim() ? MKT_HINT
-      : got ? "Saves as " + got[0] + ", " + MKT_AS[got[1]] : "Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD";
-  };
-  mktPreview();
-  $("#mktSym").oninput = () => { mktSay(""); mktPreview(); };
-  $("#mktKind").onchange = () => { mktSay(""); mktPreview(); };
-  $("#mktSym").onkeydown = (ev) => { if (ev.key === "Enter") $("#mktAdd").click(); };
-  $("#mktAdd").onclick = () => {
-    if (!S || !S.markets) return;
-    const raw = $("#mktSym").value;
-    if (!raw.trim()) return mktSay("Type a symbol, like AAPL or BTC.");
-    const got = mktParse(raw, $("#mktKind").value);
-    if (!got) return mktSay($("#mktKind").value && /^\s*\^/.test(raw) ? "A ^ symbol is an index. Set Kind to Index or Auto."
-      : "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
-    const list = S.markets.syms || [];
-    // Count pending posts so a double tap adds once
-    mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => mktSame(sy, p)));
-    const dup = list.concat(mktPending).find((sy) => mktSame(sy, { sym: got[0], kind: got[1] }));
-    if (dup) return mktSay(dup.sym + " is in the list already.");
-    const max = S.markets.max || 8;
-    if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
-    mktSay("");
-    const mine = { sym: got[0], kind: got[1], at: Date.now() };
-    mktPending.push(mine);
-    setGD({ mkt: "0," + got[0] + "," + got[1] }).then((ok) => {
-      if (!ok) mktPending = mktPending.filter((p) => p !== mine);
-      else toast("Added " + got[0]);
-    });
-    $("#mktSym").value = "";
-    mktPreview();
-  };
-
-  // ---- player props: a roster's player, or a favorite --------------------------
-  const PROP_NAMES = {
-    "football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
-    "football:int": "Interceptions thrown", "football:rushyds": "Rushing yards", "football:rushatt": "Rushing attempts",
-    "football:recyds": "Receiving yards", "football:rec": "Receptions", "football:rryds": "Rushing and receiving yards",
-    "football:td": "Anytime touchdown", "football:tackles": "Tackles", "football:sacks": "Sacks",
-    "football:kickpts": "Kicking points",
-    "basketball:pts": "Points", "basketball:reb": "Rebounds", "basketball:ast": "Assists", "basketball:threes": "Threes made",
-    "basketball:stl": "Steals", "basketball:blk": "Blocks", "basketball:pra": "Points, rebounds and assists",
-    "basketball:pr": "Points and rebounds", "basketball:pa": "Points and assists", "basketball:ra": "Rebounds and assists",
-    "baseball:hits": "Hits", "baseball:runs": "Runs", "baseball:rbi": "RBIs", "baseball:hrr": "Hits, runs and RBIs",
-    "baseball:hr": "Home run", "baseball:k": "Pitcher's strikeouts", "baseball:hitsallowed": "Hits allowed",
-    "baseball:er": "Earned runs allowed", "baseball:outs": "Pitcher's outs",
-    "hockey:pts": "Points", "hockey:goal": "Anytime goal", "hockey:ast": "Assists", "hockey:sog": "Shots on goal",
-    "hockey:blk": "Blocked shots", "hockey:saves": "Goalie's saves",
-    "soccer:goal": "Anytime goal",
-  };
-  let propFavs = false;     // the list is the favorite players
-  let propRoster = [];      // the bet team's players
-  let propRosterFor = "";
-  let propPending = [];     // posted, not yet listed by the panel
-  const sameProp = (a, b) => a.l === b.l && a.id === b.id && a.stat === b.stat && a.side === b.side && a.half === b.half;
-  // PROP_STATS rows: [sport, key, panel label, yes prop]
-  const statsFor = (lg) => (lg ? PROP_STATS.filter((st) => st[0] === sportOf(lg)) : []);
-  const propPlayers = () => {
-    if (propFavs) {
-      return ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).map((pl) => {
-        const t = teamById(pl.l, pl.team);
-        return { l: pl.l, id: pl.id, team: pl.team, panel: pl.name, label: pl.name + (t ? " \u00b7 " + t[3] : "") };
-      });
-    }
-    const t = teamByKey(betTeam);
-    if (!t || propRosterFor !== betTeam) return [];
-    return propRoster.map((a) => ({ l: t[0], id: a.id, team: t[1], panel: a.panel,
-      label: a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : "") }));
-  };
-  const fillSelect = (sel, items) => {
-    const sig = JSON.stringify(items);
-    if (sel.dataset.sig === sig) return;
-    const was = sel.value;
-    sel.dataset.sig = sig;
-    sel.textContent = "";
-    for (const [value, text] of items) {
-      const o = el("option", null, text);
-      o.value = value;
-      sel.appendChild(o);
-    }
-    if (items.some((it) => it[0] === was)) sel.value = was;
-  };
-  const pickedPlayer = () => propPlayers().find((pl) => pl.l + ":" + pl.id === $("#propPick").value);
-  const renderPropForm = () => {
-    const prop = $("#betType").value === "prop";
-    $("#propRows").hidden = !prop;
-    $("#betTeamRow").hidden = prop && propFavs;
-    if (!prop) return;
-    const favs = ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).length;
-    setOn($("#propFavs"), propFavs, "aria-pressed");
-    $("#propFavs").disabled = !favs && !propFavs;
-    const list = propPlayers();
-    fillSelect($("#propPick"), list.map((pl) => [pl.l + ":" + pl.id, pl.label]));
-    const t = teamByKey(betTeam);
-    $("#propPickHint").textContent = propFavs
-      ? (list.length ? "Your favorite players, from every team" : "No favorite players yet. Add them in the Favorite players card.")
-      : !favs ? "From the team's roster" : "From the team's roster, or tap Favorite players";
-    const pl = pickedPlayer();
-    const lg = pl ? pl.l : !propFavs && t && fromEspn(t[0]) ? t[0] : "";
-    fillSelect($("#propStat"), statsFor(lg).map((st) => [st[1], PROP_NAMES[st[0] + ":" + st[1]] || st[2]]));
-    const st = statsFor(lg).find((x) => x[1] === $("#propStat").value);
-    const yes = !!(st && st[3]);
-    $("#propSideRow").hidden = yes;
-    $("#betLineRow").hidden = yes;
-    $("#betSign").hidden = true;
-    $("#betLineHint").textContent = "The sportsbook's line for the stat, like 24.5. A whole number can push";
-    $("#betLine").placeholder = "24.5";
-  };
-  const loadPropRoster = async () => {
-    const t = teamByKey(betTeam);
-    propRosterFor = betTeam;
-    propRoster = [];
-    renderPropForm();
-    if (!t || propFavs) return;
-    if (!fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
-    betSay("Reading the " + t[3] + " roster from ESPN\u2026");
-    const list = await readRoster(t);
-    if (propRosterFor !== betTeam) return;  // another team was picked meanwhile
-    betSay(list && list.length ? "" : rosterSays(t, list));
-    propRoster = list || [];
-    renderPropForm();
-  };
-  $("#propFavs").onclick = () => {
-    propFavs = !propFavs;
-    betSay("");
-    renderPropForm();
-    if (!propFavs) loadPropRoster();
-  };
-  $("#propPick").onchange = () => { betSay(""); renderPropForm(); };
-  $("#propStat").onchange = () => { betSay(""); renderPropForm(); };
-  // A prop's line has no sign; half numbers only
-  const propHalf = (raw) => {
-    const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
-    if (!v) return "Type the line, like 24.5.";
-    if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like 24.5.";
-    const m = /^(\d+)(?:\.(\d+))?$/.exec(v);
-    if (!m) return "That isn't a number. Type it like 24.5.";
-    const frac = (m[2] || "").replace(/0+$/, "");
-    if (frac && frac !== "5") return "Lines go in whole or half numbers, like 6 or 6.5.";
-    const half = Number(m[1]) * 2 + (frac ? 1 : 0);
-    if (!half) return "A line is more than 0.";
-    if (half > 1999) return "The panel takes lines up to 999.5.";
-    return half;
-  };
-  const addProp = async () => {
-    const t = teamByKey(betTeam);
-    const pl = pickedPlayer();
-    if (!pl) {
-      if (propFavs) return betSay("Pick one of your favorite players.");
-      if (t && !fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
-      return betSay(t ? "Pick the player first." : "Pick the team first.");
-    }
-    const st = statsFor(pl.l).find((x) => x[1] === $("#propStat").value);
-    if (!st) return betSay("Pick the stat.");
-    const side = st[3] ? "yes" : $("#propSide").value;
-    const half = st[3] ? 0 : propHalf($("#betLine").value);
-    if (typeof half === "string") {
-      betSay(half);
-      $("#betLine").focus();
-      return;
-    }
-    // A favorite's saved team may be stale
-    const home = propFavs ? teamById(pl.l, pl.team) : null;
-    if (home) {
-      if (!rosters[keyOf(home)]) betSay("Checking the " + home[3] + " roster on ESPN\u2026");
-      const r = await readRoster(home);
-      betSay("");
-      if (r && r.length && !r.some((a) => a.id === pl.id)) {
-        return betSay(pl.panel + " isn't on the " + home[3] + " roster at ESPN now. Turn off Favorite players and pick their new team.");
-      }
-    }
-    const list = S.props || [];
-    propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));
-    const want = { l: pl.l, id: pl.id, stat: st[1], side, half };
-    if (list.concat(propPending).some((p) => sameProp(p, want))) return betSay("You have that prop already.");
-    const max = S.propmax;
-    if (list.length + propPending.length >= max) return betSay("All " + max + " props are in use. Remove one first.");
-    betSay("");
-    const mine = { ...want, at: Date.now() };
-    propPending.push(mine);
-    const line = st[3] ? "" : betPoints(half, false);
-    const label = pl.panel + (st[3] ? " " + st[2] : (side === "under" ? " U " : " O ") + line + " " + st[2]);
-    setGD({ prop: [0, pl.l, pl.id, pl.team, pl.panel, st[1], side, line].join(",") }).then((ok) => {
-      if (!ok) propPending = propPending.filter((x) => x !== mine);
-      else toast("Added " + label);
-    });
-    $("#betLine").value = "";
-  };
-  renderBetForm();
-
-  // ---- favorite players, picked from rosters -----------------------------------------
-  // The browser reads rosters from ESPN; the panel never does
-  let playerTeam = "";   // the add form's team, "nfl:2"
-  let roster = [];       // that team's players: [{id, name, pos, jersey, panel}]
-  let rosterFor = "";    // the team the roster read was for
-  let playerDrawn = null;
-  // Posted, not yet listed; ack is when the panel answered
-  let playerPending = [];
-  const PANEL_NAME_MAX = 10;
-  // Fold to ASCII exactly as the firmware does
-  const foldChar = (ch) => {
-    const cp = ch.codePointAt(0);
-    if (FOLD2[cp] !== undefined) return FOLD2[cp];
-    return cp >= 0xc0 && cp < 0x180 ? FOLD[cp - 0xc0] : ch;
-  };
-  // Only characters the panel accepts in a name
-  const panelLetters = (v) => Array.from(String(v || "").normalize("NFC"), foldChar).join("")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
-    .replace(/[^A-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
-  const fitName = (v) => {
-    let n = panelLetters(v);
-    if (n.length > PANEL_NAME_MAX) n = n.replace(/ (JR\.?|SR\.?|II|III|IV|V)$/, "");
-    if (n.length > PANEL_NAME_MAX) n = n.slice(0, PANEL_NAME_MAX).replace(/[ .'-]+$/, "");
-    return n;
-  };
-  // ESPN groups football and baseball rosters by position
-  const rosterAthletes = (j) => {
-    const out = [];
-    for (const a of (j && Array.isArray(j.athletes) ? j.athletes : [])) {
-      if (a && Array.isArray(a.items)) out.push(...a.items);
-      else if (a && a.id !== undefined) out.push(a);
-    }
-    return out.filter((a) => a && /^[0-9]{1,10}$/.test(String(a.id)) && Number(a.id) > 0 && Number(a.id) <= 4294967295);
-  };
-  const words = (v) => String(v || "").trim().split(/\s+/).filter(Boolean);
-  const lastOf = (a) => a.lastName || words(a.displayName || a.fullName).slice(-1)[0] || "";
-  const firstOf = (a) => a.firstName || words(a.displayName || a.fullName)[0] || "";
-  // Teammates sharing a last name get initials, like "J. HUGHES"
-  const panelNames = (list) => {
-    const lasts = list.map((a) => panelLetters(lastOf(a)));
-    const firsts = list.map((a) => panelLetters(firstOf(a)).replace(/[^A-Z0-9]/g, ""));
-    return list.map((a, i) => {
-      const mates = firsts.filter((f, j) => j !== i && lasts[j] === lasts[i]);
-      if (!mates.length || !firsts[i]) return fitName(lastOf(a));
-      const shared = (k) => mates.some((f) => f.startsWith(firsts[i].slice(0, k)));
-      let k = 1;
-      while (k < 3 && k < firsts[i].length && shared(k)) k++;
-      return fitName(firsts[i].slice(0, shared(k) ? 1 : k) + ". " + lastOf(a));
-    });
-  };
-  const playerSay = (t) => {
-    $("#playerMsg").textContent = t;
-    $("#playerMsg").hidden = !t;
-  };
-  // A team's players by last name; null if unread
-  const rosters = {};
-  const readRoster = async (t) => {
-    if (rosters[keyOf(t)]) return rosters[keyOf(t)];
-    let list = null;
-    try {
-      const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      list = rosterAthletes(await r.json());
-    } catch (_) {
-      return null;
-    }
-    const names = panelNames(list);
-    const out = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
-      pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
-      .filter((a) => a.panel)
-      .sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
-    if (out.length) rosters[keyOf(t)] = out;
-    return out;
-  };
-  const rosterSays = (t, list) => (list ? "ESPN lists no players for the " + t[3] + " right now."
-    : "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
-  const loadRoster = async (key) => {
-    const t = teamByKey(key);
-    if (!t) return;
-    rosterFor = key;
-    roster = [];
-    renderPlayerForm();
-    playerSay("Reading the " + t[3] + " roster from ESPN\u2026");
-    const list = await readRoster(t);
-    if (rosterFor !== key) return;  // another team was picked meanwhile
-    if (!list || !list.length) {
-      playerSay(rosterSays(t, list));
-      renderPlayerForm();
-      return;
-    }
-    roster = list;
-    playerSay("");
-    renderPlayerForm();
-  };
-  const renderPlayerForm = () => {
-    const t = teamByKey(playerTeam);
-    $("#playerTeam").textContent = t ? t[3] : "Pick a team";
-    const sel = $("#playerPick");
-    const sig = rosterFor + ":" + roster.length;
-    if (sel.dataset.sig !== sig) {
-      sel.dataset.sig = sig;
-      sel.textContent = "";
-      for (const a of roster) {
-        const o = el("option", null, a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : ""));
-        o.value = String(a.id);
-        sel.appendChild(o);
-      }
-    }
-    $("#playerPickRow").hidden = $("#playerAdd").hidden = !roster.length;
-  };
-  // A read after the ack without them: slots were full
-  const settlePlayers = () => {
-    const list = S.players || [];
-    const max = S.playermax;
-    playerPending = playerPending.filter((p) => {
-      if (list.some((pl) => pl.l === p.l && pl.id === p.id)) {
-        toast("Added " + p.name);
-        return false;
-      }
-      if (p.ack && stateLeft > p.ack + APPLY_MS) {
-        playerSay(list.length >= max ? "All " + max + " players are in use. Remove one first."
-          : "The panel didn't add " + p.name + ". Try again.");
-        return false;
-      }
-      return Date.now() - p.at < 10000;  // no read since: the panel is away
-    });
-  };
-  const renderPlayers = () => {
-    const card = $("#playerCard");
-    // Firmware from before favorite players sends none.
-    card.hidden = !S || S.players === undefined;
-    const lines = (game && Array.isArray(game.pl) && game.s !== "NOT_FOUND" && game.pl) || [];
-    const line = $("#playerline");
-    line.textContent = "";
-    for (const text of lines) line.appendChild(el("span", "bet", text));
-    line.hidden = !lines.length;
-    if (card.hidden) return;
-    settlePlayers();
-    const list = S.players || [];
-    $("#playerSum").textContent = list.length ? list.length + " of " + S.playermax : "";
-    const sig = JSON.stringify(list);
-    if (sig === playerDrawn) return;
-    playerDrawn = sig;
-    const host = $("#playerList");
-    const focused = host.contains(document.activeElement);
-    host.textContent = "";
-    for (const pl of list) {
-      const row = el("div", "ctl playerrow");
-      const t = teamById(pl.l, pl.team);
-      const img = el("img");
-      img.alt = "";
-      img.loading = "lazy";
-      const src = t ? logoUrl(t[0], t[1], t[2]) : "";
-      if (src) img.src = src;
-      else img.style.visibility = "hidden";
-      row.appendChild(img);
-      const name = el("label", null, pl.name);
-      name.appendChild(el("small", null, (t ? t[3] : lgInfo(pl.l).name)));
-      row.appendChild(name);
-      const x = el("button", "betdel", "\u2715");
-      x.title = "Remove " + pl.name;
-      x.setAttribute("aria-label", x.title);
-      x.onclick = () => setGD({ playerdel: pl.l + "," + pl.id }).then((ok) => ok && toast("Removed " + pl.name));
-      row.appendChild(x);
-      host.appendChild(row);
-    }
-    if (!list.length) host.appendChild(el("p", "hint", "No favorite players yet."));
-    if (focused && !host.contains(document.activeElement)) $("#playerTeam").focus();
-  };
-  $("#playerTeam").onclick = () => openPicker(false, false, true);
-  $("#playerAdd").onclick = () => {
-    if (!S) return;
-    const t = teamByKey(playerTeam);
-    const a = roster.find((x) => String(x.id) === $("#playerPick").value);
-    if (!t || !a) return playerSay("Pick the player first.");
-    const list = S.players || [];
-    const max = S.playermax;
-    const same = (pl) => pl.l === t[0] && pl.id === a.id;
-    // Pending posts count: no double posts or overfilled slots
-    if (playerPending.some(same)) return;
-    if (list.some(same)) return playerSay(a.name + " is a favorite already.");
-    if (list.length + playerPending.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
-    playerSay("");
-    const mine = { l: t[0], id: a.id, name: a.name, at: Date.now(), ack: 0 };
-    playerPending.push(mine);
-    setGD({ player: [t[0], a.id, t[1], a.panel].join(",") }).then((ok) => {
-      if (ok) mine.ack = Date.now();
-      else playerPending = playerPending.filter((p) => p !== mine);
-    });
-  };
-  renderPlayerForm();
-
-  // ---- team chooser ------------------------------------------------------
-  // Picks My team unless a pick* flag says otherwise
-  let pickFav = false;
-  let pickBet = false;
-  let pickPlayer = false;
-  let pickSplit = false;
-  let pickProp = false;
-  const choose = (t) => {
-    if (pickSplit) {
-      if (S && refKey(S.team) === keyOf(t)) {
-        toast("That's the panel's own team. Pick another.");
-        return;
-      }
-      setGD({ splitteam: keyOf(t) });
-      toast("The second area shows the " + t[3]);
-    } else if (pickPlayer) {
-      playerTeam = keyOf(t);
-      loadRoster(playerTeam);
-    } else if (pickBet) {
-      betTeam = keyOf(t);
-      betSay("");
-      renderBetForm();
-      if (pickProp) loadPropRoster();
-    } else if (pickFav) addFav(t);
-    else {
-      setGD({ team: keyOf(t) });
-      toast("Now following the " + t[3]);
-    }
-    closePicker();
-  };
-  let league = "now";
-  const renderTiles = () => {
-    if (league === "now") return renderGames();
-    $("#tiles").className = "tiles";
-    const q = $("#q").value.trim().toLowerCase();
-    const cur = S ? refKey(S.team) : "";
-    const tiles = $("#tiles");
-    tiles.innerHTML = "";
-    // A tab can hold more than one league (Golf: both tours; Racing: both
-    // series). A tour or a series is never a favorite yet, and search finds
-    // one by its tab's name too.
-    // Search matches a MiLB team's level, like "double-a"
-    const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
-    let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !((pickPlayer || pickProp) && !fromEspn(t[0]))
-      && (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
-    if (!list.length) {
-      tiles.appendChild(el("div", "none", "No team matches"));
-      return;
-    }
-    // MiLB teams grouped by level, Triple-A first
-    const byLevel = !q && list.some(levelOf);
-    if (byLevel) list = list.slice().sort((a, b) => (a[4] || 0) - (b[4] || 0));
-    let level = null;
-    for (const t of list) {
-      if (byLevel && levelOf(t) !== level) {
-        level = levelOf(t);
-        tiles.appendChild(el("div", "gh", level));
-      }
-      const tile = el("button", "tile" + (keyOf(t) === cur ? " on" : ""));
-      const img = el("img");
-      img.loading = "lazy";
-      const src = logoUrl(t[0], t[1], t[2]);
-      if (src) img.src = src;
-      else img.style.visibility = "hidden";
-      img.alt = "";
-      tile.appendChild(img);
-      tile.appendChild(el("div", "n", t[3]));
-      tile.appendChild(el("div", "a", (levelOf(t) || lgInfo(t[0]).prefix) + " · " + t[2]));
-      tile.onclick = () => choose(t);
-      tiles.appendChild(tile);
-    }
-  };
-  $("#guardClear").onclick = async () => {
-    await doAction("power_ok");
-    scheduleState(300);
-  };
-  $("#pick").onclick = () => openPicker(false);
-  $("#favAdd").onclick = () => openPicker(true);
-  // A dialog: Tab stays inside it, and closing hands focus back to the
-  // button that opened it.
-  let pickerFrom = null;
-  const openPicker = async (fav, bet = false, player = false, split = false, prop = false) => {
-    pickFav = fav;
-    pickBet = bet;
-    pickPlayer = player;
-    pickSplit = split;
-    pickProp = prop;
-    pickerFrom = document.activeElement;
-    $(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player || prop ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
-    const cur = split && S && S.splitteam && S.splitteam.id ? teamByKey(refKey(S.splitteam))
-      : player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
-    const team = fav || bet || player || split;
-    const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || ((player || prop) && !fromEspn(lg)));
-    league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
-    // Golf/Racing only for My team; players need ESPN leagues
-    tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
-    // Waits a second at most for On now's games
-    const list = await Promise.race([loadGames(false), new Promise((res) => setTimeout(res, 1000))]).catch(() => null);
-    if (list && list.some((g) => g.state === "in")) league = "now";
-    $$tabs(league);
-    $("#q").value = "";
-    renderTiles();
-    $("#modal").classList.add("open");
-    setTimeout(() => $("#q").focus(), 50);
-  };
-  // One tab per league that has teams in this firmware's list, and one for
-  // leagues that share a tab (Golf, Racing).
-  const tabsShown = new Set();
-  for (const lg of Object.keys(LEAGUES)) {
-    if (!TEAMS.some((t) => t[0] === lg) || tabsShown.has(LEAGUES[lg].tab)) continue;
-    tabsShown.add(LEAGUES[lg].tab);
-    const b = el("button", null, LEAGUES[lg].tab);
-    b.dataset.lg = lg;
-    b.setAttribute("role", "tab");
-    b.setAttribute("aria-controls", "tiles");
-    $(".tabs").appendChild(b);
-  }
-  // Only the chosen tab is in the Tab order; the arrow keys move between tabs.
-  const tabButtons = Array.from(document.querySelectorAll(".tabs button"));
-  const $$tabs = (lg) => tabButtons.forEach((b) => {
-    setOn(b, b.dataset.lg === lg, "aria-selected");
-    b.tabIndex = b.dataset.lg === lg ? 0 : -1;
-  });
-  const showTab = (b) => { league = b.dataset.lg; $$tabs(league); $("#q").value = ""; renderTiles(); };
-  tabButtons.forEach((b, i) => {
-    b.onclick = () => showTab(b);
-    b.onkeydown = (ev) => {
-      // The tabs on show: Golf and Racing hide while adding a favorite.
-      const shown = tabButtons.filter((x) => !x.hidden);
-      const n = shown.length;
-      const at = shown.indexOf(b);
-      const j = { ArrowRight: at + 1, ArrowLeft: at - 1 + n, Home: 0, End: n - 1 }[ev.key];
-      if (j === undefined || at < 0) return;
-      ev.preventDefault();
-      shown[j % n].focus();
-      showTab(shown[j % n]);
-    };
-  });
-  $("#q").oninput = renderTiles;
-  const closePicker = () => {
-    if (!$("#modal").classList.contains("open")) return;
-    $("#modal").classList.remove("open");
-    if (pickerFrom && pickerFrom.isConnected) pickerFrom.focus();
-    pickerFrom = null;
-  };
-  $("#close").onclick = closePicker;
-  $("#modal").onclick = (ev) => { if (ev.target.id === "modal") closePicker(); };
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closePicker(); });
-  $("#modal").addEventListener("keydown", (ev) => {
-    if (ev.key !== "Tab") return;
-    const all = Array.from($(".sheet").querySelectorAll("input, button:not([disabled])")).filter((n) => n.tabIndex >= 0);
-    if (!all.length) return;
-    const first = all[0], last = all[all.length - 1];
-    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
-    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
-  });
-
-  const renderCurrentTeam = () => {
-    const t = S ? teamByKey(refKey(S.team)) : null;
-    const img = $("#curLogo");
-    if (!t) { img.style.visibility = "hidden"; $("#curName").textContent = "No team chosen"; return; }
-    const src = logoUrl(t[0], t[1], t[2]);
-    img.style.visibility = src ? "visible" : "hidden";
-    if (src) img.src = src;
-    $("#curName").textContent = t[3];
-    $("#curLg").textContent = lgInfo(t[0]).name + (levelOf(t) ? ", " + levelOf(t) : "");
-  };
-
-  // ---- timezone suggestion from the browser --------------------------------
-  // Browsers report an IANA zone; the device's list carries one IANA name per
-  // entry plus a few common aliases here. Same-zone cities all map to the
-  // same POSIX rule, so a near match is still the right choice.
-  const TZ_ALIASES = {
-    "America/Detroit": "America/New_York", "America/Toronto": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
-    "America/Kentucky/Louisville": "America/New_York", "America/Montreal": "America/New_York", "America/Nassau": "America/New_York",
-    "America/Winnipeg": "America/Chicago", "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
-    "America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago", "America/Ojinaga": "America/Chicago",
-    "America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver",
-    "America/Vancouver": "America/Los_Angeles", "America/Tijuana": "America/Los_Angeles",
-    "America/Juneau": "America/Anchorage", "America/Sitka": "America/Anchorage", "America/Nome": "America/Anchorage",
-    "Europe/Dublin": "Europe/London", "Europe/Paris": "Europe/Berlin", "Europe/Madrid": "Europe/Berlin", "Europe/Rome": "Europe/Berlin",
-    "Europe/Amsterdam": "Europe/Berlin", "Europe/Brussels": "Europe/Berlin", "Europe/Vienna": "Europe/Berlin", "Europe/Zurich": "Europe/Berlin",
-    "Europe/Stockholm": "Europe/Berlin", "Europe/Oslo": "Europe/Berlin", "Europe/Copenhagen": "Europe/Berlin", "Europe/Warsaw": "Europe/Berlin",
-    "Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin", "Europe/Helsinki": "Europe/Athens", "Europe/Kiev": "Europe/Athens",
-    "Europe/Kyiv": "Europe/Athens", "Europe/Bucharest": "Europe/Athens", "Europe/Sofia": "Europe/Athens",
-    "Asia/Hong_Kong": "Asia/Shanghai", "Asia/Taipei": "Asia/Shanghai", "Asia/Manila": "Asia/Singapore", "Asia/Kuala_Lumpur": "Asia/Singapore",
-    "Australia/Melbourne": "Australia/Sydney", "Australia/Hobart": "Australia/Sydney", "Australia/Canberra": "Australia/Sydney",
-    "Australia/Darwin": "Australia/Adelaide",
-  };
-  const browserZoneName = () => {
-    let iana = "";
-    try { iana = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_) {}
-    if (!iana) return null;
-    const target = TZ_ALIASES[iana] || iana;
-    const hit = TZS.find((z) => z[1] === target);
-    return hit ? hit[0] : null;
-  };
-  // The panel follows the browser's zone unless someone picked one by hand.
-  // The Time card is a single line; the dropdown only appears on request.
-  let tzApplied = false;
-  const tzsel = $("#tzsel");
-  TZS.forEach((z, i) => { const o = el("option", null, z[0]); o.value = String(i); tzsel.appendChild(o); });
-  tzsel.onchange = () => { setGD({ tzauto: 0, tz: tzsel.value }); $("#tzpick").hidden = true; };
-  // The line's parts are made once and only their words change, so a redraw
-  // never takes the keyboard focus off the button. A button, not a bare
-  // link, so the keyboard and screen readers reach it.
-  const tzName = el("b");
-  const tzHow = el("span", "muted");
-  const tzLink = el("button", "lnk");
-  const renderTime = () => {
-    if (!S) return;
-    if (!tzName.isConnected) $("#tzline").replaceChildren(tzName, tzHow, tzLink);
-    const cur = S.tz_name || "";
-    const auto = !!S.tz_auto;
-    const mine = browserZoneName();
-    const mineIdx = mine ? TZS.findIndex((z) => z[0] === mine) : -1;
-    const pick = $("#tzpick");
-    if (document.activeElement !== tzsel) tzsel.value = String(S.tz);
-    tzName.textContent = cur || "Not set";
-    if (auto) {
-      tzHow.textContent = mine ? " · set from this browser" : " · this browser's zone is not in the list";
-      tzLink.textContent = "choose manually";
-      tzLink.onclick = () => { pick.hidden = !pick.hidden; };
-      if (mine && mine !== cur && mineIdx >= 0 && !tzApplied) {
-        tzApplied = true;
-        setGD({ tz: mineIdx });
-        toast("Timezone set to " + mine + " from this browser");
-      }
-    } else {
-      tzHow.textContent = " · chosen by hand";
-      tzLink.textContent = mine ? "follow this browser (" + mine + ")" : "change";
-      tzLink.onclick = () => {
-        if (mine) { tzApplied = false; setGD({ tzauto: 1 }); pick.hidden = true; }
-        else pick.hidden = !pick.hidden;
-      };
-    }
-  };
-
-  // ---- up next + splash (from the state document) -------------------------------
-  // tbd: ESPN has no kickoff time yet and "kick" is midnight Eastern of the
-  // game's day, so show that day in Eastern time and no clock.
-  const kickLabel = (epoch, tbd) => {
-    const d = new Date(epoch * 1000);
-    const opts = { weekday: "short", month: "short", day: "numeric" };
-    if (tbd) return d.toLocaleDateString([], { ...opts, timeZone: "America/New_York" }) + " TBD";
-    const day = d.toLocaleDateString([], opts);
-    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    return day + " " + time;
-  };
-  // Favorite teams mode: one row per favorite, both logos, state or kickoff.
-  const renderFavNext = (box) => {
-    const list = (S.next || []).filter((n) => n.t && n.t.id);
-    box.hidden = !list.length;
-    const host = $("#upnextList");
-    host.innerHTML = "";
-    for (const n of list) {
-      const row = el("div", "un fav" + (n.slot === S.shown ? " shown" : ""));
-      const img = el("img");
-      img.loading = "lazy";
-      img.alt = "";
-      img.src = logoUrl(n.t.l, n.t.id, n.t.abbr);
-      row.appendChild(img);
-      const txt = el("div", "ut");
-      const name = ranked(n.trk, n.t.abbr) + (n.oa ? " vs " + ranked(n.ork, n.oa) : "");
-      txt.appendChild(el("div", "n", name));
-      let when = n.none ? "No game scheduled" : "Not checked yet";
-      if (n.s === "IN") when = n.ts + " - " + n.os + (n.detail ? " · " + n.detail : "");
-      else if (n.s === "POST") when = endedAs(n) === "Final" ? "Final " + n.ts + " - " + n.os : endedAs(n);
-      else if (n.s === "PRE") when = kickLabel(n.kick, n.tbd) + (n.tv ? " · " + n.tv : "");
-      txt.appendChild(el("div", "w", when));
-      row.appendChild(txt);
-      host.appendChild(row);
-    }
-  };
-  const renderUpNext = () => {
-    const box = $("#upnext");
-    const mode = S ? S.mode || 0 : -1;
-    // Favorite teams with no favorites follows the team, so it lists the
-    // team's games like My team.
-    if (mode === 4 && (S.favs || []).some(refKey)) { renderFavNext(box); return; }
-    if (mode !== 0 && mode !== 4) { box.hidden = true; return; }
-    const curId = game && game.s !== "NOT_FOUND" ? String(game.id || "") : "";
-    const list = (S.next || []).filter((u) => String(u.id) !== curId).slice(0, 3);
-    box.hidden = !list.length;
-    const host = $("#upnextList");
-    host.innerHTML = "";
-    const lg = S.team ? S.team.l : "nfl";
-    for (const u of list) {
-      const row = el("div", "un");
-      const img = el("img");
-      img.loading = "lazy";
-      img.alt = "";
-      img.src = logoUrl(lg, u.oi, u.oa);
-      row.appendChild(img);
-      const txt = el("div", "ut");
-      txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + ranked(u.ork, u.on || u.oa)));
-      txt.appendChild(el("div", "w", kickLabel(u.kick, u.tbd) + (u.tv ? " · " + u.tv : "")));
-      row.appendChild(txt);
-      host.appendChild(row);
-    }
-  };
-  let lastSplashKey = "";
-  let splashTimer = null;
-  const renderSplash = () => {
-    if (!S || !S.splash) return;
-    // Keyed on play too: turnovers and cards keep the score
-    const key = S.splash + "|" + (game ? game.ts + "-" + game.os + "|" + (game.lp || "") : "");
-    if (key === lastSplashKey) return;
-    lastSplashKey = key;
-    const n = $("#splash");
-    n.textContent = S.splash;
-    n.style.background = "#" + (S.splash_color && S.splash_color !== "000000" ? S.splash_color : "1d4ed8");
-    n.classList.add("on");
-    clearTimeout(splashTimer);
-    splashTimer = setTimeout(() => n.classList.remove("on"), 3000);
-  };
-
-  // ---- the Flight Tracker card (components/gameday/app_flights.h) -----------
-  const FLIGHTS_ID = 3;
-  const FLIGHT_SOURCES = { fr24: "Flightradar24", adsbfi: "adsb.fi", adsblol: "adsb.lol", receiver: "your receiver" };
-  const FLIGHT_RADII = { imperial: [5, 10, 15, 25, 50, 100], metric: [5, 10, 25, 50, 100, 150] };
-  const COORDS = /^\s*([+-]?\d{1,3}(?:\.\d*)?)\s*(?:,\s*|\s+)([+-]?\d{1,3}(?:\.\d*)?)\s*$/;
-  // The panel's settings, or a post not shown yet
-  const flightNow = () => {
-    const f = (S && S.flights) || {};
-    const r = S && S.flyradius !== undefined ? /^(\d+)([a-z]*)$/.exec(S.flyradius) : null;
-    return {
-      ...f,
-      home: S && S.flyhome !== undefined ? (S.flyhome === "none" ? "" : S.flyhome) : f.home || "",
-      place: S && S.flyplace !== undefined ? S.flyplace : f.place || "",
-      radius: r ? Number(r[1]) : f.radius,
-      radius_unit: r ? r[2] || "mi" : f.radius_unit,
-      receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
-    };
-  };
-  // One home search for both cards
-  const homeSearch = (p) => {
-    const msg = (t) => { const m = $("#" + p + "Msg"); m.textContent = t || ""; m.hidden = !t; };
-    const setHome = (lat, lon, place) => {
-      msg("");
-      $("#" + p + "Picks").hidden = true;
-      $("#" + p + "Where").value = "";
-      setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
-    };
-    const findPlace = async () => {
-      const q = $("#" + p + "Where").value.trim();
-      const picks = $("#" + p + "Picks");
-      picks.hidden = true;
-      if (!q) { msg("Type a town, a ZIP code, or a latitude and longitude."); return; }
-      const c = COORDS.exec(q);
-      if (c) {
-        const lat = Number(c[1]), lon = Number(c[2]);
-        if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
-          msg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
-          return;
-        }
-        setHome(lat, lon, "");
-        return;
-      }
-      msg("Looking it up...");
-      let found = [];
-      try {
-        // Open-Meteo's place search: keyless, from this browser.
-        const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        found = ((await r.json()).results || []).filter((x) => typeof x.latitude === "number" && typeof x.longitude === "number");
-      } catch (_) {
-        msg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
-        return;
-      }
-      if (!found.length) { msg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
-      const label = (x) => [x.name, x.admin1, x.country].filter((v, i, all) => v && all.indexOf(v) === i).join(", ");
-      if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
-      msg("");
-      picks.innerHTML = "";
-      for (const x of found) {
-        const b = el("button", "btn", label(x));
-        b.onclick = () => setHome(x.latitude, x.longitude, label(x));
-        picks.append(b);
-      }
-      picks.hidden = false;
-    };
-    $("#" + p + "Find").onclick = findPlace;
-    $("#" + p + "Where").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
-    $("#" + p + "Clear").onclick = () => setGD({ flyhome: "none" });
-    return msg;
-  };
-  const flightMsg = homeSearch("flight");
-  $("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
-  const saveRx = () => {
-    const v = $("#flightRx").value.trim();
-    if (/\s/.test(v) || v.length > 95) { flightMsg("A receiver's address has no spaces, like 192.168.1.50."); return; }
-    flightMsg("");
-    setGD({ flyreceiver: v || "none" });
-  };
-  $("#flightRxSave").onclick = saveRx;
-  $("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
-  // Planespotters' photo of the card's plane, read by this browser
-  const PHOTO_API = "https://api.planespotters.net/pub/photos/";
-  const PHOTO_RETRY_MS = 60000;
-  const flightPhotos = new Map();  // by hex: {photo}, {pending} or {failed}
-  const photoAt = async (path) => {
-    const r = await fetch(PHOTO_API + path);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const p = ((await r.json()).photos || [])[0];
-    const t = p && (p.thumbnail_large || p.thumbnail);
-    if (!t || typeof t.src !== "string" || !/^https:\/\//.test(t.src)) return null;
-    const link = typeof p.link === "string" && /^https:\/\//.test(p.link) ? p.link : "";
-    return { src: t.src, link, by: typeof p.photographer === "string" ? p.photographer : "" };
-  };
-  const showFlightPhoto = (hex, reg, label) => {
-    const fig = $("#flightPhoto");
-    const key = hex || (reg ? "reg:" + reg : "");
-    const got = key ? flightPhotos.get(key) : undefined;
-    if (key && (!got || (got.failed && Date.now() - got.failed >= PHOTO_RETRY_MS))) {
-      flightPhotos.set(key, { pending: true });
-      (async () => (hex && (await photoAt("hex/" + encodeURIComponent(hex))))
-        || (reg ? photoAt("reg/" + encodeURIComponent(reg)) : null))()
-        .then((photo) => flightPhotos.set(key, { photo }), () => flightPhotos.set(key, { failed: Date.now() }))
-        .then(() => renderFlights());
-    }
-    const p = got && got.photo;
-    if (!p) { fig.hidden = true; return; }
-    const img = $("#flightPhotoImg");
-    if (img.getAttribute("src") !== p.src) img.src = p.src;
-    img.alt = "Photo of " + label;
-    const by = $("#flightPhotoBy");
-    by.textContent = "Photo: " + (p.by ? p.by + ", " : "") + "Planespotters.net";
-    for (const a of [$("#flightPhotoLink"), by])
-      if (p.link) a.href = p.link; else a.removeAttribute("href");
-    $("#flightPhotoOf").textContent = label;
-    fig.hidden = false;
-  };
-  let flightRadii = "";
-  const renderFlights = () => {
-    const card = $("#flightCard");
-    card.hidden = !S || !S.flights || !((S.displays || []).some((d) => d.id === FLIGHTS_ID));
-    if (card.hidden) return;
-    const f = flightNow();
-    const where = f.home ? (f.place ? f.place + " (" + f.home.replace(",", ", ") + ")" : f.home.replace(",", ", ")) : "";
-    $("#flightSum").textContent = f.home ? f.place || f.home.replace(",", ", ") : "No location yet";
-    $("#flightHomeRow").hidden = !f.home;
-    $("#flightHome").textContent = where;
-    const unit = f.units === "metric" ? "km" : "mi";
-    const opts = FLIGHT_RADII[f.units === "metric" ? "metric" : "imperial"].map((n) => [n + unit, n + " " + unit]);
-    const cur = f.radius + (f.radius_unit || "mi");
-    if (!opts.some((o) => o[0] === cur)) opts.push([cur, f.radius + " " + (f.radius_unit || "mi")]);
-    const key = opts.map((o) => o[0]).join("|");
-    const sel = $("#flightRadius");
-    if (flightRadii !== key) {
-      flightRadii = key;
-      sel.innerHTML = "";
-      for (const [v, t] of opts) sel.add(new Option(t, v));
-    }
-    if (document.activeElement !== sel) sel.value = cur;
-    const rx = $("#flightRx");
-    if (document.activeElement !== rx) rx.value = f.receiver;
-    const n = Number(f.planes) || 0;
-    const from = FLIGHT_SOURCES[f.source] || "";
-    // Near the 180th meridian it skips Flightradar24
-    const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
-    const shown = S.display_now === "flights" || S.split_now === "flights";
-    const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
-    const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
-    let line = !f.home ? "Set a home location to see the planes near it."
-      : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
-        : f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
-          + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
-          : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
-            : "Looking for planes.";
-    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
-      line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
-    else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
-    $("#flightNow").textContent = line;
-    const live = f.status === "ok" && n > 0;
-    showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
-  };
-
-  // ---- the Weather card (components/gameday/app_weather.h) -----------------
-  const WX_ID = 4;
-  const WX_SOURCES = { "open-meteo": "Open-Meteo", "met-norway": "MET Norway" };
-  homeSearch("wx");
-  const wxTickerOn = () => (S && S.wxticker !== undefined ? S.wxticker : !!(S && S.weather && S.weather.ticker));
-  $("#wxTicker").setAttribute("role", "switch");
-  $("#wxTicker").onclick = () => setGD({ wxticker: wxTickerOn() ? 0 : 1 });
-  const renderWeather = () => {
-    const card = $("#wxCard");
-    const w = S && S.weather;
-    card.hidden = !w || !((S.displays || []).some((d) => d.id === WX_ID));
-    if (card.hidden) return;
-    // Shared home, pending posts included
-    const f = S.flights ? flightNow() : { home: w.home || "", place: w.place || "" };
-    const coords = (f.home || "").replace(",", ", ");
-    $("#wxSum").textContent = f.home ? f.place || coords : "No home yet";
-    $("#wxHomeRow").hidden = !f.home;
-    $("#wxHome").textContent = f.home ? (f.place ? f.place + " (" + coords + ")" : coords) : "";
-    setOn($("#wxTicker"), wxTickerOn(), "aria-checked");
-    const shown = S.display_now === "weather" || S.split_now === "weather";
-    const mine = (S.displays || []).find((d) => d.id === WX_ID);
-    const chosen = S.display === WX_ID || (mine && S.split === mine.split);
-    const n = Number(w.alerts) || 0;
-    let line = !f.home ? "Set a home location to see its weather."
-      : w.status === "failing" ? "Can't reach the weather right now. The panel keeps trying."
-        : w.status === "ok" && w.temp ? w.temp + ", " + w.sky + (WX_SOURCES[w.source] ? ", from " + WX_SOURCES[w.source] : "") + "."
-          : w.status === "old" && !shown ? "Not reading the weather now: the panel reads it only while Weather is on it."
-            : "Looking up the weather.";
-    if (f.home && w.status === "ok" && n) line += " " + n + (n === 1 ? " alert: " : " alerts, first: ") + w.alert + ".";
-    if (f.home && w.status === "ok" && w.aqi != null) line += " Air quality " + w.aqi + ".";
-    if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
-      line += " The clock is up for the night hours, and Weather comes back after them.";
-    else if (f.home && !chosen) line += " Choose Weather under Showing to put it on the panel.";
-    $("#wxNow").textContent = line;
-  };
-
-  const renderAll = () => {
-    renderBoard();
-    renderBets();
-    renderMarkets();
-    renderFlights();
-    renderWeather();
-    renderPlayers();
-    renderUpNext();
-    renderSplash();
-    renderCurrentTeam();
-    renderMode();
-    renderSettings();
-    renderSplit();
-    renderShowing();
-    renderIdle();
-    renderPanels();
-    renderTime();
-    if (S && S.name) {
-      $("#hostname").textContent = S.name + ".local";
-      // Its six characters tell two panels' tabs apart
-      const tail = S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-      document.title = "Game Day Scoreboard" + (tail ? " " + tail : "");
-    }
-    renderData();
-    renderHealth();
-    renderWifi();
-    renderFolds();
-  };
-
-  const renderData = () => {
-    const kb = S && S.espn_kb;
-    if (kb == null) { $("#espnData").textContent = ""; return; }
-    const size = kb < 1000 ? kb + " KB" : (kb / 1000).toFixed(kb < 100000 ? 1 : 0) + " MB";
-    const reads = S.espn_reads || 0;
-    $("#espnData").textContent = size + " in " + reads + (reads === 1 ? " read" : " reads");
-  };
-
-  // The health block (components/gameday/health.h). Firmware before it sends
-  // none, and the rows stay hidden.
-  const RESTARTS = {
-    power: "Power on", restart: "Restart", update: "Update", crash: "Crash", watchdog: "Froze (watchdog)",
-    brownout: "Power dip (brownout)", usb: "USB reset",
-  };
-  const restartName = (k) => RESTARTS[k] || "Other";
-  // The Wi-Fi history (components/gameday/wifi_history.h). Firmware before it
-  // sends none, and the rows stay hidden.
-  const WIFI_CAUSES = {
-    signal: "signal lost", router: "dropped by the router", password: "sign-in refused",
-    roam: "moved to another access point", other: "other",
-  };
-  const span = (s) => {
-    if (s < 60) return s + " s";
-    const m = Math.round(s / 60);
-    if (m < 60) return m + " min";
-    const h = Math.floor(m / 60);
-    if (h < 24) return h + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
-    return Math.floor(h / 24) + " d" + (h % 24 ? " " + (h % 24) + " h" : "");
-  };
-  // An empty health block (the firmware's fallback when it doesn't fit its
-  // buffer) counts as none.
-  const healthOf = () => (S && S.health && S.health.up != null ? S.health : null);
-  const renderHealth = () => {
-    const h = healthOf();
-    $("#health").hidden = !h;
-    if (!h) return;
-    $("#hStart").textContent = restartName(h.start) + ", " + span(h.up) + " ago";
-    $("#hBoots").textContent = h.boots > 1 ? "Start " + h.boots + " since the power came on" : "";
-    $("#hFault").textContent = !h.fault ? "None"
-      : restartName(h.fault) + (h.fault_ago != null ? ", " + span(h.fault_ago) + " ago" : "");
-    $("#hHeap").textContent = Math.round(h.heap_kb) + " KiB, largest piece " + Math.round(h.block_kb) + " KiB";
-    const answer = (code, ago) => (code === 200 ? "OK" : code === 0 ? "No answer" : "HTTP " + code) + ", " + span(ago) + " ago";
-    $("#hEspn").textContent = h.espn == null ? "None yet" : answer(h.espn, h.espn_ago);
-    // Shown once the panel has read from MLB
-    $("#hMlbRow").hidden = h.mlb == null;
-    if (h.mlb != null) $("#hMlb").textContent = answer(h.mlb, h.mlb_ago);
-    // Shown once the panel has read from HockeyTech
-    $("#hHtRow").hidden = h.ht == null;
-    if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
-    // A row per display once it has read
-    document.querySelectorAll("#health .happ").forEach((n) => n.remove());
-    for (const d of otherDisplays()) {
-      if (h[d.key] == null) continue;
-      const row = el("div", "ctl happ");
-      row.append(el("label", null, "Last " + d.name + " read"), el("span", "val", answer(h[d.key], h[d.key + "_ago"])));
-      $("#hFw").parentElement.before(row);
-    }
-    const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
-    // The build time comes in Unix seconds; shown in the browser's own time
-    const b = h.built ? new Date(h.built * 1000) : null;
-    const builtText = b ? b.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
-      b.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
-    $("#hFw").textContent = (h.version || "") + (chan ? " " + chan : "") + (builtText ? ", built " + builtText : "");
-    // Live here, so they no longer wait on the RSSI and heap sensors, which
-    // are off until someone turns them on in Home Assistant. The Wi-Fi
-    // object, when there is one, fills in the signal.
-    if (!S.wifi) $("#rssi").textContent = h.rssi != null ? h.rssi + " dBm" : "Not connected";
-    $("#psram").textContent = h.psram_kb ? Math.round(h.psram_kb) + " KiB" : "";
-    renderGuard(h);
-  };
-
-  // Heat and power protection (components/gameday/guard.h). heat is the
-  // dimming step, power "capped" after two brownout restarts in a row.
-  const HEAT_PERCENT = [100, 70, 45, 25];
-  const renderGuard = (h) => {
-    const hasGuard = h && h.heat != null;
-    $("#hTempRow").hidden = !hasGuard || h.temp == null;
-    $("#hPowerRow").hidden = !hasGuard;
-    const capped = hasGuard && h.power === "capped";
-    const hot = hasGuard && h.heat > 0;
-    $("#guard").hidden = !capped && !hot;
-    $("#guard").classList.toggle("power", capped);
-    if (!hasGuard) return;
-    const pct = HEAT_PERCENT[Math.min(h.heat, HEAT_PERCENT.length - 1)];
-    if (h.temp != null) $("#hTemp").textContent = Math.round(h.temp) + " C" + (hot ? ", dimmed to " + pct + "%" : "");
-    $("#hPower").textContent = (h.brownouts || 0) + (capped ? ", brightness capped" : "");
-    $("#guardClear").hidden = !capped;
-    if (capped) {
-      $("#guardName").textContent = "Check the power supply";
-      $("#guardText").textContent = "The panel restarted twice in a row because its power dipped, so its brightness is held down. "
-        + "Use the power supply that came with it, not a phone charger or a USB port, then press Clear.";
-    } else if (hot) {
-      $("#guardName").textContent = "Too warm, dimming";
-      $("#guardText").textContent = "The panel is running hot, so it is at " + pct + "% of its brightness until it cools. "
-        + "Keep it out of direct sun and give it some air behind it.";
-    }
-  };
-  // The history across the full width (a day at most), newest at the right,
-  // gaps where the panel was off Wi-Fi (a red tick along the bottom). -95 to
-  // -35 dBm bottom to top.
-  const drawSpark = (svg, hist, step) => {
-    const W = hist.length, H = 48, NS = "http://www.w3.org/2000/svg";
-    const y = (v) => (H - 2 - (Math.min(-35, Math.max(-95, v)) + 95) / 60 * (H - 4)).toFixed(1);
-    let d = "", gaps = "", lo = 0, hi = -127, weak = 0, n = 0;
-    hist.forEach((v, i) => {
-      const x = i;
-      if (v == null) { gaps += "M" + x + " " + (H - 3) + "V" + H; return; }
-      d += (i > 0 && hist[i - 1] != null ? "L" : "M") + x + " " + y(v);
-      if (i === hist.length - 1 || hist[i + 1] == null) d += "h0.01";  // a lone point still shows
-      lo = Math.min(lo, v); hi = Math.max(hi, v); n++;
-      if (v < -75) weak++;
-    });
-    const path = (cls, p) => {
-      const e = document.createElementNS(NS, "path");
-      e.setAttribute("class", cls);
-      e.setAttribute("d", p);
-      e.setAttribute("vector-effect", "non-scaling-stroke");
-      return e;
-    };
-    svg.setAttribute("viewBox", "0 0 " + (W - 1) + " " + H);
-    svg.replaceChildren(path("th", "M0 " + y(-75) + "H" + W));
-    if (gaps) svg.appendChild(path("gap", gaps));
-    if (d) svg.appendChild(path("ln", d));
-    svg.setAttribute("aria-label", n ? "Signal over the last " + span(W * step) + ": " + lo + " to " + hi
-      + " dBm" + (weak ? ", weak for " + span(weak * step) : "") : "No signal readings yet");
-  };
-  const renderWifi = () => {
-    renderDevicePeek();
-    const w = S && S.wifi;
-    $("#wifiDiag").hidden = !w;
-    if (!w) return;
-    $("#rssi").textContent = w.rssi != null ? w.rssi + " dBm" : "Not connected";
-    $("#wifiWeak").hidden = !w.weak;
-    const hist = w.hist || [], step = w.step || 300;
-    $("#wifiSparkBox").hidden = hist.length < 2;
-    if (hist.length >= 2) {
-      drawSpark($("#wifiSpark"), hist, step);
-      $("#wifiFrom").textContent = (hist.length * step >= 86400 ? "24 h" : span(hist.length * step)) + " ago";
-    }
-    // Up less than a day (by the history), every drop since start is in the day.
-    const day = hist.length > 0 && hist.length * step < 86400;
-    const count = day ? w.drops : w.day;
-    $("#wifiDrops").textContent = (count || "None") + (count ? (day ? " since start" : " in 24 h") : "");
-    const causes = Object.entries(w.causes || {}).filter(([k]) => k !== "roam");
-    let line = "";
-    if (w.last) {
-      line = "Last: " + (WIFI_CAUSES[w.last] || "other") + ", " + span(w.last_ago) + " ago"
-        + (w.last_down != null ? ", back in " + span(w.last_down) : "");
-      if (causes.length > 1) line += ". " + causes.map(([k, c]) => c + " " + (WIFI_CAUSES[k] || k)).join(", ");
-    }
-    $("#wifiLast").textContent = line;
-  };
-
-  // After an install the device reboots. The event stream only retries every
-  // 30 seconds, so poll the root page instead and reload as soon as it answers.
-  let es = null;
-  let streamAt = 0;
-  const showRestart = (line) => {
-    restart = line;
-    renderGone();
-  };
-  // Reboot, the resets and the panel picker are far down the page; the line is on the board.
-  const toBoard = () => $("#board").scrollIntoView({ behavior: "smooth", block: "start" });
-  const waitForReboot = (fromVersion, line) => {
-    const started = Date.now();
-    let sawDown = false;
-    if (es) { es.close(); es = null; }
-    setConn(false);
-    showRestart(line);
-    // Ask the device which version it runs; reload as soon as that changes.
-    // A connection to a rebooting device can hang, so each probe gets 1.5s.
-    const tick = async () => {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 1500);
-      try {
-        // detail=all carries current_version; the plain state does not
-        const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
-        if (r.ok) {
-          const j = await r.json();
-          const changed = j.current_version && fromVersion !== "" && j.current_version !== fromVersion;
-          const settled = !String(j.state || "").toUpperCase().includes("INSTALLING");
-          // Once the device has been seen down, a settled answer means it is back.
-          if (changed || (sawDown && settled)) { location.reload(); return; }
-        }
-      } catch (_) { sawDown = true; }
-      clearTimeout(timer);
-      if (Date.now() - started < 5 * 60 * 1000) { setTimeout(tick, 2000); return; }
-      // Not back in five minutes: stop saying it's restarting and listen again.
-      restart = "";
-      renderGone();
-      // An install that never restarted the panel didn't happen: the firmware
-      // box goes back to what the panel offers.
-      if (installing) {
-        installing = false;
-        if (ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
-      }
-      connect();
-    };
-    setTimeout(tick, 3000);
-  };
-  // Both resets blank the saved network, so the panel comes back as its own
-  // setup hotspot and never on this one. Stop asking it.
-  const intoSetup = (why) => {
-    stopped = true;
-    if (es) { es.close(); es = null; }
-    clearInterval(pollTimer);
-    clearTimeout(stateTimer);
-    setConn(false);
-    const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-    showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
-  };
-
-  // ---- check for updates -----------------------------------------------------
-  // The device only sends a state event when the result changes, so "no update"
-  // after a check would look like nothing happened. Ask for the result directly.
-  const checkForUpdates = async (btn) => {
-    const uid = byName["Firmware"];
-    btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = "Checking";
-    $("#fw").hidden = false;
-    $("#fwText").textContent = "Checking for updates";
-    $("#fwSub").textContent = "";
-    $("#fwInstall").hidden = true;
-    fwChecking = true;
-    await new Promise((r) => setTimeout(r, 4000));
-    // A panel that lost power never closes the connection, so give up on it.
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 8000);
-    try {
-      // detail=all carries current_version; the plain state does not
-      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
-      if (r.ok && uid) {
-        const j = await r.json();
-        onState(Object.assign({ id: uid }, j));
-        const st = String(j.state || "").toUpperCase();
-        // The firmware row shows the result; only shout when there is something to
-        // do. The device offers any different version, an older one included.
-        if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
-        else if (st.includes("INSTALLING")) { /* the install is running; nothing to say */ }
-        else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
-      } else if (uid) {
-        renderUpdate(ents[uid]);
-        toast("Could not read the update status");
-      }
-    } catch (_) {
-      if (uid) renderUpdate(ents[uid]);
-      toast("Device did not respond");
-    }
-    clearTimeout(timer);
-    fwChecking = false;
-    btn.textContent = label;
-    btn.disabled = false;
-  };
-
-  // State events carry the update state but not current_version; fetch the
-  // full detail whenever the state changes so the box shows the running version.
-  let fwDetailInflight = false;
-  const refreshFirmwareDetail = async (id) => {
-    if (fwDetailInflight) return;
-    fwDetailInflight = true;
-    try {
-      const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
-      if (r.ok) {
-        const j = await r.json();
-        ents[id] = Object.assign(ents[id] || {}, j, { id });
-        renderUpdate(ents[id]);
-      }
-    } catch (_) {}
-    fwDetailInflight = false;
-  };
-
-  // true if a is newer than b, false if older, null if either is unreadable.
-  // As in the firmware (auto_update.h), betas ("2026.10.1-beta.812") order by
-  // their build number and come before the release they lead up to.
-  const isNewer = (a, b) => {
-    const parse = (v) => {
-      const [base, beta] = String(v || "").replace(/^v/, "").split("-beta.");
-      const p = base.split(".").map((n) => parseInt(n, 10));
-      const build = beta === undefined ? Infinity : parseInt(beta, 10);
-      if (p.length < 3 || p.some(isNaN) || isNaN(build)) return null;
-      return [p[0], p[1], p[2], p[3] || 0, build];
-    };
-    const pa = parse(a), pb = parse(b);
-    if (!pa || !pb) return null;
-    for (let i = 0; i < 5; i++) if (pa[i] !== pb[i]) return pa[i] > pb[i];
-    return false;
-  };
-
-  // ---- firmware update -----------------------------------------------------
-  // The manifest carries a one-line summary; the release on GitHub has the
-  // real bullet list. Fetch that from the browser and fall back to the summary.
-  const notesCache = {};
-  const bulletsFrom = (text) => String(text || "").split(/\r?\n/).filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
-  const renderNotes = (host, tag, summary) => {
-    const list = el("ul", "notes");
-    host.appendChild(list);
-    const fill = (items) => {
-      list.innerHTML = "";
-      items.forEach((t) => list.appendChild(el("li", null, t)));
-    };
-    // Summary first so something shows right away; the manifest joins the bullets with " | ".
-    const quick = String(summary || "").split(" | ").map((t) => t.trim()).filter(Boolean);
-    if (quick.length) fill(quick);
-    if (!tag) return;
-    if (notesCache[tag]) { fill(notesCache[tag]); return; }
-    fetch("https://api.github.com/repos/" + REPO + "/releases/tags/" + encodeURIComponent(tag), { headers: { Accept: "application/vnd.github+json" } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const items = j ? bulletsFrom(j.body) : [];
-        if (items.length) { notesCache[tag] = items; fill(items); }
-      })
-      .catch(() => {});
-  };
-  // A release has its own section on the site's changelog, in owner words; a
-  // beta has none, so it keeps the manifest's link to its commit, and only
-  // an https one, since any other kind of address could run script on a tap.
-  const notesLink = (u) => {
-    if (/^\d+(\.\d+)+$/.test(String(u.value || ""))) return SITE_URL + "/changelog/#v" + u.value;
-    const url = String(u.release_url || "");
-    return /^https:\/\//i.test(url) ? url : "";
-  };
-  let installing = false;
-  let fwChecking = false;  // Check for updates is waiting for the panel's answer
-  // What the firmware box reads from the state document, and what it last drew with.
-  const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
-  let fwDrawn = fwInputs();
-  // Folded Device card's peek shows alerts, not contents
-  let fwNote = "";
-  const renderDevicePeek = () => {
-    const note = fwNote || (S && S.wifi && S.wifi.weak ? "Weak signal" : "");
-    const peek = $("#devicePeek");
-    peek.textContent = note || "Updates, Wi-Fi, diagnostics";
-    peek.classList.toggle("alert", !!note);
-  };
-  const renderUpdate = (u) => {
-    const box = $("#fw");
-    box.hidden = false;
-    fwNote = "";
-    const cur = u.current_version ? "v" + u.current_version : "";
-    const latest = u.value ? "v" + u.value : "";
-    const st = String(u.state || "").toUpperCase();
-    const btn = $("#fwInstall");
-    const sub = $("#fwSub");
-    btn.hidden = true;
-    fwDrawn = fwInputs();
-    if (st.includes("INSTALLING") || installing) {
-      fwNote = "Installing " + (latest || "update");
-      $("#fwText").textContent = fwNote;
-      sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
-    } else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
-      // The device offers any different version; a lower one is a downgrade.
-      // Only the beta feeds carry "-beta.<build>" versions (scripts/beta_version.sh),
-      // so the version on offer names the feed it came from, whatever the
-      // Follow beta switch says right now.
-      const chan = /-beta\.\d+$/.test(String(u.value || "")) ? "beta" : "release";
-      $("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
-      sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
-    } else if (st.includes("AVAILABLE")) {
-      // The panel rolled back from this very version (a crash in its first
-      // minute); it won't install it on its own again, but Install still tries.
-      const failed = !!(S && S.update_failed && S.update_failed === u.value);
-      if (failed) {
-        fwNote = "Update didn't take";
-        $("#fwText").textContent = "The update to " + latest + " didn't take and the panel went back to " + (cur || "its old version");
-        sub.textContent = "Install tries it again." + (S.autoupd || S.bar ? " It won't install this one on its own." : "");
-      } else {
-        fwNote = "Update available: " + latest;
-        $("#fwText").textContent = fwNote;
-        sub.textContent = (cur ? "You have " + cur + "." : "") + (S && (S.autoupd || S.bar) ? " It installs on its own between 3 and 5 AM." : "");
-      }
-      renderNotes(sub, latest, u.summary);
-      btn.hidden = false;
-      // Wait for the running version: the offer may be older
-      if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
-      btn.onclick = async () => {
-        const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
-        if (!confirm(ask)) return;
-        installing = true;
-        renderUpdate(u);
-        // Only an install the panel took is waited out; a failed post has said so.
-        if (!(await post(u.id, "install"))) {
-          installing = false;
-          renderUpdate(u);
-          return;
-        }
-        toast("Installing " + latest);
-        waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
-      };
-    } else if (st.includes("NO UPDATE")) {
-      $("#fwText").textContent = "You're up to date, " + cur;
-      sub.textContent = "";
-    } else {
-      $("#fwText").textContent = "Firmware " + cur;
-      sub.textContent = "Not checked yet. It checks a few seconds after the clock syncs, or tap Check for updates.";
-    }
-    const notesUrl = notesLink(u);
-    if (notesUrl && !st.includes("INSTALLING")) {
-      const a = el("a", null, "Release notes");
-      a.href = notesUrl;
-      a.target = "_blank";
-      a.rel = "noopener";
-      sub.appendChild(document.createTextNode(sub.textContent ? " " : ""));
-      sub.appendChild(a);
-    }
-    renderDevicePeek();
-  };
-
-  // ---- saved Wi-Fi networks ---------------------------------------------
-  // GET /gameday/wifi lists the networks the panel remembers, names only, in
-  // the order it tries them. Firmware without the list answers 404 and the
-  // section stays hidden.
-  const renderNetworks = (j) => {
-    const nets = j.networks || [];
-    const list = $("#nets");
-    list.innerHTML = "";
-    nets.forEach((n, i) => {
-      const row = el("div", "ctl");
-      const label = el("label", null, n.ssid);
-      if (n.connected) label.appendChild(el("small", null, "Connected"));
-      else if (i === 0) label.appendChild(el("small", null, "Tried first"));
-      row.appendChild(label);
-      const b = el("button", "btn danger", "Forget");
-      b.onclick = async () => {
-        if (!confirm("Forget " + n.ssid + "?")) return;
-        b.disabled = true;
-        try {
-          const r = await fetch("/gameday/wifi?forget=" + encodeURIComponent(n.ssid), { method: "POST" });
-          // A forgotten network the panel is on stays connected only until
-          // that connection drops or the panel restarts; the last saved one
-          // stays in ESPHome's own slot, so the panel joins it again.
-          const after = !n.connected ? ""
-            : nets.length === 1 ? "; the panel keeps using it and saves it again when it reconnects"
-            : "; it stays connected until this connection drops or the panel restarts";
-          toast(r.ok ? "Forgot " + n.ssid + after : "Could not forget " + n.ssid);
-        } catch (_) {
-          toast("Could not forget " + n.ssid);
-        }
-        loadNetworks();
-      };
-      row.appendChild(b);
-      list.appendChild(row);
-    });
-    $("#netsEmpty").hidden = nets.length > 0;
-    $("#netsCard").hidden = false;
-  };
-  const loadNetworks = async () => {
-    try {
-      const r = await fetch("/gameday/wifi?_=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) { $("#netsCard").hidden = true; return; }
-      renderNetworks(await r.json());
-    } catch (_) {
-      $("#netsCard").hidden = true;
-    }
-  };
-
-  // ---- event stream ------------------------------------------------------
-  const onState = (e) => {
-    ents[e.id] = Object.assign(ents[e.id] || {}, e);
-    if (e.name) byName[e.name] = e.id;
-    const name = ents[e.id].name;
-    const def = controlDefs.find((d) => d.name === name);
-    if (def) {
-      if (!built[e.id]) built[e.id] = buildControl(def, ents[e.id]);
-      built[e.id].update(ents[e.id]);
-    }
-    switch (name) {
-      // Sent on every board update: re-read the state document. Its value is
-      // Home Assistant's shorter line, so the ticker and last play come from there.
-      case "Game Status": scheduleState(150); break;
-      case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
-      case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
-      case "IP": $("#ip").textContent = e.value || ""; break;
-      case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
-      case "Free Heap (PSRAM)": if (!healthOf()) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
-    }
-  };
-
-  const connect = () => {
-    if (es) es.close();
-    streamAt = Date.now();
-    es = new EventSource("/events");
-    es.addEventListener("ping", (ev) => {
-      setConn(true);
-      answered();
-      if (!ev.data) return;
-      try {
-        const p = JSON.parse(ev.data);
-        if (p.title) $("#devname").textContent = p.title;
-        if (p.comment) $("#ver").textContent = p.comment;
-      } catch (_) {}
-    });
-    es.addEventListener("state", (ev) => {
-      try { onState(JSON.parse(ev.data)); } catch (_) {}
-    });
-    es.onopen = () => { setConn(true); answered(); fetchState(); };
-    // A dropped stream is often only a phone waking up; ask the panel before
-    // saying it's gone.
-    es.onerror = () => { setConn(false); fetchState(); };
-  };
-  connect();
-  fetchState();
-  loadNetworks();
-  // Fallback poll in case an event is missed; the ticker event is the fast path.
-  const pollTimer = setInterval(fetchState, 15000);
+let folds = {};
+let expandAll = false;
+try {
+const v = JSON.parse(localStorage.getItem("gd.cards"));
+if (v && typeof v === "object") folds = v;
+expandAll = localStorage.getItem("gd.expand") === "1";
+} catch (_) {}
+const folded = (id) => (expandAll ? true : folds[id]);
+document.querySelectorAll("details.card").forEach((d) => {
+if (typeof folded(d.id) === "boolean") d.open = folded(d.id);
+d.firstElementChild.addEventListener("click", () => {
+folds[d.id] = !d.open;
+try { localStorage.setItem("gd.cards", JSON.stringify(folds)); } catch (_) {}
+});
+});
+let foldsSet = false;
+const renderFolds = () => {
+if (!S || foldsSet) return;
+foldsSet = true;
+const full = { favCard: favKeys, playerCard: S.players, betCard: S.bets, mktCard: showsMarkets() ? [1] : [] };
+for (const id in full) if (typeof folded(id) !== "boolean") $("#" + id).open = (full[id] || []).length > 0;
+};
+const openUnlessChosen = (id) => { if (typeof folded(id) !== "boolean") $("#" + id).open = true; };
+let toastTimer;
+const toast = (t) => {
+const n = $("#toast");
+n.textContent = t;
+n.classList.add("on");
+clearTimeout(toastTimer);
+toastTimer = setTimeout(() => n.classList.remove("on"), 1800);
+};
+const domainOf = (e) => e.domain || String(e.id || "").split(/[\/-]/)[0];
+const post = async (id, action, params, attempt = 0) => {
+const e = ents[id] || { id };
+const domain = domainOf(e);
+const target = e.name || String(id).split("/")[1] || String(id).split("-").slice(1).join("-");
+const qs = params
+? "?" + Object.entries(params).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&")
+: "";
+try {
+const r = await fetch(`/${domain}/${encodeURIComponent(target)}/${action}${qs}`, { method: "POST" });
+if (!r.ok) throw new Error("HTTP " + r.status);
+return true;
+} catch (e) {
+if (attempt < 1) {
+await new Promise((res) => setTimeout(res, 500));
+return post(id, action, params, attempt + 1);
+}
+toast("Device did not respond (" + (e.message || "network") + "). Try again.");
+return false;
+}
+};
+const qs = (params) => Object.entries(params).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
+const APPLY_MS = 300;
+const held = {};
+const ref = (key) => ({ l: key.split(":")[0], id: Number(key.split(":")[1]) });
+const stateForm = {
+mode: Number, rotate: Number, rotatesec: Number, lockon: Number, release: Number, collide: Number, standing: Number,
+clocksize: Number, textsize: Number, sportview: Number, areadetail: (v) => v === "1",
+down: (v) => v === "1", count: (v) => v === "1", match: (v) => v === "1", play: (v) => v === "1", odds: (v) => v === "1", opp: (v) => v === "1",
+bootaddr: (v) => v === "1", today: (v) => v === "1", autoupd: (v) => v === "1", beta: (v) => v === "1",
+follow: (v) => v === "1",
+alerts: Number, alertfav: (v) => v === "1", anim: (v) => v === "1",
+idle: Number, idledim: Number, nightbri: Number, night: (v) => v === "1",
+nightstart: String, nightend: String,
+watch: (v) => v === "1", watchstay: Number, watchmine: (v) => v === "1",
+split: Number, splitteam: (v) => (v && v !== "none" ? ref(v) : {}), display: Number, full: (v) => v === "1",
+flyhome: String, flyplace: String, flyradius: String, flyreceiver: String, wxticker: (v) => v === "1",
+live: (v) => v.split(",").filter(Boolean),
+team: (v) => ref(v),
+favs: (v) => v.split(",").filter(Boolean).map(ref),
+};
+const sameForm = {
+mode: (a, b) => (a || 0) === (b || 0),
+team: (a, b) => refKey(a) === refKey(b),
+splitteam: (a, b) => refKey(a) === refKey(b),
+live: (a, b) => (a || []).slice().sort().join(",") === (b || []).slice().sort().join(","),
+favs: (a, b) => (a || []).map(refKey).filter(Boolean).join(",") === (b || []).map(refKey).filter(Boolean).join(","),
+};
+const same = (k, a, b) => (sameForm[k] ? sameForm[k](a, b) : a === b);
+const overlay = () => {
+if (!D) return;
+S = Object.assign({}, D);
+for (const k of Object.keys(held)) S[k] = held[k].v;
+game = S.game || null;
+};
+let stateTimer = null;
+let stateLeft = 0;
+let stateInflight = false;
+let stateAgain = false;
+const fetchState = async () => {
+if (stopped) return;
+if (stateInflight) { stateAgain = true; return; }
+stateInflight = true;
+const left = Date.now();
+const ctl = new AbortController();
+const timer = setTimeout(() => ctl.abort(), 8000);
+let reached = false;
+try {
+const r = await fetch("/gameday/state?_=" + left, { cache: "no-store", signal: ctl.signal });
+reached = true;
+answered();
+if (!connected && !restart && Date.now() - streamAt > 10000) connect();
+if (r.ok) {
+D = await r.json();
+stateLeft = left;
+for (const k of Object.keys(held)) {
+const h = held[k];
+if (h.ack && (same(k, D[k], h.v) || left > h.ack + APPLY_MS)) delete held[k];
+}
+overlay();
+renderAll();
+if (Object.values(held).some((h) => h.ack)) scheduleState(APPLY_MS + 100);
+}
+} catch (_) {
+if (!reached) unanswered();
+}
+clearTimeout(timer);
+stateInflight = false;
+if (stateAgain) { stateAgain = false; fetchState(); }
+};
+const scheduleState = (ms) => { clearTimeout(stateTimer); stateTimer = setTimeout(fetchState, ms); };
+const postSet = async (params, attempt = 0) => {
+try {
+const r = await fetch("/gameday/set?" + qs(params), { method: "POST" });
+if (!r.ok) throw new Error("HTTP " + r.status);
+return true;
+} catch (e) {
+if (attempt < 1) {
+await new Promise((res) => setTimeout(res, 500));
+return postSet(params, attempt + 1);
+}
+toast("Device did not respond (" + (e.message || "network") + "). Try again.");
+return false;
+}
+};
+let setQueue = Promise.resolve();
+const setGD = (params) => {
+const mine = {};
+for (const k of Object.keys(params)) {
+if (!stateForm[k]) continue;
+mine[k] = held[k] = { v: stateForm[k](String(params[k])), ack: 0 };
+}
+if (mine.live) {
+mine.live_auto = held.live_auto = { v: !mine.live.v.length, ack: 0 };
+if (!mine.live.v.length) { delete mine.live; delete held.live; }
+}
+if (Object.keys(mine).length) { overlay(); renderAll(); }
+const run = setQueue.then(() => postSet(params)).then((ok) => {
+for (const k of Object.keys(mine)) {
+if (held[k] !== mine[k]) continue;
+if (ok) held[k].ack = Date.now();
+else delete held[k];
+}
+if (!ok) { overlay(); renderAll(); }
+scheduleState(APPLY_MS + 100);
+return ok;
+});
+setQueue = run;
+return run;
+};
+const doAction = async (name, done) => {
+try {
+const r = await fetch("/gameday/action?do=" + name, { method: "POST" });
+if (!r.ok) throw new Error("HTTP " + r.status);
+if (done) toast(done);
+} catch (e) {
+toast("Device did not respond (" + (e.message || "network") + ")");
+}
+};
+const tryIt = (field, name, done) => {
+const page = pageOf();
+if ((page && page !== "Scoreboard") || (field && S && S.display_now && S.display_now !== "gameday")) {
+toast("Set Showing to Scoreboard to try it");
+return;
+}
+doAction(name, done);
+};
+document.querySelectorAll("[data-anim]").forEach((b) => {
+b.onclick = () => tryIt(false, "anim&play=" + encodeURIComponent(b.dataset.anim), "Playing on the panel");
+});
+$("#fieldTry").onclick = () => tryIt(true, "field", "Showing a sample field on the panel");
+const setConn = (on) => {
+if (on === connected) return;
+connected = on;
+const c = $("#conn");
+c.classList.toggle("on", on);
+c.querySelector("span").textContent = on ? "live" : "offline";
+};
+let readFails = 0;
+let firstFailAt = 0;
+const renderGone = () => {
+const line = $("#gone");
+line.textContent = restart
+|| (downSince ? "Panel not answering since " + new Date(downSince).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+line.hidden = !line.textContent;
+$("#board").classList.toggle("dim", !line.hidden);
+};
+const answered = () => {
+readFails = 0;
+if (downSince) { downSince = 0; renderGone(); }
+};
+const unanswered = () => {
+if (!readFails++) firstFailAt = Date.now();
+if (downSince || (connected && readFails < 2)) return;
+downSince = firstFailAt;
+setConn(false);
+renderGone();
+};
+const endedAs = (g) => (g.done === false && g.detail ? g.detail : "Final");
+const fitRank = (node) => {
+const rk = node.querySelector(".abbr .rk");
+if (!rk) return;
+rk.hidden = false;
+rk.hidden = node.querySelector(".abbr").scrollWidth > node.clientWidth;
+};
+window.addEventListener("resize", () => document.querySelectorAll("#board .team").forEach(fitRank));
+const liftColor = (hex) => {
+const c = parseInt(hex, 16) || 0;
+let r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+const m = Math.max(r, g, b);
+if (!m) return "ffffff";
+if (m < 0xc0) [r, g, b] = [r, g, b].map((x) => Math.floor((x * 0xc0) / m));
+return ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+};
+const renderTeam = (node, league, id, abbr, rec, timeouts, poss, color, rank) => {
+const img = node.querySelector("img");
+const src = id ? logoUrl(league, id, abbr) : "";
+if (img.getAttribute("src") !== src) img.src = src;
+img.style.visibility = src ? "visible" : "hidden";
+const a = node.querySelector(".abbr");
+a.textContent = abbr || "---";
+if (rank && abbr) a.prepend(el("span", "rk", "#" + rank), " ");
+fitRank(node);
+a.classList.toggle("poss", !!poss);
+a.style.color = "#" + liftColor(color || "ffffff");
+node.querySelector(".rec").textContent = rec || "";
+node.querySelector(".pips").style.display = timeouts === null || timeouts < 0 ? "none" : "";
+node.querySelectorAll(".pips i").forEach((p, i) => p.classList.toggle("on", i < (timeouts || 0)));
+};
+const situation = (g) => {
+if (!g.sport) return g.d || "";
+if (g.sport === 1 && g.outs >= 0) return (g.sit ? g.sit + ", " : "") + g.outs + (g.outs === 1 ? " out" : " outs");
+return g.sit || "";
+};
+const golfDates = (start, end, shift = 43200) => {
+if (!start) return "";
+const zone = (S && S.tz_iana) || undefined;
+const part = (t) => {
+try {
+const p = new Intl.DateTimeFormat("en-US", { timeZone: zone, month: "short", day: "numeric" }).formatToParts(new Date((t + shift) * 1000));
+return { m: p.find((x) => x.type === "month").value, d: p.find((x) => x.type === "day").value };
+} catch (_) { return { m: "", d: "" }; }
+};
+const a = part(start), z = part(end || start);
+if (a.m === z.m && a.d === z.d) return a.m + " " + a.d;
+return a.m + " " + a.d + "-" + (a.m === z.m ? "" : z.m + " ") + z.d;
+};
+const renderGolf = (g) => {
+const golf = g.golf || {};
+const st = $("#gstate");
+const ph = golf.ph || 0;
+st.classList.toggle("live", ph === 1);
+st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(golf.st || "").toUpperCase();
+$("#golfSt").textContent = ph === 0 ? "" : golf.st || "";
+const next = golf.next;
+$("#golfWhen").textContent = ph === 0 ? golfDates(golf.start, golf.end)
+: next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end) : "";
+const ol = $("#golfRows");
+ol.innerHTML = "";
+for (const r of golf.rows || []) {
+const li = el("li", r.w ? "w" : null);
+li.appendChild(el("span", "p", r.p || ""));
+li.appendChild(el("span", "n", r.n || ""));
+const sc = String(r.s || "");
+li.appendChild(el("span", "s " + (sc[0] === "-" ? "u" : sc[0] === "+" ? "o" : sc === "E" ? "e" : ""), sc));
+li.appendChild(el("span", "t", r.t || ""));
+ol.appendChild(li);
+}
+};
+const dayTime = (t) => {
+if (!t) return "";
+try {
+return new Intl.DateTimeFormat("en-US", { timeZone: (S && S.tz_iana) || undefined, weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(t * 1000));
+} catch (_) { return ""; }
+};
+const renderRace = (g) => {
+const race = g.race || {};
+const st = $("#gstate");
+const ph = race.ph || 0;
+st.classList.toggle("live", ph === 1);
+st.textContent = ph === 1 ? "LIVE" : ph === 3 ? "FINAL" : ph === 0 ? "UPCOMING" : String(race.st || "").toUpperCase();
+$("#golfSt").textContent = ph === 0 ? "" : race.st || "";
+const nx = race.nx ? race.nx + ", " + dayTime(race.at) : "";
+const next = race.next;
+$("#golfWhen").textContent = ph === 0 ? nx || golfDates(race.start, race.end, 0)
+: ph === 1 || ph === 2 ? (nx ? "Next: " + nx : "")
+: next && next.name ? "Next: " + next.name + ", " + golfDates(next.start, next.end, 0) : "";
+const ol = $("#golfRows");
+ol.innerHTML = "";
+for (const r of race.rows || []) {
+const li = el("li", r.w ? "w" : null);
+li.appendChild(el("span", "p", r.p || ""));
+li.appendChild(el("span", "n", r.n || ""));
+li.appendChild(el("span", "s", r.v || ""));
+li.appendChild(el("span", "t", r.d || ""));
+ol.appendChild(li);
+}
+};
+const renderBoard = () => {
+const b = $("#board");
+const g = game;
+const lboard = !!(g && g.s !== "NOT_FOUND" && (g.sport === 5 || g.sport === 6));
+b.classList.toggle("golfing", lboard);
+$("#golf").hidden = !lboard;
+$("#golf").classList.toggle("race", lboard && g.sport === 6);
+b.querySelector(".row").hidden = lboard;
+const st = $("#gstate");
+const msg = $("#msg");
+const captive = !!(S && S.captive);
+const stale = $("#stale");
+stale.textContent = captive ? "Wi-Fi needs a sign-in" : "data stale";
+stale.classList.toggle("on", captive || ((S && S.misses) || 0) >= 3);
+const gname = $("#gname");
+gname.textContent = (g && g.s !== "NOT_FOUND" && g.gn) || "";
+gname.hidden = !gname.textContent;
+if (!g || g.s === "NOT_FOUND") {
+b.classList.add("empty");
+st.textContent = g ? "NO GAME" : "WAITING";
+st.classList.remove("live");
+msg.hidden = false;
+const mode = S ? String(S.mode || 0) : "0";
+const favMode = mode === "4" && S && (S.favs || []).some(refKey);
+const liveMode = S && !favMode && (isLive(mode) || S.recap || !(S.team && S.team.id));
+msg.textContent = !g ? "Waiting for the first fetch"
+: captive ? "This Wi-Fi needs a sign-in. Use a home network or a hotspot."
+: g.why ? g.why
+: favMode ? "None of your favorites has a game coming up"
+: liveMode ? "No live games right now"
+: S && S.team && isRacing(S.team.l) ? "No upcoming race for this series"
+: S && S.team && isBoard(S.team.l) ? "No upcoming event for this tour" : "No upcoming game for this team";
+$("#clock").innerHTML = "&nbsp;";
+$("#down").textContent = "";
+return;
+}
+b.classList.remove("empty");
+msg.hidden = true;
+if (lboard) {
+if (g.sport === 6) renderRace(g);
+else renderGolf(g);
+$("#clock").innerHTML = "&nbsp;";
+$("#down").textContent = "";
+return;
+}
+st.classList.toggle("live", g.s === "IN");
+st.textContent = g.s === "IN" ? "LIVE" : g.s === "POST" ? endedAs(g).toUpperCase() : "UPCOMING";
+const football = !g.sport;
+renderTeam($("#tA"), g.l, g.ti, g.ta, g.tr, football ? g.tt : null, g.p === 1, g.tc, g.trk);
+renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc, g.ork);
+$("#sA").textContent = g.ts;
+$("#sB").textContent = g.os;
+const clock = $("#clock");
+if (g.s === "IN") clock.textContent = g.c || "In progress";
+else if (g.s === "POST") clock.textContent = endedAs(g);
+else clock.textContent = g.k || "Upcoming";
+const d = $("#down");
+d.textContent = g.s === "IN" ? situation(g) : g.s === "PRE" && g.tv ? "on " + g.tv : "";
+d.classList.toggle("rz", g.s === "IN" && !!g.rz);
+};
+const isLive = (m) => m === "1" || m === "2" || m === "3" || m === "5";
+const modeButtons = Array.from(document.querySelectorAll("#modes button"));
+modeButtons.forEach((b) => {
+b.onclick = () => {
+const cur = S ? String(S.mode || 0) : "";
+if (cur === b.dataset.mode || (b.dataset.mode === "5" && isLive(cur))) return;
+setGD({ mode: b.dataset.mode });
+toast(b.textContent);
+};
+});
+const rotateSelect = $("#rotate");
+rotateSelect.onchange = () => setGD({ rotatesec: rotateSelect.value });
+const lockonInput = $("#lockon");
+lockonInput.onchange = () => {
+const v = Math.min(120, Math.max(5, Number(lockonInput.value) || 15));
+lockonInput.value = v;
+setGD({ lockon: v });
+};
+const releaseSelect = $("#release");
+releaseSelect.onchange = () => setGD({ release: releaseSelect.value });
+const staySelect = $("#watchstay");
+staySelect.onchange = () => setGD({ watchstay: staySelect.value });
+const collideSelect = $("#collide");
+const favRotate = $("#favrotate");
+const showFavRotate = () => {
+favRotate.hidden = collideSelect.value !== "1";
+};
+collideSelect.onchange = () => {
+showFavRotate();
+setGD({ collide: collideSelect.value });
+};
+favRotate.onchange = () => setGD({ rotatesec: favRotate.value });
+const liveKeys = () => {
+const m = String(S.mode || 0);
+if (m === "1") return ["nfl"];
+if (m === "2") return ["ncaa"];
+if (m === "3") return ["nfl", "ncaa"];
+return S.live || [];
+};
+const liveAuto = () => String(S.mode || 0) === "5" && !!S.live_auto;
+$("#liveAuto").onclick = () => {
+setGD({ live: "" });
+toast("Leagues follow your team and favorites");
+};
+const renderLiveBar = () => {
+const auto = liveAuto();
+$("#liveName").textContent = S.fallback ? "No live game right now, showing your team until one starts"
+: S.recap ? "No live game right now, showing recent finals"
+: S.follow ? "Staying on the game you follow"
+: "Following a random game in progress";
+$("#liveLg").textContent = (S.fallback || S.recap || S.follow ? "" : "Moves on when it ends, or after Switch every. ")
++ (auto ? "Leagues follow your team and favorites. Tap a league to choose by hand:" : "Leagues:");
+$("#liveChips").classList.toggle("auto", auto);
+$("#liveAuto").hidden = auto || String(S.mode || 0) !== "5";
+renderLiveChips();
+};
+const liveChips = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && TEAMS.some((t) => t[0] === lg)).map((lg) => {
+const b = el("button", "chip", LEAGUES[lg].tab);
+setOn(b, false, "aria-pressed");
+b.onclick = () => {
+const cur = liveKeys();
+const next = cur.includes(lg) ? cur.filter((k) => k !== lg) : cur.concat([lg]);
+if (!next.length) return toast("Pick at least one league");
+const params = { live: next.join(",") };
+if (String(S.mode || 0) !== "5") params.mode = 5;
+setGD(params);
+};
+$("#liveChips").appendChild(b);
+return [lg, b];
+});
+const renderLiveChips = () => {
+const on = liveKeys();
+for (const [lg, b] of liveChips) setOn(b, on.includes(lg), "aria-pressed");
+};
+const renderFollow = (mode) => {
+const favMode = mode === "4" && (S.favs || []).some(refKey);
+const liveGame = isLive(mode) && !S.fallback && !S.recap;
+const g = game;
+const on = !!S.follow;
+const up = S.visit
+? !!S.visit_follow || on
+: !!(g && g.s !== "NOT_FOUND" && (g.s !== "POST" || on) && g.id && g.sport !== 5 && g.sport !== 6);
+$("#followbar").hidden = S.follow === undefined || !(up && (favMode || liveGame));
+$("#followbar").classList.toggle("on", on);
+$("#followName").textContent = on ? "Following this game" : "Follow this game";
+const until = favMode ? "until its final has been up for After the final" : "until it ends";
+$("#followLg").textContent = on
+? "The panel stays on this game " + until + ". Turn this off to go back to "
++ (favMode ? "your favorites." : "switching games.")
+: S.visit
+? "The panel is showing a big play in another game. Turn this on to go straight back to the game it was showing and keep it on the panel " + until + "."
+: "Keep this game on the panel " + until + ", instead of "
++ (favMode ? "moving to another favorite." : "switching to another game.");
+};
+const renderMode = () => {
+if (!S) return;
+const mode = String(S.mode || 0);
+modeButtons.forEach((b) => setOn(b, b.dataset.mode === mode || (b.dataset.mode === "5" && isLive(mode)), "aria-pressed"));
+const live = isLive(mode);
+if (live) renderLiveBar();
+const favs = mode === "4";
+$("#teambar").hidden = live || favs;
+$("#livebar").hidden = !live;
+$("#favbar").hidden = !favs;
+const rotateSec = String(S.rotatesec || (S.rotate || 1) * 60);
+if (document.activeElement !== rotateSelect) rotateSelect.value = rotateSec;
+if (document.activeElement !== favRotate) favRotate.value = rotateSec;
+if (document.activeElement !== lockonInput) lockonInput.value = S.lockon || 15;
+if (document.activeElement !== releaseSelect) releaseSelect.value = String(S.release || 30);
+if (document.activeElement !== collideSelect) {
+collideSelect.value = String(S.collide || 0);
+showFavRotate();
+}
+if (favs) {
+const set = (S.next || []).filter((n) => n.t && n.t.id).length;
+const shown = (S.next || []).find((n) => n.slot === S.shown);
+$("#favName").textContent = !set
+? "No favorites set yet"
+: S.follow && shown
+? "Following " + (shown.t.name || shown.t.abbr)
+: S.locked && shown
+? "Locked on " + (shown.t.name || shown.t.abbr)
+: "Cycling through your favorites";
+}
+renderFollow(mode);
+};
+const IDLE_HINTS = [
+"What each mode shows anyway: your team's next game, your favorites, or recent scores.",
+"The time in your team's colors, and its next game on a wide panel.",
+"Recent final scores and the games still to come today, for your team's and your favorites' leagues.",
+"On game day the matchup with a countdown to the start, then the final until midnight. Other days, the clock.",
+"The panel goes dark, or as dim as you set below, without turning it off.",
+"Your team's logo, big, in its colors, with its name and its next game or last result. In Favorite teams, the one playing next.",
+];
+const idleSelect = $("#idle");
+idleSelect.onchange = () => setGD({ idle: idleSelect.value });
+const idleDim = $("#idledim");
+idleDim.oninput = () => ($("#idledimVal").textContent = idleDim.value);
+idleDim.onchange = () => setGD({ idledim: idleDim.value });
+const nightBri = $("#nightbri");
+nightBri.oninput = () => ($("#nightbriVal").textContent = nightBri.value);
+nightBri.onchange = () => setGD({ nightbri: nightBri.value });
+["nightstart", "nightend"].forEach((key) => {
+const input = $("#" + key);
+input.onchange = () => { if (/^\d\d:\d\d$/.test(input.value)) setGD({ [key]: input.value }); };
+});
+const renderIdle = () => {
+$("#idleCtls").hidden = $("#nightCtls").hidden = !S || S.idle === undefined;
+if ($("#idleCtls").hidden) return;
+const show = Number(S.idle) || 0;
+if (document.activeElement !== idleSelect) idleSelect.value = String(show);
+$("#idleHint").textContent = IDLE_HINTS[show] || "";
+$("#idleDimRow").hidden = show !== 4;
+if (document.activeElement !== idleDim) {
+idleDim.value = S.idledim || 0;
+$("#idledimVal").textContent = String(S.idledim || 0);
+}
+$("#nightRows").hidden = !S.night;
+for (const key of ["nightstart", "nightend"])
+if (document.activeElement !== $("#" + key)) $("#" + key).value = S[key] || "";
+if (document.activeElement !== nightBri) {
+nightBri.value = S.nightbri || 1;
+$("#nightbriVal").textContent = String(S.nightbri || 1);
+}
+const now = { clock: "the clock", scores: "recent scores", today: "today's game", logo: "your team's logo" }[S.idle_view];
+const main = ((S.displays || []).find((d) => d.id === Number(S.display || 0)) || {}).key;
+const wakes = { f1: "an F1 session is on", markets: "a market you listed opens", flights: "a plane comes near",
+weather: "the National Weather Service has a warning or a watch out for home" }[main];
+$("#idleNow").textContent = S.dark ? "The panel is dark until " + (wakes || "a game you follow starts") + "."
+: now ? "Showing " + now + (S.night_now ? ", in the night hours," : "") + " until a game you follow starts."
+: S.night_now ? "In the night hours." : "";
+};
+const SPLIT_TITLES = { bottom: "Bottom half", right2: "Right two panels", right1: "Right panel" };
+const SPLIT_CHOICES = [
+["Nothing: the board fills the row", "The board stretches across every panel, as before."],
+["Rotating live games", "The other live games in the leagues you follow, about 8 seconds each, leaving out minor league baseball, AHL and ECHL games. With Switch to big plays in other games on, a big play there shows in this area and the main board stays on its game. Uses more data."],
+["A second team's game", "Another team's next game, its live game with its own celebrations, and its final. Uses more data while it plays."],
+["Today's scores", "Recent final scores and the games still to come today, for your team's and your favorites' leagues."],
+["Clock and date", "The time and the date, with your next games underneath."],
+];
+const WATCH_HINT = "The panel checks the other live games in your Live games leagues, or your favorites' games, about every 45 seconds, and shows one for its big play before coming back, even over the idle display. Not while you follow a game. Uses more data.";
+const WATCH_HINT_SPLIT = "A big play in another live game shows in the second area for the time below, and the main board stays on its game, even while you follow one.";
+const splitShows = () => {
+if (!S || S.split === undefined || !S.split_at) return -1;
+const show = Number(S.split) || 0;
+return S.split_at === "bottom" && show === 0 ? 4 : show;
+};
+const otherDisplays = () => ((S && S.displays) || []).filter((d) => d.id !== 0);
+const displayName = (id) => (((S && S.displays) || []).find((d) => d.id === id) || {}).name || "";
+const mainDisplay = () => Number((S && S.display) || 0);
+const splitOffered = (show) => {
+const out = (S.split_at === "bottom" ? "1234" : "01234").split("").map((c) => [Number(c), ...SPLIT_CHOICES[c]]);
+if (mainDisplay() !== 0 || show === 5)
+out.push([5, "Game Day", "The scoreboard: your team's game, and what the main board would show, while the main board shows " + (displayName(mainDisplay()) || "another display") + "."]);
+for (const d of otherDisplays())
+out.push([d.split, d.name, d.name + ", while the main board shows something else. The clock when the main board shows it too."]);
+return out;
+};
+const splitSelect = $("#split");
+splitSelect.onchange = () => setGD({ split: splitSelect.value });
+$("#splitTeam").onclick = () => openPicker(false, false, false, true);
+let splitOptions = "";
+const renderSplit = () => {
+const show = splitShows();
+$("#splitCtls").hidden = show < 0;
+if (show < 0) return;
+$("#splitTitle").textContent = SPLIT_TITLES[S.split_at] || "Second area";
+const offered = splitOffered(show);
+const key = offered.map((o) => o[0] + o[1]).join("|");
+if (splitOptions !== key) {
+splitOptions = key;
+splitSelect.innerHTML = "";
+for (const [v, label] of offered) splitSelect.add(new Option(label, String(v)));
+}
+if (document.activeElement !== splitSelect) splitSelect.value = String(show);
+$("#splitHint").textContent = (offered.find((o) => o[0] === show) || [])[2] || "";
+const t = S.splitteam && S.splitteam.id ? S.splitteam : null;
+$("#splitTeamRow").hidden = show !== 2;
+$("#areaDetailRow").hidden = S.areadetail === undefined || show < 1 || show > 4;
+$("#splitTeam").textContent = t ? t.name || t.abbr : "Pick a team";
+const others = otherDisplays();
+$("#fullRow").hidden = S.full === undefined || !others.length;
+const names = others.map((d) => d.name);
+const which = names.length > 1 ? names.slice(0, -1).join(", ") + " or " + names[names.length - 1] : names[0] || "";
+const area = S.split_at === "bottom" ? "the bottom half" : S.split_at === "right2" ? "the right two panels" : "the right panel";
+const bottom = S.split_at === "bottom";
+$("#fullHint").textContent = "With Showing on " + which + ", it fills " + (bottom ? "all four panels" : "the whole row")
++ " instead of sharing " + (bottom ? "them" : "it") + " with " + area + ". This choice comes back for the Scoreboard and the night hours' clock.";
+const n = Number(S.split_n) || 0;
+const now = S.split_now;
+let line = "";
+if (now === "live") line = n === 1 ? "Showing the one other live game." : "Rotating " + n + " live games.";
+else if (now === "team") line = "Showing " + (t ? t.abbr : "the second team") + "'s game.";
+else if (now === "scores") line = show === 1 ? "No other live games: showing today's scores." : "Showing today's scores.";
+else if (now === "game") line = "Showing Game Day.";
+else if (now === "detail") line = "Showing your game's details.";
+else if (show > 5 && now && now !== "clock" && now !== "date") line = "Showing " + (displayName(show - 5) || now) + ".";
+else if (now === "clock" || now === "date") {
+line = show === 2 && !t ? "Pick a team for it."
+: show === 2 ? "Showing the clock: " + t.abbr + " isn't on now, or is on the main board."
+: show === 1 ? "No other live games: showing the clock."
+: show === 3 ? "No scores yet: showing the clock."
+: "";
+if (now === "date" && show === 4) line = "The main board has the time, so this shows the date.";
+if (show === 5) line = "The main board shows Game Day, so this shows the clock.";
+if (show > 5) line = mainDisplay() === show - 5 ? "The main board shows " + displayName(show - 5) + ", so this shows the clock."
+: "Showing the clock: the night hours, or nothing to show yet.";
+}
+if (S.full_now) line = (displayName(mainDisplay()) || "The display") + " fills the panel now: Full screen is on.";
+$("#splitNow").textContent = line;
+};
+const standingSel = $("#standing");
+standingSel.onchange = () => setGD({ standing: standingSel.value });
+const sizeSels = ["clocksize", "textsize", "sportview"].map((k) => {
+const sel = $("#" + k);
+sel.onchange = () => setGD({ [k]: sel.value });
+return sel;
+});
+document.querySelectorAll(".sw[data-set]").forEach((sw) => {
+sw.setAttribute("role", "switch");
+setOn(sw, false, "aria-checked");
+sw.onclick = () => setGD({ [sw.dataset.set]: S && S[sw.dataset.set] ? 0 : 1 });
+});
+document.addEventListener("click", (ev) => {
+const lab = ev.target.closest(".ctl > label:not([for])");
+if (!lab || ev.target.closest("a, button, input, select")) return;
+const sws = lab.parentElement.querySelectorAll(":scope > .sw");
+if (sws.length === 1 && !sws[0].disabled) sws[0].click();
+});
+const ALERTS = [
+["football", "Football", [
+["Touchdown"], ["Field goal"], ["Extra point"],
+["2-point conversion", "Two points after a touchdown, and any two points that aren't clearly a safety."],
+["Safety", "Two points ESPN calls a safety, or that come in the middle of a drive."],
+["Interception"],
+["Fumble recovery", "Only a fumble the other team recovers."]]],
+["baseball", "Baseball", [
+["Runs", "Runs that aren't a home run, and every minor league run: MLB doesn't say how those scored."],
+["Home run", "MLB games."],
+["Grand slam", "A home run that scores four, in MLB games."],
+["Walk-off", "The home team goes ahead in the 9th inning or later, which ends the game. In a minor league doubleheader's 7-inning game, the 7th."]]],
+["hockey", "Hockey", [["Goal", "Every goal the same way, AHL and ECHL games too: neither ESPN nor HockeyTech says which came on a power play or into an empty net."]]],
+["soccer", "Soccer", [["Goal"], ["Penalty goal", "A goal from the penalty spot."], ["Red card", "Either side's, by name."]]],
+["basketball", "Basketball", [
+["Lead change", "The team that was behind goes ahead, in the last 2 minutes or in overtime."],
+["Buzzer beater", "A basket in the last second of a period that ties the game or takes the lead."],
+["Overtime", "When overtime starts."],
+["Final", "When the game ends, unless your team won: then the victory splash."]]],
+["players", "Favorite players", [
+["Scores", "Names a favorite player who scores, in place of the team's splash. Football, baseball, soccer and hockey; in basketball only a late lead change or a buzzer beater."]]],
+];
+const alertSws = [];
+for (const [sport, name, kinds] of ALERTS) {
+const group = el("div", "alertSport");
+group.dataset.sport = sport;
+group.append(el("div", "sub", name));
+for (const [label, hint] of kinds) {
+const row = el("div", "ctl");
+const lab = el("label", "", label);
+if (hint) lab.append(el("small", "", hint));
+const sw = el("button", "sw");
+const bit = alertSws.length;
+sw.setAttribute("role", "switch");
+sw.setAttribute("aria-label", name + ": " + label);
+setOn(sw, false, "aria-checked");
+sw.onclick = () => S && S.alerts !== undefined && setGD({ alerts: (S.alerts ^ (1 << bit)) >>> 0 });
+row.append(lab, sw);
+group.append(row);
+alertSws.push(sw);
+}
+$("#alertCtls").append(group);
+}
+let favKeys = [];
+let favSlots = [];
+const favMax = () => (S && S.favmax) || 4;
+const postFavs = (keys) => setGD({ favs: keys.join(",") });
+const renderFavs = () => {
+const host = $("#favCtls");
+const a = document.activeElement;
+const was = a && host.contains(a) && a.closest(".ctl.fav")
+? { key: a.closest(".ctl.fav").dataset.key, title: a.title, at: Array.from(host.children).indexOf(a.closest(".ctl.fav")) }
+: null;
+host.innerHTML = "";
+favKeys.forEach((key, i) => {
+const t = teamByKey(key);
+const row = el("div", "ctl fav");
+row.dataset.key = key;
+const img = el("img");
+img.loading = "lazy";
+img.alt = "";
+const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+if (src) img.src = src;
+else img.style.visibility = "hidden";
+row.appendChild(img);
+const name = el("label", null, (i + 1) + ". " + (t ? t[3] : key));
+const slot = favSlots[i] ?? i;
+if (t) name.appendChild(el("small", null, lgInfo(t[0]).name + (slot < 4 ? " · remote button " + (slot + 1) : "")));
+row.appendChild(name);
+const ctl = el("span", "favmove");
+const mk = (label, title, fn) => {
+const b = el("button", null, label);
+b.title = title;
+b.setAttribute("aria-label", title);
+b.onclick = fn;
+ctl.appendChild(b);
+};
+const swap = (j) => {
+if (j < 0 || j >= favKeys.length) return;
+const next = favKeys.slice();
+next[i] = favKeys[j];
+next[j] = favKeys[i];
+postFavs(next);
+};
+mk("\u25B2", "Move up", () => swap(i - 1));
+mk("\u25BC", "Move down", () => swap(i + 1));
+mk("\u2715", "Remove", () => postFavs(favKeys.filter((_, k) => k !== i)));
+row.appendChild(ctl);
+host.appendChild(row);
+});
+if (!favKeys.length) host.appendChild(el("p", "hint", "No favorites yet."));
+$("#favAdd").hidden = favKeys.length >= favMax();
+if (was) {
+const rows = Array.from(host.querySelectorAll(".ctl.fav"));
+const row = rows.find((r) => r.dataset.key === was.key) || rows[Math.min(was.at, rows.length - 1)];
+const b = row && Array.from(row.querySelectorAll("button")).find((x) => x.title === was.title);
+(b || $("#favAdd")).focus();
+}
+};
+const addFav = (t) => {
+const key = keyOf(t);
+if (favKeys.includes(key)) return toast(t[3] + " is already a favorite");
+if (favKeys.length >= favMax()) return toast("That's the most favorites the panel holds");
+postFavs(favKeys.concat([key]));
+toast("Added the " + t[3]);
+};
+const renderSettings = () => {
+if (!S) return;
+document.querySelectorAll(".sw[data-set]").forEach((sw) => setOn(sw, !!S[sw.dataset.set], "aria-checked"));
+const keys = [], slots = [];
+(S.favs || []).forEach((t, i) => { if (refKey(t)) { keys.push(refKey(t)); slots.push(i); } });
+if (keys.join(",") !== favKeys.join(",") || slots.join(",") !== favSlots.join(",")) {
+favKeys = keys;
+favSlots = slots;
+renderFavs();
+} else {
+$("#favAdd").hidden = favKeys.length >= favMax();
+}
+$("#favSum").textContent = favKeys.length ? favKeys.length + " of " + favMax() : "";
+const sports = new Set([S.team].concat(S.favs || []).filter((t) => t && t.id).map((t) => t.l)
+.concat(S.live_auto ? [] : S.live || []).map(sportOf));
+document.querySelectorAll("#tickerCtls .ctl[data-sport], #alertCtls .alertSport").forEach((row) => {
+row.hidden = row.dataset.sport === "players" ? S.players === undefined : sports.size > 0 && !sports.has(row.dataset.sport);
+});
+$("#alertCtls").hidden = $("#alertFavRow").hidden = S.alerts === undefined;
+$("#animRow").hidden = $("#animTryRow").hidden = S.anim === undefined;
+alertSws.forEach((sw, bit) => setOn(sw, ((S.alerts >>> bit) & 1) === 1, "aria-checked"));
+const followed = [S.team].concat(S.favs || []).filter((t) => t && t.id);
+$("#standingRow").hidden = S.standing === undefined || (followed.length > 0 && !followed.some((t) => isPro(t.l)));
+if (document.activeElement !== standingSel) standingSel.value = String(S.standing || 0);
+$("#sizeCtls").hidden = S.clocksize === undefined;
+$("#sportCtls").hidden = S.sportview === undefined;
+sizeSels.forEach((sel) => { if (document.activeElement !== sel) sel.value = String(S[sel.id] || 0); });
+$("#watchRow").hidden = $("#watchStayRow").hidden = $("#watchMineRow").hidden = S.watch === undefined;
+const rotating = splitShows() === 1;
+$("#watchHint").textContent = rotating ? WATCH_HINT_SPLIT : WATCH_HINT;
+if (rotating) $("#watchMineRow").hidden = true;
+if (document.activeElement !== staySelect && S.watchstay) {
+const v = String(S.watchstay);
+if (![...staySelect.options].some((o) => o.value === v)) staySelect.add(new Option(v + " s", v));
+staySelect.value = v;
+}
+$("#autoupdRow").hidden = S.autoupd === undefined;
+$("#betaRow").hidden = S.beta === undefined;
+if (!fwChecking && fwInputs() !== fwDrawn && ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+$("#barRow").hidden = !S.bar;
+if (S.bar) {
+const who = S.name || "this panel";
+$("#barReport").href = "mailto:" + S.bar.report + "?subject=" + encodeURIComponent("Bar panel " + who) +
+"&body=" + encodeURIComponent("Panel: " + who + "\nWhat's wrong:\n");
+}
+$("#ticker").textContent = S.status || "";
+$("#play").textContent = game && game.lp ? "Last play: " + game.lp : "";
+};
+const PANEL_SIZES = { 1: "64x64", 2: "128x64", 3: "192x64", 4: "256x64", "2x2": "128x128" };
+const restartAs = (as) => {
+toast(as);
+waitForReboot("", as + ". This page reconnects when the panel is back.");
+toBoard();
+};
+const renderPanels = () => {
+if (!S || !S.panels) return;
+const cur = (S.rows || 1) > 1 ? S.panels + "x" + S.rows : String(S.panels);
+const picks = document.querySelectorAll("#panels .panelpick");
+const sel = $("#wiringSel");
+picks.forEach((b) => {
+setOn(b, b.dataset.cols === cur, "aria-pressed");
+b.onclick = async () => {
+if (b.dataset.cols === cur) return;
+const size = PANEL_SIZES[b.dataset.cols];
+if (!confirm("Restart the panel as " + size + "?")) return;
+picks.forEach((x) => (x.disabled = true));
+const params = { panels: b.dataset.cols };
+if (b.dataset.cols === "2x2") params.wiring = String(S.wiring || 0);
+if (!(await setGD(params))) {
+picks.forEach((x) => (x.disabled = false));
+return;
+}
+restartAs("Restarting as " + size);
+};
+});
+$("#wiringRow").hidden = cur !== "2x2" || S.wiring === undefined;
+if (document.activeElement !== sel) sel.value = String(S.wiring || 0);
+sel.onchange = async () => {
+const was = String(S.wiring || 0);
+if (!confirm("Restart the panel with the new wiring?")) {
+sel.value = was;
+return;
+}
+sel.disabled = true;
+const ok = await setGD({ wiring: sel.value });
+sel.disabled = false;
+if (!ok) {
+sel.value = was;
+return;
+}
+restartAs("Restarting with the new wiring");
+};
+};
+const controlDefs = [
+{ name: "Power", into: "#quickCtls", label: "Panel on" },
+{ name: "Brightness", into: "#quickCtls", label: "Brightness" },
+{ name: "Scroll Speed", into: "#panelCtls", label: "Ticker speed" },
+{ name: "Select Page", into: "#panelCtls", label: "Showing" },
+{ name: "WizMote Auto-Discovery", into: "#remoteCtls", label: "Discovery" },
+{ name: "Clear WizMote Pairing", into: "#remoteActions", label: "Unpair remote", danger: true },
+{ name: "Refresh Now", into: "#actions", label: "Refresh scores" },
+{ name: "Check for Updates", into: "#actions", label: "Check for updates" },
+{ name: "Reboot", into: "#dangerActions", label: "Reboot", danger: true, restart: "" },
+{ name: "Reset Wi-Fi", into: "#dangerActions", label: "Reset Wi-Fi", danger: true,
+restart: "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept, and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows." },
+{ name: "Factory Reset", into: "#dangerActions", label: "Factory reset", danger: true,
+restart: "The panel is restarting into setup with everything erased, so this page won't reconnect." },
+];
+const built = {};
+let showing = null;
+const pageOf = () => (showing && (showing.ent.value || showing.ent.state)) || "";
+const pickShowing = (v) => {
+const page = pageOf();
+if (v.startsWith("display:")) {
+setGD({ display: v.slice(8) });
+if (page !== "Scoreboard") post(showing.ent.id, "set", { option: "Scoreboard" });
+return;
+}
+if (v === "Scoreboard" && mainDisplay() !== 0) setGD({ display: "0" });
+if (v !== page) post(showing.ent.id, "set", { option: v });
+};
+const renderShowing = () => {
+if (!showing) return;
+const { sel, ent } = showing;
+const opts = (ent.option || []).map((o) => [o, o]);
+for (const d of otherDisplays()) opts.push(["display:" + d.id, d.name]);
+const key = opts.map((o) => o[0]).join("|");
+if (sel.dataset.key !== key) {
+sel.dataset.key = key;
+sel.innerHTML = "";
+for (const [v, label] of opts) sel.add(new Option(label, v));
+}
+const page = pageOf();
+const cur = page === "Scoreboard" && mainDisplay() !== 0 && otherDisplays().length ? "display:" + mainDisplay() : page;
+if (document.activeElement !== sel) sel.value = cur;
+};
+const buildControl = (def, e) => {
+const domain = domainOf(e);
+const host = $(def.into);
+if (domain === "button") {
+const b = el("button", "btn" + (def.danger ? " danger" : ""), def.label);
+b.onclick = async () => {
+if (def.danger && !confirm(def.label + "?")) return;
+const sent = post(e.id, "press");
+if (def.name === "Check for Updates") { checkForUpdates(b); return; }
+toast(def.label);
+if (def.restart === undefined || !(await sent)) return;
+if (def.restart === "") waitForReboot("", "Restarting. This page reconnects when the panel is back.");
+else intoSetup(def.restart);
+toBoard();
+};
+host.appendChild(b);
+return { update() {} };
+}
+const row = el("div", "ctl");
+const label = el("label", null, def.label);
+const id = "ctl-" + def.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+row.appendChild(label);
+if (domain === "switch") {
+const sw = el("button", "sw");
+sw.setAttribute("role", "switch");
+sw.setAttribute("aria-label", def.label);
+setOn(sw, false, "aria-checked");
+sw.onclick = () => {
+const on = !sw.classList.contains("on");
+setOn(sw, on, "aria-checked");
+post(e.id, on ? "turn_on" : "turn_off");
+};
+row.appendChild(sw);
+host.appendChild(row);
+return { update(ev) { setOn(sw, ev.value === true || ev.state === "ON", "aria-checked"); } };
+}
+if (domain === "number") {
+const val = el("span", "val");
+val.setAttribute("aria-hidden", "true");
+const r = el("input");
+r.id = label.htmlFor = id;
+r.type = "range";
+r.min = e.min_value ?? 0;
+r.max = e.max_value ?? 100;
+r.step = e.step ?? 1;
+r.oninput = () => (val.textContent = r.value);
+r.onchange = () => post(e.id, "set", { value: r.value });
+row.appendChild(r);
+row.appendChild(val);
+host.appendChild(row);
+return { update(ev) { if (document.activeElement !== r) { r.value = ev.value; val.textContent = ev.value; } } };
+}
+if (domain === "select" && def.name === "Select Page") {
+const s = el("select");
+s.id = label.htmlFor = id;
+row.appendChild(s);
+host.appendChild(row);
+showing = { sel: s, ent: e };
+s.onchange = () => pickShowing(s.value);
+return { update(ev) { showing.ent = ev; renderShowing(); } };
+}
+if (domain === "select") {
+const s = el("select");
+s.id = label.htmlFor = id;
+(e.option || []).forEach((o) => s.appendChild(el("option", null, o)));
+s.onchange = () => post(e.id, "set", { option: s.value });
+row.appendChild(s);
+host.appendChild(row);
+return { update(ev) { if (ev.option) { s.innerHTML = ""; ev.option.forEach((o) => s.appendChild(el("option", null, o))); } s.value = ev.value; } };
+}
+return { update() {} };
+};
+const ESPN = "https://site.api.espn.com/apis/site/v2/sports/";
+const MLB_DAY = "https://statsapi.mlb.com/api/v1/schedule?sportId=11,12,13,14&hydrate=team,linescore"
++ "&fields=dates,games,gamePk,gameDate,status,codedGameState,startTimeTBD,teams,away,home,team,id,abbreviation,"
++ "teamName,score,linescore,currentInning,inningState,scheduledInnings&date=";
+const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+const mlbGame = (lg, g) => {
+const c = String((g.status || {}).codedGameState || "S")[0];
+const state = "IMN".includes(c) ? "in" : "FOQR".includes(c) ? "post" : "DCTU".includes(c) ? "off" : "pre";
+const ls = g.linescore || {};
+const half = { Top: "Top", Bottom: "Bot", Middle: "Mid", End: "End" }[ls.inningState];
+const inning = Number(ls.currentInning) || 0;
+const detail = state === "in" ? (half && inning ? half + " " + ordinal(inning) : "In Progress")
+: state === "post" ? (inning && ls.scheduledInnings && inning !== ls.scheduledInnings ? "Final/" + inning : "Final")
+: state === "off" ? ({ D: "Postponed", C: "Canceled" }[c] || "Suspended")
+: (g.status || {}).startTimeTBD ? "TBD"
+: new Date(g.gameDate).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const side = (k) => {
+const x = (g.teams || {})[k] || {};
+const t = x.team || {};
+return { id: Number(t.id), abbr: t.abbreviation || "", score: String(x.score ?? 0), name: t.teamName || t.name || "" };
+};
+return { league: lg, id: String(g.gamePk), state, detail, away: side("away"), home: side("home"), date: g.gameDate };
+};
+let games = null;
+let gamesAt = 0;
+let gamesLoading = null;
+const teamById = (lg, id) => TEAMS.find((t) => t[0] === lg && t[1] === id);
+const easternDate = () => {
+const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+const g = (t) => p.find((x) => x.type === t).value;
+return g("year") + g("month") + g("day");
+};
+const loadGames = (force) => {
+if (!force && games && Date.now() - gamesAt < 60000) return Promise.resolve(games);
+if (!gamesLoading) gamesLoading = readGames().finally(() => { gamesLoading = null; });
+return gamesLoading;
+};
+const readGames = async () => {
+const d = easternDate();
+const urls = Object.keys(LEAGUES).filter((lg) => !isBoard(lg) && !isHt(lg))
+.map((lg) => [lg, isMlb(lg) ? MLB_DAY + d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6)
+: `${ESPN}${LEAGUES[lg].path}/scoreboard?${LEAGUES[lg].scan}dates=${d}`]);
+const out = [];
+await Promise.all(urls.map(async ([lg, u]) => {
+const ctl = new AbortController();
+const timer = setTimeout(() => ctl.abort(), 5000);
+try {
+const j = await (await fetch(u, { signal: ctl.signal })).json();
+if (isMlb(lg)) {
+for (const day of j.dates || []) for (const g of day.games || []) out.push(mlbGame(lg, g));
+return;
+}
+for (const ev of j.events || []) {
+const c = ev.competitions?.[0];
+if (!c) continue;
+const side = (ha) => {
+const x = c.competitors.find((k) => k.homeAway === ha) || {};
+const rank = Number(x.curatedRank?.current);
+return { id: Number(x.team?.id), abbr: x.team?.abbreviation || "", score: x.score || "0", name: x.team?.shortDisplayName || x.team?.displayName || "",
+rank: rank >= 1 && rank < 99 ? rank : 0 };
+};
+const type = ev.status?.type || {};
+const state = type.state === "post" && type.completed === false ? "off" : type.state || "pre";
+out.push({ league: lg, id: ev.id, state, detail: type.shortDetail || "", away: side("away"), home: side("home"), date: ev.date });
+}
+} catch (_) {   } finally { clearTimeout(timer); }
+}));
+const rank = { in: 0, pre: 1, post: 2, off: 3 };
+out.sort((a, b) => (rank[a.state] - rank[b.state]) || (a.date < b.date ? -1 : 1));
+games = out;
+gamesAt = Date.now();
+return out;
+};
+const renderGames = async () => {
+const tiles = $("#tiles");
+tiles.className = "games";
+tiles.innerHTML = "";
+tiles.appendChild(el("div", "none", "Loading today's games"));
+const list = await loadGames(false);
+if (league !== "now") return;
+tiles.innerHTML = "";
+const q = $("#q").value.trim().toLowerCase();
+const shown = list.filter((g) => !q || (g.away.name + " " + g.home.name + " " + g.away.abbr + " " + g.home.abbr).toLowerCase().includes(q));
+if (!shown.length) {
+tiles.appendChild(el("div", "none", list.length ? "No game matches" : "No games today"));
+return;
+}
+const cur = S ? refKey(S.team) : "";
+let lastState = null;
+for (const g of shown) {
+if (g.state !== lastState) {
+lastState = g.state;
+const heading = { in: "Live now", pre: "Later today", post: "Final", off: "Postponed or canceled" };
+tiles.appendChild(el("div", "gh", heading[g.state] || "Final"));
+}
+const card = el("div", "game" + (g.state === "in" ? " live" : ""));
+const mkSide = (s) => {
+const t = teamById(g.league, s.id);
+const b = el("button", "side" + (t && keyOf(t) === cur ? " on" : ""));
+b.disabled = !t || ((pickPlayer || pickProp) && !fromEspn(t[0]));
+b.title = t ? "Follow the " + t[3] : "Not in the team list";
+const img = el("img");
+img.loading = "lazy";
+img.src = logoUrl(g.league, s.id, s.abbr);
+img.alt = "";
+b.appendChild(img);
+const txt = el("div", "st");
+txt.appendChild(el("div", "n", s.name));
+txt.appendChild(el("div", "a", ranked(s.rank, s.abbr)));
+b.appendChild(txt);
+b.appendChild(el("div", "sc", g.state === "pre" || g.state === "off" ? "" : String(s.score)));
+b.onclick = () => {
+if (!t) return;
+if (pickFav || pickBet || pickPlayer || pickSplit) return choose(t);
+setGD({ team: keyOf(t) });
+toast("Now following the " + t[3]);
+closePicker();
+};
+return b;
+};
+card.appendChild(mkSide(g.away));
+const mid = el("div", "gm");
+mid.appendChild(el("div", "at", "@"));
+mid.appendChild(el("div", "det", g.detail));
+card.appendChild(mid);
+card.appendChild(mkSide(g.home));
+tiles.appendChild(card);
+}
+};
+let betTeam = "";
+let betSign = "";
+let betDrawn = null;
+let betPending = [];
+const sameBet = (a, b) => a.l === b.l && a.id === b.id && a.type === b.type && a.half === b.half;
+const BET_WORDS = { covering: "COVERING", not_covering: "NOT COVERING", level: "PUSH", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
+const betTone = (st) => (st === "covering" || st === "won" ? "good" : st === "not_covering" || st === "lost" ? "bad" : BET_WORDS[st] ? "even" : "");
+const betPoints = (half, sign) => (sign && half > 0 ? "+" : half < 0 ? "-" : "") + Math.floor(Math.abs(half) / 2) + (Math.abs(half) % 2 ? ".5" : "");
+const betHalf = (raw, spread) => {
+const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+if (spread && /^(pk|pick|pickem|pick'em)$/i.test(v)) return 0;
+if (!v) return spread ? "Type the spread, like 3.5." : "Type the total, like 47.5.";
+if (!spread && /^[+-]/.test(v)) return "A total has no + or -. Type it like 47.5.";
+const m = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(v);
+if (!m) return "That isn't a number. Type it like " + (spread ? "3.5." : "47.5.");
+const frac = (m[3] || "").replace(/0+$/, "");
+if (frac && frac !== "5") return "Lines go in whole or half points, like 3 or 3.5.";
+const half = (Number(m[2]) * 2 + (frac ? 1 : 0)) * (m[1] === "-" ? -1 : 1);
+if (spread && Math.abs(half) > 199) return "The panel takes spreads up to 99.5.";
+if (!spread && !half) return "A total is more than 0.";
+if (half > 1999) return "The panel takes totals up to 999.5.";
+return half;
+};
+const betGame = (b) => {
+if (!b.ev) return "Starts when the panel shows a " + b.abbr + " game";
+const vs = b.abbr + " vs " + (b.oa || "?") + " \u00b7 ";
+const score = b.ts + "-" + b.os;
+if (b.st === "pre") return vs + (b.kick * 1000 > Date.now() ? kickLabel(b.kick) : "Waiting for the start");
+if (b.st === "unread") return vs + "Started, not on the panel right now";
+if (b.st === "void") return vs + "Postponed or canceled";
+if (b.st === "won" || b.st === "lost" || b.st === "push") return vs + "Final " + score;
+return vs + score;
+};
+const betChip = (b, text) => el("span", "bet " + betTone(b.st), text);
+const PROP_WORDS = { on_track: "ON TRACK", off_track: "OFF TRACK", hit: "HIT", not_yet: "NOT YET", won: "WON", lost: "LOST", push: "PUSH", void: "VOID" };
+const propTone = (st) => (st === "on_track" || st === "hit" || st === "won" ? "good" : st === "off_track" || st === "lost" ? "bad" : PROP_WORDS[st] ? "even" : "");
+const propText = (p) => p.text + (p.v !== undefined && p.side !== "yes" ? " " + betPoints(p.v, false) : "")
++ (PROP_WORDS[p.st] ? " " + PROP_WORDS[p.st] : "");
+const propGame = (p) => {
+const t = teamById(p.l, p.team);
+const abbr = t ? t[2] : "";
+if (!p.ev) return "Starts when the panel shows a " + abbr + " game";
+const vs = abbr + " vs " + (p.oa || "?") + " \u00b7 ";
+const n = p.v !== undefined && p.side !== "yes" ? betPoints(p.v, false) : "";
+if (p.st === "pre") return vs + (p.kick * 1000 > Date.now() ? kickLabel(p.kick) : "Waiting for the start");
+if (p.st === "unread") return vs + "Started, not on the panel right now";
+if (p.st === "void") return vs + "Void: postponed, or the player didn't play";
+if (p.st === "won" || p.st === "lost" || p.st === "push") return vs + "Final" + (n ? ", " + n : "");
+return vs + (n ? n + " so far" : "Live");
+};
+const renderBets = () => {
+const card = $("#betCard");
+card.hidden = !S || S.bets === undefined;
+const list = (S && S.bets) || [];
+const props = (S && S.props) || [];
+const live = game && game.id && game.s !== "NOT_FOUND";
+const on = live ? list.filter((b) => b.ev === String(game.id)) : [];
+const propsOn = live ? props.filter((p) => p.ev === String(game.id)) : [];
+const line = $("#betline");
+line.textContent = "";
+for (const b of on) line.appendChild(betChip(b, b.text + (BET_WORDS[b.st] ? " " + BET_WORDS[b.st] : "")));
+for (const p of propsOn) line.appendChild(el("span", "bet " + propTone(p.st), propText(p)));
+line.hidden = !on.length && !propsOn.length;
+if (card.hidden) return;
+renderPropForm();
+$("#betSum").textContent = [list.length ? list.length + " of " + (S.betmax || 8) : "",
+props.length ? props.length + (props.length > 1 ? " props" : " prop") : ""].filter(Boolean).join(" \u00b7 ");
+const sig = JSON.stringify([list, props]);
+if (sig === betDrawn) return;
+betDrawn = sig;
+const host = $("#betList");
+const focused = host.contains(document.activeElement);
+host.textContent = "";
+for (const b of list) {
+const row = el("div", "ctl betrow");
+const img = el("img");
+img.alt = "";
+img.loading = "lazy";
+const src = logoUrl(b.l, b.id, b.abbr);
+if (src) img.src = src;
+else img.style.visibility = "hidden";
+row.appendChild(img);
+const name = el("label", null, b.text);
+name.appendChild(el("small", null, betGame(b)));
+row.appendChild(name);
+if (BET_WORDS[b.st]) row.appendChild(betChip(b, BET_WORDS[b.st]));
+const x = el("button", "betdel", "\u2715");
+x.title = "Remove " + b.text;
+x.setAttribute("aria-label", x.title);
+x.onclick = () => setGD({ betdel: b.slot }).then((ok) => ok && toast("Removed " + b.text));
+row.appendChild(x);
+host.appendChild(row);
+}
+for (const pr of props) {
+const row = el("div", "ctl betrow proprow");
+const t = teamById(pr.l, pr.team);
+const img = el("img");
+img.alt = "";
+img.loading = "lazy";
+const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+if (src) img.src = src;
+else img.style.visibility = "hidden";
+row.appendChild(img);
+const name = el("label", null, pr.text);
+name.appendChild(el("small", null, propGame(pr)));
+row.appendChild(name);
+if (PROP_WORDS[pr.st]) row.appendChild(el("span", "bet " + propTone(pr.st), PROP_WORDS[pr.st]));
+const x = el("button", "betdel", "\u2715");
+x.title = "Remove " + pr.text;
+x.setAttribute("aria-label", x.title);
+x.onclick = () => setGD({ propdel: pr.slot }).then((ok) => ok && toast("Removed " + pr.text));
+row.appendChild(x);
+host.appendChild(row);
+}
+if (!list.length && !props.length) host.appendChild(el("p", "hint", "No bets yet."));
+if (focused && !host.contains(document.activeElement)) $("#betTeam").focus();
+};
+const typedSign = (v) => {
+const m = /^\s*([+\-\u2212])/.exec(v);
+return m ? (m[1] === "+" ? "+" : "-") : "";
+};
+const signButtons = Array.from(document.querySelectorAll("#betSign button"));
+const renderBetForm = () => {
+const t = teamByKey(betTeam);
+$("#betTeam").textContent = t ? t[3] : "Pick a team";
+const type = $("#betType").value;
+$("#betTeamHint").textContent = type === "prop" ? "The player's team. Minor league teams have no player props."
+: "For a total, either team in the game";
+$("#betLineRow").hidden = type === "ml";
+$("#betSign").hidden = type !== "spread";
+signButtons.forEach((b) => setOn(b, b.dataset.sign === betSign, "aria-pressed"));
+$("#betLineHint").textContent = type === "spread" ? "Tap \u2212 for a favorite or + for an underdog, then the points, like 3.5. 0 is a pick'em"
+: "Total points in the game, like 47.5";
+$("#betLine").placeholder = type === "spread" ? "3.5" : "47.5";
+renderPropForm();
+};
+const betSay = (t) => {
+$("#betMsg").textContent = t;
+$("#betMsg").hidden = !t;
+};
+$("#betTeam").onclick = () => openPicker(false, true, false, false, $("#betType").value === "prop");
+$("#betType").onchange = () => {
+betSay("");
+renderBetForm();
+if ($("#betType").value === "prop") loadPropRoster();
+};
+$("#betLine").onkeydown = (ev) => { if (ev.key === "Enter") $("#betAdd").click(); };
+$("#betLine").oninput = () => {
+const s = typedSign($("#betLine").value);
+if (s && s !== betSign) { betSign = s; renderBetForm(); }
+};
+signButtons.forEach((b) => {
+b.onclick = () => {
+betSign = b.dataset.sign;
+const f = $("#betLine");
+if (typedSign(f.value)) f.value = betSign + f.value.replace(/^\s*[+\-\u2212]\s*/, "");
+betSay("");
+renderBetForm();
+f.focus();
+};
+});
+$("#betAdd").onclick = () => {
+if (!S) return;
+if ($("#betType").value === "prop") return addProp();
+const t = teamByKey(betTeam);
+if (!t) return betSay("Pick the team first.");
+const type = $("#betType").value;
+let raw = $("#betLine").value;
+if (type === "spread" && !typedSign(raw) && betSign && /^\s*\d/.test(raw)) raw = betSign + raw.trim();
+const half = type === "ml" ? 0 : betHalf(raw, type === "spread");
+if (typeof half === "string") {
+betSay(half);
+$("#betLine").focus();
+return;
+}
+if (type === "spread" && half !== 0 && !typedSign(raw)) return betSay("Tap \u2212 if the team is the favorite or + if it's the underdog.");
+const list = S.bets || [];
+betPending = betPending.filter((p) => Date.now() - p.at < 5000 && !list.some((b) => sameBet(b, p)));
+const want = { l: t[0], id: t[1], type, half };
+if (list.concat(betPending).some((b) => sameBet(b, want))) return betSay("You have that bet already.");
+const max = S.betmax || 8;
+if (list.length + betPending.length >= max) return betSay("All " + max + " bets are in use. Remove one first.");
+betSay("");
+const mine = { ...want, at: Date.now() };
+betPending.push(mine);
+const value = type === "ml" ? "" : betPoints(half, type === "spread");
+setGD({ bet: [0, t[0], t[1], type, value].join(",") }).then((ok) => {
+if (!ok) betPending = betPending.filter((p) => p !== mine);
+else toast("Added " + (type === "ml" ? t[2] + " ML" : type === "spread" ? t[2] + " " + (half ? value : "PK") : type.toUpperCase() + " " + value));
+});
+$("#betLine").value = "";
+betSign = "";
+renderBetForm();
+};
+const MKT_ID = 2;
+const MKT_KIND = { stock: "Stock or fund", index: "Index", crypto: "Crypto" };
+const MKT_AS = { stock: "a stock or fund", index: "an index", crypto: "a coin, in US dollars" };
+const MKT_ST = { pre: "Pre-market", open: "Open", post: "After hours", closed: "Closed" };
+const MKT_HINT = "Like AAPL, SPY, ^GSPC for the S&P 500, or BTC";
+let mktDrawn = null;
+let mktPending = [];
+let mktLock = 0;
+const showsMarkets = () => mainDisplay() === MKT_ID || splitShows() === 5 + MKT_ID;
+const mktParse = (text, kind) => {
+let s = "";
+for (const c of text) {
+if (c === " ") continue;
+s += c >= "a" && c <= "z" ? c.toUpperCase() : c;
+if (new TextEncoder().encode(s).length > 16) return null;
+}
+if (s.startsWith("$")) s = s.slice(1);
+if (s.startsWith("^")) {
+if (kind && kind !== "index") return null;
+s = s.slice(1);
+kind = "index";
+}
+const coinOk = !kind || kind === "crypto";
+if (coinOk && s.length > 4 && /[-/]USD$/.test(s)) {
+s = s.slice(0, -4);
+kind = "crypto";
+}
+if (coinOk) {
+s = MARKETS.alias[s] || s;
+if (!kind && MARKETS.coins.includes(s)) kind = "crypto";
+}
+if (!kind) kind = MARKETS.indexes.includes(s) ? "index" : "stock";
+if (kind === "stock") {
+s = s.replace(/\//g, ".");
+if (/^.+-[A-Z]$/.test(s)) s = s.slice(0, -2) + "." + s.slice(-1);
+}
+const ok = kind === "stock" ? /^[A-Z0-9]+(?:[.=-][A-Z0-9]+)*$/ : /^[A-Z0-9]+$/;
+return s.length <= 10 && ok.test(s) ? [s, kind] : null;
+};
+const mktSame = (a, b) => a.kind === b.kind && (a.sym === b.sym
+|| (a.kind === "index" && !!MARKETS.yahoo[a.sym] && MARKETS.yahoo[a.sym] === MARKETS.yahoo[b.sym]));
+const renderMarkets = () => {
+const card = $("#mktCard");
+card.hidden = !S || !S.markets || !(S.displays || []).some((d) => d.id === MKT_ID);
+if (card.hidden) return;
+const m = S.markets;
+const list = m.syms || [];
+$("#mktSum").textContent = list.length + " of " + (m.max || 8) + (m.defaults ? " \u00b7 the starting list" : "");
+$("#mktSrc").hidden = m.src !== "backup";
+$("#mktRetry").hidden = m.src !== "retry";
+const old = m.read && Date.now() / 1000 - m.read > 30 * 60;
+$("#mktOld").hidden = !old;
+if (old) $("#mktOld").textContent = "Prices as of " + new Date(m.read * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) + ". The panel reads them only while Stocks & Crypto is up.";
+const sig = JSON.stringify(list);
+if (mktLock && sig === mktDrawn && stateLeft <= mktLock + APPLY_MS) return;
+const unlock = mktLock !== 0;
+mktLock = 0;
+if (sig === mktDrawn && !unlock) return;
+mktDrawn = sig;
+const host = $("#mktList");
+const focused = host.contains(document.activeElement);
+host.textContent = "";
+list.forEach((sy, i) => {
+const row = el("div", "ctl betrow mktrow");
+const name = el("label", null, sy.sym);
+name.appendChild(el("small", null, sy.miss ? "Yahoo Finance doesn't know this symbol"
+: [MKT_KIND[sy.kind], MKT_ST[sy.st]].filter(Boolean).join(" \u00b7 ")));
+row.appendChild(name);
+if (sy.price) row.appendChild(el("span", "bet " + (sy.dir > 0 ? "good" : sy.dir < 0 ? "bad" : ""), sy.price + (sy.pct ? " " + sy.pct : "")));
+const tools = el("span", "mkttools");
+const button = (text, label, on, params, done) => {
+const b = el("button", "betdel", text);
+b.title = label;
+b.setAttribute("aria-label", label);
+b.disabled = !on;
+b.onclick = () => {
+mktLock = Infinity;
+host.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+setGD(params).then((ok) => {
+mktLock = ok ? Date.now() : 0;
+if (!ok) { mktDrawn = null; renderMarkets(); }
+if (ok && done) toast(done);
+});
+};
+tools.appendChild(b);
+};
+button("\u25b2", "Move " + sy.sym + " up", i > 0, { mktmove: sy.slot + "," + (sy.slot - 1) });
+button("\u25bc", "Move " + sy.sym + " down", i < list.length - 1, { mktmove: sy.slot + "," + (sy.slot + 1) });
+button("\u2715", "Remove " + sy.sym, true, { mktdel: sy.slot }, "Removed " + sy.sym);
+row.appendChild(tools);
+host.appendChild(row);
+});
+if (focused && !host.contains(document.activeElement)) $("#mktSym").focus();
+};
+const mktSay = (t) => {
+$("#mktMsg").textContent = t;
+$("#mktMsg").hidden = !t;
+};
+const mktPreview = () => {
+const raw = $("#mktSym").value;
+const got = raw.trim() ? mktParse(raw, $("#mktKind").value) : null;
+$("#mktHint").textContent = !raw.trim() ? MKT_HINT
+: got ? "Saves as " + got[0] + ", " + MKT_AS[got[1]] : "Letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD";
+};
+mktPreview();
+$("#mktSym").oninput = () => { mktSay(""); mktPreview(); };
+$("#mktKind").onchange = () => { mktSay(""); mktPreview(); };
+$("#mktSym").onkeydown = (ev) => { if (ev.key === "Enter") $("#mktAdd").click(); };
+$("#mktAdd").onclick = () => {
+if (!S || !S.markets) return;
+const raw = $("#mktSym").value;
+if (!raw.trim()) return mktSay("Type a symbol, like AAPL or BTC.");
+const got = mktParse(raw, $("#mktKind").value);
+if (!got) return mktSay($("#mktKind").value && /^\s*\^/.test(raw) ? "A ^ symbol is an index. Set Kind to Index or Auto."
+: "The panel can't read that symbol. Use letters and digits, like AAPL, BRK.B, ^GSPC or BTC-USD, up to 10.");
+const list = S.markets.syms || [];
+mktPending = mktPending.filter((p) => Date.now() - p.at < 5000 && !list.some((sy) => mktSame(sy, p)));
+const dup = list.concat(mktPending).find((sy) => mktSame(sy, { sym: got[0], kind: got[1] }));
+if (dup) return mktSay(dup.sym + " is in the list already.");
+const max = S.markets.max || 8;
+if (list.length + mktPending.length >= max) return mktSay("All " + max + " are in use. Remove one first.");
+mktSay("");
+const mine = { sym: got[0], kind: got[1], at: Date.now() };
+mktPending.push(mine);
+setGD({ mkt: "0," + got[0] + "," + got[1] }).then((ok) => {
+if (!ok) mktPending = mktPending.filter((p) => p !== mine);
+else toast("Added " + got[0]);
+});
+$("#mktSym").value = "";
+mktPreview();
+};
+const PROP_NAMES = {
+"football:passyds": "Passing yards", "football:passtd": "Passing touchdowns", "football:cmp": "Completions",
+"football:int": "Interceptions thrown", "football:rushyds": "Rushing yards", "football:rushatt": "Rushing attempts",
+"football:recyds": "Receiving yards", "football:rec": "Receptions", "football:rryds": "Rushing and receiving yards",
+"football:td": "Anytime touchdown", "football:tackles": "Tackles", "football:sacks": "Sacks",
+"football:kickpts": "Kicking points",
+"basketball:pts": "Points", "basketball:reb": "Rebounds", "basketball:ast": "Assists", "basketball:threes": "Threes made",
+"basketball:stl": "Steals", "basketball:blk": "Blocks", "basketball:pra": "Points, rebounds and assists",
+"basketball:pr": "Points and rebounds", "basketball:pa": "Points and assists", "basketball:ra": "Rebounds and assists",
+"baseball:hits": "Hits", "baseball:runs": "Runs", "baseball:rbi": "RBIs", "baseball:hrr": "Hits, runs and RBIs",
+"baseball:hr": "Home run", "baseball:k": "Pitcher's strikeouts", "baseball:hitsallowed": "Hits allowed",
+"baseball:er": "Earned runs allowed", "baseball:outs": "Pitcher's outs",
+"hockey:pts": "Points", "hockey:goal": "Anytime goal", "hockey:ast": "Assists", "hockey:sog": "Shots on goal",
+"hockey:blk": "Blocked shots", "hockey:saves": "Goalie's saves",
+"soccer:goal": "Anytime goal",
+};
+let propFavs = false;
+let propRoster = [];
+let propRosterFor = "";
+let propPending = [];
+const sameProp = (a, b) => a.l === b.l && a.id === b.id && a.stat === b.stat && a.side === b.side && a.half === b.half;
+const statsFor = (lg) => (lg ? PROP_STATS.filter((st) => st[0] === sportOf(lg)) : []);
+const propPlayers = () => {
+if (propFavs) {
+return ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).map((pl) => {
+const t = teamById(pl.l, pl.team);
+return { l: pl.l, id: pl.id, team: pl.team, panel: pl.name, label: pl.name + (t ? " \u00b7 " + t[3] : "") };
+});
+}
+const t = teamByKey(betTeam);
+if (!t || propRosterFor !== betTeam) return [];
+return propRoster.map((a) => ({ l: t[0], id: a.id, team: t[1], panel: a.panel,
+label: a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : "") }));
+};
+const fillSelect = (sel, items) => {
+const sig = JSON.stringify(items);
+if (sel.dataset.sig === sig) return;
+const was = sel.value;
+sel.dataset.sig = sig;
+sel.textContent = "";
+for (const [value, text] of items) {
+const o = el("option", null, text);
+o.value = value;
+sel.appendChild(o);
+}
+if (items.some((it) => it[0] === was)) sel.value = was;
+};
+const pickedPlayer = () => propPlayers().find((pl) => pl.l + ":" + pl.id === $("#propPick").value);
+const renderPropForm = () => {
+const prop = $("#betType").value === "prop";
+$("#propRows").hidden = !prop;
+$("#betTeamRow").hidden = prop && propFavs;
+if (!prop) return;
+const favs = ((S && S.players) || []).filter((pl) => fromEspn(pl.l)).length;
+setOn($("#propFavs"), propFavs, "aria-pressed");
+$("#propFavs").disabled = !favs && !propFavs;
+const list = propPlayers();
+fillSelect($("#propPick"), list.map((pl) => [pl.l + ":" + pl.id, pl.label]));
+const t = teamByKey(betTeam);
+$("#propPickHint").textContent = propFavs
+? (list.length ? "Your favorite players, from every team" : "No favorite players yet. Add them in the Favorite players card.")
+: !favs ? "From the team's roster" : "From the team's roster, or tap Favorite players";
+const pl = pickedPlayer();
+const lg = pl ? pl.l : !propFavs && t && fromEspn(t[0]) ? t[0] : "";
+fillSelect($("#propStat"), statsFor(lg).map((st) => [st[1], PROP_NAMES[st[0] + ":" + st[1]] || st[2]]));
+const st = statsFor(lg).find((x) => x[1] === $("#propStat").value);
+const yes = !!(st && st[3]);
+$("#propSideRow").hidden = yes;
+$("#betLineRow").hidden = yes;
+$("#betSign").hidden = true;
+$("#betLineHint").textContent = "The sportsbook's line for the stat, like 24.5. A whole number can push";
+$("#betLine").placeholder = "24.5";
+};
+const loadPropRoster = async () => {
+const t = teamByKey(betTeam);
+propRosterFor = betTeam;
+propRoster = [];
+renderPropForm();
+if (!t || propFavs) return;
+if (!fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+betSay("Reading the " + t[3] + " roster from ESPN\u2026");
+const list = await readRoster(t);
+if (propRosterFor !== betTeam) return;
+betSay(list && list.length ? "" : rosterSays(t, list));
+propRoster = list || [];
+renderPropForm();
+};
+$("#propFavs").onclick = () => {
+propFavs = !propFavs;
+betSay("");
+renderPropForm();
+if (!propFavs) loadPropRoster();
+};
+$("#propPick").onchange = () => { betSay(""); renderPropForm(); };
+$("#propStat").onchange = () => { betSay(""); renderPropForm(); };
+const propHalf = (raw) => {
+const v = raw.replace(/\u2212/g, "-").replace(/\s+/g, "").replace(/^([+-]?\d+),(\d+)$/, "$1.$2");
+if (!v) return "Type the line, like 24.5.";
+if (/^[+-]/.test(v)) return "A prop's line has no + or -. Type it like 24.5.";
+const m = /^(\d+)(?:\.(\d+))?$/.exec(v);
+if (!m) return "That isn't a number. Type it like 24.5.";
+const frac = (m[2] || "").replace(/0+$/, "");
+if (frac && frac !== "5") return "Lines go in whole or half numbers, like 6 or 6.5.";
+const half = Number(m[1]) * 2 + (frac ? 1 : 0);
+if (!half) return "A line is more than 0.";
+if (half > 1999) return "The panel takes lines up to 999.5.";
+return half;
+};
+const addProp = async () => {
+const t = teamByKey(betTeam);
+const pl = pickedPlayer();
+if (!pl) {
+if (propFavs) return betSay("Pick one of your favorite players.");
+if (t && !fromEspn(t[0])) return betSay("Minor league teams have no player props. Pick another team, or tap Favorite players.");
+return betSay(t ? "Pick the player first." : "Pick the team first.");
+}
+const st = statsFor(pl.l).find((x) => x[1] === $("#propStat").value);
+if (!st) return betSay("Pick the stat.");
+const side = st[3] ? "yes" : $("#propSide").value;
+const half = st[3] ? 0 : propHalf($("#betLine").value);
+if (typeof half === "string") {
+betSay(half);
+$("#betLine").focus();
+return;
+}
+const home = propFavs ? teamById(pl.l, pl.team) : null;
+if (home) {
+if (!rosters[keyOf(home)]) betSay("Checking the " + home[3] + " roster on ESPN\u2026");
+const r = await readRoster(home);
+betSay("");
+if (r && r.length && !r.some((a) => a.id === pl.id)) {
+return betSay(pl.panel + " isn't on the " + home[3] + " roster at ESPN now. Turn off Favorite players and pick their new team.");
+}
+}
+const list = S.props || [];
+propPending = propPending.filter((x) => Date.now() - x.at < 5000 && !list.some((p) => sameProp(p, x)));
+const want = { l: pl.l, id: pl.id, stat: st[1], side, half };
+if (list.concat(propPending).some((p) => sameProp(p, want))) return betSay("You have that prop already.");
+const max = S.propmax;
+if (list.length + propPending.length >= max) return betSay("All " + max + " props are in use. Remove one first.");
+betSay("");
+const mine = { ...want, at: Date.now() };
+propPending.push(mine);
+const line = st[3] ? "" : betPoints(half, false);
+const label = pl.panel + (st[3] ? " " + st[2] : (side === "under" ? " U " : " O ") + line + " " + st[2]);
+setGD({ prop: [0, pl.l, pl.id, pl.team, pl.panel, st[1], side, line].join(",") }).then((ok) => {
+if (!ok) propPending = propPending.filter((x) => x !== mine);
+else toast("Added " + label);
+});
+$("#betLine").value = "";
+};
+renderBetForm();
+let playerTeam = "";
+let roster = [];
+let rosterFor = "";
+let playerDrawn = null;
+let playerPending = [];
+const PANEL_NAME_MAX = 10;
+const foldChar = (ch) => {
+const cp = ch.codePointAt(0);
+if (FOLD2[cp] !== undefined) return FOLD2[cp];
+return cp >= 0xc0 && cp < 0x180 ? FOLD[cp - 0xc0] : ch;
+};
+const panelLetters = (v) => Array.from(String(v || "").normalize("NFC"), foldChar).join("")
+.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+.replace(/[^A-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
+const fitName = (v) => {
+let n = panelLetters(v);
+if (n.length > PANEL_NAME_MAX) n = n.replace(/ (JR\.?|SR\.?|II|III|IV|V)$/, "");
+if (n.length > PANEL_NAME_MAX) n = n.slice(0, PANEL_NAME_MAX).replace(/[ .'-]+$/, "");
+return n;
+};
+const rosterAthletes = (j) => {
+const out = [];
+for (const a of (j && Array.isArray(j.athletes) ? j.athletes : [])) {
+if (a && Array.isArray(a.items)) out.push(...a.items);
+else if (a && a.id !== undefined) out.push(a);
+}
+return out.filter((a) => a && /^[0-9]{1,10}$/.test(String(a.id)) && Number(a.id) > 0 && Number(a.id) <= 4294967295);
+};
+const words = (v) => String(v || "").trim().split(/\s+/).filter(Boolean);
+const lastOf = (a) => a.lastName || words(a.displayName || a.fullName).slice(-1)[0] || "";
+const firstOf = (a) => a.firstName || words(a.displayName || a.fullName)[0] || "";
+const panelNames = (list) => {
+const lasts = list.map((a) => panelLetters(lastOf(a)));
+const firsts = list.map((a) => panelLetters(firstOf(a)).replace(/[^A-Z0-9]/g, ""));
+return list.map((a, i) => {
+const mates = firsts.filter((f, j) => j !== i && lasts[j] === lasts[i]);
+if (!mates.length || !firsts[i]) return fitName(lastOf(a));
+const shared = (k) => mates.some((f) => f.startsWith(firsts[i].slice(0, k)));
+let k = 1;
+while (k < 3 && k < firsts[i].length && shared(k)) k++;
+return fitName(firsts[i].slice(0, shared(k) ? 1 : k) + ". " + lastOf(a));
+});
+};
+const playerSay = (t) => {
+$("#playerMsg").textContent = t;
+$("#playerMsg").hidden = !t;
+};
+const rosters = {};
+const readRoster = async (t) => {
+if (rosters[keyOf(t)]) return rosters[keyOf(t)];
+let list = null;
+try {
+const r = await fetch(`${ESPN}${lgInfo(t[0]).path}/teams/${t[1]}/roster`);
+if (!r.ok) throw new Error("HTTP " + r.status);
+list = rosterAthletes(await r.json());
+} catch (_) {
+return null;
+}
+const names = panelNames(list);
+const out = list.map((a, i) => ({ id: Number(a.id), name: a.displayName || a.fullName || names[i], last: lastOf(a),
+pos: (a.position && a.position.abbreviation) || "", jersey: a.jersey || "", panel: names[i] }))
+.filter((a) => a.panel)
+.sort((a, b) => a.last.localeCompare(b.last) || a.name.localeCompare(b.name));
+if (out.length) rosters[keyOf(t)] = out;
+return out;
+};
+const rosterSays = (t, list) => (list ? "ESPN lists no players for the " + t[3] + " right now."
+: "Couldn't read the " + t[3] + " roster from ESPN. Check this device's internet connection and try again.");
+const loadRoster = async (key) => {
+const t = teamByKey(key);
+if (!t) return;
+rosterFor = key;
+roster = [];
+renderPlayerForm();
+playerSay("Reading the " + t[3] + " roster from ESPN\u2026");
+const list = await readRoster(t);
+if (rosterFor !== key) return;
+if (!list || !list.length) {
+playerSay(rosterSays(t, list));
+renderPlayerForm();
+return;
+}
+roster = list;
+playerSay("");
+renderPlayerForm();
+};
+const renderPlayerForm = () => {
+const t = teamByKey(playerTeam);
+$("#playerTeam").textContent = t ? t[3] : "Pick a team";
+const sel = $("#playerPick");
+const sig = rosterFor + ":" + roster.length;
+if (sel.dataset.sig !== sig) {
+sel.dataset.sig = sig;
+sel.textContent = "";
+for (const a of roster) {
+const o = el("option", null, a.name + (a.pos ? " \u00b7 " + a.pos : "") + (a.jersey ? " #" + a.jersey : ""));
+o.value = String(a.id);
+sel.appendChild(o);
+}
+}
+$("#playerPickRow").hidden = $("#playerAdd").hidden = !roster.length;
+};
+const settlePlayers = () => {
+const list = S.players || [];
+const max = S.playermax;
+playerPending = playerPending.filter((p) => {
+if (list.some((pl) => pl.l === p.l && pl.id === p.id)) {
+toast("Added " + p.name);
+return false;
+}
+if (p.ack && stateLeft > p.ack + APPLY_MS) {
+playerSay(list.length >= max ? "All " + max + " players are in use. Remove one first."
+: "The panel didn't add " + p.name + ". Try again.");
+return false;
+}
+return Date.now() - p.at < 10000;
+});
+};
+const renderPlayers = () => {
+const card = $("#playerCard");
+card.hidden = !S || S.players === undefined;
+const lines = (game && Array.isArray(game.pl) && game.s !== "NOT_FOUND" && game.pl) || [];
+const line = $("#playerline");
+line.textContent = "";
+for (const text of lines) line.appendChild(el("span", "bet", text));
+line.hidden = !lines.length;
+if (card.hidden) return;
+settlePlayers();
+const list = S.players || [];
+$("#playerSum").textContent = list.length ? list.length + " of " + S.playermax : "";
+const sig = JSON.stringify(list);
+if (sig === playerDrawn) return;
+playerDrawn = sig;
+const host = $("#playerList");
+const focused = host.contains(document.activeElement);
+host.textContent = "";
+for (const pl of list) {
+const row = el("div", "ctl playerrow");
+const t = teamById(pl.l, pl.team);
+const img = el("img");
+img.alt = "";
+img.loading = "lazy";
+const src = t ? logoUrl(t[0], t[1], t[2]) : "";
+if (src) img.src = src;
+else img.style.visibility = "hidden";
+row.appendChild(img);
+const name = el("label", null, pl.name);
+name.appendChild(el("small", null, (t ? t[3] : lgInfo(pl.l).name)));
+row.appendChild(name);
+const x = el("button", "betdel", "\u2715");
+x.title = "Remove " + pl.name;
+x.setAttribute("aria-label", x.title);
+x.onclick = () => setGD({ playerdel: pl.l + "," + pl.id }).then((ok) => ok && toast("Removed " + pl.name));
+row.appendChild(x);
+host.appendChild(row);
+}
+if (!list.length) host.appendChild(el("p", "hint", "No favorite players yet."));
+if (focused && !host.contains(document.activeElement)) $("#playerTeam").focus();
+};
+$("#playerTeam").onclick = () => openPicker(false, false, true);
+$("#playerAdd").onclick = () => {
+if (!S) return;
+const t = teamByKey(playerTeam);
+const a = roster.find((x) => String(x.id) === $("#playerPick").value);
+if (!t || !a) return playerSay("Pick the player first.");
+const list = S.players || [];
+const max = S.playermax;
+const same = (pl) => pl.l === t[0] && pl.id === a.id;
+if (playerPending.some(same)) return;
+if (list.some(same)) return playerSay(a.name + " is a favorite already.");
+if (list.length + playerPending.length >= max) return playerSay("All " + max + " players are in use. Remove one first.");
+playerSay("");
+const mine = { l: t[0], id: a.id, name: a.name, at: Date.now(), ack: 0 };
+playerPending.push(mine);
+setGD({ player: [t[0], a.id, t[1], a.panel].join(",") }).then((ok) => {
+if (ok) mine.ack = Date.now();
+else playerPending = playerPending.filter((p) => p !== mine);
+});
+};
+renderPlayerForm();
+let pickFav = false;
+let pickBet = false;
+let pickPlayer = false;
+let pickSplit = false;
+let pickProp = false;
+const choose = (t) => {
+if (pickSplit) {
+if (S && refKey(S.team) === keyOf(t)) {
+toast("That's the panel's own team. Pick another.");
+return;
+}
+setGD({ splitteam: keyOf(t) });
+toast("The second area shows the " + t[3]);
+} else if (pickPlayer) {
+playerTeam = keyOf(t);
+loadRoster(playerTeam);
+} else if (pickBet) {
+betTeam = keyOf(t);
+betSay("");
+renderBetForm();
+if (pickProp) loadPropRoster();
+} else if (pickFav) addFav(t);
+else {
+setGD({ team: keyOf(t) });
+toast("Now following the " + t[3]);
+}
+closePicker();
+};
+let league = "now";
+const renderTiles = () => {
+if (league === "now") return renderGames();
+$("#tiles").className = "tiles";
+const q = $("#q").value.trim().toLowerCase();
+const cur = S ? refKey(S.team) : "";
+const tiles = $("#tiles");
+tiles.innerHTML = "";
+const words = (t) => (isBoard(t[0]) || levelOf(t) ? lgInfo(t[0]).tab + " " + levelOf(t) + " " : "") + t[3] + " " + t[2];
+let list = TEAMS.filter((t) => !((pickFav || pickBet || pickPlayer || pickSplit) && isBoard(t[0])) && !((pickPlayer || pickProp) && !fromEspn(t[0]))
+&& (q ? words(t).toLowerCase().includes(q) : lgInfo(t[0]).tab === lgInfo(league).tab));
+if (!list.length) {
+tiles.appendChild(el("div", "none", "No team matches"));
+return;
+}
+const byLevel = !q && list.some(levelOf);
+if (byLevel) list = list.slice().sort((a, b) => (a[4] || 0) - (b[4] || 0));
+let level = null;
+for (const t of list) {
+if (byLevel && levelOf(t) !== level) {
+level = levelOf(t);
+tiles.appendChild(el("div", "gh", level));
+}
+const tile = el("button", "tile" + (keyOf(t) === cur ? " on" : ""));
+const img = el("img");
+img.loading = "lazy";
+const src = logoUrl(t[0], t[1], t[2]);
+if (src) img.src = src;
+else img.style.visibility = "hidden";
+img.alt = "";
+tile.appendChild(img);
+tile.appendChild(el("div", "n", t[3]));
+tile.appendChild(el("div", "a", (levelOf(t) || lgInfo(t[0]).prefix) + " · " + t[2]));
+tile.onclick = () => choose(t);
+tiles.appendChild(tile);
+}
+};
+$("#guardClear").onclick = async () => {
+await doAction("power_ok");
+scheduleState(300);
+};
+$("#pick").onclick = () => openPicker(false);
+$("#favAdd").onclick = () => openPicker(true);
+let pickerFrom = null;
+const openPicker = async (fav, bet = false, player = false, split = false, prop = false) => {
+pickFav = fav;
+pickBet = bet;
+pickPlayer = player;
+pickSplit = split;
+pickProp = prop;
+pickerFrom = document.activeElement;
+$(".sheet").setAttribute("aria-label", split ? "Pick the second team" : player || prop ? "Pick the player's team" : bet ? "Pick the bet's team" : fav ? "Add a favorite" : "Choose a team");
+const cur = split && S && S.splitteam && S.splitteam.id ? teamByKey(refKey(S.splitteam))
+: player && playerTeam ? teamByKey(playerTeam) : bet && betTeam ? teamByKey(betTeam) : S ? teamByKey(refKey(S.team)) : null;
+const team = fav || bet || player || split;
+const hide = (lg) => !!LEAGUES[lg] && ((team && isBoard(lg)) || ((player || prop) && !fromEspn(lg)));
+league = cur && !hide(cur[0]) ? tabKey(cur[0]) : "nfl";
+tabButtons.forEach((b) => { b.hidden = hide(b.dataset.lg); });
+const list = await Promise.race([loadGames(false), new Promise((res) => setTimeout(res, 1000))]).catch(() => null);
+if (list && list.some((g) => g.state === "in")) league = "now";
+$$tabs(league);
+$("#q").value = "";
+renderTiles();
+$("#modal").classList.add("open");
+setTimeout(() => $("#q").focus(), 50);
+};
+const tabsShown = new Set();
+for (const lg of Object.keys(LEAGUES)) {
+if (!TEAMS.some((t) => t[0] === lg) || tabsShown.has(LEAGUES[lg].tab)) continue;
+tabsShown.add(LEAGUES[lg].tab);
+const b = el("button", null, LEAGUES[lg].tab);
+b.dataset.lg = lg;
+b.setAttribute("role", "tab");
+b.setAttribute("aria-controls", "tiles");
+$(".tabs").appendChild(b);
+}
+const tabButtons = Array.from(document.querySelectorAll(".tabs button"));
+const $$tabs = (lg) => tabButtons.forEach((b) => {
+setOn(b, b.dataset.lg === lg, "aria-selected");
+b.tabIndex = b.dataset.lg === lg ? 0 : -1;
+});
+const showTab = (b) => { league = b.dataset.lg; $$tabs(league); $("#q").value = ""; renderTiles(); };
+tabButtons.forEach((b, i) => {
+b.onclick = () => showTab(b);
+b.onkeydown = (ev) => {
+const shown = tabButtons.filter((x) => !x.hidden);
+const n = shown.length;
+const at = shown.indexOf(b);
+const j = { ArrowRight: at + 1, ArrowLeft: at - 1 + n, Home: 0, End: n - 1 }[ev.key];
+if (j === undefined || at < 0) return;
+ev.preventDefault();
+shown[j % n].focus();
+showTab(shown[j % n]);
+};
+});
+$("#q").oninput = renderTiles;
+const closePicker = () => {
+if (!$("#modal").classList.contains("open")) return;
+$("#modal").classList.remove("open");
+if (pickerFrom && pickerFrom.isConnected) pickerFrom.focus();
+pickerFrom = null;
+};
+$("#close").onclick = closePicker;
+$("#modal").onclick = (ev) => { if (ev.target.id === "modal") closePicker(); };
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closePicker(); });
+$("#modal").addEventListener("keydown", (ev) => {
+if (ev.key !== "Tab") return;
+const all = Array.from($(".sheet").querySelectorAll("input, button:not([disabled])")).filter((n) => n.tabIndex >= 0);
+if (!all.length) return;
+const first = all[0], last = all[all.length - 1];
+if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+});
+const renderCurrentTeam = () => {
+const t = S ? teamByKey(refKey(S.team)) : null;
+const img = $("#curLogo");
+if (!t) { img.style.visibility = "hidden"; $("#curName").textContent = "No team chosen"; return; }
+const src = logoUrl(t[0], t[1], t[2]);
+img.style.visibility = src ? "visible" : "hidden";
+if (src) img.src = src;
+$("#curName").textContent = t[3];
+$("#curLg").textContent = lgInfo(t[0]).name + (levelOf(t) ? ", " + levelOf(t) : "");
+};
+const TZ_ALIASES = {
+"America/Detroit": "America/New_York", "America/Toronto": "America/New_York", "America/Indiana/Indianapolis": "America/New_York",
+"America/Kentucky/Louisville": "America/New_York", "America/Montreal": "America/New_York", "America/Nassau": "America/New_York",
+"America/Winnipeg": "America/Chicago", "America/Indiana/Knox": "America/Chicago", "America/Menominee": "America/Chicago",
+"America/North_Dakota/Center": "America/Chicago", "America/Matamoros": "America/Chicago", "America/Ojinaga": "America/Chicago",
+"America/Edmonton": "America/Denver", "America/Boise": "America/Denver", "America/Ciudad_Juarez": "America/Denver",
+"America/Vancouver": "America/Los_Angeles", "America/Tijuana": "America/Los_Angeles",
+"America/Juneau": "America/Anchorage", "America/Sitka": "America/Anchorage", "America/Nome": "America/Anchorage",
+"Europe/Dublin": "Europe/London", "Europe/Paris": "Europe/Berlin", "Europe/Madrid": "Europe/Berlin", "Europe/Rome": "Europe/Berlin",
+"Europe/Amsterdam": "Europe/Berlin", "Europe/Brussels": "Europe/Berlin", "Europe/Vienna": "Europe/Berlin", "Europe/Zurich": "Europe/Berlin",
+"Europe/Stockholm": "Europe/Berlin", "Europe/Oslo": "Europe/Berlin", "Europe/Copenhagen": "Europe/Berlin", "Europe/Warsaw": "Europe/Berlin",
+"Europe/Prague": "Europe/Berlin", "Europe/Budapest": "Europe/Berlin", "Europe/Helsinki": "Europe/Athens", "Europe/Kiev": "Europe/Athens",
+"Europe/Kyiv": "Europe/Athens", "Europe/Bucharest": "Europe/Athens", "Europe/Sofia": "Europe/Athens",
+"Asia/Hong_Kong": "Asia/Shanghai", "Asia/Taipei": "Asia/Shanghai", "Asia/Manila": "Asia/Singapore", "Asia/Kuala_Lumpur": "Asia/Singapore",
+"Australia/Melbourne": "Australia/Sydney", "Australia/Hobart": "Australia/Sydney", "Australia/Canberra": "Australia/Sydney",
+"Australia/Darwin": "Australia/Adelaide",
+};
+const browserZoneName = () => {
+let iana = "";
+try { iana = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (_) {}
+if (!iana) return null;
+const target = TZ_ALIASES[iana] || iana;
+const hit = TZS.find((z) => z[1] === target);
+return hit ? hit[0] : null;
+};
+let tzApplied = false;
+const tzsel = $("#tzsel");
+TZS.forEach((z, i) => { const o = el("option", null, z[0]); o.value = String(i); tzsel.appendChild(o); });
+tzsel.onchange = () => { setGD({ tzauto: 0, tz: tzsel.value }); $("#tzpick").hidden = true; };
+const tzName = el("b");
+const tzHow = el("span", "muted");
+const tzLink = el("button", "lnk");
+const renderTime = () => {
+if (!S) return;
+if (!tzName.isConnected) $("#tzline").replaceChildren(tzName, tzHow, tzLink);
+const cur = S.tz_name || "";
+const auto = !!S.tz_auto;
+const mine = browserZoneName();
+const mineIdx = mine ? TZS.findIndex((z) => z[0] === mine) : -1;
+const pick = $("#tzpick");
+if (document.activeElement !== tzsel) tzsel.value = String(S.tz);
+tzName.textContent = cur || "Not set";
+if (auto) {
+tzHow.textContent = mine ? " · set from this browser" : " · this browser's zone is not in the list";
+tzLink.textContent = "choose manually";
+tzLink.onclick = () => { pick.hidden = !pick.hidden; };
+if (mine && mine !== cur && mineIdx >= 0 && !tzApplied) {
+tzApplied = true;
+setGD({ tz: mineIdx });
+toast("Timezone set to " + mine + " from this browser");
+}
+} else {
+tzHow.textContent = " · chosen by hand";
+tzLink.textContent = mine ? "follow this browser (" + mine + ")" : "change";
+tzLink.onclick = () => {
+if (mine) { tzApplied = false; setGD({ tzauto: 1 }); pick.hidden = true; }
+else pick.hidden = !pick.hidden;
+};
+}
+};
+const kickLabel = (epoch, tbd) => {
+const d = new Date(epoch * 1000);
+const opts = { weekday: "short", month: "short", day: "numeric" };
+if (tbd) return d.toLocaleDateString([], { ...opts, timeZone: "America/New_York" }) + " TBD";
+const day = d.toLocaleDateString([], opts);
+const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+return day + " " + time;
+};
+const renderFavNext = (box) => {
+const list = (S.next || []).filter((n) => n.t && n.t.id);
+box.hidden = !list.length;
+const host = $("#upnextList");
+host.innerHTML = "";
+for (const n of list) {
+const row = el("div", "un fav" + (n.slot === S.shown ? " shown" : ""));
+const img = el("img");
+img.loading = "lazy";
+img.alt = "";
+img.src = logoUrl(n.t.l, n.t.id, n.t.abbr);
+row.appendChild(img);
+const txt = el("div", "ut");
+const name = ranked(n.trk, n.t.abbr) + (n.oa ? " vs " + ranked(n.ork, n.oa) : "");
+txt.appendChild(el("div", "n", name));
+let when = n.none ? "No game scheduled" : "Not checked yet";
+if (n.s === "IN") when = n.ts + " - " + n.os + (n.detail ? " · " + n.detail : "");
+else if (n.s === "POST") when = endedAs(n) === "Final" ? "Final " + n.ts + " - " + n.os : endedAs(n);
+else if (n.s === "PRE") when = kickLabel(n.kick, n.tbd) + (n.tv ? " · " + n.tv : "");
+txt.appendChild(el("div", "w", when));
+row.appendChild(txt);
+host.appendChild(row);
+}
+};
+const renderUpNext = () => {
+const box = $("#upnext");
+const mode = S ? S.mode || 0 : -1;
+if (mode === 4 && (S.favs || []).some(refKey)) { renderFavNext(box); return; }
+if (mode !== 0 && mode !== 4) { box.hidden = true; return; }
+const curId = game && game.s !== "NOT_FOUND" ? String(game.id || "") : "";
+const list = (S.next || []).filter((u) => String(u.id) !== curId).slice(0, 3);
+box.hidden = !list.length;
+const host = $("#upnextList");
+host.innerHTML = "";
+const lg = S.team ? S.team.l : "nfl";
+for (const u of list) {
+const row = el("div", "un");
+const img = el("img");
+img.loading = "lazy";
+img.alt = "";
+img.src = logoUrl(lg, u.oi, u.oa);
+row.appendChild(img);
+const txt = el("div", "ut");
+txt.appendChild(el("div", "n", (u.neutral ? "vs " : u.home ? "vs " : "@ ") + ranked(u.ork, u.on || u.oa)));
+txt.appendChild(el("div", "w", kickLabel(u.kick, u.tbd) + (u.tv ? " · " + u.tv : "")));
+row.appendChild(txt);
+host.appendChild(row);
+}
+};
+let lastSplashKey = "";
+let splashTimer = null;
+const renderSplash = () => {
+if (!S || !S.splash) return;
+const key = S.splash + "|" + (game ? game.ts + "-" + game.os + "|" + (game.lp || "") : "");
+if (key === lastSplashKey) return;
+lastSplashKey = key;
+const n = $("#splash");
+n.textContent = S.splash;
+n.style.background = "#" + (S.splash_color && S.splash_color !== "000000" ? S.splash_color : "1d4ed8");
+n.classList.add("on");
+clearTimeout(splashTimer);
+splashTimer = setTimeout(() => n.classList.remove("on"), 3000);
+};
+const FLIGHTS_ID = 3;
+const FLIGHT_SOURCES = { fr24: "Flightradar24", adsbfi: "adsb.fi", adsblol: "adsb.lol", receiver: "your receiver" };
+const FLIGHT_RADII = { imperial: [5, 10, 15, 25, 50, 100], metric: [5, 10, 25, 50, 100, 150] };
+const COORDS = /^\s*([+-]?\d{1,3}(?:\.\d*)?)\s*(?:,\s*|\s+)([+-]?\d{1,3}(?:\.\d*)?)\s*$/;
+const flightNow = () => {
+const f = (S && S.flights) || {};
+const r = S && S.flyradius !== undefined ? /^(\d+)([a-z]*)$/.exec(S.flyradius) : null;
+return {
+...f,
+home: S && S.flyhome !== undefined ? (S.flyhome === "none" ? "" : S.flyhome) : f.home || "",
+place: S && S.flyplace !== undefined ? S.flyplace : f.place || "",
+radius: r ? Number(r[1]) : f.radius,
+radius_unit: r ? r[2] || "mi" : f.radius_unit,
+receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
+};
+};
+const homeSearch = (p) => {
+const msg = (t) => { const m = $("#" + p + "Msg"); m.textContent = t || ""; m.hidden = !t; };
+const setHome = (lat, lon, place) => {
+msg("");
+$("#" + p + "Picks").hidden = true;
+$("#" + p + "Where").value = "";
+setGD({ flyhome: lat.toFixed(4) + "," + lon.toFixed(4), flyplace: place || "" });
+};
+const findPlace = async () => {
+const q = $("#" + p + "Where").value.trim();
+const picks = $("#" + p + "Picks");
+picks.hidden = true;
+if (!q) { msg("Type a town, a ZIP code, or a latitude and longitude."); return; }
+const c = COORDS.exec(q);
+if (c) {
+const lat = Number(c[1]), lon = Number(c[2]);
+if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) {
+msg("Latitude goes from -90 to 90 and longitude from -180 to 180.");
+return;
+}
+setHome(lat, lon, "");
+return;
+}
+msg("Looking it up...");
+let found = [];
+try {
+const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=" + encodeURIComponent(q));
+if (!r.ok) throw new Error("HTTP " + r.status);
+found = ((await r.json()).results || []).filter((x) => typeof x.latitude === "number" && typeof x.longitude === "number");
+} catch (_) {
+msg("Couldn't reach the place search. Type the latitude and longitude instead, like 40.64, -73.78.");
+return;
+}
+if (!found.length) { msg("Nothing found for \u201c" + q + "\u201d. Try a town and state, or a ZIP code."); return; }
+const label = (x) => [x.name, x.admin1, x.country].filter((v, i, all) => v && all.indexOf(v) === i).join(", ");
+if (found.length === 1) { setHome(found[0].latitude, found[0].longitude, label(found[0])); return; }
+msg("");
+picks.innerHTML = "";
+for (const x of found) {
+const b = el("button", "btn", label(x));
+b.onclick = () => setHome(x.latitude, x.longitude, label(x));
+picks.append(b);
+}
+picks.hidden = false;
+};
+$("#" + p + "Find").onclick = findPlace;
+$("#" + p + "Where").onkeydown = (e) => { if (e.key === "Enter") findPlace(); };
+$("#" + p + "Clear").onclick = () => setGD({ flyhome: "none" });
+return msg;
+};
+const flightMsg = homeSearch("flight");
+$("#flightRadius").onchange = () => setGD({ flyradius: $("#flightRadius").value });
+const saveRx = () => {
+const v = $("#flightRx").value.trim();
+if (/\s/.test(v) || v.length > 95) { flightMsg("A receiver's address has no spaces, like 192.168.1.50."); return; }
+flightMsg("");
+setGD({ flyreceiver: v || "none" });
+};
+$("#flightRxSave").onclick = saveRx;
+$("#flightRx").onkeydown = (e) => { if (e.key === "Enter") saveRx(); };
+const PHOTO_API = "https://api.planespotters.net/pub/photos/";
+const PHOTO_RETRY_MS = 60000;
+const flightPhotos = new Map();
+const photoAt = async (path) => {
+const r = await fetch(PHOTO_API + path);
+if (!r.ok) throw new Error("HTTP " + r.status);
+const p = ((await r.json()).photos || [])[0];
+const t = p && (p.thumbnail_large || p.thumbnail);
+if (!t || typeof t.src !== "string" || !/^https:\/\//.test(t.src)) return null;
+const link = typeof p.link === "string" && /^https:\/\//.test(p.link) ? p.link : "";
+return { src: t.src, link, by: typeof p.photographer === "string" ? p.photographer : "" };
+};
+const showFlightPhoto = (hex, reg, label) => {
+const fig = $("#flightPhoto");
+const key = hex || (reg ? "reg:" + reg : "");
+const got = key ? flightPhotos.get(key) : undefined;
+if (key && (!got || (got.failed && Date.now() - got.failed >= PHOTO_RETRY_MS))) {
+flightPhotos.set(key, { pending: true });
+(async () => (hex && (await photoAt("hex/" + encodeURIComponent(hex))))
+|| (reg ? photoAt("reg/" + encodeURIComponent(reg)) : null))()
+.then((photo) => flightPhotos.set(key, { photo }), () => flightPhotos.set(key, { failed: Date.now() }))
+.then(() => renderFlights());
+}
+const p = got && got.photo;
+if (!p) { fig.hidden = true; return; }
+const img = $("#flightPhotoImg");
+if (img.getAttribute("src") !== p.src) img.src = p.src;
+img.alt = "Photo of " + label;
+const by = $("#flightPhotoBy");
+by.textContent = "Photo: " + (p.by ? p.by + ", " : "") + "Planespotters.net";
+for (const a of [$("#flightPhotoLink"), by])
+if (p.link) a.href = p.link; else a.removeAttribute("href");
+$("#flightPhotoOf").textContent = label;
+fig.hidden = false;
+};
+let flightRadii = "";
+const renderFlights = () => {
+const card = $("#flightCard");
+card.hidden = !S || !S.flights || !((S.displays || []).some((d) => d.id === FLIGHTS_ID));
+if (card.hidden) return;
+const f = flightNow();
+const where = f.home ? (f.place ? f.place + " (" + f.home.replace(",", ", ") + ")" : f.home.replace(",", ", ")) : "";
+$("#flightSum").textContent = f.home ? f.place || f.home.replace(",", ", ") : "No location yet";
+$("#flightHomeRow").hidden = !f.home;
+$("#flightHome").textContent = where;
+const unit = f.units === "metric" ? "km" : "mi";
+const opts = FLIGHT_RADII[f.units === "metric" ? "metric" : "imperial"].map((n) => [n + unit, n + " " + unit]);
+const cur = f.radius + (f.radius_unit || "mi");
+if (!opts.some((o) => o[0] === cur)) opts.push([cur, f.radius + " " + (f.radius_unit || "mi")]);
+const key = opts.map((o) => o[0]).join("|");
+const sel = $("#flightRadius");
+if (flightRadii !== key) {
+flightRadii = key;
+sel.innerHTML = "";
+for (const [v, t] of opts) sel.add(new Option(t, v));
+}
+if (document.activeElement !== sel) sel.value = cur;
+const rx = $("#flightRx");
+if (document.activeElement !== rx) rx.value = f.receiver;
+const n = Number(f.planes) || 0;
+const from = FLIGHT_SOURCES[f.source] || "";
+const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
+const shown = S.display_now === "flights" || S.split_now === "flights";
+const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
+const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
+let line = !f.home ? "Set a home location to see the planes near it."
+: f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
+: f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
++ (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
+: f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
+: "Looking for planes.";
+if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
+else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
+$("#flightNow").textContent = line;
+const live = f.status === "ok" && n > 0;
+showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
+};
+const WX_ID = 4;
+const WX_SOURCES = { "open-meteo": "Open-Meteo", "met-norway": "MET Norway" };
+homeSearch("wx");
+const wxTickerOn = () => (S && S.wxticker !== undefined ? S.wxticker : !!(S && S.weather && S.weather.ticker));
+$("#wxTicker").setAttribute("role", "switch");
+$("#wxTicker").onclick = () => setGD({ wxticker: wxTickerOn() ? 0 : 1 });
+const renderWeather = () => {
+const card = $("#wxCard");
+const w = S && S.weather;
+card.hidden = !w || !((S.displays || []).some((d) => d.id === WX_ID));
+if (card.hidden) return;
+const f = S.flights ? flightNow() : { home: w.home || "", place: w.place || "" };
+const coords = (f.home || "").replace(",", ", ");
+$("#wxSum").textContent = f.home ? f.place || coords : "No home yet";
+$("#wxHomeRow").hidden = !f.home;
+$("#wxHome").textContent = f.home ? (f.place ? f.place + " (" + coords + ")" : coords) : "";
+setOn($("#wxTicker"), wxTickerOn(), "aria-checked");
+const shown = S.display_now === "weather" || S.split_now === "weather";
+const mine = (S.displays || []).find((d) => d.id === WX_ID);
+const chosen = S.display === WX_ID || (mine && S.split === mine.split);
+const n = Number(w.alerts) || 0;
+let line = !f.home ? "Set a home location to see its weather."
+: w.status === "failing" ? "Can't reach the weather right now. The panel keeps trying."
+: w.status === "ok" && w.temp ? w.temp + ", " + w.sky + (WX_SOURCES[w.source] ? ", from " + WX_SOURCES[w.source] : "") + "."
+: w.status === "old" && !shown ? "Not reading the weather now: the panel reads it only while Weather is on it."
+: "Looking up the weather.";
+if (f.home && w.status === "ok" && n) line += " " + n + (n === 1 ? " alert: " : " alerts, first: ") + w.alert + ".";
+if (f.home && w.status === "ok" && w.aqi != null) line += " Air quality " + w.aqi + ".";
+if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === "clock" || S.split_now === "date"))
+line += " The clock is up for the night hours, and Weather comes back after them.";
+else if (f.home && !chosen) line += " Choose Weather under Showing to put it on the panel.";
+$("#wxNow").textContent = line;
+};
+const renderAll = () => {
+renderBoard();
+renderBets();
+renderMarkets();
+renderFlights();
+renderWeather();
+renderPlayers();
+renderUpNext();
+renderSplash();
+renderCurrentTeam();
+renderMode();
+renderSettings();
+renderSplit();
+renderShowing();
+renderIdle();
+renderPanels();
+renderTime();
+if (S && S.name) {
+$("#hostname").textContent = S.name + ".local";
+const tail = S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
+document.title = "Game Day Scoreboard" + (tail ? " " + tail : "");
+}
+renderData();
+renderHealth();
+renderWifi();
+renderFolds();
+};
+const renderData = () => {
+const kb = S && S.espn_kb;
+if (kb == null) { $("#espnData").textContent = ""; return; }
+const size = kb < 1000 ? kb + " KB" : (kb / 1000).toFixed(kb < 100000 ? 1 : 0) + " MB";
+const reads = S.espn_reads || 0;
+$("#espnData").textContent = size + " in " + reads + (reads === 1 ? " read" : " reads");
+};
+const RESTARTS = {
+power: "Power on", restart: "Restart", update: "Update", crash: "Crash", watchdog: "Froze (watchdog)",
+brownout: "Power dip (brownout)", usb: "USB reset",
+};
+const restartName = (k) => RESTARTS[k] || "Other";
+const WIFI_CAUSES = {
+signal: "signal lost", router: "dropped by the router", password: "sign-in refused",
+roam: "moved to another access point", other: "other",
+};
+const span = (s) => {
+if (s < 60) return s + " s";
+const m = Math.round(s / 60);
+if (m < 60) return m + " min";
+const h = Math.floor(m / 60);
+if (h < 24) return h + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+return Math.floor(h / 24) + " d" + (h % 24 ? " " + (h % 24) + " h" : "");
+};
+const healthOf = () => (S && S.health && S.health.up != null ? S.health : null);
+const renderHealth = () => {
+const h = healthOf();
+$("#health").hidden = !h;
+if (!h) return;
+$("#hStart").textContent = restartName(h.start) + ", " + span(h.up) + " ago";
+$("#hBoots").textContent = h.boots > 1 ? "Start " + h.boots + " since the power came on" : "";
+$("#hFault").textContent = !h.fault ? "None"
+: restartName(h.fault) + (h.fault_ago != null ? ", " + span(h.fault_ago) + " ago" : "");
+$("#hHeap").textContent = Math.round(h.heap_kb) + " KiB, largest piece " + Math.round(h.block_kb) + " KiB";
+const answer = (code, ago) => (code === 200 ? "OK" : code === 0 ? "No answer" : "HTTP " + code) + ", " + span(ago) + " ago";
+$("#hEspn").textContent = h.espn == null ? "None yet" : answer(h.espn, h.espn_ago);
+$("#hMlbRow").hidden = h.mlb == null;
+if (h.mlb != null) $("#hMlb").textContent = answer(h.mlb, h.mlb_ago);
+$("#hHtRow").hidden = h.ht == null;
+if (h.ht != null) $("#hHt").textContent = answer(h.ht, h.ht_ago);
+document.querySelectorAll("#health .happ").forEach((n) => n.remove());
+for (const d of otherDisplays()) {
+if (h[d.key] == null) continue;
+const row = el("div", "ctl happ");
+row.append(el("label", null, "Last " + d.name + " read"), el("span", "val", answer(h[d.key], h[d.key + "_ago"])));
+$("#hFw").parentElement.before(row);
+}
+const chan = { stable: "stable", beta: "beta", bar: "bar beta" }[h.channel];
+const b = h.built ? new Date(h.built * 1000) : null;
+const builtText = b ? b.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
+b.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+$("#hFw").textContent = (h.version || "") + (chan ? " " + chan : "") + (builtText ? ", built " + builtText : "");
+if (!S.wifi) $("#rssi").textContent = h.rssi != null ? h.rssi + " dBm" : "Not connected";
+$("#psram").textContent = h.psram_kb ? Math.round(h.psram_kb) + " KiB" : "";
+renderGuard(h);
+};
+const HEAT_PERCENT = [100, 70, 45, 25];
+const renderGuard = (h) => {
+const hasGuard = h && h.heat != null;
+$("#hTempRow").hidden = !hasGuard || h.temp == null;
+$("#hPowerRow").hidden = !hasGuard;
+const capped = hasGuard && h.power === "capped";
+const hot = hasGuard && h.heat > 0;
+$("#guard").hidden = !capped && !hot;
+$("#guard").classList.toggle("power", capped);
+if (!hasGuard) return;
+const pct = HEAT_PERCENT[Math.min(h.heat, HEAT_PERCENT.length - 1)];
+if (h.temp != null) $("#hTemp").textContent = Math.round(h.temp) + " C" + (hot ? ", dimmed to " + pct + "%" : "");
+$("#hPower").textContent = (h.brownouts || 0) + (capped ? ", brightness capped" : "");
+$("#guardClear").hidden = !capped;
+if (capped) {
+$("#guardName").textContent = "Check the power supply";
+$("#guardText").textContent = "The panel restarted twice in a row because its power dipped, so its brightness is held down. "
++ "Use the power supply that came with it, not a phone charger or a USB port, then press Clear.";
+} else if (hot) {
+$("#guardName").textContent = "Too warm, dimming";
+$("#guardText").textContent = "The panel is running hot, so it is at " + pct + "% of its brightness until it cools. "
++ "Keep it out of direct sun and give it some air behind it.";
+}
+};
+const drawSpark = (svg, hist, step) => {
+const W = hist.length, H = 48, NS = "http://www.w3.org/2000/svg";
+const y = (v) => (H - 2 - (Math.min(-35, Math.max(-95, v)) + 95) / 60 * (H - 4)).toFixed(1);
+let d = "", gaps = "", lo = 0, hi = -127, weak = 0, n = 0;
+hist.forEach((v, i) => {
+const x = i;
+if (v == null) { gaps += "M" + x + " " + (H - 3) + "V" + H; return; }
+d += (i > 0 && hist[i - 1] != null ? "L" : "M") + x + " " + y(v);
+if (i === hist.length - 1 || hist[i + 1] == null) d += "h0.01";
+lo = Math.min(lo, v); hi = Math.max(hi, v); n++;
+if (v < -75) weak++;
+});
+const path = (cls, p) => {
+const e = document.createElementNS(NS, "path");
+e.setAttribute("class", cls);
+e.setAttribute("d", p);
+e.setAttribute("vector-effect", "non-scaling-stroke");
+return e;
+};
+svg.setAttribute("viewBox", "0 0 " + (W - 1) + " " + H);
+svg.replaceChildren(path("th", "M0 " + y(-75) + "H" + W));
+if (gaps) svg.appendChild(path("gap", gaps));
+if (d) svg.appendChild(path("ln", d));
+svg.setAttribute("aria-label", n ? "Signal over the last " + span(W * step) + ": " + lo + " to " + hi
++ " dBm" + (weak ? ", weak for " + span(weak * step) : "") : "No signal readings yet");
+};
+const renderWifi = () => {
+renderDevicePeek();
+const w = S && S.wifi;
+$("#wifiDiag").hidden = !w;
+if (!w) return;
+$("#rssi").textContent = w.rssi != null ? w.rssi + " dBm" : "Not connected";
+$("#wifiWeak").hidden = !w.weak;
+const hist = w.hist || [], step = w.step || 300;
+$("#wifiSparkBox").hidden = hist.length < 2;
+if (hist.length >= 2) {
+drawSpark($("#wifiSpark"), hist, step);
+$("#wifiFrom").textContent = (hist.length * step >= 86400 ? "24 h" : span(hist.length * step)) + " ago";
+}
+const day = hist.length > 0 && hist.length * step < 86400;
+const count = day ? w.drops : w.day;
+$("#wifiDrops").textContent = (count || "None") + (count ? (day ? " since start" : " in 24 h") : "");
+const causes = Object.entries(w.causes || {}).filter(([k]) => k !== "roam");
+let line = "";
+if (w.last) {
+line = "Last: " + (WIFI_CAUSES[w.last] || "other") + ", " + span(w.last_ago) + " ago"
++ (w.last_down != null ? ", back in " + span(w.last_down) : "");
+if (causes.length > 1) line += ". " + causes.map(([k, c]) => c + " " + (WIFI_CAUSES[k] || k)).join(", ");
+}
+$("#wifiLast").textContent = line;
+};
+let es = null;
+let streamAt = 0;
+const showRestart = (line) => {
+restart = line;
+renderGone();
+};
+const toBoard = () => $("#board").scrollIntoView({ behavior: "smooth", block: "start" });
+const waitForReboot = (fromVersion, line) => {
+const started = Date.now();
+let sawDown = false;
+if (es) { es.close(); es = null; }
+setConn(false);
+showRestart(line);
+const tick = async () => {
+const ctl = new AbortController();
+const timer = setTimeout(() => ctl.abort(), 1500);
+try {
+const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
+if (r.ok) {
+const j = await r.json();
+const changed = j.current_version && fromVersion !== "" && j.current_version !== fromVersion;
+const settled = !String(j.state || "").toUpperCase().includes("INSTALLING");
+if (changed || (sawDown && settled)) { location.reload(); return; }
+}
+} catch (_) { sawDown = true; }
+clearTimeout(timer);
+if (Date.now() - started < 5 * 60 * 1000) { setTimeout(tick, 2000); return; }
+restart = "";
+renderGone();
+if (installing) {
+installing = false;
+if (ents[byName["Firmware"]]) renderUpdate(ents[byName["Firmware"]]);
+}
+connect();
+};
+setTimeout(tick, 3000);
+};
+const intoSetup = (why) => {
+stopped = true;
+if (es) { es.close(); es = null; }
+clearInterval(pollTimer);
+clearTimeout(stateTimer);
+setConn(false);
+const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
+showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
+};
+const checkForUpdates = async (btn) => {
+const uid = byName["Firmware"];
+btn.disabled = true;
+const label = btn.textContent;
+btn.textContent = "Checking";
+$("#fw").hidden = false;
+$("#fwText").textContent = "Checking for updates";
+$("#fwSub").textContent = "";
+$("#fwInstall").hidden = true;
+fwChecking = true;
+await new Promise((r) => setTimeout(r, 4000));
+const ctl = new AbortController();
+const timer = setTimeout(() => ctl.abort(), 8000);
+try {
+const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store", signal: ctl.signal });
+if (r.ok && uid) {
+const j = await r.json();
+onState(Object.assign({ id: uid }, j));
+const st = String(j.state || "").toUpperCase();
+if (st.includes("AVAILABLE")) { if (isNewer(j.value, j.current_version) !== false) toast("Update available: v" + j.value); }
+else if (st.includes("INSTALLING")) {   }
+else if (!st.includes("NO UPDATE")) toast("Could not reach the update server. Try again in a minute.");
+} else if (uid) {
+renderUpdate(ents[uid]);
+toast("Could not read the update status");
+}
+} catch (_) {
+if (uid) renderUpdate(ents[uid]);
+toast("Device did not respond");
+}
+clearTimeout(timer);
+fwChecking = false;
+btn.textContent = label;
+btn.disabled = false;
+};
+let fwDetailInflight = false;
+const refreshFirmwareDetail = async (id) => {
+if (fwDetailInflight) return;
+fwDetailInflight = true;
+try {
+const r = await fetch("/update/Firmware?detail=all&_=" + Date.now(), { cache: "no-store" });
+if (r.ok) {
+const j = await r.json();
+ents[id] = Object.assign(ents[id] || {}, j, { id });
+renderUpdate(ents[id]);
+}
+} catch (_) {}
+fwDetailInflight = false;
+};
+const isNewer = (a, b) => {
+const parse = (v) => {
+const [base, beta] = String(v || "").replace(/^v/, "").split("-beta.");
+const p = base.split(".").map((n) => parseInt(n, 10));
+const build = beta === undefined ? Infinity : parseInt(beta, 10);
+if (p.length < 3 || p.some(isNaN) || isNaN(build)) return null;
+return [p[0], p[1], p[2], p[3] || 0, build];
+};
+const pa = parse(a), pb = parse(b);
+if (!pa || !pb) return null;
+for (let i = 0; i < 5; i++) if (pa[i] !== pb[i]) return pa[i] > pb[i];
+return false;
+};
+const notesCache = {};
+const bulletsFrom = (text) => String(text || "").split(/\r?\n/).filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
+const renderNotes = (host, tag, summary) => {
+const list = el("ul", "notes");
+host.appendChild(list);
+const fill = (items) => {
+list.innerHTML = "";
+items.forEach((t) => list.appendChild(el("li", null, t)));
+};
+const quick = String(summary || "").split(" | ").map((t) => t.trim()).filter(Boolean);
+if (quick.length) fill(quick);
+if (!tag) return;
+if (notesCache[tag]) { fill(notesCache[tag]); return; }
+fetch("https://api.github.com/repos/" + REPO + "/releases/tags/" + encodeURIComponent(tag), { headers: { Accept: "application/vnd.github+json" } })
+.then((r) => (r.ok ? r.json() : null))
+.then((j) => {
+const items = j ? bulletsFrom(j.body) : [];
+if (items.length) { notesCache[tag] = items; fill(items); }
+})
+.catch(() => {});
+};
+const notesLink = (u) => {
+if (/^\d+(\.\d+)+$/.test(String(u.value || ""))) return SITE_URL + "/changelog/#v" + u.value;
+const url = String(u.release_url || "");
+return /^https:\/\//i.test(url) ? url : "";
+};
+let installing = false;
+let fwChecking = false;
+const fwInputs = () => JSON.stringify(S ? [S.update_failed || "", !!(S.autoupd || S.bar)] : null);
+let fwDrawn = fwInputs();
+let fwNote = "";
+const renderDevicePeek = () => {
+const note = fwNote || (S && S.wifi && S.wifi.weak ? "Weak signal" : "");
+const peek = $("#devicePeek");
+peek.textContent = note || "Updates, Wi-Fi, diagnostics";
+peek.classList.toggle("alert", !!note);
+};
+const renderUpdate = (u) => {
+const box = $("#fw");
+box.hidden = false;
+fwNote = "";
+const cur = u.current_version ? "v" + u.current_version : "";
+const latest = u.value ? "v" + u.value : "";
+const st = String(u.state || "").toUpperCase();
+const btn = $("#fwInstall");
+const sub = $("#fwSub");
+btn.hidden = true;
+fwDrawn = fwInputs();
+if (st.includes("INSTALLING") || installing) {
+fwNote = "Installing " + (latest || "update");
+$("#fwText").textContent = fwNote;
+sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
+} else if (st.includes("AVAILABLE") && isNewer(u.value, u.current_version) === false) {
+const chan = /-beta\.\d+$/.test(String(u.value || "")) ? "beta" : "release";
+$("#fwText").textContent = "You're ahead of the latest " + chan + ", " + cur;
+sub.textContent = "The newest " + chan + " is " + latest + ". Nothing to install.";
+} else if (st.includes("AVAILABLE")) {
+const failed = !!(S && S.update_failed && S.update_failed === u.value);
+if (failed) {
+fwNote = "Update didn't take";
+$("#fwText").textContent = "The update to " + latest + " didn't take and the panel went back to " + (cur || "its old version");
+sub.textContent = "Install tries it again." + (S.autoupd || S.bar ? " It won't install this one on its own." : "");
+} else {
+fwNote = "Update available: " + latest;
+$("#fwText").textContent = fwNote;
+sub.textContent = (cur ? "You have " + cur + "." : "") + (S && (S.autoupd || S.bar) ? " It installs on its own between 3 and 5 AM." : "");
+}
+renderNotes(sub, latest, u.summary);
+btn.hidden = false;
+if (failed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
+btn.onclick = async () => {
+const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
+if (!confirm(ask)) return;
+installing = true;
+renderUpdate(u);
+if (!(await post(u.id, "install"))) {
+installing = false;
+renderUpdate(u);
+return;
+}
+toast("Installing " + latest);
+waitForReboot(u.current_version, "Installing " + latest + ". This page reloads when the panel is back.");
+};
+} else if (st.includes("NO UPDATE")) {
+$("#fwText").textContent = "You're up to date, " + cur;
+sub.textContent = "";
+} else {
+$("#fwText").textContent = "Firmware " + cur;
+sub.textContent = "Not checked yet. It checks a few seconds after the clock syncs, or tap Check for updates.";
+}
+const notesUrl = notesLink(u);
+if (notesUrl && !st.includes("INSTALLING")) {
+const a = el("a", null, "Release notes");
+a.href = notesUrl;
+a.target = "_blank";
+a.rel = "noopener";
+sub.appendChild(document.createTextNode(sub.textContent ? " " : ""));
+sub.appendChild(a);
+}
+renderDevicePeek();
+};
+const renderNetworks = (j) => {
+const nets = j.networks || [];
+const list = $("#nets");
+list.innerHTML = "";
+nets.forEach((n, i) => {
+const row = el("div", "ctl");
+const label = el("label", null, n.ssid);
+if (n.connected) label.appendChild(el("small", null, "Connected"));
+else if (i === 0) label.appendChild(el("small", null, "Tried first"));
+row.appendChild(label);
+const b = el("button", "btn danger", "Forget");
+b.onclick = async () => {
+if (!confirm("Forget " + n.ssid + "?")) return;
+b.disabled = true;
+try {
+const r = await fetch("/gameday/wifi?forget=" + encodeURIComponent(n.ssid), { method: "POST" });
+const after = !n.connected ? ""
+: nets.length === 1 ? "; the panel keeps using it and saves it again when it reconnects"
+: "; it stays connected until this connection drops or the panel restarts";
+toast(r.ok ? "Forgot " + n.ssid + after : "Could not forget " + n.ssid);
+} catch (_) {
+toast("Could not forget " + n.ssid);
+}
+loadNetworks();
+};
+row.appendChild(b);
+list.appendChild(row);
+});
+$("#netsEmpty").hidden = nets.length > 0;
+$("#netsCard").hidden = false;
+};
+const loadNetworks = async () => {
+try {
+const r = await fetch("/gameday/wifi?_=" + Date.now(), { cache: "no-store" });
+if (!r.ok) { $("#netsCard").hidden = true; return; }
+renderNetworks(await r.json());
+} catch (_) {
+$("#netsCard").hidden = true;
+}
+};
+const onState = (e) => {
+ents[e.id] = Object.assign(ents[e.id] || {}, e);
+if (e.name) byName[e.name] = e.id;
+const name = ents[e.id].name;
+const def = controlDefs.find((d) => d.name === name);
+if (def) {
+if (!built[e.id]) built[e.id] = buildControl(def, ents[e.id]);
+built[e.id].update(ents[e.id]);
+}
+switch (name) {
+case "Game Status": scheduleState(150); break;
+case "Firmware": renderUpdate(ents[e.id]); refreshFirmwareDetail(e.id); break;
+case "WizMote Status": $("#wizStatus").textContent = e.value || ""; break;
+case "IP": $("#ip").textContent = e.value || ""; break;
+case "RSSI": if (!(S && (S.wifi || healthOf()))) $("#rssi").textContent = e.value ? e.value + " dBm" : ""; break;
+case "Free Heap (PSRAM)": if (!healthOf()) $("#psram").textContent = e.value ? Math.round(e.value) + " KiB" : ""; break;
+}
+};
+const connect = () => {
+if (es) es.close();
+streamAt = Date.now();
+es = new EventSource("/events");
+es.addEventListener("ping", (ev) => {
+setConn(true);
+answered();
+if (!ev.data) return;
+try {
+const p = JSON.parse(ev.data);
+if (p.title) $("#devname").textContent = p.title;
+if (p.comment) $("#ver").textContent = p.comment;
+} catch (_) {}
+});
+es.addEventListener("state", (ev) => {
+try { onState(JSON.parse(ev.data)); } catch (_) {}
+});
+es.onopen = () => { setConn(true); answered(); fetchState(); };
+es.onerror = () => { setConn(false); fetchState(); };
+};
+connect();
+fetchState();
+loadNetworks();
+const pollTimer = setInterval(fetchState, 15000);
 })();

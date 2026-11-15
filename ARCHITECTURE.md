@@ -729,7 +729,15 @@ board only when its team is ESPN's (`watch_refusal_holds_board`).
 `firmware/web/app.js` and `app.css` are the page; `scripts/build_web.py`
 prepends the team and timezone tables and writes `bundle.js` (and
 `bundle-demo.js` with `demo.js`), which ESPHome's `web_server` embeds. CI
-fails when a bundle is stale.
+fails when a bundle is stale. The bundles carry `app.js` and `demo.js`
+without comments, indentation or blank lines (`strip_js`), about 10 KB less
+gzipped in flash and on every page load: strings, template literals and
+regexes are copied as written and every remaining line break stays, so
+semicolon insertion reads the code the same, and the build stops when the
+result doesn't parse under `node --check` (where Node is installed) or
+isn't stable when stripped again. The page sets its own viewport, `lang`
+and title, which ESPHome's hosted page script used to, so a phone gets the
+phone layout with that script gone or out of reach.
 
 `GamedayComponent` is also an `AsyncWebHandler` for every `/gameday/` path:
 

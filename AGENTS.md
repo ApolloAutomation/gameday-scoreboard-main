@@ -45,7 +45,8 @@ the same ground for people; this file is the short version.
 - `firmware/pages`: the LVGL pages drawn on the panel.
 - `firmware/web`: the device page. `bundle.js` is generated from `app.js`
   and the team and timezone tables, and `bundle-demo.js` is the same plus
-  `demo.js` (both by `scripts/build_web.py`); `app.css` is served as is.
+  `demo.js` (both by `scripts/build_web.py`, with comments and indentation
+  stripped, so edit `app.js`); `app.css` is served as is.
 - `docs/site`: the installer and support site. Every page needs its own
   title, description, canonical link and share tags;
   `python3 scripts/site_seo.py check docs/site` lists what's missing.
