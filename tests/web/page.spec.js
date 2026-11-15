@@ -1763,7 +1763,7 @@ test("after a Follow beta flip the other feed's update can't be installed until 
   await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
   await expect(page.locator("#fwInstall")).toBeHidden();
   await expect(page.locator("#fwSub")).not.toContainText("Release notes");
-  // A check that still finds the release: the beta feed didn't answer.
+  // Still the release after a check: no beta answer.
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
   await expect(page.locator("#toast")).toHaveText("Could not reach the update server. Try again in a minute.", { timeout: 8000 });
   await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
@@ -1772,7 +1772,7 @@ test("after a Follow beta flip the other feed's update can't be installed until 
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
   await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7-beta.3", { timeout: 8000 });
   await expect(page.locator("#fwInstall")).toBeVisible();
-  // And back off: the beta stays until the release feed answers.
+  // Back off: the beta stays until the release answers.
   await page.locator('.sw[data-set="beta"]').click();
   await expectSet(request, { beta: "0" });
   await expect(page.locator("#fwText")).toHaveText("Checking for the latest release");
@@ -1790,13 +1790,13 @@ test("an install that doesn't start or fails says so at once and brings Install 
   await page.locator("#fwInstall").click();
   await expect(page.locator("#fwText")).toHaveText("Installing v1.5.6");
   await expect(page.locator("#gone")).toContainText("Installing v1.5.6");
-  // The panel never went down and still offers it: no install.
+  // Never went down, still offers it: no install.
   await expect(page.locator("#fwText")).toHaveText("The update to v1.5.6 didn't install", { timeout: 8000 });
   await expect(page.locator("#fwSub")).toContainText("The panel is still on v1.5.5. Install tries again.");
   await expect(page.locator("#fwInstall")).toBeVisible();
   await expect(page.locator("#gone")).toBeHidden();
   await expect(page.locator("#devicePeek")).toHaveText("Update didn't install");
-  // The panel reads the feed again; a newer offer reads as new.
+  // The panel rereads; a newer offer reads as new.
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...entity, value: "1.5.7" } }));
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
   await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7", { timeout: 8000 });

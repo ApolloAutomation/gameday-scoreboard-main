@@ -5833,7 +5833,7 @@ static void test_auto_update_new_release() {
   const int32_t n1 = auto_update_day(2026, 319);
   const int32_t n2 = auto_update_day(2026, 320);
   UpdateSeen s{};
-  CHECK(!update_seen_tonight(s, "2026.11.6", n1));  // never seen
+  CHECK(!update_seen_tonight(s, "2026.11.6", n1));  // nothing noted yet
   CHECK(update_seen_note(s, "2026.11.6", n1));
   CHECK(!update_seen_note(s, "2026.11.6", n2));  // the first night sticks
   CHECK(update_seen_tonight(s, "2026.11.6", n1));
@@ -5845,7 +5845,7 @@ static void test_auto_update_new_release() {
   CHECK(!update_seen_note(s, "2026.11.8-beta.3", n2));  // betas don't wait
   CHECK(!update_seen_tonight(s, "2026.11.8-beta.3", n2));
   CHECK_EQ(std::string(s.version), std::string("2026.11.7"));
-  // Too long for the record: noted once, not on every look.
+  // Too long for the record: noted only once.
   const std::string longer = "2026.11.7.1234567890123456789";
   CHECK(update_seen_note(s, longer, n1));
   CHECK(!update_seen_note(s, longer, n2));
@@ -5856,7 +5856,7 @@ static void test_auto_update_new_release() {
   CHECK(update_seen_note(s, "2026.11.6", n1));
   CHECK(update_seen_tonight(s, "2026.11.6", n1));
 
-  // 3:20 AM, a newer release first seen tonight: tomorrow night instead.
+  // 3:20 AM, first seen tonight: waits a night.
   AutoUpdateInputs in;
   in.enabled = true;
   in.clock_valid = true;
