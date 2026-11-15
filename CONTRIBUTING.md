@@ -162,8 +162,9 @@ If you edit `firmware/web/app.js`, `app.css` or `demo.js`, run
 
 A pull request that has to grow a firmware or parser figure by more than
 `max_growth` in `firmware/budget.json` gets the maintainer's
-`size-growth-ok` label instead of raising `max_growth`; the budget
-ceilings still apply. A PR into `main` fails while `max_growth` differs
+`size-growth-ok` label instead of raising `max_growth`, then a re-run of
+the Size budget job (adding a label starts no run); the budget ceilings
+still apply. A PR into `main` fails while `max_growth` differs
 from `GROWTH_DEFAULTS` in `scripts/size_budget.py`.
 
 If you change what the panel does, run it on a panel for a while

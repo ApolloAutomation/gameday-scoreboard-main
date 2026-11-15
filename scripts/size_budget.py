@@ -115,7 +115,11 @@ def check(budget: dict, sizes: dict, base: dict, base_label: str, growth_ok: boo
                 if was is not None and metric in growth and now - was > growth[metric]:
                     msg = (f"{what} grew {now - was:,} B ({was:,} to {now:,} B) against {base_label}; "
                            f"one change may add at most {growth[metric]:,} B")
-                    (warnings if growth_ok else errors).append(msg)
+                    if growth_ok:
+                        warnings.append(msg)
+                    else:
+                        errors.append(f"{msg}. If this growth is intended, the maintainer adds the "
+                                      "size-growth-ok label to the PR and re-runs the Size budget job.")
                 rows.append((name, LABELS.get(metric, metric), was, now, cap))
     return errors, rows, warnings
 
@@ -191,11 +195,12 @@ def selftest() -> None:
     assert len(over) == 1 and "over its budget" in over[0]
     grew, _, _ = check(budget, {"firmware": {"a": {"flash": 950, "static_ram": 50}}},
                        {"firmware": {"a": {"flash": 800}}}, "dev")
-    assert len(grew) == 1 and "grew 150 B" in grew[0]
+    assert len(grew) == 1 and "grew 150 B" in grew[0] and "re-runs the Size budget job" in grew[0], grew
     # The label turns growth into a warning, never the ceiling.
     grew, _, warned = check(budget, {"firmware": {"a": {"flash": 1950, "static_ram": 50}}},
                             {"firmware": {"a": {"flash": 800}}}, "dev", growth_ok=True)
     assert len(grew) == 1 and "over its budget" in grew[0] and len(warned) == 1 and "grew" in warned[0], (grew, warned)
+    assert "label" not in warned[0], warned
     new, _, _ = check(budget, {"firmware": {"a": {"flash": 1, "static_ram": 1}, "b": {"flash": 1}}}, {}, "dev")
     assert len(new) == 1 and "no budget" in new[0]
     gone, _, _ = check(budget, {}, {}, "dev")

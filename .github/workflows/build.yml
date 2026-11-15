@@ -169,8 +169,7 @@ jobs:
           done
           echo "::error file=.github/workflows/build.yml::ESPHOME_VERSION is $ESPHOME_VERSION, a beta. main and release tags build only on a final ESPHome release: move the pin to a final release on dev, then promote again. To ship this beta anyway, the maintainer adds the esphome-beta-ok label to the promotion PR and re-runs this job."
           exit 1
-      # Customers get what the beta channel ran overnight (CONTRIBUTING.md).
-      # The no-soak-ok label skips the wait for one PR.
+      # Customers get what the beta channel ran overnight.
       - name: The beta channel ran this build for a night
         if: (github.event_name == 'pull_request' && github.base_ref == 'main') || startsWith(github.ref, 'refs/tags/v')
         env:
