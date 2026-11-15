@@ -3,7 +3,8 @@
 // compile it directly.
 //
 // The rules: only between 3 and 5 AM panel time, never while a game the
-// panel follows is live, and one try a night. A failed or interrupted
+// panel follows is live, one try a night, and not on the night a release is
+// first seen (UpdateSeen). A failed or interrupted
 // install leaves the old firmware running (the new image only boots once it
 // is fully written and checked), and the next try is the next night. A
 // release that rolled back on the panel is not installed on its own again
@@ -24,6 +25,8 @@ namespace espn {
 // The quiet window, local hours [start, end).
 static const int kAutoUpdateStartHour = 3;
 static const int kAutoUpdateEndHour = 5;
+// The local date this much later names a moment's night.
+static const int kAutoUpdateNightShiftHours = 24 - kAutoUpdateEndHour;
 // Each panel starts at its own minute in the first hour so a house full of
 // panels, or the whole fleet, doesn't download at once. The second hour is
 // left for a panel held off by a late game.
@@ -44,6 +47,9 @@ inline int32_t auto_update_day(int year, int day_of_year) { return (int32_t) yea
 // betas, so a panel that turns Follow beta off is offered the release once
 // it ships.
 static const char kBetaTag[] = "-beta.";
+
+// Only beta feed versions carry kBetaTag.
+inline bool offer_from_beta(const std::string &latest) { return latest.find(kBetaTag) != std::string::npos; }
 
 static const int kVersionParts = 4;
 static const int kVersionPartDigits = 9;  // fits a 32-bit long
@@ -132,6 +138,28 @@ inline void update_mark_terminate(UpdateMark &m) {
   m.failed[kUpdateVersionLen - 1] = '\0';
 }
 
+// A release waits out the night it's first seen.
+struct UpdateSeen {
+  char version[kUpdateVersionLen];  // last release on offer, "" = none
+  int32_t night;                    // auto_update_day() it was first seen
+} __attribute__((packed));
+
+// True when the record changed and wants saving.
+inline bool update_seen_note(UpdateSeen &s, const std::string &latest, int32_t night) {
+  s.version[kUpdateVersionLen - 1] = '\0';
+  if (latest.empty() || offer_from_beta(latest) || strncmp(s.version, latest.c_str(), kUpdateVersionLen - 1) == 0)
+    return false;
+  update_mark_set(s.version, latest);
+  s.night = night;
+  return true;
+}
+
+// The release on offer was first seen tonight.
+inline bool update_seen_tonight(const UpdateSeen &s, const std::string &latest, int32_t tonight) {
+  return !latest.empty() && !offer_from_beta(latest) && s.night == tonight &&
+         strncmp(s.version, latest.c_str(), kUpdateVersionLen - 1) == 0;
+}
+
 enum class UpdateOutcome : uint8_t {
   NONE,         // nothing was being installed
   PENDING,      // running the version being installed, not yet a good boot
@@ -173,6 +201,7 @@ enum class AutoUpdateStep : uint8_t {
   INSTALL,    // record tonight's try, then install
   INSTALL_NOW,  // record the try for this version, then install (install_now_listed)
   SKIP_FAILED,  // the release on offer rolled back here; leave it to a manual install
+  WAIT_NEW,     // first seen tonight; installs tomorrow night
 };
 
 // "Install now" for the beta channel: the publisher names panels in the
@@ -224,6 +253,7 @@ struct AutoUpdateInputs {
   bool live{false};        // a game the panel follows is in progress
   bool now{false};         // install_now_listed() and not tried for this version yet
   bool failed{false};      // update_failed_here() for the release on offer
+  bool fresh{false};       // update_seen_tonight() for the release on offer
 };
 
 inline AutoUpdateStep auto_update_step(const AutoUpdateInputs &in) {
@@ -242,6 +272,8 @@ inline AutoUpdateStep auto_update_step(const AutoUpdateInputs &in) {
     return AutoUpdateStep::IDLE;
   if (in.failed)
     return AutoUpdateStep::SKIP_FAILED;
+  if (in.fresh)
+    return AutoUpdateStep::WAIT_NEW;
   if (in.live)
     return AutoUpdateStep::WAIT_GAME;
   return AutoUpdateStep::INSTALL;

@@ -1105,6 +1105,11 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   bool update_installing_{false};  // the update entity is installing, mark written
   void settle_update_mark_();
   void update_state_changed_();
+#ifndef GAMEDAY_BAR
+  ESPPreferenceObject update_seen_pref_;
+  ::espn::UpdateSeen update_seen_{};
+  int32_t auto_update_new_{0};  // the night it last logged WAIT_NEW
+#endif
 #ifdef GAMEDAY_BAR
   // fnv1_hash() of the version last installed through "Install now"
   // (auto_update.h), saved before the install so a crash or power cut

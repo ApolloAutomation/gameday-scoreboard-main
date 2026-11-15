@@ -47,6 +47,10 @@ You can install an update at any time, during a game too. Your team, favorites a
 - never while a game the panel follows is live: it waits, and the second hour leaves room for a late game to finish
 - one try a night; if that try fails, it tries again the next night
 
+:::note[Coming in the next release]
+A new release waits a night. The panel doesn't install a release on its own in the first 3 to 5 AM window after it sees that release, only in a later one, so there's time to pull a release that has a problem before panels take it by themselves. A release that comes out in the evening installs the night after next. **Install** on the device page still installs it right away, and betas with **Follow beta** on don't wait.
+:::
+
 With the switch off, the panel still checks and the device page tells you when an update is out, but nothing installs until you tap **Install**. Home Assistant has the same switch; see [Home Assistant (optional)](/using/home-assistant/).
 
 ## An update that didn't take

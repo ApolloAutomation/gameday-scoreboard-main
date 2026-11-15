@@ -2935,6 +2935,11 @@ void GamedayComponent::settle_update_mark_() {
     this->update_mark_pref_.save(&this->update_mark_);
   if (this->update_mark_.failed[0] != '\0')
     ESP_LOGW(TAG, "Update %s rolled back on this panel before", this->update_mark_.failed);
+#ifndef GAMEDAY_BAR
+  this->update_seen_pref_ = global_preferences->make_preference<::espn::UpdateSeen>(fnv1_hash("gameday_update_seen_v1"));
+  if (!this->update_seen_pref_.load(&this->update_seen_))
+    this->update_seen_ = ::espn::UpdateSeen{};
+#endif
   App.get_updates()[0]->add_on_state_callback([this]() { this->update_state_changed_(); });
 #endif
 }
@@ -2994,10 +2999,21 @@ bool GamedayComponent::followed_game_live_() const {
 
 void GamedayComponent::auto_update_tick_() {
 #ifdef USE_UPDATE
-  if (!this->auto_update() || this->time_ == nullptr || App.get_updates().empty())
+  if (this->time_ == nullptr || App.get_updates().empty())
     return;
   update::UpdateEntity *u = App.get_updates()[0];
   ESPTime now = this->time_->now();
+#ifndef GAMEDAY_BAR
+  // Noted with the setting off too
+  if (now.is_valid() && u->state == update::UPDATE_STATE_AVAILABLE) {
+    const ESPTime ahead = ESPTime::from_epoch_local(now.timestamp + ::espn::kAutoUpdateNightShiftHours * 3600);
+    if (::espn::update_seen_note(this->update_seen_, u->update_info.latest_version,
+                                 ::espn::auto_update_day(ahead.year, ahead.day_of_year)))
+      this->update_seen_pref_.save(&this->update_seen_);
+  }
+#endif
+  if (!this->auto_update())
+    return;
   ::espn::AutoUpdateInputs in;
   in.enabled = true;
   in.clock_valid = now.is_valid();
@@ -3014,6 +3030,9 @@ void GamedayComponent::auto_update_tick_() {
   in.newer = ::espn::version_newer(u->update_info.latest_version, u->update_info.current_version);
   in.live = this->followed_game_live_();
   in.failed = ::espn::update_failed_here(this->update_mark_, u->update_info.latest_version);
+#ifndef GAMEDAY_BAR
+  in.fresh = ::espn::update_seen_tonight(this->update_seen_, u->update_info.latest_version, in.today);
+#endif
 #ifdef GAMEDAY_BAR
   in.now = in.available && ::espn::install_now_listed(u->update_info.summary, this->hostname()) &&
            fnv1_hash(u->update_info.latest_version) != this->now_tried_;
@@ -3042,6 +3061,14 @@ void GamedayComponent::auto_update_tick_() {
         ESP_LOGI(TAG, "Auto update: %s rolled back on this panel, not installing it on its own",
                  u->update_info.latest_version.c_str());
       this->auto_update_skipped_ = in.today;
+      break;
+    case ::espn::AutoUpdateStep::WAIT_NEW:
+#ifndef GAMEDAY_BAR
+      if (this->auto_update_new_ != in.today)
+        ESP_LOGI(TAG, "Auto update: %s is new tonight; it installs tomorrow night",
+                 u->update_info.latest_version.c_str());
+      this->auto_update_new_ = in.today;
+#endif
       break;
     case ::espn::AutoUpdateStep::INSTALL:
       // Saved, and written to flash now, before the install starts: a power
