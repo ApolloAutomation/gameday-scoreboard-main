@@ -364,14 +364,13 @@ bool WeatherApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out.body.clear();
   out.headers.clear();
-  const std::string agent = ::flights::photo_agent(espn::app_env().version);
+  espn::app_header(out, "User-Agent", ::flights::photo_agent(espn::app_env().version));
   Host host = HOST_OPEN_METEO;
   switch (r) {
     case Read::FORECAST: {
       const espn::F1Host &om = this->host_[HOST_OPEN_METEO];
       if (om.backup() && now < om.out_until) {
         out.url = met_url(this->req_lat_, this->req_lon_);
-        espn::app_header(out, "User-Agent", agent);
         host = HOST_MET;
       } else {
         out.url = forecast_url(this->req_lat_, this->req_lon_);
@@ -380,7 +379,6 @@ bool WeatherApp::request(int64_t now, espn::AppRequest &out) {
     }
     case Read::ALERTS:
       out.url = alerts_url(this->req_lat_, this->req_lon_);
-      espn::app_header(out, "User-Agent", agent);
       espn::app_header(out, "Accept", "application/geo+json");
       host = HOST_NWS;
       break;
@@ -662,7 +660,7 @@ std::string WeatherApp::ticker_(int64_t now, std::vector<TickerSpan> &spans) con
     const Day &d = this->fc_.days[0];
     addf(out, "Today %d/%d", temp_of(d.hi_c10, u.f), temp_of(d.lo_c10, u.f));
     if (d.pop > 0)
-      addf(out, "%d%% chance of rain", d.pop);
+      addf(out, "%d%% chance of %s", d.pop, snowy(d.code) ? "snow" : "rain");
     if (d.sunrise != 0)
       addf(out, "Sunrise %s, sunset %s", clock_text(espn::app_local(d.sunrise)).c_str(),
            clock_text(espn::app_local(d.sunset)).c_str());
@@ -769,7 +767,7 @@ void WeatherApp::now_(int w, int h, int64_t now, AppFrame &out) const {
     if (set != 0)
       st.add("Set", kWarm, "%s", clock_text(espn::app_local(set)).c_str());
     if (today != nullptr && today->pop >= 0)
-      st.add("Rain", kWet, "%d%%", today->pop);
+      st.add(snowy(today->code) ? "Snow" : "Rain", kWet, "%d%%", today->pop);
     if (air)
       st.add("Air", aqi_color(band), "%d", this->air_.aqi);
     return;
@@ -814,7 +812,7 @@ void WeatherApp::now_(int w, int h, int64_t now, AppFrame &out) const {
   if (air)
     col.add("Air quality", aqi_color(band), "%d %s", this->air_.aqi, aqi_name(band, true));
   if (today != nullptr && today->pop >= 0)
-    col.add("Rain today", kWet, "%d%%", today->pop);
+    col.add(snowy(today->code) ? "Snow today" : "Rain today", kWet, "%d%%", today->pop);
   if (n.gust_kmh10 > 0)
     col.add("Gusts", kWhite, "%d %s", speed_of(n.gust_kmh10, u.mph), u.mph ? "mph" : "km/h");
 }
@@ -982,10 +980,11 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
     putf(out, 132, 42, 58, BoardFont::S8, AppAlign::LEFT, kDim, "Ring %d %s", dist, unit);
   if (w < 256)
     return;
-  put(out, 196, 0, 60, BoardFont::S8, AppAlign::LEFT, kGray, "Rain");
   size_t i = 0;
   while (i + 1 < this->fc_.n_hours && this->fc_.hours[i + 1].at <= now)
     i++;
+  const bool snow = i < this->fc_.n_hours && snowy(this->fc_.hours[i].code);
+  put(out, 196, 0, 60, BoardFont::S8, AppAlign::LEFT, kGray, snow ? "Snow" : "Rain");
   for (int row = 0; row < 5 && i < this->fc_.n_hours; row++, i++) {
     const Hour &hr = this->fc_.hours[i];
     put(out, 196, 9 + row * 9, 20, BoardFont::S8, AppAlign::LEFT, kGray, hour_text(espn::app_local(hr.at)));

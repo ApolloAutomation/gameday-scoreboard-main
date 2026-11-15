@@ -104,6 +104,21 @@ struct HostWait {
   uint32_t left(uint32_t now) const { return this->waiting(now) ? this->wait_ms - (now - this->since_ms) : 0; }
 };
 
+// A millis() wait that ends once seen over.
+struct Hold {
+  uint32_t since_ms{0};
+  uint32_t for_ms{0};  // 0: no hold running
+  void start(uint32_t now, uint32_t ms) {
+    this->since_ms = now;
+    this->for_ms = ms;
+  }
+  bool on(uint32_t now) {
+    if (this->for_ms != 0 && now - this->since_ms >= this->for_ms)
+      this->for_ms = 0;
+    return this->for_ms != 0;
+  }
+};
+
 // Alone, the scan's own backoff counts the failure.
 inline uint32_t host_scan_result(HostWait &w, bool read, bool failed, bool others, bool refused,
                                  uint32_t retry_after_ms, uint32_t rnd, uint32_t now) {

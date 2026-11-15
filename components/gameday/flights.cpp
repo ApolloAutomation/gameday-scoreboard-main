@@ -201,10 +201,10 @@ std::string local_url(const std::string &entered, const Home &h) {
   return s.substr(0, at) + circle + (end == std::string::npos ? "" : s.substr(end));
 }
 
-uint32_t feed_gap_ms(const Feed &f, Source s) {
+uint32_t feed_gap_ms(Source s) {
   switch (s) {
     case Source::ADSBLOL:
-      return f.lol_gap_ms;
+      return kLolMinMs;
     case Source::LOCAL:
       return kLocalPollMs;
     case Source::FR24:
@@ -236,7 +236,7 @@ FeedPick feed_pick(const Feed &f, bool local, uint32_t now_ms, bool fr24) {
     uint32_t due = 0;
     if (f.read_once[k]) {
       const uint32_t since = now_ms - f.last_ms[k];
-      const uint32_t gap = feed_gap_ms(f, s);
+      const uint32_t gap = feed_gap_ms(s);
       due = since >= gap ? 0 : gap - since;
     }
     const uint32_t left = f.wait[k].left(now_ms);
@@ -263,35 +263,6 @@ void feed_done(Feed &f, Source s, int status, bool parsed, uint32_t retry_after_
     w.clear();
   else
     w.fail(espn::is_throttle_status(status), retry_after_ms, rnd, now_ms);
-}
-
-namespace {
-
-long plain_number(const std::string &s) {
-  if (s.empty() || s.size() > 9)
-    return -1;
-  long v = 0;
-  for (char c : s) {
-    if (c < '0' || c > '9')
-      return -1;
-    v = v * 10 + (c - '0');
-  }
-  return v;
-}
-
-}
-
-void feed_lol_limits(Feed &f, const std::string &remaining, const std::string &reset_s) {
-  const long left = plain_number(remaining), reset = plain_number(reset_s);
-  if (left < 0 || reset < 0)
-    return;
-  const uint64_t window = (uint64_t) reset * 1000;
-  uint64_t gap = left > 0 ? window / (uint64_t) left : window;
-  if (gap < kLolMinMs)
-    gap = kLolMinMs;
-  if (gap > kLolMaxMs)
-    gap = kLolMaxMs;
-  f.lol_gap_ms = (uint32_t) gap;
 }
 
 // ---- Units -------------------------------------------------------------------

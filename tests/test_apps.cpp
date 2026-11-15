@@ -282,23 +282,19 @@ void test_units() {
   ACHECK(tz_miles(0) && tz_fahrenheit(0) && tz_miles(6) && tz_fahrenheit(6));
   ACHECK(tz_miles(10) && !tz_fahrenheit(10));
   ACHECK(!tz_miles(7) && !tz_fahrenheit(7) && !tz_miles(13) && !tz_miles(-1) && !tz_fahrenheit(200));
+  // Every Canadian row: Celsius and km
+  for (int tz = 14; tz <= 17; tz++)
+    ACHECK(strncmp(kTimezones[tz].name, "Canada ", 7) == 0 && !tz_miles(tz) && !tz_fahrenheit(tz));
 }
 
 void test_hosts() {
   ACHECK(url_host("https://API.Example.com:8443/v1?x=1") == "api.example.com");
   ACHECK(url_host("http://example.com") == "example.com");
   ACHECK(url_host("https://example.com/path") == "example.com");
-  ACHECK(host_is("api.example.com", "example.com") && host_is("example.com", "example.com"));
-  ACHECK(!host_is("badexample.com", "example.com") && !host_is("example.com", "") && !host_is("com", "example.com"));
-  const AppHost hosts[] = {{"example.com", Source::F1}, {"data.example.org", Source::FLIGHTS}};
-  ACHECK(url_source("https://api.example.com/x", hosts, 2) == Source::F1);
-  ACHECK(url_source("https://data.example.org/x", hosts, 2) == Source::FLIGHTS);
-  ACHECK(url_source("https://example.org/x", hosts, 2) == Source::ESPN);
-  ACHECK(url_source("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard", hosts, 2) ==
-         Source::ESPN);
-  ACHECK(url_source("https://statsapi.mlb.com/api/v1/schedule", hosts, 2) == Source::MLB_STATS);
-  ACHECK(url_source("https://lscluster.hockeytech.com/feed/", hosts, 2) == Source::HOCKEYTECH);
-  ACHECK(url_source("https://api.example.com/x", hosts, 0) == Source::ESPN);
+  ACHECK(url_source("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard") == Source::ESPN);
+  ACHECK(url_source("https://statsapi.mlb.com/api/v1/schedule") == Source::MLB_STATS);
+  ACHECK(url_source("https://lscluster.hockeytech.com/feed/") == Source::HOCKEYTECH);
+  ACHECK(url_source("https://api.example.com/x") == Source::ESPN);
 }
 
 void test_timing() {
@@ -394,12 +390,8 @@ void test_app_slots() {
   ACHECK(!app_register(slots, &a));  // its slot is taken
   ACHECK(!app_register(slots, nullptr));
   ACHECK(slots.mask() == 0b101 && slots.get(Display::MARKETS) == &a);
-  AppHost hosts[4];
-  const size_t n = app_hosts(slots, hosts, 4);
-  ACHECK(n == 1 && hosts[0].source == Source::MARKETS);
-  ACHECK(url_source("https://api.example.com/v1", hosts, n) == Source::MARKETS);
+  ACHECK(std::string(slots.get(Display::MARKETS)->hosts()[0]) == "example.com");
   ACHECK(app_for_key(slots, "testunit") == Display::MARKETS && app_for_key(slots, "split") == Display::GAMEDAY);
-  ACHECK(app_hosts(slots, hosts, 0) == 0);
   ACHECK(!a.lit(0));  // busy's answer by default
 
   // Through the interface, as the firmware runs it.

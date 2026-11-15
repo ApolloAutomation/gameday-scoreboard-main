@@ -7,9 +7,7 @@
 # channel goes: firmware/<variant>/, the beta channels, the two-panel build.
 # No build in this repo sets update_mirror.
 #
-# Only each manifest and the files it names go up (the OTA and factory
-# images). The .elf next to them is for crash decoding, and at about 45 MB it
-# is over Pages' 25 MiB file limit.
+# Only each manifest and the files it names go up.
 #
 # Needs CLOUDFLARE_API_TOKEN (Account, Cloudflare Pages, Edit) and
 # CLOUDFLARE_ACCOUNT_ID. Without them it warns and stops, so a release still

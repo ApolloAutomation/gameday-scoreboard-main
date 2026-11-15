@@ -39,6 +39,10 @@ constexpr TzParsed kTimezonesParsed[] = {
     {-3600, -7200, {7200, 0, 1, 3, 5, 0}, {10800, 0, 1, 10, 5, 0}},  // Central Europe: CET-1CEST,M3.5.0,M10.5.0/3
     {-36000, -39600, {7200, 0, 1, 10, 1, 0}, {10800, 0, 1, 4, 1, 0}},  // Australia Eastern: AEST-10AEDT,M10.1.0,M4.1.0/3
     {0, 0, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}},  // UTC: UTC0
+    {25200, 0, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}},  // Canada Pacific: MST7
+    {21600, 0, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}},  // Canada Mountain: CST6
+    {18000, 0, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}},  // Canada Central: EST5
+    {18000, 14400, {7200, 0, 1, 3, 2, 0}, {7200, 0, 1, 11, 1, 0}},  // Canada Eastern: EST5EDT,M3.2.0,M11.1.0
 };
 
 constexpr size_t kTimezonesParsedCount = sizeof(kTimezonesParsed) / sizeof(kTimezonesParsed[0]);

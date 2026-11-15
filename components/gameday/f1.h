@@ -17,7 +17,6 @@ static const size_t kF1Keep = 10;
 static const size_t kF1Rows = 6;
 static const size_t kF1Sessions = 6;
 static const size_t kF1ShapeMax = 72;
-static const char *const kF1UserAgent = "GameDayScoreboard/1.0";
 
 // ESPN's per-car extras beside its RaceRow.
 struct F1Car {

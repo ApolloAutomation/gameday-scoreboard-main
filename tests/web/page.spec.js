@@ -406,6 +406,69 @@ test("the team picker searches the team list and posts the team", async ({ page,
   await expect(page.locator("#curName")).toHaveText("Philadelphia Eagles");
 });
 
+test("the board lifts a dark team color the way the panel does, so the name shows on black", async ({ page, request }) => {
+  await reset(request);
+  const g = (await deviceState(request)).game;
+  await reset(request, { game: { ...g, ...LIVE, tc: "000000", oc: "021018" } });
+  await page.goto("/");
+  await expect(page.locator("#tA .abbr")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(page.locator("#tB .abbr")).toHaveCSS("color", "rgb(16, 128, 192)");
+  // A bright color stays as it is
+  await reset(request, { game: { ...g, ...LIVE, tc: "FFB612", oc: "C0C0C0" } });
+  await page.reload();
+  await expect(page.locator("#tA .abbr")).toHaveCSS("color", "rgb(255, 182, 18)");
+  await expect(page.locator("#tB .abbr")).toHaveCSS("color", "rgb(192, 192, 192)");
+});
+
+// A phone, with no ESPHome page script
+test.describe("a phone", () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+
+  test("the page sets its own phone width, language and title", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#tA .abbr")).toHaveText("DAL");
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", "width=device-width, initial-scale=1");
+    expect(await page.evaluate(() => [innerWidth, matchMedia("(max-width: 560px)").matches])).toEqual([375, true]);
+    await expect(page).toHaveTitle("Game Day Scoreboard 2f6a70");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length)).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("the status word clears the logo, hints get their row and a switch's words flip it", async ({ page, request }) => {
+    await reset(request);
+    const g = (await deviceState(request)).game;
+    for (const s of ["PRE", "IN"]) {
+      await reset(request, { game: { ...g, s } });
+      await page.goto("/");
+      await expect(page.locator("#gstate")).toHaveText(s === "IN" ? "LIVE" : "UPCOMING");
+      const [word, logo] = await Promise.all([page.locator("#gstate").boundingBox(), page.locator("#tA img").boundingBox()]);
+      expect(word.y + word.height).toBeLessThanOrEqual(logo.y);
+    }
+    // A hinted select goes under its words
+    const [label, select] = await Promise.all([page.locator('label[for="idle"]').boundingBox(), page.locator("#idle").boundingBox()]);
+    expect(label.width).toBeGreaterThan(300);
+    expect(select.y).toBeGreaterThanOrEqual(label.y + label.height);
+    expect(await page.locator("#idle").evaluate((n) => getComputedStyle(n).fontSize)).toBe("16px");
+    // The words and the hint beside a switch flip it
+    await page.locator("#nightCtls .ctl label").first().click();
+    await expectSet(request, { night: "1" });
+    await expect(page.getByRole("switch", { name: "Night hours" })).toHaveAttribute("aria-checked", "true");
+    await page.locator("#nightCtls .ctl label small").first().click();
+    await expectSet(request, { night: "0" });
+    // Not a button's words
+    await page.locator("#animTryRow label").click();
+    await sleep(300);
+    expect((await (await request.get("/_log")).json()).filter((q) => q.path === "/gameday/action")).toEqual([]);
+    // No game: no empty logo frames
+    await reset(request, { game: { s: "NOT_FOUND", l: "nfl" }, next: [] });
+    await page.reload();
+    await expect(page.locator("#gstate")).toHaveText("NO GAME");
+    await expect(page.locator("#tA img")).toHaveCSS("visibility", "hidden");
+  });
+});
+
 test("the picker opens on today's live games and follows a side", async ({ page, request }) => {
   const side = (homeAway, id, abbr, name, score) => ({ homeAway, score, team: { id, abbreviation: abbr, shortDisplayName: name } });
   await page.route("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard*", (route) =>
@@ -430,6 +493,23 @@ test("the picker opens on today's live games and follows a side", async ({ page,
   await page.locator("#tiles .side", { hasText: "Eagles" }).click();
   await expectSet(request, { team: "nfl:21" });
   await expect(page.locator("#modal")).not.toHaveClass(/open/);
+});
+
+test("the picker opens within a second when ESPN doesn't answer, and On now gives up on it", async ({ page, request }) => {
+  // ESPN's scoreboards never answer
+  await page.route("https://site.api.espn.com/apis/site/v2/sports/**", () => {});
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#curName")).toHaveText("Dallas Cowboys");
+  const t0 = Date.now();
+  await page.locator("#pick").click();
+  await expect(page.locator("#modal")).toHaveClass(/open/, { timeout: 1800 });
+  expect(Date.now() - t0).toBeLessThan(1800);
+  await expect(page.locator(".tabs button.on")).toHaveText("NFL");
+  await expect(page.locator("#tiles .tile.on .n")).toHaveText("Dallas Cowboys");
+  await page.getByRole("tab", { name: "On now" }).click();
+  await expect(page.locator("#tiles")).toHaveText("Loading today's games");
+  await expect(page.locator("#tiles")).toHaveText("No games today", { timeout: 9000 });
 });
 
 test("the On now tab asks ESPN for every college game, not the Top 25", async ({ page, request }) => {
@@ -1047,6 +1127,44 @@ test("big-play switches post the alert mask, for the sports the panel follows", 
   await expect(page.locator("#alertFavRow")).toBeHidden();
   await expect(page.locator("#animRow")).toBeHidden();
   await expect(page.locator("#animTryRow")).toBeHidden();
+});
+
+test("Try it says what it plays, and plays nothing off the Scoreboard page", async ({ page, request }) => {
+  const actions = async () => (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/action").map((p) => p.q);
+  await reset(request);
+  await page.goto("/");
+  const row = page.locator("#animTryRow");
+  // The hint keeps the row; the buttons go under it
+  const [label, buttons] = await Promise.all([row.locator("label").boundingBox(), row.locator(".trybtns").boundingBox()]);
+  expect(label.width).toBeGreaterThan(300);
+  expect(buttons.y).toBeGreaterThanOrEqual(label.y + label.height);
+  await row.getByRole("button", { name: "Extra point" }).click();
+  await expect(page.locator("#toast")).toHaveText("Playing on the panel");
+  await expect.poll(actions).toContainEqual({ do: "anim", play: "pat" });
+  await row.getByRole("button", { name: "Return" }).click();
+  await expect.poll(actions).toContainEqual({ do: "anim", play: "ret" });
+  await page.locator("#fieldTry").click();
+  await expect(page.locator("#toast")).toHaveText("Showing a sample field on the panel");
+  await expect.poll(actions).toContainEqual({ do: "field" });
+
+  // Weather on the main board: no sample field
+  await reset(request, { displays: WX_DISPLAYS, display: 4 });
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Showing" })).toHaveValue("display:4");
+  await page.locator("#fieldTry").click();
+  await expect(page.locator("#toast")).toHaveText("Set Showing to Scoreboard to try it");
+  // The Clock page: no play either
+  await reset(request);
+  const clock = { id: "select/Select Page", domain: "select", name: "Select Page", state: "Clock", value: "Clock", option: ["Scoreboard", "Clock"] };
+  await page.route("**/events", (route) => route.fulfill({
+    status: 200, contentType: "text/event-stream", body: "event: state\ndata: " + JSON.stringify(clock) + "\n\n",
+  }));
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Showing" })).toHaveValue("Clock");
+  await row.getByRole("button", { name: "Pass" }).click();
+  await expect(page.locator("#toast")).toHaveText("Set Showing to Scoreboard to try it");
+  await sleep(300);
+  expect(await actions()).toEqual([]);
 });
 
 test("big plays in other games: the switches and the stay post their settings", async ({ page, request }) => {
@@ -1701,7 +1819,7 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812. Nothing to install.");
 });
 
-test("Follow beta doesn't rename what the firmware box found until the beta feed answers", async ({ page, request }) => {
+test("Follow beta says the firmware box is checking until the beta feed answers", async ({ page, request }) => {
   await reset(request, { beta: false });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
   let entity = { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" };
@@ -1710,7 +1828,7 @@ test("Follow beta doesn't rename what the firmware box found until the beta feed
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.6-beta.813");
   await page.locator('.sw[data-set="beta"]').click();
   await expectSet(request, { beta: "1" });
-  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 2000);
+  await staysAs(page.locator("#fwText"), ["Checking for the latest beta"], 2000);
   // The beta feed answers.
   entity = { ...fw, value: "1.5.6-beta.812", current_version: "1.5.6-beta.813" };
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
@@ -1734,7 +1852,7 @@ test("a Follow beta flip made on another page reaches the firmware box with the 
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812.");
 });
 
-test("a check right after a Follow beta flip that still finds the release feed's answer keeps the release wording", async ({ page, request }) => {
+test("a check right after a Follow beta flip that still finds the release feed's answer keeps checking", async ({ page, request }) => {
   await reset(request, { beta: false });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...fw, value: "1.5.5", current_version: "1.5.6-beta.813" } }));
@@ -1746,8 +1864,74 @@ test("a check right after a Follow beta flip that still finds the release feed's
   const checked = page.waitForResponse((r) => r.url().includes("/update/Firmware"), { timeout: 8000 });
   await page.locator("#actions button", { hasText: "Check for updates" }).click();
   await checked;
-  await staysAs(page.locator("#fwText"), ["You're ahead of the latest release, v1.5.6-beta.813"], 2000);
-  await expect(page.locator("#fwSub")).toContainText("The newest release is v1.5.5.");
+  await staysAs(page.locator("#fwText"), ["Checking for the latest beta"], 2000);
+  await expect(page.locator("#fwInstall")).toBeHidden();
+});
+
+test("after a Follow beta flip the other feed's update can't be installed until this feed answers", async ({ page, request }) => {
+  await reset(request, { beta: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  await page.locator('.sw[data-set="beta"]').click();
+  await expectSet(request, { beta: "1" });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
+  await expect(page.locator("#fwInstall")).toBeHidden();
+  await expect(page.locator("#fwSub")).not.toContainText("Release notes");
+  // Still the release after a check: no beta answer.
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#toast")).toHaveText("Could not reach the update server. Try again in a minute.", { timeout: 8000 });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest beta");
+  // The beta feed answers.
+  entity = { ...fw, value: "1.5.7-beta.3", current_version: "1.5.5" };
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7-beta.3", { timeout: 8000 });
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  // Back off: the beta stays until the release answers.
+  await page.locator('.sw[data-set="beta"]').click();
+  await expectSet(request, { beta: "0" });
+  await expect(page.locator("#fwText")).toHaveText("Checking for the latest release");
+  await expect(page.locator("#fwInstall")).toBeHidden();
+});
+
+test("an install that doesn't start or fails says so at once and brings Install back", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  const entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await expect(page.locator("#fwText")).toHaveText("Installing v1.5.6");
+  await expect(page.locator("#gone")).toContainText("Installing v1.5.6");
+  // Never went down, still offers it: no install.
+  await expect(page.locator("#fwText")).toHaveText("The update to v1.5.6 didn't install", { timeout: 8000 });
+  await expect(page.locator("#fwSub")).toContainText("The panel is still on v1.5.5. Install tries again.");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#devicePeek")).toHaveText("Update didn't install");
+  // The panel rereads; a newer offer reads as new.
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: { ...entity, value: "1.5.7" } }));
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.7", { timeout: 8000 });
+});
+
+test("an install still running keeps waiting for the panel", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  await expect(page.locator("#fwInstall")).toBeVisible();
+  entity = { ...entity, state: "INSTALLING" };
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#fwInstall").click();
+  await staysAs(page.locator("#fwText"), ["Installing v1.5.6"], 6000);
+  await expect(page.locator("#gone")).toContainText("Installing v1.5.6");
 });
 
 test("a setting changed during Check for updates leaves the firmware box checking", async ({ page, request }) => {
@@ -1837,21 +2021,27 @@ test("an update that rolled back says so and still offers Install", async ({ pag
   await expect(page.locator("#fwSub")).toContainText("It installs on its own between 3 and 5 AM.");
 });
 
-test("an install that never restarts the panel stops saying Installing once the page gives up waiting", async ({ page, request }) => {
+test("an install that never restarts the panel stops the restart line once the page gives up waiting", async ({ page, request }) => {
   await reset(request);
-  const entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
-                   release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
+  let entity = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "",
+                 release_url: "", value: "2026.10.1", current_version: "2026.10.0" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
   await page.clock.install();
   await page.goto("/");
   await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
+  // The panel says it is installing and never restarts.
+  entity = { ...entity, state: "INSTALLING" };
   page.once("dialog", (d) => d.accept());
   await page.locator("#fwInstall").click();
   await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
   await expect(page.locator("#gone")).toHaveText("Installing v2026.10.1. This page reloads when the panel is back.");
-  // The download failed: the panel stays up, still offering the same version.
   await page.clock.fastForward("05:01");
   await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#fwText")).toHaveText("Installing v2026.10.1");
+  // It ends, still offering the same version: Install is back.
+  entity = { ...entity, state: "UPDATE AVAILABLE" };
+  await page.locator("#actions button", { hasText: "Check for updates" }).click();
+  await page.clock.fastForward("00:05");
   await expect(page.locator("#fwText")).toHaveText("Update available: v2026.10.1");
   await expect(page.locator("#fwInstall")).toBeVisible();
 });
@@ -1888,13 +2078,15 @@ test("release notes link to the release's section of the site changelog, a beta 
   await page.reload();
   await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.0");
 
+  // Follow beta on: a beta's notes.
+  await reset(request, { beta: true });
   entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: commit };
   await page.reload();
   await expect(link).toHaveAttribute("href", commit);
 });
 
 test("release notes link only to an https address", async ({ page, request }) => {
-  await reset(request);
+  await reset(request, { beta: true });
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };
   let entity = { ...fw, value: "2026.10.1-beta.9", current_version: "2026.10.0", release_url: "javascript:alert(1)" };
   await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
@@ -1905,6 +2097,7 @@ test("release notes link only to an https address", async ({ page, request }) =>
   await expect(link).toHaveCount(0);
 
   // A release still links to its changelog section.
+  await reset(request, { beta: false });
   entity = { ...entity, value: "2026.10.1" };
   await page.reload();
   await expect(link).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/changelog/#v2026.10.1");
@@ -2223,6 +2416,47 @@ test.describe("a browser in Ciudad Juarez", () => {
   });
 });
 
+// Canada's own zones, appended after UTC
+for (const [iana, name, tz] of [
+  ["America/Vancouver", "Canada Pacific", "14"],
+  ["America/Edmonton", "Canada Mountain", "15"],
+  ["America/Winnipeg", "Canada Central", "16"],
+  ["America/Toronto", "Canada Eastern", "17"],
+  ["America/Montreal", "Canada Eastern", "17"],
+  ["America/Regina", "Canada Mountain", "15"],
+  ["America/Whitehorse", "Canada Pacific", "14"],
+  ["America/Atikokan", "Canada Central", "16"],
+  ["America/Moncton", "Canada Atlantic", "7"],
+]) {
+  test.describe(`a browser in ${iana}`, () => {
+    test.use({ timezoneId: iana });
+    test(`sets the panel to ${name}`, async ({ page, request }) => {
+      await reset(request, { tz: 0, tz_name: "US Eastern", tz_auto: true });
+      await page.goto("/");
+      await expectSet(request, { tz });
+      await expect(page.locator("#toast")).toHaveText(`Timezone set to ${name} from this browser`);
+    });
+  });
+}
+
+test("every timezone alias names a zone the panel has", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const root = path.join(__dirname, "..", "..");
+  const app = fs.readFileSync(path.join(root, "firmware/web/app.js"), "utf8");
+  const block = app.match(/const TZ_ALIASES = \{([\s\S]*?)\};/)[1];
+  const aliases = [...block.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]);
+  const rows = fs.readFileSync(path.join(root, "components/gameday/timezones.h"), "utf8")
+    .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  const zones = [...rows.matchAll(/\{"[^"]+",\s*"[^"]+",\s*"([^"]+)"\}/g)].map((m) => m[1]);
+  expect(zones).toContain("America/Toronto");
+  expect(aliases.length).toBeGreaterThan(20);
+  for (const [from, to] of aliases) {
+    expect(zones, `${from} goes to ${to}`).toContain(to);
+    expect(zones, `${from} has a row of its own`).not.toContain(from);
+  }
+});
+
 test("the timezone line's choose manually and follow this browser work from the keyboard", async ({ page, request }) => {
   await reset(request);
   await page.goto("/");
@@ -2417,6 +2651,13 @@ test("diagnostics say why the panel restarted and how it is doing", async ({ pag
   await page.reload();
   await expect(page.locator("#hHtRow")).toBeVisible();
   await expect(page.locator("#hHt")).toHaveText("OK, 12 s ago");
+  // A row per listed display, once it has read
+  await expect(page.locator("#health .happ")).toHaveCount(0);
+  await reset(request, { displays: WX_DISPLAYS, health: { ...h, f1: 200, f1_ago: 5, flights: 0, flights_ago: 30, weather: 200, weather_ago: 150 } });
+  await page.reload();
+  await expect(page.locator("#health .happ label")).toHaveText(["Last Flight Tracker read", "Last Weather read"]);
+  await expect(page.locator("#health .happ .val")).toHaveText(["No answer, 30 s ago", "OK, 3 min ago"]);
+  await expect(page.locator("#health .happ").first()).toHaveCSS("border-top-style", "solid");
 
   // A brownout whose time isn't known, before the first ESPN read.
   await reset(request, {
@@ -2617,7 +2858,215 @@ test("a dropped stream alone doesn't call the panel gone", async ({ page, reques
   await expect(page.locator("#gone")).toBeHidden();
 });
 
+// Logs each stream: opened at, others open, failed at
+const watchStreams = (page) => page.addInitScript(() => {
+  const Real = window.EventSource;
+  window.__streams = [];
+  window.EventSource = class extends Real {
+    constructor(...args) {
+      const open = window.__streams.filter((s) => s.es.readyState !== 2).length;
+      super(...args);
+      const rec = { at: Date.now(), open, failed: 0, es: this };
+      window.__streams.push(rec);
+      this.addEventListener("error", () => { if (!rec.failed) rec.failed = Date.now(); });
+    }
+  };
+});
+const streams = (page) => page.evaluate(() => window.__streams.map(({ es, ...r }) => ({ ...r, state: es.readyState })));
+// Waits until the nth stream fails, then its read
+const failed = async (page, n) => {
+  await expect.poll(async () => {
+    const s = await streams(page);
+    return s.length === n && s[n - 1].failed > 0;
+  }, { timeout: 15000 }).toBe(true);
+  await sleep(300);
+};
+// The panel pings the page's stream
+const ping = (page) => page.evaluate(() => window.__streams.at(-1).es.dispatchEvent(new MessageEvent("ping")));
+// A phone locking (true) or waking (false)
+const setHidden = (page, hidden) => page.evaluate((h) => {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (h ? "hidden" : "visible") });
+  document.dispatchEvent(new Event("visibilitychange"));
+}, hidden);
+
+test("the page loads no script but the panel's own and opens one event stream", async ({ page, request, baseURL }) => {
+  await watchStreams(page);
+  await reset(request);
+  const scripts = [];
+  page.on("request", (r) => { if (r.resourceType() === "script") scripts.push(r.url()); });
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await expect(page.locator("#gstate")).toHaveText("UPCOMING");
+  // ESPHome's shell, without its own page app
+  const shell = await (await request.get("/")).text();
+  expect(shell.match(/<script[^>]*>/g)).toEqual(["<script type=module src=/0.js>"]);
+  expect(scripts).toEqual([baseURL + "/0.js"]);
+  await sleep(1000);
+  expect(await streams(page)).toEqual([expect.objectContaining({ open: 0, failed: 0, state: 1 })]);
+  // ESPHome's page app set these
+  await expect(page).toHaveTitle("Game Day Scoreboard 2f6a70");
+  const root = await page.evaluate(() => [document.documentElement.lang, getComputedStyle(document.documentElement).colorScheme]);
+  expect(root).toEqual(["en", "light dark"]);
+});
+
+test.describe("on a phone", () => {
+  // Chromium reads the viewport meta only when mobile
+  const { defaultBrowserType, ...phone } = base.devices["iPhone 13"];
+  test.use(phone);
+  test("the page is as wide as the phone's screen, not a zoomed-out desktop page", async ({ page, request }) => {
+    await reset(request);
+    await page.goto("/");
+    await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+    expect(await page.evaluate(() => [window.innerWidth, window.visualViewport.scale])).toEqual([390, 1]);
+  });
+});
+
+test("a stream the panel keeps dropping is closed and reopened after 2 s, then 4 s, doubling up to a minute, one at a time, and one that held a minute starts over at 2 s", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+
+  // Every session ends right after its first events.
+  await reset(request, {}, ["events_end"]);
+  await failed(page, 3);
+  let s = await streams(page);
+  expect(s[1].at - s[0].failed).toBeGreaterThanOrEqual(1900);
+  expect(s[1].at - s[0].failed).toBeLessThan(3500);
+  expect(s[2].at - s[1].failed).toBeGreaterThanOrEqual(3900);
+  expect(s[2].at - s[1].failed).toBeLessThan(5500);
+  // Longer waits on a faked clock: none 3 s early
+  let n = 3;
+  for (const wait of [8000, 16000, 32000, 60000, 60000]) {
+    await page.clock.fastForward(wait - 3000);
+    await sleep(200);
+    expect((await streams(page)).length).toBe(n);
+    await page.clock.fastForward(3000);
+    await failed(page, ++n);
+  }
+  await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
+
+  // The next one holds and is heard for a minute
+  await reset(request);
+  await page.clock.fastForward(60000);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  for (let heard = 0; heard < 3; heard++) {
+    await sleep(300);
+    await page.clock.fastForward(21000);
+    await ping(page);
+  }
+  await sleep(300);
+  expect((await streams(page)).length).toBe(++n);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // Dropped now, it's reopened after 2 s again
+  await reset(request, {}, ["events"]);
+  await failed(page, n + 1);
+  s = await streams(page);
+  expect(s[n].at - s[n - 1].failed).toBeGreaterThanOrEqual(1900);
+  expect(s[n].at - s[n - 1].failed).toBeLessThan(3500);
+  // Never two at once, each closed by the page
+  expect(s.map((x) => x.open)).toEqual(s.map(() => 0));
+  expect(s.map((x) => x.state)).toEqual(s.map(() => 2));
+});
+
+test("a quiet stream is dropped when the panel answers a state read, and reopened", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await sleep(300);
+  // 36 s unheard, then the regular re-read is answered
+  await page.clock.fastForward(36000);
+  await expect.poll(async () => (await streams(page))[0].state).toBe(2);
+  await expect(page.locator("#gone")).toBeHidden();
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 5000 });
+  expect(await streams(page)).toEqual([
+    expect.objectContaining({ open: 0, failed: 0, state: 2 }), expect.objectContaining({ open: 0, state: 1 })]);
+});
+
+test("a panel that answers again after not answering gets its stream back at once, not after the wait", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.clock.install();
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  await reset(request, {}, ["down"]);
+  await expect(page.locator("#gone")).toHaveText(/^Panel not answering since/);
+  // Four more tries fail: the next is 32 s off
+  let n = 1;
+  for (const wait of [2000, 4000, 8000, 16000]) {
+    await failed(page, n++);
+    await page.clock.fastForward(wait);
+  }
+  await failed(page, n);
+  // The panel is back: the regular re-read finds it
+  await reset(request);
+  await page.clock.fastForward(15000);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 3000 });
+  await expect(page.locator("#gone")).toBeHidden();
+  const s = await streams(page);
+  expect(s.length).toBe(n + 1);
+  expect(s[n].at - s[n - 1].failed).toBeLessThan(20000);
+  expect(s.map((x) => x.open)).toEqual(s.map(() => 0));
+});
+
+test("a stream that drops while the page is hidden waits until the page is shown, then reopens at once", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // Shown again with its stream fine: nothing reopens.
+  await setHidden(page, true);
+  await setHidden(page, false);
+  await sleep(500);
+  expect((await streams(page)).length).toBe(1);
+
+  // Hidden, the stream drops; the panel recovers meanwhile
+  await setHidden(page, true);
+  await reset(request, {}, ["events"]);
+  await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
+  await reset(request);
+  await sleep(3000);
+  expect((await streams(page)).length).toBe(1);
+  await setHidden(page, false);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/, { timeout: 1500 });
+  expect((await streams(page)).length).toBe(2);
+});
+
+test("a stream gone quiet while the phone slept is reopened when the page is shown, and so is one the browser's back/forward cache dropped", async ({ page, request }) => {
+  await watchStreams(page);
+  await reset(request);
+  await page.goto("/");
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  // A minute passes unheard: the session died during sleep
+  const woke = await page.evaluate(() => {
+    const now = Date.now;
+    Date.now = () => now() + 60000;
+    document.dispatchEvent(new Event("visibilitychange"));
+    return Date.now();
+  });
+  await expect.poll(async () => (await streams(page)).length).toBe(2);
+  expect((await streams(page))[1].at - woke).toBeLessThan(500);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+
+  // Restored from the cache: reopened once 2 s have passed
+  const dot = await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    return document.querySelector("#conn").className;
+  });
+  expect(dot).not.toMatch(/\bon\b/);
+  await expect.poll(async () => (await streams(page)).length).toBe(3);
+  await expect(page.locator("#conn")).toHaveClass(/\bon\b/);
+  const s = await streams(page);
+  expect(s[2].at - s[1].at).toBeGreaterThanOrEqual(1900);
+  expect(s.map((x) => [x.open, x.failed, x.state])).toEqual([[0, 0, 2], [0, 0, 2], [0, 0, 1]]);
+});
+
 test("Reboot says it's restarting and reloads when the panel is back", async ({ page, request }) => {
+  await watchStreams(page);
   await reset(request);
   page.on("dialog", (d) => d.accept());
   await page.goto("/");
@@ -2632,6 +3081,9 @@ test("Reboot says it's restarting and reloads when the panel is back", async ({ 
   await reset(request, {}, ["down"]);
   await sleep(4500);
   await expect(page.locator("#gone")).toHaveText(restarting);
+  // No stream meanwhile, not even when the network comes back
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  expect(await streams(page)).toEqual([expect.objectContaining({ state: 2 })]);
   const reloaded = page.waitForEvent("load", { timeout: 10000 });
   await reset(request);
   await reloaded;
@@ -2661,6 +3113,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   // The mock still answers, but the page has stopped asking it.
   const asked = [];
   page.on("request", (r) => { if (r.url().startsWith(baseURL)) asked.push(r.url()); });
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await sleep(1500);
   expect(asked).toEqual([]);
   await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
@@ -2766,6 +3219,10 @@ test("the idle display says what the panel shows now, and hides on firmware with
                                     { id: 3, key: "flights", name: "Flight Tracker", split: 8 }] });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("The panel is dark until a plane comes near.");
+  await reset(request, { idle: 4, idle_view: "clock", dark: true, display: 4, displays: WX_DISPLAYS });
+  await page.reload();
+  await expect(page.locator("#idleNow"))
+    .toHaveText("The panel is dark until the National Weather Service has a warning or a watch out for home.");
   await reset(request, { idle: 5, idle_view: "logo" });
   await page.reload();
   await expect(page.locator("#idleNow")).toHaveText("Showing your team's logo until a game you follow starts.");
@@ -2940,6 +3397,21 @@ test("Full screen lets a display fill a 2x2 and keeps the second area's choice f
   await reset(request, { panels: 4, displays: FLIGHTS, split: 4 });
   await page.reload();
   await expect(page.locator("#fullHint")).toContainText("it fills the whole row instead of sharing it with the right two panels.");
+});
+
+test("Full screen flips on each tap before the panel's next read, so a second tap undoes the first", async ({ page, request }) => {
+  await reset(request, { panels: 2, rows: 2, displays: DISPLAYS, split: 6 });
+  await page.goto("/");
+  const full = page.getByRole("switch", { name: "Full screen" });
+  await expect(full).toHaveAttribute("aria-checked", "false");
+  await slowReads(page, 1500);
+  await full.click();
+  expect(await full.getAttribute("aria-checked")).toBe("true");
+  await full.click();
+  expect(await full.getAttribute("aria-checked")).toBe("false");
+  await expect.poll(() => sets(request)).toEqual([{ full: "1" }, { full: "0" }]);
+  await staysAs(page.locator('.sw.on[data-set="full"]'), [], 2000);
+  expect((await deviceState(request)).full).toBe(false);
 });
 
 // The Stocks & Crypto card (components/gameday/app_markets.h).
@@ -4400,7 +4872,7 @@ test.describe("cards that fold", () => {
 
   test("an update on offer opens Device, and a folded Device says an update, one that didn't take or a weak signal beside its name", async ({ page, request }) => {
     await page.setViewportSize({ width: 375, height: 800 });
-    await reset(request, { autoupd: false });
+    await reset(request, { autoupd: false, beta: true });
     const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
     let entity = { ...fw, value: "2026.11.0-beta.812", current_version: "2026.10.2" };
     await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));

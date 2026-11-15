@@ -733,6 +733,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void start_worker_();
   static void worker_(void *arg);
   void run_job_();
+  bool worker_held_(uint32_t now) const;
   void apply_job_();
   void start_clock_job_();
   void apply_clock_job_();
@@ -1103,8 +1104,16 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject update_mark_pref_;
   ::espn::UpdateMark update_mark_{};
   bool update_installing_{false};  // the update entity is installing, mark written
+  // No new downloads from install start to its end
+  bool install_hold_{false};
+  void install_hold_end_();
   void settle_update_mark_();
   void update_state_changed_();
+#ifndef GAMEDAY_BAR
+  ESPPreferenceObject update_seen_pref_;
+  ::espn::UpdateSeen update_seen_{};
+  int32_t auto_update_new_{0};  // the night it last logged WAIT_NEW
+#endif
 #ifdef GAMEDAY_BAR
   // fnv1_hash() of the version last installed through "Install now"
   // (auto_update.h), saved before the install so a crash or power cut
@@ -1121,6 +1130,10 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject beta_pref_;
   uint8_t follow_beta_{0};  // 1 = read the beta manifest
   void apply_channel_();
+  uint32_t channel_read_ms_{0};  // last read asked of this channel
+  uint8_t channel_retries_{0};
+  bool offer_off_channel_() const;
+  void channel_tick_();
 #endif
 #ifdef GAMEDAY_UPDATE_MIRROR
   http_request::HttpRequestUpdate *mirror_update_{nullptr};
@@ -1356,7 +1369,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ::espn::Backoff a2_fail_;
   uint8_t a2_misses_{0};
   uint32_t a2_wait_since_{0}, a2_wait_ms_{0};
-  uint32_t gap_hold_until_{0};  // millis(), 0 none
+  ::espn::Hold gap_hold_;  // ESPN refused a gap read
   uint32_t times_cycle_ms_{0};  // the last watch_times_.cycle()
   // The card up (league, event) and since when.
   uint8_t rot_league_{0};
@@ -1421,7 +1434,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Order: the area's own, scores, then the watcher.
   void start_gap_job_(uint32_t due);
   bool gap_ok_(uint32_t now) const;
-  bool espn_gap_ok_(uint32_t now) const;
+  bool espn_gap_ok_(uint32_t now);
   // Favorite teams' next read, which ticks every second.
   uint32_t fav_gap_due_(uint32_t now) const;
   // Next known games, minus the main board's.
@@ -1449,7 +1462,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void warn_check_(bool main_drawn);
   uint32_t warn_key_{0};
   // A frame into fields the board or area draws.
-  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f);
+  void app_fields_(::espn::Display d, int w, int h, UpdateFields &f, LogoCache::Surface pins);
   void draw_main_app_(bool quiet = false);
   // 1 started, -1 doesn't fit before due, 0 none.
   int start_app_job_(uint32_t now, uint32_t due);
@@ -1467,9 +1480,6 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t icon_wait_{0};
   bool app_shown_[::espn::kDisplayCount]{};
   ESPPreferenceObject app_pref_[::espn::kDisplayCount];
-  static constexpr size_t APP_HOSTS = 8;
-  ::espn::AppHost app_hosts_[APP_HOSTS]{};
-  size_t app_host_n_{0};
 
   Schedule schedule_;
   uint32_t schedule_fetched_ms_{0};
@@ -1542,8 +1552,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Empty means show the record.
   std::string standing_text_() const;
   uint32_t busy_since_ms_{0};  // millis() when the worker task was started
-  // No worker starts for RETRY_INTERVAL after; 0 never.
+  // No worker starts until worker_held_ ends; 0 never.
   uint32_t worker_gave_up_ms_{0};
+  uint32_t worker_id_{0};  // PsramTasks' id of the last worker started
   // Bumped by the main loop when it abandons a worker, read by the worker.
   std::atomic<uint32_t> worker_seq_{0};
   Job job_;

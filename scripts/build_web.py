@@ -16,10 +16,15 @@ ESPHome embeds a single js_include file, so the team list and the app are
 concatenated here. bundle-demo.js is the same plus demo.js, for the demo
 build only (firmware/pages/demo.yaml). Run after editing firmware/web/app.js
 or demo.js or regenerating components/gameday/teams.h, and commit both bundles.
+
+Bundles carry app.js and demo.js stripped (strip_js).
 """
 
 import json
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,6 +97,128 @@ def fold_tables(cpp):
     return fold, special
 
 
+# A slash after these words starts a regex
+JS_WORD = re.compile(r"[\w$]+")
+REGEX_AFTER = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw",
+               "instanceof", "yield", "await"}
+
+
+def strip_js(src):
+    """src without comments, indentation, trailing spaces or blank lines."""
+    lines, cur = [], []
+    subs = []       # brace depth inside each open template ${...}
+    tmpl = False    # inside a template literal's text
+    last = ""       # last token: "v" a value, else its text
+    i, n = 0, len(src)
+
+    def end_line():
+        text = "".join(cur).rstrip(" \t")
+        if text:
+            lines.append(text)
+        cur.clear()
+
+    def take(j):
+        # src[i:j] as it is
+        cur.append(src[i:j])
+        return j
+
+    while i < n:
+        c = src[i]
+        if tmpl:
+            j = i
+            while j < n and src[j] not in "`\\$":
+                j += 1
+            if j >= n:
+                raise SystemExit("strip_js: a template literal never ends")
+            if src[j] == "\\":
+                i = take(j + 2)
+            elif src[j] == "`":
+                i = take(j + 1)
+                tmpl, last = False, "v"
+            elif src.startswith("${", j):
+                i = take(j + 2)
+                subs.append(0)
+                tmpl, last = False, "{"
+            else:
+                i = take(j + 1)
+            continue
+        if c == "\n":
+            end_line()
+            i += 1
+        elif c in " \t\r":
+            if cur:
+                cur.append(c)
+            i += 1
+        elif src.startswith("//", i):
+            while i < n and src[i] != "\n":
+                i += 1
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            if j < 0:
+                raise SystemExit("strip_js: a block comment never ends")
+            if "\n" in src[i:j]:
+                end_line()
+            elif cur:
+                cur.append(" ")
+            i = j + 2
+        elif c in "'\"":
+            j = i + 1
+            while j < n and src[j] != c:
+                if src[j] == "\n":
+                    raise SystemExit("strip_js: a string runs past its line")
+                j += 2 if src[j] == "\\" else 1
+            i = take(j + 1)
+            last = "v"
+        elif c == "`":
+            i = take(i + 1)
+            tmpl = True
+        elif c == "/" and (last not in ("v", ")", "]") and not JS_WORD.fullmatch(last) or last in REGEX_AFTER):
+            j, cls = i + 1, False
+            while j < n and (cls or src[j] != "/"):
+                if src[j] == "\n":
+                    raise SystemExit("strip_js: a regex runs past its line")
+                cls = (cls or src[j] == "[") and src[j] != "]"
+                j += 2 if src[j] == "\\" else 1
+            j += 1
+            while j < n and src[j].isalpha():
+                j += 1
+            i = take(j)
+            last = "v"
+        elif JS_WORD.match(c):
+            j = JS_WORD.match(src, i).end()
+            last = src[i:j]
+            i = take(j)
+        else:
+            if c == "{" and subs:
+                subs[-1] += 1
+            elif c == "}" and subs:
+                if subs[-1] == 0:
+                    subs.pop()
+                    i = take(i + 1)
+                    tmpl = True
+                    continue
+                subs[-1] -= 1
+            last = c
+            i = take(i + 1)
+    end_line()
+    if tmpl or subs:
+        raise SystemExit("strip_js: a template literal never ends")
+    return "\n".join(lines) + "\n"
+
+
+def check_parses(name, text):
+    """Stops the build when Node can't parse text."""
+    node = shutil.which("node")
+    if not node:
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / (name + ".js")
+        path.write_text(text, encoding="utf-8")
+        r = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(f"stripped {name} doesn't parse:\n{r.stderr}")
+
+
 def check_leagues(leagues, app_js):
     """app.js keeps its own copy of the leagues.h table. Stop the build when
     they differ, because a mismatch otherwise only shows as a broken logo or
@@ -135,11 +262,17 @@ def main():
     props = "const PROP_STATS=" + json.dumps(stats, separators=(",", ":")) + ";\n"
     markets = "const MARKETS=" + json.dumps(market_tables(MARKETS_H.read_text(encoding="utf-8")),
                                             separators=(",", ":")) + ";\n"
-    page = header + teams + tz + folds + props + markets + app_js
+    app_min = strip_js(app_js)
+    demo_min = strip_js(DEMO_JS.read_text(encoding="utf-8"))
+    for name, text in (("app", app_min), ("demo", demo_min)):
+        if strip_js(text) != text:
+            raise SystemExit(f"strip_js isn't stable on {name}.js")
+        check_parses(name, text)
+    page = header + teams + tz + folds + props + markets + app_min
     BUNDLE.write_text(page, encoding="utf-8", newline="\n")
     print(f"wrote {BUNDLE} ({BUNDLE.stat().st_size} bytes, {len(rows)} teams)")
     demo = page.replace("from teams.h and app.js", "from teams.h, app.js and demo.js", 1)
-    DEMO_BUNDLE.write_text(demo + "\n" + DEMO_JS.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+    DEMO_BUNDLE.write_text(demo + demo_min, encoding="utf-8", newline="\n")
     print(f"wrote {DEMO_BUNDLE} ({DEMO_BUNDLE.stat().st_size} bytes)")
 
 
