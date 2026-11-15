@@ -1615,6 +1615,245 @@ static void test_break_edges() {
   CHECK_EQ(ot1.team_timeouts, 2);
 }
 
+// The NFL sends 0 seconds left and few play clocks.
+static void test_nfl_halftime() {
+  GameSnapshot none;
+  TickerOptions all;
+  auto at = [](int period, const char *name, const char *detail, const char *clock, const char *play,
+               const char *type, const char *id) {
+    GameSnapshot g = live(17, 0);
+    g.period = period;
+    g.status_name = name;
+    g.short_detail = detail;
+    g.display_clock = clock;
+    g.last_play = play;
+    g.play_type = type;
+    g.play_id = id;
+    g.play_secs_left = 0;
+    g.short_down_distance = "2nd & 9";
+    g.down_distance = "2nd & 9 at BUF 28";
+    g.possession = 2;
+    return g;
+  };
+  const char *kWords = "END QUARTER 2";
+  const char *kKick = "W.Reichard kicks 65 yards from MIN 35 to end zone, Touchback.";
+  const char *kSack = " (Shotgun) J.Love sacked at GB 29 for -6 yards (L.Rodriguez).";
+
+  // End of the half, the 3rd's kickoff, then a sack.
+  GameSnapshot w = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(none, w);
+  CHECK(!w.resumed);
+  CHECK(football_break(w));
+  CHECK_EQ(clock_text(w), std::string("Halftime"));
+  GameSnapshot w2 = w;
+  carry_football(w, w2);
+  CHECK_EQ(clock_text(w2), std::string("Halftime"));
+  GameSnapshot k = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kKick, "Kickoff", "120");
+  k.short_down_distance = "1st & 10";
+  k.down_distance = "1st & 10 at GB 35";
+  carry_football(w2, k);
+  CHECK(k.resumed);
+  CHECK_EQ(clock_text(k), std::string("3rd"));
+  GameSnapshot sk = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kSack, "Sack", "137");
+  sk.short_down_distance = "2nd & 16";
+  sk.down_distance = "2nd & 16 at GB 29";
+  carry_football(k, sk);
+  CHECK(sk.resumed);
+  CHECK_EQ(clock_text(sk), std::string("3rd"));
+  CHECK(status_text(sk, all, "").find("2nd & 16") != std::string::npos);
+  CHECK(status_text(sk, all, "").find("4th") == std::string::npos);
+  GameSnapshot sk2 = sk;  // the next read, nothing new
+  sk2.resumed = false;
+  carry_football(sk, sk2);
+  CHECK(sk2.resumed);
+  GameSnapshot clk = sk;  // a play text with its clock
+  clk.last_play = "(14:21) J.Love pass short right to M.Lloyd for 6 yards.";
+  clk.play_id = "157";
+  clk.resumed = false;
+  carry_football(sk, clk);
+  CHECK_EQ(clock_text(clk), std::string("14:21 3rd"));
+  GameSnapshot q3 = at(3, "STATUS_IN_PROGRESS", "14:55 - 3rd", "14:55", kSack, "Sack", "137");
+  q3.short_down_distance = "2nd & 16";
+  carry_football(sk, q3);
+  CHECK(!q3.resumed);
+  CHECK(!football_break(q3));
+  CHECK_EQ(clock_text(q3), std::string("14:55 3rd"));
+
+  // The 3rd's kickoff unseen: the sack follows the half's end.
+  GameSnapshot ws = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kSack, "Sack", "137");
+  carry_football(w, ws);
+  CHECK(ws.resumed);
+  CHECK_EQ(clock_text(ws), std::string("3rd"));
+  GameSnapshot wq = at(3, "STATUS_IN_PROGRESS", "14:55 - 3rd", "14:55", kSack, "Sack", "137");
+  carry_football(ws, wq);
+  CHECK(!wq.held);
+  CHECK_EQ(clock_text(wq), std::string("14:55 3rd"));
+
+  // A late play before the half's end words.
+  GameSnapshot p = at(2, "STATUS_IN_PROGRESS", "0:16 - 2nd", "0:16",
+                      "(Shotgun) J.Allen pass incomplete short right to K.Shakir.", "Pass Incompletion", "90");
+  carry_football(none, p);
+  GameSnapshot ph = p;
+  ph.status_name = "STATUS_HALFTIME";
+  ph.short_detail = "Halftime";
+  ph.display_clock = "0:00";
+  carry_football(p, ph);
+  CHECK(!ph.resumed);
+  CHECK_EQ(clock_text(ph), std::string("Halftime"));
+  CHECK(status_text(ph, all, "").find("2nd & 9") == std::string::npos);
+  GameSnapshot ph2 = ph;
+  carry_football(ph, ph2);
+  CHECK(!ph2.resumed);
+  CHECK_EQ(clock_text(ph2), std::string("Halftime"));
+  GameSnapshot pw = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(ph2, pw);
+  CHECK(!pw.resumed);
+  CHECK_EQ(clock_text(pw), std::string("Halftime"));
+  GameSnapshot pw2 = pw;
+  carry_football(pw, pw2);
+  CHECK_EQ(clock_text(pw2), std::string("Halftime"));
+  GameSnapshot pk = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kKick, "Kickoff", "120");
+  carry_football(pw2, pk);
+  CHECK(pk.resumed);
+  CHECK_EQ(clock_text(pk), std::string("3rd"));
+
+  // A kickoff returned as the half runs out.
+  const char *kReturn = "J.Bates kicks 65 yards from DET 35 to NE 0. K.Raymond to NE 30 for 30 yards.";
+  GameSnapshot rh = at(2, "STATUS_HALFTIME", "Halftime", "0:00", "J.Goff pass short left to A.St. Brown for TD.",
+                       "Passing Touchdown", "80");
+  carry_football(none, rh);
+  CHECK(!rh.resumed);
+  GameSnapshot rk = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kReturn, "Kickoff", "85");
+  carry_football(rh, rk);
+  CHECK(!rk.resumed);  // held on a first-half play, no end words yet
+  CHECK_EQ(clock_text(rk), std::string("Halftime"));
+  GameSnapshot rw = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(rk, rw);
+  CHECK(!rw.resumed);
+  GameSnapshot rl = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kReturn, "Kickoff", "85");
+  carry_football(rw, rl);
+  CHECK(!rl.resumed);  // listed before the half's end
+  CHECK_EQ(clock_text(rl), std::string("Halftime"));
+  GameSnapshot back = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(k, back);  // the end words return after a resumed read
+  CHECK(!back.resumed);
+  CHECK_EQ(clock_text(back), std::string("Halftime"));
+
+  // The half ends on a return seen live, with or without ids.
+  for (const bool ids : {true, false}) {
+    GameSnapshot lr = at(2, "STATUS_IN_PROGRESS", "0:05 - 2nd", "0:05", kReturn, "Kickoff", ids ? "85" : "");
+    carry_football(none, lr);
+    CHECK(!lr.held);
+    GameSnapshot lh = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kReturn, "Kickoff", ids ? "85" : "");
+    carry_football(lr, lh);
+    CHECK(!lh.resumed);
+    CHECK(football_break(lh));
+    CHECK_EQ(clock_text(lh), std::string("Halftime"));
+    GameSnapshot lh2 = lh;
+    carry_football(lh, lh2);
+    CHECK(!lh2.resumed);
+    CHECK_EQ(clock_text(lh2), std::string("Halftime"));
+    GameSnapshot lw = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+    carry_football(lh2, lw);
+    CHECK(!lw.resumed);
+    CHECK_EQ(clock_text(lw), std::string("Halftime"));
+    GameSnapshot lk = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kKick, "Kickoff", "120");
+    carry_football(lw, lk);
+    CHECK(lk.resumed);
+    CHECK_EQ(clock_text(lk), std::string("3rd"));
+  }
+
+  // Recorded: SF @ DAL, Halftime before the end words.
+  GameSnapshot dp = at(2, "STATUS_IN_PROGRESS", "0:07 - 2nd", "0:07", "B.Anger punts 44 yards to SF 20.", "Punt", "88");
+  carry_football(none, dp);
+  GameSnapshot dk = at(2, "STATUS_HALFTIME", "Halftime", "0:00", " D.Prescott kneels to DAL 19 for -1 yards.",
+                       "Rush", "92");
+  carry_football(dp, dk);
+  CHECK(!dk.resumed);
+  CHECK(football_break(dk));
+  CHECK_EQ(clock_text(dk), std::string("Halftime"));
+  GameSnapshot dw = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(dk, dw);
+  CHECK(!dw.resumed);
+  CHECK(football_break(dw));
+  CHECK_EQ(clock_text(dw), std::string("Halftime"));
+
+  // First looks during the break.
+  GameSnapshot f1 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kSack, "Sack", "137");
+  carry_football(none, f1);
+  CHECK(!f1.resumed);
+  CHECK_EQ(clock_text(f1), std::string("Halftime"));
+  GameSnapshot f2 = f1;
+  carry_football(f1, f2);
+  CHECK(!f2.resumed);
+  CHECK_EQ(clock_text(f2), std::string("Halftime"));
+  GameSnapshot f3 = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kKick, "Kickoff", "120");
+  carry_football(none, f3);
+  CHECK(f3.resumed);
+  CHECK_EQ(clock_text(f3), std::string("3rd"));
+  GameSnapshot f4 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", kWords, "End of Half", "100");
+  f4.team_timeouts = 1;
+  f4.opp_timeouts = 0;
+  carry_football(none, f4);
+  CHECK(f4.held);  // the first half's drive stays hidden
+  CHECK_EQ(f4.team_timeouts, 3);
+  CHECK_EQ(clock_text(f4), std::string("15:00 3rd"));
+  GameSnapshot f5 = at(3, "STATUS_IN_PROGRESS", "14:20 - 3rd", "14:20", kSack, "Sack", "137");
+  carry_football(f4, f5);
+  CHECK(!f5.held);
+  GameSnapshot f6 = at(3, "STATUS_IN_PROGRESS", "15:00 - 3rd", "15:00", kKick, "Kickoff", "120");
+  carry_football(f4, f6);
+  CHECK(!f6.held);
+  GameSnapshot fr = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kReturn, "Kickoff", "85");
+  carry_football(none, fr);
+  GameSnapshot frw = at(2, "STATUS_HALFTIME", "Halftime", "0:00", kWords, "End of Half", "100");
+  carry_football(fr, frw);
+  CHECK(!frw.resumed);
+  CHECK_EQ(clock_text(frw), std::string("Halftime"));
+
+  // Zero seconds left is real from the 4th on.
+  GameSnapshot h4 = at(4, "STATUS_IN_PROGRESS", "0:31 - 4th", "0:31", "(00:31) J.Love pass incomplete.",
+                       "Pass Incompletion", "300");
+  h4.team_timeouts = 0;
+  h4.opp_timeouts = 1;
+  carry_football(none, h4);
+  GameSnapshot e4 = at(4, "STATUS_END_PERIOD", "End of 4th", "0:00", "END QUARTER 4", "End Period", "310");
+  e4.team_timeouts = 0;
+  e4.opp_timeouts = 1;
+  carry_football(h4, e4);
+  CHECK(football_break(e4));
+  CHECK_EQ(e4.team_timeouts, 0);
+  CHECK_EQ(e4.opp_timeouts, 1);
+  CHECK_EQ(clock_text(e4), std::string("End of 4th"));
+
+  // Recorded: MIN @ GB, ESPN at Halftime past the 3rd's kickoff.
+  JsonDocument doc;
+  CHECK(!deserializeJson(doc, slurp("fixtures/event_nfl_halftime.json"), DeserializationOption::NestingLimit(40)));
+  const char *want[] = {"Halftime",  "3rd",       "3rd",       "3rd",       "14:55 3rd", "15:00 3rd",
+                        "14:20 3rd", "14:20 3rd", "14:20 3rd", "14:20 3rd", "13:35 3rd"};
+  CHECK_EQ(doc.as<JsonArrayConst>().size(), (size_t) 11);
+  GameSnapshot prev;
+  size_t i = 0;
+  for (JsonVariantConst ev : doc.as<JsonArrayConst>()) {
+    std::string one;
+    serializeJson(ev, one);
+    GameSnapshot g;
+    CHECK(parse_event_str(one, Sport::FOOTBALL, 9, g, "401873060"));
+    if (i == 2) {
+      GameSnapshot cold = g;  // a first look at the sack
+      carry_football(none, cold);
+      CHECK_EQ(clock_text(cold), std::string("Halftime"));
+    }
+    carry_football(prev, g);
+    if (i < 11)
+      CHECK_EQ(clock_text(g), std::string(want[i]));
+    if (i >= 2 && i <= 5)
+      CHECK(status_text(g, all, "").find("2nd & 16") != std::string::npos);
+    prev = g;
+    i++;
+  }
+}
+
 // ESPN may end a half in progress: "End of 2nd".
 static void test_end_of_half_in_progress() {
   std::string json = slurp("fixtures/day_ncaa_20261017.json");
@@ -9320,6 +9559,7 @@ int main() {
   test_end_of_half_in_progress();
   test_break_timelines();
   test_break_edges();
+  test_nfl_halftime();
   test_red_zone();
   test_color();
   test_favorites();
