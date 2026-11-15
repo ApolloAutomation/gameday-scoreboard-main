@@ -280,7 +280,7 @@ void LogoCache::make_photo_room_(uint32_t now) {
 
 // Caller holds the lock.
 void LogoCache::start_task_() {
-  if (this->task_running_)
+  if (this->task_running_ || this->paused_)
     return;
   this->task_running_ = true;
   // 16 KB: the TLS handshake needs it.
@@ -288,6 +288,21 @@ void LogoCache::start_task_() {
     ESP_LOGW(TAG, "Could not start the logo task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->task_running_ = false;
+  }
+}
+
+void LogoCache::pause(bool on) {
+  if (this->lock_ == nullptr)
+    return;
+  Locked guard(this->lock_);
+  this->paused_ = on;
+  if (on)
+    return;
+  for (auto &e : this->entries_) {
+    if (e->state == State::QUEUED) {
+      this->start_task_();
+      return;
+    }
   }
 }
 
@@ -307,7 +322,7 @@ void LogoCache::run_() {
     {
       Locked guard(this->lock_);
       for (auto &e : this->entries_) {
-        if (e->state == State::QUEUED &&
+        if (e->state == State::QUEUED && !this->paused_ &&
             (job == nullptr || ::espn::logo_job_before(e->prio, e->seq, job->prio, job->seq)))
           job = e.get();
       }

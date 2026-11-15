@@ -85,6 +85,8 @@ class LogoCache {
   // On-screen row logos by logo_key; keeps the last set.
   void pin_icons(const uint32_t *keys, size_t n);
   bool busy() const { return this->task_running_; }
+  // Holds new downloads; the one under way finishes.
+  void pause(bool on);
   // Retries on-screen failed logos; true when one became ready.
   // failed: one failed or proved unreadable instead.
   bool loop(bool &failed);
@@ -162,6 +164,7 @@ class LogoCache {
   uint8_t icon_pin_n_[2]{};
   uint32_t retry_check_ms_{0};
   bool task_running_{false};
+  bool paused_{false};
   std::atomic<bool> loaded_{false};
   std::atomic<bool> failed_{false};  // a logo failed since loop()
   std::atomic<bool> pending_any_{false};

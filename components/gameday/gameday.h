@@ -1103,6 +1103,9 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject update_mark_pref_;
   ::espn::UpdateMark update_mark_{};
   bool update_installing_{false};  // the update entity is installing, mark written
+  // No new downloads from install start to its end
+  bool install_hold_{false};
+  void install_hold_end_();
   void settle_update_mark_();
   void update_state_changed_();
 #ifndef GAMEDAY_BAR
