@@ -5526,6 +5526,28 @@ static void test_backoff_windows() {
   CHECK_EQ(parse_retry_after_ms("12a"), 0u);
 }
 
+static void test_hold() {
+  Hold h;
+  CHECK(!h.on(0) && !h.on(0x80000000u));
+  // Across millis()'s wrap, and 25 days on it stays over.
+  const uint32_t t0 = 0xFFFFF000u;
+  h.start(t0, 5 * 60 * 1000);
+  CHECK(h.on(t0) && h.on(t0 + 1000) && h.on(t0 + 5 * 60 * 1000 - 1));
+  CHECK(!h.on(t0 + 5 * 60 * 1000));
+  CHECK(!h.on(t0 + 0x80000000u) && !h.on(t0 + 0x80001000u) && !h.on(t0 + 0xFFFFF000u));
+  // Unseen 30 days, then seen once: over for good.
+  h.start(1000, 5 * 60 * 1000);
+  CHECK(!h.on(1000 + 30u * 86400u * 1000u));
+  CHECK(!h.on(1000 + 1000) && !h.on(1000 + 0x80000000u));
+  // A later refusal restarts it, as long as asked.
+  h.start(1000, 60 * 60 * 1000);
+  h.start(2000, 5 * 60 * 1000);
+  CHECK(h.on(2000 + 5 * 60 * 1000 - 1) && !h.on(2000 + 5 * 60 * 1000));
+  // The longest Retry-After the header can carry: 11.6 days.
+  h.start(0xF0000000u, parse_retry_after_ms("999999"));
+  CHECK(h.on(0xF0000000u + 999999000u - 1) && !h.on(0xF0000000u + 999999000u));
+}
+
 static void test_cup_backoff() {
   // A cup job backs off when its last read failed or was refused.
   CHECK(cup_read_backs_off(true, true, false, false));   // the poll failed
@@ -9286,6 +9308,7 @@ int main() {
   test_backoff();
   test_miss_count();
   test_backoff_windows();
+  test_hold();
   test_cup_backoff();
   test_auto_update();
   test_auto_update_edges();

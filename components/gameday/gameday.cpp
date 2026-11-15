@@ -1560,7 +1560,7 @@ void GamedayComponent::apply_box_job_() {
     this->box_failed_(j.took_ms);
     if (j.throttled) {
       // ESPN refused: every gap read waits.
-      this->gap_hold_until_ = (now + std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE)) | 1;
+      this->gap_hold_.start(now, std::max<uint32_t>(j.retry_after_ms, 5 * MINUTE));
       this->watch_refused_(now);
     }
     return;
@@ -1683,6 +1683,7 @@ void GamedayComponent::loop() {
       this->boot_clock_noted_ = true;
       ::espn::boot_log_clock(boot_log, (int64_t) this->time_->now().timestamp - esp_timer_get_time() / 1000000);
     }
+    this->gap_hold_.on(millis());  // ends a passed hold while reads pause
     // A graded bet goes at local midnight (bets.h).
     if (this->bets_tick_())
       this->rebuild_state_(&this->last_fields_);
@@ -5614,8 +5615,9 @@ bool GamedayComponent::gap_ok_(uint32_t now) const {
 }
 
 // Minor league second teams use their own host's wait.
-bool GamedayComponent::espn_gap_ok_(uint32_t now) const {
-  return !this->backing_off_() && !(this->gap_hold_until_ != 0 && (int32_t) (now - this->gap_hold_until_) < 0);
+bool GamedayComponent::espn_gap_ok_(uint32_t now) {
+  const bool held = this->gap_hold_.on(now);
+  return !held && !this->backing_off_();
 }
 
 // A due second-area read that doesn't fit blocks others.
@@ -5755,7 +5757,7 @@ void GamedayComponent::a2_failed_(const Job &j) {
     const uint32_t ms = this->back_off_();
     bool hold_board;
     if (host == ::espn::Source::ESPN) {
-      this->gap_hold_until_ = (now + std::max<uint32_t>(retry, 5 * MINUTE)) | 1;
+      this->gap_hold_.start(now, std::max<uint32_t>(retry, 5 * MINUTE));
       hold_board = ::espn::watch_refusal_holds_board(this->favorites_mode_(), this->live_mode_(), this->mode_league_());
     } else {
       hold_board = !this->favorites_mode_() && !this->live_mode_() &&

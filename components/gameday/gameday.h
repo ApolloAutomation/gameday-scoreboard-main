@@ -1356,7 +1356,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ::espn::Backoff a2_fail_;
   uint8_t a2_misses_{0};
   uint32_t a2_wait_since_{0}, a2_wait_ms_{0};
-  uint32_t gap_hold_until_{0};  // millis(), 0 none
+  ::espn::Hold gap_hold_;  // ESPN refused a gap read
   uint32_t times_cycle_ms_{0};  // the last watch_times_.cycle()
   // The card up (league, event) and since when.
   uint8_t rot_league_{0};
@@ -1421,7 +1421,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // Order: the area's own, scores, then the watcher.
   void start_gap_job_(uint32_t due);
   bool gap_ok_(uint32_t now) const;
-  bool espn_gap_ok_(uint32_t now) const;
+  bool espn_gap_ok_(uint32_t now);
   // Favorite teams' next read, which ticks every second.
   uint32_t fav_gap_due_(uint32_t now) const;
   // Next known games, minus the main board's.
