@@ -3247,14 +3247,13 @@ static esp_err_t probe_event(esp_http_client_event_t *evt) {
   return ESP_OK;
 }
 
-// Probe task. Its own esp_http_client rather than http_request, which follows
+// Its own esp_http_client rather than http_request, which follows
 // redirects: a portal's redirect is the answer, and following it to an HTTPS
 // sign-in page with its own certificate would only fail.
-void GamedayComponent::probe_task_(void *arg) {
-  auto *self = static_cast<GamedayComponent *>(arg);
+static ::espn::Probe run_probe(const char *url) {
   ProbeHeaders h;
   esp_http_client_config_t cfg = {};
-  cfg.url = self->probe_url_.load();
+  cfg.url = url;
   cfg.timeout_ms = 10000;
   cfg.disable_auto_redirect = true;
   cfg.event_handler = &probe_event;
@@ -3279,7 +3278,13 @@ void GamedayComponent::probe_task_(void *arg) {
   const bool redirect = status >= 300 && status < 400 && !h.location.empty();
   ESP_LOGI(TAG, "Wi-Fi check: %s (HTTP %d%s%s)", ::espn::probe_name(r), status, redirect ? ", to " : "",
            redirect ? ::espn::detail::url_host(h.location).c_str() : "");
-  self->probe_result_ = (uint8_t) r;
+  return r;
+}
+
+// park() never returns: free the strings first.
+void GamedayComponent::probe_task_(void *arg) {
+  auto *self = static_cast<GamedayComponent *>(arg);
+  self->probe_result_ = (uint8_t) run_probe(self->probe_url_.load());
   self->probe_done_ = true;
   PsramTasks::park();
 }
