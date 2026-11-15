@@ -3,8 +3,12 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [main, beta, dev]
+    # Not main: its promotion PR and tag build it.
+    branches: [beta, dev]
     tags: ["v*"]
+  # Weekly on dev, so upstream breakage shows without a push.
+  schedule:
+    - cron: "23 10 * * 1"
   workflow_dispatch:
     inputs:
       install_now:
@@ -38,7 +42,8 @@ env:
 # merged. To get firmware for a cancelled commit, rerun it with
 # `gh run rerun <run id>`. Tags are their own refs, so a release never cancels.
 concurrency:
-  group: build-${{ github.ref }}
+  # The weekly run and dev's pushes never cancel each other.
+  group: build-${{ github.event_name == 'schedule' && 'schedule-' || '' }}${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -244,6 +249,29 @@ jobs:
       - name: The size budget's max_growth is at its defaults
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
         run: python3 scripts/size_budget.py growth-defaults
+      - name: The docs name the ESPHome version CI builds with
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 - <<'EOF'
+          import os, re, sys
+          want = os.environ["ESPHOME_VERSION"]
+          spots = [
+              ("AGENTS.md", r"ESPHome (\S+), the version CI pins"),
+              ("CONTRIBUTING.md", r"\[ESPHome\]\(https://esphome\.io/\) (\S+), the version CI builds with"),
+              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"`\.github/workflows/build\.yml`, (\S+) on the `dev` branch"),
+              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"pip install esphome==(\S+)"),
+          ]
+          bad = 0
+          for path, pattern in spots:
+              found = re.findall(pattern, open(path, encoding="utf-8").read())
+              if not found:
+                  print(f"::warning file={path}::No ESPHome version found by /{pattern}/; update this check")
+              for v in found:
+                  if v != want:
+                      print(f"::error file={path}::Says ESPHome {v}; CI builds with {want} (ESPHOME_VERSION in build.yml)")
+                      bad = 1
+          sys.exit(bad)
+          EOF
       - name: Release tags are on main
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -529,7 +557,7 @@ jobs:
     # workflow on main republishes the site with them. The stable manifests
     # and the flasher are left as they are.
     name: Publish the beta channel
-    needs: [build, build-bar, host-tests, web-tests]
+    needs: [build, build-bar, host-tests, fuzz, web-tests, budget]
     if: github.ref == 'refs/heads/beta' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
@@ -610,7 +638,8 @@ jobs:
     name: Build ${{ matrix.variant }} (ESPHome beta)
     needs: notes
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # The weekly run reports a break.
+    continue-on-error: ${{ github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
@@ -654,19 +683,23 @@ jobs:
           python3 scripts/build_airlines.py --selftest
           bash scripts/beta_version.sh --selftest
           python3 scripts/build_sprites.py --selftest
+          bash scripts/set_manifest_name.sh --selftest
+          bash scripts/keep_previous_ota.sh --selftest
+          bash scripts/check_live_feed.sh --selftest
+          python3 scripts/check_docs_links.py --selftest
       - name: sprites.h is built from the current art
         run: python3 scripts/build_sprites.py --check
-      # Play animation GIFs for art review
-      - name: Play animation review images
-        run: make -C tests review
-      - uses: actions/upload-artifact@v7
-        with:
-          name: review
-          path: tests/build/review
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
         run: python3 tests/web/mock_device.py --selftest
+
+  # Beside Parser tests, so neither waits on the other.
+  fuzz:
+    name: Fuzz the parsers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
       - name: Fuzz the parsers (30 s a target)
         run: make -C tests fuzz
       # libFuzzer names the input by what went wrong: a crash, a run over
@@ -682,6 +715,19 @@ jobs:
             tests/build/oom-*
             tests/build/leak-*
           if-no-files-found: ignore
+
+  review:
+    # Play animation GIFs for art review, on pull requests
+    name: Play animation review images
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make -C tests review
+      - uses: actions/upload-artifact@v7
+        with:
+          name: review
+          path: tests/build/review
 
   web-tests:
     # The device page (firmware/web/bundle.js) in Chromium against
@@ -711,7 +757,7 @@ jobs:
 
   publish:
     name: Publish flasher and release
-    needs: [build, host-tests, web-tests, notes]
+    needs: [build, host-tests, fuzz, web-tests, budget, notes]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -812,3 +858,27 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_MIRROR_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/publish_mirror.sh site
+
+  scheduled-report:
+    # A failed weekly run opens, or adds to, one issue.
+    name: Report a failed weekly run
+    needs: [notes, branch-rules, build, budget, build-demo, build-bar, build-beta, host-tests, fuzz, web-tests]
+    if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="The weekly build of dev failed"
+          body="The scheduled Build run on dev failed: $URL. Nobody pushed, so something outside the repo likely moved: the ESPHome beta, a fetched component or font, or a GitHub action."
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number,title \
+                | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
