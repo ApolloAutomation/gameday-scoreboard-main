@@ -430,29 +430,12 @@ inline std::string url_host(const std::string &url) {
   return host;
 }
 
-// The host itself, or one under it.
-inline bool host_is(const std::string &host, const char *name) {
-  const size_t n = strlen(name);
-  if (n == 0 || host.size() < n || host.compare(host.size() - n, n, name) != 0)
-    return false;
-  return host.size() == n || host[host.size() - n - 1] == '.';
-}
-
-struct AppHost {
-  const char *host{nullptr};
-  Source source{Source::ESPN};
-};
-
-// Which host's accounting a read goes to.
-inline Source url_source(const std::string &url, const AppHost *hosts, size_t n) {
+// A Game Day read's host accounting; displays use display_source.
+inline Source url_source(const std::string &url) {
   if (is_mlb_url(url))
     return Source::MLB_STATS;
   if (is_ht_url(url))
     return Source::HOCKEYTECH;
-  const std::string host = url_host(url);
-  for (size_t i = 0; i < n; i++)
-    if (hosts[i].host != nullptr && host_is(host, hosts[i].host))
-      return hosts[i].source;
   return Source::ESPN;
 }
 
@@ -623,18 +606,6 @@ inline bool app_register(AppSlots &slots, App *a) {
     return false;
   slots.app[(int) a->id()] = a;
   return true;
-}
-
-// Every display's hosts, for url_source; returns the count.
-inline size_t app_hosts(const AppSlots &slots, AppHost *out, size_t max) {
-  size_t n = 0;
-  for (int d = 1; d < kDisplayCount; d++) {
-    const App *a = slots.app[d];
-    const char *const *h = a != nullptr ? a->hosts() : nullptr;
-    for (; h != nullptr && *h != nullptr && n < max; h++)
-      out[n++] = AppHost{*h, display_source((Display) d)};
-  }
-  return n;
 }
 
 // The display claiming a set key; GAMEDAY for none.

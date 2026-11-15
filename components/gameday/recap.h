@@ -82,9 +82,9 @@ inline bool recap_day_kept(int32_t day, int32_t today) { return (int64_t) today 
 // days recap_day_kept keeps, so nothing downloaded is thrown away at once.
 inline bool recap_back_reads(int w) { return w >= 1 && w <= kRecapBackDays; }
 // Game cards in one loop, later today and finals together, shared between
-// the leagues shown. Two logos each, so 22 stays inside the 48-logo cache
-// (four are kept pinned) and a loop does not download the same logos again
-// every time round. The later-today cards come first, up to kRecapLaterCap,
+// the leagues shown. Two logos each, so 22 stays well inside the logo cache
+// (MAX_LOGOS, logo_cache.cpp) and a loop does not download the same logos
+// again every time round. The later-today cards come first, up to kRecapLaterCap,
 // and the finals get the rest: 14 with a full eight.
 static const size_t kRecapCap = 22;
 static const size_t kRecapLaterCap = kPendingKeep;

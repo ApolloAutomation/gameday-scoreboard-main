@@ -1468,9 +1468,6 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   uint32_t icon_wait_{0};
   bool app_shown_[::espn::kDisplayCount]{};
   ESPPreferenceObject app_pref_[::espn::kDisplayCount];
-  static constexpr size_t APP_HOSTS = 8;
-  ::espn::AppHost app_hosts_[APP_HOSTS]{};
-  size_t app_host_n_{0};
 
   Schedule schedule_;
   uint32_t schedule_fetched_ms_{0};

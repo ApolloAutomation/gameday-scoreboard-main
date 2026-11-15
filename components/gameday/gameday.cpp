@@ -91,7 +91,6 @@ static const uint32_t PRE_NEAR_INTERVAL = MINUTE;
 // (max-age 1) gains little from going faster.
 static const uint32_t IN_INTERVAL = 10 * 1000;
 static const uint32_t POST_INTERVAL = MINUTE;
-static const uint32_t POST_LINGER = 30 * MINUTE;
 // For the panel's own trouble (a fetch task that never finished or could not
 // start). A failed ESPN read backs off instead (back_off_).
 static const uint32_t RETRY_INTERVAL = MINUTE;
@@ -3193,10 +3192,9 @@ std::shared_ptr<http_request::HttpContainer> GamedayComponent::open_(const std::
     }
   }
   // Each host's answers and refusals are tracked apart.
-  ::espn::Source src = ::espn::url_source(url, this->app_hosts_, this->app_host_n_);
   // A display's read is its own, shared host or not.
-  if (app != nullptr)
-    src = ::espn::display_source((::espn::Display) this->job_.app);
+  const ::espn::Source src =
+      app != nullptr ? ::espn::display_source((::espn::Display) this->job_.app) : ::espn::url_source(url);
   const bool espn = src == ::espn::Source::ESPN;
   Job::HostJob &side = this->job_.host[(size_t) src];
   (espn ? this->job_.read_espn : side.read) = true;
@@ -5969,7 +5967,6 @@ void GamedayComponent::apps_setup_() {
     env.version.erase(0, 1);
   this->logos_.set_photo_agent(::flights::photo_agent(env.version));
   ::espn::register_apps(slots);
-  this->app_host_n_ = ::espn::app_hosts(slots, this->app_hosts_, APP_HOSTS);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];
     if (a == nullptr)
