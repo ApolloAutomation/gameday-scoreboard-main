@@ -80,10 +80,17 @@ flowchart LR
     main --> tag
 ```
 
+What customers get is what the beta channel ran for a night. The Branch
+rules job fails a PR into `main`, and the release tag on its merge, until
+the beta channel published the PR's commit at least 12 hours earlier and
+the bar panels' 3 to 5 AM install window (08:00 to 13:00 UTC, every US
+time zone) has passed since. Re-run the job once it has. For a fix
+customers can't wait for, the maintainer adds the `no-soak-ok` label to
+the promotion PR and re-runs the job; the tag on its merge passes too.
+
 When `dev` is on a beta pin, the final ships first: the pin moves on
 `dev`, `dev` is promoted to `beta`, the bar panels run it for a night, and
-then `beta` is promoted to `main`. What customers get is what the beta
-channel ran.
+then `beta` is promoted to `main`.
 
 A fix we want that is only in an ESPHome beta, in order:
 
@@ -108,6 +115,28 @@ tag, on its way to release, and the next patch number once it's released,
 so 2026.10.1 builds 2026.10.2-beta.<run>. A bar build from any other branch
 is `<version>-beta.0`, so a bar panel flashed from it takes the next beta.
 
+### Taking a release back
+
+Once a panel installs a release it never goes back to an older one, so a
+bad release is stopped from reaching more panels and then fixed forward:
+
+1. `gh release edit vX.Y.Z --prerelease`. The site and the update
+   manifests are built from the latest release, which is now the one
+   before it.
+2. `gh workflow run site.yml --ref main` republishes the site from that
+   release. Its "The update feed is live" step fails if Pages didn't
+   take the deploy; run it again if so. Panels that haven't installed
+   vX.Y.Z stop being offered it, and an offer they already read fails at
+   once, because its file is gone from the site.
+3. Panels already on vX.Y.Z need a higher version: ship the fix as the
+   next patch release, with the `no-soak-ok` label on its promotion PR if
+   it can't wait a night.
+
+Until that release, `main`'s version has no live release, so a beta
+publish or a `docs/site` change doesn't redeploy the site by itself (see
+the top of `site.yml`); run step 2's command after one when it should go
+live.
+
 ### Setup
 
 - [ESPHome](https://esphome.io/) 2026.10.2, the version CI builds with.
@@ -130,6 +159,13 @@ run `npm ci` and `npx playwright install chromium` once, then `npm test`.
 If you edit `firmware/web/app.js`, `app.css` or `demo.js`, run
 `python3 scripts/build_web.py` and commit the regenerated `bundle.js` and
 `bundle-demo.js`. CI fails the PR if either is stale.
+
+A pull request that has to grow a firmware or parser figure by more than
+`max_growth` in `firmware/budget.json` gets the maintainer's
+`size-growth-ok` label instead of raising `max_growth`, then a re-run of
+the Size budget job (adding a label starts no run); the budget ceilings
+still apply. A PR into `main` fails while `max_growth` differs
+from `GROWTH_DEFAULTS` in `scripts/size_budget.py`.
 
 If you change what the panel does, run it on a panel for a while
 (during a game if the change touches live scoring) and say in the PR

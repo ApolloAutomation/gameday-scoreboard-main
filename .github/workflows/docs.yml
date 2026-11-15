@@ -12,6 +12,7 @@ on:
     paths:
       - "docs/wiki/**"
       - "CHANGELOG.md"
+      - "scripts/check_docs_links.py"
   workflow_dispatch:
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -34,3 +35,6 @@ jobs:
       - name: Build
         working-directory: docs/wiki
         run: npm run build
+      # Astro passes dead links silently.
+      - name: Links between pages and their anchors
+        run: python3 scripts/check_docs_links.py docs/wiki/dist

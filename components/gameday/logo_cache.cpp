@@ -212,26 +212,18 @@ bool LogoCache::pinned_url_(std::string_view url) const {
     if (!p.empty() && p == url)
       return true;
   }
-  if (this->icon_pin_n_[0] == 0 && this->icon_pin_n_[1] == 0)
+  if (this->icon_pins_[0].empty() && this->icon_pins_[1].empty())
     return false;
   const uint32_t key = url_key(url);
-  for (int s = 0; s < 2; s++)
-    for (uint8_t i = 0; i < this->icon_pin_n_[s]; i++)
-      if (this->icon_pins_[s][i] == key)
-        return true;
-  return false;
+  return this->icon_pins_[0].has(key) || this->icon_pins_[1].has(key);
 }
 
-void LogoCache::pin_icons(const uint32_t *keys, size_t n) {
-  n = std::min(n, ICON_PINS);
-  if (this->lock_ == nullptr ||
-      (n == this->icon_pin_n_[0] && std::equal(keys, keys + n, this->icon_pins_[0])))
+void LogoCache::pin_icons(Surface s, const uint32_t *keys, size_t n) {
+  // Only the main loop writes them: no lock to compare
+  if (this->lock_ == nullptr || s > AREA2 || this->icon_pins_[s].same(keys, n))
     return;
   Locked guard(this->lock_);
-  std::copy(this->icon_pins_[0], this->icon_pins_[0] + ICON_PINS, this->icon_pins_[1]);
-  this->icon_pin_n_[1] = this->icon_pin_n_[0];
-  std::copy(keys, keys + n, this->icon_pins_[0]);
-  this->icon_pin_n_[0] = (uint8_t) n;
+  this->icon_pins_[s].set(keys, n);
 }
 
 // Main loop. A failed logo still on screen is asked for again on its own, so
@@ -280,7 +272,7 @@ void LogoCache::make_photo_room_(uint32_t now) {
 
 // Caller holds the lock.
 void LogoCache::start_task_() {
-  if (this->task_running_)
+  if (this->task_running_ || this->paused_)
     return;
   this->task_running_ = true;
   // 16 KB: the TLS handshake needs it.
@@ -288,6 +280,21 @@ void LogoCache::start_task_() {
     ESP_LOGW(TAG, "Could not start the logo task (largest free internal block %u bytes)",
              (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
     this->task_running_ = false;
+  }
+}
+
+void LogoCache::pause(bool on) {
+  if (this->lock_ == nullptr)
+    return;
+  Locked guard(this->lock_);
+  this->paused_ = on;
+  if (on)
+    return;
+  for (auto &e : this->entries_) {
+    if (e->state == State::QUEUED) {
+      this->start_task_();
+      return;
+    }
   }
 }
 
@@ -307,7 +314,7 @@ void LogoCache::run_() {
     {
       Locked guard(this->lock_);
       for (auto &e : this->entries_) {
-        if (e->state == State::QUEUED &&
+        if (e->state == State::QUEUED && !this->paused_ &&
             (job == nullptr || ::espn::logo_job_before(e->prio, e->seq, job->prio, job->seq)))
           job = e.get();
       }

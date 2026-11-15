@@ -3,8 +3,12 @@ name: Build
 on:
   pull_request:
   push:
-    branches: [main, beta, dev]
+    # Not main: its promotion PR and tag build it.
+    branches: [beta, dev]
     tags: ["v*"]
+  # Weekly on dev, so upstream breakage shows without a push.
+  schedule:
+    - cron: "23 10 * * 1"
   workflow_dispatch:
     inputs:
       install_now:
@@ -38,7 +42,8 @@ env:
 # merged. To get firmware for a cancelled commit, rerun it with
 # `gh run rerun <run id>`. Tags are their own refs, so a release never cancels.
 concurrency:
-  group: build-${{ github.ref }}
+  # The weekly run and dev's pushes never cancel each other.
+  group: build-${{ github.event_name == 'schedule' && 'schedule-' || '' }}${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -71,6 +76,14 @@ jobs:
             echo "summary=Development build" >> "$GITHUB_OUTPUT"
           fi
           cat notes.md
+      # Warns when the manifest's summary would be cut.
+      - name: Release summary fits the update manifest
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
+        run: |
+          v=$(sed -n 's/^  version: "\(.*\)"$/\1/p' firmware/gameday-common.yaml)
+          if grep -q "^## v$v\s*$" CHANGELOG.md; then
+            python scripts/release_notes.py "v$v" --summary
+          fi
       # The site's /changelog page is rendered at deploy; fail here first.
       - name: Changelog page renders
         run: |
@@ -93,6 +106,8 @@ jobs:
       contents: read
       # The override label on a promotion PR.
       pull-requests: read
+      # When the beta channel published the PR's commit.
+      actions: read
     steps:
       - name: PRs into beta come from dev
         if: github.event_name == 'pull_request' && github.base_ref == 'beta'
@@ -154,6 +169,57 @@ jobs:
           done
           echo "::error file=.github/workflows/build.yml::ESPHOME_VERSION is $ESPHOME_VERSION, a beta. main and release tags build only on a final ESPHome release: move the pin to a final release on dev, then promote again. To ship this beta anyway, the maintainer adds the esphome-beta-ok label to the promotion PR and re-runs this job."
           exit 1
+      # Customers get what the beta channel ran overnight.
+      - name: The beta channel ran this build for a night
+        if: (github.event_name == 'pull_request' && github.base_ref == 'main') || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SOAK_HOURS: "12"
+        run: |
+          set -euo pipefail
+          if [ -n "$PR" ]; then
+            prs=$PR
+          else
+            prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+                    --jq '.[] | select(.base.ref == "main" and .merged_at != null) | .number')
+          fi
+          heads=""
+          for n in $prs; do
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
+            if jq -e '.labels[] | select(.name == "no-soak-ok")' <<< "$pr" > /dev/null; then
+              echo "::warning::PR #$n has the no-soak-ok label, so this reaches main without a night on the beta channel."
+              exit 0
+            fi
+            heads="$heads $(jq -r .head.sha <<< "$pr")"
+          done
+          [ -n "$heads" ] || heads=$GITHUB_SHA
+          how="Re-run this job once it has. For a fix that can't wait, the maintainer adds the no-soak-ok label to the promotion PR and re-runs this job."
+          for sha in $heads; do
+            at=""
+            for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$sha&branch=beta&per_page=20" \
+                          --jq '.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch") | .id'); do
+              t=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=50" \
+                    --jq '.jobs[] | select(.name == "Publish the beta channel" and .conclusion == "success") | .completed_at')
+              for x in $t; do
+                if [ -z "$at" ] || [[ "$x" < "$at" ]]; then at=$x; fi
+              done
+            done
+            if [ -z "$at" ]; then
+              echo "::error::The beta channel never published ${sha::7}. Promote dev to beta and let the bar panels run it for a night first. $how"
+              exit 1
+            fi
+            # 08:00-13:00 UTC spans 3-5 AM in US zones.
+            read -r hours night < <(jq -nr --arg t "$at" '
+              ($t | fromdateiso8601) as $p
+              | ((($p - 28800) / 86400 | ceil) * 86400 + 28800) as $start
+              | "\(((now - $p) / 3600) | floor) \(now >= $start + 18000)"')
+            if [ "$hours" -lt "$SOAK_HOURS" ] || [ "$night" != true ]; then
+              echo "::error::The beta channel published ${sha::7} at $at, $hours hours ago. main takes it after $SOAK_HOURS hours that include the bar panels' 3 to 5 AM install window (08:00 to 13:00 UTC). $how"
+              exit 1
+            fi
+            echo "The beta channel has run ${sha::7} since $at, $hours hours."
+          done
       - uses: actions/checkout@v7
         with:
           # Tags need history for the main check. The quotes matter: a bare 0
@@ -178,6 +244,33 @@ jobs:
             echo "$found" | while read -r f; do echo "::error file=$f::Private notes don't belong in this public repo. Remove the file."; done
             exit 1
           fi
+      # A raised max_growth goes back before a release.
+      - name: The size budget's max_growth is at its defaults
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: python3 scripts/size_budget.py growth-defaults
+      - name: The docs name the ESPHome version CI builds with
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 - <<'EOF'
+          import os, re, sys
+          want = os.environ["ESPHOME_VERSION"]
+          spots = [
+              ("AGENTS.md", r"ESPHome (\S+), the version CI pins"),
+              ("CONTRIBUTING.md", r"\[ESPHome\]\(https://esphome\.io/\) (\S+), the version CI builds with"),
+              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"`\.github/workflows/build\.yml` in the code you clone, (\S+) for the latest release"),
+              ("docs/wiki/src/content/docs/diy/build-from-source.md", r"pip install esphome==(\S+)"),
+          ]
+          bad = 0
+          for path, pattern in spots:
+              found = re.findall(pattern, open(path, encoding="utf-8").read())
+              if not found:
+                  print(f"::warning file={path}::No ESPHome version found by /{pattern}/; update this check")
+              for v in found:
+                  if v != want:
+                      print(f"::error file={path}::Says ESPHome {v}; CI builds with {want} (ESPHOME_VERSION in build.yml)")
+                      bad = 1
+          sys.exit(bad)
+          EOF
       - name: Release tags are on main
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -269,6 +362,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+      # The size-growth-ok label
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -326,10 +421,21 @@ jobs:
           fi
           echo "label=$best" >> "$GITHUB_OUTPUT"
           echo "Base figures from $best"
+      # size-growth-ok lifts max_growth for one PR, never the ceilings.
       - name: Check the budget
         env:
           BASE_LABEL: ${{ steps.base.outputs.label }}
-        run: python3 scripts/size_budget.py check sizes --base base --base-label "$BASE_LABEL"
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          growth=""
+          if [ "$BASE_REF" = dev ]; then
+            labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.labels[].name')
+            if grep -qxF size-growth-ok <<< "$labels"; then growth=--growth-ok; fi
+          fi
+          python3 scripts/size_budget.py check sizes --base base --base-label "$BASE_LABEL" $growth
 
   build-demo:
     # The demo build (firmware/pages/demo.yaml) for showing panels in bars and
@@ -450,7 +556,7 @@ jobs:
     # workflow on main republishes the site with them. The stable manifests
     # and the flasher are left as they are.
     name: Publish the beta channel
-    needs: [build, build-bar, host-tests, web-tests]
+    needs: [build, build-bar, host-tests, fuzz, web-tests, budget]
     if: github.ref == 'refs/heads/beta' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
@@ -531,7 +637,8 @@ jobs:
     name: Build ${{ matrix.variant }} (ESPHome beta)
     needs: notes
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # The weekly run reports a break.
+    continue-on-error: ${{ github.event_name != 'schedule' }}
     strategy:
       fail-fast: false
       matrix:
@@ -553,6 +660,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: make -C tests
+      - name: Unit checks under ASan and UBSan
+        run: make -C tests sanitize
       - name: Replay tool builds
         run: make -C tests replay
       - name: Memory each ESPN read takes
@@ -575,19 +684,23 @@ jobs:
           python3 scripts/build_airlines.py --selftest
           bash scripts/beta_version.sh --selftest
           python3 scripts/build_sprites.py --selftest
+          bash scripts/set_manifest_name.sh --selftest
+          bash scripts/keep_previous_ota.sh --selftest
+          bash scripts/check_live_feed.sh --selftest
+          python3 scripts/check_docs_links.py --selftest
       - name: sprites.h is built from the current art
         run: python3 scripts/build_sprites.py --check
-      # Play animation GIFs for art review
-      - name: Play animation review images
-        run: make -C tests review
-      - uses: actions/upload-artifact@v7
-        with:
-          name: review
-          path: tests/build/review
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
         run: python3 tests/web/mock_device.py --selftest
+
+  # Beside Parser tests, so neither waits on the other.
+  fuzz:
+    name: Fuzz the parsers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
       - name: Fuzz the parsers (30 s a target)
         run: make -C tests fuzz
       # libFuzzer names the input by what went wrong: a crash, a run over
@@ -603,6 +716,19 @@ jobs:
             tests/build/oom-*
             tests/build/leak-*
           if-no-files-found: ignore
+
+  review:
+    # Play animation GIFs for art review, on pull requests
+    name: Play animation review images
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: make -C tests review
+      - uses: actions/upload-artifact@v7
+        with:
+          name: review
+          path: tests/build/review
 
   web-tests:
     # The device page (firmware/web/bundle.js) in Chromium against
@@ -632,7 +758,7 @@ jobs:
 
   publish:
     name: Publish flasher and release
-    needs: [build, host-tests, web-tests, notes]
+    needs: [build, host-tests, fuzz, web-tests, budget, notes]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -675,6 +801,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/add_beta_channel.sh site
+      # An offer read before this deploy still installs.
+      - name: Keep the previous OTA images
+        run: bash scripts/keep_previous_ota.sh site
+      # crash_report.py reads ELFs from the release zips.
+      - name: Leave the debug ELFs off the site
+        run: find site/firmware -name '*.elf' -print -delete
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
@@ -683,6 +815,9 @@ jobs:
           include-hidden-files: true
       - id: deployment
         uses: actions/deploy-pages@v5
+      # No release until panels can see it.
+      - name: The update feed is live
+        run: bash scripts/check_live_feed.sh site
       - name: Create the release with notes and binaries
         env:
           GH_TOKEN: ${{ github.token }}
@@ -724,3 +859,27 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_MIRROR_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/publish_mirror.sh site
+
+  scheduled-report:
+    # A failed weekly run opens, or adds to, one issue.
+    name: Report a failed weekly run
+    needs: [notes, branch-rules, build, budget, build-demo, build-bar, build-beta, host-tests, fuzz, web-tests]
+    if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="The weekly build of dev failed"
+          body="The scheduled Build run on dev failed: $URL. Nobody pushed, so something outside the repo likely moved: the ESPHome beta, a fetched component or font, or a GitHub action."
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number,title \
+                | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -65,6 +66,36 @@ template<class V> inline int pick_photo_evict_in(const V &slots, size_t cap, siz
   // Every photo busy or shown: logos as usual
   return slots.size() < max ? -1 : pick_evict_in(slots, now);
 }
+
+// A surface's shown pictures: this set, then the last.
+struct IconPins {
+  static constexpr size_t kMax = 10;  // eight logos, a photo, its stand-in
+  uint32_t keys[2][kMax]{};
+  uint8_t n[2]{};
+  bool same(const uint32_t *k, size_t m) const {
+    m = m < kMax ? m : kMax;
+    return m == this->n[0] && std::equal(k, k + m, this->keys[0]);
+  }
+  // False when unchanged.
+  bool set(const uint32_t *k, size_t m) {
+    if (this->same(k, m))
+      return false;
+    m = m < kMax ? m : kMax;
+    std::copy(this->keys[0], this->keys[0] + kMax, this->keys[1]);
+    this->n[1] = this->n[0];
+    std::copy(k, k + m, this->keys[0]);
+    this->n[0] = (uint8_t) m;
+    return true;
+  }
+  bool empty() const { return this->n[0] == 0 && this->n[1] == 0; }
+  bool has(uint32_t key) const {
+    for (int s = 0; s < 2; s++)
+      for (uint8_t i = 0; i < this->n[s]; i++)
+        if (this->keys[s][i] == key)
+          return true;
+    return false;
+  }
+};
 
 // Shown or held cards first, then prefetches, oldest first
 enum LogoPrio : uint8_t { LOGO_NOW = 0, LOGO_NEXT = 1 };

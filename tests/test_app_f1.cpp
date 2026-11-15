@@ -375,7 +375,7 @@ void test_reads_and_screens() {
     const std::string host = url_host(rq.url);
     const std::string ua = header_of(rq, "User-Agent");
     if (host == "api.jolpi.ca" || host == "api.open-meteo.com")
-      PCHECK(ua == kF1UserAgent, "%s sends its agent", rq.url.c_str());
+      PCHECK(ua == f1_met_agent(app_env().version), "%s sends its agent", rq.url.c_str());
     else
       PCHECK(ua.empty() && rq.body.empty(), "%s keeps the panel's", rq.url.c_str());
   }

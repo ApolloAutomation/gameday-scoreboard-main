@@ -62,11 +62,22 @@ template<typename From, typename Fill> bool parse_file(const char *file, Fill fi
   return parse_with(body, fill, from);
 }
 
+// Reads sent without the project's User-Agent
+int unnamed = 0;
+
+void count_agent(const espn::AppRequest &req) {
+  bool named = false;
+  for (const espn::AppHeader &h : req.headers)
+    named = named || (h.name == "User-Agent" && h.value.find("GameDayScoreboard/") == 0);
+  unnamed += named ? 0 : 1;
+}
+
 // One read as run_app_job_ makes it, from a fixture.
 bool step(WeatherApp &a, int64_t now, std::string &url, const char *file, int status = 200, bool refused = false) {
   espn::AppRequest req;
   if (!a.request(now, req))
     return false;
+  count_agent(req);
   url = req.url;
   bool ok = false;
   if (file != nullptr && status == 200) {
@@ -103,6 +114,7 @@ int read_all(WeatherApp &a, int64_t now) {
     espn::AppRequest req;
     if (!a.request(now, req))
       break;
+    count_agent(req);
     const char *file = fixture_for(req.url);
     JsonDocument filter, doc;
     const bool ok = a.filter(filter) &&
@@ -201,6 +213,7 @@ void test_icons() {
   WCHECK(sky_text(2, true, 12) == "Pt cloudy" && sky_text(2, true, 20) == "Partly cloudy" &&
              sky_text(0, false, 12) == "Clear" && sky_text(73, true, 12) == "Snow",
          "words: %s", sky_text(73, true, 12).c_str());
+  WCHECK(snowy(75) && snowy(85) && !snowy(61) && !snowy(66) && !snowy(95) && !snowy(0), "snow's codes");
 }
 
 void test_aqi_alerts() {
@@ -415,6 +428,7 @@ void test_app() {
   WCHECK(read_all(*a, kNow) == 2, "radar and air");
   read_all(*a, kNow + 120);
   WCHECK(a->alerts().n == 1 && a->air().aqi == 41 && a->radar().n == kFrames && a->forecast().valid, "all read");
+  WCHECK(unnamed == 0, "every read names the panel: %d without", unnamed);
   r = a->next_read(kNow + 121, true, at);
   WCHECK(r == WeatherApp::Read::ALERTS && at == kNow + 120 + WeatherApp::kAlertsS, "alerts every 5 minutes: %lld",
          (long long) (at - kNow));
@@ -443,6 +457,16 @@ void test_app() {
       WCHECK(espn::app_frame_board(f), "%dx%d page %d draws", sz[0], sz[1], (int) p);
       WCHECK(f.ticker.compare(0, 34, "Winter Storm Warning until 10a Sat") == 0, "ticker: %s",
              f.ticker.substr(0, 40).c_str());
+      // Tahoe's heavy snow day
+      WCHECK(f.ticker.find("% chance of snow") != std::string::npos && f.ticker.find("of rain") == std::string::npos,
+             "snow in the ticker");
+      if (p == Page::NOW && (sz[0] == 256 || sz[1] == 128)) {
+        const char *label = sz[1] == 128 ? "Snow" : "Snow today";
+        bool snow = false;
+        for (const espn::AppText &t : f.texts)
+          snow = snow || t.text == label;
+        WCHECK(snow && !has_text(f, "Rain"), "%dx%d says %s", sz[0], sz[1], label);
+      }
       if (p == Page::RADAR)
         WCHECK(f.photo.w == std::min(sz[0], 128) && f.photo.h == sz[1] - 8 &&
                    f.photo.hold == rainviewer_url(a->radar(), kFrames - 1, 389399, -1199772) &&

@@ -255,7 +255,7 @@ espn::AppSet prefs_set(Prefs &p, const std::string &key, const std::string &valu
 void prefs_state(const Prefs &p, const Units &u, JsonObject out) {
   out["home"] = coord_text(p.lat_e4, p.lon_e4);
   out["place"] = (const char *) p.place;
-  out["radius"] = p.radius;
+  out["radius"] = (uint16_t) p.radius;  // a copy: Prefs is packed
   out["radius_unit"] = dist_unit_key((DistUnit) p.radius_unit);
   out["receiver"] = (const char *) p.receiver;
   out["units"] = u.dist == DistUnit::MILES ? "imperial" : "metric";
@@ -449,6 +449,8 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out = espn::AppRequest();
   this->read_home_ = prefs_home(this->prefs_);
+  // The free services ask who's calling
+  auto named = [&out]() { espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version)); };
   switch (n.read) {
     case Read::POSITIONS:
       switch (n.source) {
@@ -457,9 +459,11 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
           break;
         case Source::ADSBFI:
           out.url = adsbfi_url(this->read_home_);
+          named();
           break;
         case Source::ADSBLOL:
           out.url = adsblol_url(this->read_home_);
+          named();
           break;
         default:
           out.url = fr24_url(this->read_home_);
@@ -472,13 +476,14 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
       out.url = kRoutesetUrl;
       out.body = routeset_body(this->ask_);
       espn::app_header(out, "Content-Type", "application/json");
+      named();
       this->im_last_ms_ = now_ms | 1;
       this->pending_routes_ = this->routes_;
       break;
     case Read::PHOTO:
       this->photo_ask_(now, this->photo_key_);
       out.url = photo_url(this->photo_key_);
-      espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version));
+      named();
       this->photo_last_ms_ = now_ms | 1;
       this->pending_photo_ = PlanePhoto();
       break;
@@ -486,6 +491,7 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
       const RouteAsk ask = route_asks(this->near_, this->routes_, (uint32_t) now);
       memcpy(this->db_callsign_, ask.callsign[0], sizeof(this->db_callsign_));
       out.url = adsbdb_url(this->db_callsign_);
+      named();
       this->db_last_ms_ = now_ms | 1;
       this->pending_routes_ = this->routes_;
       break;

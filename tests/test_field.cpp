@@ -159,7 +159,16 @@ void test_model() {
   // Missing data hides the spot, or the field
   g = event("event_nfl_live.json", 2);
   g.possession = 0;
+  g.play_side = 0;
   FCHECK(field_model(g).on && !field_model(g).spot);
+  // After a kickoff return ESPN leaves out possession
+  g = event("event_nfl_kickoff_return.json", 17);
+  FCHECK(g.possession == 0 && g.play_side == 1);
+  m = field_model(g);
+  FCHECK(m.spot && m.side == 0 && m.ball == 30 && m.gain == 40 && m.down == 1 && m.dist == 10);
+  FCHECK(field_down(m, false) == "1st & 10" && field_spot(g, false) == "NE 30");
+  m = field_model(event("event_nfl_kickoff_return.json", 8));
+  FCHECK(m.spot && m.side == 1 && m.ball == 70 && m.gain == 60);
   g = event("event_nfl_live.json", 2);
   g.fb.down = 0;
   FCHECK(!field_model(g).spot);
@@ -227,7 +236,8 @@ void check_frame(const SportFrame &fr, int w, bool large, const char *what) {
 void test_frames() {
   std::vector<GameSnapshot> games = {event("event_nfl_live.json", 2), event("event_nfl_live.json", 16),
                                      event("event_ncaa_live.json", 2229), day(6, 150), day(11, 2026),
-                                     day(7, 2429), day(2, 276), field_sample("", 0, "", 0)};
+                                     day(7, 2429), day(2, 276), field_sample("", 0, "", 0),
+                                     event("event_nfl_kickoff_return.json", 17)};
   for (const GameSnapshot &g : games) {
     const std::string clock = board_clock_text(g, false, 0);
     for (int large = 0; large < 2; large++) {
@@ -255,6 +265,15 @@ void test_frames() {
   FCHECK(red);
   // Possession's gold bar under the side with the ball
   FCHECK(fr.pic.poss_y >= 0 && fr.pic.poss_x < 64);
+  // After a kickoff return: down, spot and returner's bar
+  const GameSnapshot ret = event("event_nfl_kickoff_return.json", 17);
+  sport_frame(ret, board_clock_text(ret, false, 0), 128, false, fr);
+  bool down = false, kick = false;
+  for (const AppText &t : fr.texts) {
+    down = down || t.text.find("1st & 10") == 0;
+    kick = kick || t.text == "Kickoff";
+  }
+  FCHECK(down && !kick && fr.pic.poss_y >= 0 && fr.pic.poss_x < 64);
   // Halftime shows each period's points, no bar
   const GameSnapshot half = day(7, 2429);
   sport_frame(half, board_clock_text(half, false, 0), 256, false, fr);

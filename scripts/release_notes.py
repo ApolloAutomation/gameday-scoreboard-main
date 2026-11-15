@@ -2,7 +2,7 @@
 """Print the CHANGELOG.md section for one version, or render the site's changelog page.
 
     python scripts/release_notes.py v0.2.2            # full section body
-    python scripts/release_notes.py v0.2.2 --summary  # one line for the firmware manifest
+    python scripts/release_notes.py v0.2.2 --summary  # one line for the firmware manifest (warns when cut)
     python scripts/release_notes.py --page site/changelog/index.html [--dates releases.json] [--date v0.2.2=2026-10-20]
     python scripts/release_notes.py --selftest
 
@@ -40,11 +40,26 @@ def section(version: str) -> str:
     return m.group(1).strip() + "\n"
 
 
-def summary(body: str, limit: int = 240) -> str:
-    """Bullets joined into one line with " | " (the page splits on it), trimmed to fit an ESPHome text field."""
+SUMMARY_LIMIT = 240
+
+
+def full_summary(body: str) -> str:
+    """The section's lead line, else its bullets joined with " | " (the page splits on it)."""
+    if lead(body):
+        return lead(body)
     bullets = [ln[2:].strip() for ln in body.splitlines() if ln.startswith("- ")]
-    out = " | ".join(bullets) if bullets else body.strip().splitlines()[0]
-    return out if len(out) <= limit else out[: limit - 3].rstrip() + "..."
+    return " | ".join(bullets) if bullets else body.strip().splitlines()[0]
+
+
+def summary(body: str, limit: int = SUMMARY_LIMIT) -> str:
+    """full_summary() cut at a whole word to fit an ESPHome text field."""
+    out = full_summary(body)
+    if len(out) <= limit:
+        return out
+    cut = out[: limit - 3]
+    if " " in cut:
+        cut = cut[: cut.rindex(" ")]
+    return cut.rstrip(" ,;:|-") + "..."
 
 
 def releases() -> list[tuple[str, str]]:
@@ -60,16 +75,21 @@ def releases() -> list[tuple[str, str]]:
     return sorted(out, key=lambda r: [int(n) for n in r[0][1:].split(".")], reverse=True)
 
 
-def headline(body: str) -> str:
-    """The section's one-line summary: a plain line above the bullets if it has one, else the first bullet's first sentence."""
-    lead = []
+def lead(body: str) -> str:
+    """The plain lines above the section's bullets, as one line."""
+    out = []
     for ln in body.splitlines():
         if ln.startswith("- "):
             break
         if ln.strip():
-            lead.append(ln.strip())
-    if lead:
-        return " ".join(lead)
+            out.append(ln.strip())
+    return " ".join(out)
+
+
+def headline(body: str) -> str:
+    """The section's one-line summary: a plain line above the bullets if it has one, else the first bullet's first sentence."""
+    if lead(body):
+        return lead(body)
     first = next((ln[2:].strip() for ln in body.splitlines() if ln.startswith("- ")), "")
     m = re.match(r"(.+?[.!?])\s+(?=[A-Z\"])", first)
     return m.group(1) if m else first
@@ -145,8 +165,15 @@ def selftest() -> None:
     assert dates == {"v2026.10.0": date(2026, 10, 19), "v2026.11.0": date(2026, 11, 2)}, dates
 
     assert summary("- One.\n- Two.\n") == "One. | Two."
+    assert summary("The lead.\n\n- One.\n- Two.\n") == "The lead."
     trimmed = summary("- " + "x" * 300)
     assert len(trimmed) == 240 and trimmed.endswith("..."), trimmed
+    # A long lead line ends on a whole word.
+    text = "Kicks, home runs and goals " * 20
+    words = summary(text + "\n\n- A bullet.\n")
+    core = words[:-3]
+    assert len(words) <= 240 and words.endswith("...") and text.startswith(core) and text[len(core)] in " ,", words
+    assert summary("- " + "word, " * 60).endswith("word..."), summary("- " + "word, " * 60)
     assert headline("A lead line.\n\n- A bullet. More.\n") == "A lead line."
     assert headline("- First sentence. Second one.\n") == "First sentence."
     print("selftest ok")
@@ -163,4 +190,12 @@ if __name__ == "__main__":
         page(sys.argv[2], release_dates(dates_file[0] if dates_file else None, option("--date")))
         raise SystemExit(0)
     body = section(sys.argv[1])
-    print(summary(body) if "--summary" in sys.argv else body, end="")
+    if "--summary" in sys.argv:
+        n = len(full_summary(body))
+        if n > SUMMARY_LIMIT:
+            print(f"::warning file=CHANGELOG.md::The {sys.argv[1]} summary is {n} characters; the update manifest "
+                  f"shows the first {SUMMARY_LIMIT}, cut at a word. Keep the section's lead line to "
+                  f"{SUMMARY_LIMIT}.", file=sys.stderr)
+        print(summary(body), end="")
+    else:
+        print(body, end="")
