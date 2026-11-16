@@ -762,6 +762,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void end_visit_();
   void watch_refused_(uint32_t now);
   GameSnapshot board_prev_(const GameSnapshot &cur);  // game_ as the read before cur
+  void take_board_prev_(const GameSnapshot &cur);     // prev_ = board_prev_(cur)
   bool visit_back_{false};  // next mode poll is the first after a visit
   // No way back: what the board follows changed.
   void drop_visit_() {
@@ -1093,6 +1094,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   ESPPreferenceObject pref5_;
   ESPPreferenceObject pref6_;
   Prefs6 prefs6_{};
+  // Loop stack bytes never used, read every 10 s.
+  std::atomic<uint32_t> loop_stack_free_{0};
   // Install updates automatically (auto_update.h), run from loop().
   uint32_t auto_update_ms_{0};      // last look
   int32_t auto_update_checked_{0};  // the night the manifest was read for it
@@ -1395,6 +1398,7 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   A2Jump jump_;
   GameSnapshot &jump_game_() { return this->idle_snaps_[2]; }
   const GameSnapshot &jump_game_() const { return this->idle_snaps_[2]; }
+  GameSnapshot &a2_card_() { return this->idle_snaps_[3]; }
   uint32_t a2_splash_ms_{0};
   bool a2_splash_up_(uint32_t now) const { return ::espn::splash_up(now, this->a2_splash_ms_); }
   // A 2x2's board splash covers the area

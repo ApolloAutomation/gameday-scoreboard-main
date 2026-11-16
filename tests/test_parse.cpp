@@ -1140,6 +1140,23 @@ static void test_clock_text() {
   CHECK_EQ(clock_text(k), std::string("End of 1st"));
 }
 
+// clear() leaves a parsed snapshot as a new one.
+static void test_snapshot_clear() {
+  GameSnapshot g;
+  CHECK(parse_event_str(slurp("fixtures/event_nfl_live.json"), Sport::FOOTBALL, 2, g, "401873051"));
+  CHECK(g.valid);
+  CHECK(g.state == GameState::IN);
+  CHECK_EQ(g.team_score, 3);
+  CHECK(!g.last_play.empty());
+  g.clear();
+  CHECK(!g.valid);
+  CHECK(g.state == GameState::NOT_FOUND);
+  CHECK(g.event_id.empty());
+  CHECK(g.last_play.empty());
+  CHECK_EQ(g.team_score, 0);
+  CHECK_EQ(g.opp_score, 0);
+}
+
 static void test_carry_football() {
   GameSnapshot none;
   GameSnapshot pre = live(0, 0, GameState::PRE);
@@ -9555,6 +9572,7 @@ int main() {
   test_upcoming();
   test_clock_text();
   test_halftime_fixture();
+  test_snapshot_clear();
   test_carry_football();
   test_halftime_resumes();
   test_end_of_half_in_progress();

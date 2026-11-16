@@ -30,6 +30,7 @@ GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
 GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
 GameSnapshot &GameSnapshot::operator=(GameSnapshot &&) noexcept = default;
 GameSnapshot::~GameSnapshot() = default;
+void GameSnapshot::clear() { *this = GameSnapshot(); }
 
 const char *league_path(League league) {
   const LeagueInfo *l = league_info(league);
