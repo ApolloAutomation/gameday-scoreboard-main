@@ -50,6 +50,14 @@ The card also shows the airline's logo and a picture of the plane.
 
 The list of the nearest planes, nearest first, has each one's callsign, type code, altitude and distance, or just the callsign and the distance where the list is one panel wide. Its first line says how many planes are nearby.
 
+:::note[Coming in the next release]
+**The picture moves.** When the card shows the plane's picture rather than a photo, the picture moves in a small sky of its own: a helicopter's rotor turns and it bobs gently where there's room, a propeller plane's propellers spin, and a jet leaves a short dashed contrail as clouds drift past it. A plane whose type isn't known keeps a still picture. Behind it, clouds drift slowly by, a few birds glide across now and then by day, the sun sits in a corner by day, and the moon (in its phase) and a few softly twinkling stars come out at night. Wind streaks show on a gusty day. When [Weather](/using/weather/) is set up and has read the forecast for the same home, the sky follows it: clear, partly cloudy or overcast, with rain, snow or fog, and day and night from that day's sunrise and sunset. Without Weather, day and night come from the sun's place over your home, and the clouds are made up. Each plane gets its own sky, and it changes every ten minutes.
+
+Everything moves slowly and stays dim, so the plane is always the brightest thing in the picture and nothing flashes. During the night hours, and while **Off or dim** has dimmed the panel, the picture and its sky hold still.
+
+The notes the Flight Tracker shows instead of a plane, like **Looking for planes**, have a band of the same sky above their words when the area is at least 64 LEDs tall.
+:::
+
 | Area | What it shows |
 | --- | --- |
 | 64x64 (one panel, or the right panel of three wide) | The card and the list take turns, about 8 seconds each. A speed too wide for the card, like 1185 km/h, shows as the number alone. |

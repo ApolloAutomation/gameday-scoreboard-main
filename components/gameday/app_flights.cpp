@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "landmarks.h"
+#include "sky.h"
 #include "timezones.h"
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -112,6 +113,15 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     ic.mark = true;
     out.icons.push_back(ic);
   }
+  const Sky &k = fr.sky;
+  out.sky.x = k.x;
+  out.sky.y = k.y;
+  out.sky.w = k.w;
+  out.sky.h = k.h;
+  out.sky.scale = k.scale;
+  out.sky.kind = (uint8_t) k.kind;
+  out.sky.flip = k.flip;
+  out.sky.tail = k.tail;
   out.photo.x = fr.photo.x;
   out.photo.y = fr.photo.y;
   out.photo.w = fr.photo.w;
@@ -644,6 +654,12 @@ void FlightsApp::apply(bool ok, int64_t now) {
 }
 
 void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
+  this->frame_(w, h, now, out);
+  if (out.sky.w > 0)
+    espn::sky_fill(out.sky, this->card_hex_, this->prefs_.lat_e4, this->prefs_.lon_e4, now);
+}
+
+void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
   FrameOpts o;
   o.w = w;
   o.h = h;

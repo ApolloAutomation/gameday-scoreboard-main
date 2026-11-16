@@ -105,6 +105,7 @@ class FlightsApp final : public espn::App {
   void lost_(uint32_t now_ms);
   uint32_t rnd_();
   Units units_() const { return units_for_zone(espn::app_env().tz); }
+  void frame_(int w, int h, int64_t now, espn::AppFrame &out) const;
   // The card plane's photo key; false for none wanted.
   bool photo_ask_(int64_t now, char key[9]) const;
 

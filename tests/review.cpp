@@ -68,6 +68,12 @@ int main(int argc, char **argv) {
     if (only == "planes")
       return 0;
   }
+  if (only.empty() || only == "sky") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d plane skies\n", render_sky_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "sky")
+      return 0;
+  }
   for (const ScenePlay &p : kScenePlays) {
     const AnimKind k = anim_sample(p.play).args.kind;
     if (!only.empty() && only != anim_name(k) && only != p.play)

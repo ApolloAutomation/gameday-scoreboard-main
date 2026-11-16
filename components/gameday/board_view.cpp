@@ -9,6 +9,8 @@
 
 #include <esp_heap_caps.h>
 
+#include "esphome/core/hal.h"
+
 #include "alerts.h"
 #include "badge.h"
 #include "board_layout.h"
@@ -19,6 +21,7 @@
 #include "panel_text.h"
 #include "scene_view.h"
 #include "setup_qr.h"
+#include "sky.h"
 
 static_assert(LV_TXT_COLOR_CMD[0] == esphome::gameday::kRecolorCmd, "__init__.py defines LV_TXT_COLOR_CMD");
 
@@ -541,6 +544,31 @@ void put_art(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Takes the painted pixels; redraws only the box that changed
+void blit(lv_obj_t *o, uint16_t *shown, const uint16_t *next, int bw, int bh, bool fresh) {
+  int x0 = bw, y0 = bh, x1 = -1, y1 = -1;
+  for (int y = 0; y < bh; y++)
+    for (int x = 0; x < bw; x++) {
+      const size_t i = (size_t) y * bw + x;
+      if (!fresh && shown[i] == next[i])
+        continue;
+      x0 = std::min(x0, x);
+      x1 = std::max(x1, x);
+      y0 = std::min(y0, y);
+      y1 = std::max(y1, y);
+      shown[i] = next[i];
+    }
+  if (fresh) {
+    lv_obj_invalidate(o);
+  } else if (x1 >= 0) {
+    // LVGL takes screen coordinates: the area's are offset
+    lv_area_t c, a;
+    lv_obj_get_coords(o, &c);
+    lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
+    lv_obj_invalidate_area(o, &a);
+  }
+}
+
 // Only the pixels that changed redraw
 void put_field(BoardView &v, const UpdateFields &f) {
   const ::espn::FieldPic &pic = f.field_pic;
@@ -593,27 +621,7 @@ void put_field(BoardView &v, const UpdateFields &f) {
       ::espn::field_paint(p, pic);
     else
       ::espn::map_paint(p, map, ::espn::app_env().land);
-    int x0 = bw, y0 = bh, x1 = -1, y1 = -1;
-    for (int y = 0; y < bh; y++)
-      for (int x = 0; x < bw; x++) {
-        const size_t i = (size_t) y * bw + x;
-        if (!fresh && v.field_buf[i] == v.field_next[i])
-          continue;
-        x0 = std::min(x0, x);
-        x1 = std::max(x1, x);
-        y0 = std::min(y0, y);
-        y1 = std::max(y1, y);
-        v.field_buf[i] = v.field_next[i];
-      }
-    if (fresh) {
-      lv_obj_invalidate(v.field);
-    } else if (x1 >= 0) {
-      // LVGL takes screen coordinates: the area's are offset
-      lv_area_t c, a;
-      lv_obj_get_coords(v.field, &c);
-      lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
-      lv_obj_invalidate_area(v.field, &a);
-    }
+    blit(v.field, v.field_buf, v.field_next, bw, bh, fresh);
     if (kind == 1)
       v.field_shown = pic;
     else
@@ -621,6 +629,80 @@ void put_field(BoardView &v, const UpdateFields &f) {
     v.canvas_kind = kind;
   }
   show(v.field, true);
+}
+
+// The drawn plane's sky at this moment; still holds its first pose
+void sky_draw(BoardView &v, bool fresh) {
+  ::espn::AppSky s = v.sky_shown;
+  if (::espn::app_env().still)
+    s.flags |= ::espn::kSkyStill;
+  ::espn::Px565 p;
+  p.px = v.sky_next;
+  p.w = p.stride = s.w;
+  p.h = s.h;
+  p.clip = ::espn::PxBox{0, 0, s.w, s.h};
+  ::espn::sky_paint(p, s, millis() - v.sky_t0);
+  blit(v.sky, v.sky_buf, v.sky_next, s.w, s.h, fresh);
+}
+
+void sky_tick(lv_timer_t *t) {
+  BoardView &v = *static_cast<BoardView *>(lv_timer_get_user_data(t));
+  // Hidden or another page: rests until the next frame
+  if (v.sky == nullptr || lv_obj_has_flag(v.sky, LV_OBJ_FLAG_HIDDEN) ||
+      lv_obj_get_screen(v.sky) != lv_screen_active()) {
+    lv_timer_pause(t);
+    return;
+  }
+  sky_draw(v, false);
+  if (::espn::app_env().still)
+    lv_timer_pause(t);
+}
+
+// The frame's moving sky, its own canvas and timer
+void put_sky(BoardView &v, const UpdateFields &f) {
+  const ::espn::AppSky &s = f.sky_pic;
+  if (!f.board || s.w == 0 || s.h == 0) {
+    show(v.sky, false);
+    if (v.sky_timer != nullptr)
+      lv_timer_pause(v.sky_timer);
+    return;
+  }
+  if (v.sky_buf == nullptr) {
+    const size_t bytes = (size_t) ::espn::kAppSkyMaxW * ::espn::kAppSkyMaxH * 2;
+    v.sky_buf = static_cast<uint16_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    v.sky_next = static_cast<uint16_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (v.sky_buf == nullptr || v.sky_next == nullptr) {
+      heap_caps_free(v.sky_buf);
+      heap_caps_free(v.sky_next);
+      v.sky_buf = v.sky_next = nullptr;
+      return;
+    }
+  }
+  if (v.sky == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.sky = lv_canvas_create(v.board);
+    lv_obj_remove_flag(v.sky, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    v.sky_shown = ::espn::AppSky();
+  }
+  ::espn::AppSky &was = v.sky_shown;
+  const bool fresh = lv_obj_has_flag(v.sky, LV_OBJ_FLAG_HIDDEN) || was.x != s.x || was.y != s.y || was.w != s.w ||
+                     was.h != s.h;
+  if (fresh) {
+    lv_canvas_set_buffer(v.sky, v.sky_buf, s.w, s.h, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(v.sky, s.x, s.y);
+    lv_obj_set_size(v.sky, s.w, s.h);
+  }
+  if (memcmp(&s, &was, sizeof s) != 0) {
+    was = s;
+    v.sky_t0 = millis();
+  }
+  show(v.sky, true);
+  sky_draw(v, fresh);
+  if (v.sky_timer == nullptr)
+    v.sky_timer = lv_timer_create(sky_tick, ::espn::kSkyFrameMs, &v);
+  if (v.sky_timer != nullptr && !::espn::app_env().still)
+    lv_timer_resume(v.sky_timer);
 }
 
 // The frame's photo, from the logo cache
@@ -966,6 +1048,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_art(v, f);
   put_photo(v, f);
   put_field(v, f);
+  put_sky(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {

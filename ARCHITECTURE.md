@@ -125,7 +125,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
-  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
+  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `sky.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
   `weather.cpp/.h`, `weather_art.cpp`, `map_canvas.h` and `app_weather.cpp/.h` (Weather), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
@@ -393,7 +393,15 @@ The card's airline is Flightradar24's airline field (`Plane::brand`, the
 paint on the plane), else the callsign's. `plane_art.cpp` holds the side
 views, ASCII art packed to 2 bits a pixel at compile time, and maps an
 ICAO type code, else the ADS-B category, to one of them; `put_art` in
-`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. On a card
+`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. Unscaled,
+the card's picture is an `AppSky` instead (`sky.cpp`): `sky_paint` draws the
+plane with its rotor, propeller or contrail moving, over clouds, birds, the
+sun or moon and Weather's rain or snow (`App::sky`), as a pure function of
+the time; `put_sky` gives it its own canvas and a 100 ms LVGL timer that
+repaints the box and invalidates only the pixels that changed, the way the
+field's canvas does. The timer stops while the sky is hidden or another page
+is up, and in night hours or Off or dim (`AppEnv::still`), when the picture
+holds its first pose. A loaded photo hides the sky as it hides the art. On a card
 128 wide or more the card's plane also gets a photo: a read of
 Planespotters' API (`Read::PHOTO`, by hex, else registration, with a
 User-Agent naming the project) through the fetch task like the others, one
@@ -975,7 +983,8 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   the display's reads), `test_weather.cpp` (Weather: each source, failover,
   units, icons, the radar's map math, pages and frames at every size),
   `test_landmarks.cpp` (the landmark set's check, its projection and the
-  base layer's lines and labels), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  base layer's lines and labels), `test_sky.cpp` (the moving pictures: the plane's clarity, calm
+  motion, still in night hours, day and night, weather and the sun's times), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
   decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
   (the photo's cut, scaling and lighting) and `test_networks.cpp`

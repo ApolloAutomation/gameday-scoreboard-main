@@ -659,6 +659,17 @@ struct Art {
   uint32_t tail{kColTail};
 };
 
+// A drawn picture's box, animated with a sky behind.
+// NONE: the sky alone, over a note.
+struct Sky {
+  int16_t x{0}, y{0};
+  uint8_t w{0}, h{0};  // w 0: none
+  uint8_t scale{1};
+  PlaneKind kind{PlaneKind::NONE};
+  bool flip{false};
+  uint32_t tail{kColTail};
+};
+
 static const int kLogoPx = 16;
 // Full screen's card logo.
 static const int kLogoBigPx = 32;
@@ -686,6 +697,7 @@ struct Frame {
   std::vector<Logo> logos;
   Photo photo;
   std::string ticker;
+  Sky sky;
 };
 
 struct FrameOpts {

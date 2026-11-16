@@ -12,6 +12,7 @@
 #include "app_flights.h"
 #include "flight_airlines.h"
 #include "flights.h"
+#include "sky.h"
 #include "timezones.h"
 
 using namespace flights;
@@ -647,8 +648,21 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
     for (const Box &t : boxes)
       FCHECK(apart(b, t), "%s: the photo clear of text", what);
   }
+  // The sky's box: inside, clear of text, its plane fits
+  if (f.sky.w > 0) {
+    const Box b{f.sky.x, f.sky.x + f.sky.w, f.sky.y, f.sky.y + f.sky.h - 1};
+    const PlaneSprite *sp = plane_sprite(f.sky.kind);
+    FCHECK(f.sky.w <= espn::kAppSkyMaxW && f.sky.h <= espn::kAppSkyMaxH && f.sky.scale >= 1, "%s: the sky drawable",
+           what);
+    FCHECK(sp == nullptr || (sp->w <= f.sky.w && sp->h <= f.sky.h), "%s: the plane fits its sky", what);
+    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the sky inside", what);
+    for (const Box &t : boxes)
+      FCHECK(apart(b, t), "%s: the sky clear of text", what);
+    pics.push_back(b);
+  }
   const bool tall_list = o.list && esphome::gameday::tall_board(o.w, o.h);
-  FCHECK(f.art.size() <= 1 && (f.logos.size() <= 1 || tall_list), "%s: one picture, one logo", what);
+  FCHECK(f.art.size() + (f.sky.kind != PlaneKind::NONE) <= 1 && (f.logos.size() <= 1 || tall_list),
+         "%s: one picture, one logo", what);
   for (const Logo &l : f.logos) {
     const Box b{l.x, l.x + l.px, l.y, l.y + l.px - 1};
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
@@ -743,7 +757,7 @@ void test_frames() {
          "the 64 card");
   o.card = 2;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "B407") != nullptr && f.art.size() == 1 && f.art[0].kind == PlaneKind::HELI && f.logos.empty(),
+  FCHECK(find_text(f, "B407") != nullptr && f.sky.w > 0 && f.sky.kind == PlaneKind::HELI && f.logos.empty(),
          "no airline: a helicopter and its code");
   FCHECK(f.items[0].font == BoardFont::S16 && f.items[0].text == "N77NY", "the big callsign stays");
   // An airline missing from the table keeps its route.
@@ -767,7 +781,7 @@ void test_frames() {
     const Text *route = find_text(f, "DEN-LGA");
     FCHECK(route != nullptr && route->color == kColRoute && find_text(f, "NKS123") != nullptr && f.logos.empty(),
            "unlisted airline: callsign and route");
-    FCHECK(f.art.size() == 1 && f.art[0].kind == PlaneKind::NARROW, "unlisted airline: its picture");
+    FCHECK(f.sky.w > 0 && f.sky.kind == PlaneKind::NARROW, "unlisted airline: its picture");
   }
   un.planes[0].from[0] = un.planes[0].to[0] = '\0';
   strcpy(un.planes[0].flight, "NK123");
@@ -867,19 +881,34 @@ void test_tall_frames() {
   o.h = 64;
   o.list = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.size() == 1 && f.art[0].scale == 1,
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.w == kPhotoW && f.sky.scale == 1,
          "the split card unchanged");
 }
 
 void test_notes() {
   for (int w : {64, 128, 192, 256})
-    for (int k = 0; k < 4; k++) {
-      FrameOpts o;
-      o.w = w;
-      const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES));
-      check_frame(f, o, "note");
-      FCHECK(!f.items.empty(), "a note");
-    }
+    for (int h : {32, 64, 128})
+      for (int ticker = 0; ticker < 2; ticker++)
+        for (int k = 0; k < 4 && (h > 32 || !ticker); k++) {
+          FrameOpts o;
+          o.w = w;
+          o.h = h;
+          o.ticker = ticker;
+          const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES));
+          char what[48];
+          snprintf(what, sizeof what, "note %d at %dx%d", k, w, h);
+          check_frame(f, o, what);
+          FCHECK(!f.items.empty(), "a note");
+          // A sky over the words wherever a panel is that tall
+          const Sky &sk = f.sky;
+          if (h >= 64 && ticker)
+            FCHECK(sk.w == std::min(w, 128) && sk.x == (w - sk.w) / 2 && sk.y == 0 &&
+                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == (h == 128 ? 2 : 1) &&
+                       sk.kind == PlaneKind::NONE,
+                   "%s: its sky %d,%d %dx%d", what, sk.x, sk.y, sk.w, sk.h);
+          if (h == 32)
+            FCHECK(sk.w == 0, "%s: no room for a sky", what);
+        }
   FrameOpts o;
   o.w = 64;
   Frame f = note_frame(Note::NO_HOME, o, 10);
@@ -1213,6 +1242,10 @@ void test_app() {
   f = espn::AppFrame();
   r.app.frame(128, 64, r.now, f);
   FCHECK(frame_text(f) == "Looking for planes|", "before the first read: %s", frame_text(f).c_str());
+  // Its sky, filled from the home's place and time
+  FCHECK(f.sky.w == 128 && f.sky.h == 28 && f.sky.kind == 0 && f.sky.moon < 8 &&
+             f.sky.seed == espn::sky_seed("", r.now) && f.texts[0].y >= 28,
+         "a sky over the note: %dx%d seed %08x", f.sky.w, f.sky.h, (unsigned) f.sky.seed);
   FCHECK(r.app.poll_ms(r.now) == 0, "due at once");
   FCHECK(r.step(200, fr24) && r.last_url.find("data-cloud.flightradar24.com") != std::string::npos,
          "Flightradar24 first: %s", r.last_url.c_str());
@@ -1223,8 +1256,8 @@ void test_app() {
     // The airline logo as an icon the board loads
     espn::AppFrame wide;
     r.app.frame(256, 64, r.now, wide);
-    FCHECK(wide.icons.size() == 1 && wide.art.size() == 1, "a logo and a picture: %zu %zu", wide.icons.size(),
-           wide.art.size());
+    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0, "a logo and a picture: %zu %zu",
+           wide.icons.size(), wide.art.size());
     for (const espn::AppIcon &ic : wide.icons) {
       char url[160];
       const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, 0, url, sizeof url) : 0;
@@ -1256,7 +1289,7 @@ void test_app() {
     FCHECK(ph.url == "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg" && ph.x == kPhotoX &&
                ph.y == kPhotoY && ph.w == kPhotoW && ph.h == kPhotoH,
            "the photo in the picture's spot: %s", ph.url.c_str());
-    FCHECK(wide.art.size() == 1, "the picture until it loads");
+    FCHECK(wide.sky.w > 0, "the picture until it loads");
     std::string t = wide.ticker;
     t.insert(ph.at, ph.credit);
     FCHECK(t.rfind("27 planes nearby | SWA1678 Southwest", 0) == 0 &&
@@ -1633,8 +1666,7 @@ void test_photo_reads() {
   FCHECK(asked.size() <= n + 1, "a miss once: %zu", asked.size() - n);
   espn::AppFrame g;
   r.app.frame(256, 64, r.now, g);
-  FCHECK(g.photo.url.empty() && g.art.size() == 1, "the picture, no photo: %s %zu", g.photo.url.c_str(),
-         g.art.size());
+  FCHECK(g.photo.url.empty() && g.sky.w > 0, "the picture, no photo: %s %zu", g.photo.url.c_str(), g.art.size());
   FCHECK(r.app.photos().slots[0].state == PhotoState::NONE, "kept as a miss");
   // Off screen: none until a wide card is drawn again
   Reads s;
@@ -1659,6 +1691,17 @@ std::string frame_sig(const espn::AppFrame &f) {
   }
   for (const espn::AppArt &a : f.art) {
     snprintf(b, sizeof b, "A%d,%d,%d,%d,%d,%d,%06x\n", a.x, a.y, a.w, a.h, a.flip, a.scale, (unsigned) a.ink[1]);
+    o += b;
+  }
+  // A plane in its sky: where its still picture was
+  const espn::AppSky &k = f.sky;
+  const PlaneSprite *sp = plane_sprite((PlaneKind) k.kind);
+  if (k.w > 0 && sp != nullptr) {
+    snprintf(b, sizeof b, "A%d,%d,%d,%d,%d,%d,%06x\n", k.x + (k.w - sp->w) / 2, k.y + (k.h - sp->h) / 2, sp->w, sp->h,
+             k.flip, k.scale, (unsigned) k.tail);
+    o += b;
+  } else if (k.w > 0) {
+    snprintf(b, sizeof b, "S%d,%d,%d,%d,%d\n", k.x, k.y, k.w, k.h, k.scale);
     o += b;
   }
   for (const espn::AppIcon &i : f.icons) {
@@ -1725,7 +1768,8 @@ void test_radar_frames() {
         for (const Text &t : flight_frame(n, nullptr, o, 100).items)
           direct += std::to_string(t.x) + "," + std::to_string(t.y) + t.text;
       }
-    FCHECK(sig_hash(bare) == 0x14a648aau, "notes at 128x128 and 256x64: 0x%08x", (unsigned) sig_hash(bare));
+    FCHECK(sig_hash(bare) == 0xeecf6540u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
+           (unsigned) sig_hash(bare));
     FCHECK(sig_hash(sig) == 0xdcedfc3du, "64, 128 and 192 wide as before: 0x%08x", (unsigned) sig_hash(sig));
     FCHECK(sig_hash(direct) == 0x9b7325a1u, "the card and list as before: 0x%08x", (unsigned) sig_hash(direct));
   }
@@ -1752,7 +1796,9 @@ void test_radar_frames() {
     FCHECK(got == want, "%dx%d: the 128x64 card: %s", w, h, got.c_str());
     FCHECK(f.ticker == card.ticker && f.ticker.rfind("27 planes nearby | SWA1678", 0) == 0, "%dx%d: today's ticker",
            w, h);
-    FCHECK(f.art.size() == card.art.size() && f.icons.size() == card.icons.size(), "%dx%d: its picture and logo", w, h);
+    FCHECK(f.art.size() == card.art.size() && f.icons.size() == card.icons.size() &&
+               memcmp(&f.sky, &card.sky, sizeof f.sky) == 0,
+           "%dx%d: its picture and logo", w, h);
     const espn::AppMap &m = f.map;
     FCHECK(m.radar == 1 && m.x == hx && m.y == hy && m.w == 128 && m.h == 56 && m.ring == 26 && m.inner == 13 &&
                std::string(m.ring_text) == "28MI" && m.roads == 1,

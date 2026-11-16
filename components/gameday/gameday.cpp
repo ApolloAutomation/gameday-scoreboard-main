@@ -2616,6 +2616,8 @@ bool GamedayComponent::idle_update_() {
   const bool changed = v != this->idle_view_ || main_changed;
   this->idle_ = s;
   this->idle_view_ = v;
+  // Pictures hold still while the panel is dimmed
+  ::espn::app_env().still = s.dim || (s.night && !this->night_.on);
   const bool side = v == ::espn::IdleView::SCORES;
   if (side != this->side_on_) {
     this->side_on_ = side;
@@ -6245,6 +6247,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     f.map_pic = fr.map;
     f.map_pic.set_id = this->land_.id;
   }
+  f.sky_pic = fr.sky;
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons + 2];
   static_assert(::espn::kAppIcons + 2 <= ::espn::IconPins::kMax, "every shown picture gets a pin");
@@ -6312,8 +6315,10 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
       f.photo_img = img;
       f.photo_xy[0] = (int16_t) (ph.x + (ph.w - img->get_width()) / 2);
       f.photo_xy[1] = (int16_t) (ph.y + (ph.h - img->get_height()) / 2);
-      if (!ph.keep_art)
+      if (!ph.keep_art) {
         f.art.clear();
+        f.sky_pic = ::espn::AppSky();
+      }
       if (ph.alt >= 0 && (size_t) ph.alt < f.texts.size())
         f.texts[ph.alt].text.clear();
     }

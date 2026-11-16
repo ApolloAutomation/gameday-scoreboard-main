@@ -184,6 +184,24 @@ bool WeatherApp::for_home_(Read r, int32_t lat, int32_t lon) const {
   return r == Read::RADAR || (this->lat_[(int) r] == lat && this->lon_[(int) r] == lon);
 }
 
+bool WeatherApp::sky(int64_t now, espn::SkyNow &out) const {
+  if (!this->fresh_(Read::FORECAST, now))
+    return false;
+  const Now &n = this->fc_.now;
+  out.day = n.day;
+  for (uint8_t i = 0; i < this->fc_.n_days; i++) {
+    const Day &d = this->fc_.days[i];
+    if (d.sunrise > 0 && d.sunset > d.sunrise && now >= d.at && now < d.at + 86400)
+      out.day = now >= d.sunrise && now < d.sunset;
+  }
+  const uint8_t c = n.code;
+  out.cover = c <= 3 ? c : 3;
+  out.fog = c == 45 || c == 48;
+  out.fall = snowy(c) ? 2 : c >= 51 ? 1 : 0;
+  out.wind = n.gust_kmh10 > 300;
+  return true;
+}
+
 bool WeatherApp::fresh_(Read r, int64_t now) const {
   int32_t lat, lon;
   const int i = (int) r;

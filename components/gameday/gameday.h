@@ -176,6 +176,8 @@ struct UpdateFields {
   ::espn::FieldPic field_pic;
   // Or another display's map, on the same canvas
   ::espn::AppMap map_pic;
+  // A drawn plane in its sky, until a photo loads
+  ::espn::AppSky sky_pic;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };

@@ -81,6 +81,12 @@ struct BoardView {
   ::espn::FieldPic field_shown{};
   ::espn::AppMap map_shown{};
   uint8_t canvas_kind{0};  // 0 none, 1 field, 2 map
+  // A drawn plane's moving sky, made on first use
+  lv_obj_t *sky{nullptr};
+  uint16_t *sky_buf{nullptr}, *sky_next{nullptr};  // shown, and painted
+  lv_timer_t *sky_timer{nullptr};
+  ::espn::AppSky sky_shown{};
+  uint32_t sky_t0{0};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout

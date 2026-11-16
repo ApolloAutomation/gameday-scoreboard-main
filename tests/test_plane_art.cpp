@@ -494,9 +494,11 @@ void test_brand_and_cards() {
         const Frame f = flight_frame(n, nullptr, o, (uint32_t) kNow);
         const bool brand = logo_airline(p) != nullptr;
         const bool art = plane_sprite(plane_kind(p.type, p.category)) != nullptr;
-        PCHECK(f.art.size() == (art ? 1u : 0u), "%s %d: a picture", plane_label(p), w);
-        if (!f.art.empty())
-          PCHECK(f.art[0].flip == (p.track > 180), "%s %d: faces its way", plane_label(p), w);
+        // Drawn in its moving sky, never as a still picture too
+        PCHECK((f.sky.w > 0) == art && f.art.empty(), "%s %d: a picture", plane_label(p), w);
+        if (f.sky.w > 0)
+          PCHECK(f.sky.flip == (p.track > 180) && f.sky.kind == plane_kind(p.type, p.category) && f.sky.scale == 1,
+                 "%s %d: faces its way", plane_label(p), w);
         for (const Logo &l : f.logos)
           PCHECK(l.alt >= 0 && f.items[(size_t) l.alt].text == logo_chip(*logo_airline(p), p.flight[0] != '\0'
                                                                                              ? p.flight
@@ -513,21 +515,20 @@ void test_brand_and_cards() {
   if (swa != nullptr) {
     Frame f = card(*swa, 128);
     PCHECK(f.logos.size() == 1 && f.logos[0].x == 111 && f.logos[0].y == 0, "the logo at 111,0");
-    PCHECK(f.art.size() == 1 && f.art[0].kind == PlaneKind::NARROW, "a 737");
-    const PlaneSprite *s = plane_sprite(PlaneKind::NARROW);
-    PCHECK(f.art[0].x == 72 + (56 - s->w) / 2 && f.art[0].y == 17 + (21 - s->h) / 2, "centered in 72,17,56x21");
+    PCHECK(f.sky.w > 0 && f.sky.kind == PlaneKind::NARROW, "a 737");
+    PCHECK(f.sky.x == 72 && f.sky.y == 17 && f.sky.w == 56 && f.sky.h == 21, "its sky in 72,17,56x21");
     PCHECK(text_of(f, "737 MAX 8") != nullptr, "the type without its maker");
     PCHECK(text_of(f, "WN") != nullptr && text_of(f, "WN")->font == BoardFont::S12, "the code while it loads");
     PCHECK(text_of(f, "Southwest") != nullptr && text_of(f, "Southwest")->x + text_of(f, "Southwest")->w <= 109,
            "the name before the logo");
-    PCHECK(f.art[0].tail != kColTail, "Southwest's tail in its color");
+    PCHECK(f.sky.tail != kColTail, "Southwest's tail in its color");
     // 64: logo and a small callsign
     f = card(*swa, 64);
     const Text *cs = text_of(f, "SWA1678");
     PCHECK(cs != nullptr && cs->x == 18 && cs->y == 0 && cs->font == BoardFont::S8, "the callsign beside the logo");
     PCHECK(f.logos.size() == 1 && f.logos[0].x == 0 && f.logos[0].y == 0, "the logo at 0,0");
     PCHECK(text_of(f, "DEN-LGA") != nullptr && text_of(f, "DEN-LGA")->y == 8, "the route under it");
-    PCHECK(f.art.size() == 1 && f.art[0].y >= 16 && f.art[0].y + s->h <= 32, "the picture in rows 16-31");
+    PCHECK(f.sky.x == 0 && f.sky.y == 16 && f.sky.w == 64 && f.sky.h == 16, "the picture in rows 16-31");
     PCHECK(text_of(f, "Southwest") == nullptr, "no name line: the logo stands in");
   }
   const Plane *rpa = by_label(v, "RPA4505");
@@ -549,7 +550,7 @@ void test_brand_and_cards() {
     Frame f = card(*heli, 64);
     PCHECK(f.logos.empty() && text_of(f, "N7QD") != nullptr && text_of(f, "N7QD")->font == BoardFont::S16,
            "a private plane keeps its big callsign");
-    PCHECK(f.art.size() == 1 && f.art[0].kind == PlaneKind::HELI && f.art[0].tail == kColTail, "a gray helicopter");
+    PCHECK(f.sky.w > 0 && f.sky.kind == PlaneKind::HELI && f.sky.tail == kColTail, "a gray helicopter");
     f = card(*heli, 128);
     PCHECK(text_of(f, "Bell 206") != nullptr && text_of(f, "Bell 206")->x == 66, "no logo: the name as before");
   }
@@ -557,11 +558,11 @@ void test_brand_and_cards() {
   Plane west = v[0], none = v[0];
   west.track = 270;
   none.track = -1;
-  PCHECK(card(west, 128).art[0].flip && !card(none, 128).art[0].flip, "flip by track");
+  PCHECK(card(west, 128).sky.flip && !card(none, 128).sky.flip, "flip by track");
   Plane balloon = v[0];
   strcpy(balloon.type, "");
   strcpy(balloon.category, "B2");
-  PCHECK(card(balloon, 64).art.empty(), "a balloon: no picture");
+  PCHECK(card(balloon, 64).art.empty() && card(balloon, 64).sky.w == 0, "a balloon: no picture");
 }
 
 }  // namespace

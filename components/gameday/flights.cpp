@@ -1427,10 +1427,21 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
 std::string pick_fit(const std::string &a, const std::string &b, size_t max) { return a.size() <= max ? a : cut(b, max); }
 
 // The plane centered in the box, scaled, if it fits.
+// Unscaled, it moves in its own sky.
 void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1) {
   const PlaneSprite *s = plane_sprite(c.kind);
   if (s == nullptr || s->w * scale > w || s->h * scale > h)
     return;
+  if (scale == 1) {
+    f.sky.x = (int16_t) x;
+    f.sky.y = (int16_t) y;
+    f.sky.w = (uint8_t) w;
+    f.sky.h = (uint8_t) h;
+    f.sky.kind = c.kind;
+    f.sky.flip = c.flip;
+    f.sky.tail = c.tail_color;
+    return;
+  }
   Art a;
   a.x = (int16_t) (x + (w - s->w * scale) / 2);
   a.y = (int16_t) (y + (h - s->h * scale) / 2);
@@ -1727,8 +1738,18 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
   if (!sub.empty())
     wrap_into(lines, sub, max);
   Frame f;
-  const int limit = o.ticker ? o.h - 8 : o.h;
-  int y = (limit - (int) lines.size() * 8) / 2;
+  const int limit = o.ticker ? o.h - 8 : o.h, words = (int) lines.size() * 8;
+  // A sky band over the words, where they leave room
+  const int bw = o.w < 128 ? o.w : 128, bh = o.h >= 128 ? 48 : o.w < 128 ? 24 : 28;
+  int top = 0;
+  if (o.w >= 64 && limit - bh >= words) {
+    f.sky.x = (int16_t) ((o.w - bw) / 2);
+    f.sky.w = (uint8_t) bw;
+    f.sky.h = (uint8_t) bh;
+    f.sky.scale = bh == 48 ? 2 : 1;
+    top = bh;
+  }
+  int y = top + (limit - top - words) / 2;
   for (size_t i = 0; i < lines.size(); i++) {
     put(f, 0, y, o.w, BoardFont::S8, Align::CENTER, i < main ? kColValue : kColDim, lines[i]);
     y += 8;

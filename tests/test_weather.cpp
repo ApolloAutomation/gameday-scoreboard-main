@@ -461,6 +461,11 @@ void test_app() {
   std::string url;
   WCHECK(step(*a, kNow, url, "fixtures/weather_om_tahoe.json") && url.find("api.open-meteo.com") != std::string::npos,
          "the forecast first: %s", url.c_str());
+  // The Flight Tracker's sky: overcast, after sunset, calm
+  espn::SkyNow sky;
+  WCHECK(a->sky(kNow, sky) && !sky.day && sky.cover == 3 && sky.fall == 0 && !sky.fog && !sky.wind,
+         "the sky now: day %d cover %d fall %d", sky.day, sky.cover, sky.fall);
+  WCHECK(!a->sky(kNow + WeatherApp::kOldS, sky), "an old forecast: no sky");
   espn::AppRequest alerts;
   WCHECK(a->request(kNow, alerts) && alerts.url.find("api.weather.gov") != std::string::npos, "then alerts");
   bool ua = false, geo = false;

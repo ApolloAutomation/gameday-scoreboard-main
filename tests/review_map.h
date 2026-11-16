@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -15,7 +16,9 @@
 #include "land_set.h"
 #include "landmarks.h"
 #include "map_canvas.h"
+#include "gif_write.h"
 #include "png_write.h"
+#include "sky.h"
 
 namespace espn {
 
@@ -114,6 +117,20 @@ inline Canvas compose(const AppFrame &f, int w, int h, const LandSet *set, bool 
     for (int y = 0; y < m.h; y++)
       for (int x = 0; x < m.w; x++)
         cv.put(m.x + x, m.y + y, buf[(size_t) y * m.w + x]);
+  }
+  // A drawn plane's sky at the review clock
+  const AppSky &sk = f.sky;
+  if (sk.w > 0) {
+    std::vector<uint16_t> buf((size_t) sk.w * sk.h);
+    Px565 p;
+    p.px = buf.data();
+    p.w = p.stride = sk.w;
+    p.h = sk.h;
+    p.clip = PxBox{0, 0, sk.w, sk.h};
+    sky_paint(p, sk, g_ms);
+    for (int y = 0; y < sk.h; y++)
+      for (int x = 0; x < sk.w; x++)
+        cv.put(sk.x + x, sk.y + y, buf[(size_t) y * sk.w + x]);
   }
   const AppPhoto &ph = f.photo;
   if (rain && ph.w > 0) {
@@ -278,6 +295,107 @@ inline int render_plane_views(const std::string &dir, const std::string &fixture
             n++;
           }
         }
+      }
+  env = AppEnv{};
+  return n;
+}
+
+// The Flight Tracker's drawn planes in their skies: whole screens
+// (GIF and a PNG still) at each size, and each kind's box
+inline int render_sky_views(const std::string &dir, const std::string &fixtures, const ReviewFonts &fonts) {
+  using namespace review_map;
+  AppEnv &env = app_env();
+  env.local = local_of;
+  env.ms = ms_now;
+  env.tz = 4;
+  std::string fr24 = slurp(fixtures + "/flights_fr24_nyc.json");
+  int n = 0;
+  auto save_gif = [&](const char *name, int w, int h, const std::function<void(std::vector<uint16_t> &)> &paint,
+                      uint32_t ms) {
+    GifWriter g;
+    g.w = w;
+    g.h = h;
+    g.scale = 4;
+    std::vector<uint16_t> buf((size_t) w * h);
+    for (g_ms = 0; g_ms < ms; g_ms += kSkyFrameMs) {
+      paint(buf);
+      g.add(buf.data(), w, (int) (kSkyFrameMs / 10));
+    }
+    if (g.save(dir + name)) {
+      printf("%s%s\n", dir.c_str(), name);
+      n++;
+    }
+  };
+  static const int kSizes[][2] = {{64, 64}, {128, 64}, {256, 64}, {128, 128}};
+  for (int note = 0; note < 3; note++)
+    for (const auto &sz : kSizes) {
+      flights::FlightsApp a;
+      a.setup();
+      a.set("flyhome", "40.71,-74.01");
+      a.set("flyradius", "28mi");
+      a.shown(true);
+      // 2: the card again, its sky turned to night
+      const int64_t now = 1794457500;
+      AppRequest req;
+      if (note != 1 && a.request(now, req)) {
+        AppTextStream in(fr24);
+        const bool ok = a.parse(in, now);
+        a.ended(AppResult{200, false, 0});
+        a.apply(ok, now);
+      }
+      AppFrame f;
+      a.frame(sz[0], sz[1], now, f);
+      app_frame_trim(f);
+      if (note == 2) {
+        f.sky.flags &= (uint8_t) ~kSkyDay;
+        f.sky.moon = 2;
+      }
+      static const char *const kWhat[] = {"card", "note", "night"};
+      char name[96];
+      snprintf(name, sizeof name, "/sky_%s_%dx%d.gif", kWhat[note], sz[0], sz[1]);
+      save_gif(
+          name, sz[0], sz[1],
+          [&](std::vector<uint16_t> &buf) { buf = compose(f, sz[0], sz[1], nullptr, false, fonts).px; }, 12000);
+      g_ms = 3000;
+      const Canvas cv = compose(f, sz[0], sz[1], nullptr, false, fonts);
+      snprintf(name, sizeof name, "/sky_%s_%dx%d.png", kWhat[note], sz[0], sz[1]);
+      if (png_save(dir + name, cv.px.data(), cv.w, cv.h, 6)) {
+        printf("%s%s\n", dir.c_str(), name);
+        n++;
+      }
+    }
+  // Each kind in the 128 card's box and the 64 card's, day and night
+  const flights::PlaneKind kinds[] = {flights::PlaneKind::HELI,   flights::PlaneKind::LIGHT,
+                                      flights::PlaneKind::TWIN_PROP, flights::PlaneKind::TURBOPROP,
+                                      flights::PlaneKind::NARROW, flights::PlaneKind::JUMBO,
+                                      flights::PlaneKind::GENERIC};
+  static const char *const kNames[] = {"heli", "light", "twin", "turboprop", "narrow", "jumbo", "generic"};
+  for (int i = 0; i < 7; i++)
+    for (int box = 0; box < 2; box++)
+      for (int sky = 0; sky < 3; sky++) {
+        AppSky s;
+        s.w = box ? 64 : 56;
+        s.h = box ? 16 : 21;
+        s.kind = (uint8_t) kinds[i];
+        s.flip = i % 2;
+        s.tail = 0xD03030;
+        s.seed = 0x1234567u * (i + 1);
+        s.flags = sky == 1 ? 0 : kSkyDay;
+        s.cover = sky == 2 ? 3 : 1;
+        s.fall = sky == 2 ? 1 : 0;
+        s.wind = sky == 2;
+        s.moon = 3;
+        char name[96];
+        static const char *const kSky[] = {"day", "night", "rain"};
+        snprintf(name, sizeof name, "/sky_%s_%dx%d_%s.gif", kNames[i], s.w, s.h, kSky[sky]);
+        save_gif(name, s.w, s.h, [&](std::vector<uint16_t> &buf) {
+          Px565 p;
+          p.px = buf.data();
+          p.w = p.stride = s.w;
+          p.h = s.h;
+          p.clip = PxBox{0, 0, s.w, s.h};
+          sky_paint(p, s, g_ms);
+        }, i == 0 ? 60000 : 20000);
       }
   env = AppEnv{};
   return n;
