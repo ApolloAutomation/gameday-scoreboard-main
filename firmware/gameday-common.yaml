@@ -5,7 +5,7 @@ substitutions:
   # The MAC suffix keeps two panels on one network apart: gameday-2f6a70.local
   name: "gameday"
   friendly_name: "Game Day Scoreboard"
-  version: "2026.11.8"
+  version: "2026.11.9"
   # Set by each board's top-level file; names the manifest folder.
   variant: "moonhub75"
   # The project's site, GitHub Pages today, with no trailing slash. The
@@ -507,6 +507,8 @@ improv_ble:
 
 web_server:
   version: 3
+  # Firmware upload at /update only on the setup hotspot
+  ota: false
   # Custom page (firmware/web). Regenerate bundle.js with scripts/build_web.py.
   js_include: web/bundle.js
   css_include: web/app.css
@@ -522,6 +524,8 @@ http_request:
   # verified.
   verify_ssl: true
   buffer_size_rx: 2048
+  # The request line and User-Agent share this
+  buffer_size_tx: 1024
 
 # Over-the-air updates from the release manifest. Checked every 6 hours and
 # on demand from the device page.
@@ -649,6 +653,17 @@ gameday:
           lambda: 'return x == "qc";'
         then:
           - script.execute: qc_start
+    # An install from the update feed starting, or failing
+    - if:
+        condition:
+          lambda: 'return x == "updating";'
+        then:
+          - script.execute: boot_updating
+    - if:
+        condition:
+          lambda: 'return x == "update_ended";'
+        then:
+          - script.execute: boot_hide
     - if:
         condition:
           lambda: 'return x == "team_picked";'

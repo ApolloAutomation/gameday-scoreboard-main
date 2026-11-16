@@ -6,8 +6,9 @@ grows more in one go than the budget's max_growth allows against the base
 branch, with the numbers in the error and in the job summary.
 
     python3 scripts/size_budget.py firmware <build dir> <variant> <out.json>
-        Flash (the OTA image) and static internal RAM (from the ELF) of one
-        build: the folder build-action leaves, with its .ota.bin and .elf.
+        Flash (the OTA image), static internal RAM and the main loop's
+        deepest stack chain (both from the ELF) of one build: the folder
+        build-action leaves, with its .ota.bin and .elf.
     python3 scripts/size_budget.py host <heap.json> <out.json>
         The parser figures `make -C tests heap` printed (tests/heap_budget.cpp).
     python3 scripts/size_budget.py check <sizes dir> [--base <dir>] [--base-label <text>] [--growth-ok]
@@ -25,6 +26,12 @@ Static internal RAM is every allocated section the ELF places in the
 ESP32-S3's internal data RAM (0x3FC88000 to 0x3FD00000). .dram0.dummy stands
 in for the IRAM code that shares that memory, so this is the same figure as
 ESPHome's "RAM:" line, and it is internal RAM the heap never gets.
+
+loop_stack is the sum of the stack frames of LOOP_CHAIN, the main loop's
+deepest known call chain (a Favorite teams read that redraws the second
+area's clock), from each function's `entry a1, N` in the ELF. The loop's
+stack is 16 KB (loop_task_stack_size in gameday-common.yaml) and the chain's
+tail (snprintf and the clock's helpers) adds about 2 KB more.
 """
 
 import json
@@ -49,7 +56,14 @@ LABELS = {
     "static_ram": "static internal RAM",
     "json": "JSON documents (PSRAM on the panel)",
     "heap": "other heap (internal RAM on the panel)",
+    "loop_stack": "main loop's deepest stack chain",
 }
+
+# The chain loop_stack adds up, outermost first: (namespace prefix, name).
+_GAMEDAY = "7esphome7gameday16GamedayComponent"
+LOOP_CHAIN = [("7esphome", "loop_task")] + [(_GAMEDAY, n) for n in (
+    "loop", "apply_job_", "apply_fav_job_", "fav_no_event_", "fav_choose_", "emit_", "emit_a2_", "a2_fields_",
+    "a2_clock_line_")]
 
 
 def static_ram(elf: bytes) -> int:
@@ -65,12 +79,69 @@ def static_ram(elf: bytes) -> int:
     return total
 
 
+def _sections(elf: bytes) -> list:
+    if elf[:4] != b"\x7fELF" or elf[4] != 1 or elf[5] != 1:
+        raise SystemExit("not a 32-bit little-endian ELF")
+    shoff, = struct.unpack_from("<I", elf, 0x20)
+    shentsize, shnum = struct.unpack_from("<HH", elf, 0x2E)
+    return [struct.unpack_from("<IIIIIIIIII", elf, shoff + i * shentsize) for i in range(shnum)]
+
+
+def frame_sizes(elf: bytes, chain: list) -> list:
+    """Each function's `entry a1, N` frame, matched by mangled name.
+
+    `_ZN` or `_ZNK`, the prefix, then the name's length and the name, then
+    the end of the name or an ABI tag: lambdas (`_ZZ...`) and clones
+    (`$isra$0`, `.part.0`) are left out. Overloads take the largest.
+    """
+    secs = _sections(elf)
+    found = {}
+    for _name, typ, _flags, _addr, off, size, link, _info, _align, entsize in secs:
+        if typ != 2:  # 2 is SHT_SYMTAB, the symbol table
+            continue
+        stroff = secs[link][4]
+        for i in range(size // (entsize or 16)):
+            st_name, value, _size, _info, _other, shndx = struct.unpack_from("<IIIBBH", elf, off + i * 16)
+            end = elf.index(b"\0", stroff + st_name)
+            sym = elf[stroff + st_name:end].decode("ascii", "replace")
+            for k, (prefix, fn) in enumerate(chain):
+                for head in ("_ZN", "_ZNK"):
+                    stem = f"{head}{prefix}{len(fn)}{fn}"
+                    if sym.startswith(stem) and sym[len(stem):len(stem) + 1] in ("E", "B") \
+                            and "$" not in sym and "." not in sym:
+                        found.setdefault(k, []).append((sym, value, shndx))
+    out = []
+    for k, (prefix, fn) in enumerate(chain):
+        if k not in found:
+            raise SystemExit(f"loop_stack: no symbol for {fn} in the ELF")
+        best = 0
+        for sym, value, shndx in found[k]:
+            if not 0 < shndx < len(secs):
+                raise SystemExit(f"loop_stack: {sym} is not in a section")
+            _n, _t, _f, addr, off, size, *_ = secs[shndx]
+            at = off + value - addr
+            if not addr <= value < addr + size - 2:
+                raise SystemExit(f"loop_stack: {sym} is outside its section")
+            b0, b1, b2 = elf[at:at + 3]
+            if b0 != 0x36 or b1 & 0x0F != 1:
+                raise SystemExit(f"loop_stack: {sym} does not start with entry a1 (bytes {elf[at:at + 3].hex()})")
+            best = max(best, ((b2 << 4) | (b1 >> 4)) * 8)
+        out.append((fn, best))
+    return out
+
+
+def loop_stack(elf: bytes) -> int:
+    return sum(n for _fn, n in frame_sizes(elf, LOOP_CHAIN))
+
+
 def measure_firmware(build: Path, variant: str) -> dict:
     ota = sorted(build.glob("*.ota.bin"))
     elf = sorted(build.glob("*.elf"))
     if len(ota) != 1 or len(elf) != 1:
         raise SystemExit(f"{build}: expected one .ota.bin and one .elf, found {len(ota)} and {len(elf)}")
-    return {"firmware": {variant: {"flash": ota[0].stat().st_size, "static_ram": static_ram(elf[0].read_bytes())}}}
+    data = elf[0].read_bytes()
+    return {"firmware": {variant: {"flash": ota[0].stat().st_size, "static_ram": static_ram(data),
+                                   "loop_stack": loop_stack(data)}}}
 
 
 def load_sizes(folder: Path) -> dict:
@@ -187,6 +258,38 @@ def selftest() -> None:
     struct.pack_into("<HH", head, 0x2E, 40, len(secs))
     body = b"".join(struct.pack("<IIIIIIIIII", 0, 1, f, a, o, s, 0, 0, 4, 0) for f, a, o, s in secs)
     assert static_ram(bytes(head) + body) == 300
+
+    # Symbols: apply_job_ (entry a1, 1600) and its lambda.
+    names = (b"\0_ZN7esphome7gameday16GamedayComponent10apply_job_Ev"
+             b"\0_ZZN7esphome7gameday16GamedayComponent10apply_job_EvENKUlvE_clEv\0")
+    lam = names.index(b"_ZZ")
+    text = b"\x36\x81\x0c\x00" + b"\x36\x41\x00\x00"
+    syms = b"\0" * 16 + struct.pack("<IIIBBH", 1, 0x42000000, 4, 0x12, 0, 1) + \
+        struct.pack("<IIIBBH", lam, 0x42000004, 4, 0x12, 0, 1)
+    off_text, off_syms = 52, 52 + len(text)
+    off_str = off_syms + len(syms)
+    off_sh = off_str + len(names)
+    shdrs = [(0, 0, 0, 0, 0, 0, 0), (1, 0x6, 0x42000000, off_text, len(text), 0, 0),
+             (2, 0, 0, off_syms, len(syms), 3, 16), (3, 0, 0, off_str, len(names), 0, 0)]
+    head = bytearray(52)
+    head[:6] = b"\x7fELF\x01\x01"
+    struct.pack_into("<I", head, 0x20, off_sh)
+    struct.pack_into("<HH", head, 0x2E, 40, len(shdrs))
+    elf = bytes(head) + text + syms + names + b"".join(
+        struct.pack("<IIIIIIIIII", 0, t, f, a, o, s, l, 0, 4, e) for t, f, a, o, s, l, e in shdrs)
+    assert frame_sizes(elf, [(_GAMEDAY, "apply_job_")]) == [("apply_job_", 1600)]
+    try:
+        frame_sizes(elf, [(_GAMEDAY, "apply_job_"), (_GAMEDAY, "emit_")])
+        raise AssertionError("a missing symbol must fail")
+    except SystemExit as e:
+        assert "no symbol for emit_" in str(e), e
+    # A function without an entry opcode is an error.
+    bad = elf[:off_text] + b"\x00\x00\x00" + elf[off_text + 3:]
+    try:
+        frame_sizes(bad, [(_GAMEDAY, "apply_job_")])
+        raise AssertionError("a function without entry must fail")
+    except SystemExit as e:
+        assert "does not start with entry" in str(e), e
 
     budget = {"max_growth": {"flash": 100}, "firmware": {"a": {"flash": 1000, "static_ram": 50}}}
     ok, rows, _ = check(budget, {"firmware": {"a": {"flash": 900, "static_ram": 50}}}, {}, "dev")

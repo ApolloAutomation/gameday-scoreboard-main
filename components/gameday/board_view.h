@@ -28,6 +28,7 @@ struct BoardView {
   lv_obj_t *badge_lbl[2]{};
   lv_obj_t *abbr[2]{};
   lv_obj_t *score[2]{};
+  lv_obj_t *when{nullptr};  // before a game: the day or time
   lv_obj_t *rec[2]{};   // the record, standing or rank under each logo
   lv_obj_t *poss[2]{};  // possession: a gold underline
   lv_obj_t *clock{nullptr};

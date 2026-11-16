@@ -9,7 +9,7 @@ The prebuilt firmware for DIY builds targets one pinout, the [MoonHub75](https:/
 
 ## Apollo M-1 and MoonHub75
 
-The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [DIY installer](/diy/install/) and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
+The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [Apollo M-1 installer](/diy/install/) and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
 
 Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as both boards carry one. The scoreboard pages don't use it.
 
@@ -61,8 +61,8 @@ A pin map in `firmware/controllers/` and a line on the DIY page make a good firs
 
 ## The scoreboard75 controller board is a different board
 
-The scoreboard75 controller board uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own installer, the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/).
+The scoreboard75 controller board uses different pins. Its pin map is `firmware/controllers/scoreboard75.yaml`, its build is `firmware/gameday-scoreboard75.yaml`, and it has its own choice, **scoreboard75 controller board**, on the [installer on the home page](https://apolloautomation.github.io/gameday-scoreboard-main/).
 
 :::caution
-On a board you built, use the DIY installer or build `gameday.yaml`. Never flash `gameday-scoreboard75.yaml` or the main installer's firmware to a MoonHub75-pinout board. The panel pins won't match, and that build takes its updates from the controller's feed.
+On an Apollo M-1 or a board you built, use the Apollo M-1 choices or build `gameday.yaml`. Never flash `gameday-scoreboard75.yaml` or the installer's scoreboard75 choice to a MoonHub75-pinout board. The panel pins won't match, and that build takes its updates from the controller's feed.
 :::

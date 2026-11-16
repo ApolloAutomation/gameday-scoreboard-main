@@ -137,6 +137,8 @@
       <div class="conn" id="conn" aria-live="polite"><i></i><span>offline</span></div>
     </header>
 
+    <div class="updbar" id="updBar" role="status" hidden><span id="updText"></span><span class="updbtns" id="updBtns"><button class="btn primary" id="updInstall">Install</button><button class="btn" id="updLater">Later</button></span></div>
+
     <section class="board empty" id="board">
       <div class="state" id="gstate">WAITING</div>
       <div class="stale" id="stale">data stale</div>
@@ -242,7 +244,7 @@
         </div>
         <div id="sportCtls" hidden>
           <div class="ctl"><label for="sportview">Game board<small id="sportviewHelp">How a football game in progress shows on the main board. The Field view draws the field with the ball's spot, the line of scrimmage and the line to gain, the drive, and the score and the clock above it, and the ticker carries the game's leaders, the drive and each side's chance to win. Other sports, and football before the kickoff and after the final, keep the scoreboard.</small></label><select id="sportview" aria-label="Game board" aria-describedby="sportviewHelp"><option value="0">Scoreboard</option><option value="1">Field view</option></select></div>
-          <div class="ctl"><label>Try it<small>Shows a sample field on the Scoreboard page for 15 seconds, in your game's colors, then the panel goes back to what it showed.</small></label><button class="btn" id="fieldTry">Field view</button></div>
+          <div class="ctl"><label>Try it<small>During a football game, shows that game's own field on the Scoreboard page for 15 seconds. With no football game on, shows a sample marked SAMPLE. Then the panel goes back to what it showed.</small></label><button class="btn" id="fieldTry">Field view</button></div>
         </div>
         <div class="ctl" id="standingRow" hidden><label for="standing">Standing next to pro teams<small id="standingHelp">What your team shows where its record goes: the record, its playoff seed, or its place in its division, conference or league, when ESPN has them. The other team keeps its record. College teams show their rank, and minor league teams always their record.</small></label><select id="standing" aria-label="Standing next to pro teams" aria-describedby="standingHelp"><option value="0">Record</option><option value="1">Seed</option><option value="2">Place</option></select></div>
         <div id="nightCtls" hidden>
@@ -348,7 +350,7 @@
         <p class="hint">Full-screen splashes for scores and big plays, each with its own switch.</p>
         <div id="celebCtls">
           <div class="ctl" id="animRow"><label>Play animations<small>A short pixel-art play across the whole panel before a touchdown's, a field goal's, an extra point's, a two-point conversion's, a home run's or a goal's splash: the pass or the run into the end zone, the kick through the uprights, the swing and the ball over the fence, or the shot into a soccer or hockey net and a long GOOOAAALLL, with a caption across the top that says what happened and the score. The splash follows as usual.</small></label><button class="sw" data-set="anim" aria-label="Play animations"></button></div>
-          <div class="ctl drop" id="animTryRow"><label>Try it<small>Plays one now on the Scoreboard page, in your team's colors with a sample caption, then the panel goes back to what it showed.</small></label><span class="trybtns"><button class="btn" data-anim="pass">Pass</button><button class="btn" data-anim="run">Run</button><button class="btn" data-anim="ret">Return</button><button class="btn" data-anim="fg">Field goal</button><button class="btn" data-anim="pat">Extra point</button><button class="btn" data-anim="two">2-pt</button><button class="btn" data-anim="hr">Home run</button><button class="btn" data-anim="soccer">Goal (soccer)</button><button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
+          <div class="ctl drop" id="animTryRow"><label>Try it<small>Plays a sample now on the Scoreboard page, in your team's colors, its score line marked SAMPLE, then the panel goes back to what it showed.</small></label><span class="trybtns"><button class="btn" data-anim="pass">Pass</button><button class="btn" data-anim="run">Run</button><button class="btn" data-anim="ret">Return</button><button class="btn" data-anim="fg">Field goal</button><button class="btn" data-anim="pat">Extra point</button><button class="btn" data-anim="two">2-pt</button><button class="btn" data-anim="hr">Home run</button><button class="btn" data-anim="soccer">Goal (soccer)</button><button class="btn" data-anim="hockey">Goal (hockey)</button></span></div>
           <div class="ctl"><label>Opponent scores too<small>The other side's scores and big plays. Red cards, overtime and the final show either way.</small></label><button class="sw" data-set="opp" aria-label="Opponent scores too"></button></div>
           <div class="ctl" id="alertFavRow"><label>Favorite teams only<small>In Live games, big-play splashes only for games with your team or a favorite. The victory splash still shows for every game.</small></label><button class="sw" data-set="alertfav" aria-label="Favorite teams only"></button></div>
           <div class="ctl" id="watchRow"><label>Switch to big plays in other games<small id="watchHint"></small></label><button class="sw" data-set="watch" aria-label="Switch to big plays in other games"></button></div>
@@ -423,7 +425,7 @@
           <div class="fwsub" id="fwSub"></div>
         </div>
         <div class="ctl" id="autoupdRow" hidden>
-          <label>Install updates automatically<small>Between 3 and 5 AM, never during a live game. Off: the panel only tells you an update is out.</small></label>
+          <label>Install updates automatically<small>Between 3 and 5 AM, never during a live game. Off: this page tells you when an update is out.</small></label>
           <button class="sw" data-set="autoupd" aria-label="Install updates automatically"></button>
         </div>
         <div class="ctl" id="betaRow" hidden>
@@ -699,7 +701,7 @@
   document.querySelectorAll("[data-anim]").forEach((b) => {
     b.onclick = () => tryIt(false, "anim&play=" + encodeURIComponent(b.dataset.anim), "Playing on the panel");
   });
-  $("#fieldTry").onclick = () => tryIt(true, "field", "Showing a sample field on the panel");
+  $("#fieldTry").onclick = () => tryIt(true, "field", "Showing the Field view on the panel");
 
   // Every ping calls this; #conn is a live region, so only a flip touches it.
   const setConn = (on) => {
@@ -916,6 +918,8 @@
     renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc, g.ork);
     $("#sA").textContent = g.ts;
     $("#sB").textContent = g.os;
+    // Before the start, no 0-0
+    b.querySelector(".score").hidden = g.s === "PRE";
     const clock = $("#clock");
     if (g.s === "IN") clock.textContent = g.c || "In progress";
     else if (g.s === "POST") clock.textContent = endedAs(g);
@@ -3325,9 +3329,17 @@
     peek.textContent = note || "Updates, Wi-Fi, diagnostics";
     peek.classList.toggle("alert", !!note);
   };
+  // The bar at the top of the page; Later hides one version
+  const showUpdBar = (text, buttons) => {
+    $("#updText").textContent = text;
+    $("#updBtns").hidden = !buttons;
+    $("#updBar").hidden = false;
+  };
+  const updLater = () => { try { return localStorage.getItem("gd.updLater") || ""; } catch (_) { return ""; } };
   const renderUpdate = (u) => {
     const box = $("#fw");
     box.hidden = false;
+    $("#updBar").hidden = true;
     fwNote = "";
     const cur = u.current_version ? "v" + u.current_version : "";
     const latest = u.value ? "v" + u.value : "";
@@ -3340,6 +3352,7 @@
     if (st.includes("INSTALLING") || installing) {
       fwNote = "Installing " + (latest || "update");
       $("#fwText").textContent = fwNote;
+      showUpdBar(fwNote + ". Keep the panel powered.", false);
       sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
     } else if (stale) {
       $("#fwText").textContent = "Checking for the latest " + (S.beta ? "beta" : "release");
@@ -3373,7 +3386,17 @@
       renderNotes(sub, latest, u.summary);
       btn.hidden = false;
       // Wait for the running version: the offer may be older
-      if (failed || missed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
+      if (failed || missed || isNewer(u.value, u.current_version)) {
+        openUnlessChosen("deviceCard");
+        if (updLater() !== String(u.value || "")) {
+          showUpdBar(fwNote + (!failed && !missed && S && (S.autoupd || S.bar) ? ". It installs on its own between 3 and 5 AM." : ""), true);
+          $("#updInstall").onclick = () => btn.click();
+          $("#updLater").onclick = () => {
+            $("#updBar").hidden = true;
+            try { localStorage.setItem("gd.updLater", String(u.value || "")); } catch (_) {}
+          };
+        }
+      }
       btn.onclick = async () => {
         const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
         if (!confirm(ask)) return;

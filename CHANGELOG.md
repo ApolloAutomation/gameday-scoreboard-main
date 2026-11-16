@@ -14,6 +14,21 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.9
+
+NFL halftime no longer reads "4th", Weather's forecast loads again, the board shows when a game starts instead of 0-0, and a new panel says when it's joining your Wi-Fi.
+
+- An NFL board could show "4th" during halftime once the second half's kickoff came in. It now shows Halftime through the break, then "3rd" with the new drive's down and distance.
+- Weather's forecast, which stopped loading in v2026.11.8, loads again.
+- Before a game the board leaves out the 0-0 and shows the day, like "Sun" or "Tomorrow", with the start time, like "4:25 PM", where the score and clock go, on every layout and on the device page's board. With My team today as the idle display, the countdown takes the start time's place. On a single 64x64 panel a ranked team's rank shows in the ticker's matchup before the game.
+- A new panel joining Wi-Fi from the hotspot's setup page or the installer says JOINING and the network's name instead of Wi-Fi lost. If it isn't on after about 30 seconds, it says Can't join with the hotspot's QR code, so a mistyped password is easy to fix.
+- The install page asks which controller you have, Apollo M-1 (one 64x64 panel or 128x64) or scoreboard75, before it shows Install, so an M-1 gets its own firmware.
+- When an update is out, a bar at the top of the device page says so, with Install and Later, so you don't have to scroll to the Device card. While an update installs, the panel says Updating and Keep it plugged in.
+- On the device page, the Field view's Try it shows your football game's own field while it's on, or a sample marked SAMPLE between made-up HOME and AWAY teams, and Play animations' Try it says SAMPLE in place of your team's score.
+- The panel takes a firmware file at its /update address only while its setup hotspot is up, not on your home Wi-Fi, so a web page opened at home can't install firmware on it. Install on the device page works as before.
+- Redrawing the board uses less of the panel's working memory, leaving more room to spare against a rare restart.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.8
 
 Panels set to British Columbia, Alberta or Manitoba time show the right clock again, an update that doesn't install now says so, and the device page keeps one connection to the panel and reads better on a phone.

@@ -32,7 +32,7 @@ The arrangement the panel drives is the layout you pick, saved on the panel and 
 | Four 64x64 panels side by side | Four wide | The wide board spread across 256 pixels |
 | Four 64x64 panels in two rows of two | Two rows of two | The 128x64 board on top, the second area underneath: the time, the date and a bigger ticker to start with |
 
-One firmware drives every layout. The [DIY installer](/diy/install/) offers one 64x64 panel or a 128x64 display, so the first start uses the right one. For three or four panels, install the one-panel build, then pick **Three wide**, **Four wide** or **Two rows of two** on the device page. You can change the layout there any time. See [Panel sizes](/using/panel-sizes/).
+One firmware drives every layout. The [M-1 installer](/diy/install/) offers one 64x64 panel or a 128x64 display, so the first start uses the right one. For three or four panels, install the one-panel build, then pick **Three wide**, **Four wide** or **Two rows of two** on the device page. You can change the layout there any time. See [Panel sizes](/using/panel-sizes/).
 
 Two rows of two, and three or four in a row, can show something else beside the board: today's scores, a second team's game, other live games, the clock, or another display like F1, Stocks & Crypto, the Flight Tracker or Weather. See [The second area](/using/panel-sizes/#the-second-area).
 

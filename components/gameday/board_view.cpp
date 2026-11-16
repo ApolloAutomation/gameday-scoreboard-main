@@ -650,6 +650,10 @@ void board_build(BoardView &v) {
     v.clock_ampm = plain_label(v.no_game, v.f8, LV_OPA_COVER);
     lv_obj_add_flag(v.clock_ampm, LV_OBJ_FLAG_HIDDEN);
   }
+  if (v.when == nullptr && v.game != nullptr) {
+    v.when = plain_label(v.game, v.f12, LV_OPA_COVER);
+    lv_obj_add_flag(v.when, LV_OBJ_FLAG_HIDDEN);
+  }
   // Fireworks fill the canvas's top left
   if (v.fx != nullptr)
     lv_image_set_inner_align(v.fx, LV_IMAGE_ALIGN_TOP_LEFT);
@@ -714,6 +718,8 @@ void board_layout(BoardView &v, int w, int h, int splash_h, Sizes sizes) {
     place(v.abbr[i], g.abbr[i]);
     place(v.score[i], g.score[i]);
   }
+  put_font(v.when, font_of(v, g.when_font));
+  place(v.when, g.when);
   put_clock(v, g, true);
   if (g.wide) {
     for (int i = 0; i < 2; i++) {
@@ -845,15 +851,21 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_text(v.score[0], std::to_string(f.team_score).c_str());
   put_text(v.score[1], std::to_string(f.opponent_score).c_str());
 
-  // Before a game, only the idle countdown sends a clock
-  const bool clock_up = (live || f.game_state == "PRE") && !clock_text.empty();
+  // Before a game: the day over the time, no zeros
+  const bool pre = f.game_state == "PRE";
+  const KickoffRows k = pre ? kickoff_rows(panel_text(f.kickoff)) : KickoffRows{};
+  const std::string &lower = clock_text.empty() ? k.time : clock_text;
+  const std::string &clock_line = !pre ? clock_text : wide ? lower : k.day;
+  const std::string &when_line = wide ? k.day : lower;
+  const bool clock_up = (live || pre) && !clock_line.empty();
   if (clock_up)
-    put_text(v.clock, clock_text.c_str());
+    put_text(v.clock, clock_line.c_str());
+  put_changed(v.when, pre ? when_line.c_str() : "");
   v.clock_rec = (uint8_t) std::min<size_t>(wide ? std::max(rec[0].size(), rec[1].size()) : 0, 255);
   v.clock_baseball = f.sport == 1;
   put_clock(v, g, false);
   // College rank goes in front only where it fits
-  const int clock_px = clock_up && v.clock != nullptr ? (int) clock_text.size() * char_px(v.clock) : 0;
+  const int clock_px = clock_up && v.clock != nullptr ? (int) clock_line.size() * char_px(v.clock) : 0;
   auto put_rank = [&](lv_obj_t *lbl, uint8_t rank, const std::string &text, bool row) {
     if (lbl == nullptr)
       return;
@@ -1032,6 +1044,9 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
     }
   }
   show(v.clock, clock_up);
+  show(v.score[0], !pre);
+  show(v.score[1], !pre);
+  show(v.when, pre && !when_line.empty());
   show(v.abbr[0], wide || !clock_up);
   show(v.abbr[1], wide || !clock_up);
 

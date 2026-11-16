@@ -83,8 +83,10 @@ inline int render_field_views(const std::string &dir, const std::string &fixture
   g.short_detail = "10:00 - OT";
   g.fb.periods = 5;
   games.emplace_back("overtime", g);
+  // The Try it's own sample
+  games.emplace_back("try_sample", field_try_sample());
   for (const auto &[name, g] : games) {
-    const std::string clock = board_clock_text(g, false, 0);
+    const std::string clock = name == "try_sample" ? kFieldSampleClock : board_clock_text(g, false, 0);
     const std::string ticker = field_ticker(g, true);
     for (int large = 0; large < 2; large++) {
       for (int w : {64, 128, 192, 256}) {

@@ -11,6 +11,8 @@ NFL and college football games share one board. What you see depends on your pan
 
 The next-game card shows both team logos, your team on the left, with each team's abbreviation in its own color and the season records under the logos.
 
+Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
+
 The ticker along the bottom carries:
 
 - the game's name for bowl and playoff games, like "Rose Bowl" or "NFC Wild Card"
@@ -20,7 +22,7 @@ The ticker along the bottom carries:
 
 A game whose kickoff time isn't set yet, like a college game a couple of weeks out, shows the day and "TBD", like "Sat TBD".
 
-A ranked college team shows its rank in front of its name. Before kickoff the ticker starts with the matchup, like "#5 OSU vs #12 MICH", after the game's name when it has one. On a 128x64 board the rank sits in front of the record under the logo, like "#5 9-1", and on a single 64x64 panel in front of the abbreviation, like "#5 OSU". Each goes in only where it fits; see [Ranks and standings](/using/ticker/#ranks-and-standings).
+A ranked college team shows its rank in front of its name. Before kickoff the ticker starts with the matchup, like "#5 OSU vs #12 MICH", after the game's name when it has one. On a 128x64 board the rank sits in front of the record under the logo, like "#5 9-1", and on a single 64x64 panel in front of the abbreviation after the game, like "#5 OSU". Before the game the day of the game has that row on a single 64x64 panel, so the rank is in the ticker's matchup. Each goes in only where it fits; see [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 An NFL team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
 
@@ -60,7 +62,7 @@ Right after a kickoff or a punt is returned, ESPN often has the down and the spo
 
 The ticker carries the last play (with **Last play** on in the Ticker card), the game's passing, rushing and receiving leaders, like "J. Allen 21/34, 241 YDS, 2 TD", the drive so far, like "Drive: 7 plays, 38 yards, 1:36", and the team ESPN gives the better chance to win, like "DUKE 84% to win". Your favorite players' lines and your bets follow, as on the scoreboard.
 
-Splashes and play animations show over the field just as over the scoreboard, and the field comes back after them. **Try it** next to **Game board** shows a sample field on the panel for 15 seconds, in your game's colors, then the panel goes back to what it showed. See [Panel sizes and layouts](/using/panel-sizes/#field-view) for each layout.
+Splashes and play animations show over the field just as over the scoreboard, and the field comes back after them. **Try it** next to **Game board** shows your football game's own field for 15 seconds while it's on, with its real score, clock, down and spot, then the panel goes back to what it showed. With no football game on, it shows a sample marked **SAMPLE**, between made-up teams called **HOME** and **AWAY**. See [Panel sizes and layouts](/using/panel-sizes/#field-view) for each layout.
 
 On two rows of two and on three or four panels in a row, **Game details** in the second area puts the field beside the scoreboard instead: the board stays the scoreboard, and the second area shows the field with the down and distance over it, each side's chance to win as a bar under it, the drive's plays, yards and time, and the chance to win in each team's color, with the leaders and the drive in its own ticker. It's off unless you turn it on, it takes the place of the clock, the date or today's scores only, and it doesn't show while the main board shows the Field view. See [The second area](/using/panel-sizes/#the-second-area).
 

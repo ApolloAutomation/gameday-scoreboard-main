@@ -17,9 +17,9 @@ everything else from `firmware/gameday-common.yaml`.
 
 | File | What it is | Variant | Released |
 |---|---|---|---|
-| `gameday.yaml` | MoonHub75 pinout (the Apollo M-1 Rev6 shares it) | `moonhub75` | Yes, DIY installer, one panel |
-| `gameday-2panel.yaml` | `gameday.yaml` booting two panels wide | `moonhub75` (crash report says `moonhub75-2panel`) | Yes, DIY installer, two panels; updates from `moonhub75` |
-| `gameday-scoreboard75.yaml` | scoreboard75 controller board, boots two panels wide | `scoreboard75` | Yes, main installer |
+| `gameday.yaml` | MoonHub75 pinout (the Apollo M-1 Rev6 shares it) | `moonhub75` | Yes, home page and M-1 installer, one panel |
+| `gameday-2panel.yaml` | `gameday.yaml` booting two panels wide | `moonhub75` (crash report says `moonhub75-2panel`) | Yes, home page and M-1 installer, two panels; updates from `moonhub75` |
+| `gameday-scoreboard75.yaml` | scoreboard75 controller board, boots two panels wide | `scoreboard75` | Yes, home page installer |
 | `gameday-demo.yaml`, `gameday-scoreboard75-demo.yaml` | release build plus `pages/demo.yaml`: a scripted game, no updater | as above | Never |
 | `gameday-bar.yaml`, `gameday-scoreboard75-bar.yaml` | release build plus `pages/bar.yaml`: always on the beta channel, installs on its own at night | as above | Beta channel only |
 
@@ -747,7 +747,7 @@ isn't stable when stripped again.
 | `POST /gameday/action?do=` | `refresh`, `qc`, `power_ok` (and the demo's `demo`, `demo_stop`) |
 | `GET/POST /gameday/wifi` | The saved networks; `forget=<ssid>` |
 | `GET /gameday/crash`, `POST ?clear=1` | The stored crash report |
-| `GET /gameday/heap` | Free memory, for the burn-in monitor |
+| `GET /gameday/heap` | Free memory, for the burn-in monitor; `stack` is the main loop's lowest free stack in bytes (FreeRTOS's high-water mark, read every 10 s; 0 until the first read) |
 
 The page reads the state document, re-reads it when ESPHome's event stream
 sends a Game Status event, holds each tapped setting until the panel
@@ -853,8 +853,9 @@ state document.
 ## Sites
 
 - `docs/site`: the installer and support site for GitHub Pages
-  (`site_base`). Pages: home (the main installer, scoreboard75), `install/diy`
-  (MoonHub75 one or two panels), `diy`, `setup`, `support`, `privacy`,
+  (`site_base`). Pages: home (the installer, with a board picker
+  for the M-1 and scoreboard75), `install/diy` (the M-1 and MoonHub75 installer,
+  one or two panels), `diy`, `setup`, `support`, `privacy`,
   `changelog`. Links are relative so the site works under the Pages project
   path. A release deploy adds `firmware/<variant>/` manifests and images, the
   beta channel folders, the rendered changelog, FAQ JSON-LD, `sitemap.xml`
