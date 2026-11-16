@@ -87,10 +87,18 @@ void detail_frame(const GameSnapshot &g, const std::string &clock, int w, bool l
 // Last play, leaders, the drive, the chance to win
 std::string field_ticker(const GameSnapshot &g, bool last_play);
 
-// The Try it shows the sample this long
+// The Try it shows the field this long
 constexpr uint32_t kFieldTryMs = 15000;
-// The Try it's game, in the given teams' colors
+// A made-up game, in the given teams' colors
 GameSnapshot field_sample(const std::string &team, uint32_t team_rgb, const std::string &opp, uint32_t opp_rgb);
+// Live football, not the demo: the board's own game
+inline bool field_try_live(const GameSnapshot &board, bool demo) {
+  return !demo && board.valid && board.sport == Sport::FOOTBALL && board.state == GameState::IN;
+}
+// Otherwise HOME and AWAY, "SAMPLE" for the clock
+constexpr const char *kFieldSampleClock = "SAMPLE";
+constexpr uint32_t kFieldSampleHome = 0x1E64DC, kFieldSampleAway = 0xF08C1E;
+inline GameSnapshot field_try_sample() { return field_sample("HOME", kFieldSampleHome, "AWAY", kFieldSampleAway); }
 
 namespace detail {
 // The board's own game reads only (parse_event)

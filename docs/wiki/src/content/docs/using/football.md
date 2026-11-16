@@ -62,6 +62,10 @@ The ticker carries the last play (with **Last play** on in the Ticker card), the
 
 Splashes and play animations show over the field just as over the scoreboard, and the field comes back after them. **Try it** next to **Game board** shows a sample field on the panel for 15 seconds, in your game's colors, then the panel goes back to what it showed. See [Panel sizes and layouts](/using/panel-sizes/#field-view) for each layout.
 
+:::note[Coming in the next release]
+**Try it** shows your football game's own field for 15 seconds while it's on, with its real score, clock, down and spot. With no football game on, it shows a sample marked **SAMPLE**, between made-up teams called **HOME** and **AWAY**.
+:::
+
 On two rows of two and on three or four panels in a row, **Game details** in the second area puts the field beside the scoreboard instead: the board stays the scoreboard, and the second area shows the field with the down and distance over it, each side's chance to win as a bar under it, the drive's plays, yards and time, and the chance to win in each team's color, with the leaders and the drive in its own ticker. It's off unless you turn it on, it takes the place of the clock, the date or today's scores only, and it doesn't show while the main board shows the Field view. See [The second area](/using/panel-sizes/#the-second-area).
 
 ## Scoring splashes

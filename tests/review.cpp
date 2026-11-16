@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   for (const ScenePlay &p : kScenePlays) {
-    const AnimKind k = anim_sample(p.play, "", 0).args.kind;
+    const AnimKind k = anim_sample(p.play).args.kind;
     if (!only.empty() && only != anim_name(k) && only != p.play)
       continue;
     for (const auto &s : kSceneScreens) {

@@ -14,7 +14,7 @@ components/gameday/gameday.cpp:
                          and prop= and propdel= the player props in theirs, as props.h does)
   POST /gameday/action   400 without do=, 404 for a name the firmware does not know
                          (anim takes play=pass|run|ret|fg|pat|two|tworun|hr|soccer|hockey;
-                         field shows a sample Field view);
+                         field shows the live game's Field view or a sample);
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
   POST /gameday/wifi     forget=<ssid>; 404 when it is not saved
