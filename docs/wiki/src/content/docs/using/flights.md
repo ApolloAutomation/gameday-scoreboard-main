@@ -61,6 +61,21 @@ The list of the nearest planes, nearest first, has each one's callsign, type cod
 - **The card**: the airline's logo big, 32 LEDs square, at the top left, the callsign in big letters beside it with the airline's name and the plane's type under it, then the route in big letters, like **ATL-BDL**, with the flight number at its right. The plane's photo fills the width of the panel under that, about 126 by 52 LEDs, cut to that shape, and until it comes in, or with no photo, the plane's picture shows there at twice its size, or three times for a small plane like a business jet or a helicopter. Under the picture are the altitude and the speed, then how far away and in which direction, and whether it's climbing, level or descending.
 - **The list**: the nearest seven planes, each with its airline's logo and two lines: the callsign and the distance, then the type, the route and the altitude.
 
+:::note[Coming in the next release]
+**A radar on the extra panels.** When the Flight Tracker has the whole of four wide (with **Nothing** picked, or **Full screen** on) or of two rows of two (with **Full screen** on), half the panels show a radar of the planes around your home:
+
+- On four wide, the nearest plane's card stays on the left two panels, as it is today, and the right two panels show the radar and the nearby list in turn, about 8 seconds each.
+- On two rows of two, the top half shows the 128x64 card, with its photo or picture, and the bottom half shows the radar and the nearby list in turn. This takes the place of the full-screen tall card and tall list: the list shows six planes with their type, altitude and distance, and the routes of the nearest three stay in the ticker.
+
+On the radar, your home is the white dot in the middle, north is up (the **N** on the ring), and the ring is your **Within** distance, labeled at the bottom right, like **10MI**. When the distance is an even number, a dotted ring marks half of it. Each plane is a small arrow pointing the way it's flying, or a dot when its heading isn't known; a short dash is a plane on the ground. The plane on the card is yellow with brackets around it, so the two halves read together, and a plane in an emergency is red. Planes farther than your distance are left out.
+
+The nearest plane has its callsign beside it (its registration when it has no callsign). The others carry the number of their row in the nearby list, which is numbered **1** to **6** on these two layouts, so a row in the list can be found on the radar. A number with no room beside its plane is left off.
+
+Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. Without them the radar shows the rings and the planes on black. Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+
+Every other size, and the Flight Tracker in a second area, shows as before.
+:::
+
 The ticker along the bottom says how many planes are nearby, then the nearest three, with the airline, the type, the route, the altitude, the speed and where each one is.
 
 The card stays on the same plane until another one is clearly nearer, so it doesn't flip between two planes at about the same distance. When nothing nearby is in the air, planes on the ground show instead, when the flight data lists them.

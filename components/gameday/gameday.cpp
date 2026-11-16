@@ -6241,7 +6241,7 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
   f.art = std::move(fr.art);
   f.bar = fr.bar;
   if (fr.map.w > 0 && fr.map.x + fr.map.w <= w && fr.map.y + fr.map.h <= h &&
-      ::espn::map_has(fr.map, ::espn::app_env().land)) {
+      (fr.map.radar || ::espn::map_has(fr.map, ::espn::app_env().land))) {
     f.map_pic = fr.map;
     f.map_pic.set_id = this->land_.id;
   }

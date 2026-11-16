@@ -391,6 +391,149 @@ void test_paint() {
   }
 }
 
+AppMap radar_of(int32_t lat_e4, int32_t lon_e4) {
+  AppMap m;
+  m.w = 128;
+  m.h = 56;
+  m.lat_e4 = lat_e4;
+  m.lon_e4 = lon_e4;
+  m.roads = 1;
+  m.radar = 1;
+  m.ring = 26;
+  m.inner = 13;
+  m.scale_q16 = (int32_t) lroundf(map_scale_ring(lat_e4, 26, 16093.4f) * 65536.0f);
+  snprintf(m.ring_text, sizeof m.ring_text, "10MI");
+  return m;
+}
+
+void add_blip(AppMap &m, int x, int y, int track, uint8_t ink, uint8_t flags, uint8_t number) {
+  AppBlip &b = m.blips[m.n_blips++];
+  b.x = (int16_t) x;
+  b.y = (int16_t) y;
+  b.track = (int16_t) track;
+  b.ink = ink;
+  b.flags = flags;
+  b.number = number;
+}
+
+PxBox grow(const PxBox &b) { return PxBox{(int16_t) (b.x - 1), (int16_t) (b.y - 1), (int16_t) (b.w + 2), (int16_t) (b.h + 2)}; }
+
+// Every mark's box, as labels must avoid them.
+std::vector<PxBox> radar_taken(const AppMap &m) {
+  std::vector<PxBox> out;
+  const int lw = px_text_w(m.ring_text, 1);
+  out.push_back(PxBox{(int16_t) (m.w / 2 - 1), 0, 3, 5});
+  out.push_back(PxBox{(int16_t) (m.w - 1 - lw), (int16_t) (m.h - 6), (int16_t) lw, 5});
+  out.push_back(PxBox{(int16_t) (m.w / 2 - 3), (int16_t) (m.h / 2 - 3), 6, 6});
+  MapMark mk[kAppBlips];
+  map_marks(m, mk);
+  for (int i = 0; i < m.n_blips; i++) {
+    const int d = m.blips[i].flags & kBlipIsCard ? 3 : 2;
+    out.push_back(PxBox{(int16_t) (m.blips[i].x - d), (int16_t) (m.blips[i].y - d), (int16_t) (2 * d + 1),
+                        (int16_t) (2 * d + 1)});
+    if (mk[i].w > 0)
+      out.push_back(PxBox{mk[i].x, mk[i].y, mk[i].w, 5});
+  }
+  return out;
+}
+
+void test_radar() {
+  std::vector<uint8_t> bytes = land_sample();
+  LandSet s;
+  land_check(bytes.data(), bytes.size(), s);
+  AppMap m = radar_of(400012, -899988);
+  add_blip(m, 84, 30, 90, kBlipCard, kBlipTrack | kBlipIsCard, 0);
+  add_blip(m, 44, 18, 200, kBlipPlane, kBlipTrack, 1);
+  add_blip(m, 76, 44, 0, kBlipPlane, 0, 2);
+  add_blip(m, 52, 42, 0, kBlipGround, kBlipOnGround, 3);
+  add_blip(m, 72, 12, 315, kBlipAlert, kBlipTrack, 4);
+  snprintf(m.tag, sizeof m.tag, "UAL1234");
+  m.tag_of = 1;
+  // Numbers and the tag: inside, apart, off every blip
+  MapMark mk[kAppBlips];
+  map_marks(m, mk);
+  LCHECK(mk[1].w == px_text_w("UAL1234", 1) && mk[0].w == 0, "the tag in place of a number; the card has none");
+  int placed = 0;
+  const std::vector<PxBox> taken = radar_taken(m);
+  for (int i = 0; i < m.n_blips; i++) {
+    if (mk[i].w == 0)
+      continue;
+    placed++;
+    const PxBox b{mk[i].x, mk[i].y, mk[i].w, 5};
+    LCHECK(b.x >= 1 && b.y >= 1 && b.x + b.w <= 127 && b.y + 5 <= 55, "mark %d inside", i);
+    for (const PxBox &t : taken)
+      LCHECK((t.x == b.x && t.y == b.y && t.w == b.w) || !box_overlap(grow(b), t), "mark %d clear of %d,%d", i, t.x, t.y);
+  }
+  LCHECK(placed == 4, "the tag and every number fit: %d", placed);
+  // Place labels keep off the marks
+  MapLabel lab[kMapLabelMax];
+  const int n = map_labels(m, s, lab, map_label_cap(m));
+  LCHECK(n > 0, "towns on the radar: %d", n);
+  for (int i = 0; i < n; i++) {
+    LandPlace pl;
+    land_place(s, lab[i].place, pl);
+    const PxBox b{lab[i].lx, lab[i].ly, (int16_t) (4 * pl.len - 1), 5};
+    for (const PxBox &t : taken)
+      LCHECK(!box_overlap(b, t), "%s clear of the mark at %d,%d", pl.name, t.x, t.y);
+  }
+  labels_sound(m, s, "radar");
+  // Crowded blips: numbers left off, never overlapping
+  AppMap c = radar_of(400012, -899988);
+  for (int i = 0; i < kAppBlips; i++)
+    add_blip(c, 64 + (i % 2), 28 + (i / 4), 45 * i, kBlipPlane, kBlipTrack, (uint8_t) (i + 1));
+  map_marks(c, mk);
+  int shown = 0;
+  for (int i = 0; i < kAppBlips; i++) {
+    shown += mk[i].w > 0;
+    for (int j = 0; j < i; j++)
+      LCHECK(mk[i].w == 0 || mk[j].w == 0 ||
+                 !box_overlap(grow(PxBox{mk[i].x, mk[i].y, mk[i].w, 5}), PxBox{mk[j].x, mk[j].y, mk[j].w, 5}),
+             "crowded marks %d and %d apart", i, j);
+  }
+  LCHECK(shown < kAppBlips, "crowded: some numbers left off: %d", shown);
+  // Painted: rings and home without a set; nothing past the canvas
+  Canvas bare(128, 56);
+  map_paint(bare.p, m, nullptr);
+  LCHECK(bare.count(0x484848) > 100 && bare.count(0xFFFFFF) == 4, "rings and home, no landmarks");
+  LCHECK(bare.count(0x4A3A24) == 0 && bare.count(0x505050) == 0, "no lines without a set");
+  LCHECK(bare.count(0xFFD000) > 0 && bare.count(0x806800) == 12 && bare.count(0xFF4040) > 0,
+         "the card's plane, its brackets and the emergency");
+  Canvas land(128, 56);
+  map_paint(land.p, m, &s);
+  LCHECK(land.count(0x4A3A24) > 0 && land.count(0x484848) > 100, "roads and rings");
+  // The emergency on top of another plane
+  AppMap e = radar_of(400012, -899988);
+  add_blip(e, 40, 28, 0, kBlipAlert, kBlipTrack, 1);
+  add_blip(e, 40, 28, 0, kBlipCard, kBlipTrack | kBlipIsCard, 0);
+  Canvas ec(128, 56);
+  map_paint(ec.p, e, &s);
+  LCHECK(ec.px[28 * 128 + 40] == rgb565(0xFF4040), "the emergency drawn last");
+  // Edges, every heading, long tags: the guard bytes stay
+  const int guard = 64;
+  std::vector<uint16_t> buf(128 * 56 + 2 * guard, 0xA5A5);
+  Px565 g;
+  g.px = buf.data() + guard;
+  g.w = g.stride = 128;
+  g.h = 56;
+  g.clip = PxBox{0, 0, 128, 56};
+  for (int k = 0; k < 16; k++) {
+    AppMap em = radar_of(400012, -899988);
+    const int xs[4] = {0, 127, 1, 126}, ys[4] = {0, 55, 54, 1};
+    for (int i = 0; i < kAppBlips; i++)
+      add_blip(em, xs[(i + k) % 4], ys[(i + k / 4) % 4], 45 * i + k, (uint8_t) (i % 4),
+               (uint8_t) ((i % 2 ? kBlipTrack : 0) | (i == 3 ? kBlipIsCard : 0) | (i == 5 ? kBlipOnGround : 0)),
+               (uint8_t) i);
+    snprintf(em.tag, sizeof em.tag, "WWWWWWWW");
+    em.tag_of = (int8_t) (k % kAppBlips);
+    snprintf(em.ring_text, sizeof em.ring_text, "250MI");
+    map_paint(g, em, k % 2 ? &s : nullptr);
+  }
+  bool intact = true;
+  for (int i = 0; i < guard; i++)
+    intact = intact && buf[i] == 0xA5A5 && buf[buf.size() - 1 - i] == 0xA5A5;
+  LCHECK(intact, "radar: the guard bytes stay");
+}
+
 void test_store() {
   // What NVS keeps is the bytes as sent
   std::vector<uint8_t> sent = land_sample();
@@ -408,6 +551,7 @@ int run_landmark_tests(int &total_checks) {
   test_check();
   test_projection();
   test_paint();
+  test_radar();
   test_store();
   total_checks += checks;
   return failures;

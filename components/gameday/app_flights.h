@@ -48,6 +48,12 @@ Units units_for_zone(int tz_index);
 espn::AppSet prefs_set(Prefs &p, const std::string &key, const std::string &value);
 void prefs_state(const Prefs &p, const Units &u, JsonObject out);
 
+// Four wide, or 2x2 Full screen: the card beside a radar.
+bool radar_room(int w, int h);
+static const int kRadarW = 128, kRadarH = 56, kRadarRing = 26, kRadarRows = 6;
+// The radar's rings, planes, numbers and tag at x, y.
+void radar_map(const Nearby &n, uint8_t card, const Prefs &p, int x, int y, espn::AppMap &out);
+
 class FlightsApp final : public espn::App {
  public:
   // Each screen's time where the card and list take turns.

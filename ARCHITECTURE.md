@@ -469,8 +469,19 @@ server streams to `handleBody` into a PSRAM staging buffer. `land_check`
 proves every count, name and offset before the main loop swaps the set in
 (`app_env().land`), and the panel keeps it in its own NVS namespace,
 `gd_land`, apart from the preferences, so no saved struct changes. A set for
-another rounded home is not drawn, and a radar with no set draws no canvas
-at all.
+another rounded home is not drawn, and a Weather radar with no set draws no
+canvas at all.
+
+**The plane radar.** When the Flight Tracker has a 256x64 or 128x128 frame
+(`radar_room`), `FlightsApp::frame` draws the 128x64 card in one half and
+gives the other half, 128x56, to the radar and the numbered list in turn on
+the list clock (`list_`, `kScreenMs`); every other size takes the old path
+unchanged. The radar is an `AppMap` with `radar` set: rings at the owner's
+distance, the planes as `AppBlip`s (position, heading, ink, list row from
+`list_number`, the same numbering `radar_list` prints) and the nearest
+plane's tag, so it repaints only when a read moves something. `map_paint`
+draws the landmarks under it when the set matches, and the rings, planes,
+numbers and tag (`map_marks`, placed clear of each other) either way.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in

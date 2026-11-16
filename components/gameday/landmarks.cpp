@@ -46,10 +46,11 @@ struct Cand {
   int32_t key;
   uint8_t idx;
 };
+constexpr int kReserved = 7 + 2 * kAppBlips;
 // Label placement's scratch, in PSRAM once
 struct Scratch {
   Cand c[kLandMaxPlaces];
-  Box taken[6 + 2 * kMapLabelMax];
+  Box taken[kReserved + 2 * kMapLabelMax];
 };
 
 Scratch *scratch() {
@@ -108,6 +109,141 @@ __attribute__((noinline)) void set_xy(const MapProj &pr, const LandSet &s, int16
 }
 
 MapProj proj_of(const AppMap &m) { return map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h); }
+
+constexpr uint32_t kRingInk = 0x484848, kInnerInk = 0x303030, kNorthInk = 0x808080, kRingText = 0x707070;
+constexpr uint32_t kNumInk = 0x909090, kCardMark = 0x806800;
+constexpr uint32_t kBlipInk[4] = {0xE0E0E0, 0xFFD000, 0xFF4040, 0x808080};
+
+Box box(int x, int y, int w, int h) { return Box{(int16_t) x, (int16_t) y, (int16_t) w, (int16_t) h}; }
+
+// The radar's N on the ring's top, and the ring label
+void radar_boxes(const AppMap &m, Box &north, Box &label) {
+  north = box(m.w / 2 - 1, 0, 3, 5);
+  const int lw = px_text_w(m.ring_text, 1);
+  label = box(m.w - 1 - lw, m.h - 6, lw, 5);
+}
+
+int blip_half(const AppBlip &b) { return b.flags & kBlipIsCard ? 3 : 2; }
+Box blip_box(const AppBlip &b) {
+  const int d = blip_half(b);
+  return box(b.x - d, b.y - d, 2 * d + 1, 2 * d + 1);
+}
+int blip_count(const AppMap &m) { return m.radar ? (m.n_blips < kAppBlips ? m.n_blips : kAppBlips) : 0; }
+
+// What labels avoid: keeps, home, the radar's marks
+int reserved(const AppMap &m, Box *out) {
+  int n = 0;
+  for (const AppMapKeep &k : m.keep)
+    if (k.w > 0 && k.h > 0)
+      out[n++] = box(k.x, k.y, k.w, k.h);
+  out[n++] = box(m.w / 2 - 3, m.h / 2 - 3, 6, 6);
+  if (!m.radar)
+    return n;
+  radar_boxes(m, out[n], out[n + 1]);
+  n += 2;
+  MapMark mk[kAppBlips];
+  map_marks(m, mk);
+  for (int i = 0; i < blip_count(m); i++) {
+    out[n++] = blip_box(m.blips[i]);
+    if (mk[i].w > 0)
+      out[n++] = box(mk[i].x, mk[i].y, mk[i].w, 5);
+  }
+  return n;
+}
+
+void circle(Px565 &p, int cx, int cy, int r, uint16_t c, bool dotted) {
+  int x = r, y = 0, err = 1 - r, step = 0;
+  while (x >= y) {
+    if (!dotted || (step++ & 1) == 0)
+      for (int k = 0; k < 8; k++) {
+        const int a = k & 4 ? y : x, b = k & 4 ? x : y;
+        p.put(cx + (k & 1 ? -a : a), cy + (k & 2 ? -b : b), c);
+      }
+    y++;
+    if (err < 0) {
+      err += 2 * y + 1;
+    } else {
+      x--;
+      err += 2 * (y - x) + 1;
+    }
+  }
+}
+
+void blip(Px565 &p, const AppBlip &b) {
+  const uint16_t c = rgb565(kBlipInk[b.ink & 3]);
+  if (b.flags & kBlipIsCard) {
+    const uint16_t k = rgb565(kCardMark);
+    for (int sx = -1; sx <= 1; sx += 2)
+      for (int sy = -1; sy <= 1; sy += 2) {
+        const int x = b.x + 3 * sx, y = b.y + 3 * sy;
+        p.put(x, y, k);
+        p.put(x - sx, y, k);
+        p.put(x, y - sy, k);
+      }
+  }
+  if (b.flags & kBlipOnGround) {
+    p.fill(b.x - 1, b.y, 2, 1, c);
+    return;
+  }
+  if (!(b.flags & kBlipTrack)) {
+    p.fill(b.x - 1, b.y - 1, 2, 2, c);
+    return;
+  }
+  // 5x5 arrows up and up-right, turned in quarters
+  static const uint32_t kArrow[2] = {0x4255C4u, 0x11531Cu};
+  const int dir = ((b.track % 360 + 360) % 360 + 22) / 45 % 8;
+  const uint32_t bits = kArrow[dir & 1];
+  for (int i = 0; i < 25; i++) {
+    if (!(bits >> i & 1))
+      continue;
+    int x = i % 5, y = i / 5;
+    for (int r = 0; r < dir / 2; r++) {
+      const int t = x;
+      x = 4 - y;
+      y = t;
+    }
+    p.put(b.x - 2 + x, b.y - 2 + y, c);
+  }
+}
+
+// Rings, then the N and ring label on black
+void radar_under(Px565 &p, const AppMap &m) {
+  const int cx = m.w / 2, cy = m.h / 2;
+  if (m.inner > 0)
+    circle(p, cx, cy, m.inner, rgb565(kInnerInk), true);
+  circle(p, cx, cy, m.ring, rgb565(kRingInk), false);
+  Box north, label;
+  radar_boxes(m, north, label);
+  const uint16_t n = rgb565(kNorthInk);
+  p.fill(north.x - 1, north.y, north.w + 2, north.h + 1, 0);
+  p.fill(label.x - 1, label.y - 1, label.w + 2, label.h + 2, 0);
+  px_text(p, north.x, north.y, "N", n, 1);
+  px_text(p, label.x, label.y, m.ring_text, rgb565(kRingText), 1);
+}
+
+// Planes, home, then their numbers and the tag
+void radar_over(Px565 &p, const AppMap &m) {
+  const int n = blip_count(m);
+  // Others, then the card's, then emergencies on top
+  for (uint8_t ink : {kBlipGround, kBlipPlane, kBlipCard, kBlipAlert})
+    for (int i = 0; i < n; i++)
+      if (m.blips[i].ink == ink)
+        blip(p, m.blips[i]);
+  // Home stays in sight under a plane
+  p.fill(m.w / 2 - 1, m.h / 2 - 1, 2, 2, 0xFFFF);
+  MapMark mk[kAppBlips];
+  map_marks(m, mk);
+  for (int i = 0; i < n; i++) {
+    if (mk[i].w == 0)
+      continue;
+    const AppBlip &b = m.blips[i];
+    char num[2] = {(char) ('0' + b.number), 0};
+    const bool tag = i == m.tag_of;
+    p.fill(mk[i].x - 1, mk[i].y - 1, mk[i].w + 2, 7, 0);
+    const uint32_t ink = tag || b.ink == kBlipAlert ? kBlipInk[b.ink & 3] : kNumInk;
+    px_text(p, mk[i].x, mk[i].y, tag ? m.tag : num, rgb565(ink), 1);
+  }
+}
 
 }  // namespace
 
@@ -245,7 +381,6 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
   Cand *cd = sc->c;
   Box *taken = sc->taken;
   // Candidates: projected, inside, biggest then nearest
-  const Box home{(int16_t) (pr.ox - 3), (int16_t) (pr.oy - 3), 6, 6};
   int nc = 0;
   LandPlace pl;
   for (size_t i = 0; i < s.np; i++) {
@@ -262,11 +397,7 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
     cd[at] = Cand{(int16_t) x, (int16_t) y, k, (uint8_t) i};
   }
   // Taken: the keeps, the home, then dots and labels
-  int nt = 0;
-  for (const AppMapKeep &k : m.keep)
-    if (k.w > 0 && k.h > 0)
-      taken[nt++] = Box{k.x, k.y, k.w, k.h};
-  taken[nt++] = home;
+  int nt = reserved(m, taken);
   int n = 0;
   // Off the ring first; then a city may cross it
   for (int pass = 0; pass < 2; pass++)
@@ -304,10 +435,59 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
   return n;
 }
 
+void map_marks(const AppMap &m, MapMark out[kAppBlips]) {
+  for (int i = 0; i < kAppBlips; i++)
+    out[i] = MapMark();
+  const int n = blip_count(m);
+  if (n == 0)
+    return;
+  Box taken[3 + 2 * kAppBlips];
+  int nt = 0;
+  taken[nt++] = box(m.w / 2 - 3, m.h / 2 - 3, 6, 6);
+  radar_boxes(m, taken[nt], taken[nt + 1]);
+  nt += 2;
+  for (int i = 0; i < n; i++)
+    taken[nt++] = blip_box(m.blips[i]);
+  // The tag first, then numbers in list order
+  for (int pass = 0; pass < 2; pass++)
+    for (int i = 0; i < n; i++) {
+      const AppBlip &b = m.blips[i];
+      const bool tag = i == m.tag_of && m.tag[0] != '\0';
+      if (tag != (pass == 0) || (!tag && (b.number < 1 || b.number > 9)))
+        continue;
+      const int lw = tag ? px_text_w(m.tag, 1) : 3, d = blip_half(b);
+      // Beside, above, below, the corners; a tag farther out too
+      const int tx[8] = {b.x + d + 2, b.x - d - 2 - lw, b.x - lw / 2, b.x - lw / 2,
+                         b.x + d + 1, b.x + d + 1, b.x - d - 1 - lw, b.x - d - 1 - lw};
+      const int ty[8] = {b.y - 2, b.y - 2, b.y - d - 6, b.y + d + 2, b.y - d - 5, b.y + d + 1, b.y - d - 5, b.y + d + 1};
+      const int far = tag ? 3 : 1;
+      for (int t = 0; t < 8 * far; t++) {
+        const int k = t % 8, s = t / 8 * 4, sx = k == 1 || k > 5 ? -s : k < 2 || k > 3 ? s : 0;
+        const int sy = k == 2 || k == 4 || k == 6 ? -s : k == 3 || k == 5 || k == 7 ? s : 0;
+        const Box l = box(tx[k] + sx, ty[k] + sy, lw, 5);
+        if (l.x < 1 || l.y < 1 || l.x + l.w > m.w - 1 || l.y + l.h > m.h - 1)
+          continue;
+        bool ok = true;
+        for (int k = 0; k < nt && ok; k++)
+          ok = !meet(l, taken[k], 1);
+        if (!ok)
+          continue;
+        out[i] = MapMark{l.x, l.y, l.w};
+        taken[nt++] = l;
+        break;
+      }
+    }
+}
+
 void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
   p.fill(0, 0, p.w, p.h, 0);
-  if (!map_has(m, set))
+  if (!map_has(m, set)) {
+    if (m.radar) {
+      radar_under(p, m);
+      radar_over(p, m);
+    }
     return;
+  }
   const LandSet &s = *set;
   const MapProj pr = proj_of(m);
   // Roads, then borders, then the coast
@@ -339,6 +519,8 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
   // Lines stay clear of the kept labels
   for (const AppMapKeep &k : m.keep)
     p.fill(k.x, k.y, k.w, k.h, 0);
+  if (m.radar)
+    radar_under(p, m);
   MapLabel lab[kMapLabelMax];
   const int n = map_labels(m, s, lab, map_label_cap(m));
   LandPlace pl;
@@ -351,6 +533,8 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
     p.fill(lab[i].lx - 1, lab[i].ly - 1, 4 * pl.len + 1, 7, 0);
     px_text(p, lab[i].lx, lab[i].ly, pl.name, rgb565(big ? kTextBig : kTextSmall), 1);
   }
+  if (m.radar)
+    radar_over(p, m);
 }
 
 }  // namespace espn

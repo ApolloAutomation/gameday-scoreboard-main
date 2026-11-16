@@ -62,6 +62,12 @@ int main(int argc, char **argv) {
     if (only == "map")
       return 0;
   }
+  if (only.empty() || only == "planes") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d plane radars\n", render_plane_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "planes")
+      return 0;
+  }
   for (const ScenePlay &p : kScenePlays) {
     const AnimKind k = anim_sample(p.play).args.kind;
     if (!only.empty() && only != anim_name(k) && only != p.play)

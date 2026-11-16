@@ -66,6 +66,36 @@ void fuzz_landmarks(const uint8_t *data, size_t size) {
     p.clip = PxBox{0, 0, m.w, m.h};
     map_paint(p, m, &set);
   }
+  // The plane radar, its blips from the body's bytes
+  AppMap r;
+  r.w = 128;
+  r.h = 56;
+  r.lat_e4 = set.lat_e2 * 100;
+  r.lon_e4 = set.lon_e2 * 100;
+  r.scale_q16 = 65536;
+  r.roads = r.radar = 1;
+  r.ring = 26;
+  r.inner = 13;
+  snprintf(r.ring_text, sizeof r.ring_text, "250MI");
+  snprintf(r.tag, sizeof r.tag, "WWWWWWWW");
+  r.n_blips = (uint8_t) (size % (kAppBlips + 1));
+  r.tag_of = (int8_t) (size % kAppBlips) - 1;
+  for (int i = 0; i < r.n_blips; i++) {
+    const uint8_t bx = data[(i * 5) % size], by = data[(i * 5 + 1) % size];
+    AppBlip &o = r.blips[i];
+    o.x = (int16_t) (bx % 140 - 6);
+    o.y = (int16_t) (by % 70 - 7);
+    o.track = (int16_t) (bx * 3 - by);
+    o.ink = (uint8_t) (i % 4);
+    o.flags = (uint8_t) (i % 8);
+    o.number = (uint8_t) (i % 7);
+  }
+  Px565 p;
+  p.px = px;
+  p.w = p.stride = r.w;
+  p.h = r.h;
+  p.clip = PxBox{0, 0, r.w, r.h};
+  map_paint(p, r, &set);
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {

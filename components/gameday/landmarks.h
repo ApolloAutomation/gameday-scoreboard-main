@@ -85,7 +85,12 @@ int map_label_cap(const AppMap &m);
 int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap);
 // The set drawn here: same rounded middle.
 bool map_has(const AppMap &m, const LandSet *s);
-// Black, then lines, dots and labels.
+// A radar plane's number or tag; w 0: none fits.
+struct MapMark {
+  int16_t x{0}, y{0}, w{0};
+};
+void map_marks(const AppMap &m, MapMark out[kAppBlips]);
+// Black, lines, dots, labels; a radar's marks on top.
 void map_paint(Px565 &p, const AppMap &m, const LandSet *set);
 
 }  // namespace espn

@@ -712,6 +712,10 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
 // card_end: where the card plane's words end.
 std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s,
                           size_t planes = 3, size_t *card_end = nullptr);
+// The radar layouts: a plane's list row number; 0 none.
+uint8_t list_number(const Nearby &n, uint8_t card, uint8_t i, int rows);
+// Their list, numbered rows, 128 by h at x0, y0.
+void radar_list(Frame &f, const Nearby &n, uint8_t card, const Units &u, int x0, int y0, int h);
 // Text width in pixels at the font's advance.
 int text_px(const Text &t);
 

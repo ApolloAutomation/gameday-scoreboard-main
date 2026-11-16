@@ -183,6 +183,17 @@ constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 120;
 struct AppMapKeep {
   int16_t x{0}, y{0}, w{0}, h{0};
 };
+// A plane on the radar, in canvas pixels.
+enum : uint8_t { kBlipPlane = 0, kBlipCard, kBlipAlert, kBlipGround };
+enum : uint8_t { kBlipTrack = 1, kBlipOnGround = 2, kBlipIsCard = 4 };
+struct AppBlip {
+  int16_t x{0}, y{0}, track{0};  // track in degrees
+  uint8_t ink{kBlipPlane};
+  uint8_t flags{0};
+  uint8_t number{0};  // its list row; 0 none
+  uint8_t pad{0};
+};
+constexpr int kAppBlips = 8;
 struct AppMap {
   int16_t x{0}, y{0}, w{0}, h{0};  // area-local; w 0: none
   int32_t lat_e4{0}, lon_e4{0};    // the map's middle
@@ -191,7 +202,15 @@ struct AppMap {
   AppMapKeep keep[4]{};            // boxes no place label covers
   uint8_t roads{0};
   uint8_t ring{0};  // a circle's radius labels stay off; 0 none
-  uint8_t spare[2]{};
+  // The plane radar's rings, home and planes over the map
+  uint8_t radar{0};
+  uint8_t inner{0};  // dotted inner ring's radius; 0 none
+  char ring_text[6]{};
+  char tag[9]{};  // the nearest plane's name
+  int8_t tag_of{-1};  // its blip; -1 none
+  uint8_t n_blips{0};
+  uint8_t pad[3]{};
+  AppBlip blips[kAppBlips]{};
 };
 static_assert(std::has_unique_object_representations_v<AppMap>, "AppMap compares as bytes");
 // The view's canvas buffers' cap.

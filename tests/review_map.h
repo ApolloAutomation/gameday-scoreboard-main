@@ -230,4 +230,57 @@ inline int render_map_views(const std::string &dir, const std::string &fixtures,
   return n;
 }
 
+// The Flight Tracker on every size, its radar where there's room
+inline int render_plane_views(const std::string &dir, const std::string &fixtures, const ReviewFonts &fonts) {
+  using namespace review_map;
+  AppEnv &env = app_env();
+  env.local = local_of;
+  env.ms = ms_now;
+  env.tz = 4;
+  const std::string fr24 = slurp(fixtures + "/flights_fr24_nyc.json");
+  // Invented towns around the home's rounded spot
+  std::vector<uint8_t> bytes = land_encode(4071, -7401, 250, land_sample_places(), land_sample_lines());
+  LandSet set;
+  land_check(bytes.data(), bytes.size(), set);
+  set.id = 1;
+  int n = 0;
+  static const int kSizes[][2] = {{64, 64}, {128, 64}, {256, 64}, {128, 128}};
+  for (const char *radius : {"28mi", "10mi"})
+    for (const auto &sz : kSizes)
+      for (int turn = 0; turn < 2; turn++) {
+        flights::FlightsApp a;
+        a.setup();
+        a.set("flyhome", "40.71,-74.01");
+        a.set("flyradius", radius);
+        a.shown(true);
+        const int64_t now = 1794457500;
+        AppRequest req;
+        if (a.request(now, req)) {
+          AppTextStream in(fr24);
+          const bool ok = a.parse(in, now);
+          a.ended(AppResult{200, false, 0});
+          a.apply(ok, now);
+        }
+        AppFrame f;
+        a.frame(sz[0], sz[1], now, f);
+        if (turn == 1)
+          a.frame(sz[0], sz[1], now + 8, f = AppFrame());
+        app_frame_trim(f);
+        for (int k = 0; k < 2; k++) {
+          if (k == 1 && f.map.w == 0)
+            continue;
+          const Canvas cv = compose(f, sz[0], sz[1], k == 0 ? nullptr : &set, false, fonts);
+          char name[96];
+          snprintf(name, sizeof name, "/planes_%s_%dx%d_%s_%s.png", radius, sz[0], sz[1], turn ? "turn2" : "turn1",
+                   k ? "land" : "bare");
+          if (png_save(dir + name, cv.px.data(), cv.w, cv.h, 6)) {
+            printf("%s%s\n", dir.c_str(), name);
+            n++;
+          }
+        }
+      }
+  env = AppEnv{};
+  return n;
+}
+
 }  // namespace espn

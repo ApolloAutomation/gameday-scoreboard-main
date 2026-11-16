@@ -1468,8 +1468,11 @@ std::string type_fit(const Card &c, size_t max) {
   return c.cat != nullptr ? fit_words(c.cat, max) : "";
 }
 
-void row(Frame &f, const Plane &p, int x0, int y, int w, const Units &u) {
-  put(f, x0 + 1, y, 40, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColCallsign, plane_label(p));
+void row(Frame &f, const Plane &p, int x0, int y, int w, const Units &u, int num = 0) {
+  if (num > 0)
+    put(f, x0 + 1, y, 5, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColDim, std::to_string(num));
+  put(f, x0 + (num > 0 ? 7 : 1), y, num > 0 ? 36 : 40, BoardFont::S8, Align::LEFT,
+      p.emergency ? kColAlert : kColCallsign, plane_label(p));
   if (w >= 128) {
     put(f, x0 + 43, y, 20, BoardFont::S8, Align::LEFT, kColType, p.type);
     put(f, x0 + 65, y, 30, BoardFont::S8, Align::RIGHT, kColDim, alt_text(p, u.alt, Fmt::BARE));
@@ -1598,18 +1601,39 @@ void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o
   }
 }
 
+void list_head(Frame &f, const Nearby &n, int x0, int y) {
+  put(f, x0 + 1, y, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
+  put(f, x0 + 66, y, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
+}
+
 void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   card_left(f, c);
   const int x0 = 128, lw = o.w - 128;
   if (lw >= 128) {
-    put(f, x0 + 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
-    put(f, x0 + 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
+    list_head(f, n, x0, 0);
   } else {
     put(f, x0, 0, lw, BoardFont::S8, Align::CENTER, kColDim, count_text(n));
   }
   rows(f, n, o.card, x0, 8, lw >= 128 ? 128 : 64, o.ticker ? o.h - 8 : o.h, o.units);
 }
 
+}
+
+uint8_t list_number(const Nearby &n, uint8_t card, uint8_t i, int rows) {
+  if (card >= n.n)
+    card = 0;
+  const int k = i < card ? i + 1 : i;
+  return i >= n.n || i == card || k > rows ? 0 : (uint8_t) k;
+}
+
+void radar_list(Frame &f, const Nearby &n, uint8_t card, const Units &u, int x0, int y0, int h) {
+  list_head(f, n, x0, y0);
+  const int rows = (h - 8) / 8;
+  for (uint8_t i = 0; i < n.n; i++) {
+    const uint8_t k = list_number(n, card, i, rows);
+    if (k > 0)
+      row(f, n.planes[i], x0, y0 + 8 * k, 128, u, k);
+  }
 }
 
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s) {

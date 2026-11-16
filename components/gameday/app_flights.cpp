@@ -1,8 +1,10 @@
 // The Flight Tracker display (app_flights.h).
 #include "app_flights.h"
 
+#include <cmath>
 #include <cstring>
 
+#include "landmarks.h"
 #include "timezones.h"
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -259,6 +261,65 @@ void prefs_state(const Prefs &p, const Units &u, JsonObject out) {
   out["radius_unit"] = dist_unit_key((DistUnit) p.radius_unit);
   out["receiver"] = (const char *) p.receiver;
   out["units"] = u.dist == DistUnit::MILES ? "imperial" : "metric";
+}
+
+bool radar_room(int w, int h) { return (w == 256 && h == 64) || (w == 128 && h == 128); }
+
+void radar_map(const Nearby &n, uint8_t card, const Prefs &p, int x, int y, espn::AppMap &m) {
+  m = espn::AppMap();
+  m.x = (int16_t) x;
+  m.y = (int16_t) y;
+  m.w = kRadarW;
+  m.h = kRadarH;
+  m.lat_e4 = p.lat_e4;
+  m.lon_e4 = p.lon_e4;
+  m.roads = 1;
+  m.radar = 1;
+  m.ring = kRadarRing;
+  m.inner = p.radius % 2 == 0 ? kRadarRing / 2 : 0;
+  const float r_nm = to_nm(p.radius, (DistUnit) p.radius_unit);
+  m.scale_q16 = (int32_t) lroundf(espn::map_scale_ring(p.lat_e4, kRadarRing, r_nm * 1852.0f) * 65536.0f);
+  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", (unsigned) p.radius,
+           p.radius_unit == (uint8_t) DistUnit::KM ? "KM" : p.radius_unit == (uint8_t) DistUnit::NM ? "NM" : "MI");
+  const espn::MapProj pr = espn::map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h);
+  if (card >= n.n)
+    card = 0;
+  for (uint8_t i = 0; i < n.n && m.n_blips < espn::kAppBlips; i++) {
+    const Plane &pl = n.planes[i];
+    int bx, by;
+    if (pl.tier == Tier::NOPOS || pl.dist_nm < 0 || pl.dist_nm > r_nm || !espn::map_xy(pr, pl.lat, pl.lon, bx, by))
+      continue;
+    // Mercator may push it past the ring: back onto it
+    const float dx = bx - pr.ox, dy = by - pr.oy, d = sqrtf(dx * dx + dy * dy);
+    if (d > kRadarRing) {
+      bx = pr.ox + (int) lroundf(dx * kRadarRing / d);
+      by = pr.oy + (int) lroundf(dy * kRadarRing / d);
+    }
+    espn::AppBlip &b = m.blips[m.n_blips];
+    b.x = (int16_t) bx;
+    b.y = (int16_t) by;
+    const bool ground = pl.tier == Tier::GROUND;
+    b.ink = pl.emergency ? espn::kBlipAlert : i == card ? espn::kBlipCard : ground ? espn::kBlipGround : espn::kBlipPlane;
+    b.flags = (uint8_t) ((i == card ? espn::kBlipIsCard : 0) | (ground ? espn::kBlipOnGround : 0));
+    if (!ground && pl.track >= 0) {
+      b.track = (int16_t) lroundf(pl.track);
+      b.flags |= espn::kBlipTrack;
+    }
+    b.number = list_number(n, card, i, kRadarRows);
+    // The nearest drawn: its callsign, else registration
+    const char *name = pl.callsign[0] != '\0' ? pl.callsign : pl.reg;
+    if (m.tag_of < 0 && name[0] != '\0') {
+      size_t k = 0;
+      for (const char *c = name; *c != '\0' && k + 1 < sizeof m.tag; c++)
+        if (*c != ' ' && espn::font3x5_has(*c))
+          m.tag[k++] = (char) (*c >= 'a' && *c <= 'z' ? *c - 32 : *c);
+      if (k > 0)
+        m.tag_of = (int8_t) m.n_blips;
+      else
+        m.tag[0] = '\0';
+    }
+    m.n_blips++;
+  }
 }
 
 // ---- The display ---------------------------------------------------------------
@@ -600,8 +661,9 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
     put_text(out, note_frame(Note::NONE_NEAR, o, home.radius_nm));
     return;
   }
-  // The card and the list take turns under 192 wide.
-  if (w < 192) {
+  // Card and list take turns, or radar and list
+  const bool radar = radar_room(w, h);
+  if (w < 192 || radar) {
     if (this->screen_s_ == 0 || now < this->screen_s_) {
       this->screen_s_ = now;
     } else if (now - this->screen_s_ >= (int64_t) (kScreenMs / 1000) - 1) {
@@ -609,15 +671,30 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
       this->screen_s_ = now;
     }
   }
-  o.card = this->card_;
-  o.list = w < 192 && this->list_;
+  o.card = this->card_ < this->near_.n ? this->card_ : 0;
+  o.list = w < 192 && !radar && this->list_;
   char key[9];
   if (w >= 128) {
     this->photo_room_ = true;
-    if (photo_key(this->near_.planes[this->card_ < this->near_.n ? this->card_ : 0], key))
+    if (photo_key(this->near_.planes[o.card], key))
       o.photo = this->photos_.find(key, (uint32_t) now);
   }
-  put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
+  if (!radar) {
+    put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
+    return;
+  }
+  // The 128x64 card, the radar or list beside
+  o.w = 128;
+  o.h = 64;
+  o.ticker = false;
+  Frame fr = flight_frame(this->near_, &this->routes_, o, (uint32_t) now);
+  const int hx = h == 64 ? 128 : 0, hy = h == 64 ? 0 : 64;
+  if (this->list_)
+    radar_list(fr, this->near_, o.card, o.units, hx, hy, kRadarH);
+  else
+    radar_map(this->near_, o.card, this->prefs_, hx, hy, out.map);
+  fr.ticker = flight_ticker(this->near_, &this->routes_, o, (uint32_t) now, 3, &fr.photo.at);
+  put_text(out, fr);
 }
 
 }
