@@ -106,4 +106,10 @@ The receiver's planes need no internet, but their routes still come from adsb.im
 
 The home location stays on the panel, to four decimal places (about 10 meters), with the place's name if you looked one up. Each read sends the flight data service a box around it, not the spot itself: the center is rounded to about a kilometer first, and the box reaches a little past your **Within** distance all around it. adsb.fi and adsb.lol get that rounded center and the distance. The panel still works out each plane's distance and direction from your exact spot. Route lookups send only the planes' callsigns and positions, over plain HTTP to adsb.im. A logo download sends only the airline's code, never your location, and a photo lookup only the plane's address or registration.
 
-Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
+Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel.
+
+:::note[Coming in the next release]
+Setting the home on the device page also has your browser look up map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows) from OpenStreetMap: a box around the home rounded to two decimal places, never the exact spot. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+:::
+
+**Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

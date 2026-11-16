@@ -1,4 +1,4 @@
-// Play animation GIFs for review: make -C tests review
+// Review images: make -C tests review
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -6,6 +6,7 @@
 
 #include "gif_write.h"
 #include "review_field.h"
+#include "review_map.h"
 #include "scene_render.h"
 
 using namespace espn;
@@ -53,6 +54,12 @@ int main(int argc, char **argv) {
     const char *fonts = getenv("REVIEW_FONTS");
     printf("%d field views\n", render_field_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
     if (only == "field")
+      return 0;
+  }
+  if (only.empty() || only == "map") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d radar maps\n", render_map_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "map")
       return 0;
   }
   for (const ScenePlay &p : kScenePlays) {

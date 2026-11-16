@@ -9,6 +9,7 @@
 #include <ctime>
 #include <new>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -178,6 +179,24 @@ struct AppPhoto {
 };
 constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 120;
 
+// Landmarks under a radar (landmarks.h); compared as bytes.
+struct AppMapKeep {
+  int16_t x{0}, y{0}, w{0}, h{0};
+};
+struct AppMap {
+  int16_t x{0}, y{0}, w{0}, h{0};  // area-local; w 0: none
+  int32_t lat_e4{0}, lon_e4{0};    // the map's middle
+  int32_t scale_q16{0};            // canvas px per zoom-7 world px
+  uint32_t set_id{0};              // the component fills it
+  AppMapKeep keep[4]{};            // boxes no place label covers
+  uint8_t roads{0};
+  uint8_t ring{0};  // a circle's radius labels stay off; 0 none
+  uint8_t spare[2]{};
+};
+static_assert(std::has_unique_object_representations_v<AppMap>, "AppMap compares as bytes");
+// The view's canvas buffers' cap.
+constexpr int kAppMapMaxW = 128, kAppMapMaxH = 120;
+
 // RGB565 then alpha, as runtime_image lays logos out.
 inline void app_art_paint(const AppArt &a, uint8_t *out) {
   const int s = a.scale < 1 ? 1 : a.scale, ow = a.w * s, n = ow * a.h * s;
@@ -205,6 +224,7 @@ struct AppFrame {
   std::vector<AppArt> art;
   AppFill bar;
   AppPhoto photo;
+  AppMap map;
 };
 
 // Full screen: the rows as labels, pitch apart from y0.
@@ -299,6 +319,9 @@ inline void app_frame_trim(AppFrame &f) {
     f.photo = AppPhoto();
   else if (p.w == 0 || p.h == 0)
     p.w = p.h = 0;
+  const AppMap &m = f.map;
+  if (m.x < 0 || m.y < 0 || m.w < 16 || m.h < 16 || m.w > kAppMapMaxW || m.h > kAppMapMaxH || m.scale_q16 <= 0)
+    f.map = AppMap();
 }
 
 // Flat x, y pairs clipped to the area.
@@ -483,11 +506,14 @@ struct AppResult {
 };
 
 // What displays need from the panel; the component sets it.
+struct LandSet;
+
 struct AppEnv {
   struct tm (*local)(int64_t epoch){nullptr};  // null reads UTC
   uint8_t tz{0};  // index into kTimezones
   std::string version;  // the firmware's, "2026.11.2"
   uint32_t (*ms)(){nullptr};  // millis(), for animations; null is 0
+  const LandSet *land{nullptr};  // the map landmarks, main loop only
 };
 
 inline AppEnv &app_env() {

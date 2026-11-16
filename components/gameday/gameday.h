@@ -35,6 +35,7 @@
 #include "health.h"
 #include "hotspot.h"
 #include "idle.h"
+#include "landmarks.h"
 #include "offseason.h"
 #include "panel_text.h"
 #include "players.h"
@@ -173,6 +174,8 @@ struct UpdateFields {
   // Football's field under the labels (field.h)
   bool field{false};
   ::espn::FieldPic field_pic;
+  // Or another display's map, on the same canvas
+  ::espn::AppMap map_pic;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -222,6 +225,10 @@ class GamedaySelect : public select::Select, public Component {
 //   GET  /gameday/crash              the last crash, watchdog or brownout restart and its
 //                                    backtrace, kept in flash (components/crash_report)
 //   POST /gameday/crash?clear=1      empties it
+//   POST /gameday/landmarks          the map landmarks for the saved home, as
+//                                    application/octet-stream (landmarks.h); 400
+//                                    unreadable, 409 for another home, 413 too big,
+//                                    503 no room
 // The demo build (firmware/gameday-demo.yaml) adds do=demo|demo_stop and
 // GET/POST /gameday/demo (demo.cpp).
 // Requests arrive on the HTTP task; settings are applied on the main loop.
@@ -457,6 +464,8 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   // AsyncWebHandler (HTTP task)
   bool canHandle(AsyncWebServerRequest *request) const override;
   void handleRequest(AsyncWebServerRequest *request) override;
+  // POST /gameday/landmarks streams its body here first.
+  void handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) override;
 
  protected:
   void apply_team_(const ::espn::Team &t);
@@ -1474,6 +1483,17 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void apply_app_job_();
   void app_failed_(::espn::Display d, uint32_t took_ms);
   bool app_set_(const std::string &key, const std::string &value);
+  // Map landmarks (landmarks.h): one set in PSRAM, kept in NVS.
+  void land_load_();
+  void land_post_(AsyncWebServerRequest *request);  // on the HTTP task
+  void land_take_(uint8_t *p, size_t n);             // on the main loop
+  const char *land_state_(int32_t lat_e4, int32_t lon_e4, bool home) const;
+  ::espn::LandSet land_{};
+  uint8_t *land_stage_{nullptr};  // the HTTP task only
+  size_t land_got_{0};
+  bool land_bad_{false};
+  bool land_saved_{false};  // false: kept only until restart
+  std::atomic<uint32_t> land_home_{::espn::kLandNoHome};
   ::espn::MainView main_view_{::espn::MainView::GAMEDAY};
   UpdateFields *main_app_{nullptr};  // PSRAM: what the board draws then
   ::espn::AppTimes app_times_;

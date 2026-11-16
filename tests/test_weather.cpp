@@ -11,6 +11,7 @@
 #include "app_flights.h"
 #include "app_frame_check.h"
 #include "app_weather.h"
+#include "landmarks.h"
 #include "map_canvas.h"
 
 using namespace wx;
@@ -366,9 +367,61 @@ void test_urls_map() {
       const bool tl = x < 4 && y < 4, tr = x >= 4 && y < 4 && x % 2 == 0 && y % 2 == 0, bl = x < 4 && y >= 4;
       c.paint(x, y, 1, 1, tl || tr ? red : bl ? faint : clear);
     }
+  uint8_t raw[12];
+  c.finish(raw);
+  // Over black, as the radar has always looked
   uint8_t px[8];
-  c.finish(px);
+  for (int i = 0; i < 4; i++) {
+    const uint16_t v = (uint16_t) (raw[2 * i] | raw[2 * i + 1] << 8);
+    const uint32_t a = raw[8 + i];
+    const uint16_t o = (uint16_t) ((((v >> 11) * a / 255) << 11) | ((((v >> 5) & 63) * a / 255) << 5) | ((v & 31) * a / 255));
+    px[2 * i] = (uint8_t) (o & 0xFF);
+    px[2 * i + 1] = (uint8_t) (o >> 8);
+  }
   auto at565 = [&px](int i) { return (uint16_t) (px[2 * i] | px[2 * i + 1] << 8); };
+  WCHECK(raw[8] == 255 && raw[11] == 0 && raw[9] > 0 && raw[9] < 255, "alpha: solid, clear, partly: %d %d %d", raw[8],
+         raw[11], raw[9]);
+  // Composited, it matches the opaque image it replaced
+  int worst = 0;
+  for (uint32_t seed = 1; seed < 400; seed++) {
+    espn::MapCanvas m;
+    m.setup(6, 6, 3, 3);
+    std::vector<espn::MapCell> mc(9, espn::MapCell{});
+    m.cells = mc.data();
+    uint32_t r = seed * 2654435761u;
+    for (uint32_t y = 0; y < 6; y++)
+      for (uint32_t x = 0; x < 6; x++) {
+        r = r * 1664525u + 1013904223u;
+        const uint8_t rgba[4] = {(uint8_t) (r >> 24), (uint8_t) (r >> 16), (uint8_t) (r >> 8),
+                                 (uint8_t) ((r >> 4) % 3 == 0 ? 0 : r & 255)};
+        m.paint(x, y, 1, 1, rgba);
+      }
+    uint8_t got[27];
+    m.finish(got);
+    for (int i = 0; i < 9; i++) {
+      const espn::MapCell &cl = mc[i];
+      uint32_t er = 0, eg = 0, eb = 0;
+      if (cl.a > 0 && cl.n > 0) {
+        uint32_t lift = std::min<uint32_t>(255, (uint32_t) cl.a * espn::kMapLift / cl.n);
+        er = std::min<uint32_t>(255, (uint32_t) cl.r * 256 / cl.a);
+        eg = std::min<uint32_t>(255, (uint32_t) cl.g * 256 / cl.a);
+        eb = std::min<uint32_t>(255, (uint32_t) cl.b * 256 / cl.a);
+        const uint32_t top = std::max(er, std::max(eg, eb));
+        if (top > 0 && top < espn::kMapVivid)
+          lift = lift * espn::kMapVivid / top;
+        er = std::min<uint32_t>(255, er * lift / 255);
+        eg = std::min<uint32_t>(255, eg * lift / 255);
+        eb = std::min<uint32_t>(255, eb * lift / 255);
+      }
+      const uint16_t v = (uint16_t) (got[2 * i] | got[2 * i + 1] << 8);
+      const uint32_t a = got[18 + i];
+      const int dr = std::abs((int) ((v >> 11) * a / 255) - (int) (er >> 3));
+      const int dg = std::abs((int) (((v >> 5) & 63) * a / 255) - (int) (eg >> 2));
+      const int db = std::abs((int) ((v & 31) * a / 255) - (int) (eb >> 3));
+      worst = std::max(worst, std::max(dr, std::max(dg, db)));
+    }
+  }
+  WCHECK(worst <= 1, "over black, within 1 LSB of the opaque map: %d", worst);
   WCHECK(at565(0) == 0xF800 && at565(3) == 0, "solid red and clear");
   WCHECK((at565(1) >> 11) > 8 && (at565(1) >> 11) < 31 && (at565(1) & 0x7FF) == 0, "a quarter shows dimmer: %04x",
          at565(1));
@@ -473,6 +526,17 @@ void test_app() {
                    f.photo.url.find("tilecache.rainviewer.com") != std::string::npos && f.bar.w == 2 &&
                    f.line.pts.size() > 10 && a->redraw_ms() <= WeatherApp::kStepMs,
                "%dx%d radar: the newest frame stands in, the home and its ring", sz[0], sz[1]);
+      if (p == Page::RADAR) {
+        const espn::AppMap &m = f.map;
+        WCHECK(m.x == f.photo.x && m.y == f.photo.y && m.w == f.photo.w && m.h == f.photo.h &&
+                   m.lat_e4 == 389400 && m.lon_e4 == -1199800 &&
+                   m.scale_q16 == (int32_t) lroundf(espn::map_scale_weather(m.w, m.h) * 65536.0f) &&
+                   m.keep[0].w == 30 && m.keep[1].x == m.w - 26 && m.keep[1].y == m.h - 8 &&
+                   (m.roads != 0) == (m.w >= 128),
+               "%dx%d radar: landmarks under the images", sz[0], sz[1]);
+      } else {
+        WCHECK(f.map.w == 0, "%dx%d page %d: no map", sz[0], sz[1], (int) p);
+      }
     }
     for (int p = 0; p < kPages; p++)
       WCHECK(seen[p], "%dx%d shows page %d", sz[0], sz[1], p);

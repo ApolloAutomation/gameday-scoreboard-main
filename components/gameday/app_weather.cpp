@@ -8,6 +8,7 @@
 #include "board_layout.h"
 #include "app_flights.h"
 #include "flights.h"
+#include "landmarks.h"
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize("Os")
@@ -968,6 +969,18 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
     putf(out, bw - 26, bh - 8, 25, BoardFont::S8, AppAlign::RIGHT, kDim, "%d%s", dist, unit);
   }
   out.bar = espn::AppFill{(int16_t) (cx - 1), (int16_t) (cy - 1), 2, 2, kWhite};
+  // Landmarks under the rain, where the images are
+  espn::AppMap &m = out.map;
+  m.w = (int16_t) bw;
+  m.h = (int16_t) bh;
+  m.lat_e4 = round_e4(lat);
+  m.lon_e4 = round_e4(lon);
+  m.scale_q16 = (int32_t) lroundf(espn::map_scale_weather(bw, bh) * 65536.0f);
+  m.keep[0] = espn::AppMapKeep{1, 0, 30, 8};
+  if (dist != 0)
+    m.keep[1] = espn::AppMapKeep{(int16_t) (bw - 26), (int16_t) (bh - 8), 25, 8};
+  m.roads = bw >= 128;
+  m.ring = (uint8_t) r;
   if (w < 192)
     return;
   // Beside it on wide boards: now and coming rain

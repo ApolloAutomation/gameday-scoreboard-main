@@ -36,6 +36,10 @@ Weather takes turns through its pages, about 10 seconds each, starting over each
 - **Radar**: the rain and snow around home on a dark map, about 150 miles (240 km) across in the middle of the US, with home as a white dot in the middle and a gray ring at a round distance, like **25mi**, at the bottom right. It plays the last hour, a frame every half second, and holds the newest for two seconds. The time of the frame on screen is at the top left, white for the newest. Until the first frame comes in it says **Loading radar**.
 - **Air quality** (8 seconds): the US Air Quality Index in big digits, in the color of its band, the band's name (Good, Moderate, Unhealthy for sensitive groups, Unhealthy, Very unhealthy or Hazardous), the pollutant behind it, like **Mostly Ozone**, and the fine particles (PM2.5) in micrograms per cubic meter.
 
+:::note[Coming in the next release]
+Under the rain, the radar can show landmarks to keep you oriented: nearby towns and cities as small dots with their names in small capitals, the biggest first and as many as fit without covering home, the time or the ring's label; state lines (or country borders) as dotted lines; coastlines; and, on maps 128 wide or more, the motorways as thin brown lines. On a 64-wide area the map is too small for highways, so only cities and the borders show. Everything is dim and gray or brown so it never looks like rain, and rain draws over it. Landmarks come from OpenStreetMap: your browser looks them up when you set the home on the device page, or when you tap **Add landmarks** there, and hands them to the panel, which keeps them through restarts and updates. Until then the radar looks as it always has. See [The Weather card](/using/device-page/#the-weather-card).
+:::
+
 | Area | What it shows |
 | --- | --- |
 | 64x64 (one panel, or the right panel of three wide) | **Now**: the picture and the temperature at the top, then the sky, the high and low, the wind and humidity, and what it feels like. **Hours**: a row every three hours for the next 12. **Days**: a row a day for five days. **Radar**: the whole area. |
@@ -69,10 +73,17 @@ This needs a home in the US: the National Weather Service covers the 50 states a
 - **Air quality**: Open-Meteo's air quality service (air-quality-api.open-meteo.com), about every 30 minutes, under 1 KB. Its page shows only with an answer from the last 2 hours.
 - **Alerts**: the National Weather Service (api.weather.gov), every 5 minutes, for a home in the US. When it says home isn't in its area, the panel stops asking for that home.
 - **Radar**: the list of the last radar frames from [RainViewer](https://www.rainviewer.com) (api.rainviewer.com), every 10 minutes, then each frame's image (tilecache.rainviewer.com), about 20 KB. A frame is downloaded once and kept while it's in the last hour, so after the first minute on screen the panel downloads about one image every 10 minutes. When RainViewer or its images can't be reached and home is in the US, the radar comes from Iowa State University's Iowa Environmental Mesonet (mesonet.agron.iastate.edu), the National Weather Service's NEXRAD radars put together, a few KB a frame. Outside the US, with RainViewer out, the radar page is left out until it's back. When the images won't load from either, the radar page is left out for 10 minutes before the panel tries again.
+- **Landmarks** (coming in the next release): towns, state lines, coastlines and motorways from [OpenStreetMap](https://www.openstreetmap.org/copyright), looked up by your browser, not the panel, once when you set the home or tap **Add landmarks**, from the Overpass service (overpass-api.de, or overpass.kumi.systems when that one fails). The download can take a minute; your browser keeps at most 8 KB of it for the panel. Map landmarks © OpenStreetMap contributors.
 - **Nothing while it's off screen**: Weather reads only while it's on the main board or in the second area, besides the alert checks above when the switch is on. Off screen, the device page says it isn't reading.
 
 When a service fails, the panel waits longer each time before asking it again, and as long as it asks when it turns the panel away.
 
 ## Your location
 
-Weather uses the home the Flight Tracker keeps on the panel. Each weather service gets that spot rounded to two decimal places, about a kilometer, never the exact one. Radar images are centered on that rounded spot too. Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the home from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
+Weather uses the home the Flight Tracker keeps on the panel. Each weather service gets that spot rounded to two decimal places, about a kilometer, never the exact one. Radar images are centered on that rounded spot too.
+
+:::note[Coming in the next release]
+For the radar's landmarks, your browser sends OpenStreetMap's Overpass service a box around the home rounded to two decimal places, the same rounding the weather services get, never the exact spot. The panel itself never contacts a map service. **Clear** leaves the panel's landmarks in place but stops drawing them, and a factory reset removes them. Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+:::
+
+Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the home from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

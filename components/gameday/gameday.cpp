@@ -52,6 +52,7 @@
 #include <esp_sntp.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <nvs.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <sys/time.h>
@@ -324,6 +325,7 @@ void GamedayComponent::setup() {
     ESP_LOGW(TAG, "Can't follow Wi-Fi disconnects; drops will show no cause");
 #endif
   this->logos_.setup();
+  this->land_load_();
   this->pref_ = global_preferences->make_preference<Prefs>(fnv1_hash("gameday_prefs_v1"));
   bool loaded = this->pref_.load(&this->prefs_);
   if (!loaded) {
@@ -6238,6 +6240,11 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     t.text = panel_text(t.text);
   f.art = std::move(fr.art);
   f.bar = fr.bar;
+  if (fr.map.w > 0 && fr.map.x + fr.map.w <= w && fr.map.y + fr.map.h <= h &&
+      ::espn::map_has(fr.map, ::espn::app_env().land)) {
+    f.map_pic = fr.map;
+    f.map_pic.set_id = this->land_.id;
+  }
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons + 2];
   static_assert(::espn::kAppIcons + 2 <= ::espn::IconPins::kMax, "every shown picture gets a pin");
@@ -7547,6 +7554,16 @@ void GamedayComponent::rebuild_state_(const UpdateFields *f) {
   // The device page shows the bar beta note and a "Something wrong?" link.
   doc["bar"]["report"] = this->report_email_;
 #endif
+  {
+    int32_t lat = 0, lon = 0;
+    const bool home = ::espn::app_home(::espn::app_slots(), lat, lon);
+    this->land_home_.store(home ? ::espn::land_pack(::espn::land_e2(lat), ::espn::land_e2(lon)) : ::espn::kLandNoHome);
+    doc["landmarks"] = this->land_state_(lat, lon, home);
+    if (this->land_.p != nullptr) {
+      doc["landmarks_n"] = this->land_.np;
+      doc["landmarks_saved"] = this->land_saved_;
+    }
+  }
   doc["misses"] = this->misses_;
   // The Wi-Fi wants a sign-in (captive.h); the page and the app say how to
   // get the panel onto a network that works.
@@ -8066,6 +8083,10 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
     this->handle_set_(request);
     return;
   }
+  if (url == StringRef("/gameday/landmarks") && request->method() == HTTP_POST) {
+    this->land_post_(request);
+    return;
+  }
   if (url == StringRef("/gameday/action") && request->method() == HTTP_POST) {
     std::string name = request->arg("do");
     if (name.empty()) {
@@ -8374,6 +8395,140 @@ void GamedayComponent::apply_set_(const std::vector<std::pair<std::string, std::
   }
   if (dirty)
     this->rebuild_state_(&this->last_fields_);
+}
+
+}  // namespace gameday
+}  // namespace esphome
+
+namespace esphome {
+namespace gameday {
+
+// ---- Map landmarks (landmarks.h) -----------------------------------------------
+
+static const char *const LAND_NS = "gd_land";
+
+void GamedayComponent::land_load_() {
+  nvs_handle_t h;
+  if (nvs_open(LAND_NS, NVS_READONLY, &h) != ESP_OK)
+    return;
+  size_t n = 0;
+  uint8_t *p = nullptr;
+  if (nvs_get_blob(h, "set", nullptr, &n) == ESP_OK && n > 0 && n <= ::espn::kLandMaxBytes) {
+    p = static_cast<uint8_t *>(heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (p != nullptr && nvs_get_blob(h, "set", p, &n) != ESP_OK) {
+      heap_caps_free(p);
+      p = nullptr;
+    }
+  }
+  nvs_close(h);
+  ::espn::LandSet set;
+  if (p != nullptr && ::espn::land_check(p, n, set) == ::espn::LandError::OK) {
+    this->land_ = set;
+    this->land_.id = 1;
+    this->land_saved_ = true;
+    ::espn::app_env().land = &this->land_;
+    ESP_LOGI(TAG, "Map landmarks: %u places, %u lines", (unsigned) set.np, (unsigned) set.nl);
+    return;
+  }
+  heap_caps_free(p);
+  if (n > 0 && nvs_open(LAND_NS, NVS_READWRITE, &h) == ESP_OK) {
+    ESP_LOGW(TAG, "Saved map landmarks unreadable; dropped");
+    nvs_erase_key(h, "set");
+    nvs_commit(h);
+    nvs_close(h);
+  }
+}
+
+const char *GamedayComponent::land_state_(int32_t lat_e4, int32_t lon_e4, bool home) const {
+  if (this->land_.p == nullptr)
+    return "none";
+  return home && this->land_.lat_e2 == ::espn::land_e2(lat_e4) && this->land_.lon_e2 == ::espn::land_e2(lon_e4)
+             ? "ok"
+             : "other";
+}
+
+void GamedayComponent::handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index,
+                                  size_t total) {
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  if (request->url_to(buf) != StringRef("/gameday/landmarks"))
+    return;
+  if (index == 0) {
+    this->land_got_ = 0;
+    this->land_bad_ = total > ::espn::kLandMaxBytes;
+  }
+  if (this->land_bad_)
+    return;
+  if (this->land_stage_ == nullptr)
+    this->land_stage_ =
+        static_cast<uint8_t *>(heap_caps_malloc(::espn::kLandMaxBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (this->land_stage_ == nullptr || index != this->land_got_ || len > ::espn::kLandMaxBytes - index) {
+    this->land_bad_ = true;
+    return;
+  }
+  memcpy(this->land_stage_ + index, data, len);
+  this->land_got_ += len;
+}
+
+void GamedayComponent::land_post_(AsyncWebServerRequest *request) {
+  const size_t n = request->contentLength();
+  const size_t got = this->land_got_;
+  const bool bad = this->land_bad_;
+  this->land_got_ = 0;
+  this->land_bad_ = false;
+  if (n > ::espn::kLandMaxBytes) {
+    request->send(413, "application/json", "{\"error\":\"too big\"}");
+    return;
+  }
+  ::espn::LandSet set;
+  const ::espn::LandError e = bad || got != n || this->land_stage_ == nullptr ? ::espn::LandError::LENGTH
+                                                                        : ::espn::land_check(this->land_stage_, n, set);
+  if (e != ::espn::LandError::OK) {
+    char body[48];
+    snprintf(body, sizeof body, "{\"error\":\"%s\"}", ::espn::land_error_word(e));
+    request->send(400, "application/json", body);
+    return;
+  }
+  if (this->land_home_.load() != ::espn::land_pack(set.lat_e2, set.lon_e2)) {
+    request->send(409, "application/json", "{\"error\":\"home changed\"}");
+    return;
+  }
+  auto *p = static_cast<uint8_t *>(heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (p == nullptr) {
+    request->send(503, "application/json", "{\"error\":\"no room\"}");
+    return;
+  }
+  memcpy(p, this->land_stage_, n);
+  this->defer([this, p, n]() { this->land_take_(p, n); });
+  char body[64];
+  snprintf(body, sizeof body, "{\"ok\":true,\"places\":%u,\"lines\":%u}", (unsigned) set.np, (unsigned) set.nl);
+  request->send(200, "application/json", body);
+}
+
+void GamedayComponent::land_take_(uint8_t *p, size_t n) {
+  ::espn::LandSet set;
+  if (::espn::land_check(p, n, set) != ::espn::LandError::OK) {
+    heap_caps_free(p);
+    return;
+  }
+  uint8_t *old = const_cast<uint8_t *>(this->land_.p);
+  set.id = this->land_.id + 1;
+  this->land_ = set;
+  ::espn::app_env().land = &this->land_;
+  heap_caps_free(old);
+  nvs_handle_t h;
+  bool saved = nvs_open(LAND_NS, NVS_READWRITE, &h) == ESP_OK;
+  if (saved) {
+    saved = nvs_set_blob(h, "set", p, n) == ESP_OK && nvs_commit(h) == ESP_OK;
+    nvs_close(h);
+  }
+  this->land_saved_ = saved;
+  if (saved)
+    ESP_LOGI(TAG, "Map landmarks saved: %u places, %u lines", (unsigned) set.np, (unsigned) set.nl);
+  else
+    ESP_LOGW(TAG, "Map landmarks not saved; kept until restart");
+  this->rebuild_state_(&this->last_fields_);
+  for (int i = 1; i < ::espn::kDisplayCount; i++)
+    this->app_redraw_((::espn::Display) i);
 }
 
 }  // namespace gameday

@@ -11,6 +11,7 @@
 
 #include "app_markets.h"
 #include "app_flights.h"
+#include "landmarks.h"
 #include "panel_text.h"
 #include "players.h"
 #include "set_request.h"
@@ -40,7 +41,38 @@ void check_markets(const MarketList &l, const std::string &k, const std::string 
             "a listed symbol has no Yahoo name", k, v);
 }
 
+// POST /gameday/landmarks: checked, then painted at each size.
+void fuzz_landmarks(const uint8_t *data, size_t size) {
+  std::vector<uint8_t> body(data, data + size);
+  LandSet set;
+  if (land_check(body.data(), body.size(), set) != LandError::OK)
+    return;
+  static uint16_t px[128 * 120];
+  static const int kSizes[3][2] = {{64, 56}, {128, 56}, {128, 120}};
+  for (const int *sz : kSizes) {
+    AppMap m;
+    m.w = (int16_t) sz[0];
+    m.h = (int16_t) sz[1];
+    m.lat_e4 = set.lat_e2 * 100;
+    m.lon_e4 = set.lon_e2 * 100;
+    m.scale_q16 = (int32_t) (map_scale_weather(m.w, m.h) * 65536.0f);
+    m.roads = 1;
+    m.ring = 20;
+    m.keep[0] = AppMapKeep{1, 0, 30, 8};
+    Px565 p;
+    p.px = px;
+    p.w = p.stride = m.w;
+    p.h = m.h;
+    p.clip = PxBox{0, 0, m.w, m.h};
+    map_paint(p, m, &set);
+  }
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  if (size >= 2 && data[0] == 'G' && data[1] == 'L') {
+    fuzz_landmarks(data, size);
+    return 0;
+  }
   std::string body((const char *) data, size);
   MarketList markets;
   const MarketBlob defaults = market_defaults();

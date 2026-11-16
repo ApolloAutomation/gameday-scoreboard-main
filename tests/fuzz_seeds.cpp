@@ -12,11 +12,13 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "app_f1.h"
 #include "espn_parse.h"
 #include "f1.h"
 #include "flights.h"
+#include "land_set.h"
 #include "weather.h"
 #include "source_hockeytech.h"
 #include "source_markets.h"
@@ -165,6 +167,9 @@ int main(int argc, char **argv) {
       body += (body.empty() ? "" : "&") + std::string(kv[0] | "") + "=" + std::string(kv[1] | "");
     std::ofstream(set_out / ("case_" + std::to_string(set_seeds++) + ".txt"), std::ios::binary) << body;
   }
+  const std::vector<uint8_t> land = land_sample();
+  std::ofstream(set_out / "landmarks.bin", std::ios::binary).write((const char *) land.data(), (std::streamsize) land.size());
+  set_seeds++;
   printf("%zu ESPN seeds, %zu set seeds\n", espn_seeds, set_seeds);
   return 0;
 }

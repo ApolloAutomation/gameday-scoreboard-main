@@ -5088,3 +5088,245 @@ test("the Weather card says what the panel has", async ({ page, request }) => {
   await expectSet(request, { split: "9" });
   await expect(page.locator("#splitNow")).toHaveText("Showing Weather.");
 });
+
+// ---- Map landmarks: OpenStreetMap, from the browser ------------------------
+const OVERPASS = "https://overpass-api.de/api/interpreter";
+const OVERPASS_2 = "https://overpass.kumi.systems/api/interpreter";
+// Invented towns and lines around a home, as Overpass answers
+const osmAround = (lat, lon, { places = 6, ways = 3, points = 12 } = {}) => {
+  const els = [];
+  const at = (dy, dx) => ({ lat: lat + dy, lon: lon + dx });
+  for (let i = 0; i < places; i++)
+    els.push({ type: "node", id: 100 + i, ...at(Math.sin(i * 1.7) * 0.6, Math.cos(i * 1.3) * 0.8),
+               tags: { name: "Town " + String.fromCharCode(65 + (i % 26)) + (i >= 26 ? i : ""),
+                       place: i % 3 ? "town" : "city", population: String((400000 / (i + 1)) | 0) } });
+  let id = 1000;
+  for (const kind of ["border", "coast", "road"]) {
+    els.push({ type: "marker", id: id++, tags: { kind } });
+    for (let w = 0; w < ways; w++)
+      els.push({ type: "way", id: id++, geometry: Array.from({ length: points }, (_, k) =>
+        at(-0.9 + (1.8 * k) / (points - 1), (w - ways / 2) * 0.25 + (k % 2 ? 0.04 : -0.04))) });
+  }
+  return { elements: els };
+};
+const landPosts = async (request) =>
+  (await (await request.get("/_log")).json()).filter((p) => p.path === "/gameday/landmarks");
+// The set as landmarks.h reads it
+const landRead = (buf) => {
+  const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const h = { magic: String.fromCharCode(buf[0], buf[1]), lat: v.getInt16(4, true), lon: v.getInt16(6, true),
+              np: v.getUint16(8, true), nl: v.getUint16(10, true), npt: v.getUint16(12, true), reach: v.getUint16(14, true),
+              places: [], kinds: [] };
+  for (let i = 0; i < h.np; i++) {
+    const at = 16 + 16 * i;
+    h.places.push({ dlat: v.getInt16(at, true), dlon: v.getInt16(at + 2, true), cls: buf[at + 4],
+                    name: String.fromCharCode(...buf.slice(at + 6, at + 6 + buf[at + 5])) });
+  }
+  for (let i = 0; i < h.nl; i++) h.kinds.push(buf[16 + 16 * h.np + 2 * i]);
+  return h;
+};
+// The panel's posts, their bodies kept
+const keepBodies = async (page) => {
+  const bodies = [];
+  await page.route("**/gameday/landmarks", async (route) => {
+    bodies.push(route.request().postDataBuffer());
+    await route.continue();
+  });
+  return bodies;
+};
+
+test("setting a home looks up its landmarks once and hands them to the panel", async ({ page, request }) => {
+  await reset(request, { displays: WX_DISPLAYS });
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.fulfill({ json: BROOKLYN }));
+  const asked = [], second = [];
+  await page.route(OVERPASS, (route) => {
+    asked.push(route.request());
+    return route.fulfill({ json: osmAround(40.65, -73.95) });
+  });
+  await page.route(OVERPASS_2, (route) => { second.push(1); return route.abort(); });
+  const bodies = await keepBodies(page);
+  await page.goto("/");
+  await expect(page.locator("#flightMarks")).toBeHidden();
+  await expect(page.locator("#wxMarks")).toBeHidden();
+  await page.locator("#flightWhere").fill("Brooklyn");
+  await page.locator("#flightFind").click();
+  await page.locator("#flightPicks button").first().click();
+  await expectSet(request, { flyhome: "40.6501,-73.9496", flyplace: "Brooklyn, New York, United States" });
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  expect(asked).toHaveLength(1);
+  expect(second).toHaveLength(0);
+  const req = asked[0];
+  expect(req.method()).toBe("POST");
+  expect(req.headers()["content-type"]).toContain("application/x-www-form-urlencoded");
+  const q = new URLSearchParams(req.postData()).get("data");
+  expect(q).toContain("[timeout:100]");
+  expect(q).toContain('admin_level~"^(2|4)$"');
+  // Every box is around the home rounded to two places
+  const boxes = [...q.matchAll(/\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/g)].map((m) => m.slice(1).map(Number));
+  expect(boxes.length).toBeGreaterThanOrEqual(5);
+  for (const b of boxes) {
+    expect(Math.abs((b[0] + b[2]) / 2 - 40.65)).toBeLessThan(0.002);
+    expect(Math.abs((b[1] + b[3]) / 2 + 73.95)).toBeLessThan(0.002);
+  }
+  expect(q).not.toContain("40.6501");
+  const [post] = await landPosts(request);
+  expect(post.type).toBe("application/octet-stream");
+  expect(post.n).toBeLessThanOrEqual(8192);
+  const h = landRead(bodies[0]);
+  expect([h.magic, h.lat, h.lon, h.np, h.reach]).toEqual(["GL", 4065, -7395, 6, 250]);
+  expect(new Set(h.kinds)).toEqual(new Set([0, 1, 2]));
+  const st = await deviceState(request);
+  expect([st.landmarks, st.landmarks_n, st.landmarks_saved]).toEqual(["ok", 6, true]);
+  for (const p of ["flight", "wx"]) {
+    await expect(page.locator(`#${p}MarksSay`)).toHaveText("Map landmarks added: 6 towns and cities.");
+    await expect(page.locator(`#${p}MarksGo`)).toBeHidden();
+    await expect(page.locator(`#${p}Marks`)).toContainText("Map landmarks © OpenStreetMap contributors");
+    await expect(page.locator(`#${p}Marks a`)).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
+  }
+  // The same home, and state polls, ask nothing more
+  await page.waitForResponse((r) => r.url().includes("/gameday/state"));
+  await page.locator("#wxWhere").fill("40.6501, -73.9496");
+  await page.locator("#wxFind").click();
+  await sleep(1500);
+  expect(asked).toHaveLength(1);
+  await page.reload();
+  await expect(page.locator("#wxMarksSay")).toHaveText("Map landmarks: 6 towns and cities.");
+  await expect(page.locator("#wxMarksGo")).toBeHidden();
+  await sleep(1000);
+  expect(asked).toHaveLength(1);
+  await page.locator("#wxClear").click();
+  await expectSet(request, { flyhome: "none" });
+  await expect(page.locator("#wxMarks")).toBeHidden();
+  await expect(page.locator("#flightMarks")).toBeHidden();
+});
+
+test("typed coordinates look up landmarks for the rounded home", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS });
+  const asked = [];
+  await page.route(OVERPASS, (route) => { asked.push(1); return route.fulfill({ json: osmAround(38.05, -84.73) }); });
+  const bodies = await keepBodies(page);
+  await page.goto("/");
+  await page.locator("#flightWhere").fill("38.0512, -84.7349");
+  await page.locator("#flightFind").click();
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  expect(asked).toHaveLength(1);
+  const h = landRead(bodies[0]);
+  expect([h.lat, h.lon]).toEqual([3805, -8473]);
+  await expect(page.locator("#flightMarksSay")).toHaveText("Map landmarks added: 6 towns and cities.");
+});
+
+test("a failed OpenStreetMap server is tried once on the other, then the page offers Try again", async ({ page, request }) => {
+  await reset(request, { displays: WX_DISPLAYS, flights: { home: "38.0512,-84.7349" } });
+  const hits = [];
+  let first = "504", second = "ok";
+  const answer = (route, how) => (how === "ok" ? route.fulfill({ json: osmAround(38.05, -84.73) })
+    : how === "net" ? route.abort() : route.fulfill({ status: Number(how), body: "" }));
+  await page.route(OVERPASS, (route) => { hits.push("a"); return answer(route, first); });
+  await page.route(OVERPASS_2, (route) => { hits.push("b"); return answer(route, second); });
+  await page.goto("/");
+  // A home from before, without landmarks
+  await expect(page.locator("#wxMarksSay")).toHaveText("The radar can show nearby towns, roads and borders.");
+  await expect(page.locator("#flightMarksGo")).toHaveText("Add landmarks");
+  await sleep(1000);
+  expect(hits).toEqual([]);
+  await page.locator("#wxMarksGo").click();
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  expect(hits).toEqual(["a", "b"]);
+  await expect(page.locator("#wxMarksSay")).toHaveText("Map landmarks added: 6 towns and cities.");
+
+  // Both out: no post; Try again runs once more
+  await reset(request, { displays: WX_DISPLAYS, flights: { home: "38.0512,-84.7349" } });
+  hits.length = 0;
+  first = "429";
+  second = "net";
+  await page.reload();
+  await page.locator("#flightMarksGo").click();
+  await expect(page.locator("#flightMarksSay")).toHaveText("Couldn't add map landmarks. The radar works without them.");
+  await expect(page.locator("#wxMarksGo")).toHaveText("Try again");
+  expect(hits).toEqual(["a", "b"]);
+  expect(await landPosts(request)).toHaveLength(0);
+  first = "net";
+  second = "ok";
+  await page.locator("#wxMarksGo").click();
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  expect(hits).toEqual(["a", "b", "a", "b"]);
+  await expect(page.locator("#flightMarksSay")).toHaveText("Map landmarks added: 6 towns and cities.");
+
+  // A plain refusal isn't tried on the other
+  await reset(request, { displays: WX_DISPLAYS, flights: { home: "38.0512,-84.7349" } });
+  hits.length = 0;
+  first = "400";
+  await page.reload();
+  await page.locator("#wxMarksGo").click();
+  await expect(page.locator("#wxMarksGo")).toHaveText("Try again");
+  expect(hits).toEqual(["a"]);
+});
+
+test("the set keeps the panel's caps, cleans names and drops what is out of reach", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS, flights: { home: "46.2044,6.1432" }, land_set: { lat: 100, lon: 100 } });
+  const lat = 46.2, lon = 6.14, kmLon = 111.32 * Math.cos(lat * Math.PI / 180);
+  const node = (id, dlat, dlon, tags) => ({ type: "node", id, lat: lat + dlat, lon: lon + dlon, tags });
+  const els = [
+    node(1, 0.05, 0.05, { name: "Saint-Geneviève-des-Bois", place: "city", population: "300000" }),
+    node(2, 0.10, -0.1, { name: "Mount Pleasant", place: "town" }),
+    node(3, -0.1, 0.12, { name: "Fort Collins", place: "town" }),
+    node(4, 0.15, 0.2, { name: "東京", "name:en": "Tōkyō", place: "city", population: "250000" }),
+    node(5, -0.15, -0.2, { name: "Москва", place: "city" }),
+    node(6, 0.2, -0.25, { name: "North Platte", place: "town" }),
+    node(7, -0.2, 0.3, { name: "Coeur d'Alene", place: "town" }),
+    node(8, 3.0, 0, { name: "Faraway", place: "city", population: "900000" }),
+    node(9, 0.1, 0, { name: "Nearby", place: "village" }),
+    node(10, 0.5, 0, { name: "Outer", place: "village" }),
+    node(11, 0.051, 0.051, { name: "Saint-Geneviève-des-Bois", place: "town" }),
+    { type: "marker", id: 50, tags: { kind: "road" } },
+  ];
+  // A dual carriageway: two ways 100 m apart
+  const road = (id, off) => ({ type: "way", id, geometry: Array.from({ length: 30 }, (_, k) =>
+    ({ lat: lat - 0.3 + k * 0.02 + (k % 3) * 0.002, lon: lon + off / kmLon })) });
+  els.push(road(51, 0), road(52, 0.1));
+  await page.route(OVERPASS, (route) => route.fulfill({ json: { elements: els } }));
+  const bodies = await keepBodies(page);
+  await page.goto("/");
+  await expect(page.locator("#flightMarksGo")).toHaveText("Add landmarks");
+  await page.locator("#flightMarksGo").click();
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  const h = landRead(bodies[0]);
+  expect([h.magic, h.lat, h.lon]).toEqual(["GL", 4620, 614]);
+  expect(h.places.map((p) => p.name).sort()).toEqual(
+    ["COEUR", "FT COLLINS", "MT PLEASAN", "N PLATTE", "NEARBY", "ST-GENEVIE", "TOKYO"].sort());
+  expect(h.places.find((p) => p.name === "ST-GENEVIE").cls).toBe(4);
+  expect(h.places.find((p) => p.name === "TOKYO").cls).toBe(4);
+  expect(h.places.find((p) => p.name === "NEARBY").cls).toBe(1);
+  expect(h.kinds).toEqual([2]);
+  expect((await deviceState(request)).landmarks).toBe("ok");
+
+  // Far too much: the caps hold
+  await reset(request, { displays: FLIGHT_DISPLAYS, flights: { home: "46.2044,6.1432" } });
+  await page.unroute(OVERPASS);
+  await page.route(OVERPASS, (route) => route.fulfill({ json: osmAround(46.2, 6.14, { places: 90, ways: 120, points: 60 }) }));
+  await page.reload();
+  await page.locator("#flightMarksGo").click();
+  // The reset emptied the log
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  const big = landRead(bodies[1]);
+  expect(bodies[1].length).toBeLessThanOrEqual(8192);
+  expect(big.np).toBeLessThanOrEqual(64);
+  expect(big.nl).toBeLessThanOrEqual(200);
+  expect(big.npt).toBeLessThanOrEqual(1600);
+  expect(big.npt).toBeGreaterThan(1000);
+  for (const p of big.places) expect(p.name).toMatch(/^[A-Z0-9](?:[A-Z0-9 .'-]{0,8}[A-Z0-9])?$/);
+  expect((await deviceState(request)).landmarks).toBe("ok");
+});
+
+test("a panel whose home moved on answers 409, and the page shows no error", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS, flights: { home: "38.0512,-84.7349" } });
+  await page.route(OVERPASS, (route) => route.fulfill({ json: osmAround(38.05, -84.73) }));
+  let n = 0;
+  await page.route("**/gameday/landmarks", (route) => { n++; return route.fulfill({ status: 409, json: { error: "home changed" } }); });
+  await page.goto("/");
+  await page.locator("#flightMarksGo").click();
+  await expect.poll(() => n, { timeout: 8000 }).toBe(2);
+  await sleep(500);
+  await expect(page.locator("#flightMarksSay")).toHaveText("The radar can show nearby towns, roads and borders.");
+  await expect(page.locator("#flightMarksGo")).toHaveText("Add landmarks");
+});

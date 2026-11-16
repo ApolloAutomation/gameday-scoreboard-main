@@ -451,6 +451,27 @@ after a display's setting changes, like the switch or the shared home. A
 display's read now always counts as that display's in `open_`, so two
 displays can share a host, as F1 and Weather share Open-Meteo.
 
+**Map landmarks.** Under the radar the canvas Football's field uses
+(`put_field`, now the field or a map, never both) draws towns, state lines,
+coastlines and motorways (`landmarks.h`): a radar frame names its box,
+middle, scale and the labels to keep clear in `AppFrame::map` (`AppMap`,
+compared as bytes, so a radar step that only changes the image repaints
+nothing), and `map_paint` projects the set with the images' zoom-7 Web
+Mercator onto black, places labels biggest first where they fit, and leaves
+the image's alpha (`MapCanvas::finish` now writes RGB565 with an alpha
+plane, the same picture over black) to lay rain over it. The set comes from
+the device page: the browser asks OpenStreetMap's Overpass service for one
+box around the rounded home (overpass-api.de, overpass.kumi.systems if
+that fails), simplifies it to at most 64 places and 1,600 line points, and
+posts at most 8 KB as
+`application/octet-stream` to `/gameday/landmarks`, which ESPHome's web
+server streams to `handleBody` into a PSRAM staging buffer. `land_check`
+proves every count, name and offset before the main loop swaps the set in
+(`app_env().land`), and the panel keeps it in its own NVS namespace,
+`gd_land`, apart from the preferences, so no saved struct changes. A set for
+another rounded home is not drawn, and a radar with no set draws no canvas
+at all.
+
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
 the board's gaps: `loop()` calls `start_gap_job_` while the next board poll
@@ -747,6 +768,7 @@ isn't stable when stripped again.
 | `POST /gameday/action?do=` | `refresh`, `qc`, `power_ok` (and the demo's `demo`, `demo_stop`) |
 | `GET/POST /gameday/wifi` | The saved networks; `forget=<ssid>` |
 | `GET /gameday/crash`, `POST ?clear=1` | The stored crash report |
+| `POST /gameday/landmarks` | The map landmarks for the saved home (`landmarks.h`), streamed to `handleBody`; 400 unreadable, 409 another home, 413 over 8 KB, 503 no room; the state's `landmarks` (`none`, `ok`, `other`), `landmarks_n` and `landmarks_saved` follow it |
 | `GET /gameday/heap` | Free memory, for the burn-in monitor; `stack` is the main loop's lowest free stack in bytes (FreeRTOS's high-water mark, read every 10 s; 0 until the first read) |
 
 The page reads the state document, re-reads it when ESPHome's event stream
@@ -940,7 +962,9 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
   feeds, sources and failover, routes, photo lookups, screens, settings and
   the display's reads), `test_weather.cpp` (Weather: each source, failover,
-  units, icons, the radar's map math, pages and frames at every size), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  units, icons, the radar's map math, pages and frames at every size),
+  `test_landmarks.cpp` (the landmark set's check, its projection and the
+  base layer's lines and labels), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
   decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
   (the photo's cut, scaling and lighting) and `test_networks.cpp`

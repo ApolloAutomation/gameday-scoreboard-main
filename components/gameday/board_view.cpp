@@ -14,6 +14,7 @@
 #include "board_layout.h"
 #include "espn_parse.h"
 #include "gameday.h"
+#include "landmarks.h"
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "scene_view.h"
@@ -369,6 +370,13 @@ void put_icons(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Bottom up: the canvas, the photo, the box
+void sink_layers(BoardView &v) {
+  for (lv_obj_t *o : {v.bar, v.photo, v.field})
+    if (o != nullptr)
+      lv_obj_move_to_index(o, 0);
+}
+
 // The box under the board's labels, made on first use
 void put_bar(BoardView &v, const UpdateFields &f) {
   const ::espn::AppFill &b = f.bar;
@@ -377,9 +385,7 @@ void put_bar(BoardView &v, const UpdateFields &f) {
     if (!on || v.board == nullptr)
       return;
     v.bar = plain_bar(v.board, b.color);
-    lv_obj_move_to_index(v.bar, 0);
-    if (v.photo != nullptr)
-      lv_obj_move_to_index(v.photo, 0);
+    sink_layers(v);
   }
   if (on) {
     if (lv_obj_get_style_x(v.bar, LV_PART_MAIN) != b.x || lv_obj_get_style_y(v.bar, LV_PART_MAIN) != b.y)
@@ -538,18 +544,22 @@ void put_art(BoardView &v, const UpdateFields &f) {
 // Only the pixels that changed redraw
 void put_field(BoardView &v, const UpdateFields &f) {
   const ::espn::FieldPic &pic = f.field_pic;
-  if (!f.board || !f.field || pic.w <= 0 || pic.h <= 0) {
+  const ::espn::AppMap &map = f.map_pic;
+  const uint8_t kind = !f.board ? 0 : f.field && pic.w > 0 && pic.h > 0 ? 1 : !f.field && map.w > 0 && map.h > 0 ? 2 : 0;
+  if (kind == 0) {
     show(v.field, false);
     return;
   }
-  const size_t n = (size_t) pic.w * pic.h;
+  const int16_t bx = kind == 1 ? pic.x : map.x, by = kind == 1 ? pic.y : map.y;
+  const int16_t bw = kind == 1 ? pic.w : map.w, bh = kind == 1 ? pic.h : map.h;
+  const size_t n = (size_t) bw * bh;
   if (n > v.field_px) {
     heap_caps_free(v.field_buf);
     heap_caps_free(v.field_next);
     v.field_buf = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     v.field_next = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     v.field_px = v.field_buf != nullptr && v.field_next != nullptr ? n : 0;
-    v.field_shown = ::espn::FieldPic();
+    v.canvas_kind = 0;
     if (v.field_px == 0) {
       show(v.field, false);
       return;
@@ -560,26 +570,33 @@ void put_field(BoardView &v, const UpdateFields &f) {
       return;
     v.field = lv_canvas_create(v.board);
     lv_obj_remove_flag(v.field, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-    lv_obj_move_to_index(v.field, 0);
+    sink_layers(v);
   }
   const ::espn::FieldPic &was = v.field_shown;
-  const bool fresh = was.w != pic.w || was.h != pic.h || was.x != pic.x || was.y != pic.y;
+  const ::espn::AppMap &mwas = v.map_shown;
+  const bool fresh = v.canvas_kind != kind ||
+                     (kind == 1 ? was.w != pic.w || was.h != pic.h || was.x != pic.x || was.y != pic.y
+                                : mwas.w != map.w || mwas.h != map.h || mwas.x != map.x || mwas.y != map.y);
   if (fresh) {
-    lv_canvas_set_buffer(v.field, v.field_buf, pic.w, pic.h, LV_COLOR_FORMAT_RGB565);
-    lv_obj_set_pos(v.field, pic.x, pic.y);
-    lv_obj_set_size(v.field, pic.w, pic.h);
+    lv_canvas_set_buffer(v.field, v.field_buf, bw, bh, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(v.field, bx, by);
+    lv_obj_set_size(v.field, bw, bh);
   }
-  if (fresh || !::espn::field_same(pic, v.field_shown)) {
+  const bool changed = kind == 1 ? !::espn::field_same(pic, was) : memcmp(&map, &mwas, sizeof map) != 0;
+  if (fresh || changed) {
     ::espn::Px565 p;
     p.px = v.field_next;
-    p.w = p.stride = pic.w;
-    p.h = pic.h;
-    p.clip = ::espn::PxBox{0, 0, pic.w, pic.h};
-    ::espn::field_paint(p, pic);
-    int x0 = pic.w, y0 = pic.h, x1 = -1, y1 = -1;
-    for (int y = 0; y < pic.h; y++)
-      for (int x = 0; x < pic.w; x++) {
-        const size_t i = (size_t) y * pic.w + x;
+    p.w = p.stride = bw;
+    p.h = bh;
+    p.clip = ::espn::PxBox{0, 0, bw, bh};
+    if (kind == 1)
+      ::espn::field_paint(p, pic);
+    else
+      ::espn::map_paint(p, map, ::espn::app_env().land);
+    int x0 = bw, y0 = bh, x1 = -1, y1 = -1;
+    for (int y = 0; y < bh; y++)
+      for (int x = 0; x < bw; x++) {
+        const size_t i = (size_t) y * bw + x;
         if (!fresh && v.field_buf[i] == v.field_next[i])
           continue;
         x0 = std::min(x0, x);
@@ -597,7 +614,11 @@ void put_field(BoardView &v, const UpdateFields &f) {
       lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
       lv_obj_invalidate_area(v.field, &a);
     }
-    v.field_shown = pic;
+    if (kind == 1)
+      v.field_shown = pic;
+    else
+      v.map_shown = map;
+    v.canvas_kind = kind;
   }
   show(v.field, true);
 }
@@ -614,7 +635,7 @@ void put_photo(BoardView &v, const UpdateFields &f) {
     v.photo = lv_image_create(v.board);
     lv_obj_remove_style_all(v.photo);
     // Under the labels, lines and pictures
-    lv_obj_move_to_index(v.photo, 0);
+    sink_layers(v);
   }
   const lv_image_dsc_t *src = f.photo_img->get_lv_image_dsc();
   if (lv_image_get_src(v.photo) != src)

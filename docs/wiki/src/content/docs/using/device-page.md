@@ -9,6 +9,10 @@ Every panel serves its own web page. Open it in a browser on any phone or comput
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). In firmware v2026.11.7 and earlier, your browser also loads ESPHome's standard device page script from ESPHome's own site (oi.esphome.io) each time the page opens. That script asks Iconify (api.iconify.design) for its icons and keeps a second connection to the panel open, and a phone that can't reach ESPHome's server shows the page small, like a desktop page. From v2026.11.8 on, the page leaves that script out and loads everything else from the panel. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
+:::note[Coming in the next release]
+Your browser also reads the map landmarks under the radar from OpenStreetMap's Overpass service (overpass-api.de, or overpass.kumi.systems when that one fails), once each time you set the home or tap **Add landmarks**.
+:::
+
 ## The live board
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.
@@ -213,6 +217,10 @@ The line at the bottom says what the panel is doing: **Looking for planes.**, ho
 If a place can't be found, the card says so: try a town and state, or a ZIP code. If the place search can't be reached, type the latitude and longitude instead.
 
 The home is [Weather](/using/weather/)'s too: setting or clearing it in either card changes both.
+
+:::note[Coming in the next release]
+Under the home, both cards have a **Radar map** row for the towns, roads and state lines drawn under the radar. Setting the home on this page, by name or by latitude and longitude, starts it: the row says **Adding map landmarks... this can take a minute.**, then what was added, like **Map landmarks added: 54 towns and cities.** Later visits show **Map landmarks: 54 towns and cities.** A home set before this release, or from Home Assistant, has none yet: the row says **The radar can show nearby towns, roads and borders.** with an **Add landmarks** button. If OpenStreetMap can't be reached, the row says **Couldn't add map landmarks. The radar works without them.** and offers **Try again**. The row credits **Map landmarks © OpenStreetMap contributors**, linked to [their copyright page](https://www.openstreetmap.org/copyright). Your browser does the lookup, not the panel, and sends only the home rounded to about a kilometer; see [Weather: Your location](/using/weather/#your-location).
+:::
 
 ## The Weather card
 
