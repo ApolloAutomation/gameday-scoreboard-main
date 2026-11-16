@@ -4,7 +4,9 @@
 check <dir>: every page (an index.html outside firmware/) has its own title
 and description, a canonical URL that matches where it lives, Open Graph and
 Twitter card tags, a share image that exists in the site, and JSON-LD that
-parses. CI runs it on docs/site.
+parses. An install button has no manifest until a board is picked, each
+board choice names a known build, and the home page offers both boards.
+CI runs it on docs/site.
 
 build <dir>: check, then add the FAQPage JSON-LD to support/ from the page's
 own cards, and write sitemap.xml and robots.txt. Both site deploys run it on
@@ -30,6 +32,8 @@ BASE = "https://apolloautomation.github.io/gameday-scoreboard-main"
 FAQ_PAGE = "support/index.html"
 REQUIRED_PROPS = ["og:title", "og:description", "og:url", "og:image", "og:type"]
 REQUIRED_NAMES = ["description", "twitter:card", "twitter:image"]
+MANIFESTS = ["firmware/moonhub75/manifest.json", "firmware/moonhub75-2panel/manifest.json",
+             "firmware/scoreboard75/manifest.json"]
 
 
 class Head(HTMLParser):
@@ -41,6 +45,8 @@ class Head(HTMLParser):
         self.meta = {}
         self.canonical = None
         self.ld = []
+        self.preset = 0
+        self.picks = []
         self._in = None
         self._svg = 0  # depth inside <svg>, whose <title> names the drawing
 
@@ -59,6 +65,10 @@ class Head(HTMLParser):
         elif tag == "script" and a.get("type") == "application/ld+json":
             self._in = "ld"
             self.ld.append("")
+        elif tag == "esp-web-install-button" and "manifest" in a:
+            self.preset += 1
+        if "data-manifest" in a:
+            self.picks.append(a["data-manifest"] or "")
 
     def handle_endtag(self, tag):
         if tag == "svg" and self._svg:
@@ -159,6 +169,16 @@ def check(site):
                 json.loads(block)
             except ValueError as e:
                 errors.append(f"{rel}: JSON-LD block {i + 1} doesn't parse: {e}")
+        if head.preset:
+            errors.append(f"{rel}: Install button has a manifest before a board is picked")
+        for m in head.picks:
+            if not any(m.endswith(k) for k in MANIFESTS):
+                errors.append(f"{rel}: board choice {m} isn't a known build")
+        if rel == "index.html" and not (
+            any(m.endswith(MANIFESTS[0]) or m.endswith(MANIFESTS[1]) for m in head.picks)
+            and any(m.endswith(MANIFESTS[2]) for m in head.picks)
+        ):
+            errors.append(f"{rel}: home page doesn't offer both the M-1 and the scoreboard75 build")
     return errors
 
 
@@ -200,14 +220,18 @@ def build(site):
     return []
 
 
-def page(path, title, desc, extra=""):
+PICKER = "".join(f'<button class="panelpick" data-manifest="{m}"></button>' for m in MANIFESTS) + (
+    "<esp-web-install-button></esp-web-install-button>")
+
+
+def page(path, title, desc, extra="", body=""):
     url = BASE + "/" + path[: -len("index.html")]
     return f"""<!doctype html><html><head><title>{title}</title>
 <meta name="description" content="{desc}"><link rel="canonical" href="{url}">
 <meta property="og:title" content="{title}"><meta property="og:description" content="{desc}">
 <meta property="og:url" content="{url}"><meta property="og:type" content="website">
 <meta property="og:image" content="{BASE}/media/og.jpg"><meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="{BASE}/media/og.jpg">{extra}</head><body><main>
+<meta name="twitter:image" content="{BASE}/media/og.jpg">{extra}</head><body><main>{body}
 <div class="card"><h2>Lines on the panel?</h2><p>Unplug it for <strong>10 seconds</strong>.</p>
 <p class="note">Still there? Email <a href="mailto:x@y">support</a>.</p></div>
 <div class="card"><h2>Outside?</h2><ol><li>Indoors only.</li><li>Keep it dry.</li></ol></div>
@@ -226,7 +250,7 @@ def selftest():
         for rel in ["index.html", "support/index.html", "install/diy/index.html", "firmware/x/index.html"]:
             os.makedirs(os.path.dirname(os.path.join(site, rel)) or site, exist_ok=True)
             with open(os.path.join(site, rel), "w", encoding="utf-8") as f:
-                f.write(page(rel, "Page " + rel, desc + rel))
+                f.write(page(rel, "Page " + rel, desc + rel, body=PICKER if rel == "index.html" else ""))
         os.makedirs(os.path.join(site, "media"))
         open(os.path.join(site, "media/og.jpg"), "wb").close()
         assert [p for p, _ in pages(site)] == ["index.html", "install/diy/index.html", "support/index.html"]
@@ -257,6 +281,21 @@ def selftest():
         errors = "\n".join(check(site))
         for want in ["same title", "same description", "canonical is", "og:url is", "isn't a file", "doesn't parse"]:
             assert want in errors, (want, errors)
+
+        # A preset manifest, an unknown build and a home page missing a board fail.
+        open(os.path.join(site, "media/og.jpg"), "wb").close()
+        def home_errors(body):
+            with open(os.path.join(site, "index.html"), "w", encoding="utf-8") as f:
+                f.write(page("index.html", "Home", desc + "home", body=body))
+            return "\n".join(e for e in check(site) if e.startswith("index.html"))
+
+        assert home_errors(PICKER) == "", home_errors(PICKER)
+        preset = PICKER.replace("<esp-web-install-button>", f'<esp-web-install-button manifest="{MANIFESTS[2]}">')
+        assert "before a board is picked" in home_errors(preset)
+        assert "isn't a known build" in home_errors(PICKER + '<button data-manifest="firmware/other/manifest.json">')
+        no_m1 = PICKER.replace(MANIFESTS[0], MANIFESTS[2]).replace(MANIFESTS[1], MANIFESTS[2])
+        assert "doesn't offer both" in home_errors(no_m1)
+        assert "doesn't offer both" in home_errors(PICKER.replace(MANIFESTS[2], MANIFESTS[0]))
     print("selftest ok")
 
 

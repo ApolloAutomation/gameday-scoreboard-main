@@ -473,6 +473,120 @@ void test_sample() {
   FCHECK(field_sample("BUF", 0, "BUF", 0).opp_abbr == "AWAY");
 }
 
+// The panel's Try it pick; empty: the scoreboard
+SportFrame try_frame(const GameSnapshot &board, int w, bool large, bool demo = false) {
+  SportFrame fr;
+  if (field_ready(board) && !demo)
+    sport_frame(board, board_clock_text(board, false, 0), w, large, fr);
+  else if (!field_try_live(board, demo))
+    sport_frame(field_try_sample(), kFieldSampleClock, w, large, fr);
+  return fr;
+}
+
+bool says(const SportFrame &fr, const std::string &want) {
+  for (const AppText &t : fr.texts)
+    if (t.text == want || t.text.find(want) != std::string::npos)
+      return true;
+  return false;
+}
+
+// Made-up teams, SAMPLE for the clock, nothing of the board's
+void check_sample(const SportFrame &fr, int w, const GameSnapshot &board, const std::string &what) {
+  bool home = false, away = false, word = false, board_abbr = false;
+  for (const AppText &t : fr.texts) {
+    home = home || t.text == "HOME";
+    away = away || t.text == "AWAY";
+    word = word || t.text == kFieldSampleClock;
+    for (const std::string &a : {board.team_abbr, board.opp_abbr})
+      board_abbr = board_abbr || (!a.empty() && t.text.find(a) != std::string::npos);
+  }
+  if (!(home && away && word && !board_abbr))
+    printf("  sample %d %s: home %d away %d word %d board %d\n", w, what.c_str(), home, away, word, board_abbr);
+  FCHECK(home && away && word && !board_abbr);
+  FCHECK(fr.pic.m.color[0] == field_color(kFieldSampleHome) && fr.pic.m.color[1] == field_color(kFieldSampleAway));
+}
+
+void test_try() {
+  // The sample: fixed made-up teams, colors far apart
+  const GameSnapshot s = field_try_sample();
+  FCHECK(s.team_abbr == "HOME" && s.opp_abbr == "AWAY" && field_ready(s));
+  FCHECK(parse_color(s.team_color) == kFieldSampleHome && parse_color(s.opp_color) == kFieldSampleAway);
+  const FieldModel sm = field_model(s);
+  const int dr = (int) (sm.color[0] >> 16) - (int) (sm.color[1] >> 16);
+  const int db = (int) (sm.color[0] & 0xFF) - (int) (sm.color[1] & 0xFF);
+  FCHECK(dr * dr + db * db > 100 * 100);
+  // A live NFL game: its own score, clock and down
+  const GameSnapshot nfl = event("event_nfl_live.json", 2);
+  FCHECK(field_try_live(nfl, false));
+  const std::string clock = board_clock_text(nfl, false, 0);
+  FCHECK(!clock.empty() && clock != kFieldSampleClock);
+  for (int large = 0; large < 2; large++)
+    for (int w : {64, 128, 192, 256}) {
+      const SportFrame fr = try_frame(nfl, w, large);
+      bool scores[2] = {false, false};
+      for (const AppText &t : fr.texts) {
+        scores[0] = scores[0] || t.text == std::to_string(nfl.team_score);
+        scores[1] = scores[1] || t.text == std::to_string(nfl.opp_score);
+      }
+      FCHECK(says(fr, "BUF") && says(fr, "MIN") && scores[0] && scores[1]);
+      FCHECK(!says(fr, "HOME") && !says(fr, "AWAY") && !says(fr, kFieldSampleClock));
+      FCHECK(fr.pic.m.score[0] == nfl.team_score && fr.pic.m.score[1] == nfl.opp_score);
+      FCHECK(fr.pic.m.down == nfl.fb.down && fr.pic.m.spot);
+      bool time = false;
+      for (const AppText &t : fr.texts)
+        time = time || (!t.text.empty() && clock.find(t.text) != std::string::npos && t.text.find(':') != std::string::npos);
+      FCHECK(time);
+      FCHECK(says(fr, "2nd"));
+    }
+  // Halftime with a spot: the game's own field
+  GameSnapshot ht = nfl;
+  ht.status_name = "STATUS_HALFTIME";
+  ht.period = 2;
+  ht.display_clock = "0:00";
+  ht.short_detail = "Halftime";
+  FCHECK(field_try_live(ht, false) && field_ready(ht));
+  for (int w : {64, 128, 192, 256}) {
+    const SportFrame fr = try_frame(ht, w, false);
+    FCHECK(says(fr, "BUF") && says(fr, "Half") && !says(fr, kFieldSampleClock) && fr.pic.m.brk);
+    FCHECK(fr.pic.m.score[0] == nfl.team_score && fr.pic.m.score[1] == nfl.opp_score);
+  }
+  // Halftime, no spot yet: the board's own scoreboard
+  JsonDocument doc;
+  FCHECK(!deserializeJson(doc, slurp("fixtures/event_nfl_halftime.json"), DeserializationOption::NestingLimit(40)));
+  std::string first;
+  serializeJson(doc[0], first);
+  GameSnapshot half;
+  FCHECK(parse_event_str(first, Sport::FOOTBALL, 9, half, "401873060"));
+  FCHECK(field_try_live(half, false) && !field_ready(half));
+  FCHECK(try_frame(half, 128, false).texts.empty());
+  // Final football, pregame, live basketball, nothing: the sample
+  GameSnapshot fin;
+  FCHECK(parse_event_str(slurp("fixtures/event_nfl_super_bowl.json"), Sport::FOOTBALL, 26, fin, "401772988"));
+  FCHECK(fin.state == GameState::POST);
+  GameSnapshot pre;
+  FCHECK(parse_event_str(slurp("fixtures/event_nfl_pre.json"), Sport::FOOTBALL, 3, pre, "401872999"));
+  FCHECK(pre.state == GameState::PRE);
+  GameSnapshot nba;
+  FCHECK(parse_event_str(slurp("fixtures/event_nba_live.json"), Sport::BASKETBALL, 11, nba));
+  FCHECK(nba.state == GameState::IN && nba.team_abbr == "IND");
+  const std::pair<const char *, GameSnapshot> others[] = {
+      {"final", fin}, {"pre", pre}, {"nba", nba}, {"none", GameSnapshot()}};
+  for (const auto &[what, board] : others) {
+    FCHECK(!field_try_live(board, false));
+    for (int large = 0; large < 2; large++)
+      for (int w : {64, 128, 192, 256}) {
+        const SportFrame fr = try_frame(board, w, large);
+        check_sample(fr, w, board, what);
+        // Not the old sample's real teams either
+        check_sample(fr, w, nfl, what);
+      }
+  }
+  // The demo's live football: the sample, not its game
+  FCHECK(!field_try_live(nfl, true));
+  for (int w : {64, 128, 192, 256})
+    check_sample(try_frame(nfl, w, false, true), w, nfl, "demo");
+}
+
 }  // namespace
 
 int run_field_tests(int &total_checks) {
@@ -483,6 +597,7 @@ int run_field_tests(int &total_checks) {
   test_fit();
   test_picture();
   test_sample();
+  test_try();
   total_checks += checks;
   return failures;
 }

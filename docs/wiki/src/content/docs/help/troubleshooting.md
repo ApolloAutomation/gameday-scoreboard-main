@@ -38,7 +38,7 @@ You joined the panel's **Game Day** hotspot and no page opened.
 - Check the password.
 - Use your main network, not a guest network.
 
-While it joins a network from the Game Day app, the panel shows **JOINING** and the network's name, so a wrong pick shows up there.
+While it joins a network from the Game Day app, the hotspot's setup page or the installer, the panel shows **JOINING** and the network's name, so a wrong pick shows up there. After about 30 seconds without getting on, a new panel says **Can't join** and the name, with the hotspot's QR code: check the name and the password, then scan the code and give them again.
 
 If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code, the network wants you to sign in on a web page, like many bar, hotel and dorm networks. The panel can't sign in to those pages. Set it up on a home network or a phone hotspot instead: [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi) puts it back into setup so you can. The QR code opens the panel's device page by IP address: from a phone on the same Wi-Fi, scan it and tap **Reset Wi-Fi** in the Device card. If the page won't open, the network keeps devices apart: use the button's Reset Wi-Fi. Once it's on the new network, you can forget the sign-in network under **Wi-Fi networks** on the device page so the panel doesn't go back to it. The message goes away by itself once scores come through.
 

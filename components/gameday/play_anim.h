@@ -696,13 +696,14 @@ inline std::string say_score(const std::string &abbr, int score, int gain) {
   return out;
 }
 
-// A Try it play, captioned with the board's team
+// A Try it play: no team's score, ever
+constexpr const char *kAnimSampleScore = "SAMPLE";
 struct AnimSample {
   AnimArgs args;
   std::string say, score;
+  int gain{0};  // the play's points
 };
-inline AnimSample anim_sample(const std::string &play, const std::string &abbr, int score,
-                              const std::string &name = "") {
+inline AnimSample anim_sample(const std::string &play, const std::string &name = "") {
   AnimSample r;
   AnimArgs &a = r.args;
   int gain = 6;
@@ -738,7 +739,8 @@ inline AnimSample anim_sample(const std::string &play, const std::string &abbr, 
     a.dist = 24;
   }
   r.say = say_words(a, what, detail::say_name(name), gain);
-  r.score = abbr.empty() ? say_score("", -1, gain) : say_score(abbr, score + gain, gain);
+  r.score = kAnimSampleScore;
+  r.gain = gain;
   return r;
 }
 

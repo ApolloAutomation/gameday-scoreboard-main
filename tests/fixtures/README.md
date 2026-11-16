@@ -20,6 +20,7 @@ Recorded from ESPN on 2026-09-05 with a `curl/8.0` User-Agent (ESPN returns
 | `event_nfl_pre.json` | `.../football/nfl/scoreboard/401872999`, CHI @ ATL a week out, with odds (recorded 2026-10-13) |
 | `event_nfl_super_bowl.json` | `.../football/nfl/scoreboard/401772988`, Super Bowl LX on its own (recorded 2026-10-13) |
 | `event_nfl_kickoff_return.json` | `.../football/nfl/scoreboard/401873053`, NE vs DET, 12:57 2nd, just after a kickoff return to NE 30: the situation has the down and spot but no `possession`; `lastPlay.end.team` is NE (recorded 2026-11-15) |
+| `event_nfl_halftime.json` | MIN @ GB (401873060) across halftime, 19:43 to 19:47 UTC on 2026-11-15: an array of eleven reads, the game's own scoreboard event cut to the fields the football parser keeps, each read's status, clock, `lastPlay` (id, type, text, `secondsLeft` 0), down and distance, possession and timeouts from an 8 s poll (`lastPlay.end.team` filled in from the play). ESPN's status stays Halftime past the 3rd quarter's kickoff and first play |
 
 Event ids the tests rely on are listed at the top of `test_parse.cpp`.
 

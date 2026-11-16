@@ -100,6 +100,14 @@ button { font: inherit; color: inherit; }
 .board.empty .row { opacity: .35; }
 /* The panel isn't answering, or is restarting: what's left on the board is old */
 .gone { margin-top: 10px; font-size: 13px; color: var(--gold); }
+.updbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px;
+  padding: 10px 14px; border: 1px solid var(--gold); border-radius: var(--radius);
+  background: var(--panel); color: var(--gold); font-weight: 600;
+}
+.updbar #updText { flex: 1 1 200px; }
+.updbtns { display: flex; gap: 8px; }
+.updbar .btn { min-height: 44px; }
 .board.dim .row, .board.dim .state, .board.dim .stale, .board.dim .gname, .board.dim .msg,
 .board.dim .ticker, .board.dim .play, .board.dim .betline { opacity: .35; filter: grayscale(1); }
 .board .msg { text-align: center; color: var(--muted); padding: 22px 0 8px; }

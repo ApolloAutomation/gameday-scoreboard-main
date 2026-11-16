@@ -19,7 +19,7 @@ the same ground for people; this file is the short version.
   are the two release builds. Each only names itself and picks a pin map from
   `firmware/controllers/`; everything else is in
   `firmware/gameday-common.yaml`. `firmware/gameday-2panel.yaml` is
-  gameday.yaml booting two panels wide, offered by the DIY installer.
+  gameday.yaml booting two panels wide, offered by both installers.
   `firmware/gameday-demo.yaml` and `firmware/gameday-scoreboard75-demo.yaml`
   add the scripted demo (`firmware/pages/demo.yaml`) for test builds; they
   are never released.
@@ -155,3 +155,9 @@ the same ground for people; this file is the short version.
   label `docs: not needed`. Describe behavior `main` doesn't have yet in a
   `:::note[Coming in the next release]` aside. `npm run build` in
   `docs/wiki` must pass.
+
+## Code comments
+
+- Keep every comment 3–10 words max.
+- Never mention conversation history, chats, or decisions made with the user.
+- Never state whether something was or wasn't tested.

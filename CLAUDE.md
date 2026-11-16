@@ -71,3 +71,9 @@ contributors; read it too.
 - Never commit secrets.yaml, Wi-Fi details or league and team logos.
 - The site address (the GitHub Pages address today) lives in a few known
   places; CONTRIBUTING.md's "Moving to a new address" lists them.
+
+## Code comments
+
+- Keep every comment 3–10 words max.
+- Never mention conversation history, chats, or decisions made with the user.
+- Never state whether something was or wasn't tested.

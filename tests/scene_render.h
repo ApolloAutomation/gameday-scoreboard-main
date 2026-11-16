@@ -33,14 +33,16 @@ constexpr ScenePlay kScenePlays[] = {{"pass", "BUF", 21, "Chase"},  {"run", "BUF
                                      {"fg", "BUF", 21, "Prater"},   {"pat", "BUF", 27, "Prater"},
                                      {"two", "BUF", 27, "Kincaid"}, {"tworun", "BUF", 27, "Cook"}};
 
-// The kit's index picks the scorer's name or none
+// Named: a real play's caption; else the Try it's
 inline Scene scene_of(const ScenePlay &p, int w, int h, const Kit2 &kit, bool named, bool mirror, int feet = 0) {
-  AnimSample a = anim_sample(p.play, p.abbr, p.score, named ? p.name : "");
+  AnimSample a = anim_sample(p.play, named ? p.name : "");
+  if (named)
+    a.score = say_score(p.abbr, p.score + a.gain, a.gain);
   if (mirror)
     a.args.flags |= kAnimMirror;
   if (feet > 0) {
     a.args.dist = (int16_t) feet;
-    a = AnimSample{a.args, say_words(a.args, Say::PLAIN, named ? p.name : "", 2), a.score};
+    a = AnimSample{a.args, say_words(a.args, Say::PLAIN, named ? p.name : "", 2), a.score, a.gain};
   }
   Scene sc = scene_make(a.args, w, h, kit.color, kit.alt, kit.other, kit.other_alt, 7);
   scene_say(sc, a.say.c_str(), a.score.c_str());
