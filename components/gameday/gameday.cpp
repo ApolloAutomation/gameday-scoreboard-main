@@ -3011,6 +3011,7 @@ void GamedayComponent::update_state_changed_() {
     // Other tasks' requests cut the download's watchdog to 5 s
     this->install_hold_ = true;
     this->logos_.pause(true);
+    this->fire_action_("updating");
     // Queued ahead of the download's own defer
     this->defer([this]() {
       const uint32_t start = millis();
@@ -3046,6 +3047,7 @@ void GamedayComponent::update_state_changed_() {
     this->update_mark_.installing[0] = '\0';
     this->update_mark_pref_.save(&this->update_mark_);
     this->install_hold_end_();
+    this->fire_action_("update_ended");
     // The offer may predate the newest publish
     bool recheck = true;
 #ifdef GAMEDAY_UPDATE_MIRROR

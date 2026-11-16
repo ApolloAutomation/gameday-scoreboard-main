@@ -93,6 +93,8 @@ document.body.innerHTML = `
       <div class="conn" id="conn" aria-live="polite"><i></i><span>offline</span></div>
     </header>
 
+    <div class="updbar" id="updBar" role="status" hidden><span id="updText"></span><span class="updbtns" id="updBtns"><button class="btn primary" id="updInstall">Install</button><button class="btn" id="updLater">Later</button></span></div>
+
     <section class="board empty" id="board">
       <div class="state" id="gstate">WAITING</div>
       <div class="stale" id="stale">data stale</div>
@@ -379,7 +381,7 @@ document.body.innerHTML = `
           <div class="fwsub" id="fwSub"></div>
         </div>
         <div class="ctl" id="autoupdRow" hidden>
-          <label>Install updates automatically<small>Between 3 and 5 AM, never during a live game. Off: the panel only tells you an update is out.</small></label>
+          <label>Install updates automatically<small>Between 3 and 5 AM, never during a live game. Off: this page tells you when an update is out.</small></label>
           <button class="sw" data-set="autoupd" aria-label="Install updates automatically"></button>
         </div>
         <div class="ctl" id="betaRow" hidden>
@@ -2980,9 +2982,16 @@ const peek = $("#devicePeek");
 peek.textContent = note || "Updates, Wi-Fi, diagnostics";
 peek.classList.toggle("alert", !!note);
 };
+const showUpdBar = (text, buttons) => {
+$("#updText").textContent = text;
+$("#updBtns").hidden = !buttons;
+$("#updBar").hidden = false;
+};
+const updLater = () => { try { return localStorage.getItem("gd.updLater") || ""; } catch (_) { return ""; } };
 const renderUpdate = (u) => {
 const box = $("#fw");
 box.hidden = false;
+$("#updBar").hidden = true;
 fwNote = "";
 const cur = u.current_version ? "v" + u.current_version : "";
 const latest = u.value ? "v" + u.value : "";
@@ -2995,6 +3004,7 @@ const stale = !st.includes("INSTALLING") && !installing && offChannel(u);
 if (st.includes("INSTALLING") || installing) {
 fwNote = "Installing " + (latest || "update");
 $("#fwText").textContent = fwNote;
+showUpdBar(fwNote + ". Keep the panel powered.", false);
 sub.textContent = "Keep the panel powered. It reboots when done and this page reconnects.";
 } else if (stale) {
 $("#fwText").textContent = "Checking for the latest " + (S.beta ? "beta" : "release");
@@ -3021,7 +3031,17 @@ sub.textContent = (cur ? "You have " + cur + "." : "") + (S && (S.autoupd || S.b
 }
 renderNotes(sub, latest, u.summary);
 btn.hidden = false;
-if (failed || missed || isNewer(u.value, u.current_version)) openUnlessChosen("deviceCard");
+if (failed || missed || isNewer(u.value, u.current_version)) {
+openUnlessChosen("deviceCard");
+if (updLater() !== String(u.value || "")) {
+showUpdBar(fwNote + (!failed && !missed && S && (S.autoupd || S.bar) ? ". It installs on its own between 3 and 5 AM." : ""), true);
+$("#updInstall").onclick = () => btn.click();
+$("#updLater").onclick = () => {
+$("#updBar").hidden = true;
+try { localStorage.setItem("gd.updLater", String(u.value || "")); } catch (_) {}
+};
+}
+}
 btn.onclick = async () => {
 const ask = failed ? "Try " + latest + " again? It didn't take last time. The panel will reboot." : "Install " + latest + " now? The panel will reboot.";
 if (!confirm(ask)) return;

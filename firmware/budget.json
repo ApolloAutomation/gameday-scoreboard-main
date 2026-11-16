@@ -8,17 +8,17 @@
   },
   "firmware": {
     "moonhub75": {
-      "flash": 2889800,
+      "flash": 2893800,
       "static_ram": 150000,
       "loop_stack": 8192
     },
     "moonhub75-2panel": {
-      "flash": 2889800,
+      "flash": 2893800,
       "static_ram": 150000,
       "loop_stack": 8192
     },
     "scoreboard75": {
-      "flash": 2866200,
+      "flash": 2870400,
       "static_ram": 149200,
       "loop_stack": 8192
     }

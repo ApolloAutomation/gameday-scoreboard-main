@@ -266,6 +266,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 
 When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt-take), the card opens by itself with the **Install** button in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say what needs you in it, in place of what it holds: **Update available** and the version, **Update didn't take**, **Installing** and the version, or **Weak signal**.
 
+:::note[Coming in the next release]
+When an update is out, a bar at the top of the page says so too, with **Install** and **Later**, so you don't have to scroll to this card. **Later** hides it for that version in that browser. See [Installing an update](/using/updates/#installing-an-update).
+:::
+
 An install that didn't start, or failed without the panel restarting, opens the card too, and the words beside **Device** say **Update didn't install**. See [Installing an update](/using/updates/#installing-an-update).
 
 ### Diagnostics

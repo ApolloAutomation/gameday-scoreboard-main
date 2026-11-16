@@ -105,6 +105,10 @@ If the whole panel lights red, green, blue and white in turn, then a white line 
 
 The panel shows no message of its own while it updates. It restarts when the update is done and comes back on its start-up screen. The device page shows how the update is going. See [Updates](/using/updates/).
 
+:::note[Coming in the next release]
+While an update installs, the panel says **Updating**, **Keep it plugged in** and **Back in a minute** (on a single 64x64 panel, **Updating**, **Keep it plugged in**). Leave it powered. It restarts on the new version, or goes back to what it was showing if the install doesn't go through. The device page also shows a bar at the top with **Install** whenever an update is out.
+:::
+
 | The device page says | What it means |
 | --- | --- |
 | **Update available** and a version | A newer release is out, or a newer beta with **Follow beta** on. Press **Install** to install it. |

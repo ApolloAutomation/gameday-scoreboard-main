@@ -619,6 +619,29 @@ script:
           else
             id(boot_set_lines).execute("", "Looking up", "scores", "", true);
 
+  # Install screen, drawn before the download holds the loop
+  - id: boot_updating
+    then:
+      - if:
+          condition:
+            lambda: 'return id(boot_hold_stage) < 2;'
+          then:
+            - script.stop: boot_hide_later
+            - component.suspend: boot_check
+            - component.suspend: boot_anim
+            - lvgl.obj.update:
+                id: boot_overlay
+                hidden: false
+            - lambda: |-
+                const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
+                id(boot_qr_cycle).execute(0, false);
+                id(boot_view).execute(false, "");
+                if (wide)
+                  id(boot_set_lines).execute("Updating", "Keep it plugged in", "Back in a minute", "", false);
+                else
+                  id(boot_set_lines).execute("Updating", "Keep it", "plugged in", "", false);
+                lv_refr_now(nullptr);
+
   - id: boot_hide
     then:
       # The boot button's countdown owns the overlay (boot_hold_tick):

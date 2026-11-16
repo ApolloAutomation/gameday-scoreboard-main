@@ -653,6 +653,17 @@ gameday:
           lambda: 'return x == "qc";'
         then:
           - script.execute: qc_start
+    # An install from the update feed starting, or failing
+    - if:
+        condition:
+          lambda: 'return x == "updating";'
+        then:
+          - script.execute: boot_updating
+    - if:
+        condition:
+          lambda: 'return x == "update_ended";'
+        then:
+          - script.execute: boot_hide
     - if:
         condition:
           lambda: 'return x == "team_picked";'
