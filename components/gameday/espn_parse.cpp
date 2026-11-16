@@ -30,6 +30,7 @@ GameSnapshot::GameSnapshot(GameSnapshot &&) noexcept = default;
 GameSnapshot &GameSnapshot::operator=(const GameSnapshot &) = default;
 GameSnapshot &GameSnapshot::operator=(GameSnapshot &&) noexcept = default;
 GameSnapshot::~GameSnapshot() = default;
+void GameSnapshot::clear() { *this = GameSnapshot(); }
 
 const char *league_path(League league) {
   const LeagueInfo *l = league_info(league);
@@ -943,11 +944,15 @@ std::string play_clock(const std::string &p) {
   return c == "0:00" ? "" : c;
 }
 
+// The NFL sends 0 on every play.
+static int secs_left(const GameSnapshot &s) { return s.play_secs_left == 0 && s.period < 4 ? -1 : s.play_secs_left; }
+
 // A resumed halftime counts as the 3rd quarter.
 static int board_period(const GameSnapshot &s) {
   if (!s.resumed || s.period >= 3)
     return s.period;
-  return s.play_secs_left >= 0 && s.play_secs_left < 900 ? 4 : 3;
+  const int left = secs_left(s);
+  return left >= 0 && left < 900 ? 4 : 3;
 }
 
 static int timeout_half(int period) { return period <= 2 ? 1 : (period <= 4 ? 2 : period - 2); }
@@ -977,36 +982,56 @@ static bool break_words(const std::string &p) {
   return p.empty() || p.rfind("End of", 0) == 0 || p.rfind("END ", 0) == 0 || p.find("Halftime") != std::string::npos;
 }
 
-static bool kickoff(const std::string &p) {
+static bool kickoff(const GameSnapshot &s) {
   // "kickoff", "Kickoff" or "kicks"
-  return p.find("ickoff") != std::string::npos || p.find("kicks") != std::string::npos;
+  const std::string &p = s.last_play;
+  return p.find("ickoff") != std::string::npos || p.find("kicks") != std::string::npos || s.play_type == "Kickoff";
+}
+
+// ESPN's play ids grow: 1 later, -1 earlier, 0 unknown.
+static int id_order(const std::string &a, const std::string &b) {
+  if (a.empty() || b.empty() || a == b)
+    return 0;
+  for (const std::string *id : {&a, &b})
+    for (char c : *id)
+      if (c < '0' || c > '9')
+        return 0;
+  if (a.size() != b.size())
+    return a.size() > b.size() ? 1 : -1;
+  return a > b ? 1 : -1;
 }
 
 // A late first-half play can still arrive after halftime.
-static bool after_break(const GameSnapshot &s, int break_period, const std::string &break_play, int break_secs) {
+static bool after_break(const GameSnapshot &s, int break_period, const std::string &break_play, int break_secs,
+                        const std::string &words_id) {
   if (break_words(s.last_play) || s.last_play == break_play)
     return false;
   if (break_period != 2)
     return true;
-  const int secs = play_secs(s.last_play);
+  const int secs = play_secs(s.last_play), left = secs_left(s);
   // 1800 left can be a first-half kickoff return too.
-  if (s.play_secs_left >= 0)
-    return s.play_secs_left < 1800 ||
-           (s.play_secs_left == 1800 && (secs == 900 || (secs < 0 && kickoff(s.last_play))));
+  if (left >= 0)
+    return left < 1800 || (left == 1800 && (secs == 900 || (secs < 0 && kickoff(s))));
   if (secs >= 0)
     return secs > (break_secs >= 0 ? break_secs : 599);
-  return kickoff(s.last_play);
+  const int order = id_order(s.play_id, words_id);
+  if (order != 0)
+    return order > 0;  // after or before the half's end words
+  if (s.period < 3 && !break_play.empty() && !break_words(break_play))
+    return false;  // no end words since a first-half play
+  return kickoff(s) || (s.period >= 3 && clock_running(s));
 }
 
 static bool first_half_play(const GameSnapshot &s) {
-  if (s.play_secs_left >= 0) {
+  const int left = secs_left(s);
+  if (left >= 0) {
     // At 1800, the 3rd quarter's own kickoff isn't.
     const int secs = play_secs(s.last_play);
-    return s.play_secs_left > 1800 ||
-           (s.play_secs_left == 1800 && secs != 900 && !(secs < 0 && kickoff(s.last_play)));
+    return left > 1800 || (left == 1800 && secs != 900 && !(secs < 0 && kickoff(s)));
   }
   return s.last_play.find("End of 2nd") != std::string::npos || s.last_play.find("End of Half") != std::string::npos ||
-         s.last_play.find("Halftime") != std::string::npos;
+         s.last_play.find("Halftime") != std::string::npos || s.last_play.rfind("END QUARTER 2", 0) == 0 ||
+         s.play_type == "End of Half";
 }
 
 void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
@@ -1014,11 +1039,19 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
     return;
   const bool game = prev.valid && prev.event_id == next.event_id;
   const bool was_held = game && prev.held;
+  const std::string words_id = was_held && break_words(prev.last_play) ? prev.play_id : std::string();
   if (next.status_name == "STATUS_HALFTIME" && next.state == GameState::IN) {
-    if (game && prev.resumed && !first_half_play(next))
+    // The half ended on this play.
+    const bool ended_on = game && prev.state == GameState::IN && prev.period == 2 &&
+                          prev.status_name != "STATUS_HALFTIME" && !next.last_play.empty() &&
+                          (next.play_id.empty() ? next.last_play == prev.last_play : next.play_id == prev.play_id);
+    if (ended_on)
+      next.resumed = false;
+    else if (game && prev.resumed && !first_half_play(next))
       next.resumed = true;  // until ESPN's status catches up
     else
-      next.resumed = after_break(next, 2, was_held ? prev.break_play : std::string(), was_held ? prev.break_secs : -1);
+      next.resumed = after_break(next, 2, was_held ? prev.break_play : std::string(), was_held ? prev.break_secs : -1,
+                                 words_id);
   }
   next.held = false;
   next.break_period = 0;
@@ -1038,7 +1071,7 @@ void carry_football(const GameSnapshot &prev, GameSnapshot &next) {
       hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
     } else if (was_held && clock_running(next) && next.period == prev.break_period) {
       // ESPN put time back in the period: play goes on
-    } else if (was_held && !after_break(next, prev.break_period, prev.break_play, prev.break_secs)) {
+    } else if (was_held && !after_break(next, prev.break_period, prev.break_play, prev.break_secs, words_id)) {
       hold(prev.break_period, late ? next.last_play : prev.break_play, late ? secs : prev.break_secs);
     } else if (!was_held && break_now(next)) {
       hold(next.period >= 4 ? next.period : 2, next.last_play, secs);

@@ -747,7 +747,7 @@ isn't stable when stripped again.
 | `POST /gameday/action?do=` | `refresh`, `qc`, `power_ok` (and the demo's `demo`, `demo_stop`) |
 | `GET/POST /gameday/wifi` | The saved networks; `forget=<ssid>` |
 | `GET /gameday/crash`, `POST ?clear=1` | The stored crash report |
-| `GET /gameday/heap` | Free memory, for the burn-in monitor |
+| `GET /gameday/heap` | Free memory, for the burn-in monitor; `stack` is the main loop's lowest free stack in bytes (FreeRTOS's high-water mark, read every 10 s; 0 until the first read) |
 
 The page reads the state document, re-reads it when ESPHome's event stream
 sends a Game Status event, holds each tapped setting until the panel

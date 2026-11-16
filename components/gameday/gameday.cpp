@@ -298,7 +298,7 @@ void GamedayComponent::setup() {
   ::espn::set_json_allocator(&json_psram);
   ::espn::recap_heap() = {[](size_t n) { return psram_alloc(n); }, [](void *p) { heap_caps_free(p); }};
 #endif
-  this->idle_snaps_.resize(3);  // before anything can draw (side, today, jump)
+  this->idle_snaps_.resize(4);  // before anything can draw (side, today, jump, area card)
   // A restart keeps the wall clock, so a crash a moment ago has its time now.
   this->start_reason_ = ::espn::boot_log_start(boot_log, (int) esp_reset_reason(), (uint32_t) App.get_build_time(),
                                                (int64_t) ::time(nullptr));
@@ -582,7 +582,7 @@ void GamedayComponent::favorites_changed_(bool first_pick, const std::vector<Lea
   this->rebuild_favorites_(true);
   this->follow_ = ::espn::FollowPin{};  // a new list: back to the mode's own pick
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && this->idle_snaps_.size() >= 2)
-    this->today_final_() = GameSnapshot{};  // it may be a team no longer on the list
+    this->today_final_().clear();  // it may be a team no longer on the list
   // Idle scores follow the favorites' leagues.
   this->scan_due_now_();
   if (this->prefs2_.mode == (uint8_t) Mode::FAVORITES && (was_fav_mode || this->favorites_mode_())) {
@@ -590,8 +590,8 @@ void GamedayComponent::favorites_changed_(bool first_pick, const std::vector<Lea
     // cycle refresh what is missing and re-pick.
     this->drop_visit_();
     this->generation_++;
-    this->game_ = GameSnapshot{};
-    this->prev_ = GameSnapshot{};
+    this->game_.clear();
+    this->prev_.clear();
     this->no_game_confirmed_ = false;  // ESPN has not answered for the new list
     this->emit_({});
     this->end_backoff_wait_();
@@ -629,7 +629,7 @@ void GamedayComponent::press_favorite(uint8_t slot) {
       this->fav_shown_ = (int) i;
       this->fav_shown_since_ = (int64_t) this->time_->timestamp_now();
       this->fav_poll_ms_ = 0;
-      this->prev_ = GameSnapshot{};
+      this->prev_.clear();
       this->game_ = this->fav_[i].game;
       this->post_since_ms_ = 0;
       this->emit_({});
@@ -877,9 +877,12 @@ bool GamedayComponent::fav_choose_(int64_t now_epoch) {
   this->fav_shown_ = c.index;
   this->fav_shown_since_ = now_epoch;
   this->fav_poll_ms_ = 0;
-  this->prev_ = GameSnapshot{};
+  this->prev_.clear();
   this->visit_back_ = false;
-  this->game_ = c.index >= 0 ? this->fav_[c.index].game : GameSnapshot{};
+  if (c.index >= 0)
+    this->game_ = this->fav_[c.index].game;
+  else
+    this->game_.clear();
   this->post_since_ms_ = 0;
   this->misses_ = 0;
   if (c.index >= 0)
@@ -1011,10 +1014,10 @@ uint32_t GamedayComponent::fav_gap_due_(uint32_t now) const {
 void GamedayComponent::fav_no_event_(FavEntry &e, bool shown, int64_t now_epoch) {
   ESP_LOGI(TAG, "No upcoming game for %s", e.team->abbr);
   this->no_game_confirmed_ = true;
-  e.game = GameSnapshot{};
+  e.game.clear();
   e.final_epoch = 0;
   if (shown)
-    this->game_ = GameSnapshot{};
+    this->game_.clear();
   bool switched = this->fav_choose_(now_epoch);
   if (!switched && this->fav_shown_ < 0) {
     // No favorite has a card: once the last one is read, the off-season
@@ -1675,6 +1678,7 @@ void GamedayComponent::loop() {
     this->emit_a2_({});
   if (millis() - this->auto_update_ms_ >= AUTO_UPDATE_TICK) {
     this->auto_update_ms_ = millis();
+    this->loop_stack_free_.store(uxTaskGetStackHighWaterMark(nullptr), std::memory_order_relaxed);
     this->auto_update_tick_();
 #ifdef GAMEDAY_BETA_CHANNEL
     this->channel_tick_();
@@ -2402,8 +2406,8 @@ void GamedayComponent::idle_changed_(bool live_switch) {
     this->live_none_ = false;
     this->live_started_ms_ = 0;
     this->schedule_ = Schedule{};
-    this->game_ = GameSnapshot{};
-    this->prev_ = GameSnapshot{};
+    this->game_.clear();
+    this->prev_.clear();
     this->post_since_ms_ = 0;
     this->generation_++;  // a read in flight was for the other one
     this->end_backoff_wait_();
@@ -3227,7 +3231,7 @@ void GamedayComponent::apply_timezone_() {
 // game layout with no opponent.
 void GamedayComponent::drop_team_placeholder_() {
   if (::espn::is_team_placeholder(this->game_))
-    this->game_ = GameSnapshot{};
+    this->game_.clear();
 }
 
 void GamedayComponent::reset_game_() {
@@ -3253,7 +3257,7 @@ void GamedayComponent::reset_game_() {
   this->scan_due_now_();
   this->side_wait_ms_ = 0;
   if (this->idle_snaps_.size() >= 2)
-    this->today_final_() = GameSnapshot{};
+    this->today_final_().clear();
   this->schedule_ = Schedule{};
   this->schedule_fetched_ms_ = 0;
   this->comps_.clear();
@@ -3264,8 +3268,8 @@ void GamedayComponent::reset_game_() {
   this->upcoming_due_ = false;
   this->upcoming_after_poll_ = false;
   this->cache_unconfirmed_ = false;
-  this->game_ = GameSnapshot{};
-  this->prev_ = GameSnapshot{};
+  this->game_.clear();
+  this->prev_.clear();
   this->post_since_ms_ = 0;
   this->misses_ = 0;
   this->no_game_confirmed_ = false;
@@ -4076,10 +4080,10 @@ void GamedayComponent::start_job_() {
         break;
       }
     }
-    this->prev_ = GameSnapshot{};
+    this->prev_.clear();
     this->done_event_ = this->game_.event_id;
     this->lingered_event_ = this->game_.event_id;
-    this->game_ = GameSnapshot{};
+    this->game_.clear();
     this->post_since_ms_ = 0;
     if (next != nullptr) {
       ESP_LOGI(TAG, "Game is over: taking event %s from the season schedule", next->event_id.c_str());
@@ -4456,8 +4460,8 @@ void GamedayComponent::apply_job_() {
         // timestamp alone would not, because the test is on schedule_.valid.
         this->schedule_ = Schedule{};
         this->schedule_fetched_ms_ = 0;
-        this->game_ = GameSnapshot{};
-        this->prev_ = GameSnapshot{};
+        this->game_.clear();
+        this->prev_.clear();
         this->post_since_ms_ = 0;
         this->emit_({});
         this->schedule_next_(0);  // fetch the card now
@@ -4472,7 +4476,7 @@ void GamedayComponent::apply_job_() {
       this->live_fallback_ = false;
       this->live_started_ms_ = now == 0 ? 1 : now;
       this->schedule_ = Schedule{};
-      this->prev_ = GameSnapshot{};
+      this->prev_.clear();
       // The scan itself came back clean, so there is no run of failures to
       // report: clear the miss count. last_good_ms_ stays where it was,
       // because no game was polled - finals are fetched once, not polled,
@@ -4515,8 +4519,8 @@ void GamedayComponent::apply_job_() {
     this->live_unread_ = true;  // its first read restarts the clock (apply_job_)
     if (this->game_.event_id != g.event_id || this->game_.team_id != g.away_id) {
       // Same game and side keeps its poll for carry_football.
-      this->game_ = GameSnapshot{};
-      this->prev_ = GameSnapshot{};
+      this->game_.clear();
+      this->prev_.clear();
     }
     this->watch_feed_(j.live);
     this->schedule_next_(0);  // poll the chosen game right away
@@ -4568,7 +4572,7 @@ void GamedayComponent::apply_job_() {
     if (j.no_event) {
       ESP_LOGI(TAG, "No upcoming game for this team");
       this->no_game_confirmed_ = true;
-      this->game_ = GameSnapshot{};
+      this->game_.clear();
       // Same as the no-live-games case: the schedule fetch succeeded, so the
       // failure run is over, but no GameSnapshot was applied and the board
       // has no score whose age last_good_ms_ could describe.
@@ -4596,7 +4600,7 @@ void GamedayComponent::apply_job_() {
   }
   this->cache_unconfirmed_ = false;
   ::espn::carry_football(this->game_, j.game);
-  this->prev_ = this->board_prev_(j.game);
+  this->take_board_prev_(j.game);
   this->game_ = j.game;
   this->mark_good_poll_();
   if (this->live_unread_ && this->live_mode_() && !this->live_fallback_) {
@@ -4672,8 +4676,8 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
   if (j.no_event) {
     ESP_LOGI(TAG, "No upcoming game for this team");
     this->no_game_confirmed_ = true;
-    this->game_ = GameSnapshot{};
-    this->prev_ = GameSnapshot{};
+    this->game_.clear();
+    this->prev_.clear();
     this->misses_ = 0;
     this->emit_({});
     this->mark_board_ready_();
@@ -4684,7 +4688,7 @@ void GamedayComponent::apply_cup_job_(uint32_t now) {
   } else if (j.polled) {
     this->prev_ = this->board_prev_(j.game);
     if (moved)
-      this->prev_ = GameSnapshot{};
+      this->prev_.clear();
     ::espn::carry_football(this->prev_, j.game);
     this->game_ = j.game;
     this->mark_good_poll_();
@@ -4741,8 +4745,8 @@ void GamedayComponent::apply_board_job_(uint32_t now) {
       ESP_LOGI(TAG, "No upcoming %s", sport == ::espn::Sport::RACING ? "race" : "event");
       this->clear_backoff_();
       this->no_game_confirmed_ = true;
-      this->game_ = GameSnapshot{};
-      this->prev_ = GameSnapshot{};
+      this->game_.clear();
+      this->prev_.clear();
       this->misses_ = 0;
       this->emit_({});
       this->mark_board_ready_();
@@ -5134,7 +5138,10 @@ void GamedayComponent::apply_visit_job_() {
     return;
   }
   this->visit_.fails = 0;
-  this->prev_ = this->visit_.first ? GameSnapshot{} : std::move(this->game_);
+  if (this->visit_.first)
+    this->prev_.clear();
+  else
+    this->prev_ = std::move(this->game_);
   this->game_ = std::move(j.game);
   ::espn::carry_football(this->prev_, this->game_);
   // The first poll splashes the play that brought it.
@@ -5162,7 +5169,7 @@ void GamedayComponent::end_visit_() {
     this->fav_shown_since_ = ::espn::rotate_since_resume(this->fav_shown_since_,
                                                          (int64_t) this->time_->timestamp_now(), away / 1000);
   this->drop_visit_();
-  this->prev_ = GameSnapshot{};
+  this->prev_.clear();
   this->visit_back_ = true;  // that read splashes only a final reached meanwhile (board_prev_)
   this->emit_({});
   this->schedule_next_(0);  // the mode's own read, now
@@ -5183,6 +5190,11 @@ GameSnapshot GamedayComponent::board_prev_(const GameSnapshot &cur) {
     return ::espn::watch_back_prev(std::move(this->game_), cur);
   }
   return std::move(this->game_);
+}
+
+// Out of line: board_prev_'s result stays off apply_job_'s stack.
+__attribute__((noinline)) void GamedayComponent::take_board_prev_(const GameSnapshot &cur) {
+  this->prev_ = this->board_prev_(cur);
 }
 
 // ---- Split mode: the second area (split.h) -----------------------------------
@@ -5433,6 +5445,11 @@ std::string GamedayComponent::a2_clock_line_() const {
   return out;
 }
 
+// Keeps rot_card's returned temporary out of a2_fields_'s frame.
+static __attribute__((noinline)) void set_rot_card(GameSnapshot &out, const ::espn::WatchGame &w) {
+  out = ::espn::rot_card(w);
+}
+
 void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &splash, UpdateFields &f) {
   using ::espn::AreaView;
   if (v == AreaView::DETAIL) {
@@ -5472,7 +5489,8 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
     const bool main = (this->recap_on_ && this->idle_view_ == ::espn::IdleView::BOARD) ||
                       this->idle_view_ == ::espn::IdleView::SCORES;
     const int step = ::espn::scores_step(this->recap_step_, this->recap_cards_.size(), main);
-    GameSnapshot card;
+    GameSnapshot &card = this->a2_card_();
+    card.clear();
     std::string message, ticker;
     this->recap_card_(step < 0 ? 0 : (size_t) step, true, card, message, ticker);
     this->game_fields_(card, {}, f);
@@ -5481,7 +5499,8 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
     return;
   }
   const GameSnapshot *g = nullptr;
-  GameSnapshot card;
+  GameSnapshot &card = this->a2_card_();
+  card.clear();
   uint8_t league = 0;
   bool rotation = false;
   const GameSnapshot &mg = ::espn::watch_mode_game(this->game_, this->visit_.saved.get());
@@ -5495,7 +5514,7 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
     // A rotation card, or a jump before its read.
     for (const auto &w : this->watch_)
       if (::espn::watch_same(w, this->rot_league_, this->rot_event_)) {
-        card = ::espn::rot_card(w);
+        set_rot_card(card, w);
         g = &card;
         league = w.league;
         rotation = !this->jump_.active;
@@ -5527,7 +5546,7 @@ void GamedayComponent::a2_fields_(::espn::AreaView v, const ::espn::Splash &spla
 }
 
 void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
-  if (this->idle_snaps_.size() < 3)
+  if (this->idle_snaps_.size() < 4)
     return;  // called before setup()
   const ::espn::AreaView v = this->a2_compute_();
   this->a2_view_ = v;
@@ -5966,7 +5985,7 @@ void GamedayComponent::apply_a2_job_() {
     if (j.no_event) {
       ESP_LOGI(TAG, "Second area: no upcoming game for %s", e.team->abbr);
       this->a2_none_ = true;
-      e.game = GameSnapshot{};
+      e.game.clear();
       this->a2_final_ms_ = 0;
       this->a2_answered_();
       this->a2_fail_.clear();
@@ -5991,7 +6010,7 @@ void GamedayComponent::apply_a2_job_() {
         this->a2_failed_(j);
       if (j.no_event) {
         this->a2_none_ = true;
-        e.game = GameSnapshot{};
+        e.game.clear();
         this->a2_final_ms_ = 0;
       }
       if (j.game_skipped)
@@ -6065,7 +6084,7 @@ void GamedayComponent::a2_jump_(const ::espn::WatchAlert &a, uint8_t league) {
   this->jump_.poll_ms = now | 1;  // the watcher's read was just now
   this->jump_.event_id = a.event_id;
   this->jump_.splash = a.splash;
-  this->jump_game_() = GameSnapshot{};
+  this->jump_game_().clear();
   this->rot_league_ = league;
   this->rot_event_ = a.event_id;
   this->emit_a2_(a.splash);
@@ -6076,7 +6095,7 @@ void GamedayComponent::end_jump_() {
     return;
   this->jump_ = A2Jump{};
   if (this->idle_snaps_.size() >= 3)
-    this->jump_game_() = GameSnapshot{};
+    this->jump_game_().clear();
   this->rot_ms_ = 0;  // the rotation's next card now
 }
 
@@ -7292,7 +7311,7 @@ void GamedayComponent::recap_prepare_() {
   const bool side = this->side_on_;
   GameSnapshot &card = side ? this->side_card_() : this->game_;
   if (!side) {
-    this->prev_ = GameSnapshot{};
+    this->prev_.clear();
     this->post_since_ms_ = 0;
   }
   this->recap_card_(this->recap_step_, side, card, this->recap_message_, this->recap_ticker_);
@@ -7306,7 +7325,7 @@ void GamedayComponent::recap_card_(size_t step, bool side, GameSnapshot &card, s
   auto with_none = [&none](const std::string &label) { return none.empty() ? label : none + " | " + label; };
   if (this->recap_cards_.empty() || step >= this->recap_cards_.size()) {
     // Nothing in the last week and no kickoff in the next: the off season.
-    card = GameSnapshot{};
+    card.clear();
     message = "No live " + word + "games";
     ticker = none;
     return;
@@ -7314,7 +7333,7 @@ void GamedayComponent::recap_card_(size_t step, bool side, GameSnapshot &card, s
   const ::espn::RecapCard &c = this->recap_cards_[step];
   switch (c.kind) {
     case ::espn::RecapKind::HEADER:
-      card = GameSnapshot{};
+      card.clear();
       message = ::espn::recap_header(this->recap_days_[c.day], tnow);
       ticker = none;
       break;
@@ -7326,7 +7345,7 @@ void GamedayComponent::recap_card_(size_t step, bool side, GameSnapshot &card, s
       break;
     }
     case ::espn::RecapKind::LATER_HEADER:
-      card = GameSnapshot{};
+      card.clear();
       message = "Later today";
       ticker = none;
       break;
@@ -7340,7 +7359,7 @@ void GamedayComponent::recap_card_(size_t step, bool side, GameSnapshot &card, s
       break;
     }
     case ::espn::RecapKind::NEXT: {
-      card = GameSnapshot{};
+      card.clear();
       std::string match;
       int64_t kick = this->recap_next_kickoff_(&match);
       if (kick == 0) {
@@ -8031,10 +8050,11 @@ void GamedayComponent::handleRequest(AsyncWebServerRequest *request) {
   // sensors only read every 5 minutes so Home Assistant isn't logging them.
   if (url == StringRef("/gameday/heap") && request->method() == HTTP_GET) {
     char body[128];
-    snprintf(body, sizeof(body), "{\"internal\":%.1f,\"block\":%.1f,\"psram\":%.1f}",
+    snprintf(body, sizeof(body), "{\"internal\":%.1f,\"block\":%.1f,\"psram\":%.1f,\"stack\":%u}",
              heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024.0f,
              heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024.0f,
-             heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024.0f);
+             heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024.0f,
+             (unsigned) this->loop_stack_free_.load(std::memory_order_relaxed));
     request->send(200, "application/json", body);
     return;
   }

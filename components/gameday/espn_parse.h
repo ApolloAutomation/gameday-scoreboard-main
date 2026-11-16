@@ -270,6 +270,8 @@ struct GameSnapshot {
   GameSnapshot &operator=(const GameSnapshot &);
   GameSnapshot &operator=(GameSnapshot &&) noexcept;
   ~GameSnapshot();
+  // Out of line: the temporary stays off callers' stacks.
+  void clear();
   bool valid{false};
   GameState state{GameState::NOT_FOUND};
   std::string event_id;
