@@ -19,9 +19,7 @@ The next-game card shows both logos, your team on the left, with the records und
 - the betting line, over/under and TV channel, when ESPN has them and **Pre-game odds and TV** is on
 - the ballpark
 
-:::note[Coming in the next release]
 Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
-:::
 
 MLB has no Up next list on the device page: a team's season schedule is too large for the panel to read.
 

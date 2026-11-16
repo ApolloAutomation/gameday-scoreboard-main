@@ -24,9 +24,7 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
 | **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
-:::note[Coming in the next release]
-A panel joining Wi-Fi for the first time, from the hotspot's setup page or the installer's Wi-Fi dialog, says **JOINING** and the network's name instead of **Wi-Fi lost**. If it still isn't on after about 30 seconds, it says **Can't join** and the network's name, with **scan to fix** and the hotspot's QR code taking turns with **Join Wi-Fi / Game Day / 2f6a70**. It keeps trying that network. If you mistyped the password or picked the wrong network, scan the code and give it again on the setup page. See [The panel won't join my Wi-Fi](/help/troubleshooting/#the-panel-wont-join-my-wi-fi).
-:::
+A panel joining Wi-Fi for the first time, from the hotspot's setup page or the installer's Wi-Fi dialog, says **JOINING** and the network's name. If it still isn't on after about 30 seconds, it says **Can't join** and the network's name, with **scan to fix** and the hotspot's QR code taking turns with **Join Wi-Fi / Game Day / 2f6a70**. It keeps trying that network. If you mistyped the password or picked the wrong network, scan the code and give it again on the setup page. See [The panel won't join my Wi-Fi](/help/troubleshooting/#the-panel-wont-join-my-wi-fi).
 
 ## When the Wi-Fi is the problem
 
@@ -103,11 +101,7 @@ If the whole panel lights red, green, blue and white in turn, then a white line 
 
 ## During an update
 
-The panel shows no message of its own while it updates. It restarts when the update is done and comes back on its start-up screen. The device page shows how the update is going. See [Updates](/using/updates/).
-
-:::note[Coming in the next release]
-While an update installs, the panel says **Updating**, **Keep it plugged in** and **Back in a minute** (on a single 64x64 panel, **Updating**, **Keep it plugged in**). Leave it powered. It restarts on the new version, or goes back to what it was showing if the install doesn't go through. The device page also shows a bar at the top with **Install** whenever an update is out.
-:::
+While an update installs, the panel says **Updating**, **Keep it plugged in** and **Back in a minute** (on a single 64x64 panel, **Updating**, **Keep it plugged in**). Leave it powered. It restarts on the new version and comes back on its start-up screen, or goes back to what it was showing if the install doesn't go through. The device page shows how the update is going, and a bar at its top with **Install** whenever an update is out. See [Updates](/using/updates/).
 
 | The device page says | What it means |
 | --- | --- |

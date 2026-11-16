@@ -33,12 +33,8 @@ An N+ prop reads **PROP THOMAS 3+ 3PM** before the start, then its number so far
 - Before the game the ticker starts with the matchup and the ranks, like "#5 OSU vs #12 MICH" or "FSU vs #19 SMU".
 - After the final and at halftime, and in basketball between periods too, the records read "#5 OSU 9-1 | #12 MICH 8-2".
 - On a 128x64 board the rank goes in front of the record under the logo, like "#5 9-1". That spot holds 7 characters, so when the two don't fit, like "#12 10-1", the record stays and the rank is left out. While the game clock shows a long break, like "End of 2nd", or the idle display's **My team today** counts down a long wait, like "in 10h 30m", the spot keeps clear of it with 6 characters, so "#16 4-1" shows "4-1" until there's room again. On three or four panels in a row the clock is far enough away that the spot always holds 7.
-- On a single 64x64 panel the rank goes in front of the abbreviation, like "#5 OSU", before and after the game. That spot holds 6 characters, so "#12 OSU" or "#5 MICH" shows just the abbreviation. During play the clock has that row.
+- On a single 64x64 panel the rank goes in front of the abbreviation, like "#5 OSU", after the game. That spot holds 6 characters, so "#12 OSU" or "#5 MICH" shows just the abbreviation. Before the game the day of the game has that row, so the rank is in the ticker's matchup only, and during play the clock has it.
 - The device page shows the ranks on its board, in the **Up next** and Favorite teams lists and in **On now**. On a phone whose screen is too narrow for the rank beside the abbreviation, the page's board leaves it out.
-
-:::note[Coming in the next release]
-On a single 64x64 panel, before the game the day takes the abbreviations' row, so the rank is in the ticker's matchup only.
-:::
 
 **Pro teams.** **Standing next to pro teams**, in the Panel card on the device page, picks what your team shows where its record goes, under its logo on a 128x64 board, in the ticker and on the device page:
 

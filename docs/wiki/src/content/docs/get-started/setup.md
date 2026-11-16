@@ -31,9 +31,7 @@ While your phone is on the panel's hotspot, `192.168.4.1` shows the setup page, 
 
 The panel joins your Wi-Fi. Then [pick your team](/get-started/pick-your-team/) on its device page.
 
-:::note[Coming in the next release]
 While it joins, a new panel says **JOINING** and the name of the network you picked. If it says **Can't join** after about 30 seconds, check the password, scan the QR code again and give it the network once more.
-:::
 
 ## Pick your team, or add it to Home Assistant
 
