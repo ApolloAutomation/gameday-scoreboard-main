@@ -39,7 +39,7 @@
     .pins table { border-collapse: collapse; font-size: 0.85rem; }
     .pins th, .pins td { border: 1px solid #262e38; padding: 4px 8px; text-align: center; }
     .pins th { color: #9da7b3; font-weight: 600; }
-    /* Same pictures as the panel picker on the DIY installer. */
+    /* Same pictures as the installer's panel picker. */
     .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 16px; }
     .panel { background: #0b0f14; border: 1px solid #262e38; border-radius: 12px; padding: 12px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: #d6dde7; font-size: 0.95rem; text-align: center; }
     .panel svg { width: 100%; max-width: 160px; height: auto; }
@@ -57,7 +57,7 @@
     <h2>Boards</h2>
 
     <h3>Apollo M-1 and MoonHub75</h3>
-    <p>The <a href="https://apolloautomation.com/products/m-1-led-matrix">Apollo Automation M-1 LED Matrix</a> (Rev6) and the <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> share a pinout, and it has a prebuilt firmware. The M-1 Rev4 uses other pins. Install it from your browser with the DIY installer and it takes updates over Wi-Fi like any other panel.</p>
+    <p>The <a href="https://apolloautomation.com/products/m-1-led-matrix">Apollo Automation M-1 LED Matrix</a> (Rev6) and the <a href="https://github.com/MoonModules/Hardware/tree/main/MOONHUB75">MoonHub75</a> share a pinout, and it has a prebuilt firmware. The M-1 Rev4 uses other pins. Install it from your browser with the M-1 installer and it takes updates over Wi-Fi like any other panel.</p>
 
     <h3>An ESP32-S3 board wired to the MoonHub75 pinout</h3>
     <p>The same prebuilt firmware runs on a bare ESP32-S3 board if you wire it to the same pins. It needs:</p>
@@ -98,8 +98,8 @@
 
   <div class="card">
     <h2>Install</h2>
-    <p>Plug the board into a computer over USB, open the DIY installer in Chrome or Edge, pick one panel or two, and click Install.</p>
-    <a class="button" href="../install/diy/">Open the DIY installer</a>
+    <p>Plug the board into a computer over USB, open the M-1 installer in Chrome or Edge, pick one panel or two, and click Install.</p>
+    <a class="button" href="../install/diy/">Open the M-1 installer</a>
     <p>Joining Wi-Fi and picking a team work the same as on a Game Day Scoreboard. <a href="../setup/">Setup</a> covers the rest.</p>
     <p class="note">Building from YAML instead? The <a href="https://github.com/ApolloAutomation/gameday-scoreboard-main#build-it-yourself">README</a> has the steps.</p>
   </div>
