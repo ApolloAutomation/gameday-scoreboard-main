@@ -1134,6 +1134,10 @@ test("Try it says what it plays, and plays nothing off the Scoreboard page", asy
   await reset(request);
   await page.goto("/");
   const row = page.locator("#animTryRow");
+  // The hints say what shows: a live game, or SAMPLE
+  await expect(row.locator("label small")).toHaveText(/^Plays a sample now .* marked SAMPLE, /);
+  await expect(page.locator("#sportCtls .ctl").filter({ has: page.locator("#fieldTry") }).locator("label small"))
+    .toHaveText(/^During a football game, shows that game's own field .* for 15 seconds\. With no football game on, shows a sample marked SAMPLE\./);
   // The hint keeps the row; the buttons go under it
   const [label, buttons] = await Promise.all([row.locator("label").boundingBox(), row.locator(".trybtns").boundingBox()]);
   expect(label.width).toBeGreaterThan(300);
@@ -1144,7 +1148,7 @@ test("Try it says what it plays, and plays nothing off the Scoreboard page", asy
   await row.getByRole("button", { name: "Return" }).click();
   await expect.poll(actions).toContainEqual({ do: "anim", play: "ret" });
   await page.locator("#fieldTry").click();
-  await expect(page.locator("#toast")).toHaveText("Showing a sample field on the panel");
+  await expect(page.locator("#toast")).toHaveText("Showing the Field view on the panel");
   await expect.poll(actions).toContainEqual({ do: "field" });
 
   // Weather on the main board: no sample field

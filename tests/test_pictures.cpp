@@ -394,12 +394,16 @@ void test_captions() {
   // Score lines, with and without a team
   PCHECK(say_score("", -1, 6) == "+6" && say_score("TA&M", 7, 0) == "TA&M 7");
   PCHECK(say_score("BUF", 21, 6) == "BUF 21 +6");
-  // Every Try it play has a caption
+  // Every Try it play: a caption, no team's score
   for (const ScenePlay &p : kScenePlays) {
-    const AnimSample a = anim_sample(p.play, "BUF", 3);
-    PCHECK(ladder(a.say) && a.score.find("BUF ") == 0 && a.args.kind != AnimKind::NONE);
-    PCHECK(anim_sample(p.play, "", 0).score[0] == '+');
+    const AnimSample a = anim_sample(p.play);
+    PCHECK(ladder(a.say) && a.score == "SAMPLE" && a.args.kind != AnimKind::NONE && a.gain > 0);
+    PCHECK(anim_sample(p.play, p.name).score == "SAMPLE");
+    for (const auto &kit : kReviewKits)
+      PCHECK(std::string(scene_of(p, 128, 64, kit, false, false).score) == "SAMPLE");
   }
+  for (const char *play : {"pass", "run", "ret", "hr", "fg", "two", "tworun", "pat", "soccer", "hockey", "x"})
+    PCHECK(anim_sample(play).score == "SAMPLE");
 }
 
 // The read before cur: side has pts fewer
@@ -569,8 +573,8 @@ void test_two_point() {
   cur.last_play = "(Cam Ward Run for Two-Point Conversion) TEN Penalty, Defensive Pass Interference, declined";
   PCHECK((anim_of(Alert::TWO_POINT, false, cur).flags & kAnimTwoRun) != 0);
   PCHECK(std::string(anim_name(AnimKind::TWO_POINT)) == "two");
-  PCHECK(anim_sample("two", "", 0).args.kind == AnimKind::TWO_POINT && anim_sample("two", "", 0).score == "+2");
-  PCHECK((anim_sample("tworun", "", 0).args.flags & kAnimTwoRun) != 0);
+  PCHECK(anim_sample("two").args.kind == AnimKind::TWO_POINT && anim_sample("two").gain == 2);
+  PCHECK((anim_sample("tworun").args.flags & kAnimTwoRun) != 0);
 }
 
 // Lines fit the setup, clear of posts, word, ball

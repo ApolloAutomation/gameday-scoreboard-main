@@ -2105,7 +2105,7 @@ void GamedayComponent::try_anim_(const std::string &play) {
     return;
   }
   const UpdateFields &f = this->last_fields_;
-  const ::espn::AnimSample a = ::espn::anim_sample(play, f.team_abbr, f.team_score);
+  const ::espn::AnimSample a = ::espn::anim_sample(play);
   if (!scene_play(v->splash, a.args, f.team_color, f.opponent_color, millis(), nullptr, a.say.c_str(),
                   a.score.c_str()))
     ESP_LOGI(TAG, "Play animation: shows on the Scoreboard page only");
@@ -2140,7 +2140,7 @@ void GamedayComponent::set_area_detail(bool on) {
   this->emit_a2_({});
 }
 
-// The page's Try it: a sample field, then back
+// The page's Try it: the live field or a sample
 void GamedayComponent::try_field_() {
   if (this->main_view_ != ::espn::MainView::GAMEDAY) {
     ESP_LOGI(TAG, "Field view: shows on Game Day only");
@@ -2151,8 +2151,11 @@ void GamedayComponent::try_field_() {
   if (v != nullptr && v->board != nullptr && lv_obj_get_screen(v->board) != lv_screen_active())
     ESP_LOGI(TAG, "Field view: shows on the Scoreboard page only");
 #endif
-  ESP_LOGI(TAG, "Field view: a sample for %u s", (unsigned) (::espn::kFieldTryMs / 1000));
   this->field_try_ms_ = millis() | 1;
+  const char *what = this->field_on_(this->game_)            ? "the live game"
+                     : ::espn::field_try_live(this->game_, this->demo_playing_()) ? "the live game, no spot yet"
+                                                           : "a sample";
+  ESP_LOGI(TAG, "Field view: %s for %u s", what, (unsigned) (::espn::kFieldTryMs / 1000));
   this->set_timeout("field_try", ::espn::kFieldTryMs, [this]() {
     this->field_try_ms_ = 0;
     this->emit_({});
@@ -2160,9 +2163,10 @@ void GamedayComponent::try_field_() {
   this->emit_({});
 }
 
-void GamedayComponent::field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area) const {
+void GamedayComponent::field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area,
+                                     const char *clock_text) const {
   ::espn::SportFrame fr;
-  const std::string clock = ::espn::board_clock_text(g, false, 0);
+  const std::string clock = clock_text != nullptr ? clock_text : ::espn::board_clock_text(g, false, 0);
   if (area)
     ::espn::detail_frame(g, clock, w, this->text_large(), fr);
   else
@@ -2177,16 +2181,13 @@ void GamedayComponent::field_fields_(UpdateFields &f, const GameSnapshot &g, int
 }
 
 void GamedayComponent::field_try_fields_(UpdateFields &f) {
-  // The board's teams, else made-up ones
-  const GameSnapshot &g = this->game_;
-  const bool teams = g.valid && !g.team_abbr.empty() && !g.opp_abbr.empty();
-  const GameSnapshot s = ::espn::field_sample(teams ? g.team_abbr : std::string(), ::espn::parse_color(g.team_color),
-                                              teams ? g.opp_abbr : std::string(), ::espn::parse_color(g.opp_color));
+  // Made-up teams, never the board's
+  const GameSnapshot s = ::espn::field_try_sample();
   UpdateFields t;
   this->game_fields_(s, {}, t);
   t.status_text = ::espn::field_ticker(s, true);
   t.ticker_spans.clear();
-  this->field_fields_(t, s, this->board_px_(), false);
+  this->field_fields_(t, s, this->board_px_(), false, ::espn::kFieldSampleClock);
   // A splash still shows over it
   t.splash_text = f.splash_text;
   t.splash_color = f.splash_color;
@@ -6647,7 +6648,8 @@ void GamedayComponent::emit_(const ::espn::Splash &splash) {
   }
   if (app_main)
     return;
-  if (this->field_try_ms_ != 0) {
+  // Live football's Try it is the board's own game
+  if (this->field_try_ms_ != 0 && !this->last_fields_.field && !::espn::field_try_live(this->game_, this->demo_playing_())) {
     this->field_try_fields_(this->last_fields_);
     this->logo_held_ = false;
     this->draw_(this->last_fields_);

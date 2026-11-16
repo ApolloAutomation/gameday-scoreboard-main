@@ -880,12 +880,12 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void emit_(const ::espn::Splash &splash);
   // countdown: a kickoff countdown replaces the clock.
   void game_fields_(const GameSnapshot &g, const ::espn::Splash &splash, UpdateFields &f, bool countdown = false);
-  // The Field view: g's game in progress, Field view picked
+  // The Field view: g's game in progress, picked or tried
   bool field_on_(const GameSnapshot &g) const {
-    return this->field_view() && ::espn::field_ready(g) && !this->demo_playing_();
+    return (this->field_view() || this->field_try_ms_ != 0) && ::espn::field_ready(g) && !this->demo_playing_();
   }
   // f's board becomes g's field, w wide; area: Game details
-  void field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area) const;
+  void field_fields_(UpdateFields &f, const GameSnapshot &g, int w, bool area, const char *clock = nullptr) const;
   // The Try it's sample in place of f's board
   void field_try_fields_(UpdateFields &f);
   uint32_t field_try_ms_{0};
