@@ -45,6 +45,9 @@
 #               128: hotspot QR + SETUP / Scan to / join Wi-Fi (13 s), then
 #                    the hotspot lines (5 s)
 #   connecting  Connecting to / <network name>, full width, no QR
+#   first join  JOINING / <network name>, no QR, for 30 s, then
+#               Can't join / <network name> / scan to fix, with the
+#               hotspot's turns as in wifi lost
 #   sign-in     64:  Wi-Fi needs / sign-in / use home or / a hotspot (5 s),
 #                    page QR (8 s)
 #               128: page QR + the same lines
@@ -143,6 +146,17 @@ globals:
   - id: boot_had_creds
     type: bool
     initial_value: 'false'
+  # 1 when a network was saved at this start, -1 before the first look.
+  - id: boot_net_at_start
+    type: int
+    initial_value: '-1'
+  # First join: when it started, and which details it uses.
+  - id: boot_join_since_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: boot_join_key
+    type: uint32_t
+    initial_value: '0'
   # The turn boot_qr_cycle picked: 0 the state's own text, 1 the QR code,
   # 2 the hotspot text or the address, 3 the unplug line after "Reset
   # Wi-Fi". boot_refresh reads it to choose the lines.
@@ -322,6 +336,10 @@ script:
       - lambda: |-
           auto *w = wifi::global_wifi_component;
           if (w == nullptr) return;
+          // Same test as on_boot's Bluetooth grace
+          if (id(boot_net_at_start) < 0)
+            id(boot_net_at_start) = w->has_sta() && !id(gd_networks).in_setup() &&
+                                    (id(gd_networks).count() > 0 || !w->get_sta().get_ssid().empty());
           // The boot button's countdown has the screen (boot_hold_tick).
           if (id(boot_hold_stage) >= 2) return;
           // A Bluetooth setup is mid-handover: no QR and no turns, just
@@ -349,9 +367,31 @@ script:
           // memory, which still counts as has_sta(), and is in setup, not in
           // trouble. boot_had_creds carries a real network through a failed
           // Bluetooth handover, which clears the one in memory.
+          //
+          // A network handed to a panel that started with none (the hotspot
+          // page, the installer) is a first join, not a loss: JOINING and
+          // its name, then "Can't join" with the hotspot's code.
           const bool have_creds = w->has_sta() && !w->get_sta().get_ssid().empty();
-          if (have_creds) id(boot_had_creds) = true;
-          const bool lost = id(boot_had_creds) && (id(boot_last_connected_ms) != 0 || millis() > 30000);
+          const bool was_on = id(boot_last_connected_ms) != 0;
+          const bool fresh = gameday::first_join(have_creds, id(boot_net_at_start) == 1, was_on);
+          if (have_creds && !fresh) id(boot_had_creds) = true;
+          std::string join_name;
+          if (fresh) {
+            const auto sta = w->get_sta();
+            join_name = sta.get_ssid().str();
+            // Restarts the wait when new details arrive
+            const uint32_t key = fnv1_hash(join_name + '\n' + sta.get_password().str());
+            if (key != id(boot_join_key) || id(boot_join_since_ms) == 0) {
+              id(boot_join_key) = key;
+              id(boot_join_since_ms) = millis() == 0 ? 1 : millis();
+            }
+          } else {
+            id(boot_join_since_ms) = 0;
+          }
+          const auto view = gameday::off_wifi_view(
+              have_creds, id(boot_net_at_start) == 1, was_on, id(boot_had_creds), millis(),
+              fresh ? millis() - id(boot_join_since_ms) : 0, !w->has_sta() || w->is_ap_active());
+          const bool lost = view == gameday::OffWifiView::LOST;
           const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
           // The address as up to two lines of 12 characters, split after the
           // dash in gameday-2f6a70.local. A name that will not split that way
@@ -480,6 +520,21 @@ script:
               id(boot_hide_later).stop();
               id(boot_hide).execute();
             }
+          } else if (fresh) {
+            // JOINING: text only, the bar moving. Can't join: the lost
+            // branch's turns, with the hotspot's code to try again.
+            const bool joining = provisioning || view == gameday::OffWifiView::JOINING;
+            const bool ap = !joining && w->is_ap_active();
+            id(boot_qr_cycle).execute(joining ? 0 : 2, ap);
+            const int frame = id(boot_qr_frame);
+            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
+            if (joining) {
+              id(boot_set_lines).execute("JOINING", join_name, "", "", true);
+            } else if (ap && frame == 2) {
+              const std::string &name = App.get_name();
+              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+            } else
+              id(boot_set_lines).execute("Can't join", join_name, ap ? "scan to fix" : "retrying", "", true);
           } else if (lost) {
             // Tested before the setup branch below on purpose. The fallback AP
             // starts 90 seconds into any outage, so that branch would otherwise

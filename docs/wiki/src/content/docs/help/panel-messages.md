@@ -24,6 +24,10 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 | **Open gameday-2f6a70.local** | The panel's device page address. | Open it in a browser on the same Wi-Fi. |
 | **Looking up scores** | The panel is loading its first scoreboard, at start-up or after you change the team. It shows for up to 10 seconds. | Wait. |
 
+:::note[Coming in the next release]
+A panel joining Wi-Fi for the first time, from the hotspot's setup page or the installer's Wi-Fi dialog, says **JOINING** and the network's name instead of **Wi-Fi lost**. If it still isn't on after about 30 seconds, it says **Can't join** and the network's name, with **scan to fix** and the hotspot's QR code taking turns with **Join Wi-Fi / Game Day / 2f6a70**. It keeps trying that network. If you mistyped the password or picked the wrong network, scan the code and give it again on the setup page. See [The panel won't join my Wi-Fi](/help/troubleshooting/#the-panel-wont-join-my-wi-fi).
+:::
+
 ## When the Wi-Fi is the problem
 
 | The panel says | What it means | What to do |
