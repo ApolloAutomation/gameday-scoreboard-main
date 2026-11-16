@@ -877,6 +877,25 @@ static void test_hotspot_route() {
   CHECK(!panel_route(""));
 }
 
+// A first join says JOINING, never "Wi-Fi lost".
+static void test_off_wifi_view() {
+  using esphome::gameday::off_wifi_view;
+  using esphome::gameday::OffWifiView;
+  // New panel given a network 60 s after its start.
+  CHECK(off_wifi_view(true, false, false, false, 60000, 0, true) == OffWifiView::JOINING);
+  CHECK(off_wifi_view(true, false, false, false, 80000, 29999, true) == OffWifiView::JOINING);
+  CHECK(off_wifi_view(true, false, false, false, 90000, 30000, true) == OffWifiView::CANT_JOIN);
+  // No network yet: setup.
+  CHECK(off_wifi_view(false, false, false, false, 60000, 0, true) == OffWifiView::SETUP);
+  // Saved before this start: connecting, then lost after 30 s.
+  CHECK(off_wifi_view(true, true, false, true, 10000, 0, false) == OffWifiView::CONNECTING);
+  CHECK(off_wifi_view(true, true, false, true, 30001, 0, true) == OffWifiView::LOST);
+  // A drop after joining is lost at once, even for a first network.
+  CHECK(off_wifi_view(true, false, true, true, 5000, 0, false) == OffWifiView::LOST);
+  // A failed Bluetooth handover cleared a real network: still lost.
+  CHECK(off_wifi_view(false, true, false, true, 40000, 0, true) == OffWifiView::LOST);
+}
+
 // Where a portal's redirect points. A relative link stays on whoever
 // answered, even when its query carries ESPN's address back, and a link
 // that starts with "//" names another host.
@@ -9565,6 +9584,7 @@ int main() {
   test_join_ticker();
   test_ticker_host();
   test_hotspot_route();
+  test_off_wifi_view();
   test_ha_status_text();
   test_short_game_name();
   test_kickoff_label();

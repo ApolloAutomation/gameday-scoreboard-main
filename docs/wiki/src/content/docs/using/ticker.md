@@ -36,6 +36,10 @@ An N+ prop reads **PROP THOMAS 3+ 3PM** before the start, then its number so far
 - On a single 64x64 panel the rank goes in front of the abbreviation, like "#5 OSU", before and after the game. That spot holds 6 characters, so "#12 OSU" or "#5 MICH" shows just the abbreviation. During play the clock has that row.
 - The device page shows the ranks on its board, in the **Up next** and Favorite teams lists and in **On now**. On a phone whose screen is too narrow for the rank beside the abbreviation, the page's board leaves it out.
 
+:::note[Coming in the next release]
+On a single 64x64 panel, before the game the day takes the abbreviations' row, so the rank is in the ticker's matchup only.
+:::
+
 **Pro teams.** **Standing next to pro teams**, in the Panel card on the device page, picks what your team shows where its record goes, under its logo on a 128x64 board, in the ticker and on the device page:
 
 | Choice | Shows |

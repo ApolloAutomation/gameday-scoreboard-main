@@ -27,6 +27,10 @@ AHL and ECHL teams can be [favorites](/using/favorites/) too, mixed with teams f
 
 The next-game card shows both logos and the records: wins, regulation losses, and overtime and shootout losses together, the way the NHL counts them. The ticker carries the puck drop day and time and the arena. HockeyTech doesn't list a betting line or a TV channel.
 
+:::note[Coming in the next release]
+Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
+:::
+
 The Up next list on the device page shows the team's next three games.
 
 ## Logos

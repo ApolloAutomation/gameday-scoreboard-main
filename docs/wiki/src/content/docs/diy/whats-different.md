@@ -13,7 +13,7 @@ You supply the board, the panels, the case, the stand and the power supply. Size
 
 ## Your own installer
 
-A board you built installs from the [DIY installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/), which asks for your layout before you install. The scoreboard75 controller board has its own pins and its own installer, the [main installer](https://apolloautomation.github.io/gameday-scoreboard-main/), so never use that one on a DIY board. See [Install the firmware](/diy/install/).
+A board you built on the MoonHub75 pinout installs from the [Apollo M-1 and MoonHub75 installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/), which asks for your layout before you install. The scoreboard75 controller board has its own pins and its own choice on the installer, so never pick it for a DIY board. See [Install the firmware](/diy/install/).
 
 ## Layout default
 

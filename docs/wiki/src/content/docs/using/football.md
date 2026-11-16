@@ -11,6 +11,10 @@ NFL and college football games share one board. What you see depends on your pan
 
 The next-game card shows both team logos, your team on the left, with each team's abbreviation in its own color and the season records under the logos.
 
+:::note[Coming in the next release]
+Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
+:::
+
 The ticker along the bottom carries:
 
 - the game's name for bowl and playoff games, like "Rose Bowl" or "NFC Wild Card"
@@ -21,6 +25,10 @@ The ticker along the bottom carries:
 A game whose kickoff time isn't set yet, like a college game a couple of weeks out, shows the day and "TBD", like "Sat TBD".
 
 A ranked college team shows its rank in front of its name. Before kickoff the ticker starts with the matchup, like "#5 OSU vs #12 MICH", after the game's name when it has one. On a 128x64 board the rank sits in front of the record under the logo, like "#5 9-1", and on a single 64x64 panel in front of the abbreviation, like "#5 OSU". Each goes in only where it fits; see [Ranks and standings](/using/ticker/#ranks-and-standings).
+
+:::note[Coming in the next release]
+On a single 64x64 panel the day of the game takes the abbreviations' row before the game, so the rank shows in front of the abbreviation only after the game. Before it, the rank is in the ticker's matchup.
+:::
 
 An NFL team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
 

@@ -694,6 +694,12 @@ jobs:
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
         run: python3 tests/web/mock_device.py --selftest
+      - name: The device page takes no firmware upload
+        run: |
+          awk '/^web_server:/{f=1; next} /^[^ #]/{f=0} f && /^  ota: false[ \t]*(#.*)?$/{ok=1} END{exit !ok}' firmware/gameday-common.yaml || {
+            echo "::error file=firmware/gameday-common.yaml::web_server needs ota: false, or POST /update takes firmware on home Wi-Fi"
+            exit 1
+          }
 
   # Beside Parser tests, so neither waits on the other.
   fuzz:

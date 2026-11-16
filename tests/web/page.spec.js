@@ -112,6 +112,11 @@ test("an upcoming game shows kickoff and network", async ({ page, request }) => 
   await expect(page.locator("#clock")).toHaveText("Sun 3:25 PM");
   await expect(page.locator("#down")).toHaveText("on FOX");
   await expect(page.locator("#msg")).toBeHidden();
+  await expect(page.locator("#board .score")).toBeHidden();
+  const g = (await deviceState(request)).game;
+  await reset(request, { game: { ...g, ...LIVE } });
+  await page.goto("/");
+  await expect(page.locator("#board .score")).toBeVisible();
 });
 
 // ESPN lists a game with no kickoff time yet at midnight Eastern (Friday 11 PM
@@ -1821,6 +1826,54 @@ test("betas come before their release: the release replaces a beta, and a beta b
   await page.reload();
   await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest beta, v1.5.6-beta.813");
   await expect(page.locator("#fwSub")).toContainText("The newest beta is v1.5.6-beta.812. Nothing to install.");
+});
+
+test("an update on offer shows a bar at the top of the page with Install", async ({ page, request }) => {
+  await reset(request, { autoupd: false });
+  await page.setViewportSize({ width: 375, height: 812 });
+  const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "", release_url: "" };
+  let entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.route("**/update/Firmware*", (route) => route.fulfill({ json: entity }));
+  await page.goto("/");
+  const bar = page.locator("#updBar");
+  await expect(bar).toContainText("Update available: v1.5.6");
+  await expect(bar).toBeInViewport();
+  await expect(page.locator("#updInstall")).toBeInViewport();
+
+  // Install asks, as the Firmware box's own button does
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#updInstall").click();
+  await expect(page.locator("#fwText")).toHaveText("Installing v1.5.6");
+  await expect(bar).toContainText("Installing v1.5.6. Keep the panel powered.");
+  await expect(page.locator("#updInstall")).toBeHidden();
+
+  // Up to date: no bar
+  entity = { ...fw, state: "NO UPDATE", value: "1.5.6", current_version: "1.5.6" };
+  await page.reload();
+  await expect(page.locator("#fwText")).toHaveText("You're up to date, v1.5.6");
+  await expect(bar).toBeHidden();
+
+  // Later hides it for that version, across a reload
+  entity = { ...fw, value: "1.5.6", current_version: "1.5.5" };
+  await page.reload();
+  await expect(bar).toBeVisible();
+  await page.locator("#updLater").click();
+  await expect(bar).toBeHidden();
+  await page.reload();
+  await expect(page.locator("#fwText")).toHaveText("Update available: v1.5.6");
+  await expect(bar).toBeHidden();
+
+  // A newer version brings it back, with the overnight word when on
+  await reset(request, { autoupd: true });
+  entity = { ...fw, value: "1.5.7", current_version: "1.5.5" };
+  await page.reload();
+  await expect(bar).toContainText("Update available: v1.5.7. It installs on its own between 3 and 5 AM.");
+
+  // An older version on offer is no update
+  entity = { ...fw, value: "1.5.4", current_version: "1.5.5" };
+  await page.reload();
+  await expect(page.locator("#fwText")).toHaveText("You're ahead of the latest release, v1.5.5");
+  await expect(bar).toBeHidden();
 });
 
 test("Follow beta says the firmware box is checking until the beta feed answers", async ({ page, request }) => {

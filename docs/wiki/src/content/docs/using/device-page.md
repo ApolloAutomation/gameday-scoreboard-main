@@ -13,6 +13,10 @@ The page is plain HTML built into the firmware, so there is nothing to install a
 
 The top of the page mirrors the panel: both logos, the score, the game clock, down and distance or the count and outs, timeout pips, the ticker line and the last play. A label above it says **UPCOMING**, **LIVE**, **FINAL** or **NO GAME**, and bowl and playoff games show their name, like "Rose Bowl", under the score. When the panel splashes a score, the page shows the same words for a few seconds.
 
+:::note[Coming in the next release]
+Before the game the page's board leaves the score out and shows the day and start time, as the panel does.
+:::
+
 While a golf tour is your team, the board shows its tournament's leaderboard in place of the two teams: the round, then up to 10 rows with the place, the name, the score to par (red under par, blue over) and the holes played. Before a tournament it shows the days, and after a final the tour's next event. See [Golf](/using/golf/).
 
 While a racing series is your team, the board shows the order of the session on track or the latest one: the session, then up to 10 rows with the place, the name, the car number and the gap. Before and between sessions it shows the next session and when it starts, and after the race the next race weekend. See [Racing](/using/racing/).
@@ -261,6 +265,10 @@ Under them: the **Firmware** box, the **Install updates automatically** and **Fo
 - **Reset Wi-Fi** and **Factory reset** restart the panel into setup, so the page can't follow it. See [The boot button and resets](/using/buttons-and-resets/).
 
 When an update is out, or one [didn't take](/using/updates/#an-update-that-didnt-take), the card opens by itself with the **Install** button in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say what needs you in it, in place of what it holds: **Update available** and the version, **Update didn't take**, **Installing** and the version, or **Weak signal**.
+
+:::note[Coming in the next release]
+When an update is out, a bar at the top of the page says so too, with **Install** and **Later**, so you don't have to scroll to this card. **Later** hides it for that version in that browser. See [Installing an update](/using/updates/#installing-an-update).
+:::
 
 An install that didn't start, or failed without the panel restarting, opens the card too, and the words beside **Device** say **Update didn't install**. See [Installing an update](/using/updates/#installing-an-update).
 

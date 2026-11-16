@@ -994,9 +994,75 @@ void test_clock_standing() {
   LCHECK_EQ(clock_standing(g, "End of 2nd", "Seed 12", "10-6", 3, false, board_standing), "");
 }
 
+void test_kickoff_rows() {
+  using esphome::gameday::kickoff_rows;
+  const struct {
+    const char *label, *day, *time;
+  } cases[] = {{"Today 2:30 PM", "Today", "2:30 PM"},   {"Tomorrow 12:00 PM", "Tomorrow", "12:00 PM"},
+               {"Wed 7:20 PM", "Wed", "7:20 PM"},       {"Sep 14 12:05 AM", "Sep 14", "12:05 AM"},
+               {"Sat TBD", "Sat", "TBD"},               {"Today", "Today", ""},
+               {"", "", ""}};
+  for (const auto &c : cases) {
+    LCHECK_EQ(kickoff_rows(c.label).day, c.day);
+    LCHECK_EQ(kickoff_rows(c.label).time, c.time);
+  }
+}
+
+// Before a game: the day over the time, clear of the rest.
+void test_pregame_rows() {
+  const char *const days[] = {"Today", "Tomorrow", "Wed", "Sep 14"};
+  const char *const lowers[] = {"4:25 PM", "12:00 PM", "TBD", "in 23h 59m", "Starting"};
+  const char *const recs[] = {"9-1", "10-6-1", "#5 10-2"};
+  for (int w : {64, 128, 192, 256})
+    for (bool large_text : {false, true})
+      for (bool large_clock : {false, true}) {
+        const GameGeom g = game_geom(w, large_text, large_clock);
+        LCHECK(g.when_font == BoardFont::S12);
+        const Screen sc{w, kBoardRows};
+        const Box ticker{0, g.ticker_y + font_ink_top(g.ticker_font) - 1, w, kBoardRows};
+        std::vector<Box> fixed = logo_parts(g);
+        fixed.push_back(ticker);
+        if (g.wide)
+          for (int i = 0; i < 2; i++)
+            for (const Box &b : line_boxes(g.abbr[i].x, g.abbr[i].y, g.abbr[i].w, g.abbr_font, {"WSH"}))
+              fixed.push_back(b);
+        for (const char *day : days)
+          for (const char *lower : lowers)
+            for (const char *rec : recs) {
+              // Wide: the day is new, the time is the clock's
+              const std::string clock = g.wide ? lower : day, when = g.wide ? day : lower;
+              const size_t rec_chars = g.wide ? strlen(rec) : 0;
+              const auto pick = game_clock(g, clock, rec_chars, false);
+              const int clock_px = (int) clock.size() * font_px(pick.font);
+              LCHECK(clock_px <= pick.spot.w);
+              LCHECK((int) when.size() * font_px(g.when_font) <= g.when.w);
+              std::vector<Box> rows = line_boxes(pick.spot.x, pick.spot.y, pick.spot.w, pick.font, {clock});
+              for (const Box &b : line_boxes(g.when.x, g.when.y, g.when.w, g.when_font, {when}))
+                rows.push_back(b);
+              LCHECK(rows.size() == 2 && !overlap(rows[0], rows[1]));
+              std::vector<Box> parts = fixed;
+              if (g.wide) {
+                const std::string cut = std::string(rec).substr(0, std::min(record_fit(g, clock_px), strlen(rec)));
+                const int px = (int) cut.size() * font_px(BoardFont::S8);
+                for (int side = 0; side < 2 && !cut.empty(); side++)
+                  for (const Box &b :
+                       line_boxes(record_label_x(g, side, px, clock_px), g.rec[side].y, g.rec[side].w, BoardFont::S8, {cut}))
+                    parts.push_back(b);
+              }
+              for (const Box &r : rows) {
+                LCHECK(inside(r, sc));
+                for (const Box &p : parts)
+                  LCHECK(!overlap(r, p));
+              }
+            }
+      }
+}
+
 }  // namespace
 
 int run_layout_tests(int &total_checks) {
+  test_kickoff_rows();
+  test_pregame_rows();
   test_wrap_lines();
   test_splash_sides();
   test_splash_layouts();
