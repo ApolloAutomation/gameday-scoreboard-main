@@ -209,7 +209,9 @@ struct AppMap {
   char tag[9]{};  // the nearest plane's name
   int8_t tag_of{-1};  // its blip; -1 none
   uint8_t n_blips{0};
-  uint8_t pad[3]{};
+  uint8_t wide{0};  // read past the owner's distance
+  char inner_text[4]{};  // the inner ring's label
+  uint8_t pad[2]{};
   AppBlip blips[kAppBlips]{};
 };
 static_assert(std::has_unique_object_representations_v<AppMap>, "AppMap compares as bytes");

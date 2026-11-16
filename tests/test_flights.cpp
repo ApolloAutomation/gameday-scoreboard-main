@@ -889,7 +889,7 @@ void test_notes() {
   for (int w : {64, 128, 192, 256})
     for (int h : {32, 64, 128})
       for (int ticker = 0; ticker < 2; ticker++)
-        for (int k = 0; k < 4 && (h > 32 || !ticker); k++) {
+        for (int k = 0; k < 5 && (h > 32 || !ticker); k++) {
           FrameOpts o;
           o.w = w;
           o.h = h;
@@ -913,10 +913,18 @@ void test_notes() {
   o.w = 64;
   Frame f = note_frame(Note::NO_HOME, o, 10);
   FCHECK(f.items.size() == 4 && f.items[0].text == "Set your", "wrapped for one panel: %zu", f.items.size());
-  f = note_frame(Note::NONE_NEAR, o, to_nm(10, DistUnit::MILES));
-  FCHECK(f.items.size() == 3 && f.items[0].text == "No planes" && f.items[2].text == "within 10 mi", "%s",
-         f.items.back().text.c_str());
-  FCHECK(f.items[0].color == kColValue && f.items[2].color == kColDim, "the radius dimmer");
+  f = note_frame(Note::NONE_NEAR, o, to_nm(250, DistUnit::MILES));
+  FCHECK(f.items.size() == 4 && f.items[0].text == "No planes" && f.items[3].text == "to 250 mi" && f.sky.w == 64,
+         "%s", f.items.back().text.c_str());
+  FCHECK(f.items[0].color == kColValue && f.items[3].color == kColDim, "the radius dimmer");
+  f = note_frame(Note::WIDENING, o, to_nm(10, DistUnit::MILES));
+  FCHECK(f.items.size() == 4 && f.items[0].text == "Looking" && f.items[3].text == "within 10 mi" && f.sky.w == 64,
+         "looking farther on one panel: %zu", f.items.size());
+  o.w = 256;
+  f = note_frame(Note::NONE_NEAR, o, to_nm(250, DistUnit::MILES));
+  FCHECK(f.items.size() == 2 && f.items[0].text == "No planes nearby right now" &&
+             f.items[1].text == "Checked out to 250 mi",
+         "the standing screen four wide: %s", f.items[1].text.c_str());
   o.w = 128;
   f = note_frame(Note::NO_DATA, o, 10);
   FCHECK(f.items.size() == 1 && f.items[0].text == "Can't reach flight data", "one line on two panels");
@@ -1224,6 +1232,236 @@ const char *const kSpotted =
     "\"height\":280}},\"link\":\"https:\\/\\/www.planespotters.net\\/photo\\/1592852\\/n8766t?utm_source=api\","
     "\"photographer\":\"A. Spotter\"}]}";
 
+// Flightradar24's feed: planes dlat degrees north of home.
+std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24Now) {
+  const double lat = 40.71, lon = -74.01;
+  std::string out = "{\"full_count\":9,\"version\":4";
+  int k = 0;
+  for (double d : dlats) {
+    char one[200];
+    snprintf(one, sizeof one,
+             ",\"f%d\":[\"a%05d\",%.4f,%.4f,90,31000,410,\"1234\",\"\",\"A321\",\"N%dAA\",%lld,\"JFK\",\"CLT\","
+             "\"AA%d\",0,0,\"AAL%d\",0,\"AAL\"]",
+             k, k, lat + d, lon, k, (long long) at, k, k);
+    out += one;
+    k++;
+  }
+  return out + "}";
+}
+
+// The next position read, past any photo or route read.
+bool read_pos(Reads &x, const std::string &body) {
+  for (int i = 0; i < 8; i++) {
+    x.wait();
+    espn::AppRequest q;
+    if (!x.app.request(x.now, q))
+      continue;
+    x.last_url = q.url;
+    const bool pos = q.url.find("feed.js") != std::string::npos || q.url.find("/dist/") != std::string::npos;
+    espn::AppTextStream in(body);
+    const bool ok = pos && x.app.parse(in, x.now);
+    x.app.ended(espn::AppResult{pos ? 200 : 404, false, 0});
+    x.app.apply(ok, x.now);
+    if (pos)
+      return true;
+  }
+  return false;
+}
+
+const std::string kNoPlanes = "{\"full_count\":0,\"version\":4}";
+
+std::string fr24_at(uint16_t miles) {
+  Home h;
+  h.lat = 40.71;
+  h.lon = -74.01;
+  h.radius_nm = to_nm(miles, DistUnit::MILES);
+  return fr24_url(h);
+}
+
+bool frame_has_color(const espn::AppFrame &f, const std::string &text, uint32_t color) {
+  for (const espn::AppText &t : f.texts)
+    if (t.text == text && t.color == color)
+      return true;
+  return false;
+}
+
+void test_widen() {
+  // The steps: the page's, then wider, never past radius_max
+  for (DistUnit u : {DistUnit::MILES, DistUnit::KM, DistUnit::NM}) {
+    uint16_t at = 1, last = 0;
+    int n = 0;
+    for (uint16_t s; (s = next_step(u, at)) != 0; at = s, n++) {
+      FCHECK(s > at && s <= radius_max(u), "unit %d: %u after %u", (int) u, s, at);
+      last = s;
+    }
+    FCHECK(n == 8 && last == radius_max(u) && next_step(u, radius_max(u)) == 0, "unit %d: %d steps to %u", (int) u, n,
+           last);
+  }
+  FCHECK(next_step(DistUnit::MILES, 12) == 15 && next_step(DistUnit::KM, 10) == 25 &&
+             next_step(DistUnit::NM, 150) == 200,
+         "an owner's distance between steps goes to the next");
+
+  // Counts within the owner's distance past the eight kept
+  {
+    Home h;
+    h.lat = 40.71;
+    h.lon = -74.01;
+    h.radius_nm = to_nm(50, DistUnit::MILES);
+    h.own_nm = to_nm(10, DistUnit::MILES);
+    Nearby n;
+    FCHECK(parse_fr24(fr24_north({0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.5, 0.6}), h, kFr24Now,
+                      n),
+           "parses");
+    const Nearby in = nearby_own(n);
+    FCHECK(n.n == kNear && n.air == 12 && n.air_own == 10 && in.n == kNear && in.air == 10 && in.air_own == 10,
+           "ten inside of twelve: %u %u %u", n.air, n.air_own, in.air);
+  }
+
+  Reads r;
+  r.app.setup();
+  espn::app_env().tz = 0;
+  r.app.set("flyhome", "40.71,-74.01");
+  r.app.set("flyradius", "10mi");
+  r.app.shown(true);
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(10), "the owner's distance first: %s", r.last_url.c_str());
+  FCHECK(r.app.wide() == 15, "an empty read widens a step: %u", r.app.wide());
+  FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "at the same pace");
+  espn::AppFrame f;
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 10 mi|" && f.sky.w == 128, "%s", frame_text(f).c_str());
+  JsonDocument d;
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "ok" && d["planes"] == 0 && d["wide"].isNull() && d["radius"] == 10, "the page: not wider yet");
+
+  r.wait();
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(15), "the next read wider: %s", r.last_url.c_str());
+  FCHECK(r.app.wide() == 25, "another step: %u", r.app.wide());
+  d.clear();
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["wide"] == 15 && d["radius"] == 10, "the page hears how far it looked");
+  // A failed read never widens
+  r.wait();
+  FCHECK(r.step(503, "") && r.last_url == fr24_at(25) && r.app.wide() == 25, "a failure: %u", r.app.wide());
+  r.wait();
+  // A plane 30 miles out: not in 25, so 50
+  
+  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.app.wide() == 50 && r.app.nearby().n == 0, "past 25: %u", r.app.wide());
+  const int64_t widened = r.now;
+  r.wait();
+  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.last_url == fr24_at(50) && r.app.nearby().n == 1 && r.app.wide() == 50,
+         "found at 50: %s", r.last_url.c_str());
+  d.clear();
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "wide" && d["wide"] == 50 && d["radius"] == 10 && d["planes"] == 1 && d["nearest"] == "AAL0",
+         "the page hears it is wider");
+  FCHECK(r.app.lit(r.now), "a far plane keeps it lit");
+
+  // Its screens say how far, distances in amber
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_has_color(f, "30 mi N", kColRoute), "the card's distance amber: %s", frame_text(f).c_str());
+  FCHECK(f.ticker.find("No planes within 10 mi. Nearest: 30 mi N | 1 plane within 50 mi | AAL0") == 0, "%s",
+         f.ticker.c_str());
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now + 8, f);
+  FCHECK(frame_has_color(f, "Within 50 mi", kColRoute) && frame_has_color(f, "1 plane", kColDim),
+         "the list's head: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(64, 64, r.now + 16, f);
+  FCHECK(frame_has_color(f, "30mi N", kColRoute) || frame_has_color(f, "30 mi N", kColRoute), "the small card: %s",
+         frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(64, 64, r.now + 24, f);
+  FCHECK(frame_has_color(f, "Within 50mi", kColRoute), "the small list: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(192, 64, r.now, f);
+  FCHECK(frame_has_color(f, "Within 50mi", kColRoute), "three wide: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.shown(true);
+  r.app.frame(128, 128, r.now, f);
+  FCHECK(f.map.w == kRadarW && f.map.wide == 1 && strcmp(f.map.ring_text, "50MI") == 0 &&
+             strcmp(f.map.inner_text, "10") == 0 && f.map.inner == kRadarRing / 5 && f.map.n_blips == 1,
+         "the radar's rings: %s %s %u", f.map.ring_text, f.map.inner_text, f.map.inner);
+  {
+    // Without the owner's ring when it would be a dot
+    Prefs p;
+    p.lat_e4 = 407100;
+    p.lon_e4 = -740100;
+    p.radius = 5;
+    espn::AppMap m;
+    radar_map(r.app.nearby(), 0, p, 250, 0, 64, m);
+    FCHECK(m.wide == 1 && m.inner == 0 && m.inner_text[0] == '\0' && strcmp(m.ring_text, "250MI") == 0,
+           "a 5 mile ring in 250 is left out");
+    radar_map(r.app.nearby(), 0, p, 0, 0, 64, m);
+    FCHECK(m.wide == 0 && m.inner_text[0] == '\0' && strcmp(m.ring_text, "5MI") == 0, "not wider: as before");
+  }
+
+  // A plane inside shows at once; the read stays wide
+  r.now = widened + 60;
+  FCHECK(r.step(200, fr24_north({0.4348, 0.0725}, r.now)) && r.app.nearby().n == 1 &&
+             r.app.nearby().planes[0].dist_nm < to_nm(10, DistUnit::MILES) && r.app.wide() == 50,
+         "inside 10, still reading 50: %u", r.app.wide());
+  d.clear();
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "ok" && d["wide"].isNull() && d["planes"] == 1, "the page: back to normal");
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(f.ticker.find("1 plane nearby") == 0 && !frame_has_color(f, "5.0 mi N", kColRoute), "%s", f.ticker.c_str());
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.last_url == fr24_at(50) && r.app.wide() == 50,
+         "held: %s", r.last_url.c_str());
+  r.now = widened + FlightsApp::kWidenHoldS - 1;
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 50, "not before the hold's end");
+  r.now = widened + FlightsApp::kWidenHoldS;
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 0, "after the hold: back");
+  FCHECK(read_pos(r, fr24_north({0.0725}, r.now + 20)) && r.last_url == fr24_at(10), "the owner's again: %s",
+         r.last_url.c_str());
+
+  // A new distance starts over
+  read_pos(r, kNoPlanes);
+  FCHECK(r.app.wide() == 15, "widening again");
+  r.app.set("flyradius", "25mi");
+  FCHECK(r.app.wide() == 0, "a new distance resets");
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(25) && r.app.wide() == 50, "%s", r.last_url.c_str());
+
+  // Nothing out to the widest: the standing screen, reads slower
+  Reads c;
+  c.app.setup();
+  c.app.set("flyhome", "40.71,-74.01");
+  c.app.set("flyradius", "150mi");
+  c.step(200, kNoPlanes);
+  FCHECK(c.app.wide() == 250 && c.app.poll_ms(c.now) == kFr24PollMs, "one step to the widest");
+  c.wait();
+  FCHECK(c.step(200, kNoPlanes) && c.last_url == fr24_at(250) && c.app.wide() == 250, "%s", c.last_url.c_str());
+  FCHECK(c.app.poll_ms(c.now) == 120000u, "then every two minutes: %u", c.app.poll_ms(c.now));
+  for (int w : {64, 128, 256})
+    for (int h : {64, 128}) {
+      if (w == 256 && h == 128)
+        continue;
+      f = espn::AppFrame();
+      c.app.frame(w, h, c.now, f);
+      FCHECK(f.sky.w > 0 && f.texts.size() >= 2 && f.texts.back().text.find("250 mi") != std::string::npos,
+             "%dx%d: %s", w, h, frame_text(f).c_str());
+    }
+  d.clear();
+  c.app.state(d.to<JsonObject>(), c.now);
+  FCHECK(d["status"] == "ok" && d["planes"] == 0 && d["wide"] == 250, "the page hears how far");
+  c.wait();
+  FCHECK(c.step(200, fr24_north({1.5}, c.now)) && c.app.nearby().n == 1 && c.app.poll_ms(c.now) == kFr24PollMs,
+         "a plane at 104 mi: the usual pace");
+
+  // adsb.fi asks for the wider distance too
+  Reads a;
+  a.app.setup();
+  a.app.set("flyhome", "-16.43,179.38");
+  a.app.set("flyradius", "50mi");
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/45") != std::string::npos, "%s", a.last_url.c_str());
+  a.wait();
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/88") != std::string::npos, "%s", a.last_url.c_str());
+  a.wait();
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/132") != std::string::npos, "%s", a.last_url.c_str());
+  espn::app_env().tz = 0;
+}
+
 void test_app() {
   const std::string fr24 = slurp(kFr24File);
   const std::string fi = slurp("fixtures/flights_adsbfi_jfk.json");
@@ -1480,7 +1718,7 @@ void test_app() {
   none.step(200, "{\"full_count\":1,\"version\":4}");
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
-  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "%s", frame_text(f).c_str());
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 16 km|", "%s", frame_text(f).c_str());
   FCHECK(!none.app.lit(none.now), "an empty sky lets it dim");
   for (int i = 0; i < 6; i++) {
     none.wait();
@@ -1488,7 +1726,7 @@ void test_app() {
   }
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
-  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "the last answer while it is fresh");
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 16 km|", "the last answer while it is fresh");
   none.now += FlightsApp::kOldS;
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
@@ -1876,7 +2114,7 @@ void test_radar_frames() {
   n.planes[7] = radar_plane("SEV8", -5.0f, 5.0f, 270);
   n.n = 8;
   espn::AppMap m;
-  radar_map(n, 2, p, 128, 0, m);
+  radar_map(n, 2, p, 0, 128, 0, m);
   FCHECK(m.n_blips == 7, "the one past the ring left out: %d", m.n_blips);
   const espn::AppBlip *edge = &m.blips[1];
   FCHECK(edge->x == 64 && std::abs(edge->y - 2) <= 1, "one at the distance on the ring: %d,%d", edge->x, edge->y);
@@ -1894,18 +2132,18 @@ void test_radar_frames() {
   // No callsign: the registration
   n.planes[0].callsign[0] = '\0';
   snprintf(n.planes[0].reg, sizeof n.planes[0].reg, "g-abcd");
-  radar_map(n, 2, p, 0, 64, m);
+  radar_map(n, 2, p, 0, 0, 64, m);
   FCHECK(std::string(m.tag) == "G-ABCD" && m.y == 64, "the registration, upper case: %s", m.tag);
   FCHECK(std::string(m.ring_text) == "10MI" && m.inner == 13, "10MI with a 5 mi ring");
   prefs_set(p, "flyradius", "25km");
-  radar_map(n, 2, p, 0, 64, m);
+  radar_map(n, 2, p, 0, 0, 64, m);
   FCHECK(std::string(m.ring_text) == "25KM" && m.inner == 0, "25KM, no half ring");
   // Never more than eight
   Nearby full;
   for (int i = 0; i < (int) kNear; i++)
     full.planes[i] = radar_plane("P", 0.5f * (i + 1), 0.0f, 0);
   full.n = kNear;
-  radar_map(full, 0, p, 0, 64, m);
+  radar_map(full, 0, p, 0, 0, 64, m);
   FCHECK(m.n_blips == espn::kAppBlips && m.blips[7].number == 0, "eight at most, the seventh row has no number");
 }
 
@@ -1914,6 +2152,7 @@ int run_flight_tests(int &total_checks) {
   test_fr24_url();
   test_prefs();
   test_app();
+  test_widen();
   test_photo_parts();
   test_photo_reads();
   test_adsbfi();

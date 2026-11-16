@@ -170,6 +170,17 @@ def coord_text(e4):
 def flights_set(k, v):
     """prefs_set() for one of the Flight Tracker's keys."""
     f = STATE.setdefault("flights", flights_doc())
+    spot = ("home", "radius", "radius_unit", "receiver")
+    was = [f.get(x) for x in spot]
+    flights_set_one(f, k, v)
+    # set(): a new spot reads afresh, no longer widened
+    if [f.get(x) for x in spot] != was and "wide" in f:
+        f.pop("wide")
+        if f.get("status") == "wide":
+            f["status"] = "waiting"
+
+
+def flights_set_one(f, k, v):
     if k == "flyhome":
         if v in ("", "none"):
             f["home"], f["place"] = "", ""

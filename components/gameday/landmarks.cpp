@@ -46,7 +46,7 @@ struct Cand {
   int32_t key;
   uint8_t idx;
 };
-constexpr int kReserved = 7 + 2 * kAppBlips;
+constexpr int kReserved = 8 + 2 * kAppBlips;
 // Label placement's scratch, in PSRAM once
 struct Scratch {
   Cand c[kLandMaxPlaces];
@@ -111,7 +111,7 @@ __attribute__((noinline)) void set_xy(const MapProj &pr, const LandSet &s, int16
 MapProj proj_of(const AppMap &m) { return map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h); }
 
 constexpr uint32_t kRingInk = 0x484848, kInnerInk = 0x303030, kNorthInk = 0x808080, kRingText = 0x707070;
-constexpr uint32_t kNumInk = 0x909090, kCardMark = 0x806800;
+constexpr uint32_t kNumInk = 0x909090, kCardMark = 0x806800, kWideText = 0xFFD000;
 constexpr uint32_t kBlipInk[4] = {0xE0E0E0, 0xFFD000, 0xFF4040, 0x808080};
 
 Box box(int x, int y, int w, int h) { return Box{(int16_t) x, (int16_t) y, (int16_t) w, (int16_t) h}; }
@@ -121,6 +121,14 @@ void radar_boxes(const AppMap &m, Box &north, Box &label) {
   north = box(m.w / 2 - 1, 0, 3, 5);
   const int lw = px_text_w(m.ring_text, 1);
   label = box(m.w - 1 - lw, m.h - 6, lw, 5);
+}
+
+// The owner's distance, right of the inner ring; false none.
+bool inner_box(const AppMap &m, Box &b) {
+  if (m.inner_text[0] == '\0' || m.inner == 0)
+    return false;
+  b = box(m.w / 2 + m.inner + 2, m.h / 2 - 6, px_text_w(m.inner_text, 1), 5);
+  return true;
 }
 
 int blip_half(const AppBlip &b) { return b.flags & kBlipIsCard ? 3 : 2; }
@@ -141,6 +149,7 @@ int reserved(const AppMap &m, Box *out) {
     return n;
   radar_boxes(m, out[n], out[n + 1]);
   n += 2;
+  n += inner_box(m, out[n]);
   MapMark mk[kAppBlips];
   map_marks(m, mk);
   for (int i = 0; i < blip_count(m); i++) {
@@ -210,7 +219,7 @@ void blip(Px565 &p, const AppBlip &b) {
 void radar_under(Px565 &p, const AppMap &m) {
   const int cx = m.w / 2, cy = m.h / 2;
   if (m.inner > 0)
-    circle(p, cx, cy, m.inner, rgb565(kInnerInk), true);
+    circle(p, cx, cy, m.inner, rgb565(m.wide ? kRingInk : kInnerInk), true);
   circle(p, cx, cy, m.ring, rgb565(kRingInk), false);
   Box north, label;
   radar_boxes(m, north, label);
@@ -218,7 +227,12 @@ void radar_under(Px565 &p, const AppMap &m) {
   p.fill(north.x - 1, north.y, north.w + 2, north.h + 1, 0);
   p.fill(label.x - 1, label.y - 1, label.w + 2, label.h + 2, 0);
   px_text(p, north.x, north.y, "N", n, 1);
-  px_text(p, label.x, label.y, m.ring_text, rgb565(kRingText), 1);
+  px_text(p, label.x, label.y, m.ring_text, rgb565(m.wide ? kWideText : kRingText), 1);
+  Box in;
+  if (inner_box(m, in)) {
+    p.fill(in.x - 1, in.y - 1, in.w + 2, in.h + 2, 0);
+    px_text(p, in.x, in.y, m.inner_text, rgb565(kRingText), 1);
+  }
 }
 
 // Planes, home, then their numbers and the tag
@@ -441,11 +455,12 @@ void map_marks(const AppMap &m, MapMark out[kAppBlips]) {
   const int n = blip_count(m);
   if (n == 0)
     return;
-  Box taken[3 + 2 * kAppBlips];
+  Box taken[4 + 2 * kAppBlips];
   int nt = 0;
   taken[nt++] = box(m.w / 2 - 3, m.h / 2 - 3, 6, 6);
   radar_boxes(m, taken[nt], taken[nt + 1]);
   nt += 2;
+  nt += inner_box(m, taken[nt]);
   for (int i = 0; i < n; i++)
     taken[nt++] = blip_box(m.blips[i]);
   // The tag first, then numbers in list order

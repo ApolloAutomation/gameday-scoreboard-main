@@ -2869,6 +2869,7 @@ if (document.activeElement !== sel) sel.value = cur;
 const rx = $("#flightRx");
 if (document.activeElement !== rx) rx.value = f.receiver;
 const n = Number(f.planes) || 0;
+const reach = (d) => d + " " + (f.radius_unit || "mi");
 const from = FLIGHT_SOURCES[f.source] || "";
 const backup = (f.source === "adsbfi" || f.source === "adsblol") && f.fr24 !== "skip";
 const shown = S.display_now === "flights" || S.split_now === "flights";
@@ -2876,7 +2877,10 @@ const mine = (S.displays || []).find((d) => d.id === FLIGHTS_ID);
 const chosen = S.display === FLIGHTS_ID || (mine && S.split === mine.split);
 let line = !f.home ? "Set a home location to see the planes near it."
 : f.status === "failing" ? "Can't reach the flight data right now. The panel keeps trying."
-: f.status === "ok" ? (n === 0 ? "No planes nearby right now" : n + (n === 1 ? " plane" : " planes") + " nearby")
+: f.status === "ok" || f.status === "wide" ? (f.status === "wide"
+? "No planes within " + reach(f.radius) + "; showing the nearest, up to " + reach(f.wide) + " away"
+: n === 0 ? "No planes nearby right now" + (f.wide ? ", out to " + reach(f.wide) : "")
+: n + (n === 1 ? " plane" : " planes") + " nearby")
 + (from ? ", from " + from + (backup ? " while Flightradar24 is out" : "") : "") + "."
 : f.status === "old" && !shown ? "Not reading planes now: the panel reads them only while Flight Tracker is on it."
 : "Looking for planes.";
@@ -2884,7 +2888,7 @@ if (f.home && chosen && !shown && (S.display_now === "clock" || S.split_now === 
 line += " The clock is up for the night hours, and Flight Tracker comes back after them.";
 else if (f.home && !chosen) line += " Choose Flight Tracker under Showing to put it on the panel.";
 $("#flightNow").textContent = line;
-const live = f.status === "ok" && n > 0;
+const live = (f.status === "ok" || f.status === "wide") && n > 0;
 showFlightPhoto(live ? f.nearest_hex || "" : "", live ? f.nearest_reg || "" : "", f.nearest || f.nearest_reg || "");
 };
 const WX_ID = 4;

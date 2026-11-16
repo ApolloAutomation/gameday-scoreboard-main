@@ -138,6 +138,17 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
 
 uint16_t radius_max(DistUnit u) { return u == DistUnit::KM ? 400 : u == DistUnit::NM ? 200 : 250; }
 
+uint16_t next_step(DistUnit u, uint16_t from) {
+  // The page's choices, then wider, to radius_max
+  static const uint16_t kSteps[3][8] = {{5, 10, 15, 25, 50, 100, 150, 250},
+                                        {5, 10, 25, 50, 100, 150, 250, 400},
+                                        {5, 10, 15, 25, 50, 100, 150, 200}};
+  for (uint16_t s : kSteps[(int) u <= 2 ? (int) u : 0])
+    if (s > from)
+      return s;
+  return 0;
+}
+
 const char *dist_unit_key(DistUnit u) { return u == DistUnit::KM ? "km" : u == DistUnit::NM ? "nm" : "mi"; }
 
 Home prefs_home(const Prefs &p) {
@@ -275,7 +286,7 @@ void prefs_state(const Prefs &p, const Units &u, JsonObject out) {
 
 bool radar_room(int w, int h) { return (w == 256 && h == 64) || (w == 128 && h == 128); }
 
-void radar_map(const Nearby &n, uint8_t card, const Prefs &p, int x, int y, espn::AppMap &m) {
+void radar_map(const Nearby &n, uint8_t card, const Prefs &p, uint16_t wide, int x, int y, espn::AppMap &m) {
   m = espn::AppMap();
   m.x = (int16_t) x;
   m.y = (int16_t) y;
@@ -286,10 +297,20 @@ void radar_map(const Nearby &n, uint8_t card, const Prefs &p, int x, int y, espn
   m.roads = 1;
   m.radar = 1;
   m.ring = kRadarRing;
+  const uint16_t reach = wide > p.radius ? wide : p.radius;
   m.inner = p.radius % 2 == 0 ? kRadarRing / 2 : 0;
-  const float r_nm = to_nm(p.radius, (DistUnit) p.radius_unit);
+  if (reach != p.radius) {
+    // The owner's distance inside, labeled when it shows
+    m.wide = 1;
+    m.inner = (uint8_t) (kRadarRing * p.radius / reach);
+    if (m.inner < 3)
+      m.inner = 0;
+    else
+      snprintf(m.inner_text, sizeof m.inner_text, "%u", (unsigned) p.radius);
+  }
+  const float r_nm = to_nm(reach, (DistUnit) p.radius_unit);
   m.scale_q16 = (int32_t) lroundf(espn::map_scale_ring(p.lat_e4, kRadarRing, r_nm * 1852.0f) * 65536.0f);
-  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", (unsigned) p.radius,
+  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", (unsigned) reach,
            p.radius_unit == (uint8_t) DistUnit::KM ? "KM" : p.radius_unit == (uint8_t) DistUnit::NM ? "NM" : "MI");
   const espn::MapProj pr = espn::map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h);
   if (card >= n.n)
@@ -355,6 +376,8 @@ espn::AppSet FlightsApp::set(const std::string &key, const std::string &value) {
     this->got_s_ = 0;
     this->fails_ = 0;
     this->card_hex_[0] = '\0';
+    this->wide_ = this->shown_wide_ = this->empty_at_ = 0;
+    this->widen_s_ = 0;
     for (size_t i = 0; i < kSources; i++)
       this->feed_.read_once[i] = false;
     // A new receiver isn't held to the old one's waits.
@@ -381,7 +404,13 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
     return;
   }
   // Not read lately: off screen, or failing.
-  out["status"] = failing ? "failing" : now != 0 && now - this->got_s_ > kOldS ? "old" : "ok";
+  const bool old = now != 0 && now - this->got_s_ > kOldS;
+  out["status"] = failing ? "failing" : old ? "old" : this->shown_wide_ != 0 ? "wide" : "ok";
+  // How far it looked: planes past the owner's, or none
+  if (this->shown_wide_ != 0)
+    out["wide"] = this->shown_wide_;
+  else if (this->near_.n == 0 && this->empty_at_ > this->prefs_.radius)
+    out["wide"] = this->empty_at_;
   out["source"] = source_key(this->got_src_);
   const Nearby &n = this->near_;
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
@@ -437,6 +466,11 @@ FlightsApp::Next FlightsApp::next_(int64_t now) const {
   n.read = Read::POSITIONS;
   n.source = pick.source;
   n.in_ms = pick.in_ms;
+  // Nothing out to the widest: read it less often
+  if (this->capped_()) {
+    const uint32_t since = now_ms - this->feed_.last_ms[(size_t) pick.source];
+    n.in_ms = std::max(n.in_ms, since >= kCapPollMs ? 0 : kCapPollMs - since);
+  }
   if (this->got_s_ == 0 || n.in_ms == 0)
     return n;
   auto after = [now_ms](const espn::HostWait &w, uint32_t last, uint32_t gap) {
@@ -520,6 +554,11 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out = espn::AppRequest();
   this->read_home_ = prefs_home(this->prefs_);
+  this->read_wide_ = n.read == Read::POSITIONS ? this->wide_ : 0;
+  if (this->read_wide_ != 0) {
+    this->read_home_.own_nm = this->read_home_.radius_nm;
+    this->read_home_.radius_nm = to_nm(this->read_wide_, (DistUnit) this->prefs_.radius_unit);
+  }
   // The free services ask who's calling
   auto named = [&out]() { espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version)); };
   switch (n.read) {
@@ -600,7 +639,7 @@ void FlightsApp::apply(bool ok, int64_t now) {
     case Read::POSITIONS:
       feed_done(this->feed_, this->read_src_, ok ? 200 : this->status_, ok, this->retry_ms_, this->rnd_(), now_ms);
       if (ok) {
-        this->near_ = this->pending_;
+        this->widen_(now);
         this->got_s_ = now;
         this->got_src_ = this->read_src_;
         this->fails_ = 0;
@@ -653,6 +692,36 @@ void FlightsApp::apply(bool ok, int64_t now) {
   this->read_ = Read::NONE;
 }
 
+bool FlightsApp::capped_() const {
+  return this->got_s_ != 0 && this->near_.n == 0 && this->empty_at_ != 0 &&
+         next_step((DistUnit) this->prefs_.radius_unit, this->empty_at_) == 0;
+}
+
+void FlightsApp::widen_(int64_t now) {
+  const uint16_t own = this->prefs_.radius, at = this->read_wide_ != 0 ? this->read_wide_ : own;
+  const Nearby &got = this->pending_;
+  // Planes inside the owner's distance show alone
+  this->near_ = nearby_own(got);
+  this->shown_wide_ = 0;
+  this->empty_at_ = got.n == 0 ? at : 0;
+  if (this->near_.n > 0) {
+    if (this->wide_ != 0 && now - this->widen_s_ >= kWidenHoldS)
+      this->wide_ = 0;
+    return;
+  }
+  this->near_ = got;
+  if (got.n > 0) {
+    this->shown_wide_ = at;
+    return;
+  }
+  // None at all: one step wider, if there is one
+  const uint16_t next = next_step((DistUnit) this->prefs_.radius_unit, at);
+  if (next != 0) {
+    this->wide_ = next;
+    this->widen_s_ = now;
+  }
+}
+
 void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
   this->frame_(w, h, now, out);
   if (out.sky.w > 0)
@@ -673,9 +742,16 @@ void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
     put_text(out, note_frame(this->fails_ >= kNoDataFails ? Note::NO_DATA : Note::LOADING, o, home.radius_nm));
     return;
   }
+  const DistUnit unit = (DistUnit) this->prefs_.radius_unit;
   if (this->near_.n == 0) {
-    put_text(out, note_frame(Note::NONE_NEAR, o, home.radius_nm));
+    // Still widening, or none out to the widest
+    const uint16_t at = this->empty_at_ != 0 ? this->empty_at_ : this->prefs_.radius;
+    put_text(out, note_frame(this->capped_() ? Note::NONE_NEAR : Note::WIDENING, o, to_nm(at, unit)));
     return;
+  }
+  if (this->shown_wide_ != 0) {
+    o.wide_nm = to_nm(this->shown_wide_, unit);
+    o.own_nm = home.radius_nm;
   }
   // Card and list take turns, or radar and list
   const bool radar = radar_room(w, h);
@@ -706,9 +782,9 @@ void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
   Frame fr = flight_frame(this->near_, &this->routes_, o, (uint32_t) now);
   const int hx = h == 64 ? 128 : 0, hy = h == 64 ? 0 : 64;
   if (this->list_)
-    radar_list(fr, this->near_, o.card, o.units, hx, hy, kRadarH);
+    radar_list(fr, this->near_, o.card, o, hx, hy, kRadarH);
   else
-    radar_map(this->near_, o.card, this->prefs_, hx, hy, out.map);
+    radar_map(this->near_, o.card, this->prefs_, this->shown_wide_, hx, hy, out.map);
   fr.ticker = flight_ticker(this->near_, &this->routes_, o, (uint32_t) now, 3, &fr.photo.at);
   put_text(out, fr);
 }

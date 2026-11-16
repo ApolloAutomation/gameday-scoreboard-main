@@ -92,8 +92,25 @@ The panel shows a message instead of planes when it has none to show:
 
 - **Set your location on the device page**: there's no home location yet.
 - **Looking for planes**: the first answer hasn't come in yet, or the Flight Tracker has just come back on screen.
-- **No planes nearby**, with the distance under it: nothing is flying within your **Within** distance right now. A plane the flight data has no recent position for doesn't count as nearby.
+- **No planes nearby**, with the distance under it: nothing is flying within your **Within** distance right now. A plane the flight data has no recent position for doesn't count as nearby. (In the next release the panel looks farther first, as below.)
 - **Can't reach flight data**: three reads in a row failed, and the panel has no planes from the last 3 minutes. The panel keeps trying.
+
+:::note[Coming in the next release]
+**The Flight Tracker always has something to show.** When no plane is within your **Within** distance, the panel looks farther, one step at a time: 15, 25, 50, 100, 150 and then 250 miles (25, 50, 100, 150, 250 and 400 km, or up to 200 nautical miles), one step for each read that finds nothing, at its usual pace. Meanwhile it shows **Looking farther**, with the distance it just found empty under it, like **Nothing within 10 mi**.
+
+Once it finds a plane, it shows the nearest ones it found and says plainly that they're farther than your distance:
+
+- every distance is in yellow instead of green;
+- the list's first line says how far it looked, like **Within 50 mi**, in place of **Nearby**;
+- the ticker starts with **No planes within 10 mi. Nearest: 42 mi SW**;
+- on the radar the ring is the wider distance, its label in yellow, like **50MI**, and a dotted ring with a small label, like **10**, marks your own distance (left out when it would be a tiny circle).
+
+Your **Within** distance never changes. As soon as a plane is inside it again, the panel shows only the planes inside it, as usual; it keeps reading the wider circle for 5 minutes after the last step out, so a plane passing through doesn't make it flip back and forth, then reads your distance again. A new home, distance or receiver starts over at your distance.
+
+When there's nothing at all out to 250 miles (400 km, 200 nautical miles), the panel shows a calm sky with **No planes nearby right now** and **Checked out to 250 mi**, and reads every 2 minutes until a plane shows up. The device page's line says so too, like **No planes within 10 mi; showing the nearest, up to 50 mi away.**
+
+A wider read asks the flight data service for a bigger circle, so it's a larger download, and it only happens while the sky near you is empty.
+:::
 
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes the Flight Tracker's place until they end, and the device page says so.
 

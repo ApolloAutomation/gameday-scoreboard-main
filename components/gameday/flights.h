@@ -56,6 +56,7 @@ struct Home {
   double lat{NAN};
   double lon{NAN};
   float radius_nm{10.0f};
+  float own_nm{0};  // the owner's, when read wider; 0 the same
   bool valid() const;
 };
 
@@ -154,6 +155,9 @@ struct Nearby {
   uint16_t total{0};
   uint16_t air{0};     // airborne within the radius
   uint16_t ground{0};  // on the ground within the radius
+  uint16_t air_own{0};     // the same within own_nm
+  uint16_t ground_own{0};
+  float own_nm{0};
   Tier tier{Tier::AIR};
 };
 
@@ -169,6 +173,8 @@ bool airline_callsign(const char *cs);
 void nearby_add(Nearby &n, const Plane &p);
 // Keeps only the best tier present.
 void nearby_finish(Nearby &n);
+// Those within own_nm, counted the same way.
+Nearby nearby_own(const Nearby &n);
 // Keeps the shown plane unless another is clearly nearer.
 uint8_t pick_card(const Nearby &n, const char *prev_hex);
 
@@ -327,6 +333,7 @@ class StrReader {
 // One plane at a time, so memory stays flat.
 template<typename S> bool parse_aircraft_from(S &in, const Home &home, Nearby &out) {
   out = Nearby();
+  out.own_nm = home.own_nm;
   if (!detail::seek_aircraft(in))
     return false;
   JsonDocument filter(json_allocator());
@@ -355,6 +362,7 @@ template<typename S> bool parse_aircraft_from(S &in, const Home &home, Nearby &o
 // Flightradar24's feed: one flight's array at a time.
 template<typename S> bool parse_fr24_from(S &in, const Home &home, int64_t now_s, Nearby &out) {
   out = Nearby();
+  out.own_nm = home.own_nm;
   if (detail::peek_past_space(in) != '{')
     return false;
   in.read();
@@ -708,6 +716,9 @@ struct FrameOpts {
   uint8_t card{0};  // index into Nearby::planes
   bool list{false};  // under 192 wide: the list, not the card
   const PlanePhoto *photo{nullptr};  // the card plane's
+  // Read wider than the owner's own_nm: how far
+  float wide_nm{0};
+  float own_nm{0};
 };
 
 // The photo's spot on a card 128 wide.
@@ -715,11 +726,12 @@ static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
 // Full screen's: the panel's width, doubled pixels.
 static const int kPhotoTallX = 1, kPhotoTallY = 51, kPhotoTallW = 126, kPhotoTallH = 52;
 
-enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING };
+enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING, WIDENING };
 
 // Under 192 wide the card or the list; wider, both.
 // 128x128 (full screen): the tall card or list.
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s);
+// radius_nm: NONE_NEAR's and WIDENING's distance read.
 Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
 // card_end: where the card plane's words end.
 std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s,
@@ -727,7 +739,9 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
 // The radar layouts: a plane's list row number; 0 none.
 uint8_t list_number(const Nearby &n, uint8_t card, uint8_t i, int rows);
 // Their list, numbered rows, 128 by h at x0, y0.
-void radar_list(Frame &f, const Nearby &n, uint8_t card, const Units &u, int x0, int y0, int h);
+void radar_list(Frame &f, const Nearby &n, uint8_t card, const FrameOpts &o, int x0, int y0, int h);
+// "50 mi": a whole distance; short drops the space.
+std::string reach_text(float nm, DistUnit u, bool short_form = false);
 // Text width in pixels at the font's advance.
 int text_px(const Text &t);
 

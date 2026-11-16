@@ -68,6 +68,12 @@ int main(int argc, char **argv) {
     if (only == "planes")
       return 0;
   }
+  if (only.empty() || only == "wide") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d wider reads\n", render_wide_views(dir, review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "wide")
+      return 0;
+  }
   if (only.empty() || only == "sky") {
     const char *fonts = getenv("REVIEW_FONTS");
     printf("%d plane skies\n", render_sky_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));

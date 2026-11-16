@@ -3688,6 +3688,25 @@ test("the Flight Tracker card takes a latitude and longitude and says where the 
   await page.reload();
   await expect(page.locator("#flightNow")).toHaveText("3 planes nearby, from adsb.fi.");
 
+  // Nothing within the distance: it says how far it looked
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3,
+                         flights: { home: "48.1374,11.5755", status: "wide", source: "fr24", planes: 2, wide: 50,
+                                    radius: 10, radius_unit: "km" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText(
+    "No planes within 10 km; showing the nearest, up to 50 km away, from Flightradar24.");
+  await reset(request, { displays: FLIGHT_DISPLAYS, display: 3, tz: 11,
+                         flights: { home: "48.1374,11.5755", status: "ok", source: "fr24", planes: 0, wide: 400,
+                                    radius: 10, radius_unit: "km" } });
+  await page.reload();
+  await expect(page.locator("#flightNow")).toHaveText("No planes nearby right now, out to 400 km, from Flightradar24.");
+  // A new distance starts over at it
+  await page.getByRole("combobox", { name: /^Within/ }).selectOption("25km");
+  await expectSet(request, { flyradius: "25km" });
+  const st = await deviceState(request);
+  expect(st.flights.wide).toBeUndefined();
+  expect(st.flights.radius).toBe(25);
+
   // In the second area at night: the date under the board's clock
   await reset(request, { displays: FLIGHT_DISPLAYS, split: 8, panels: 4, night_now: true,
                          flights: { home: "48.1374,11.5755", status: "old", source: "fr24", planes: 12 } });
