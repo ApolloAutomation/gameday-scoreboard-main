@@ -21,9 +21,7 @@ The next-game card shows both logos, your club on the left, with each club's rec
 - the three-way odds, like "ARS -275, draw +425, LEE +700", when ESPN has them and **Pre-game odds and TV** is on
 - the stadium
 
-:::note[Coming in the next release]
 Before the match the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A match with no date yet shows neither.
-:::
 
 ## During the match
 

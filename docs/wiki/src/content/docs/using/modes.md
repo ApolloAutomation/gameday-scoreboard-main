@@ -15,9 +15,7 @@ The panel follows one team: its next game until it starts, the game while it's o
 - **During the game** the panel reads ESPN every 10 seconds, about as often as ESPN updates.
 - **After the final** the score stays up for half an hour, or ten minutes for baseball, since game two of a doubleheader can start soon after game one. Then the panel looks up the team's next game.
 
-:::note[Coming in the next release]
 Before the game the board leaves the scores out and shows the day over the start time where they go, like "Sun" over "4:25 PM".
-:::
 
 Long before the game starts, the panel checks it every 15 minutes, and every minute in the last hour before it starts. If a read from ESPN fails, it waits longer before each new try.
 
@@ -97,9 +95,7 @@ Favorite teams with no favorites set works like My team, and the ticker asks you
 - **Off or dim**: the panel goes dark, or down to the **Dim to** level you set, with the clock on it. **Panel on** stays on and your Brightness setting doesn't change, so Home Assistant sees no change either.
 - **Team logo**, for a party before or after the game: your team's logo, big, with the team's name in its colors and, under it, the next game, like "vs DAL" and "Sun 1:00 PM", or a countdown like "in 2h 15m" on game day. After a game it's the result, like "W 24-17", or ESPN's word for a game that didn't finish, like "Postponed", until the team's next game is known. On one panel the logo sits on top with the name and the game under it. On two panels or more, and on a 2x2, the logo is twice the size, filling the board's height, with the name and the game beside it. On four panels in a row, a second copy of the logo sits at the right end. While the logo downloads, or for a team the panel has no logo for, its abbreviation stands in. In Favorite teams it's the favorite that plays next, or the first favorite when none has a game coming. In Live games it's your team, or the clock with no team picked. A golf tour or a racing series gets the clock, and so do the night hours. The game takes the panel back when it starts, as with every choice.
 
-:::note[Coming in the next release]
 **My team today** leaves the scores out before the game and shows the day, like "Today", over the countdown where they go.
-:::
 
 A game counts as on once it starts. In Live games the game the panel moves to counts as on from the moment it picks it, so the clock or **Off or dim** doesn't come up at each switch while the panel reads that game. The panel keeps the final up for its usual time first: half an hour in My team (ten minutes for baseball), and **After the final** in Favorite teams, where a favorite's game also takes the panel **Take over** minutes before the start of the game, as always. **Follow this game** keeps its game up too. A splash on the board, about 7 seconds, finishes before the idle display takes the panel, so a win's splash shows whole, even with **Off or dim**. After a restart, a final the panel finds already over gets that wait only if the game started less than 4 hours ago, so an automatic update's restart in the night doesn't light up an **Off or dim** panel for last night's game. A golf tour or a racing series keeps its leaderboard up while a round or a session is on, and for half an hour after the final. Overnight between rounds, between a race weekend's sessions, and after that half hour, the idle display has the panel.
 

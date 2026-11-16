@@ -13,9 +13,7 @@ AHL and ECHL teams get this same board, with their scores from HockeyTech, the l
 
 The next-game card shows both logos, your team on the left, with the records under them. The ticker carries the puck drop day and time in the panel's timezone, the playoff series when there is one, the betting line, over/under and TV channel when ESPN has them and **Pre-game odds and TV** is on, and the arena.
 
-:::note[Coming in the next release]
 Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
-:::
 
 NHL teams have no Up next list on the device page: their season schedules are too large for the panel to read.
 

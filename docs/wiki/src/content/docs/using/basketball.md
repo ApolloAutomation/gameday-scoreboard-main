@@ -11,17 +11,11 @@ NBA, WNBA and men's college basketball games share one board. This page describe
 
 The next-game card shows both logos, your team on the left, with the records under them. The ticker carries the tip-off day and time in the panel's timezone, the playoff series when there is one, the betting line, over/under and TV channel when ESPN has them and **Pre-game odds and TV** is on, and the arena.
 
-:::note[Coming in the next release]
 Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
-:::
 
 Basketball teams have no Up next list on the device page: their season schedules are too large for the panel to read.
 
-A ranked men's college basketball team shows its rank in front of its name. Before tip-off the ticker starts with the matchup, like "#2 CONN vs #1 MICH", and the records after the final read "#2 CONN 34-6 | #1 MICH 37-3". On a 128x64 board the rank sits in front of the record under the logo, and on a single 64x64 panel in front of the abbreviation before and after the game, each only where it fits. See [Ranks and standings](/using/ticker/#ranks-and-standings).
-
-:::note[Coming in the next release]
-On a single 64x64 panel the day of the game takes the abbreviations' row before the game, so the rank shows in front of the abbreviation only after the game. Before it, the rank is in the ticker's matchup.
-:::
+A ranked men's college basketball team shows its rank in front of its name. Before tip-off the ticker starts with the matchup, like "#2 CONN vs #1 MICH", and the records after the final read "#2 CONN 34-6 | #1 MICH 37-3". On a 128x64 board the rank sits in front of the record under the logo, and on a single 64x64 panel in front of the abbreviation after the game, each only where it fits. Before the game the day of the game has that row on a single 64x64 panel, so the rank is in the ticker's matchup. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 An NBA or WNBA team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
 
