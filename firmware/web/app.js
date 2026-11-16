@@ -916,6 +916,8 @@
     renderTeam($("#tB"), g.l, g.oi, g.oa, g.or, football ? g.ot : null, g.p === 2, g.oc, g.ork);
     $("#sA").textContent = g.ts;
     $("#sB").textContent = g.os;
+    // Before the start, no 0-0
+    b.querySelector(".score").hidden = g.s === "PRE";
     const clock = $("#clock");
     if (g.s === "IN") clock.textContent = g.c || "In progress";
     else if (g.s === "POST") clock.textContent = endedAs(g);

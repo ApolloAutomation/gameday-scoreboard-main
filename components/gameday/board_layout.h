@@ -177,6 +177,9 @@ struct GameGeom {
   int16_t logo_x[2], logo_y;
   BoardFont abbr_font, score_font, clock_font;
   Spot abbr[2], score[2], clock;
+  // Before a game: the day or the time
+  Spot when;
+  BoardFont when_font;
   // Large clock: a text that doesn't fit uses these
   BoardFont clock_fall_font;
   Spot clock_fall;
@@ -228,6 +231,7 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
     g.score[0] = {36, 18, (int16_t) colw};
     g.score[1] = {(int16_t) half, 18, (int16_t) colw};
     g.clock = {32, 35, (int16_t) (w - 64)};  // the records' row, between them
+    g.when = {36, 20, (int16_t) (w - 72)};
     g.rec[0] = {0, 38, kRecRowPx};
     g.rec[1] = {(int16_t) (w - kRecRowPx), 38, kRecRowPx};
     g.down = {32, (int16_t) (48 - lift), (int16_t) (w - 64)};
@@ -260,6 +264,7 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
     g.score[1] = {(int16_t) half, sy, (int16_t) half};
     g.score_poss_dy = large_text ? 10 : 12;
     g.clock = {0, 33, (int16_t) w};  // in the abbreviations' row
+    g.when = {0, sy, (int16_t) w};
     g.base_px = 3;
     g.base_x[0] = (int16_t) (half + 3);
     g.base_x[1] = (int16_t) (half - 1);
@@ -271,6 +276,7 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
       g.out_x[i] = (int16_t) (half - 5 + i * 4);
     g.out_y = (int16_t) (large_text ? 50 : 51);
   }
+  g.when_font = BoardFont::S12;
   g.clock_fall_font = g.clock_font;
   g.clock_fall = g.clock;
   if (!large_clock)
@@ -299,6 +305,18 @@ inline GameGeom game_geom(int w, bool large_text = false, bool large_clock = fal
   }
   g.clock_top = (int16_t) (g.logo_y + kLogoPx);
   return g;
+}
+
+// "Sun 4:25 PM" as its day and its time.
+struct KickoffRows {
+  std::string day, time;
+};
+inline KickoffRows kickoff_rows(const std::string &label) {
+  const size_t colon = label.find(':');
+  const size_t cut = colon == std::string::npos ? label.rfind(' ') : label.rfind(' ', colon);
+  if (cut == std::string::npos)
+    return {label, ""};
+  return {label.substr(0, cut), label.substr(cut + 1)};
 }
 
 // Ink rows of one glyph, from the label's top.

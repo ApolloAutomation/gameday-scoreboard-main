@@ -112,6 +112,11 @@ test("an upcoming game shows kickoff and network", async ({ page, request }) => 
   await expect(page.locator("#clock")).toHaveText("Sun 3:25 PM");
   await expect(page.locator("#down")).toHaveText("on FOX");
   await expect(page.locator("#msg")).toBeHidden();
+  await expect(page.locator("#board .score")).toBeHidden();
+  const g = (await deviceState(request)).game;
+  await reset(request, { game: { ...g, ...LIVE } });
+  await page.goto("/");
+  await expect(page.locator("#board .score")).toBeVisible();
 });
 
 // ESPN lists a game with no kickoff time yet at midnight Eastern (Friday 11 PM
