@@ -174,10 +174,6 @@ struct UpdateFields {
   // Football's field under the labels (field.h)
   bool field{false};
   ::espn::FieldPic field_pic;
-  // Or another display's map, on the same canvas
-  ::espn::AppMap map_pic;
-  // A drawn plane in its sky, until a photo loads
-  ::espn::AppSky sky_pic;
 };
 
 enum class SelectType : uint8_t { TEAM, TIMEZONE, MODE, FAVORITE };
@@ -1490,12 +1486,6 @@ class GamedayComponent : public Component, public AsyncWebHandler {
   void land_post_(AsyncWebServerRequest *request);  // on the HTTP task
   void land_take_(uint8_t *p, size_t n);             // on the main loop
   const char *land_state_(int32_t lat_e4, int32_t lon_e4, bool home) const;
-  ::espn::LandSet land_{};
-  uint8_t *land_stage_{nullptr};  // the HTTP task only
-  size_t land_got_{0};
-  bool land_bad_{false};
-  bool land_saved_{false};  // false: kept only until restart
-  std::atomic<uint32_t> land_home_{::espn::kLandNoHome};
   ::espn::MainView main_view_{::espn::MainView::GAMEDAY};
   UpdateFields *main_app_{nullptr};  // PSRAM: what the board draws then
   ::espn::AppTimes app_times_;
@@ -1643,6 +1633,13 @@ class GamedayComponent : public Component, public AsyncWebHandler {
     GamedayComponent *parent_;
   };
   HotspotHandler hotspot_handler_{this};
+  // Last, so the loop's members keep their offsets
+  ::espn::LandSet land_{};
+  uint8_t *land_stage_{nullptr};  // the HTTP task only
+  size_t land_got_{0};
+  bool land_bad_{false};
+  bool land_saved_{false};  // false: kept only until restart
+  std::atomic<uint32_t> land_home_{::espn::kLandNoHome};
 };
 
 class UpdateTrigger : public Trigger<const UpdateFields &> {

@@ -504,7 +504,7 @@ def land_reach_box(lat_e2, reach):
 def land_check(b):
     """land_check(): the error word, or None and the set's center and counts."""
     c = LAND_CAP
-    if len(b) < c["kLandHead"] or len(b) > c["kLandMaxBytes"] or b[:4] != b"GL\x01\x00":
+    if len(b) < c["kLandHead"] or len(b) > c["kLandMaxBytes"] or b[:4] != b"GL\x02\x00":
         return "format", None
     i16 = lambda at: int.from_bytes(b[at:at + 2], "little", signed=True)
     u16 = lambda at: int.from_bytes(b[at:at + 2], "little")

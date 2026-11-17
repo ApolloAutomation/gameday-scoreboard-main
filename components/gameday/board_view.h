@@ -18,6 +18,12 @@ namespace esphome::gameday {
 
 struct UpdateFields;
 
+// A display's map canvas and its drawn plane's sky
+struct AppPics {
+  ::espn::AppMap map;
+  ::espn::AppSky sky;
+};
+
 // Index 0 is the team, 1 the opponent; nullptr skipped
 struct BoardView {
   lv_obj_t *game{nullptr};
@@ -168,6 +174,8 @@ struct AreaView {
 
 // The bound area, or nullptr before binding
 AreaView *area_view();
+// A view's AppPics slot (PSRAM, filled by the component)
+AppPics *&view_pics(const BoardView &v);
 // Once only, in PSRAM; nullptr when out of memory
 AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
                      image::Image *blank);

@@ -115,7 +115,7 @@ void test_check() {
   };
   const Bad bad[] = {
       {"magic", LandError::FORMAT, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { b[0] = 'X'; }},
-      {"version", LandError::FORMAT, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { b[2] = 2; }},
+      {"version", LandError::FORMAT, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { b[2] = 1; }},
       {"flags", LandError::FORMAT, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { b[3] = 1; }},
       {"lat", LandError::COUNTS, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { put16(b, 4, 9001); }},
       {"lon", LandError::COUNTS, [](std::vector<uint8_t> &b, size_t, size_t, size_t) { put16(b, 6, -18001); }},
@@ -159,11 +159,11 @@ void test_check() {
   LCHECK(cut_ok == (int) good.size(), "every truncation refused: %d of %d", cut_ok, (int) good.size());
   LCHECK(land_check(nullptr, 0, s) == LandError::FORMAT && s.p == nullptr, "no bytes");
   // The largest set is exactly the cap's worth
-  std::vector<LandPlaceIn> many(kLandMaxPlaces, LandPlaceIn{0, 0, 1, "ABCDEFGHIJ"});
+  std::vector<LandPlaceIn> many(kLandMaxPlaces, LandPlaceIn{0, 0, 1, "ABCDEFGHIJKLMN"});
   std::vector<LandLineIn> ls(kLandMaxLines - 1, LandLineIn{2, std::vector<std::pair<int, int>>(8, {0, 0})});
   ls.push_back(LandLineIn{0, std::vector<std::pair<int, int>>(kLandMaxPoints - 8 * (kLandMaxLines - 1), {0, 0})});
   std::vector<uint8_t> big = land_encode(-9000, 18000, kLandMaxReach, many, ls);
-  LCHECK(big.size() == 7840 && check(big) == LandError::OK, "the largest set: %d bytes", (int) big.size());
+  LCHECK(big.size() == 8096 && check(big) == LandError::OK, "the largest set: %d bytes", (int) big.size());
   big.push_back(0);
   LCHECK(check(big) == LandError::LENGTH, "a byte past the largest: length");
   // The reach box's edge, and a unit past it
@@ -214,7 +214,12 @@ void test_projection() {
   while (wx::merc_px_y(lat, 7) > wy - 9.0f)
     lat += 0.0001f;
   LCHECK(map_xy(p, lat, -84.73f, x, y) && y == 23, "nine tile pixels north, four and a half here: %d", y);
-  LCHECK(!map_xy(p, 38.05f, 60.0f, x, y) && x == 4096, "far away is clamped: %d", x);
+  LCHECK(!map_xy(p, 38.05f, 60.0f, x, y), "far away is left out: %d", x);
+  // Across the 180th meridian: the short way round
+  const MapProj dl = map_proj(-164300, 1799500, 0.5f, 128, 56);
+  LCHECK(map_xy(dl, -16.43f, -179.95f, x, y) && x > 64 && x < 70 && y == 28, "east of the line: %d,%d", x, y);
+  const MapProj dw = map_proj(-164300, -1799500, 0.5f, 128, 56);
+  LCHECK(map_xy(dw, -16.43f, 179.95f, x, y) && x < 64 && x > 58 && y == 28, "west of the line: %d,%d", x, y);
   const float rs = map_scale_ring(380500, 23, 16093.44f);
   LCHECK(fabsf(rs * 16093.44f / wx::ground_m_per_px(38.05f, 7) - 23.0f) < 0.01f, "ten miles is 23 px: %g", (double) rs);
   AppMap q = m;
@@ -257,8 +262,8 @@ void labels_sound(const AppMap &m, const LandSet &s, const char *what) {
     for (const AppMapKeep &k : m.keep)
       LCHECK(k.w == 0 || !box_overlap(b, PxBox{k.x, k.y, k.w, k.h}), "%s: %s off a kept box", what, pl.name);
     for (const PxBox &o : boxes)
-      LCHECK(!box_overlap(PxBox{(int16_t) (b.x - 1), (int16_t) (b.y - 1), (int16_t) (b.w + 2), (int16_t) (b.h + 2)}, o),
-             "%s: %s touches another", what, pl.name);
+      LCHECK(!box_overlap(PxBox{(int16_t) (b.x - 3), (int16_t) (b.y - 2), (int16_t) (b.w + 6), (int16_t) (b.h + 4)}, o),
+             "%s: %s within a word's space of another", what, pl.name);
     // A town's label stays on one side of the ring
     if (m.ring > 0 && pl.cls < 3) {
       int in = 0, out = 0, on = 0;
@@ -351,6 +356,63 @@ void test_paint() {
     LCHECK(k == map_label_cap(cm), "%dx%d crowded: the cap, %d", sz.first, sz.second, k);
     labels_sound(cm, cs, "crowded");
   }
+  // The big city's label comes before a nearby town
+  {
+    const AppMap lm = weather_map(128, 56, 400000, -900000);
+    const MapProj lp = map_proj(lm.lat_e4, lm.lon_e4, lm.scale_q16 / 65536.0f, lm.w, lm.h);
+    // Due east, on the ring's line, both sides of it
+    int ex = 0, ey = 0;
+    const float per_px = 360.0f / 32768.0f / (lm.scale_q16 / 65536.0f);
+    const int east = (int) lroundf((lm.ring - 2) * per_px * 4000.0f);
+    LCHECK(map_xy(lp, 40.0f, -90.0f + east / 4000.0f, ex, ey), "east on the map");
+    std::vector<LandPlaceIn> two = {{0, east, 4, "BIGTOWN"}, {-260, east + 300, 2, "SMALLVILLE"}};
+    std::vector<uint8_t> tb = land_encode(4000, -9000, 100, two, {});
+    LandSet ts;
+    land_check(tb.data(), tb.size(), ts);
+    MapLabel tl[kMapLabelMax];
+    const int k = map_labels(lm, ts, tl, map_label_cap(lm));
+    bool big = false;
+    for (int i = 0; i < k; i++)
+      big = big || tl[i].place == 0;
+    LCHECK(big, "the class 4 city is labeled: %d labels", k);
+  }
+  // Lines past the canvas: clipped, straight, and cheap
+  {
+    std::vector<uint8_t> cr = land_encode(4000, -9000, 250, {}, {{2, {{-2000, -12000}, {2000, 12000}}}});
+    LandSet xs;
+    land_check(cr.data(), cr.size(), xs);
+    AppMap xm = weather_map(128, 56, 400000, -900000);
+    xm.keep[0] = xm.keep[1] = AppMapKeep();
+    Canvas xc(128, 56);
+    map_paint(xc.p, xm, &xs);
+    const MapProj xp = map_proj(xm.lat_e4, xm.lon_e4, xm.scale_q16 / 65536.0f, xm.w, xm.h);
+    float ax, ay, bx, by;
+    map_xyf(xp, 40.0f - 0.5f, -90.0f - 3.0f, ax, ay);
+    map_xyf(xp, 40.0f + 0.5f, -90.0f + 3.0f, bx, by);
+    int off = 0, on = 0;
+    for (int x = 0; x < 128; x++) {
+      const float ty = ay + (by - ay) * (x + 0.5f - ax) / (bx - ax);
+      for (int y = 0; y < 56; y++)
+        if (xc.px[(size_t) y * 128 + x] == rgb565(0x4A3A24)) {
+          on++;
+          off += fabsf(y + 0.5f - ty) > 1.5f;
+        }
+    }
+    LCHECK(on >= 100 && off == 0, "one straight road across: %d on, %d off it", on, off);
+    // A far point breaks the line, never bends it
+    std::vector<uint8_t> brk = land_encode(4000, -9000, 300, {}, {{2, {{0, -200}, {0, 100}, {11000, 100}}}});
+    LandSet bs;
+    LCHECK(land_check(brk.data(), brk.size(), bs) == LandError::OK, "a road north");
+    AppMap bm = xm;
+    bm.scale_q16 = 65536 * 16;
+    Canvas bc(128, 56);
+    map_paint(bc.p, bm, &bs);
+    int up = 0;
+    for (int y = 0; y < 20; y++)
+      for (int x = 0; x < 128; x++)
+        up += bc.px[(size_t) y * 128 + x] == rgb565(0x4A3A24);
+    LCHECK(bc.count(0x4A3A24) > 0 && up == 0, "the far leg is left out: %d", up);
+  }
   // A line far outside costs a clamped walk
   std::vector<uint8_t> far = land_encode(4000, -9000, 250, {}, {{2, {{-9000, -12000}, {9000, 12000}}}});
   LandSet fs;
@@ -380,7 +442,7 @@ void test_paint() {
     LCHECK(intact, "%dx%d: the guard bytes stay", w, h);
   }
   // The sample paints the same picture every time
-  static const uint32_t kHash[3] = {0x79115bf7u, 0x9e792a4au, 0xe450fa0bu};
+  static const uint32_t kHash[3] = {0x20357045u, 0x14e44515u, 0x425be135u};
   int k = 0;
   for (const auto &sz : {std::make_pair(64, 56), std::make_pair(128, 56), std::make_pair(128, 120)}) {
     Canvas hc(sz.first, sz.second);

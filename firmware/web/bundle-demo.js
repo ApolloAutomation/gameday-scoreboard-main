@@ -2497,10 +2497,10 @@ radius_unit: r ? r[2] || "mi" : f.radius_unit,
 receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
 };
 };
-const OSM_HOSTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-const OSM_WAIT_MS = 120000;
-const LAND = { places: 64, lines: 200, points: 1600, name: 10, off: 32000, reach: 250, roads: 160, villages: 30 };
-const land = { key: "", say: "", n: 0, job: null };
+const OSM_HOSTS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const OSM_WAIT_MS = 60000;
+const LAND = { places: 64, lines: 200, points: 1600, name: 14, off: 32000, reach: 250, coast: 150, roads: 120, villages: 30 };
+const land = { key: "", say: "", n: 0, job: null, t0: 0 };
 const e2 = (v) => Math.sign(v) * Math.floor((Math.round(Math.abs(v) * 1e4) + 50) / 100);
 const homeKey = (home) => {
 const c = COORDS.exec(home || "");
@@ -2512,11 +2512,11 @@ const dy = km / 111.32, dx = km / (111.32 * Math.cos(lat * Math.PI / 180));
 return [Math.max(-85, lat - dy), Math.max(-180, lon - dx), Math.min(85, lat + dy), Math.min(180, lon + dx)]
 .map((v) => v.toFixed(3)).join(",");
 };
-const b = box(LAND.reach), r = box(LAND.roads), v = box(LAND.villages);
-return `[out:json][timeout:100][maxsize:268435456];node[place~"^(city|town)$"][name](${b});out qt;`
+const b = box(LAND.reach), c = box(LAND.coast), r = box(LAND.roads), v = box(LAND.villages);
+return `[out:json][timeout:50][maxsize:67108864];node[place~"^(city|town)$"][name](${b});out qt;`
 + `node[place=village][name](${v});out qt;make marker kind="border";out;`
-+ `rel[boundary=administrative][admin_level~"^(2|4)$"](${b});way(r)(${b});out skel geom(${b}) qt;`
-+ `make marker kind="coast";out;way[natural=coastline](${b});out skel geom(${b}) qt;`
++ `rel[boundary=administrative][admin_level=4](${b});way(r)(${b});out skel geom(${b}) qt;`
++ `make marker kind="coast";out;way[natural=coastline](${c})(if:!is_closed()||length()>8000);out skel geom(${c}) qt;`
 + `make marker kind="road";out;way[highway=motorway](${r});out skel geom(${r}) qt;`;
 };
 const osmFetch = async (q, job) => {
@@ -2538,22 +2538,27 @@ if (!again) break;
 }
 return null;
 };
-const SHORT = { SAINT: "ST", SAINTE: "STE", MOUNT: "MT", FORT: "FT", NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W", PORT: "PT" };
+const SHORT_END = { BEACH: "BCH", SPRINGS: "SPGS", GARDENS: "GDNS", HEIGHTS: "HTS", VILLAGE: "VLG", JUNCTION: "JCT",
+CENTER: "CTR", CENTRE: "CTR", HARBOR: "HBR", HARBOUR: "HBR", MOUNTAIN: "MTN", ISLAND: "IS", CREEK: "CRK" };
+const SHORT_START = { SAINT: "ST", SAINTE: "STE", MOUNT: "MT", FORT: "FT", NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W" };
 const landName = (tags) => {
-const ascii = (s) => (typeof s === "string" ? s.normalize("NFD").replace(/[̀-ͯ]/g, "") : "");
+const ascii = (s) => (typeof s === "string" ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "");
 const raw = [tags["name:en"], tags.name, tags.int_name].map(ascii).find((s) => s && /^[\x20-\x7e]+$/.test(s));
 if (!raw) return "";
-let n = raw.toUpperCase().replace(/[^A-Z0-9 .'-]/g, "").replace(/[A-Z]+/g, (w) => SHORT[w] || w)
-.replace(/\s+/g, " ").trim();
-if (n.length > LAND.name) {
-const first = n.split(" ")[0];
-n = first.length >= 3 && first.length <= LAND.name ? first : n.slice(0, LAND.name);
-}
-return n.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "");
+const tidy = (n) => n.replace(/\s+/g, " ").replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "");
+let n = tidy(raw.toUpperCase().replace(/[^A-Z0-9 .'-]/g, ""));
+for (const short of [SHORT_END, SHORT_START])
+if (n.length > LAND.name) n = tidy(n.replace(/[A-Z]+/g, (w) => short[w] || w));
+if (n.length <= LAND.name) return n;
+const words = n.match(/[^ -]+[ -]?/g) || [];
+let cut = "";
+for (let k = 0; k < words.length && tidy(cut + words[k]).length <= LAND.name; k++) cut += words[k];
+cut = tidy(cut);
+return /[ -]/.test(cut) ? cut : "";
 };
-const simplify = (pts) => {
+const simplify = (pts, k = 1) => {
 if (pts.length < 3) return pts;
-const tol = (p) => Math.max(0.15, Math.min(1.5, Math.hypot(p[0], p[1]) / 40));
+const tol = (p) => k * Math.max(0.15, Math.min(1.5, Math.hypot(p[0], p[1]) / 40));
 const keep = new Uint8Array(pts.length);
 keep[0] = keep[pts.length - 1] = 1;
 const stack = [[0, pts.length - 1]];
@@ -2613,7 +2618,7 @@ const [a, b] = off(p);
 return Math.hypot(p[0], p[1]) <= km && Math.abs(a) <= limLat && Math.abs(b) <= limLon;
 };
 const xy = (g) => [(g.lon - lon0) * kx, (g.lat - lat0) * ky];
-const reach = { border: LAND.reach, coast: LAND.reach, road: LAND.roads };
+const reach = { border: LAND.reach, coast: LAND.coast, road: LAND.roads };
 const raw = { border: [], coast: [], road: [] }, found = [];
 let kind = "place";
 for (const el of doc.elements) {
@@ -2640,7 +2645,7 @@ cands.sort((a, b) => b.cls - a.cls || b.n - a.n || a.d - b.d);
 const bands = [[], [], [], []];
 for (const c of cands) {
 const all = bands.flat();
-if (all.some((o) => o.name === c.name && Math.hypot(o.p[0] - c.p[0], o.p[1] - c.p[1]) < 2)) continue;
+if (all.some((o) => o.name === c.name)) continue;
 const band = bands[c.d <= 25 ? 0 : c.d <= 60 ? 1 : c.d <= 120 ? 2 : 3];
 if (band.length < 16) band.push(c);
 }
@@ -2656,19 +2661,31 @@ if (run.length > 1) pieces.push(run);
 run = [];
 }
 }
-lines[kd] = pieces.map(simplify).filter((l) => lineLen(l) >= 3);
+lines[kd] = pieces.map((l) => simplify(l, kd === "coast" ? 2 : 1)).filter((l) => lineLen(l) >= 3);
 }
+const ring = (l) => Math.hypot(l[0][0] - l[l.length - 1][0], l[0][1] - l[l.length - 1][1]) < 0.1;
+const near = (l) => l.reduce((m, p) => Math.min(m, Math.hypot(p[0], p[1])), Infinity);
+lines.coast = lines.coast.filter((l) => !ring(l) || lineLen(l) >= Math.max(8, near(l) / 3));
 const roads = [];
 for (const l of lines.road.sort((a, b) => lineLen(b) - lineLen(a))) {
 const near = l.filter((p) => roads.some((o) => o.some((q, i) => i > 0 && segDist(p, o[i - 1], q) < 0.8))).length;
 if (near < 0.8 * l.length) roads.push(l);
 }
-const segs = [];
+const rank = (ls) => ls.map((l) => ({ l, s: lineLen(l) / (1 + near(l) / 40) })).sort((a, b) => b.s - a.s).map((x) => x.l);
+const kinds = [[1, rank(lines.coast), 0.35], [0, rank(lines.border), 0.25], [2, rank(roads), 0.4]];
+const segs = [], taken = new Set();
 let npt = 0;
-for (const [kd, ls] of [[1, lines.coast], [0, lines.border], [2, roads]]) {
+for (const share of [true, false]) {
+for (const [kd, ls, part] of kinds) {
+let mine = 0, minePts = 0;
 for (const l of ls) {
-const parts = Math.ceil((l.length - 1) / 254);
-if (segs.length + parts > LAND.lines || npt + l.length + parts - 1 > LAND.points) continue;
+if (taken.has(l)) continue;
+const parts = Math.ceil((l.length - 1) / 254), pts = l.length + parts - 1;
+if (segs.length + parts > LAND.lines || npt + pts > LAND.points) continue;
+if (share && (mine + parts > LAND.lines * part || minePts + pts > LAND.points * part)) continue;
+taken.add(l);
+mine += parts;
+minePts += pts;
 for (let i = 0; i < l.length - 1; i += 254) {
 const s = l.slice(i, i + 255);
 segs.push({ kd, l: s });
@@ -2676,11 +2693,12 @@ npt += s.length;
 }
 }
 }
-const buf = new DataView(new ArrayBuffer(16 + places.length * 16 + segs.length * 2 + npt * 4));
+}
+const buf = new DataView(new ArrayBuffer(16 + places.length * (6 + LAND.name) + segs.length * 2 + npt * 4));
 let at = 0;
 const u8 = (v) => buf.setUint8(at++, v);
 const i16 = (v) => { buf.setInt16(at, v, true); at += 2; };
-[71, 76, 1, 0].forEach(u8);
+[71, 76, 2, 0].forEach(u8);
 [e2(lat0), e2(lon0), places.length, segs.length, npt, LAND.reach].forEach(i16);
 for (const c of places) {
 off(c.p).forEach(i16);
@@ -2713,8 +2731,15 @@ if (land.key === key && land.say === "looking") return;
 if (!force && key === panelKey() && D && D.landmarks === "ok") return;
 if (land.job) { land.job.stopped = true; if (land.job.ctl) land.job.ctl.abort(); }
 const job = { stopped: false, ctl: null };
-Object.assign(land, { key, say: "looking", job });
+Object.assign(land, { key, say: "looking", job, t0: Date.now() });
 renderAll();
+const tick = setInterval(() => {
+if (land.job !== job) return clearInterval(tick);
+for (const p of ["flight", "wx"]) {
+const say = $("#" + p + "MarksSay");
+if (say && land.say === "looking") say.textContent = lookingSay();
+}
+}, 1000);
 const [la, lo] = key.split(",").map((v) => Number(v) / 100);
 const doc = await osmFetch(landQuery(la, lo), job);
 if (job.stopped) return;
@@ -2723,10 +2748,15 @@ const ok = bytes && (!posted || (await posted));
 const n = ok ? await landSend(key, bytes) : null;
 if (job.stopped) return;
 land.job = null;
+clearInterval(tick);
 if (n === -1) Object.assign(land, { key: "", say: "" });
 else Object.assign(land, { say: n === null ? "failed" : "added", n });
 renderAll();
 scheduleState(APPLY_MS + 100);
+};
+const lookingSay = () => {
+const sec = Math.floor((Date.now() - land.t0) / 1000);
+return "Adding map landmarks... this can take a minute." + (sec >= 5 ? " (" + sec + " s)" : "");
 };
 const renderMarks = (p, home) => {
 const row = $("#" + p + "Marks");
@@ -2737,10 +2767,11 @@ const mine = land.key === key ? land.say : "";
 const towns = (n) => n + (n === 1 ? " town or city." : " towns and cities.");
 const ok = S.landmarks === "ok" && key === panelKey();
 $("#" + p + "MarksSay").textContent =
-mine === "looking" ? "Adding map landmarks... this can take a minute."
+mine === "looking" ? lookingSay()
 : mine === "added" ? "Map landmarks added: " + towns(land.n)
 : mine === "failed" ? "Couldn't add map landmarks. The radar works without them."
 : ok ? "Map landmarks: " + towns(Number(S.landmarks_n) || 0)
+: p === "flight" ? "On four panels in a row or two rows of two, the flight radar beside the card can show nearby towns, roads and borders. Weather's radar uses them too."
 : "The radar can show nearby towns, roads and borders.";
 const go = $("#" + p + "MarksGo");
 go.hidden = mine === "looking" || mine === "added" || (ok && mine !== "failed");

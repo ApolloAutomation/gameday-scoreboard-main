@@ -572,7 +572,10 @@ void blit(lv_obj_t *o, uint16_t *shown, const uint16_t *next, int bw, int bh, bo
 // Only the pixels that changed redraw
 void put_field(BoardView &v, const UpdateFields &f) {
   const ::espn::FieldPic &pic = f.field_pic;
-  const ::espn::AppMap &map = f.map_pic;
+  static const ::espn::AppMap kNoMap{};
+  // Another display's frame: its view's map
+  const AppPics *pics = f.game_state == "APP" ? view_pics(v) : nullptr;
+  const ::espn::AppMap &map = pics != nullptr ? pics->map : kNoMap;
   const uint8_t kind = !f.board ? 0 : f.field && pic.w > 0 && pic.h > 0 ? 1 : !f.field && map.w > 0 && map.h > 0 ? 2 : 0;
   if (kind == 0) {
     show(v.field, false);
@@ -660,8 +663,8 @@ void sky_tick(lv_timer_t *t) {
 
 // The frame's moving sky, its own canvas and timer
 void put_sky(BoardView &v, const UpdateFields &f) {
-  const ::espn::AppSky &s = f.sky_pic;
-  if (!f.board || s.w == 0 || s.h == 0) {
+  const AppPics *pics = f.game_state == "APP" ? view_pics(v) : nullptr;
+  if (!f.board || pics == nullptr || pics->sky.w == 0 || pics->sky.h == 0) {
     show(v.sky, false);
     if (v.sky_timer != nullptr)
       lv_timer_pause(v.sky_timer);
@@ -685,6 +688,7 @@ void put_sky(BoardView &v, const UpdateFields &f) {
     lv_obj_remove_flag(v.sky, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
     v.sky_shown = ::espn::AppSky();
   }
+  const ::espn::AppSky &s = pics->sky;
   ::espn::AppSky &was = v.sky_shown;
   const bool fresh = lv_obj_has_flag(v.sky, LV_OBJ_FLAG_HIDDEN) || was.x != s.x || was.y != s.y || was.w != s.w ||
                      was.h != s.h;
@@ -1289,6 +1293,15 @@ void clock_tick(const struct tm &t, bool card_date) {
 }
 
 AreaView *area_view() { return area_ptr; }
+
+AppPics *&view_pics(const BoardView &v) {
+  // The main board and the second area's
+  static const BoardView *who[2];
+  static AppPics *pics[2];
+  const int i = who[0] == &v || who[0] == nullptr ? 0 : 1;
+  who[i] = &v;
+  return pics[i];
+}
 
 AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
                      image::Image *blank) {

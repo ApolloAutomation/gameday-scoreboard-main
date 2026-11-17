@@ -1324,7 +1324,7 @@ void test_widen() {
   r.app.set("flyradius", "10mi");
   r.app.shown(true);
   FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(10), "the owner's distance first: %s", r.last_url.c_str());
-  FCHECK(r.app.wide() == 15, "an empty read widens a step: %u", r.app.wide());
+  FCHECK(r.app.wide() == 250, "an empty read looks once at the widest: %u", r.app.wide());
   FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "at the same pace");
   espn::AppFrame f;
   r.app.frame(128, 64, r.now, f);
@@ -1333,23 +1333,19 @@ void test_widen() {
   r.app.state(d.to<JsonObject>(), r.now);
   FCHECK(d["status"] == "ok" && d["planes"] == 0 && d["wide"].isNull() && d["radius"] == 10, "the page: not wider yet");
 
+  // A failed read never widens further
   r.wait();
-  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(15), "the next read wider: %s", r.last_url.c_str());
-  FCHECK(r.app.wide() == 25, "another step: %u", r.app.wide());
-  d.clear();
-  r.app.state(d.to<JsonObject>(), r.now);
-  FCHECK(d["wide"] == 15 && d["radius"] == 10, "the page hears how far it looked");
-  // A failed read never widens
+  FCHECK(r.step(503, "") && r.last_url == fr24_at(250) && r.app.wide() == 250, "a failure: %u", r.app.wide());
   r.wait();
-  FCHECK(r.step(503, "") && r.last_url == fr24_at(25) && r.app.wide() == 25, "a failure: %u", r.app.wide());
-  r.wait();
-  // A plane 30 miles out: not in 25, so 50
-  
-  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.app.wide() == 50 && r.app.nearby().n == 0, "past 25: %u", r.app.wide());
+  // Planes 30 and 120 mi out: within 50, read 100
+  FCHECK(r.step(200, fr24_north({0.4348, 1.739}, r.now)) && r.last_url == fr24_at(250) && r.app.nearby().n == 1 &&
+             r.app.wide() == 100,
+         "found from the widest: %s %u", r.last_url.c_str(), r.app.wide());
   const int64_t widened = r.now;
   r.wait();
-  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.last_url == fr24_at(50) && r.app.nearby().n == 1 && r.app.wide() == 50,
-         "found at 50: %s", r.last_url.c_str());
+  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.last_url == fr24_at(100) && r.app.nearby().n == 1 &&
+             r.app.wide() == 100,
+         "read a step past it: %s", r.last_url.c_str());
   d.clear();
   r.app.state(d.to<JsonObject>(), r.now);
   FCHECK(d["status"] == "wide" && d["wide"] == 50 && d["radius"] == 10 && d["planes"] == 1 && d["nearest"] == "AAL0",
@@ -1399,18 +1395,18 @@ void test_widen() {
   // A plane inside shows at once; the read stays wide
   r.now = widened + 60;
   FCHECK(r.step(200, fr24_north({0.4348, 0.0725}, r.now)) && r.app.nearby().n == 1 &&
-             r.app.nearby().planes[0].dist_nm < to_nm(10, DistUnit::MILES) && r.app.wide() == 50,
-         "inside 10, still reading 50: %u", r.app.wide());
+             r.app.nearby().planes[0].dist_nm < to_nm(10, DistUnit::MILES) && r.app.wide() == 100,
+         "inside 10, still reading 100: %u", r.app.wide());
   d.clear();
   r.app.state(d.to<JsonObject>(), r.now);
   FCHECK(d["status"] == "ok" && d["wide"].isNull() && d["planes"] == 1, "the page: back to normal");
   f = espn::AppFrame();
   r.app.frame(128, 64, r.now, f);
   FCHECK(f.ticker.find("1 plane nearby") == 0 && !frame_has_color(f, "5.0 mi N", kColRoute), "%s", f.ticker.c_str());
-  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.last_url == fr24_at(50) && r.app.wide() == 50,
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.last_url == fr24_at(100) && r.app.wide() == 100,
          "held: %s", r.last_url.c_str());
   r.now = widened + FlightsApp::kWidenHoldS - 1;
-  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 50, "not before the hold's end");
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 100, "not before the hold's end");
   r.now = widened + FlightsApp::kWidenHoldS;
   FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 0, "after the hold: back");
   FCHECK(read_pos(r, fr24_north({0.0725}, r.now + 20)) && r.last_url == fr24_at(10), "the owner's again: %s",
@@ -1418,10 +1414,27 @@ void test_widen() {
 
   // A new distance starts over
   read_pos(r, kNoPlanes);
-  FCHECK(r.app.wide() == 15, "widening again");
+  FCHECK(r.app.wide() == 250, "widening again");
   r.app.set("flyradius", "25mi");
   FCHECK(r.app.wide() == 0, "a new distance resets");
-  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(25) && r.app.wide() == 50, "%s", r.last_url.c_str());
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(25) && r.app.wide() == 250, "%s", r.last_url.c_str());
+
+  // Five miles to a plane 104 out: two reads
+  {
+    Reads q;
+    q.app.setup();
+    q.app.set("flyhome", "40.71,-74.01");
+    q.app.set("flyradius", "5mi");
+    q.app.shown(true);
+    q.step(200, kNoPlanes);
+    q.wait();
+    FCHECK(q.step(200, fr24_north({1.5}, q.now)) && q.last_url == fr24_at(250) && q.app.nearby().n == 1 &&
+               q.app.wide() == 250,
+           "found on the second read: %u", q.app.wide());
+    d.clear();
+    q.app.state(d.to<JsonObject>(), q.now);
+    FCHECK(d["status"] == "wide" && d["wide"] == 150 && d["radius"] == 5, "shown within 150");
+  }
 
   // Nothing out to the widest: the standing screen, reads slower
   Reads c;
@@ -1456,9 +1469,7 @@ void test_widen() {
   a.app.set("flyradius", "50mi");
   FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/45") != std::string::npos, "%s", a.last_url.c_str());
   a.wait();
-  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/88") != std::string::npos, "%s", a.last_url.c_str());
-  a.wait();
-  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/132") != std::string::npos, "%s", a.last_url.c_str());
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/219") != std::string::npos, "%s", a.last_url.c_str());
   espn::app_env().tz = 0;
 }
 
@@ -2145,6 +2156,18 @@ void test_radar_frames() {
   full.n = kNear;
   radar_map(full, 0, p, 0, 0, 64, m);
   FCHECK(m.n_blips == espn::kAppBlips && m.blips[7].number == 0, "eight at most, the seventh row has no number");
+  // A home by the 180th meridian sees planes across it
+  Prefs dl;
+  prefs_set(dl, "flyhome", "-16.43,179.95");
+  prefs_set(dl, "flyradius", "10mi");
+  Nearby across;
+  across.planes[0] = radar_plane("EAST1", 0.0f, 3.0f, 90);
+  across.planes[0].lat = -16.43f;
+  across.planes[0].lon = -179.95f;
+  across.n = 1;
+  radar_map(across, 0, dl, 0, 0, 64, m);
+  FCHECK(m.n_blips == 1 && m.blips[0].x > 64 && m.blips[0].x < 64 + kRadarRing && std::abs(m.blips[0].y - 28) <= 1,
+         "across the line, just east: %d %d,%d", m.n_blips, m.blips[0].x, m.blips[0].y);
 }
 
 int run_flight_tests(int &total_checks) {

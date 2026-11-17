@@ -469,8 +469,12 @@ Mercator onto black, places labels biggest first where they fit, and leaves
 the image's alpha (`MapCanvas::finish` now writes RGB565 with an alpha
 plane, the same picture over black) to lay rain over it. The set comes from
 the device page: the browser asks OpenStreetMap's Overpass service for one
-box around the rounded home (overpass-api.de, overpass.kumi.systems if
-that fails), simplifies it to at most 64 places and 1,600 line points, and
+box around the rounded home (overpass-api.de, the maps.mail.ru instance if
+that fails, a minute each), asking for state lines only, no coastline
+islands under 8 km and motorways within 120 km; it simplifies that to at
+most 64 places (names up to 14 characters, shortened by whole words or
+dropped, never cut) and 1,600 line points, coast, borders and roads each
+with a share of the caps, ranked by length and nearness, and
 posts at most 8 KB as
 `application/octet-stream` to `/gameday/landmarks`, which ESPHome's web
 server streams to `handleBody` into a PSRAM staging buffer. `land_check`
@@ -478,7 +482,11 @@ proves every count, name and offset before the main loop swaps the set in
 (`app_env().land`), and the panel keeps it in its own NVS namespace,
 `gd_land`, apart from the preferences, so no saved struct changes. A set for
 another rounded home is not drawn, and a Weather radar with no set draws no
-canvas at all.
+canvas at all. Lines are clipped to the canvas before they are walked, a
+point past the projection's reach breaks its line, and longitudes are taken
+the short way round the 180th meridian. The frame's map and sky go to the
+board in an `AppPics` in PSRAM, one per view (`view_pics`), not in
+`UpdateFields`, so the main loop's frames keep their size.
 
 **The plane radar.** When the Flight Tracker has a 256x64 or 128x128 frame
 (`radar_room`), `FlightsApp::frame` draws the 128x64 card in one half and

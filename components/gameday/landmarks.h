@@ -10,16 +10,17 @@
 namespace espn {
 
 // The device page's set, little endian, in bytes:
-// header 16, then places 16, lines 2, points 4.
-constexpr size_t kLandHead = 16, kLandPlaceBytes = 16;
+// header 16, then places 20, lines 2, points 4.
+constexpr size_t kLandHead = 16, kLandPlaceBytes = 20;
 constexpr size_t kLandMaxPlaces = 64, kLandMaxLines = 200, kLandMaxPoints = 1600;
 constexpr size_t kLandMaxBytes = 8192;
 constexpr int kLandMaxReach = 300;
 // Offsets in 1/4000 degree.
 constexpr int kLandMaxOff = 32000;
-constexpr int kLandName = 10;
+constexpr int kLandName = 14;
+constexpr uint8_t kLandVersion = 2;
 constexpr size_t kLandWorst = kLandHead + kLandMaxPlaces * kLandPlaceBytes + kLandMaxLines * 2 + kLandMaxPoints * 4;
-static_assert(kLandWorst == 7840 && kLandWorst <= kLandMaxBytes, "the largest set fits the cap");
+static_assert(kLandWorst == 8096 && kLandWorst <= kLandMaxBytes, "the largest set fits the cap");
 
 enum class LandKind : uint8_t { BORDER = 0, COAST = 1, ROAD = 2 };
 
@@ -65,6 +66,7 @@ struct MapProj {
 };
 MapProj map_proj(int32_t lat_e4, int32_t lon_e4, float s, int w, int h);
 // False when far outside the canvas.
+bool map_xyf(const MapProj &p, float lat, float lon, float &x, float &y);
 bool map_xy(const MapProj &p, float lat, float lon, int &x, int &y);
 // MapCanvas's scale for a 256 px tile.
 float map_scale_weather(int w, int h);

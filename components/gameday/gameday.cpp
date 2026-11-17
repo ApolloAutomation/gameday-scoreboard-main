@@ -6242,12 +6242,22 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
     t.text = panel_text(t.text);
   f.art = std::move(fr.art);
   f.bar = fr.bar;
-  if (fr.map.w > 0 && fr.map.x + fr.map.w <= w && fr.map.y + fr.map.h <= h &&
-      (fr.map.radar || ::espn::map_has(fr.map, ::espn::app_env().land))) {
-    f.map_pic = fr.map;
-    f.map_pic.set_id = this->land_.id;
+  AreaView *av = pin == LogoCache::MAIN ? nullptr : area_view();
+  BoardView *bv = pin == LogoCache::MAIN ? board_view() : av != nullptr ? &av->game : nullptr;
+  AppPics *pics = bv != nullptr ? view_pics(*bv) : nullptr;
+  if (bv != nullptr && pics == nullptr && (fr.map.w > 0 || fr.sky.w > 0)) {
+    void *at = psram_alloc(sizeof(AppPics));
+    pics = view_pics(*bv) = at != nullptr ? new (at) AppPics() : nullptr;
   }
-  f.sky_pic = fr.sky;
+  if (pics != nullptr) {
+    pics->map = ::espn::AppMap();
+    if (fr.map.w > 0 && fr.map.x + fr.map.w <= w && fr.map.y + fr.map.h <= h &&
+        (fr.map.radar || ::espn::map_has(fr.map, ::espn::app_env().land))) {
+      pics->map = fr.map;
+      pics->map.set_id = this->land_.id;
+    }
+    pics->sky = fr.sky;
+  }
   // A loaded source, else the first unfailed; one download each.
   uint32_t shown[::espn::kAppIcons + 2];
   static_assert(::espn::kAppIcons + 2 <= ::espn::IconPins::kMax, "every shown picture gets a pin");
@@ -6317,7 +6327,8 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
       f.photo_xy[1] = (int16_t) (ph.y + (ph.h - img->get_height()) / 2);
       if (!ph.keep_art) {
         f.art.clear();
-        f.sky_pic = ::espn::AppSky();
+        if (pics != nullptr)
+          pics->sky = ::espn::AppSky();
       }
       if (ph.alt >= 0 && (size_t) ph.alt < f.texts.size())
         f.texts[ph.alt].text.clear();

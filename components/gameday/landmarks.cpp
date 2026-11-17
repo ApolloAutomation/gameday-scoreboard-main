@@ -34,7 +34,7 @@ const uint8_t *places_at(const LandSet &s) { return s.p + kLandHead; }
 const uint8_t *lines_at(const LandSet &s) { return places_at(s) + (size_t) s.np * kLandPlaceBytes; }
 const uint8_t *points_at(const LandSet &s) { return lines_at(s) + (size_t) s.nl * 2; }
 
-constexpr uint32_t kRoad = 0x4A3A24, kBorder = 0x505050, kCoast = 0x3A4048;
+constexpr uint32_t kRoad = 0x4A3A24, kBorder = 0x505050, kCoast = 0x464646;
 constexpr uint32_t kDotSmall = 0x808080, kDotBig = 0xA0A0A0, kTextSmall = 0x707070, kTextBig = 0x909090;
 constexpr int kFar = 4096;
 
@@ -61,8 +61,8 @@ Scratch *scratch() {
 }
 
 // gap 1: a pixel apart counts as touching.
-__attribute__((noinline)) bool meet(const Box &a, const Box &b, int gap) {
-  return a.x - gap < b.x + b.w && b.x < a.x + a.w + gap && a.y - gap < b.y + b.h && b.y < a.y + a.h + gap;
+__attribute__((noinline)) bool meet(const Box &a, const Box &b, int gx, int gy) {
+  return a.x - gx < b.x + b.w && b.x < a.x + a.w + gx && a.y - gy < b.y + b.h && b.y < a.y + a.h + gy;
 }
 
 // The box, a pixel out, meets the circle.
@@ -104,8 +104,49 @@ void walk(Px565 &p, int x0, int y0, int x1, int y1, uint16_t c, bool dotted, int
   }
 }
 
-__attribute__((noinline)) void set_xy(const MapProj &pr, const LandSet &s, int16_t dlat, int16_t dlon, int &x, int &y) {
-  map_xy(pr, s.lat_e2 / 100.0f + dlat / 4000.0f, s.lon_e2 / 100.0f + dlon / 4000.0f, x, y);
+__attribute__((noinline)) bool set_xyf(const MapProj &pr, const LandSet &s, int16_t dlat, int16_t dlon, float &x,
+                                       float &y) {
+  return map_xyf(pr, s.lat_e2 / 100.0f + dlat / 4000.0f, s.lon_e2 / 100.0f + dlon / 4000.0f, x, y);
+}
+
+bool set_xy(const MapProj &pr, const LandSet &s, int16_t dlat, int16_t dlon, int &x, int &y) {
+  float fx, fy;
+  if (!set_xyf(pr, s, dlat, dlon, fx, fy))
+    return false;
+  x = (int) floorf(fx);
+  y = (int) floorf(fy);
+  return true;
+}
+
+// Liang-Barsky: the part within a pixel of the canvas
+__attribute__((noinline)) bool clip(float &x0, float &y0, float &x1, float &y1, int w, int h) {
+  const float dx = x1 - x0, dy = y1 - y0;
+  const float pp[4] = {-dx, dx, -dy, dy}, qq[4] = {x0 + 1, w - x0, y0 + 1, h - y0};
+  float t0 = 0, t1 = 1;
+  for (int k = 0; k < 4; k++) {
+    if (pp[k] == 0) {
+      if (qq[k] < 0)
+        return false;
+      continue;
+    }
+    const float r = qq[k] / pp[k];
+    if (pp[k] < 0) {
+      if (r > t1)
+        return false;
+      if (r > t0)
+        t0 = r;
+    } else {
+      if (r < t0)
+        return false;
+      if (r < t1)
+        t1 = r;
+    }
+  }
+  x1 = x0 + t1 * dx;
+  y1 = y0 + t1 * dy;
+  x0 += t0 * dx;
+  y0 += t0 * dy;
+  return true;
 }
 
 MapProj proj_of(const AppMap &m) { return map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h); }
@@ -275,7 +316,7 @@ void land_reach_box(int lat_e2, int reach_km, int &dlat, int &dlon) {
 
 LandError land_check(const uint8_t *p, size_t n, LandSet &out) {
   out = LandSet();
-  if (p == nullptr || n < kLandHead || n > kLandMaxBytes || p[0] != 'G' || p[1] != 'L' || p[2] != 1 || p[3] != 0)
+  if (p == nullptr || n < kLandHead || n > kLandMaxBytes || p[0] != 'G' || p[1] != 'L' || p[2] != kLandVersion || p[3] != 0)
     return LandError::FORMAT;
   const int lat = rd16(p + 4), lon = rd16(p + 6);
   const size_t np = ru16(p + 8), nl = ru16(p + 10), npt = ru16(p + 12), reach = ru16(p + 14);
@@ -354,15 +395,28 @@ MapProj map_proj(int32_t lat_e4, int32_t lon_e4, float s, int w, int h) {
   return p;
 }
 
+bool map_xyf(const MapProj &p, float lat, float lon, float &x, float &y) {
+  world(lat, lon, x, y);
+  // The shorter way round, across the 180th meridian
+  constexpr float kWorld = (float) (wx::kTilePx << wx::kRadarZoom);
+  float dx = x - p.wx;
+  if (dx > kWorld / 2)
+    dx -= kWorld;
+  else if (dx < -kWorld / 2)
+    dx += kWorld;
+  x = p.ox + dx * p.s;
+  y = p.oy + (y - p.wy) * p.s;
+  return fabsf(x) < kFar && fabsf(y) < kFar;
+}
+
 bool map_xy(const MapProj &p, float lat, float lon, int &x, int &y) {
   float fx, fy;
-  world(lat, lon, fx, fy);
-  fx = p.ox + (fx - p.wx) * p.s;
-  fy = p.oy + (fy - p.wy) * p.s;
-  auto cut = [](float v) { return v < -kFar ? -kFar : v > kFar ? kFar : (int) floorf(v); };
-  x = cut(fx);
-  y = cut(fy);
-  return fabsf(fx) < kFar && fabsf(fy) < kFar;
+  x = y = 0;
+  if (!map_xyf(p, lat, lon, fx, fy))
+    return false;
+  x = (int) floorf(fx);
+  y = (int) floorf(fy);
+  return true;
 }
 
 float map_scale_weather(int w, int h) { return (float) (w > h ? w : h) / (float) wx::kTilePx; }
@@ -400,9 +454,9 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
   for (size_t i = 0; i < s.np; i++) {
     land_place(s, i, pl);
     int x, y;
-    set_xy(pr, s, pl.dlat, pl.dlon, x, y);
+    const bool on = set_xy(pr, s, pl.dlat, pl.dlon, x, y);
     const int d = pl.cls >= 3 ? 2 : 1;
-    if (pl.cls < min_cls || x < 1 || y < 1 || x + d > m.w - 1 || y + d > m.h - 1)
+    if (!on || pl.cls < min_cls || x < 1 || y < 1 || x + d > m.w - 1 || y + d > m.h - 1)
       continue;
     const int32_t k = (int32_t) (4 - pl.cls) << 24 | ((x - pr.ox) * (x - pr.ox) + (y - pr.oy) * (y - pr.oy));
     int at = nc++;
@@ -412,31 +466,41 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
   }
   // Taken: the keeps, the home, then dots and labels
   int nt = reserved(m, taken);
+  const int nt0 = nt;
+  // The biggest cities and the nearest city lead
+  int lead_c3 = -1;
+  for (int c = 0; c < nc && lead_c3 < 0; c++)
+    if (cd[c].key >> 24 == 1)
+      lead_c3 = c;
   int n = 0;
-  // Off the ring first; then a city may cross it
-  for (int pass = 0; pass < 2; pass++)
+  // Leads off the ring, leads on it, then the rest
+  for (int pass = 0; pass < 3; pass++)
     for (int c = 0; c < nc && n < cap; c++) {
       if (cd[c].idx == 0xFF)
         continue;
-      land_place(s, cd[c].idx, pl);
-      if (pass == 1 && pl.cls < 3)
+      const bool lead = cd[c].key >> 24 == 0 || c == lead_c3;
+      if (lead != (pass < 2))
         continue;
+      land_place(s, cd[c].idx, pl);
       const int d = pl.cls >= 3 ? 2 : 1, x = cd[c].x, y = cd[c].y, lw = 4 * pl.len - 1;
       const Box dot{(int16_t) x, (int16_t) y, (int16_t) d, (int16_t) d};
       bool free = true;
       for (int t = 0; t < nt && free; t++)
-        free = !meet(dot, taken[t], 0);
+        free = !meet(dot, taken[t], 0, 0);
       // Right, left, above, below, then the corners
       const int r = x + d + 1, l = x - 2 - lw, mid = x + d / 2 - lw / 2;
       const int tx[8] = {r, l, mid, mid, r, r, l, l};
       const int ty[8] = {y - 2, y - 2, y - 7, y + d + 1, y - 6, y + d, y - 6, y + d};
       for (int t = 0; t < 8 && free; t++) {
         const Box b{(int16_t) tx[t], (int16_t) ty[t], (int16_t) lw, 5};
-        if (b.x < 0 || b.y < 0 || b.x + b.w > m.w || b.y + b.h > m.h || (pass == 0 && on_ring(b, pr.ox, pr.oy, m.ring)))
+        if (b.x < 0 || b.y < 0 || b.x + b.w > m.w || b.y + b.h > m.h || (pass != 1 && on_ring(b, pr.ox, pr.oy, m.ring)))
           continue;
         bool ok = true;
-        for (int k = 0; k < nt && ok; k++)
-          ok = !meet(b, taken[k], 1);
+        // Labels keep a word's space apart
+        for (int k = 0; k < nt && ok; k++) {
+          const bool word = k >= nt0 && taken[k].h == 5;
+          ok = !meet(b, taken[k], word ? 3 : 1, word ? 2 : 1);
+        }
         if (!ok)
           continue;
         taken[nt++] = dot;
@@ -484,7 +548,7 @@ void map_marks(const AppMap &m, MapMark out[kAppBlips]) {
           continue;
         bool ok = true;
         for (int k = 0; k < nt && ok; k++)
-          ok = !meet(l, taken[k], 1);
+          ok = !meet(l, taken[k], 1, 1);
         if (!ok)
           continue;
         out[i] = MapMark{l.x, l.y, l.w};
@@ -516,16 +580,22 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
       uint8_t lk, n;
       land_line(s, i, lk, n);
       if (lk == kind) {
-        int step = 0, px = 0, py = 0;
+        int step = 0;
+        float px = 0, py = 0;
+        bool had = false;
         for (uint8_t j = 0; j < n; j++) {
           int16_t a, b;
           land_point(s, k + j, a, b);
-          int x, y;
-          set_xy(pr, s, a, b, x, y);
-          if (j > 0)
-            walk(p, px, py, x, y, c, kind == (uint8_t) LandKind::BORDER, step);
+          float x, y;
+          // A point far off breaks the line
+          const bool ok = set_xyf(pr, s, a, b, x, y);
+          float x0 = px, y0 = py, x1 = x, y1 = y;
+          if (ok && had && clip(x0, y0, x1, y1, p.w, p.h))
+            walk(p, (int) floorf(x0), (int) floorf(y0), (int) floorf(x1), (int) floorf(y1), c,
+                 kind == (uint8_t) LandKind::BORDER, step);
           px = x;
           py = y;
+          had = ok;
         }
       }
       k += n;

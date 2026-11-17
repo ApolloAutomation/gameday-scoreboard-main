@@ -698,6 +698,7 @@ bool FlightsApp::capped_() const {
 }
 
 void FlightsApp::widen_(int64_t now) {
+  const DistUnit u = (DistUnit) this->prefs_.radius_unit;
   const uint16_t own = this->prefs_.radius, at = this->read_wide_ != 0 ? this->read_wide_ : own;
   const Nearby &got = this->pending_;
   // Planes inside the owner's distance show alone
@@ -709,17 +710,37 @@ void FlightsApp::widen_(int64_t now) {
       this->wide_ = 0;
     return;
   }
-  this->near_ = got;
-  if (got.n > 0) {
-    this->shown_wide_ = at;
+  if (got.n == 0) {
+    // None at all: one read at the widest
+    this->near_ = got;
+    if (at < radius_max(u)) {
+      this->wide_ = radius_max(u);
+      this->widen_s_ = now;
+    }
     return;
   }
-  // None at all: one step wider, if there is one
-  const uint16_t next = next_step((DistUnit) this->prefs_.radius_unit, at);
-  if (next != 0) {
-    this->wide_ = next;
-    this->widen_s_ = now;
-  }
+  // The smallest step that holds the nearest
+  float d = -1;
+  for (uint8_t i = 0; i < got.n; i++)
+    if (got.planes[i].dist_nm >= 0 && (d < 0 || got.planes[i].dist_nm < d))
+      d = got.planes[i].dist_nm;
+  uint16_t step = at;
+  for (uint16_t s = next_step(u, own); s != 0 && s < at; s = next_step(u, s))
+    if (to_nm(s, u) >= d) {
+      step = s;
+      break;
+    }
+  Nearby in = got;
+  in.own_nm = to_nm(step, u);
+  this->near_ = nearby_own(in);
+  this->near_.air = this->near_.ground = 0;
+  for (uint8_t i = 0; i < this->near_.n; i++)
+    (this->near_.planes[i].tier == Tier::GROUND ? this->near_.ground : this->near_.air)++;
+  this->shown_wide_ = step;
+  // Read a step past it: drifting planes stay found
+  const uint16_t next = next_step(u, step);
+  this->wide_ = next != 0 && next < at ? next : at;
+  this->widen_s_ = now;
 }
 
 void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {

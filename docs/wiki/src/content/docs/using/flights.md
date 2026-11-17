@@ -79,7 +79,7 @@ On the radar, your home is the white dot in the middle, north is up (the **N** o
 
 The nearest plane has its callsign beside it (its registration when it has no callsign). The others carry the number of their row in the nearby list, which is numbered **1** to **6** on these two layouts, so a row in the list can be found on the radar. A number with no room beside its plane is left off.
 
-Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. Without them the radar shows the rings and the planes on black. Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. A home by the 180th meridian sees planes on both sides of it, but its landmarks stop at the meridian. Without them the radar shows the rings and the planes on black. Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
 Every other size, and the Flight Tracker in a second area, shows as before.
 :::
@@ -96,7 +96,7 @@ The panel shows a message instead of planes when it has none to show:
 - **Can't reach flight data**: three reads in a row failed, and the panel has no planes from the last 3 minutes. The panel keeps trying.
 
 :::note[Coming in the next release]
-**The Flight Tracker always has something to show.** When no plane is within your **Within** distance, the panel looks farther, one step at a time: 15, 25, 50, 100, 150 and then 250 miles (25, 50, 100, 150, 250 and 400 km, or up to 200 nautical miles), one step for each read that finds nothing, at its usual pace. Meanwhile it shows **Looking farther**, with the distance it just found empty under it, like **Nothing within 10 mi**.
+**The Flight Tracker always has something to show.** When a read finds no plane within your **Within** distance, the next read looks all the way out to 250 miles (400 km, or 200 nautical miles), at the usual pace. Meanwhile it shows **Looking farther**, with the distance it just found empty under it, like **Nothing within 10 mi**. From what that read finds, the panel picks the smallest of the distances 15, 25, 50, 100, 150 and 250 miles (25, 50, 100, 150, 250 and 400 km, or up to 200 nautical miles) that holds the nearest plane, shows the planes within it, and keeps reading one distance wider so a plane drifting out stays found.
 
 Once it finds a plane, it shows the nearest ones it found and says plainly that they're farther than your distance:
 
@@ -105,7 +105,7 @@ Once it finds a plane, it shows the nearest ones it found and says plainly that 
 - the ticker starts with **No planes within 10 mi. Nearest: 42 mi SW**;
 - on the radar the ring is the wider distance, its label in yellow, like **50MI**, and a dotted ring with a small label, like **10**, marks your own distance (left out when it would be a tiny circle).
 
-Your **Within** distance never changes. As soon as a plane is inside it again, the panel shows only the planes inside it, as usual; it keeps reading the wider circle for 5 minutes after the last step out, so a plane passing through doesn't make it flip back and forth, then reads your distance again. A new home, distance or receiver starts over at your distance.
+Your **Within** distance never changes. As soon as a plane is inside it again, the panel shows only the planes inside it, as usual; it keeps reading the wider circle for 5 minutes after the last plane it found farther out, so a plane passing through doesn't make it flip back and forth, then reads your distance again. A new home, distance or receiver starts over at your distance.
 
 When there's nothing at all out to 250 miles (400 km, 200 nautical miles), the panel shows a calm sky with **No planes nearby right now** and **Checked out to 250 mi**, and reads every 2 minutes until a plane shows up. The device page's line says so too, like **No planes within 10 mi; showing the nearest, up to 50 mi away.**
 
@@ -149,7 +149,7 @@ The home location stays on the panel, to four decimal places (about 10 meters), 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel.
 
 :::note[Coming in the next release]
-Setting the home on the device page also has your browser look up map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows) from OpenStreetMap: a box around the home rounded to two decimal places, never the exact spot. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+Setting the home on the device page also has your browser look up map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from OpenStreetMap: a box around the home rounded to two decimal places, never the exact spot. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 :::
 
 **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

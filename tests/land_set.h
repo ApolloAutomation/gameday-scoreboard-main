@@ -27,7 +27,7 @@ inline std::vector<uint8_t> land_encode(int lat_e2, int lon_e2, int reach, const
     npt += l.pts.size();
   b.push_back('G');
   b.push_back('L');
-  b.push_back(1);
+  b.push_back(2);
   b.push_back(0);
   u16(lat_e2);
   u16(lon_e2);
@@ -41,7 +41,7 @@ inline std::vector<uint8_t> land_encode(int lat_e2, int lon_e2, int reach, const
     b.push_back((uint8_t) p.cls);
     const size_t n = strlen(p.name);
     b.push_back((uint8_t) n);
-    for (size_t i = 0; i < 10; i++)
+    for (size_t i = 0; i < 14; i++)
       b.push_back(i < n ? (uint8_t) p.name[i] : 0);
   }
   for (const LandLineIn &l : lines) {

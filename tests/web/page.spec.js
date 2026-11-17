@@ -5110,7 +5110,7 @@ test("the Weather card says what the panel has", async ({ page, request }) => {
 
 // ---- Map landmarks: OpenStreetMap, from the browser ------------------------
 const OVERPASS = "https://overpass-api.de/api/interpreter";
-const OVERPASS_2 = "https://overpass.kumi.systems/api/interpreter";
+const OVERPASS_2 = "https://maps.mail.ru/osm/tools/overpass/api/interpreter";
 // Invented towns and lines around a home, as Overpass answers
 const osmAround = (lat, lon, { places = 6, ways = 3, points = 12 } = {}) => {
   const els = [];
@@ -5137,11 +5137,11 @@ const landRead = (buf) => {
               np: v.getUint16(8, true), nl: v.getUint16(10, true), npt: v.getUint16(12, true), reach: v.getUint16(14, true),
               places: [], kinds: [] };
   for (let i = 0; i < h.np; i++) {
-    const at = 16 + 16 * i;
+    const at = 16 + 20 * i;
     h.places.push({ dlat: v.getInt16(at, true), dlon: v.getInt16(at + 2, true), cls: buf[at + 4],
                     name: String.fromCharCode(...buf.slice(at + 6, at + 6 + buf[at + 5])) });
   }
-  for (let i = 0; i < h.nl; i++) h.kinds.push(buf[16 + 16 * h.np + 2 * i]);
+  for (let i = 0; i < h.nl; i++) h.kinds.push(buf[16 + 20 * h.np + 2 * i]);
   return h;
 };
 // The panel's posts, their bodies kept
@@ -5178,8 +5178,9 @@ test("setting a home looks up its landmarks once and hands them to the panel", a
   expect(req.method()).toBe("POST");
   expect(req.headers()["content-type"]).toContain("application/x-www-form-urlencoded");
   const q = new URLSearchParams(req.postData()).get("data");
-  expect(q).toContain("[timeout:100]");
-  expect(q).toContain('admin_level~"^(2|4)$"');
+  expect(q).toContain("[timeout:50]");
+  expect(q).toContain("admin_level=4");
+  expect(q).toContain("(if:!is_closed()||length()>8000)");
   // Every box is around the home rounded to two places
   const boxes = [...q.matchAll(/\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/g)].map((m) => m.slice(1).map(Number));
   expect(boxes.length).toBeGreaterThanOrEqual(5);
@@ -5297,6 +5298,10 @@ test("the set keeps the panel's caps, cleans names and drops what is out of reac
     node(9, 0.1, 0, { name: "Nearby", place: "village" }),
     node(10, 0.5, 0, { name: "Outer", place: "village" }),
     node(11, 0.051, 0.051, { name: "Saint-Geneviève-des-Bois", place: "town" }),
+    node(12, -0.25, 0.35, { name: "Colorado Springs", place: "city", population: "480000" }),
+    node(13, 0.25, -0.35, { name: "West Palm Beach Gardens", place: "town" }),
+    node(14, -0.3, -0.3, { name: "Llanfairpwllgwyngyll", place: "town" }),
+    node(15, 0.3, 0.3, { name: "Key West", place: "town" }),
     { type: "marker", id: 50, tags: { kind: "road" } },
   ];
   // A dual carriageway: two ways 100 m apart
@@ -5312,8 +5317,9 @@ test("the set keeps the panel's caps, cleans names and drops what is out of reac
   const h = landRead(bodies[0]);
   expect([h.magic, h.lat, h.lon]).toEqual(["GL", 4620, 614]);
   expect(h.places.map((p) => p.name).sort()).toEqual(
-    ["COEUR", "FT COLLINS", "MT PLEASAN", "N PLATTE", "NEARBY", "ST-GENEVIE", "TOKYO"].sort());
-  expect(h.places.find((p) => p.name === "ST-GENEVIE").cls).toBe(4);
+    ["COEUR D'ALENE", "COLORADO SPGS", "FORT COLLINS", "KEY WEST", "MOUNT PLEASANT", "NORTH PLATTE", "NEARBY",
+     "ST-GENEVIEVE", "TOKYO", "W PALM BCH"].sort());
+  expect(h.places.find((p) => p.name === "ST-GENEVIEVE").cls).toBe(4);
   expect(h.places.find((p) => p.name === "TOKYO").cls).toBe(4);
   expect(h.places.find((p) => p.name === "NEARBY").cls).toBe(1);
   expect(h.kinds).toEqual([2]);
@@ -5333,8 +5339,29 @@ test("the set keeps the panel's caps, cleans names and drops what is out of reac
   expect(big.nl).toBeLessThanOrEqual(200);
   expect(big.npt).toBeLessThanOrEqual(1600);
   expect(big.npt).toBeGreaterThan(1000);
-  for (const p of big.places) expect(p.name).toMatch(/^[A-Z0-9](?:[A-Z0-9 .'-]{0,8}[A-Z0-9])?$/);
+  // Each kind gets a share; coast never crowds out
+  for (const kd of [0, 1, 2]) expect(big.kinds.filter((k) => k === kd).length).toBeGreaterThanOrEqual(5);
+  for (const p of big.places) expect(p.name).toMatch(/^[A-Z0-9](?:[A-Z0-9 .'-]{0,12}[A-Z0-9])?$/);
   expect((await deviceState(request)).landmarks).toBe("ok");
+});
+
+test("a slow OpenStreetMap server shows the seconds waited and gets a minute before the other", async ({ page, request }) => {
+  await reset(request, { displays: WX_DISPLAYS, flights: { home: "38.0512,-84.7349" } });
+  await page.clock.install();
+  const hits = [];
+  await page.route(OVERPASS, () => { hits.push("a"); });
+  await page.route(OVERPASS_2, (route) => { hits.push("b"); return route.fulfill({ json: osmAround(38.05, -84.73) }); });
+  await page.goto("/");
+  await page.locator("#wxMarksGo").click();
+  await expect(page.locator("#wxMarksSay")).toHaveText("Adding map landmarks... this can take a minute.");
+  await page.clock.fastForward(12000);
+  await expect(page.locator("#wxMarksSay")).toHaveText(/^Adding map landmarks\.\.\. this can take a minute\. \(1[12] s\)$/);
+  await expect(page.locator("#flightMarksSay")).toHaveText(/\(1[12] s\)$/);
+  expect(hits).toEqual(["a"]);
+  await page.clock.fastForward(49000);
+  await expect.poll(() => landPosts(request)).toHaveLength(1);
+  expect(hits).toEqual(["a", "b"]);
+  await expect(page.locator("#wxMarksSay")).toHaveText("Map landmarks added: 6 towns and cities.");
 });
 
 test("a panel whose home moved on answers 409, and the page shows no error", async ({ page, request }) => {
@@ -5346,6 +5373,6 @@ test("a panel whose home moved on answers 409, and the page shows no error", asy
   await page.locator("#flightMarksGo").click();
   await expect.poll(() => n, { timeout: 8000 }).toBe(2);
   await sleep(500);
-  await expect(page.locator("#flightMarksSay")).toHaveText("The radar can show nearby towns, roads and borders.");
+  await expect(page.locator("#flightMarksSay")).toContainText("On four panels in a row or two rows of two");
   await expect(page.locator("#flightMarksGo")).toHaveText("Add landmarks");
 });
