@@ -306,11 +306,11 @@ void radar_map(const Nearby &n, uint8_t card, const Prefs &p, uint16_t wide, int
     if (m.inner < 3)
       m.inner = 0;
     else
-      snprintf(m.inner_text, sizeof m.inner_text, "%u", (unsigned) p.radius);
+      snprintf(m.inner_text, sizeof m.inner_text, "%u", p.radius > 999 ? 999u : (unsigned) p.radius);
   }
   const float r_nm = to_nm(reach, (DistUnit) p.radius_unit);
   m.scale_q16 = (int32_t) lroundf(espn::map_scale_ring(p.lat_e4, kRadarRing, r_nm * 1852.0f) * 65536.0f);
-  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", (unsigned) reach,
+  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", reach > 999 ? 999u : (unsigned) reach,
            p.radius_unit == (uint8_t) DistUnit::KM ? "KM" : p.radius_unit == (uint8_t) DistUnit::NM ? "NM" : "MI");
   const espn::MapProj pr = espn::map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h);
   if (card >= n.n)

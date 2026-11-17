@@ -220,7 +220,7 @@ document.body.innerHTML = `
         <div class="flightpicks" id="flightPicks" role="group" aria-label="Places found" hidden></div>
         <p class="betmsg" id="flightMsg" role="alert" hidden></p>
         <div class="ctl" id="flightHomeRow" hidden><label>Planes near<small id="flightHome"></small></label><button class="btn" id="flightClear">Clear</button></div>
-        <div class="ctl" id="flightMarks" hidden><label>Radar map<small id="flightMarksSay"></small><small>Map landmarks &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></small></label><button class="btn" id="flightMarksGo">Add landmarks</button></div>
+        <div class="ctl" id="flightMarks" hidden><label>Radar map<small id="flightMarksSay"></small><small>Map landmarks from <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> and <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)</small></label><button class="btn" id="flightMarksGo">Add landmarks</button></div>
         <div class="ctl"><label for="flightRadius">Within<small>How far from home a plane can be.</small></label><select id="flightRadius"></select></div>
         <div class="ctl"><label for="flightRx">Your own receiver<small>Optional: an ADS-B receiver on your network, which the panel reads first. For tar1090 its address is enough, like 192.168.1.50. For PiAware or another receiver, give its aircraft.json address, like http://192.168.1.50/skyaware/data/aircraft.json.</small></label></div>
         <div class="flightrow"><input id="flightRx" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" aria-label="Your own receiver"><button class="btn" id="flightRxSave">Save</button></div>
@@ -235,7 +235,7 @@ document.body.innerHTML = `
         <div class="flightpicks" id="wxPicks" role="group" aria-label="Places found" hidden></div>
         <p class="betmsg" id="wxMsg" role="alert" hidden></p>
         <div class="ctl" id="wxHomeRow" hidden><label>Home<small id="wxHome"></small></label><button class="btn" id="wxClear">Clear</button></div>
-        <div class="ctl" id="wxMarks" hidden><label>Radar map<small id="wxMarksSay"></small><small>Map landmarks &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></small></label><button class="btn" id="wxMarksGo">Add landmarks</button></div>
+        <div class="ctl" id="wxMarks" hidden><label>Radar map<small id="wxMarksSay"></small><small>Map landmarks from <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> and <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)</small></label><button class="btn" id="wxMarksGo">Add landmarks</button></div>
         <div class="ctl"><label>Weather warnings in the ticker<small>The National Weather Service's warnings and watches for home lead the ticker on any display. While this is on, the panel checks for them every 5 minutes.</small></label><button class="sw" id="wxTicker" aria-label="Weather warnings in the ticker"></button></div>
         <p class="hint" id="wxNow" role="status"></p>
       </details>
@@ -2497,54 +2497,113 @@ radius_unit: r ? r[2] || "mi" : f.radius_unit,
 receiver: S && S.flyreceiver !== undefined ? (S.flyreceiver === "none" ? "" : S.flyreceiver) : f.receiver || "",
 };
 };
-const OSM_HOSTS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
-const OSM_WAIT_MS = 60000;
-const LAND = { places: 64, lines: 200, points: 1600, name: 14, off: 32000, reach: 250, coast: 150, roads: 120, villages: 30 };
-const land = { key: "", say: "", n: 0, job: null, t0: 0 };
+const LAND_URL = SITE_URL + "/land/1";
+const LAND_WAIT_MS = 15000;
+const LAND = { places: 64, lines: 200, points: 1600, name: 14, off: 32000, reach: 250, lineReach: 160, villages: 30, grid: 4 };
+const land = { key: "", say: "", n: 0, job: null };
 const e2 = (v) => Math.sign(v) * Math.floor((Math.round(Math.abs(v) * 1e4) + 50) / 100);
 const homeKey = (home) => {
 const c = COORDS.exec(home || "");
 return c ? e2(Number(c[1])) + "," + e2(Number(c[2])) : "";
 };
-const landQuery = (lat, lon) => {
-const box = (km) => {
-const dy = km / 111.32, dx = km / (111.32 * Math.cos(lat * Math.PI / 180));
-return [Math.max(-85, lat - dy), Math.max(-180, lon - dx), Math.min(85, lat + dy), Math.min(180, lon + dx)]
-.map((v) => v.toFixed(3)).join(",");
+const landBase = () => {
+try {
+const b = localStorage.getItem("gd.landBase");
+if (b && /^https?:\/\/[^\s]+$/.test(b)) return b.replace(/\/+$/, "");
+} catch (_) {}
+return LAND_URL;
 };
-const b = box(LAND.reach), c = box(LAND.coast), r = box(LAND.roads), v = box(LAND.villages);
-return `[out:json][timeout:50][maxsize:67108864];node[place~"^(city|town)$"][name](${b});out qt;`
-+ `node[place=village][name](${v});out qt;make marker kind="border";out;`
-+ `rel[boundary=administrative][admin_level=4](${b});way(r)(${b});out skel geom(${b}) qt;`
-+ `make marker kind="coast";out;way[natural=coastline](${c})(if:!is_closed()||length()>8000);out skel geom(${c}) qt;`
-+ `make marker kind="road";out;way[highway=motorway](${r});out skel geom(${r}) qt;`;
+const landTiles = (lat, lon) => {
+const g = LAND.grid, dy = LAND.reach / 111.32, dx = LAND.reach / (111.32 * Math.cos(lat * Math.PI / 180));
+const s = Math.max(-85, lat - dy), n = Math.min(85, lat + dy);
+const w = Math.max(-180, lon - dx), e = Math.min(179.9999, lon + dx);
+const out = [];
+for (let r = Math.floor(s / g); r <= Math.floor(n / g); r++)
+for (let c = Math.floor(w / g); c <= Math.floor(e / g); c++) out.push([r * g, c * g]);
+return out;
 };
-const osmFetch = async (q, job) => {
-for (let i = 0; i < OSM_HOSTS.length && !job.stopped; i++) {
+const landTileRead = (buf, lat0, lon0) => {
+const Q = 4000, G = LAND.grid * Q, v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+const bad = () => { throw new Error("bad map file"); };
+let at = 16;
+const need = (n) => { if (at + n > buf.length) bad(); };
+const co = (x) => (x < 0 || x > G ? bad() : x);
+const uv = () => {
+let r = 0;
+for (let k = 0; k < 3; k++) {
+need(1);
+const c = buf[at++];
+r |= (c & 127) << (7 * k);
+if (c < 128) return r;
+}
+return bad();
+};
+const zz = () => { const u = uv(); return (u >>> 1) ^ -(u & 1); };
+if (buf.length < 16 || buf[0] !== 71 || buf[1] !== 84 || buf[2] !== 1 || buf[8] !== LAND.grid
+|| v.getInt16(4, true) !== lat0 || v.getInt16(6, true) !== lon0) bad();
+const np = v.getUint16(10, true), nl = v.getUint16(12, true), places = [], lines = [];
+const ll = (x, y) => ({ lat: lat0 + y / Q, lon: lon0 + x / Q });
+for (let i = 0; i < np; i++) {
+need(7);
+const x = co(v.getUint16(at, true)), y = co(v.getUint16(at + 2, true)), cls = buf[at + 4], pop = buf[at + 5], n = buf[at + 6];
+at += 7;
+need(n);
+if (cls < 1 || cls > 4 || n < 1 || n > 48) bad();
+let name = "";
+for (let k = 0; k < n; k++) name += String.fromCharCode(buf[at + k] < 32 || buf[at + k] > 126 ? bad() : buf[at + k]);
+at += n;
+places.push({ ...ll(x, y), cls, pop, name });
+}
+for (let i = 0; i < nl; i++) {
+need(1);
+const kind = buf[at++], n = uv();
+if (kind > 2 || n < 2) bad();
+need(4);
+let x = co(v.getUint16(at, true)), y = co(v.getUint16(at + 2, true));
+at += 4;
+const pts = [ll(x, y)];
+for (let k = 1; k < n; k++) {
+x = co(x + zz());
+y = co(y + zz());
+pts.push(ll(x, y));
+}
+lines.push({ kind, pts });
+}
+if (at !== buf.length) bad();
+return { places, lines };
+};
+const landFiles = async (lat, lon, job) => {
 const ctl = new AbortController();
 job.ctl = ctl;
-const timer = setTimeout(() => ctl.abort(), OSM_WAIT_MS);
-let again = true;
+const timer = setTimeout(() => ctl.abort(), LAND_WAIT_MS);
+const base = landBase();
+const get = async (path) => {
+const r = await fetch(base + "/" + path, { signal: ctl.signal, referrerPolicy: "no-referrer", credentials: "omit" });
+if (!r.ok) throw new Error("HTTP " + r.status);
+return r;
+};
 try {
-const r = await fetch(OSM_HOSTS[i], { method: "POST", body: new URLSearchParams({ data: q }),
-referrerPolicy: "no-referrer", signal: ctl.signal });
-if (r.ok) return await r.json();
-again = r.status === 429 || r.status >= 500;
+const idx = await (await get("index.json")).json();
+const bits = Uint8Array.from(atob(String(idx.tiles || "")), (c) => c.charCodeAt(0));
+if (idx.format !== 1 || idx.grid !== LAND.grid || bits.length !== 495) return null;
+const has = ([a, o]) => { const i = (a + 88) / LAND.grid * 90 + (o + 180) / LAND.grid; return (bits[i >> 3] >> (i & 7)) & 1; };
+const want = landTiles(lat, lon).filter(has);
+if (!want.length) return "none";
+const tiles = await Promise.all(want.map(async ([a, o]) =>
+landTileRead(new Uint8Array(await (await get(a + "_" + o + ".bin")).arrayBuffer()), a, o)));
+return { places: tiles.flatMap((t) => t.places), lines: tiles.flatMap((t) => t.lines) };
 } catch (_) {
+return null;
 } finally {
 clearTimeout(timer);
 }
-if (!again) break;
-}
-return null;
 };
 const SHORT_END = { BEACH: "BCH", SPRINGS: "SPGS", GARDENS: "GDNS", HEIGHTS: "HTS", VILLAGE: "VLG", JUNCTION: "JCT",
 CENTER: "CTR", CENTRE: "CTR", HARBOR: "HBR", HARBOUR: "HBR", MOUNTAIN: "MTN", ISLAND: "IS", CREEK: "CRK" };
 const SHORT_START = { SAINT: "ST", SAINTE: "STE", MOUNT: "MT", FORT: "FT", NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W" };
-const landName = (tags) => {
-const ascii = (s) => (typeof s === "string" ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "");
-const raw = [tags["name:en"], tags.name, tags.int_name].map(ascii).find((s) => s && /^[\x20-\x7e]+$/.test(s));
-if (!raw) return "";
+const landName = (name) => {
+const raw = typeof name === "string" ? name.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+if (!raw || !/^[\x20-\x7e]+$/.test(raw)) return "";
 const tidy = (n) => n.replace(/\s+/g, " ").replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "");
 let n = tidy(raw.toUpperCase().replace(/[^A-Z0-9 .'-]/g, ""));
 for (const short of [SHORT_END, SHORT_START])
@@ -2607,8 +2666,7 @@ out.push(line);
 }
 return out;
 };
-const landmarksFromOverpass = (doc, lat0, lon0) => {
-if (!doc || !Array.isArray(doc.elements)) return null;
+const landmarksBuild = (src, lat0, lon0) => {
 const kx = 111.32 * Math.cos(lat0 * Math.PI / 180), ky = 111.32;
 const lim = (LAND.reach + 10) / 111.32 * 4000;
 const limLat = Math.min(LAND.off, Math.floor(lim)), limLon = Math.min(LAND.off, Math.floor(lim / Math.cos(lat0 * Math.PI / 180)));
@@ -2618,28 +2676,13 @@ const [a, b] = off(p);
 return Math.hypot(p[0], p[1]) <= km && Math.abs(a) <= limLat && Math.abs(b) <= limLon;
 };
 const xy = (g) => [(g.lon - lon0) * kx, (g.lat - lat0) * ky];
-const reach = { border: LAND.reach, coast: LAND.coast, road: LAND.roads };
-const raw = { border: [], coast: [], road: [] }, found = [];
-let kind = "place";
-for (const el of doc.elements) {
-if (!el) continue;
-if (el.type === "marker") { kind = (el.tags && el.tags.kind) || kind; continue; }
-if (kind === "place" && el.type === "node" && el.tags && typeof el.lat === "number" && typeof el.lon === "number") found.push(el);
-if (!raw[kind] || !Array.isArray(el.geometry)) continue;
-let run = [];
-for (const g of el.geometry.concat([null])) {
-if (g && typeof g.lat === "number" && typeof g.lon === "number") { run.push(xy(g)); continue; }
-if (run.length > 1) raw[kind].push(run);
-run = [];
-}
-}
-const pop = (t) => Number(String(t.population || "").split(";")[0].replace(/\D/g, "")) || 0;
+const KINDS = ["border", "coast", "road"];
+const raw = { border: [], coast: [], road: [] };
+for (const l of src.lines) raw[KINDS[l.kind]].push(l.pts.map(xy));
 const cands = [];
-for (const el of found) {
-const t = el.tags, p = xy(el), d = Math.hypot(p[0], p[1]), n = pop(t);
-const cls = n >= 250000 ? 4 : t.place === "city" || n >= 50000 ? 3 : t.place === "town" ? 2 : t.place === "village" ? 1 : 0;
-const name = cls ? landName(t) : "";
-if (name && fits(p, cls === 1 ? LAND.villages : LAND.reach)) cands.push({ p, d, n, cls, name });
+for (const t of src.places) {
+const p = xy(t), d = Math.hypot(p[0], p[1]), name = landName(t.name);
+if (name && fits(p, t.cls === 1 ? LAND.villages : LAND.reach)) cands.push({ p, d, n: t.pop, cls: t.cls, name });
 }
 cands.sort((a, b) => b.cls - a.cls || b.n - a.n || a.d - b.d);
 const bands = [[], [], [], []];
@@ -2656,7 +2699,7 @@ const pieces = [];
 for (const l of joinLines(raw[kd])) {
 let run = [];
 for (const p of l.concat([null])) {
-if (p && fits(p, reach[kd])) { run.push(p); continue; }
+if (p && fits(p, LAND.lineReach)) { run.push(p); continue; }
 if (run.length > 1) pieces.push(run);
 run = [];
 }
@@ -2731,32 +2774,21 @@ if (land.key === key && land.say === "looking") return;
 if (!force && key === panelKey() && D && D.landmarks === "ok") return;
 if (land.job) { land.job.stopped = true; if (land.job.ctl) land.job.ctl.abort(); }
 const job = { stopped: false, ctl: null };
-Object.assign(land, { key, say: "looking", job, t0: Date.now() });
+Object.assign(land, { key, say: "looking", job });
 renderAll();
-const tick = setInterval(() => {
-if (land.job !== job) return clearInterval(tick);
-for (const p of ["flight", "wx"]) {
-const say = $("#" + p + "MarksSay");
-if (say && land.say === "looking") say.textContent = lookingSay();
-}
-}, 1000);
 const [la, lo] = key.split(",").map((v) => Number(v) / 100);
-const doc = await osmFetch(landQuery(la, lo), job);
+const src = await landFiles(la, lo, job);
 if (job.stopped) return;
-const bytes = doc ? landmarksFromOverpass(doc, la, lo) : null;
-const ok = bytes && (!posted || (await posted));
+const bytes = src && src !== "none" ? landmarksBuild(src, la, lo) : null;
+const none = src === "none" || (bytes && bytes.length <= 16);
+const ok = bytes && !none && (!posted || (await posted));
 const n = ok ? await landSend(key, bytes) : null;
 if (job.stopped) return;
 land.job = null;
-clearInterval(tick);
 if (n === -1) Object.assign(land, { key: "", say: "" });
-else Object.assign(land, { say: n === null ? "failed" : "added", n });
+else Object.assign(land, { say: none ? "none" : n === null ? "failed" : "added", n });
 renderAll();
 scheduleState(APPLY_MS + 100);
-};
-const lookingSay = () => {
-const sec = Math.floor((Date.now() - land.t0) / 1000);
-return "Adding map landmarks... this can take a minute." + (sec >= 5 ? " (" + sec + " s)" : "");
 };
 const renderMarks = (p, home) => {
 const row = $("#" + p + "Marks");
@@ -2767,14 +2799,15 @@ const mine = land.key === key ? land.say : "";
 const towns = (n) => n + (n === 1 ? " town or city." : " towns and cities.");
 const ok = S.landmarks === "ok" && key === panelKey();
 $("#" + p + "MarksSay").textContent =
-mine === "looking" ? lookingSay()
+mine === "looking" ? "Adding map landmarks..."
 : mine === "added" ? "Map landmarks added: " + towns(land.n)
-: mine === "failed" ? "Couldn't add map landmarks. The radar works without them."
+: mine === "failed" ? "Couldn't load map landmarks. The radar works without them."
+: mine === "none" ? "There are no map landmarks for this area yet."
 : ok ? "Map landmarks: " + towns(Number(S.landmarks_n) || 0)
 : p === "flight" ? "On four panels in a row or two rows of two, the flight radar beside the card can show nearby towns, roads and borders. Weather's radar uses them too."
 : "The radar can show nearby towns, roads and borders.";
 const go = $("#" + p + "MarksGo");
-go.hidden = mine === "looking" || mine === "added" || (ok && mine !== "failed");
+go.hidden = mine === "looking" || mine === "added" || mine === "none" || (ok && mine !== "failed");
 go.textContent = mine === "failed" ? "Try again" : "Add landmarks";
 go.onclick = () => landFor(home, null, true);
 };

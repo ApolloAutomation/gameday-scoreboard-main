@@ -468,10 +468,17 @@ nothing), and `map_paint` projects the set with the images' zoom-7 Web
 Mercator onto black, places labels biggest first where they fit, and leaves
 the image's alpha (`MapCanvas::finish` now writes RGB565 with an alpha
 plane, the same picture over black) to lay rain over it. The set comes from
-the device page: the browser asks OpenStreetMap's Overpass service for one
-box around the rounded home (overpass-api.de, the maps.mail.ru instance if
-that fails, a minute each), asking for state lines only, no coastline
-islands under 8 km and motorways within 120 km; it simplifies that to at
+the device page: the browser reads `land/1/index.json` from the project
+site (`SITE_URL`) and the 4-degree squares it lists that meet a 250 km box
+around the rounded home (`land/1/<lat>_<lon>.bin`: places with a class and
+a rounded size, then delta-coded lines on the set's own 1/4000-degree
+grid), so only squares leave the browser. The files are committed under
+`docs/site/land/1/`, built by `scripts/build_landmarks.py` from Natural
+Earth 10m and GeoNames cities500, and checked in CI by its `--check`; a
+format change is a new folder, and `scripts/add_land_files.sh` adds a
+format only beta has to each site deploy, so beta panels find their files
+before main does. The page joins the squares' pieces, keeps towns to
+250 km (villages to 30) and lines to 160 km, and simplifies that to at
 most 64 places (names up to 14 characters, shortened by whole words or
 dropped, never cut) and 1,600 line points, coast, borders and roads each
 with a share of the caps, ranked by length and nearness, and

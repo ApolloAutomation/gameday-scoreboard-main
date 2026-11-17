@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -607,6 +609,51 @@ void test_store() {
   LCHECK(land_check(back.data(), back.size(), s) != LandError::OK && s.p == nullptr, "a bad byte drops it");
 }
 
+// A set the device page built from the site's files
+void test_real_set() {
+  std::ifstream f("fixtures/land_versailles.bin", std::ios::binary);
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  LandSet s;
+  LCHECK(land_check(bytes.data(), bytes.size(), s) == LandError::OK, "Versailles' set passes: %d bytes", (int) bytes.size());
+  LCHECK(s.lat_e2 == 3805 && s.lon_e2 == -8473 && s.np == 48, "its home and places: %d", s.np);
+  int found = 0;
+  for (size_t i = 0; i < s.np; i++) {
+    LandPlace pl;
+    land_place(s, i, pl);
+    for (const char *town : {"LEXINGTON", "FRANKFORT", "LOUISVILLE"})
+      found += strcmp(pl.name, town) == 0;
+  }
+  LCHECK(found == 3, "Lexington, Frankfort and Louisville: %d", found);
+  bool kinds = s.nl > 0;
+  for (size_t i = 0; i < s.nl; i++) {
+    uint8_t kind = 0, n = 0;
+    land_line(s, i, kind, n);
+    kinds = kinds && (kind == 0 || kind == 2);
+  }
+  LCHECK(kinds, "borders and roads only, inland");
+  for (const auto &sz : {std::make_pair(64, 56), std::make_pair(128, 56), std::make_pair(128, 120)}) {
+    const int w = sz.first, h = sz.second, guard = 64;
+    std::vector<uint16_t> buf((size_t) w * h + 2 * guard, 0xA5A5);
+    Px565 g;
+    g.px = buf.data() + guard;
+    g.w = g.stride = (int16_t) w;
+    g.h = (int16_t) h;
+    g.clip = PxBox{0, 0, (int16_t) w, (int16_t) h};
+    for (int scale : {1, 4}) {
+      AppMap m = weather_map(w, h, 380512, -847349);
+      m.scale_q16 *= scale;
+      map_paint(g, m, &s);
+    }
+    int lit = 0;
+    for (int i = 0; i < w * h; i++)
+      lit += g.px[i] != 0xA5A5;
+    bool intact = true;
+    for (int i = 0; i < guard; i++)
+      intact = intact && buf[i] == 0xA5A5 && buf[buf.size() - 1 - i] == 0xA5A5;
+    LCHECK(intact && lit > 0, "%dx%d: Versailles paints inside the canvas", w, h);
+  }
+}
+
 }  // namespace
 
 int run_landmark_tests(int &total_checks) {
@@ -615,6 +662,7 @@ int run_landmark_tests(int &total_checks) {
   test_paint();
   test_radar();
   test_store();
+  test_real_set();
   total_checks += checks;
   return failures;
 }

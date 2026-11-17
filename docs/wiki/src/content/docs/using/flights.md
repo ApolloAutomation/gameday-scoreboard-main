@@ -79,7 +79,7 @@ On the radar, your home is the white dot in the middle, north is up (the **N** o
 
 The nearest plane has its callsign beside it (its registration when it has no callsign). The others carry the number of their row in the nearby list, which is numbered **1** to **6** on these two layouts, so a row in the list can be found on the radar. A number with no room beside its plane is left off.
 
-Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. A home by the 180th meridian sees planes on both sides of it, but its landmarks stop at the meridian. Without them the radar shows the rings and the planes on black. Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. A home by the 180th meridian sees planes on both sides of it, but its landmarks stop at the meridian. Without them the radar shows the rings and the planes on black. Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 
 Every other size, and the Flight Tracker in a second area, shows as before.
 :::
@@ -149,7 +149,7 @@ The home location stays on the panel, to four decimal places (about 10 meters), 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel.
 
 :::note[Coming in the next release]
-Setting the home on the device page also has your browser look up map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from OpenStreetMap: a box around the home rounded to two decimal places, never the exact spot. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+Setting the home on the device page also has your browser read map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from this project's site: the files for the squares of about 400 km around the home, never the home itself. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 :::
 
 **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

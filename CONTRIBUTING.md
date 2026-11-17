@@ -217,7 +217,8 @@ these places:
   from it, the bar builds' included.
 - `SITE_URL` in the `env:` block of `.github/workflows/build.yml` and of
   `.github/workflows/site.yml`.
-- `SITE_URL` in `firmware/web/app.js` (the device page's changelog link).
+- `SITE_URL` in `firmware/web/app.js` (the device page's changelog link
+  and its map landmark files).
   Run `python3 scripts/build_web.py` afterwards and commit both bundles.
 - `BASE` in `scripts/site_seo.py`, then the canonical, `og:url`,
   `og:image` and `twitter:image` tags in each `docs/site` page, which must
@@ -233,6 +234,27 @@ these places:
 Panels already running firmware keep reading the old address until they
 install a release built with the new one, so keep the old address serving
 the update manifests (or redirecting to the new ones) until they have.
+
+## Map landmark files
+
+The towns, borders, coastlines and highways under the radars come from
+`docs/site/land/1/`, prebuilt files the device page reads from the site:
+one per 4-degree square, `index.json` listing them and `LICENSE.txt` with
+the sources' terms. `python3 scripts/build_landmarks.py` downloads Natural
+Earth (a pinned tag, checked by hash) and GeoNames' cities500 and rewrites
+the folder; run it when Natural Earth tags a release or about yearly, and
+commit the folder. `--check` (also in CI) reads the committed files and
+checks a few homes, and `--check --cache DIR` also rebuilds from the
+downloads kept in `DIR` and compares. A wrong town is fixed with a line in
+the script's `DROP` table and a rebuild. Changing the file format means a
+new folder (`land/2/`) and a new `LAND_URL` in `app.js`, never an edit of
+`land/1/`, since panels on older firmware keep reading it.
+
+A local build reads the live site's files. To try files that aren't on the
+site yet, run `python3 scripts/build_landmarks.py --serve` and paste the
+line it prints into the device page's browser console; it sets
+`localStorage["gd.landBase"]`, which the page reads instead of the site.
+`localStorage.removeItem("gd.landBase")` goes back.
 
 ## License
 

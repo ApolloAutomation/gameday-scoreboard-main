@@ -128,6 +128,8 @@ jobs:
             fi
           done
           bash scripts/add_beta_channel.sh site
+          # Map landmark formats only beta has yet, for beta panels.
+          bash scripts/add_land_files.sh site
           # Releases up to v2026.10.0 carry the ESPHome project name.
           ./scripts/set_manifest_name.sh site/firmware
           bash scripts/check_site_firmware.sh site "$TAG"

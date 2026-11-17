@@ -21,6 +21,9 @@ components/gameday/gameday.cpp:
   POST /gameday/landmarks the map landmarks as landmarks.h checks them: 400 with the
                          error word, 409 for another home, 413 too big; "landmarks",
                          "landmarks_n" and "landmarks_saved" in the state follow it
+  GET  /land/1/<file>    docs/site/land/1, the site's map landmark files, for a
+                         page run by hand with localStorage "gd.landBase" set to
+                         http://127.0.0.1:<port>/land/1 (the tests route them)
 
 /?demo loads bundle-demo.js instead, the demo build's page, and
 GET/POST /gameday/demo answer as demo.cpp does.
@@ -1213,13 +1216,13 @@ def page_event_names():
 def landmarks_ok():
     """land_check() takes a good set and refuses each broken field, as the host tests do."""
     def enc(places, lines, lat=4000, lon=-9000, reach=250):
-        b = bytearray(b"GL\x01\x00")
+        b = bytearray(b"GL\x02\x00")
         npt = sum(len(p) for _, p in lines)
         for v in (lat, lon, len(places), len(lines), npt, reach):
             b += v.to_bytes(2, "little", signed=True)
         for dlat, dlon, cls, name in places:
             b += dlat.to_bytes(2, "little", signed=True) + dlon.to_bytes(2, "little", signed=True)
-            b += bytes([cls, len(name)]) + name.encode().ljust(10, b"\0")
+            b += bytes([cls, len(name)]) + name.encode().ljust(LAND_CAP["kLandName"], b"\0")
         for kind, pts in lines:
             b += bytes([kind, len(pts)])
         for _, pts in lines:
@@ -1231,7 +1234,7 @@ def landmarks_ok():
     la, lo = land_reach_box(4000, 250)
     edge = enc([(la, lo, 2, "EDGE")], [(0, [(-la, -lo), (la, lo)])])
     ok = ok and land_check(edge)[0] is None and (la, lo) == (9343, 12196)
-    bad = {"format": good[:3] + b"\x01" + good[4:], "length": good + b"\0", "counts": enc([], [], reach=0),
+    bad = {"format": good[:2] + b"\x01" + good[3:], "length": good + b"\0", "counts": enc([], [], reach=0),
            "name": enc([(0, 0, 1, "Brighton")], []), "place": enc([(0, lo + 1, 1, "A")], []),
            "line": enc([], [(3, [(0, 0), (1, 1)])]), "point": enc([], [(0, [(0, 0), (la + 1, 1)])])}
     ok = ok and land_check(enc([(0, 0, 0, "A")], []))[0] == "place"
@@ -1352,6 +1355,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, demo_doc())
         if u.path == "/0.css":
             return self._send(200, "text/css", (WEB / "app.css").read_bytes())
+        if re.fullmatch(r"/land/1/[\w.-]+", u.path):
+            f = REPO / "docs/site" / u.path[1:]
+            if not f.is_file():
+                return self._send(404, "text/plain", "")
+            return self._send(200, "application/json" if f.suffix == ".json" else "application/octet-stream", f.read_bytes())
         if u.path == "/gameday/state":
             if "state" in FAIL:
                 return self._send(500, "text/plain", "")

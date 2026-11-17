@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Wait until the live site serves this deploy's update feed.
-# Every manifest's version and OTA md5s, and each OTA image.
+# Every manifest's version and OTA md5s, and each OTA image; and each
+# map landmark index (land/<format>/index.json), which the device page
+# reads from another origin, so on http(s) it needs Pages' CORS header.
 # Usage: scripts/check_live_feed.sh <site dir> [live site URL]
 #        scripts/check_live_feed.sh --selftest
 # LIVE_TRIES (36) times LIVE_WAIT (20 s) bounds the wait.
@@ -25,6 +27,23 @@ once() {
       fi
       echo "$m $path" >> "$ok"
     done < <(jq -r '.builds[].ota | "\(.path) \(.md5)"' "$site/$m")
+  done
+  for m in $(cd "$site" && find land -name index.json 2> /dev/null | sort); do
+    grep -qxF "$m" "$ok" && continue
+    if ! curl -fsS "$base/$m?live=${GITHUB_RUN_ID:-local}-$try" 2> /dev/null | cmp -s - "$site/$m"; then
+      echo "try $try: $base/$m isn't this deploy's"
+      return 1
+    fi
+    case $base in
+      http*)
+        if ! curl -fsS -o /dev/null -D - -H "Origin: http://192.168.1.50" "$base/$m" 2> /dev/null |
+          grep -qi '^access-control-allow-origin: \*'; then
+          echo "try $try: $base/$m has no Access-Control-Allow-Origin: *, so device pages can't read the map landmarks"
+          return 1
+        fi
+        ;;
+    esac
+    echo "$m" >> "$ok"
   done
 }
 
@@ -67,6 +86,12 @@ if [ "${1:-}" = --selftest ]; then
   if check "$t/site" "file://$t/old" > /dev/null; then echo "FAIL: a different image passed"; exit 1; fi
   rm "$t/old/firmware/a/g-1.ota.bin"
   if check "$t/site" "file://$t/old" > /dev/null; then echo "FAIL: a missing image passed"; exit 1; fi
+  mkdir -p "$t/site/land/1"
+  echo '{"format": 1}' > "$t/site/land/1/index.json"
+  check "$t/site" "file://$t/site" > /dev/null || { echo "FAIL: the same landmark index isn't live"; exit 1; }
+  rm -rf "$t/old" && cp -R "$t/site" "$t/old"
+  echo '{"format": 0}' > "$t/old/land/1/index.json"
+  if check "$t/site" "file://$t/old" > /dev/null; then echo "FAIL: an old landmark index passed"; exit 1; fi
   echo "check_live_feed selftest ok"
   exit 0
 fi
