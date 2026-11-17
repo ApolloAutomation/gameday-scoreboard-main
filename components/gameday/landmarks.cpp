@@ -279,6 +279,11 @@ void radar_under(Px565 &p, const AppMap &m) {
 // Planes, home, then their numbers and the tag
 void radar_over(Px565 &p, const AppMap &m) {
   const int n = blip_count(m);
+  // Black under each plane, clear of the lines
+  for (int i = 0; i < n; i++) {
+    const Box b = blip_box(m.blips[i]);
+    p.fill(b.x, b.y, b.w, b.h, 0);
+  }
   // Others, then the card's, then emergencies on top
   for (uint8_t ink : {kBlipGround, kBlipPlane, kBlipCard, kBlipAlert})
     for (int i = 0; i < n; i++)
@@ -482,11 +487,22 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
       if (lead != (pass < 2))
         continue;
       land_place(s, cd[c].idx, pl);
-      const int d = pl.cls >= 3 ? 2 : 1, x = cd[c].x, y = cd[c].y, lw = 4 * pl.len - 1;
-      const Box dot{(int16_t) x, (int16_t) y, (int16_t) d, (int16_t) d};
+      int d = pl.cls >= 3 ? 2 : 1, x = cd[c].x, y = cd[c].y;
+      const int lw = 4 * pl.len - 1;
+      Box dot{(int16_t) x, (int16_t) y, (int16_t) d, (int16_t) d};
+      // Weather names the place home sits in
+      const Box &home = taken[nt0 - 1];
+      const bool at_home = !m.radar && meet(dot, home, 0, 0);
+      if (at_home) {
+        dot = home;
+        x = home.x;
+        y = home.y + 2;
+        d = home.w;
+      }
       bool free = true;
+      // A dot a pixel off other labels
       for (int t = 0; t < nt && free; t++)
-        free = !meet(dot, taken[t], 0, 0);
+        free = (at_home && t == nt0 - 1) || !meet(dot, taken[t], 1, 1);
       // Right, left, above, below, then the corners
       const int r = x + d + 1, l = x - 2 - lw, mid = x + d / 2 - lw / 2;
       const int tx[8] = {r, l, mid, mid, r, r, l, l};
@@ -496,16 +512,16 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
         if (b.x < 0 || b.y < 0 || b.x + b.w > m.w || b.y + b.h > m.h || (pass != 1 && on_ring(b, pr.ox, pr.oy, m.ring)))
           continue;
         bool ok = true;
-        // Labels keep a word's space apart
+        // Labels keep a word's space from words and marks
         for (int k = 0; k < nt && ok; k++) {
-          const bool word = k >= nt0 && taken[k].h == 5;
+          const bool word = taken[k].h == 5;
           ok = !meet(b, taken[k], word ? 3 : 1, word ? 2 : 1);
         }
         if (!ok)
           continue;
         taken[nt++] = dot;
         taken[nt++] = b;
-        out[n++] = MapLabel{(int16_t) x, (int16_t) y, b.x, b.y, cd[c].idx};
+        out[n++] = MapLabel{(int16_t) (at_home ? -1 : x), (int16_t) (at_home ? -1 : y), b.x, b.y, cd[c].idx};
         cd[c].idx = 0xFF;
         break;
       }
@@ -606,6 +622,8 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
     p.fill(k.x, k.y, k.w, k.h, 0);
   if (m.radar)
     radar_under(p, m);
+  else if (m.ring > 0)
+    circle(p, m.w / 2, m.h / 2, m.ring, rgb565(kRingInk), false);
   MapLabel lab[kMapLabelMax];
   const int n = map_labels(m, s, lab, map_label_cap(m));
   LandPlace pl;
@@ -613,7 +631,8 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
     land_place(s, lab[i].place, pl);
     const bool big = pl.cls >= 3;
     const int d = big ? 2 : 1;
-    p.fill(lab[i].x, lab[i].y, d, d, rgb565(big ? kDotBig : kDotSmall));
+    if (lab[i].x >= 0)
+      p.fill(lab[i].x, lab[i].y, d, d, rgb565(big ? kDotBig : kDotSmall));
     // A dark edge parts it from the lines
     p.fill(lab[i].lx - 1, lab[i].ly - 1, 4 * pl.len + 1, 7, 0);
     px_text(p, lab[i].lx, lab[i].ly, pl.name, rgb565(big ? kTextBig : kTextSmall), 1);

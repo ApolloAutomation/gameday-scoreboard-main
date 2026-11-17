@@ -1657,6 +1657,9 @@ void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   const int x0 = 128, lw = o.w - 128;
   list_head(f, n, o, x0, 0, lw);
   rows(f, n, o.card, x0, 8, lw >= 128 ? 128 : 64, o.ticker ? o.h - 8 : o.h, o);
+  // The card's plane alone: say so
+  if (n.n == 1)
+    put(f, x0, 24, lw, BoardFont::S8, Align::CENTER, kColDim, "No others");
 }
 
 }

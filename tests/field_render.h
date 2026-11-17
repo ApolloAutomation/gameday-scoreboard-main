@@ -74,9 +74,24 @@ inline ReviewFonts review_fonts(const std::string &dir) {
   return r;
 }
 
+// UTF-8 to code points, as LVGL reads labels
+inline std::vector<int> utf8_codes(const std::string &s) {
+  std::vector<int> out;
+  for (size_t i = 0; i < s.size();) {
+    const unsigned char c = (unsigned char) s[i];
+    const int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+    int cp = n == 1 ? c : c & (0x3F >> (n - 1));
+    for (int k = 1; k < n && i + k < s.size(); k++)
+      cp = cp << 6 | ((unsigned char) s[i + k] & 0x3F);
+    out.push_back(cp);
+    i += n;
+  }
+  return out;
+}
+
 inline int bdf_width(const BdfFont &f, const std::string &s) {
   int w = 0;
-  for (unsigned char c : s) {
+  for (int c : utf8_codes(s)) {
     auto it = f.g.find(c);
     w += it != f.g.end() ? it->second.dw : 0;
   }
@@ -135,7 +150,7 @@ inline void review_text(Canvas &cv, const ReviewFonts &fonts, const AppText &t, 
   const uint16_t c = rgb565(t.color);
   const int rows = esphome::gameday::font_rows(t.font);
   auto width = [&](const std::string &v) {
-    return f.ok() ? bdf_width(f, v) : (int) v.size() * esphome::gameday::font_px(t.font);
+    return f.ok() ? bdf_width(f, v) : (int) utf8_codes(v).size() * esphome::gameday::font_px(t.font);
   };
   const std::vector<std::string> lines = wrap ? review_lines(t.text, t.w, width) : std::vector<std::string>{t.text};
   for (size_t n = 0; n < lines.size(); n++) {
@@ -151,7 +166,7 @@ inline void review_text(Canvas &cv, const ReviewFonts &fonts, const AppText &t, 
     }
     int x = x0;
     const int base = y + f.ascent;
-    for (unsigned char ch : line) {
+    for (int ch : utf8_codes(line)) {
       auto it = f.g.find(ch);
       if (it == f.g.end())
         continue;

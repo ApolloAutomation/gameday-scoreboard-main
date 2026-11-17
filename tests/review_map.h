@@ -227,11 +227,13 @@ inline int render_map_views(const std::string &dir, const std::string &fixtures,
   int n = 0;
   static const int kSizes[][2] = {{64, 64}, {128, 64}, {256, 64}, {128, 128}};
   for (const auto &sz : kSizes) {
-    AppFrame f;
-    g_ms = 0;
-    a->frame(sz[0], sz[1], t, f);
-    app_frame_trim(f);
     for (int k = 0; k < 3; k++) {
+      // The frame knows when landmarks draw
+      AppFrame f;
+      g_ms = 0;
+      env.land = k == 0 ? nullptr : &set;
+      a->frame(sz[0], sz[1], t, f);
+      app_frame_trim(f);
       static const char *const kKind[] = {"before", "base", "rain"};
       const Canvas cv = compose(f, sz[0], sz[1], k == 0 ? nullptr : &set, k != 1, fonts);
       char name[96];

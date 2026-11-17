@@ -2106,6 +2106,38 @@ void test_radar_frames() {
     espn::AppFrame note;
     q.app.frame(w, h, q.now, note);
     FCHECK(frame_text(note) == "Looking for planes|" && note.map.w == 0, "%dx%d: the note", w, h);
+    // The card's plane alone: the radar, never an empty list
+    Reads one;
+    one.app.setup();
+    one.app.set("flyhome", "40.71,-74.01");
+    one.app.set("flyradius", "28mi");
+    one.app.shown(true);
+    FCHECK(one.step(200, fr24_north({0.1})) && one.app.nearby().n == 1, "%dx%d: one plane", w, h);
+    for (int s : {0, 8, 16}) {
+      espn::AppFrame o1;
+      one.app.frame(w, h, one.now + s, o1);
+      FCHECK(o1.map.w == 128 && o1.map.n_blips == 1 && !app_has(o1, "Nearby"),
+             "%dx%d at %d s: the radar stays for one plane", w, h, s);
+    }
+  }
+  // Three wide, the card's plane alone: the list says so
+  {
+    Reads one;
+    one.app.setup();
+    one.app.set("flyhome", "40.71,-74.01");
+    one.app.set("flyradius", "28mi");
+    one.app.shown(true);
+    FCHECK(one.step(200, fr24_north({0.1})), "one plane at 192");
+    espn::AppFrame o1;
+    one.app.frame(192, 64, one.now, o1);
+    bool said = false;
+    for (const espn::AppText &t : o1.texts)
+      said = said || (t.text == "No others" && t.x >= 128 && t.x + t.w <= 192);
+    FCHECK(said && app_has(o1, "1 plane"), "192x64: one plane, and no others: %s", frame_text(o1).c_str());
+    FCHECK(read_pos(one, fr24_north({0.1, 0.2})) && one.app.nearby().n == 2, "192x64: two planes");
+    espn::AppFrame o2;
+    one.app.frame(192, 64, one.now, o2);
+    FCHECK(!app_has(o2, "No others"), "192x64: two planes list the other");
   }
   // The blips themselves
   Prefs p;

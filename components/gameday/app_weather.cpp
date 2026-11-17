@@ -970,7 +970,9 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   ph.keep_art = true;
   // Said until a frame draws
   ph.alt = (int8_t) out.texts.size();
-  put(out, 0, bh / 2 - 4, bw, BoardFont::S8, AppAlign::CENTER, kGray, bw >= 70 ? "Loading radar" : "Loading");
+  const char *loading = bw >= 70 ? "Loading radar" : "Loading";
+  const int lw = 5 * (int) strlen(loading);
+  put(out, 1, bh - 8, lw, BoardFont::S8, AppAlign::LEFT, kGray, loading);
   const bool rv = this->rv_(now);
   const int64_t t = rv ? this->rad_.t[k] : iem_frame_time(now, k, kFrames);
   put(out, 1, 0, 30, BoardFont::S8, AppAlign::LEFT, k + 1 == n ? kWhite : kGray, clock_text(espn::app_local(t)));
@@ -978,15 +980,7 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   const char *unit = u.mph ? "mi" : "km";
   int dist = 0, r = 0;
   const int cx = bw / 2, cy = bh / 2;
-  if (radar_ring(lat, bw, bh, u.mph, dist, r)) {
-    for (int i = 0; i <= 40; i++) {
-      const float a = (float) i * 6.2831853f / 40.0f;
-      out.line.pts.push_back({(int16_t) lroundf(cx + r * cosf(a)), (int16_t) lroundf(cy + r * sinf(a))});
-    }
-    out.line.color = kRing;
-    putf(out, bw - 26, bh - 8, 25, BoardFont::S8, AppAlign::RIGHT, kDim, "%d%s", dist, unit);
-  }
-  out.bar = espn::AppFill{(int16_t) (cx - 1), (int16_t) (cy - 1), 2, 2, kWhite};
+  const bool ring = radar_ring(lat, bw, bh, u.mph, dist, r);
   // Landmarks under the rain, where the images are
   espn::AppMap &m = out.map;
   m.w = (int16_t) bw;
@@ -997,8 +991,20 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   m.keep[0] = espn::AppMapKeep{1, 0, 30, 8};
   if (dist != 0)
     m.keep[1] = espn::AppMapKeep{(int16_t) (bw - 26), (int16_t) (bh - 8), 25, 8};
+  m.keep[2] = espn::AppMapKeep{1, (int16_t) (bh - 8), (int16_t) lw, 8};
   m.roads = bw >= 128;
   m.ring = (uint8_t) r;
+  // With landmarks the map draws it, under their labels
+  const bool land = espn::map_has(m, espn::app_env().land);
+  if (ring) {
+    for (int i = 0; i <= 40 && !land; i++) {
+      const float a = (float) i * 6.2831853f / 40.0f;
+      out.line.pts.push_back({(int16_t) lroundf(cx + r * cosf(a)), (int16_t) lroundf(cy + r * sinf(a))});
+    }
+    out.line.color = kRing;
+    putf(out, bw - 26, bh - 8, 25, BoardFont::S8, AppAlign::RIGHT, kDim, "%d%s", dist, unit);
+  }
+  out.bar = espn::AppFill{(int16_t) (cx - 1), (int16_t) (cy - 1), 2, 2, kWhite};
   if (w < 192)
     return;
   // Beside it on wide boards: now and coming rain

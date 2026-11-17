@@ -76,7 +76,7 @@ float map_scale_ring(int32_t lat_e4, int ring_px, float radius_m);
 int map_min_class(const AppMap &m);
 
 struct MapLabel {
-  int16_t x{0}, y{0};    // the place's dot
+  int16_t x{0}, y{0};    // the place's dot; -1 home's
   int16_t lx{0}, ly{0};  // the label's top left
   uint8_t place{0};
 };

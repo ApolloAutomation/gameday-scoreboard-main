@@ -53,6 +53,7 @@ AppMap weather_map(int w, int h, int32_t lat_e4, int32_t lon_e4) {
   m.scale_q16 = (int32_t) lroundf(map_scale_weather(w, h) * 65536.0f);
   m.keep[0] = AppMapKeep{1, 0, 30, 8};
   m.keep[1] = AppMapKeep{(int16_t) (w - 26), (int16_t) (h - 8), 25, 8};
+  m.keep[2] = AppMapKeep{1, (int16_t) (h - 8), (int16_t) (w >= 70 ? 65 : 35), 8};
   m.roads = w >= 128;
   m.ring = (uint8_t) (h * 2 / 5);
   return m;
@@ -280,6 +281,17 @@ void labels_sound(const AppMap &m, const LandSet &s, const char *what) {
     }
     boxes.push_back(b);
   }
+  // A dot a pixel clear of other labels; home's draws none
+  for (int i = 0; i < n; i++) {
+    if (lab[i].x < 0)
+      continue;
+    LandPlace pl;
+    land_place(s, lab[i].place, pl);
+    const int d = pl.cls >= 3 ? 2 : 1;
+    const PxBox dot{(int16_t) (lab[i].x - 1), (int16_t) (lab[i].y - 1), (int16_t) (d + 2), (int16_t) (d + 2)};
+    for (int j = 0; j < n; j++)
+      LCHECK(j == i || !box_overlap(dot, boxes[j]), "%s: %s's dot a pixel off label %d", what, pl.name, j);
+  }
   MapLabel again[kMapLabelMax];
   bool same = map_labels(m, s, again, map_label_cap(m)) == n;
   for (int i = 0; i < n && same; i++)
@@ -444,7 +456,7 @@ void test_paint() {
     LCHECK(intact, "%dx%d: the guard bytes stay", w, h);
   }
   // The sample paints the same picture every time
-  static const uint32_t kHash[3] = {0x20357045u, 0x14e44515u, 0x425be135u};
+  static const uint32_t kHash[3] = {0xa21bce9eu, 0xd7ec265du, 0x30516919u};
   int k = 0;
   for (const auto &sz : {std::make_pair(64, 56), std::make_pair(128, 56), std::make_pair(128, 120)}) {
     Canvas hc(sz.first, sz.second);
@@ -539,8 +551,56 @@ void test_radar() {
     const PxBox b{lab[i].lx, lab[i].ly, (int16_t) (4 * pl.len - 1), 5};
     for (const PxBox &t : taken)
       LCHECK(!box_overlap(b, t), "%s clear of the mark at %d,%d", pl.name, t.x, t.y);
+    // A word's space from the radar's words and planes
+    const PxBox wide{(int16_t) (b.x - 3), (int16_t) (b.y - 2), (int16_t) (b.w + 6), (int16_t) (b.h + 4)};
+    for (const PxBox &t : taken)
+      LCHECK(t.h != 5 || !box_overlap(wide, t), "%s a word's space from %d,%d", pl.name, t.x, t.y);
   }
   labels_sound(m, s, "radar");
+  // A town just under the inner ring's label stays a word apart
+  {
+    AppMap im = radar_of(400000, -900000);
+    snprintf(im.inner_text, sizeof im.inner_text, "5");
+    const MapProj ip = map_proj(im.lat_e4, im.lon_e4, im.scale_q16 / 65536.0f, im.w, im.h);
+    const float per_px = 360.0f / 32768.0f / (im.scale_q16 / 65536.0f);
+    const int lx = im.w / 2 + im.inner + 2, ly = im.h / 2 - 6;
+    // Its dot two rows under the label's left
+    const int east = (int) lroundf((lx - ip.ox + 0.5f) * per_px * 4000.0f);
+    const int south = (int) lroundf((ly + 7 - ip.oy + 0.5f) * per_px * 4000.0f);
+    std::vector<uint8_t> ib = land_encode(4000, -9000, 100, {{-south, east, 4, "NEARBY"}}, {});
+    LandSet is;
+    land_check(ib.data(), ib.size(), is);
+    MapLabel il[kMapLabelMax];
+    const int k = map_labels(im, is, il, 8);
+    const PxBox inner_box{(int16_t) lx, (int16_t) ly, (int16_t) px_text_w("5", 1), 5};
+    bool apart = true;
+    for (int i = 0; i < k; i++)
+      apart = apart && !box_overlap(PxBox{(int16_t) (il[i].lx - 3), (int16_t) (il[i].ly - 2), 23 + 6, 9}, inner_box);
+    LCHECK(k == 1 && apart, "a town a word's space from the inner ring's label: %d labels", k);
+  }
+  // Each plane on black, clear of the lines under it
+  {
+    AppMap hm = radar_of(400000, -900000);
+    add_blip(hm, 40, 20, 45, kBlipPlane, kBlipTrack, 0);
+    // A road straight through the plane
+    const MapProj hp = map_proj(hm.lat_e4, hm.lon_e4, hm.scale_q16 / 65536.0f, hm.w, hm.h);
+    const float per_px = 360.0f / 32768.0f / (hm.scale_q16 / 65536.0f);
+    // Level with the plane, all the way across
+    const int dl = (int) lroundf((hp.oy - 20 - 0.5f) * per_px * 4000.0f);
+    std::vector<uint8_t> rb = land_encode(4000, -9000, 250, {}, {{2, {{dl, -12000}, {dl, 12000}}}});
+    LandSet rs;
+    land_check(rb.data(), rb.size(), rs);
+    Canvas hc(128, 56);
+    map_paint(hc.p, hm, &rs);
+    int road = 0, under = 0;
+    for (int y = 17; y <= 23; y++)
+      for (int x = 0; x < 128; x++)
+        road += (x < 36 || x > 44) && hc.px[(size_t) y * 128 + x] == rgb565(0x4A3A24);
+    for (int y = 18; y <= 22; y++)
+      for (int x = 38; x <= 42; x++)
+        under += hc.px[(size_t) y * 128 + x] == rgb565(0x4A3A24);
+    LCHECK(road > 20 && under == 0, "the road crosses the map, not the plane: %d across, %d under", road, under);
+  }
   // Crowded blips: numbers left off, never overlapping
   AppMap c = radar_of(400012, -899988);
   for (int i = 0; i < kAppBlips; i++)
@@ -654,9 +714,53 @@ void test_real_set() {
   }
 }
 
+// Weather names home's town; its ring runs under labels
+void test_home_and_ring() {
+  std::vector<uint8_t> hb = land_encode(4000, -9000, 100, {{0, 0, 4, "HOMETOWN"}, {0, 2000, 4, "EASTON"}}, {});
+  LandSet hs;
+  land_check(hb.data(), hb.size(), hs);
+  for (const auto &sz : {std::make_pair(64, 56), std::make_pair(128, 56), std::make_pair(128, 120)}) {
+    const AppMap m = weather_map(sz.first, sz.second, 400000, -900000);
+    MapLabel lab[kMapLabelMax];
+    const int n = map_labels(m, hs, lab, map_label_cap(m));
+    int home = -1;
+    for (int i = 0; i < n; i++)
+      if (lab[i].place == 0)
+        home = i;
+    const PxBox hbox{(int16_t) (m.w / 2 - 3), (int16_t) (m.h / 2 - 3), 6, 6};
+    LCHECK(home >= 0 && lab[home].x < 0 && !box_overlap(PxBox{lab[home].lx, lab[home].ly, 31, 5}, hbox) &&
+               box_overlap(PxBox{(int16_t) (lab[home].lx - 4), (int16_t) (lab[home].ly - 4), 39, 13}, hbox),
+           "%dx%d: home's town named beside the home, no dot: %d", sz.first, sz.second, home);
+    labels_sound(m, hs, "home's town");
+    Canvas c(sz.first, sz.second);
+    map_paint(c.p, m, &hs);
+    LCHECK(c.px[(size_t) (m.h / 2) * m.w + m.w / 2] == 0, "%dx%d: no town dot on the home", sz.first, sz.second);
+    // The ring drawn, and never inside a label
+    LCHECK(c.count(0x484848) > 2 * m.ring, "%dx%d: the ring drawn: %d", sz.first, sz.second, c.count(0x484848));
+    for (int i = 0; i < n; i++) {
+      LandPlace pl;
+      land_place(hs, lab[i].place, pl);
+      int on = 0;
+      for (int y = lab[i].ly; y < lab[i].ly + 5; y++)
+        for (int x = lab[i].lx; x < lab[i].lx + 4 * pl.len - 1; x++)
+          on += c.px[(size_t) y * m.w + x] == rgb565(0x484848);
+      LCHECK(on == 0, "%dx%d: %s clear of the ring: %d", sz.first, sz.second, pl.name, on);
+    }
+  }
+  // The plane radar leaves home to its planes
+  AppMap r = radar_of(400000, -900000);
+  MapLabel lab[kMapLabelMax];
+  const int n = map_labels(r, hs, lab, 8);
+  bool named = false;
+  for (int i = 0; i < n; i++)
+    named = named || lab[i].place == 0;
+  LCHECK(!named, "the plane radar: home's town unnamed");
+}
+
 }  // namespace
 
 int run_landmark_tests(int &total_checks) {
+  test_home_and_ring();
   test_check();
   test_projection();
   test_paint();

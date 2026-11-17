@@ -11,6 +11,7 @@
 #include "app_flights.h"
 #include "app_frame_check.h"
 #include "app_weather.h"
+#include "land_set.h"
 #include "landmarks.h"
 #include "map_canvas.h"
 
@@ -539,6 +540,23 @@ void test_app() {
                    m.keep[0].w == 30 && m.keep[1].x == m.w - 26 && m.keep[1].y == m.h - 8 &&
                    (m.roads != 0) == (m.w >= 128),
                "%dx%d radar: landmarks under the images", sz[0], sz[1]);
+        // The loading words: bottom left, kept clear of towns
+        const espn::AppText &lt = f.texts[f.photo.alt];
+        const espn::AppMapKeep &k = m.keep[2];
+        WCHECK(lt.text.compare(0, 7, "Loading") == 0 && lt.x == 1 && lt.y == m.h - 8 && k.x == lt.x &&
+                   k.y == lt.y && k.w == (int) lt.text.size() * 5 && k.h == 8 && lt.x + lt.w <= m.keep[1].x,
+               "%dx%d radar: %s at %d,%d, kept %d wide", sz[0], sz[1], lt.text.c_str(), lt.x, lt.y, k.w);
+        // With landmarks the map draws the ring under labels
+        std::vector<uint8_t> bytes = land_encode(3894, -11998, 250, land_sample_places(), land_sample_lines());
+        espn::LandSet set;
+        espn::land_check(bytes.data(), bytes.size(), set);
+        espn::app_env().land = &set;
+        espn::AppFrame fl;
+        a->frame(sz[0], sz[1], now + dt, fl);
+        espn::app_env().land = nullptr;
+        WCHECK(fl.line.pts.empty() && fl.map.ring == m.ring && m.ring > 0 && f.line.pts.size() > 10,
+               "%dx%d radar: the ring is the map's with landmarks, a line without: %d points", sz[0], sz[1],
+               (int) fl.line.pts.size());
       } else {
         WCHECK(f.map.w == 0, "%dx%d page %d: no map", sz[0], sz[1], (int) p);
       }

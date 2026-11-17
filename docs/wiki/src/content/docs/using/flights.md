@@ -56,6 +56,8 @@ The list of the nearest planes, nearest first, has each one's callsign, type cod
 Everything moves slowly and stays dim, so the plane is always the brightest thing in the picture and nothing flashes. During the night hours, and while **Off or dim** has dimmed the panel, the picture and its sky hold still.
 
 The notes the Flight Tracker shows instead of a plane, like **Looking for planes**, have a band of the same sky above their words when the area is at least 64 LEDs tall.
+
+On three panels in a row, when the plane on the card is the only one nearby, the list beside it says **No others**.
 :::
 
 | Area | What it shows |
@@ -74,6 +76,7 @@ The notes the Flight Tracker shows instead of a plane, like **Looking for planes
 
 - On four wide, the nearest plane's card stays on the left two panels, as it is today, and the right two panels show the radar and the nearby list in turn, about 8 seconds each.
 - On two rows of two, the top half shows the 128x64 card, with its photo or picture, and the bottom half shows the radar and the nearby list in turn. This takes the place of the full-screen tall card and tall list: the list shows six planes with their type, altitude and distance, and the routes of the nearest three stay in the ticker.
+- When the plane on the card is the only one nearby, the radar stays on screen rather than an empty list.
 
 On the radar, your home is the white dot in the middle, north is up (the **N** on the ring), and the ring is your **Within** distance, labeled at the bottom right, like **10MI**. When the distance is an even number, a dotted ring marks half of it. Each plane is a small arrow pointing the way it's flying, or a dot when its heading isn't known; a short dash is a plane on the ground. The plane on the card is yellow with brackets around it, so the two halves read together, and a plane in an emergency is red. Planes farther than your distance are left out.
 

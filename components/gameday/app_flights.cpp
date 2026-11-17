@@ -802,7 +802,8 @@ void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
   o.ticker = false;
   Frame fr = flight_frame(this->near_, &this->routes_, o, (uint32_t) now);
   const int hx = h == 64 ? 128 : 0, hy = h == 64 ? 0 : 64;
-  if (this->list_)
+  // The card's plane alone: the radar stays
+  if (this->list_ && this->near_.n > 1)
     radar_list(fr, this->near_, o.card, o, hx, hy, kRadarH);
   else
     radar_map(this->near_, o.card, this->prefs_, this->shown_wide_, hx, hy, out.map);

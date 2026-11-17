@@ -9,6 +9,7 @@
 #include "espn_parse.h"
 #include "espn_parse_impl.h"
 #include "field.h"
+#include "field_render.h"
 #include "idle.h"
 #include "set_request.h"
 
@@ -587,9 +588,54 @@ void test_try() {
     check_sample(try_frame(nfl, w, false, true), w, nfl, "demo");
 }
 
+// The review pictures read labels as UTF-8, like LVGL
+void test_review_text() {
+  const std::vector<int> deg = utf8_codes("31\xC2\xB0" "F");
+  FCHECK(deg.size() == 4 && deg[0] == '3' && deg[2] == 0xB0 && deg[3] == 'F');
+  const std::vector<int> e = utf8_codes("S\xC3\xA3o");
+  FCHECK(e.size() == 3 && e[1] == 0xE3);
+  BdfFont f;
+  for (int c : {(int) '3', (int) '1', (int) 'F', 0xB0, 0xC2}) {
+    BdfGlyph g;
+    g.dw = 6;
+    f.g[c] = g;
+  }
+  FCHECK(bdf_width(f, "31\xC2\xB0" "F") == 24);
+  // The degree sign alone, no stray letter before it
+  Canvas cv;
+  cv.w = 40;
+  cv.h = 8;
+  cv.px.assign(320, 0);
+  BdfGlyph a;
+  a.dw = 6;
+  a.w = 1;
+  a.h = 1;
+  a.yo = -1;
+  a.rows = {0x80};
+  f.g[0xC2] = a;
+  ReviewFonts fonts;
+  fonts.f[0] = f;
+  AppText t;
+  t.w = 40;
+  t.text = "\xC2\xB0";
+  review_text(cv, fonts, t);
+  int lit = 0;
+  for (uint16_t v : cv.px)
+    lit += v != 0;
+  FCHECK(lit == 0);
+  // Its own code point, written as UTF-8, does light
+  t.text = "\xC3\x82";
+  review_text(cv, fonts, t);
+  lit = 0;
+  for (uint16_t v : cv.px)
+    lit += v != 0;
+  FCHECK(lit == 1);
+}
+
 }  // namespace
 
 int run_field_tests(int &total_checks) {
+  test_review_text();
   test_parse();
   test_model();
   test_words();
