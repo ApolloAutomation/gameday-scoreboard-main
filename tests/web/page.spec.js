@@ -5157,9 +5157,10 @@ const landIndex = (names) => {
 };
 // The squares app.js's landTiles asks for
 const squaresAround = (lat, lon) => {
-  const dy = 250 / 111.32, dx = 250 / (111.32 * Math.cos(lat * Math.PI / 180)), out = [];
-  for (let r = Math.floor(Math.max(-85, lat - dy) / 4); r <= Math.floor(Math.min(85, lat + dy) / 4); r++)
-    for (let c = Math.floor(Math.max(-180, lon - dx) / 4); c <= Math.floor(Math.min(179.9999, lon + dx) / 4); c++)
+  const a = Math.floor(lat / 4) * 4, o = Math.floor(lon / 4) * 4, far = Math.min(85, Math.max(Math.abs(a), Math.abs(a + 4)));
+  const dy = 250 / 111.32, dx = 250 / (111.32 * Math.cos(far * Math.PI / 180)), out = [];
+  for (let r = Math.floor(Math.max(-85, a - dy) / 4); r <= Math.floor(Math.min(85, a + 4 + dy) / 4); r++)
+    for (let c = Math.floor(Math.max(-180, o - dx) / 4); c <= Math.floor(Math.min(179.9999, o + 4 + dx) / 4); c++)
       out.push(r * 4 + "_" + c * 4);
   return out;
 };
@@ -5231,7 +5232,7 @@ const CREDIT = "Map landmarks from Natural Earth and GeoNames (CC BY 4.0)";
 test("setting a home reads its squares from the project site once and hands the set to the panel", async ({ page, request, baseURL }) => {
   await reset(request, { displays: WX_DISPLAYS });
   await page.route("https://geocoding-api.open-meteo.com/**", (route) => route.fulfill({ json: BROOKLYN }));
-  const tiles = { ...landAround(40.65, -73.95), "36_-76": tileBytes({ lat0: 36, lon0: -76 }) };
+  const tiles = { ...landAround(40.65, -73.95), "36_-76": tileBytes({ lat0: 36, lon0: -76 }), "44_-72": tileBytes({ lat0: 44, lon0: -72 }) };
   const asked = await serveLand(page, tiles);
   const away = [];
   page.on("request", (r) => {
@@ -5251,8 +5252,8 @@ test("setting a home reads its squares from the project site once and hands the 
   await expect.poll(() => landPosts(request)).toHaveLength(1);
   // The index, then each listed square near the rounded home
   expect(asked[0]).toBe("index.json");
-  expect(asked.slice(1).sort()).toEqual(["36_-76.bin", "40_-76.bin"]);
-  for (const n of ["36_-76", "40_-76"]) expect(squaresAround(40.65, -73.95)).toContain(n);
+  expect(asked.slice(1).sort()).toEqual(["36_-76.bin", "40_-76.bin", "44_-72.bin"]);
+  for (const n of ["36_-76", "40_-76", "44_-72"]) expect(squaresAround(40.65, -73.95)).toContain(n);
   // Only squares leave the browser, never the home
   expect(away.length).toBe(asked.length);
   for (const u of away) expect(u).toMatch(new RegExp("^" + LAND_URL.replace(/[.]/g, "\\.") + "(index\\.json|-?\\d+_-?\\d+\\.bin)$"));
@@ -5306,6 +5307,31 @@ test("typed coordinates read the squares around the rounded home", async ({ page
   const h = landRead(bodies[0]);
   expect([h.lat, h.lon]).toEqual([3805, -8473]);
   await expect(page.locator("#flightMarksSay")).toHaveText("Map landmarks added: 6 towns and cities.");
+});
+
+test("every home in a square asks for the same squares", async ({ page, request }) => {
+  await reset(request, { displays: FLIGHT_DISPLAYS });
+  const names = squaresAround(38.05, -84.73);
+  expect(names).toHaveLength(9);
+  const tiles = Object.fromEntries(names.map((n) => {
+    const [a, o] = n.split("_").map(Number);
+    return [n, tileBytes({ lat0: a, lon0: o })];
+  }));
+  const asked = await serveLand(page, tiles);
+  await page.goto("/");
+  const seen = [];
+  for (const home of ["36.0100, -87.9900", "39.9900, -84.0100", "38.0512, -84.7349"]) {
+    asked.length = 0;
+    await page.locator("#flightWhere").fill(home);
+    await page.locator("#flightFind").click();
+    await expect.poll(() => asked.length).toBe(10);
+    await expect(page.locator("#flightMarksSay")).toHaveText("There are no map landmarks for this area yet.");
+    expect(asked).toHaveLength(10);
+    seen.push(asked.slice().sort());
+  }
+  expect(seen[1]).toEqual(seen[0]);
+  expect(seen[2]).toEqual(seen[0]);
+  expect(seen[0]).toEqual(["index.json", ...names.map((n) => n + ".bin")].sort());
 });
 
 test("a square that won't load shows Try again, and Try again reads once more", async ({ page, request }) => {

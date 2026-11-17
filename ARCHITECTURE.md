@@ -469,10 +469,11 @@ Mercator onto black, places labels biggest first where they fit, and leaves
 the image's alpha (`MapCanvas::finish` now writes RGB565 with an alpha
 plane, the same picture over black) to lay rain over it. The set comes from
 the device page: the browser reads `land/1/index.json` from the project
-site (`SITE_URL`) and the 4-degree squares it lists that meet a 250 km box
-around the rounded home (`land/1/<lat>_<lon>.bin`: places with a class and
-a rounded size, then delta-coded lines on the set's own 1/4000-degree
-grid), so only squares leave the browser. The files are committed under
+site (`SITE_URL`) and the 4-degree squares it lists within 250 km of
+anywhere in the home's own square (`land/1/<lat>_<lon>.bin`: places with
+a class and a rounded size, then delta-coded lines on the set's own
+1/4000-degree grid), so every home in a square asks for the same files
+and the requests show only which square the home is in. The files are committed under
 `docs/site/land/1/`, built by `scripts/build_landmarks.py` from Natural
 Earth 10m and GeoNames cities500, and checked in CI by its `--check`; a
 format change is a new folder, and `scripts/add_land_files.sh` adds a

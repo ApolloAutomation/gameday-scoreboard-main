@@ -243,8 +243,10 @@ one per 4-degree square, `index.json` listing them and `LICENSE.txt` with
 the sources' terms. `python3 scripts/build_landmarks.py` downloads Natural
 Earth (a pinned tag, checked by hash) and GeoNames' cities500 and rewrites
 the folder; run it when Natural Earth tags a release or about yearly, and
-commit the folder. `--check` (also in CI) reads the committed files and
-checks a few homes, and `--check --cache DIR` also rebuilds from the
+commit the folder. `--check` (also in CI) reads the committed files,
+checks a few homes and fails when `index.json`'s `rules` hash no longer
+matches the script's rules, so a rule changed without a rebuild is
+caught; `--check --cache DIR` also rebuilds from the
 downloads kept in `DIR` and compares. A wrong town is fixed with a line in
 the script's `DROP` table and a rebuild. Changing the file format means a
 new folder (`land/2/`) and a new `LAND_URL` in `app.js`, never an edit of

@@ -2,6 +2,7 @@
  "format": 1,
  "grid": 4,
  "built": "2026-11-16",
+ "rules": "7a4259103440f66b",
  "sources": {
   "naturalearth": "v5.1.2",
   "geonames": "cities500 2026-11-16 sha256:40754836f9b58f2702e53e8d4c531aac2bc04a39d92d798a09afd3456ae661ca"

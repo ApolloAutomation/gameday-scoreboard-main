@@ -6,6 +6,7 @@ import base64
 import datetime
 import hashlib
 import http.server
+import inspect
 import io
 import json
 import math
@@ -22,9 +23,9 @@ from pathlib import Path
 DESCRIPTION = """\
 Regenerate docs/site/land/1/, the map landmark files under the radars.
 
-The device page reads index.json and the 4-degree squares around the home
-from the project site, builds the panel's landmark set and posts it. This
-script downloads Natural Earth 10m (public domain: coastlines, large lakes,
+The device page reads index.json and the 4-degree squares around the
+home's own square from the project site, builds the panel's landmark set
+and posts it. This script downloads Natural Earth 10m (public domain: coastlines, large lakes,
 country and state or province lines, motorways) from one pinned tag and
 GeoNames cities500 (CC BY 4.0: places of 500 people and more), and writes
 one file per square that holds something, index.json and LICENSE.txt. It
@@ -33,8 +34,9 @@ Natural Earth tags a release or yearly for GeoNames, and commit the folder.
 A new file format is a new folder (land/2/), never an edit of land/1/.
 
   --selftest   offline checks on synthetic inputs
-  --check      offline checks of the committed files (with --cache, also
-               rebuilds from the cached downloads and compares)
+  --check      offline checks of the committed files, including that
+               index.json's rules hash matches this script's (with --cache,
+               also rebuilds from the cached downloads and compares)
   --serve      serves docs/site with CORS for a local device page build
 """
 
@@ -77,7 +79,7 @@ DROP = {
 }
 NAME_MAX = 48
 NORTH_AMERICA = {"USA", "CAN", "MEX", "BLZ"}
-MAX_FOLDER, MAX_TILE, MAX_HOME = 6_000_000, 65_536, 160_000
+MAX_FOLDER, MAX_TILE, MAX_HOME = 6_000_000, 65_536, 200_000
 SPOTS = [("Versailles KY", 38.05, -84.73), ("Denver", 39.74, -104.99), ("Miami", 25.77, -80.19),
          ("Seattle", 47.61, -122.33), ("Toronto", 43.65, -79.38), ("London", 51.51, -0.13),
          ("Sydney", -33.87, 151.21), ("Anchorage", 61.22, -149.9), ("Honolulu", 21.31, -157.86),
@@ -512,11 +514,13 @@ def bitmap_keys(text):
 
 
 def home_tiles(lat, lon, km=REACH_KM):
-    """The squares meeting the reach box, clamped as the page does."""
+    """The squares in reach of anywhere in the home's square, as the page asks."""
+    a, o = math.floor(lat / GRID) * GRID, math.floor(lon / GRID) * GRID
+    far = min(85, max(abs(a), abs(a + GRID)))
     dy = km / 111.32
-    dx = km / (111.32 * math.cos(math.radians(lat)))
-    s, n = max(-85, lat - dy), min(85, lat + dy)
-    w, e = max(-180, lon - dx), min(180, lon + dx)
+    dx = km / (111.32 * math.cos(math.radians(far)))
+    s, n = max(-85, a - dy), min(85, a + GRID + dy)
+    w, e = max(-180, o - dx), min(180, o + GRID + dx)
     return [(r, c) for r in range(math.floor(s / GRID), math.floor(n / GRID) + 1)
             for c in range(math.floor(w / GRID), math.floor(min(e, 179.9999) / GRID) + 1)]
 
@@ -559,6 +563,20 @@ a size class and a rounded size.
 """
 
 
+def rules():
+    """A hash of every rule that shapes the files."""
+    parts = [repr((Q, GRID, ROW0, ROWS, COL0, COLS, MIN_KM, DP_KM, STEP_KM, BORDER, COAST, ROAD, NAME_MAX, CREDIT,
+                   sorted(PLACE_CODES), sorted(NORTH_AMERICA), sorted(DROP.items()),
+                   [(k, n) for k, n, _ in LAYERS]))]
+    for f in (num, keep_road_world, keep_road_na, *(f for _, _, f in LAYERS), load_lines, load_places, km_frame,
+              length_km, simplify, densify, quantize, tile_of, split, in_grid, build_lines, place_name, place_class,
+              pop_code, km_between, pick_places, build_places, varint, zigzag, tile_name, encode_tile, bitmap,
+              license_text, build):
+        code = [ln.strip() for ln in inspect.getsource(f).splitlines()]
+        parts.append("\n".join(ln for ln in code if ln and not ln.startswith("#")))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
 def build(cache):
     lines = load_lines(cache)
     rows, date, sha = load_places(cache)
@@ -568,7 +586,7 @@ def build(cache):
     print(f"places kept: {len(places)} of {len(rows)}")
     build_places(places, tiles)
     files = {tile_name(k): encode_tile(k, *v) for k, v in sorted(tiles.items()) if v[0] or v[1]}
-    index = {"format": 1, "grid": GRID, "built": date,
+    index = {"format": 1, "grid": GRID, "built": date, "rules": rules(),
              "sources": {"naturalearth": "v5.1.2", "geonames": f"cities500 {date} sha256:{sha}"},
              "credit": CREDIT, "tiles": bitmap(tile_key(n) for n in files)}
     files["index.json"] = (json.dumps(index, indent=1) + "\n").encode()
@@ -631,6 +649,9 @@ def check(cache=None):
         return 1
     if index.get("format") != 1 or index.get("grid") != GRID or not index.get("credit") or not index.get("sources"):
         bad.append("index.json lacks format 1, grid 4, credit or sources")
+    if index.get("rules") != rules():
+        bad.append(f"the generator's rules changed since the files were built ({index.get('rules')} vs {rules()}); "
+                   "rebuild them with this script")
     names = {n for n in files if n.endswith(".bin")}
     if {tile_name(k) for k in keys} != names:
         bad.append("index.json's squares are not the files present")
@@ -786,7 +807,18 @@ def selftest():
     assert len(bits) == 495 and bits[0] == 1 and bits[(22 * 90 + 45) >> 3] == 1 << ((22 * 90 + 45) & 7)
     assert bits[-1] == 0x80 and bitmap_keys(text) == set(corners)
     assert tile_name((9, -22)) == "36_-88.bin" and tile_key("36_-88.bin") == (9, -22)
-    assert (9, -22) in home_tiles(38.05, -84.73) and len(home_tiles(38.05, -84.73)) == 6
+    assert (9, -22) in home_tiles(38.05, -84.73) and len(home_tiles(38.05, -84.73)) == 9
+    # The same squares for every home in a square
+    for a, o in ((36, -88), (-36, 148), (60, -152), (84, 0), (-88, -180), (0, 176)):
+        ks = [home_tiles(a + y, o + x) for y in (0.0001, 1.5, 3.9999) for x in (0.0001, 2.2, 3.9999)]
+        assert all(k == ks[0] for k in ks), (a, o)
+    r = rules()
+    DROP[5] = ("Wrong", 42.0, -80.0, "selftest")
+    try:
+        assert rules() != r
+    finally:
+        del DROP[5]
+    assert rules() == r
     assert not in_grid((22, 45)) and not in_grid((-23, 0)) and in_grid((21, -45))
     print("build_landmarks selftest: ok")
     return 0

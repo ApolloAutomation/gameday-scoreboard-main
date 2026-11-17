@@ -2793,11 +2793,13 @@
     } catch (_) {}
     return LAND_URL;
   };
-  // South-west corners of the squares meeting the reach box
+  // Squares in reach of anywhere in the home's square
   const landTiles = (lat, lon) => {
-    const g = LAND.grid, dy = LAND.reach / 111.32, dx = LAND.reach / (111.32 * Math.cos(lat * Math.PI / 180));
-    const s = Math.max(-85, lat - dy), n = Math.min(85, lat + dy);
-    const w = Math.max(-180, lon - dx), e = Math.min(179.9999, lon + dx);
+    const g = LAND.grid, a = Math.floor(lat / g) * g, o = Math.floor(lon / g) * g;
+    const far = Math.min(85, Math.max(Math.abs(a), Math.abs(a + g)));
+    const dy = LAND.reach / 111.32, dx = LAND.reach / (111.32 * Math.cos(far * Math.PI / 180));
+    const s = Math.max(-85, a - dy), n = Math.min(85, a + g + dy);
+    const w = Math.max(-180, o - dx), e = Math.min(179.9999, o + g + dx);
     const out = [];
     for (let r = Math.floor(s / g); r <= Math.floor(n / g); r++)
       for (let c = Math.floor(w / g); c <= Math.floor(e / g); c++) out.push([r * g, c * g]);

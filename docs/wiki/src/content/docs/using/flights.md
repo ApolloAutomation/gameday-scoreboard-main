@@ -149,7 +149,7 @@ The home location stays on the panel, to four decimal places (about 10 meters), 
 Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel.
 
 :::note[Coming in the next release]
-Setting the home on the device page also has your browser read map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from this project's site: the files for the squares of about 400 km around the home, never the home itself. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+Setting the home on the device page also has your browser read map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from this project's site: the same files for every home in the home's 4-degree square (about 440 km across), so only which square the home is in leaves your browser, never the home itself. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before; see [The device page](/using/device-page/). Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 :::
 
 **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
