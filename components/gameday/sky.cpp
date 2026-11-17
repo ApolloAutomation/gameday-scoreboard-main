@@ -119,9 +119,15 @@ void sky_plane_at(const AppSky &s, const PlaneSprite &sp, uint32_t t, int &x, in
   const int sc = s.scale < 1 ? 1 : s.scale;
   x = (s.w / sc - sp.w) / 2;
   y = (s.h / sc - sp.h) / 2;
-  // A helicopter bobs, up 2 s, down 2 s, given room
-  if ((PlaneKind) s.kind == PlaneKind::HELI && s.h / sc >= 20 && (t / 2000) % 2 == 1)
-    y--;
+  // A slow wave up and down, given room
+  const PlaneMotion m = flights::plane_motion((PlaneKind) s.kind);
+  const int room = s.h / sc - sp.h - 2;
+  const int amp = m == PlaneMotion::STILL || room < 2 ? 0 : room < 6 ? 1 : 2;
+  if (amp == 0)
+    return;
+  const uint32_t per = m == PlaneMotion::JET ? 8000 : m == PlaneMotion::PROP ? 7000 : 6000;
+  const float a = 6.2831853f * (float) (t % per) / (float) per;
+  y += (int) lroundf(amp * sinf(a));
 }
 
 void sky_paint(Px565 &out, const AppSky &s, uint32_t t) {

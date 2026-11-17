@@ -238,10 +238,22 @@ void check_calm(const AppSky &s, const char *what) {
     }
     if (flights::plane_sprite((PlaneKind) s.kind) != nullptr)
       spot_at(s, t, spot);
+    // The plane's own swing is motion, not change
+    std::set<int> band;
+    if (const PlaneSprite *sp = flights::plane_sprite((PlaneKind) s.kind)) {
+      int x0, y0, x1, y1;
+      sky_plane_at(s, *sp, t, x0, y0);
+      sky_plane_at(s, *sp, t > kStep ? t - kStep : 0, x1, y1);
+      SCHECK(std::abs(y0 - y1) <= s.scale, "%s: the plane moves a row at most a step", what);
+      for (int y = std::min(y0, y1) - 1; y <= std::max(y0, y1) + sp->h; y++)
+        for (int x = x0 - 1; x <= x0 + sp->w; x++)
+          if (x >= 0 && y >= 0 && x < s.w && y < s.h)
+            band.insert(y * s.w + (s.flip ? s.w - 1 - x : x));
+    }
     if (!prev.empty()) {
       int changed = 0;
       for (int i = 0; i < n; i++)
-        changed += px[i] != prev[i];
+        changed += px[i] != prev[i] && band.count(i) == 0;
       worst_changed = std::max(worst_changed, changed);
       // Against the frame, or a whole box at a dim 8
       const long floor = std::max(prev_total, (long) n * 8);
@@ -466,9 +478,40 @@ void test_scale() {
   }
 }
 
+// Moving craft ride a slow wave inside the box
+void test_wave() {
+  for (PlaneKind k : kKinds) {
+    const PlaneSprite *sp = flights::plane_sprite(k);
+    if (sp == nullptr)
+      continue;
+    const bool moves = flights::plane_motion(k) != PlaneMotion::STILL;
+    for (int h : {sp->h + 2, 21, 40}) {
+      AppSky s = sky_of(k, 56, h, false, kSkyDay, 1);
+      int x0, y0, lo = 1 << 20, hi = -(1 << 20), changes = 0, last = 0;
+      sky_plane_at(s, *sp, 0, x0, y0);
+      for (uint32_t t = 0; t < 12000; t += kSkyFrameMs) {
+        int x, y;
+        sky_plane_at(s, *sp, t, x, y);
+        SCHECK(x == x0, "kind %d h %d: the wave is up and down only", (int) k, h);
+        SCHECK(y >= 0 && y + sp->h <= h, "kind %d h %d: stays inside at %u ms", (int) k, h, (unsigned) t);
+        lo = std::min(lo, y);
+        hi = std::max(hi, y);
+        changes += t > 0 && y != last;
+        last = y;
+      }
+      const int room = h - sp->h - 2, amp = !moves || room < 2 ? 0 : room < 6 ? 1 : 2;
+      SCHECK(hi - lo == 2 * amp, "kind %d h %d: swings %d, wants %d", (int) k, h, hi - lo, 2 * amp);
+      SCHECK(changes <= 4 * amp * 2, "kind %d h %d: %d steps in 12 s, slow enough", (int) k, h, changes);
+    }
+  }
+  AppSky s = sky_of(PlaneKind::NARROW, 56, 40, false, kSkyDay | kSkyStill, 1);
+  SCHECK(paint(s, 0) == paint(s, 1500), "holds level when still");
+}
+
 }  // namespace
 
 int run_sky_tests(int &total_checks) {
+  test_wave();
   test_motion();
   test_clarity();
   test_calm();
