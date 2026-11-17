@@ -329,7 +329,8 @@ def build_lines(lines, tiles):
 def place_name(ascii_name):
     n = re.sub(r"^City of ", "", ascii_name.strip())
     n = "".join(ch for ch in n if " " <= ch <= "~").strip()
-    return n[:NAME_MAX].strip()
+    # Too long: left out, never cut
+    return n if len(n) <= NAME_MAX else ""
 
 
 def place_class(pop, code):
@@ -724,6 +725,8 @@ def selftest():
 
     shp = read_shp(pack_shp([(3, [[(0, 0), (1, 1)], [(2, 2), (3, 3), (4, 4)]]), (5, [[(0, 0), (1, 0), (0, 1), (0, 0)]])]))
     assert shp == [(0, [[(0, 0), (1, 1)], [(2, 2), (3, 3), (4, 4)]]), (1, [[(0, 0), (1, 0), (0, 1), (0, 0)]])], shp
+    assert place_name("City of Bath") == "Bath" and place_name("A" * NAME_MAX) == "A" * NAME_MAX
+    assert place_name("Llan " + "a" * NAME_MAX) == "", "a name too long is left out, not cut"
     fields = [(b"TYPE", 10), (b"MIN_ZOOM", 4)]
     head = 32 + 32 * len(fields) + 1
     dbf = bytearray(struct.pack("<4xIHH", 2, head, 15)) + b"\0" * 20

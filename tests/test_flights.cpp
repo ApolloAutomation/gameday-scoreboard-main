@@ -817,6 +817,42 @@ void test_frames() {
   const Frame ff = flight_frame(fast, nullptr, om, 100);
   FCHECK(find_text(ff, "1185") != nullptr && find_text(ff, "1185km/") == nullptr, "the speed whole");
   FCHECK(flight_frame(Nearby(), nullptr, o, 0).items.empty(), "no planes, no frame");
+
+  // A word is never cut: left out
+  FCHECK(fit_words("Southwest", 8).empty() && fit_words("Delta Air Lines", 9) == "Delta Air" &&
+             fit_words("Light plane", 11) == "Light plane",
+         "whole words only");
+  Nearby sw = read(file, jfk(1));
+  Plane &sp = sw.planes[0];
+  memset(sp.callsign, 0, sizeof(sp.callsign));
+  strcpy(sp.callsign, "SWA12345");
+  sp.brand[0] = sp.flight[0] = '\0';
+  FrameOpts o128;
+  o128.w = 128;
+  f = flight_frame(sw, nullptr, o128, 100);
+  bool cut = false;
+  for (const Text &t : f.items)
+    cut = cut || (t.color == kColAirline && t.text != "Southwest" && std::string("Southwest").rfind(t.text, 0) == 0);
+  FCHECK(find_text(f, "SWA12345") != nullptr && !cut, "a long callsign leaves the airline out, never cut");
+  // No type: the registration, else says so
+  for (int tall = 0; tall < 2; tall++) {
+    Nearby nt = read(file, jfk());
+    nt.n = 1;
+    Plane &q = nt.planes[0];
+    q.type[0] = '\0';
+    memset(q.category, 0, sizeof(q.category));
+    strcpy(q.reg, "N123AB");
+    FrameOpts ot;
+    ot.w = 128;
+    ot.h = tall ? 128 : 64;
+    f = flight_frame(nt, nullptr, ot, 100);
+    const Text *reg = find_text(f, "N123AB");
+    FCHECK(reg != nullptr && reg->color == kColType, "%s: no type, its registration on the type's line",
+           tall ? "tall" : "128");
+    q.reg[0] = '\0';
+    f = flight_frame(nt, nullptr, ot, 100);
+    FCHECK(find_text(f, "Type unknown") != nullptr, "%s: no type, no registration: says so", tall ? "tall" : "128");
+  }
 }
 
 // Full screen on a 2x2: the tall card and list.

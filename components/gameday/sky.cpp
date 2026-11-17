@@ -58,7 +58,7 @@ bool prop_on(const PlaneSprite &sp, const flights::PropSpot &ps, int y, uint32_t
   return n % 2 ? j == n / 2 : j == n / 2 - 1 || j == n / 2;
 }
 
-const uint8_t kRotorHalfs[4] = {9, 6, 2, 6};
+const uint8_t kRotorHalfs[4] = {9, 6, 3, 6};
 // Birds glide a pixel this often
 const uint32_t kBirdMs = 250;
 
@@ -200,7 +200,8 @@ void sky_paint(Px565 &out, const AppSky &s, uint32_t t) {
   if (sp != nullptr) {
     int px, py;
     sky_plane_at(s, *sp, t, px, py);
-    const uint32_t frame = (t / 100) % 4;
+    // Off the sky's steps; short blades as it bobs
+    const uint32_t frame = (t + kSkySpinMs * 5 / 2) / kSkySpinMs % 4;
     // A dashed contrail sliding away behind a jet
     if (m == PlaneMotion::JET)
       for (int d = 0, ty = py + tail_row(*sp), n = 6 + r(11, 5); d < n; d++)

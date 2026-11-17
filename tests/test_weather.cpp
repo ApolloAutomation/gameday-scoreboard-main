@@ -5,8 +5,10 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "app_flights.h"
 #include "app_frame_check.h"
@@ -540,13 +542,14 @@ void test_app() {
                    m.keep[0].w == 30 && m.keep[1].x == m.w - 26 && m.keep[1].y == m.h - 8 &&
                    (m.roads != 0) == (m.w >= 128),
                "%dx%d radar: landmarks under the images", sz[0], sz[1]);
-        // The loading words: bottom left, kept clear of towns
+        // The loading words: bottom left, kept clear 2 px around
         const espn::AppText &lt = f.texts[f.photo.alt];
         const espn::AppMapKeep &k = m.keep[2];
-        WCHECK(lt.text.compare(0, 7, "Loading") == 0 && lt.x == 1 && lt.y == m.h - 8 && k.x == lt.x &&
-                   k.y == lt.y && k.w == (int) lt.text.size() * 5 && k.h == 8 && lt.x + lt.w <= m.keep[1].x,
+        const int last = lt.x + (int) lt.text.size() * 5 - 1;
+        WCHECK(lt.text.compare(0, 7, "Loading") == 0 && lt.x == 1 && lt.y == m.h - 8 && k.x <= lt.x - 1 &&
+                   k.y <= lt.y - 2 && k.x + k.w - 1 >= last + 2 && k.y + k.h == m.h && lt.x + lt.w <= m.keep[1].x,
                "%dx%d radar: %s at %d,%d, kept %d wide", sz[0], sz[1], lt.text.c_str(), lt.x, lt.y, k.w);
-        // With landmarks the map draws the ring under labels
+        // With landmarks too, the ring stays a line over the rain
         std::vector<uint8_t> bytes = land_encode(3894, -11998, 250, land_sample_places(), land_sample_lines());
         espn::LandSet set;
         espn::land_check(bytes.data(), bytes.size(), set);
@@ -554,8 +557,11 @@ void test_app() {
         espn::AppFrame fl;
         a->frame(sz[0], sz[1], now + dt, fl);
         espn::app_env().land = nullptr;
-        WCHECK(fl.line.pts.empty() && fl.map.ring == m.ring && m.ring > 0 && f.line.pts.size() > 10,
-               "%dx%d radar: the ring is the map's with landmarks, a line without: %d points", sz[0], sz[1],
+        bool same = fl.line.pts.size() == f.line.pts.size() && fl.line.color == f.line.color;
+        for (size_t i = 0; same && i < f.line.pts.size(); i++)
+          same = fl.line.pts[i].x == f.line.pts[i].x && fl.line.pts[i].y == f.line.pts[i].y;
+        WCHECK(same && fl.map.ring == m.ring && m.ring > 0 && f.line.pts.size() > 10,
+               "%dx%d radar: the ring a line over the rain, with landmarks or not: %d points", sz[0], sz[1],
                (int) fl.line.pts.size());
       } else {
         WCHECK(f.map.w == 0, "%dx%d page %d: no map", sz[0], sz[1], (int) p);
@@ -811,6 +817,99 @@ void test_failover() {
   delete a;
 }
 
+// UTF-8 to code points
+std::vector<int> codes_of(const std::string &s) {
+  std::vector<int> out;
+  for (size_t i = 0; i < s.size();) {
+    const unsigned char c = (unsigned char) s[i];
+    const int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : 3;
+    int cp = n == 1 ? c : c & (0x3F >> (n - 1));
+    for (int k = 1; k < n && i + k < s.size(); k++)
+      cp = cp << 6 | ((unsigned char) s[i + k] & 0x3F);
+    out.push_back(cp);
+    i += n;
+  }
+  return out;
+}
+
+// The YAML font entry's glyph lines, its extras' apart
+void font_glyphs(const std::string &yaml, const std::string &id, std::string &own, std::string &extra,
+                 std::string &extra_file) {
+  std::istringstream in(yaml);
+  std::string line;
+  bool inside = false, in_extras = false;
+  while (std::getline(in, line)) {
+    if (line.rfind("  - id: ", 0) == 0 || line.rfind("  - file: ", 0) == 0) {
+      inside = line.find(id) != std::string::npos;
+      in_extras = false;
+      continue;
+    }
+    if (!inside)
+      continue;
+    if (line.empty() || line[0] != ' ')
+      break;
+    if (line.find("extras:") != std::string::npos)
+      in_extras = true;
+    const size_t f = line.find("- file: ");
+    if (in_extras && f != std::string::npos)
+      extra_file = line.substr(f + 8);
+    const size_t q0 = line.find('\''), q1 = line.rfind('\'');
+    if (line.find("- '") == std::string::npos || q1 <= q0)
+      continue;
+    std::string g = line.substr(q0 + 1, q1 - q0 - 1);
+    for (size_t k; (k = g.find("''")) != std::string::npos;)
+      g.erase(k, 1);
+    (in_extras ? extra : own) += g;
+  }
+}
+
+// Every small letter the panel prints draws something
+void test_small_font() {
+  std::ifstream y("../firmware/gameday-common.yaml");
+  std::stringstream ys;
+  ys << y.rdbuf();
+  std::string own8, extra8, file8, own12, extra12, file12;
+  font_glyphs(ys.str(), "spleen_8", own8, extra8, file8);
+  font_glyphs(ys.str(), "spleen_12", own12, extra12, file12);
+  WCHECK(!own12.empty() && own8 + extra8 == own12, "the small font lists the panel's glyphs: %zu + %zu of %zu",
+         own8.size(), extra8.size(), own12.size());
+  WCHECK(file8 == "fonts/spleen-5x8-latin1.bdf", "the small font's Latin-1 file: %s", file8.c_str());
+  std::ifstream f("../firmware/" + file8);
+  std::stringstream fs;
+  fs << f.rdbuf();
+  std::map<int, std::vector<int>> bits;
+  std::istringstream in(fs.str());
+  std::string line;
+  int code = -1;
+  bool rows = false;
+  while (std::getline(in, line)) {
+    if (line.rfind("ENCODING ", 0) == 0)
+      code = atoi(line.c_str() + 9);
+    else if (line == "BITMAP")
+      rows = true;
+    else if (line == "ENDCHAR")
+      rows = false;
+    else if (rows)
+      bits[code].push_back((int) strtol(line.c_str(), nullptr, 16));
+  }
+  int blank = 0, first = 0;
+  for (int c : codes_of(extra8)) {
+    const auto it = bits.find(c);
+    int lit = 0;
+    if (it != bits.end())
+      for (int r : it->second)
+        lit += __builtin_popcount(r);
+    if (lit == 0 && blank++ == 0)
+      first = c;
+  }
+  WCHECK(codes_of(extra8).size() == 94 && blank == 0, "every Latin-1 small glyph draws: %d blank, first U+%04X",
+         blank, first);
+  int deg = 0;
+  for (int r : bits[0xB0])
+    deg += __builtin_popcount(r);
+  WCHECK(deg >= 4, "the small degree sign draws: %d pixels", deg);
+}
+
 }  // namespace
 
 int run_weather_tests(int &total_checks) {
@@ -827,6 +926,7 @@ int run_weather_tests(int &total_checks) {
   test_urls_map();
   test_app();
   test_failover();
+  test_small_font();
   espn::app_env() = espn::AppEnv{};
   total_checks += checks;
   return failures;

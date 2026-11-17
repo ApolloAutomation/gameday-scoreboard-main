@@ -213,8 +213,21 @@ packages:
 # these characters, so all three sizes carry the same list. A glyph listed
 # here that a font lacks fails the build rather than drawing a box.
 font:
+  # Spleen 5x8's Latin-1 is blank: scripts/build_small_font.py draws it
   - id: !extend spleen_8
     file: "${spleen_url}/spleen-5x8.bdf"
+    glyphs:
+      - ' !"#$%&''()*+,-./0123456789:;<=>?@'
+      - 'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`'
+      - 'abcdefghijklmnopqrstuvwxyz{|}~'
+    extras:
+      - file: fonts/spleen-5x8-latin1.bdf
+        glyphs:
+          - '¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿'
+          - 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß'
+          - 'àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ'
+  - id: !extend spleen_12
+    file: "${spleen_url}/spleen-6x12.bdf"
     glyphs: &panel_glyphs
       - ' !"#$%&''()*+,-./0123456789:;<=>?@'
       - 'ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`'
@@ -222,9 +235,6 @@ font:
       - '¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿'
       - 'ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß'
       - 'àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ'
-  - id: !extend spleen_12
-    file: "${spleen_url}/spleen-6x12.bdf"
-    glyphs: *panel_glyphs
   - id: !extend spleen_16
     file: "${spleen_url}/spleen-8x16.bdf"
     glyphs: *panel_glyphs

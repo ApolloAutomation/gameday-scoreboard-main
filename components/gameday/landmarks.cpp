@@ -38,8 +38,11 @@ constexpr uint32_t kRoad = 0x4A3A24, kBorder = 0x505050, kCoast = 0x464646;
 constexpr uint32_t kDotSmall = 0x808080, kDotBig = 0xA0A0A0, kTextSmall = 0x707070, kTextBig = 0x909090;
 constexpr int kFar = 4096;
 
+// What a taken box is, for the space kept from it
+enum : uint8_t { kMark = 0, kWord, kDot, kHome };
 struct Box {
   int16_t x, y, w, h;
+  uint8_t k{kMark};
 };
 struct Cand {
   int16_t x, y;
@@ -155,20 +158,22 @@ constexpr uint32_t kRingInk = 0x484848, kInnerInk = 0x303030, kNorthInk = 0x8080
 constexpr uint32_t kNumInk = 0x909090, kCardMark = 0x806800, kWideText = 0xFFD000;
 constexpr uint32_t kBlipInk[4] = {0xE0E0E0, 0xFFD000, 0xFF4040, 0x808080};
 
-Box box(int x, int y, int w, int h) { return Box{(int16_t) x, (int16_t) y, (int16_t) w, (int16_t) h}; }
+Box box(int x, int y, int w, int h, uint8_t k = kMark) {
+  return Box{(int16_t) x, (int16_t) y, (int16_t) w, (int16_t) h, k};
+}
 
 // The radar's N on the ring's top, and the ring label
 void radar_boxes(const AppMap &m, Box &north, Box &label) {
-  north = box(m.w / 2 - 1, 0, 3, 5);
+  north = box(m.w / 2 - 1, 0, 3, 5, kWord);
   const int lw = px_text_w(m.ring_text, 1);
-  label = box(m.w - 1 - lw, m.h - 6, lw, 5);
+  label = box(m.w - 1 - lw, m.h - 6, lw, 5, kWord);
 }
 
 // The owner's distance, right of the inner ring; false none.
 bool inner_box(const AppMap &m, Box &b) {
   if (m.inner_text[0] == '\0' || m.inner == 0)
     return false;
-  b = box(m.w / 2 + m.inner + 2, m.h / 2 - 6, px_text_w(m.inner_text, 1), 5);
+  b = box(m.w / 2 + m.inner + 2, m.h / 2 - 6, px_text_w(m.inner_text, 1), 5, kWord);
   return true;
 }
 
@@ -180,12 +185,13 @@ Box blip_box(const AppBlip &b) {
 int blip_count(const AppMap &m) { return m.radar ? (m.n_blips < kAppBlips ? m.n_blips : kAppBlips) : 0; }
 
 // What labels avoid: keeps, home, the radar's marks
-int reserved(const AppMap &m, Box *out) {
+int reserved(const AppMap &m, Box *out, int &home) {
   int n = 0;
   for (const AppMapKeep &k : m.keep)
     if (k.w > 0 && k.h > 0)
-      out[n++] = box(k.x, k.y, k.w, k.h);
-  out[n++] = box(m.w / 2 - 3, m.h / 2 - 3, 6, 6);
+      out[n++] = box(k.x, k.y, k.w, k.h, kWord);
+  home = n;
+  out[n++] = box(m.w / 2 - 3, m.h / 2 - 3, 6, 6, kHome);
   if (!m.radar)
     return n;
   radar_boxes(m, out[n], out[n + 1]);
@@ -196,7 +202,7 @@ int reserved(const AppMap &m, Box *out) {
   for (int i = 0; i < blip_count(m); i++) {
     out[n++] = blip_box(m.blips[i]);
     if (mk[i].w > 0)
-      out[n++] = box(mk[i].x, mk[i].y, mk[i].w, 5);
+      out[n++] = box(mk[i].x, mk[i].y, mk[i].w, 5, kWord);
   }
   return n;
 }
@@ -470,8 +476,23 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
     cd[at] = Cand{(int16_t) x, (int16_t) y, k, (uint8_t) i};
   }
   // Taken: the keeps, the home, then dots and labels
-  int nt = reserved(m, taken);
-  const int nt0 = nt;
+  int home_at = 0;
+  int nt = reserved(m, taken, home_at);
+  const Box home = taken[home_at];
+  bool home_named = false;
+  // Home's town: the nearest place close enough on the ground
+  const float kpp = wx::ground_m_per_px(m.lat_e4 / 10000.0f, wx::kRadarZoom) / (m.scale_q16 / 65536.0f) / 1000.0f;
+  int home_c = -1;
+  float best = 1e9f;
+  for (int c = 0; c < nc; c++) {
+    land_place(s, cd[c].idx, pl);
+    static const float kNearKm[5] = {0, 3, 4, 8, 15};
+    const float dx = cd[c].x - pr.ox, dy = cd[c].y - pr.oy, km = sqrtf(dx * dx + dy * dy) * kpp;
+    if (km <= kNearKm[pl.cls] && km < best) {
+      best = km;
+      home_c = c;
+    }
+  }
   // The biggest cities and the nearest city lead
   int lead_c3 = -1;
   for (int c = 0; c < nc && lead_c3 < 0; c++)
@@ -489,10 +510,9 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
       land_place(s, cd[c].idx, pl);
       int d = pl.cls >= 3 ? 2 : 1, x = cd[c].x, y = cd[c].y;
       const int lw = 4 * pl.len - 1;
-      Box dot{(int16_t) x, (int16_t) y, (int16_t) d, (int16_t) d};
-      // Weather names the place home sits in
-      const Box &home = taken[nt0 - 1];
-      const bool at_home = !m.radar && meet(dot, home, 0, 0);
+      Box dot = box(x, y, d, d, kDot);
+      // The place home sits in names the white dot
+      const bool at_home = !home_named && c == home_c;
       if (at_home) {
         dot = home;
         x = home.x;
@@ -500,26 +520,37 @@ int map_labels(const AppMap &m, const LandSet &s, MapLabel *out, int cap) {
         d = home.w;
       }
       bool free = true;
-      // A dot a pixel off other labels
-      for (int t = 0; t < nt && free; t++)
-        free = (at_home && t == nt0 - 1) || !meet(dot, taken[t], 1, 1);
-      // Right, left, above, below, then the corners
+      // A dot clearly nearer its own name than any other
+      for (int t = 0; t < nt && free && !at_home; t++) {
+        const uint8_t k = taken[t].k;
+        const int g = k == kWord || k == kHome ? 4 : k == kDot ? 3 : 1;
+        // Wider along a name's own rows
+        free = !meet(dot, taken[t], g, g) && (k != kWord || !meet(dot, taken[t], 6, 0));
+      }
+      // Beside it, the corners; home's over, under, past a small ring
       const int r = x + d + 1, l = x - 2 - lw, mid = x + d / 2 - lw / 2;
-      const int tx[8] = {r, l, mid, mid, r, r, l, l};
-      const int ty[8] = {y - 2, y - 2, y - 7, y + d + 1, y - 6, y + d, y - 6, y + d};
-      for (int t = 0; t < 8 && free; t++) {
-        const Box b{(int16_t) tx[t], (int16_t) ty[t], (int16_t) lw, 5};
-        if (b.x < 0 || b.y < 0 || b.x + b.w > m.w || b.y + b.h > m.h || (pass != 1 && on_ring(b, pr.ox, pr.oy, m.ring)))
+      const int tx[10] = {r, l, r, r, l, l, mid, mid, mid, mid};
+      const int ty[10] = {y - 2, y - 2, y - 6, y + d + 1, y - 6, y + d + 1, y - 8, y + 5,
+                          pr.oy - m.ring - 8, pr.oy + m.ring + 3};
+      for (int t = 0; t < (at_home ? (m.ring > 0 && m.ring <= 16 ? 10 : 8) : 6) && free; t++) {
+        const Box b = box(tx[t], ty[t], lw, 5, kWord);
+        // A pixel in from the edges, for the dark edge
+        if (b.x < 1 || b.y < 1 || b.x + b.w > m.w - 1 || b.y + b.h > m.h - 1 ||
+            ((pass != 1 || !m.radar) && on_ring(b, pr.ox, pr.oy, m.ring)))
           continue;
         bool ok = true;
-        // Labels keep a word's space from words and marks
+        // Two names on a row read as two places
         for (int k = 0; k < nt && ok; k++) {
-          const bool word = taken[k].h == 5;
-          ok = !meet(b, taken[k], word ? 3 : 1, word ? 2 : 1);
+          const uint8_t kk = taken[k].k;
+          const int gx = kk == kWord ? 8 : kk == kDot ? 4 : kk == kHome && !at_home ? 3 : 1;
+          const int gy = kk == kWord ? 2 : gx;
+          ok = (at_home && k == home_at) || (!meet(b, taken[k], gx, gy) && (kk != kDot || !meet(b, taken[k], 6, 0)));
         }
         if (!ok)
           continue;
-        taken[nt++] = dot;
+        if (!at_home)
+          taken[nt++] = dot;
+        home_named = home_named || at_home;
         taken[nt++] = b;
         out[n++] = MapLabel{(int16_t) (at_home ? -1 : x), (int16_t) (at_home ? -1 : y), b.x, b.y, cd[c].idx};
         cd[c].idx = 0xFF;
@@ -622,8 +653,6 @@ void map_paint(Px565 &p, const AppMap &m, const LandSet *set) {
     p.fill(k.x, k.y, k.w, k.h, 0);
   if (m.radar)
     radar_under(p, m);
-  else if (m.ring > 0)
-    circle(p, m.w / 2, m.h / 2, m.ring, rgb565(kRingInk), false);
   MapLabel lab[kMapLabelMax];
   const int n = map_labels(m, s, lab, map_label_cap(m));
   LandPlace pl;

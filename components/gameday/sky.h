@@ -11,6 +11,8 @@ namespace espn {
 
 // The sky's frame step, as its timer runs
 constexpr uint32_t kSkyFrameMs = 100;
+// Rotors and propellers turn a step this often
+constexpr uint32_t kSkySpinMs = 250;
 
 // Differs from plane to plane and every 10 minutes.
 uint32_t sky_seed(const char *hex, int64_t now);

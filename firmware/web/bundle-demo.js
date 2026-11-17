@@ -2608,14 +2608,9 @@ const raw = typeof name === "string" ? name.normalize("NFD").replace(/[\u0300-\u
 if (!raw || !/^[\x20-\x7e]+$/.test(raw)) return "";
 const tidy = (n) => n.replace(/\s+/g, " ").replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, "");
 let n = tidy(raw.toUpperCase().replace(/[^A-Z0-9 .'-]/g, ""));
-for (const short of [SHORT_END, SHORT_START])
-if (n.length > LAND.name) n = tidy(n.replace(/[A-Z]+/g, (w) => short[w] || w));
-if (n.length <= LAND.name) return n;
-const words = n.match(/[^ -]+[ -]?/g) || [];
-let cut = "";
-for (let k = 0; k < words.length && tidy(cut + words[k]).length <= LAND.name; k++) cut += words[k];
-cut = tidy(cut);
-return /[ -]/.test(cut) ? cut : "";
+if (n.length > LAND.name) n = tidy(n.replace(/[A-Z]+/g, (w) => SHORT_END[w] || w));
+if (n.length > LAND.name) n = tidy(n.replace(/^[A-Z]+/, (w) => SHORT_START[w] || w));
+return n.length <= LAND.name ? n : "";
 };
 const simplify = (pts, k = 1) => {
 if (pts.length < 3) return pts;

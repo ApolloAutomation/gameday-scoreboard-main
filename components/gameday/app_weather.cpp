@@ -991,13 +991,13 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   m.keep[0] = espn::AppMapKeep{1, 0, 30, 8};
   if (dist != 0)
     m.keep[1] = espn::AppMapKeep{(int16_t) (bw - 26), (int16_t) (bh - 8), 25, 8};
-  m.keep[2] = espn::AppMapKeep{1, (int16_t) (bh - 8), (int16_t) lw, 8};
+  // Lines and names keep 2 px off the words
+  m.keep[2] = espn::AppMapKeep{0, (int16_t) (bh - 10), (int16_t) (lw + 3), 10};
   m.roads = bw >= 128;
+  // Names keep off it; it stays over the rain
   m.ring = (uint8_t) r;
-  // With landmarks the map draws it, under their labels
-  const bool land = espn::map_has(m, espn::app_env().land);
   if (ring) {
-    for (int i = 0; i <= 40 && !land; i++) {
+    for (int i = 0; i <= 40; i++) {
       const float a = (float) i * 6.2831853f / 40.0f;
       out.line.pts.push_back({(int16_t) lroundf(cx + r * cosf(a)), (int16_t) lroundf(cy + r * sinf(a))});
     }

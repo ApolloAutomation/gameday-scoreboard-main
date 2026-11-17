@@ -71,6 +71,10 @@ inline ReviewFonts review_fonts(const std::string &dir) {
                                        "spleen-16x32.bdf"};
   for (int i = 0; i < 5 && !dir.empty(); i++)
     r.f[i] = bdf_load(dir + "/" + kFiles[i]);
+  // The small font's Latin-1, as the YAML's extras
+  if (r.f[0].ok())
+    for (const auto &g : bdf_load("../firmware/fonts/spleen-5x8-latin1.bdf").g)
+      r.f[0].g[g.first] = g.second;
   return r;
 }
 

@@ -255,18 +255,24 @@ void check_calm(const AppSky &s, const char *what) {
          worst_total % 10);
   // A pixel flashes (swings there and back) under 3 times a
   // second; an 8x8 area (unscaled) swings under 3 times
-  int flicker = 0, at = -1, areas = 0, area_at = -1;
+  int flicker = 0, at = -1, areas = 0, area_at = -1, spin = 0, spin_at = -1;
   std::vector<int> series(steps);
   for (int i = 0; i < n; i++) {
-    if (spot.count(i) != 0)
-      continue;
     for (int k = 0; k < steps; k++)
       series[k] = lum[k][i];
-    if (crosses(series) > 6) {
+    if (crosses(series) <= 6)
+      continue;
+    // Rotors and propellers too
+    if (spot.count(i) != 0) {
+      spin++;
+      spin_at = i;
+    } else {
       flicker++;
       at = i;
     }
   }
+  SCHECK(spin == 0, "%s: %d rotor or propeller pixels flash more than 3 times a second (one at %d,%d)", what, spin,
+         spin_at < 0 ? 0 : spin_at % s.w, spin_at < 0 ? 0 : spin_at / s.w);
   const int side = 8 * s.scale;
   for (int by = 0; by + side <= s.h; by += side / 2)
     for (int bx = 0; bx + side <= s.w; bx += side / 2) {

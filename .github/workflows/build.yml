@@ -694,6 +694,8 @@ jobs:
         run: python3 scripts/build_sprites.py --check
       - name: Map landmark files check
         run: python3 scripts/build_landmarks.py --check
+      - name: The small font's Latin-1 is built from Spleen
+        run: python3 scripts/build_small_font.py --check
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table

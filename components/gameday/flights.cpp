@@ -1359,8 +1359,9 @@ std::string fit_words(const std::string &s, size_t max) {
   std::string out = s;
   while (out.size() > max) {
     const size_t sp = out.rfind(' ');
+    // A word never cut: left out
     if (sp == std::string::npos || sp == 0)
-      return out.substr(0, max);
+      return "";
     out.resize(sp);
   }
   return out;
@@ -1371,7 +1372,7 @@ std::string fit_words(const std::string &s, size_t max) {
 namespace {
 
 struct Card {
-  std::string label, who, sub, tail, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
+  std::string label, who, sub, tail, reg, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
   const char *climb{""};
   const char *cat{nullptr};
   const AirlineName *brand{nullptr};  // whose logo shows
@@ -1427,6 +1428,7 @@ Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s)
   c.route = !leg.empty();
   c.sub = c.route ? leg : c.tail;
   c.type_code = p.type;
+  c.reg = p.reg;
   c.alt_full = alt_text(p, u.alt, Fmt::FULL);
   c.speed_full = speed_text(p, u.speed, Fmt::FULL);
   c.speed_short = speed_text(p, u.speed, Fmt::SHORT);
@@ -1503,6 +1505,14 @@ std::string type_fit(const Card &c, size_t max) {
   if (!c.type_code.empty())
     return type_text(c.type_code.c_str(), max);
   return c.cat != nullptr ? fit_words(c.cat, max) : "";
+}
+
+// The type's line: the type, else the registration
+std::string type_line(const Card &c, size_t max) {
+  std::string t = type_fit(c, max);
+  if (t.empty() && !c.reg.empty() && c.reg != c.label && c.reg != c.tail && c.reg.size() <= max)
+    t = c.reg;
+  return t.empty() ? fit_words("Type unknown", max) : t;
 }
 
 uint32_t dist_ink(const FrameOpts &o) { return o.wide_nm > 0 ? kColRoute : kColDist; }
@@ -1596,7 +1606,7 @@ void card_left(Frame &f, const Card &c) {
     put(f, rx, 8, rw, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
   put_logo(f, c, lx, 0);
   put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
-  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_fit(c, 14));
+  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
   put_art(f, c, 72, 17, 56, 21);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
@@ -1610,7 +1620,7 @@ void card_tall(Frame &f, const Card &c) {
   put_logo(f, c, 0, 0, kLogoBigPx);
   put(f, x0, 0, tw, BoardFont::S16, Align::LEFT, c.label_color, c.label);
   put(f, x0, 17, tw, BoardFont::S8, Align::LEFT, kColAirline, fit_words(c.who, (size_t) tw / 5));
-  const std::string type = type_fit(c, (size_t) tw / 5);
+  const std::string type = type_line(c, (size_t) tw / 5);
   if (type != c.who)
     put(f, x0, 25, tw, BoardFont::S8, Align::LEFT, kColType, type);
   // The biggest font that holds the route.

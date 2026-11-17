@@ -5403,11 +5403,13 @@ test("the set joins lines across squares, keeps the panel's caps, cleans names a
   const kmLon = 111.32 * Math.cos(44.1 * Math.PI / 180);
   const P = (lat, lon, cls, name, pop) => ({ lat, lon, cls, name, pop });
   const ne = { lat0: 44, lon0: 4, lines: [], places: [
-    P(44.15, 4.15, 4, "Saint-Genevieve-des-Bois", 150), P(44.2, 4.3, 2, "Mount Pleasant"), P(44.25, 4.2, 2, "Fort Collins"),
+    P(44.15, 4.15, 4, "Saint-Genevieve", 150), P(44.2, 4.3, 2, "Mount Pleasant"), P(44.25, 4.2, 2, "Fort Collins"),
     P(44.3, 4.35, 4, "Tokyo", 145), P(44.35, 4.1, 2, "North Platte"), P(44.4, 4.4, 2, "Coeur d'Alene"),
     P(47.5, 7.9, 4, "Faraway", 160), P(44.2, 4.1, 1, "Nearby"), P(44.6, 4.1, 1, "Outer"),
-    P(44.151, 4.151, 2, "Saint-Genevieve-des-Bois"), P(44.45, 4.45, 3, "Colorado Springs", 140),
-    P(44.5, 4.2, 2, "West Palm Beach Gardens"), P(44.55, 4.3, 2, "Llanfairpwllgwyngyll"), P(44.6, 4.6, 2, "Key West")] };
+    P(44.151, 4.151, 2, "Saint-Genevieve"), P(44.45, 4.45, 3, "Colorado Springs", 140),
+    P(44.5, 4.2, 2, "West Palm Beach Gardens"), P(44.55, 4.3, 2, "Llanfairpwllgwyngyll"), P(44.6, 4.6, 2, "Key West"),
+    P(44.12, 4.62, 2, "Southend-on-Sea"), P(44.14, 4.64, 2, "Kingston upon Hull"), P(44.16, 4.66, 2, "Castle Pines North"),
+    P(44.18, 4.68, 2, "North Miami Beach")] };
   // One road through four squares, cut at their edges
   const sw = { lat0: 40, lon0: 0, places: [], lines: [{ kind: 2, pts: [[43.9, 3.95], [44, 3.95]] }] };
   const nw = { lat0: 44, lon0: 0, places: [], lines: [{ kind: 2, pts: [[44, 3.95], [44.05, 3.95], [44.05, 4]] }] };
@@ -5427,9 +5429,10 @@ test("the set joins lines across squares, keeps the panel's caps, cleans names a
   expect(asked.slice(1).sort()).toEqual(["40_0.bin", "40_4.bin", "44_0.bin", "44_4.bin"]);
   const h = landRead(bodies[0]);
   expect([h.magic, h.lat, h.lon]).toEqual(["GL", 4410, 410]);
+  // A name too long after shortening is left out, never cut
   expect(h.places.map((p) => p.name).sort()).toEqual(
     ["COEUR D'ALENE", "COLORADO SPGS", "FORT COLLINS", "KEY WEST", "MOUNT PLEASANT", "NORTH PLATTE", "NEARBY",
-     "ST-GENEVIEVE", "TOKYO", "W PALM BCH"].sort());
+     "N MIAMI BCH", "ST-GENEVIEVE", "TOKYO"].sort());
   expect(h.places.find((p) => p.name === "ST-GENEVIEVE").cls).toBe(4);
   expect(h.places.find((p) => p.name === "NEARBY").cls).toBe(1);
   // The road rejoined, one carriageway kept
