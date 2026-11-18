@@ -178,6 +178,8 @@ struct AreaView {
   lv_image_dsc_t tag_dsc{};
   uint8_t tag_buf[::espn::kTagBytes]{};
   ::espn::TickerTag tag;
+  ::espn::TagIcon tag_drawn{::espn::TagIcon::NONE};  // what tag_buf holds
+  uint32_t tag_drawn_rgb{0};
   ::espn::AreaView kind{::espn::AreaView::NONE};
   ::espn::SplitShow split_show{::espn::SplitShow::OFF};
   std::string pages;  // each page ends with a newline
