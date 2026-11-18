@@ -12,7 +12,7 @@ You need a phone or computer with a web browser, and your Wi-Fi password. It tak
 Connect the power supply that came with the panel. The panel lights up with **GAME DAY** across the top and **Starting** under it.
 
 :::note[Coming in the next release]
-The panel is now called Apollo Pulse. Its start-up screen is navy blue, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words. While the panel is busy, a green bar runs under the name, and under that the panel says what it's doing, starting with **Starting**. On a single 64x64 panel, Apollo and the words take turns, about 4 seconds each, with the bar as the ledge under his paws. The setup screen keeps its QR code and its words as below.
+The panel is now called Apollo Pulse. Its start-up screen is black, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words. While the panel is busy, a green bar runs under the name, and under that the panel says what it's doing, starting with **Starting**. On a single 64x64 panel, Apollo and the words take turns, about 4 seconds each, with the bar as the ledge under his paws. The setup screen keeps its QR code and its words as below.
 :::
 
 A panel that isn't on Wi-Fi yet then shows **SETUP** and starts its own Wi-Fi hotspot. In the moment before the hotspot is up, it says **SETUP / Starting / hotspot**, with no QR code. Then a QR code appears: it's the hotspot's Wi-Fi code, and the words say **SETUP / Scan to / join Wi-Fi**. On the 128x64 panel the QR code sits on the left half and the words sit beside it. On a single 64x64 panel there is no room for both, so the words and the QR code take turns: about 5 seconds of words, then 8 seconds of QR code.

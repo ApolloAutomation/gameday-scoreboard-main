@@ -1054,7 +1054,7 @@ binary_sensor:
 
 lvgl:
   style_definitions:
-    # Apollo Automation's brand: light blue on navy
+    # Apollo Automation's light blue on black
     - id: boot_st_title
       text_font: spleen_16
       text_color: 0xD4E8F8
@@ -1072,7 +1072,7 @@ lvgl:
           width: 100%
           height: 100%
           bg_opa: COVER
-          bg_color: 0x1F425F
+          bg_color: 0x000000
           radius: 0
           pad_all: 0
           border_width: 0

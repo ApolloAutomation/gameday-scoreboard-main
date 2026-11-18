@@ -27,7 +27,7 @@ inline Canvas boot_render(const BootShot &s, const ReviewFonts &fonts) {
   Canvas cv;
   cv.w = s.w;
   cv.h = s.h;
-  cv.px.assign((size_t) s.w * s.h, rgb565(kBrandNavy));
+  cv.px.assign((size_t) s.w * s.h, rgb565(kBootBg));
   const bool want = boot_dog_wanted(s.w, s.h, s.dog, s.qr, s.since_ms, s.now_ms);
   const bool tall = s.lines[3][0] == 0;
   const BootBoxes b = boot_boxes(s.w, s.h, s.qr, want, tall);

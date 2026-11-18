@@ -47,7 +47,7 @@ bool near(uint16_t c, uint32_t rgb, int tol) {
 }
 
 void test_art() {
-  BCHECK(kApolloNavy == kBrandNavy, "apollo_logo.h laid on today's navy: rerun build_apollo.py");
+  BCHECK(kApolloBg == kBootBg, "apollo_logo.h laid on today's background: rerun build_apollo.py");
   BCHECK(kApolloH == kDogSize && kApolloW > 40 && kApolloW <= kDogSize, "Apollo %dx%d in his box", kApolloW,
          kApolloH);
   const int n = (int) (sizeof kApolloPal / sizeof kApolloPal[0]);
@@ -56,14 +56,14 @@ void test_art() {
 
   const std::vector<uint16_t> px = dog_px();
   auto at = [&](int x, int y) { return px[(size_t) y * kDogSize + x]; };
-  const uint16_t navy = rgb565(kBrandNavy);
+  const uint16_t bg = rgb565(kBootBg);
   BCHECK(std::count(px.begin(), px.end(), (uint16_t) 0x1234) == 0, "every pixel painted");
   for (int c : {0, kDogSize - 1})
     for (int r : {0, kDogSize - 1})
-      BCHECK(at(c, r) == navy, "corner %d,%d navy", c, r);
+      BCHECK(at(c, r) == bg, "corner %d,%d background", c, r);
   for (int y = 0; y < kDogSize; y++)
     for (int x = 0; x < (kDogSize - kApolloW) / 2; x++)
-      BCHECK(at(x, y) == navy && at(kDogSize - 1 - x, y) == navy, "navy beside him at row %d", y);
+      BCHECK(at(x, y) == bg && at(kDogSize - 1 - x, y) == bg, "background beside him at row %d", y);
 
   // The logo's own colors
   int orange = 0, charcoal = 0, tongue = 0, ink = 0;
@@ -86,26 +86,43 @@ void test_art() {
     }
   BCHECK(glint_l >= 1 && glint_r >= 1, "glints left %d right %d", glint_l, glint_r);
 
-  // No light halo: what touches navy is navy or darker
-  const int navy_sum = r8(navy) + g8(navy) + b8(navy);
+  // No white fringe left from the logo's white background
+  std::vector<uint8_t> outside((size_t) kDogSize * kDogSize, 0);
+  std::vector<int> todo = {0, kDogSize - 1, (kDogSize - 1) * kDogSize, kDogSize * kDogSize - 1};
+  while (!todo.empty()) {
+    const int i = todo.back();
+    todo.pop_back();
+    if (outside[i] || px[i] != bg)
+      continue;
+    outside[i] = 1;
+    const int x = i % kDogSize, y = i / kDogSize;
+    if (x > 0)
+      todo.push_back(i - 1);
+    if (x < kDogSize - 1)
+      todo.push_back(i + 1);
+    if (y > 0)
+      todo.push_back(i - kDogSize);
+    if (y < kDogSize - 1)
+      todo.push_back(i + kDogSize);
+  }
   for (int y = 0; y < kDogSize; y++)
     for (int x = 0; x < kDogSize; x++) {
-      const uint16_t c = at(x, y);
-      if (c == navy)
+      if (outside[(size_t) y * kDogSize + x])
         continue;
       bool edge = false;
       for (int d = 0; d < 4; d++) {
         const int nx = x + (d == 0) - (d == 1), ny = y + (d == 2) - (d == 3);
-        edge |= nx >= 0 && ny >= 0 && nx < kDogSize && ny < kDogSize && at(nx, ny) == navy;
+        edge |= nx >= 0 && ny >= 0 && nx < kDogSize && ny < kDogSize && outside[(size_t) ny * kDogSize + nx];
       }
+      const uint16_t c = at(x, y);
       if (edge)
-        BCHECK(r8(c) + g8(c) + b8(c) <= navy_sum + 24, "light edge at %d,%d", x, y);
+        BCHECK(!(r8(c) > 140 && g8(c) > 140 && b8(c) > 140), "white fringe at %d,%d", x, y);
     }
 
   // His ledge: the bar covers it on one panel
   int ledge = 0;
   for (int x = 0; x < kDogSize; x++)
-    ledge += r8(at(x, kApolloLedgeY)) + g8(at(x, kApolloLedgeY)) + b8(at(x, kApolloLedgeY)) < navy_sum;
+    ledge += r8(at(x, kApolloLedgeY)) + g8(at(x, kApolloLedgeY)) + b8(at(x, kApolloLedgeY)) < 72;
   BCHECK(ledge * 10 >= kApolloW * 9, "the ledge row %d holds %d dark px", kApolloLedgeY, ledge);
   const BootBoxes one = boot_boxes(64, 64, false, true);
   BCHECK(one.bar.y <= kApolloLedgeY && kApolloLedgeY < one.bar.y + one.bar.h && one.bar.y + one.bar.h == kDogSize,

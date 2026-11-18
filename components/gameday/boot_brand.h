@@ -9,7 +9,8 @@
 namespace esphome::gameday {
 
 // Brand colors, 0xRRGGBB
-static const uint32_t kBrandNavy = 0x1F425F;
+// The start-up screens' background
+static const uint32_t kBootBg = 0x000000;
 static const uint32_t kBrandBlue = 0x4379AA;
 static const uint32_t kBrandGreen = 0x9ABD32;
 static const uint32_t kBrandOrange = 0xD57D3B;
@@ -19,9 +20,9 @@ static const int kDogSize = 64;
 // His ledge's rows: where one panel's bar sits
 static const int kDogBarY = kDogSize - 3;
 
-// Navy, then Apollo centered in his 64x64 box
+// Black, then Apollo centered in his 64x64 box
 inline void paint_apollo(::espn::Px565 &p) {
-  p.fill(0, 0, kDogSize, kDogSize, ::espn::rgb565(kBrandNavy));
+  p.fill(0, 0, kDogSize, kDogSize, ::espn::rgb565(kBootBg));
   const int x0 = (kDogSize - ::espn::kApolloW) / 2, y0 = kDogSize - ::espn::kApolloH;
   for (int y = 0; y < ::espn::kApolloH; y++)
     for (int x = 0; x < ::espn::kApolloW; x++)
