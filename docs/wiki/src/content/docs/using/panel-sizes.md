@@ -102,9 +102,7 @@ While the main board shows one of these (**Showing** in the Panel card), **Shows
 | Three or four wide | The display fills the whole row, as with **Nothing** picked. |
 | One or two panels | Nothing changes: the display already fills the panel. |
 
-:::note[Coming in the next release]
 The Flight Tracker with the whole of four wide, or of two rows of two with **Full screen** on, keeps the nearest plane's 128x64 card on the left two panels or the top half, and shows a radar of the planes around your home and the nearby list in turn on the other half. See [Flight Tracker](/using/flights/#what-the-panel-shows).
-:::
 
 What you picked under **Shows** is kept. It comes back as soon as **Showing** goes back to the **Scoreboard**, and while the night hours' clock stands in for the display, so the scoreboard on two rows of two keeps its bottom half. Turning the switch on or off lays the panel out again at once, with no restart. While the display fills the panel, the second area reads nothing.
 
