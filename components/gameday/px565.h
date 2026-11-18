@@ -94,6 +94,19 @@ inline void px_sprite(Px565 &p, const Sprite &s, int x, int y, const uint16_t pa
     }
 }
 
+// Run-packed sprite, anchor at (x, y); slot 0 transparent
+inline void px_sprite_rle(Px565 &p, const RleSprite &s, int x, int y, const uint16_t pal[16], int scale) {
+  const int x0 = x - s.ax * scale, y0 = y - s.ay * scale;
+  int i = 0;
+  for (int k = 0; k < s.n; k++) {
+    const uint8_t v = s.runs[k] >> 4;
+    const int len = (s.runs[k] & 15) + 1;
+    for (int j = 0; j < len; j++, i++)
+      if (v != 0)
+        p.fill(x0 + (i % s.w) * scale, y0 + (i / s.w) * scale, scale, scale, pal[v]);
+  }
+}
+
 // 3x5 glyphs, rows top down, bit 2 the left column
 inline const uint8_t *font3x5(char c) {
   static const uint8_t kRows[][5] = {

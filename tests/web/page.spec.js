@@ -435,7 +435,10 @@ test.describe("a phone", () => {
     await expect(page.locator("#tA .abbr")).toHaveText("DAL");
     await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", "width=device-width, initial-scale=1");
     expect(await page.evaluate(() => [innerWidth, matchMedia("(max-width: 560px)").matches])).toEqual([375, true]);
-    await expect(page).toHaveTitle("Game Day Scoreboard 2f6a70");
+    await expect(page).toHaveTitle("Apollo Pulse 2f6a70");
+    await expect(page.locator(".brand h1")).toContainText("Apollo Pulse");
+    await expect(page.locator(".brand .mark")).toHaveText("AP");
+    await expect(page.locator(".brand .mark")).toHaveCSS("background-color", "rgb(67, 121, 170)");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     expect(await page.evaluate(() => getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length)).toBe(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -2794,7 +2797,7 @@ test("saved Wi-Fi networks are listed in order and one can be forgotten", async 
   // panel's own hotspot.
   await expect(page.locator("#netsCard > p.hint").first()).toHaveText(
     "The panel joins the first of these it can see, the last one that worked first."
-    + " A network you set it up on, through its Game Day hotspot or the installer, is added here.");
+    + " A network you set it up on, through its Apollo Pulse hotspot or the installer, is added here.");
 
   // Forget asks first; declining posts nothing.
   page.once("dialog", (d) => d.dismiss());
@@ -2962,7 +2965,7 @@ test("the page loads no script but the panel's own and opens one event stream", 
   await sleep(1000);
   expect(await streams(page)).toEqual([expect.objectContaining({ open: 0, failed: 0, state: 1 })]);
   // ESPHome's page app set these
-  await expect(page).toHaveTitle("Game Day Scoreboard 2f6a70");
+  await expect(page).toHaveTitle("Apollo Pulse 2f6a70");
   const root = await page.evaluate(() => [document.documentElement.lang, getComputedStyle(document.documentElement).colorScheme]);
   expect(root).toEqual(["en", "light dark"]);
 });
@@ -3157,7 +3160,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into Wi-Fi setup for 15 minutes, so this page won't reconnect. Its settings are kept,"
     + " and unplugging it and plugging it back in takes it back to the Wi-Fi it already knows."
-    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Apollo Pulse 2f6a70\" Wi-Fi.");
   await expect(page.locator("#board")).toHaveClass(/dim/);
   await expect(page.locator("#conn")).not.toHaveClass(/\bon\b/);
 
@@ -3166,7 +3169,7 @@ test("both resets say the panel restarts into setup and the page won't reconnect
   await page.locator("#dangerActions button", { hasText: "Factory reset" }).click();
   await expect(page.locator("#gone")).toHaveText(
     "The panel is restarting into setup with everything erased, so this page won't reconnect."
-    + " To set it up again, join its \"Game Day 2f6a70\" Wi-Fi.");
+    + " To set it up again, join its \"Apollo Pulse 2f6a70\" Wi-Fi.");
   // The mock still answers, but the page has stopped asking it.
   const asked = [];
   page.on("request", (r) => { if (r.url().startsWith(baseURL)) asked.push(r.url()); });

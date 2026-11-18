@@ -26,6 +26,7 @@
 #include "badge.h"
 #include "bets.h"
 #include "board_layout.h"
+#include "boot_dog.h"
 #include "captive.h"
 #include "espn_parse.h"
 #include "favorites.h"

@@ -33,6 +33,10 @@ Every network you set the panel up on is added to the top of the list. There are
 - **The installer.** Right after you install the firmware from your browser, the installer offers to put the panel on your Wi-Fi. Enter your network name and password there. See [Set up your panel](/get-started/setup/#put-it-on-wi-fi-from-the-installer).
 - **The Game Day app**, a separate project that may not find panels running this firmware, finds the panel over Bluetooth where it works and hands it the network and password. While the panel joins, it shows **JOINING** and the network's name. See [The Game Day app](/get-started/the-app/).
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
+:::
+
 The six characters are the same as in the panel's address, so two panels in one house are easy to tell apart. See [Set up your panel](/get-started/setup/).
 
 Taking the panel somewhere new? When it can't find any saved network, it says **Wi-Fi lost** and, within a few minutes, brings up its hotspot, as below, so you can give it the new network there. To put it into setup straight away, use [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
@@ -44,6 +48,10 @@ A short drop, like a mesh system moving the panel to another access point, doesn
 - Within a few minutes the panel's **Game Day** hotspot comes up, and the screen says **Wi-Fi / lost / scan to fix** with the hotspot's QR code, taking turns with the hotspot's name. Scan the code with your phone's camera to join the hotspot, or join it by name, and give the panel the new network or password. A changed router password is the common case.
 - After 30 seconds, the panel turns Bluetooth back on so the Game Day app can reach it, where the app works with this firmware.
 - After a minute without its network, a panel that was on it earlier restarts itself once, to recover. It never restarts while the app is connected to it.
+
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
+:::
 
 When the network comes back, the panel rejoins and the board comes back by itself.
 

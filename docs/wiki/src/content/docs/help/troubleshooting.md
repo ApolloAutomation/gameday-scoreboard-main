@@ -23,6 +23,10 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 You joined the panel's **Game Day** hotspot and no page opened.
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
+:::
+
 - Look for a notification to sign in to the network and tap it. Many Android phones post one instead of opening the page.
 - If your phone says the network has no internet, choose to stay connected, or to use the network as it is.
 - Open `192.168.4.1` in your browser.

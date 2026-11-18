@@ -44,7 +44,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   for.
 - **esphome**: the project name `ApolloAutomation.gameday-scoreboard`, and
   `on_boot` steps at priority 300 (apply brightness through the guard), 260
-  (name the hotspot "Game Day xxxxxx") and 240 (setup after a Wi-Fi reset,
+  (name the hotspot "Apollo Pulse xxxxxx", `hotspot_ssid` in setup_qr.h) and 240 (setup after a Wi-Fi reset,
   Bluetooth grace or Bluetooth on).
 - **external_components**: the local `components/` (`gameday`,
   `panel_layout`, `improv_ble`, `saved_networks`, `crash_report`), plus
@@ -75,7 +75,11 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   reset, 30 s cancel). Off Wi-Fi the QR code is a Wi-Fi join code for the
   panel's open hotspot, shown only once the hotspot is up; on Wi-Fi it is the
   device page's `http://<ip>/` (`components/gameday/setup_qr.h`). `boot_view`
-  sets it with `lv_qrcode_update`, only when the text changes.
+  sets it with `lv_qrcode_update`, only when the text changes. The overlay
+  wears the Apollo Pulse brand: navy, APOLLO PULSE, a green-on-blue bar and
+  Apollo the dog, a 64x64 canvas (`boot_dog.cpp`) painted from the run-packed
+  `apollo` sprite with a blink every few seconds. `boot_brand.h` places the
+  dog, the QR box and the words for each panel layout.
 - `gameday-live.yaml`: the scoreboard page's widgets, for boards 64, 128,
   192 and 256 pixels wide, with the splashes and fireworks (which splashes
   get them: `splash_fireworks`, `alerts.h`). `tt_bind_view` hands the
