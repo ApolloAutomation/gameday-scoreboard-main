@@ -1303,6 +1303,21 @@ AppPics *&view_pics(const BoardView &v) {
   return pics[i];
 }
 
+namespace {
+
+// The area's still pages take turns
+void page_tick(lv_timer_t *t) {
+  AreaView *a = (AreaView *) lv_timer_get_user_data(t);
+  if (a == nullptr || a->ticker == nullptr || !a->paged || ::espn::page_count(a->pages) < 2 ||
+      lv_tick_elaps(a->page_ms) < ::espn::kTickerPageMs)
+    return;
+  a->page = ::espn::ticker_page_next(a->page, ::espn::page_count(a->pages));
+  a->page_ms = lv_tick_get();
+  lv_label_set_text(a->ticker, ::espn::page_at(a->pages, a->page).c_str());
+}
+
+}  // namespace
+
 AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
                      image::Image *blank) {
   if (area_ptr != nullptr || root == nullptr)
@@ -1328,6 +1343,14 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
     lv_label_set_recolor(ticker, ticker_colors);
   a->ampm = plain_label(root, f8, LV_OPA_COVER);
   lv_obj_add_flag(a->ampm, LV_OBJ_FLAG_HIDDEN);
+  a->seam_line = plain_bar(root, ::espn::kSeamColor);
+  a->tag_img = lv_image_create(root);
+  lv_obj_remove_style_all(a->tag_img);
+  lv_obj_add_flag(a->tag_img, LV_OBJ_FLAG_HIDDEN);
+  a->tag_lbl = plain_label(root, f8, LV_OPA_COVER);
+  lv_obj_set_style_text_align(a->tag_lbl, LV_TEXT_ALIGN_LEFT, 0);
+  lv_obj_add_flag(a->tag_lbl, LV_OBJ_FLAG_HIDDEN);
+  lv_timer_create(page_tick, 250, a);
   // Created later, so drawn over the time and ticker
   v.game = plain_obj(root);
   v.no_game = plain_obj(root);
@@ -1385,6 +1408,18 @@ AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *t
 }
 
 void area_layout(AreaView &a, bool on, int x, int y, int w, int h, Sizes sizes) {
+  // Beside the board, its ticker stops short
+  BoardView *bv = board_view();
+  ::espn::SplitArea sa;
+  sa.on = on;
+  sa.main_w = bv != nullptr && bv->w > 0 ? bv->w : 128;
+  sa.x = (int16_t) x;
+  sa.y = (int16_t) y;
+  sa.w = (int16_t) w;
+  sa.h = (int16_t) h;
+  a.seam = ::espn::ticker_seam(sa);
+  if (bv != nullptr)
+    put_width(bv->ticker, a.seam.board_w);
   show(a.root, on);
   if (!on)
     return;
@@ -1448,6 +1483,97 @@ bool put_ticker(lv_obj_t *t, const lv_font_t *font, int y, const std::string &te
   return changed;
 }
 
+// Back to one scrolling line, as before paging
+__attribute__((noinline)) void area_unpage(AreaView &a) {
+  show(a.seam_line, false);
+  show(a.tag_img, false);
+  show(a.tag_lbl, false);
+  if (!a.paged)
+    return;
+  a.paged = false;
+  a.pages.clear();
+  a.page = 0;
+  lv_obj_t *t = a.ticker;
+  if (t == nullptr)
+    return;
+  lv_obj_set_x(t, 0);
+  lv_obj_set_width(t, a.w);
+  lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_remove_local_style_prop(t, LV_STYLE_TEXT_COLOR, LV_PART_MAIN);
+  lv_label_set_text(t, "");
+  lv_label_set_long_mode(t, LV_LABEL_LONG_SCROLL_CIRCULAR);
+}
+
+// Still pages after a tag, past the divider
+__attribute__((noinline)) bool area_pages(AreaView &a, const UpdateFields &f, const lv_font_t *font, int ty) {
+  lv_obj_t *t = a.ticker;
+  if (t == nullptr || font == nullptr)
+    return false;
+  const ::espn::TickerTag was = a.tag;
+  a.tag = ::espn::area_tag(a.kind, a.split_show, f.team_abbr, f.team_color);
+  const int tx = ::espn::seam_text_x(a.seam, a.tag), tw = a.w - tx;
+  if (!a.paged) {
+    a.paged = true;
+    a.page = 0;
+    a.page_ms = lv_tick_get();
+    lv_label_set_long_mode(t, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_LEFT, 0);
+  }
+  if (lv_obj_get_style_text_font(t, LV_PART_MAIN) != font)
+    lv_obj_set_style_text_font(t, font, 0);
+  if (lv_obj_get_style_x(t, LV_PART_MAIN) != tx)
+    lv_obj_set_x(t, tx);
+  if (lv_obj_get_style_width(t, LV_PART_MAIN) != tw)
+    lv_obj_set_width(t, tw);
+  put_y(t, ty);
+  put_color(t, ::espn::tag_text_color(a.tag.color));
+  const int cpx = (int) lv_font_get_glyph_width(font, '0', 0);
+  std::string pages = ::espn::ticker_pages(panel_text(f.status_text), cpx > 0 ? tw / cpx : tw);
+  const bool changed = pages != a.pages;
+  if (changed) {
+    a.pages = std::move(pages);
+    if (a.page >= ::espn::page_count(a.pages)) {
+      a.page = 0;
+      a.page_ms = lv_tick_get();
+    }
+  }
+  put_changed(t, ::espn::page_at(a.pages, a.page).c_str());
+  const bool up = !a.pages.empty();
+  const int rows = (int) lv_font_get_line_height(font);
+  if (a.seam_line != nullptr) {
+    lv_obj_set_pos(a.seam_line, a.seam.line_x, ty);
+    lv_obj_set_size(a.seam_line, 1, kBoardRows - ty);
+  }
+  show(a.seam_line, up);
+  const bool word = a.tag.text[0] != '\0';
+  const bool icon = !word && a.tag.icon != ::espn::TagIcon::NONE;
+  if (icon && a.tag_img != nullptr) {
+    if (a.tag_dsc.data == nullptr || was.icon != a.tag.icon || was.color != a.tag.color) {
+      ::espn::tag_paint(a.tag.icon, a.tag.color, a.tag_buf);
+      lv_image_dsc_t &d = a.tag_dsc;
+      d.header.magic = LV_IMAGE_HEADER_MAGIC;
+      d.header.cf = LV_COLOR_FORMAT_RGB565A8;
+      d.header.w = ::espn::kTagPx;
+      d.header.h = ::espn::kTagPx;
+      d.header.stride = ::espn::kTagPx * 2;
+      d.data_size = ::espn::kTagBytes;
+      d.data = a.tag_buf;
+      ::lv_image_set_src(a.tag_img, &d);
+      lv_obj_invalidate(a.tag_img);
+    }
+    lv_obj_set_pos(a.tag_img, a.seam.tag_x, ty + (rows - ::espn::kTagPx) / 2);
+  }
+  show(a.tag_img, up && icon);
+  if (word && a.tag_lbl != nullptr) {
+    put_changed(a.tag_lbl, a.tag.text);
+    put_color(a.tag_lbl, a.tag.color);
+    lv_obj_set_pos(a.tag_lbl, a.seam.tag_x, ty + (rows - 8) / 2);
+    lv_obj_set_width(a.tag_lbl, ::espn::tag_width(a.tag));
+  }
+  show(a.tag_lbl, up && word);
+  return changed;
+}
+
 }  // namespace
 
 void rows_put(lv_obj_t *const *pos, lv_obj_t *const *name, lv_obj_t *const *value, lv_obj_t *const *detail, int w,
@@ -1504,6 +1630,7 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
     put_y(a.time, lower.time_y);
     put_y(a.ampm, lower.ampm_y);
     put_y(a.date, lower.date_y);
+    area_unpage(a);
     r.ticker_changed = put_ticker(a.ticker, v.f16, lower.ticker_y, line);
     r.clock_card = true;
     return r;
@@ -1516,8 +1643,14 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
   // Leaderboards fit only spleen_8, on the last row
   if (f.board)
     rows_draw(a.rows, f, a.w);
-  r.ticker_changed = f.board && !f.field ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
-                                         : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
+  const bool rows = f.board && !f.field;
+  if (::espn::area_ticker_paged(a.seam, false)) {
+    r.ticker_changed = area_pages(a, f, rows ? v.f8 : font_of(v, g.ticker_font), rows ? kBoardRows - 8 : g.ticker_y);
+  } else {
+    area_unpage(a);
+    r.ticker_changed = rows ? put_ticker(a.ticker, v.f8, kBoardRows - 8, line)
+                            : put_ticker(a.ticker, font_of(v, g.ticker_font), g.ticker_y, line);
+  }
   if (r.splash) {
     // Fireworks when the board isn't using them
     a.splash_color = f.splash_color;
@@ -1544,8 +1677,14 @@ void area_clear(AreaView &a) {
   show(a.time, false);
   show(a.ampm, false);
   show(a.date, false);
+  area_unpage(a);
   if (a.ticker != nullptr)
     lv_label_set_text(a.ticker, "");
+}
+
+void area_ticker_tag(AreaView &a, ::espn::AreaView view, ::espn::SplitShow show) {
+  a.kind = view;
+  a.split_show = show;
 }
 
 }  // namespace esphome::gameday
