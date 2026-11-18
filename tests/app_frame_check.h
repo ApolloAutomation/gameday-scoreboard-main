@@ -65,5 +65,8 @@ inline std::vector<std::string> app_frame_problems(const espn::AppFrame &f, int 
       say("%s: a point at %d,%d outside", "the line", p.x, p.y);
   if (f.bar.w > 0 && (f.bar.x < 0 || f.bar.x + f.bar.w > w || f.bar.y < 0 || f.bar.y + f.bar.h > limit))
     say("%s: at y %d, %d tall", "the bar", f.bar.y, f.bar.h);
+  const espn::AppMap &m = f.map;
+  if (m.w > 0 && (m.x < 0 || m.x + m.w > w || m.y < 0 || m.y + m.h > limit))
+    say("%s: at %d,%d outside", "the map", m.x, m.y);
   return out;
 }

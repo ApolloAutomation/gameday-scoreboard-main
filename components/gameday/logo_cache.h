@@ -128,6 +128,7 @@ class LogoCache {
     Bytes pixels;
     int w{0}, h{0};
     uint32_t src_w{0}, src_h{0};
+    bool alpha{true};  // a JPEG photo's is opaque
   };
   // Logo task only. 1 decoded, 0 failed, -1 unreadable icon
   int decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out);

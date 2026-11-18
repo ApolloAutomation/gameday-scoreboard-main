@@ -1,0 +1,34 @@
+Map landmark files for the Game Day Scoreboard
+==============================================
+
+These files hold the towns, borders, coastlines and highways that the
+scoreboard's device page reads when the owner sets the home, to draw them
+under Weather's radar and the flight radar. Each .bin file covers one
+4 x 4 degree square; index.json lists the squares that have a file.
+Built by scripts/build_landmarks.py in the project's repository.
+
+Natural Earth
+-------------
+Coastlines, large lakes, country and state or province lines, and
+motorways from Natural Earth 10m, version 5.1.2 (including the North
+America roads layer contributed by XNR Productions).
+https://www.naturalearthdata.com
+Natural Earth is in the public domain.
+
+GeoNames
+--------
+Towns and cities from GeoNames' cities500 dump of 2026-11-16
+(sha256 40754836f9b58f2702e53e8d4c531aac2bc04a39d92d798a09afd3456ae661ca).
+https://download.geonames.org/export/dump/
+(c) GeoNames, licensed under the Creative Commons Attribution 4.0
+License, https://creativecommons.org/licenses/by/4.0/
+The data is provided "as is" without warranty or any representation of
+accuracy, timeliness or completeness.
+
+Changes made: lines were simplified to about 100 m, cut at the squares'
+edges, and features shorter than 3 km dropped; places were limited to
+populated places (not sections or historical places), their ASCII names
+used with "City of " removed, positions rounded to 1/4000 degree, a place
+within 5 km of a bigger one and a district of a city of a million or more
+dropped, a few rows with known errors dropped, and populations reduced to
+a size class and a rounded size.

@@ -18,6 +18,12 @@ components/gameday/gameday.cpp:
                          power_ok sets health.power back to "ok"
   GET  /gameday/wifi     the saved networks (components/saved_networks), names only
   POST /gameday/wifi     forget=<ssid>; 404 when it is not saved
+  POST /gameday/landmarks the map landmarks as landmarks.h checks them: 400 with the
+                         error word, 409 for another home, 413 too big; "landmarks",
+                         "landmarks_n" and "landmarks_saved" in the state follow it
+  GET  /land/1/<file>    docs/site/land/1, the site's map landmark files, for a
+                         page run by hand with localStorage "gd.landBase" set to
+                         http://127.0.0.1:<port>/land/1 (the tests route them)
 
 /?demo loads bundle-demo.js instead, the demo build's page, and
 GET/POST /gameday/demo answer as demo.cpp does.
@@ -47,6 +53,7 @@ that the shell loads no script but the bundle (shell_ok).
 import copy
 import itertools
 import json
+import math
 import os
 import re
 import sys
@@ -166,6 +173,17 @@ def coord_text(e4):
 def flights_set(k, v):
     """prefs_set() for one of the Flight Tracker's keys."""
     f = STATE.setdefault("flights", flights_doc())
+    spot = ("home", "radius", "radius_unit", "receiver")
+    was = [f.get(x) for x in spot]
+    flights_set_one(f, k, v)
+    # set(): a new spot reads afresh, no longer widened
+    if [f.get(x) for x in spot] != was and "wide" in f:
+        f.pop("wide")
+        if f.get("status") == "wide":
+            f["status"] = "waiting"
+
+
+def flights_set_one(f, k, v):
     if k == "flyhome":
         if v in ("", "none"):
             f["home"], f["place"] = "", ""
@@ -457,6 +475,8 @@ def index_html(js="/0.js"):
 STATE = copy.deepcopy(INITIAL)
 FAIL = set()
 LOG = []
+# The panel's map landmarks, or None
+LAND = {"set": None}
 # The saved Wi-Fi networks as GET /gameday/wifi lists them, the one tried first
 # first. None: firmware without the list.
 WIFI_INITIAL = [{"ssid": "Home", "connected": True}, {"ssid": "iPhone", "connected": False}]
@@ -466,6 +486,67 @@ WIFI = {"list": copy.deepcopy(WIFI_INITIAL)}
 TEAM_LEAGUE = ["nfl"]
 # Players by slot (players.h's blob); None when empty
 PLAYER_SLOTS = [None] * LIMITS["kPlayerSlots"]
+
+
+# The set's caps (landmarks.h) and font marks (px565.h)
+LAND_H = (REPO / "components/gameday/landmarks.h").read_text(encoding="utf-8")
+LAND_CAP = {k: int(v) for k, v in re.findall(r"(kLand\w+) = (\d+)", LAND_H)}
+FONT_MARKS = re.search(r'for \(const char \*m = "(.*?)"; \*m', (REPO / "components/gameday/px565.h")
+                       .read_text(encoding="utf-8"))[1].replace("\\'", "'")
+LAND_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 " + FONT_MARKS)
+
+
+def land_reach_box(lat_e2, reach):
+    """land_reach_box(): the largest offsets, in 1/4000 degree."""
+    la = (reach + 10) / 111.32 * 4000
+    c = math.cos(lat_e2 / 100 * 0.017453293)
+    cap = LAND_CAP["kLandMaxOff"]
+    return (cap if la >= cap else math.ceil(la)), (cap if c * cap <= la else math.ceil(la / c))
+
+
+def land_check(b):
+    """land_check(): the error word, or None and the set's center and counts."""
+    c = LAND_CAP
+    if len(b) < c["kLandHead"] or len(b) > c["kLandMaxBytes"] or b[:4] != b"GL\x02\x00":
+        return "format", None
+    i16 = lambda at: int.from_bytes(b[at:at + 2], "little", signed=True)
+    u16 = lambda at: int.from_bytes(b[at:at + 2], "little")
+    lat, lon, np_, nl, npt, reach = i16(4), i16(6), u16(8), u16(10), u16(12), u16(14)
+    if not (-9000 <= lat <= 9000 and -18000 <= lon <= 18000 and np_ <= c["kLandMaxPlaces"]
+            and nl <= c["kLandMaxLines"] and npt <= c["kLandMaxPoints"] and 1 <= reach <= c["kLandMaxReach"]):
+        return "counts", None
+    if len(b) != c["kLandHead"] + np_ * c["kLandPlaceBytes"] + nl * 2 + npt * 4:
+        return "length", None
+    la, lo = land_reach_box(lat, reach)
+    off = lambda at: abs(i16(at)) <= la and abs(i16(at + 2)) <= lo
+    at = c["kLandHead"]
+    for _ in range(np_):
+        n, name = b[at + 5], b[at + 6:at + 6 + c["kLandName"]]
+        if not off(at) or not 1 <= b[at + 4] <= 4:
+            return "place", None
+        if not 1 <= n <= c["kLandName"] or any(chr(x) not in LAND_CHARS for x in name[:n]) or any(name[n:]) \
+                or name[0] == 32 or name[n - 1] == 32:
+            return "name", None
+        at += c["kLandPlaceBytes"]
+    kinds = [b[at + 2 * k] for k in range(nl)]
+    counts = [b[at + 2 * k + 1] for k in range(nl)]
+    if any(k > 2 for k in kinds) or any(n < 2 for n in counts) or sum(counts) != npt:
+        return "line", None
+    at += 2 * nl
+    if not all(off(at + 4 * k) for k in range(npt)):
+        return "point", None
+    return None, {"center": (lat, lon), "places": np_, "lines": nl}
+
+
+def land_e2(e4):
+    return (e4 + 50) // 100 if e4 >= 0 else -((-e4 + 50) // 100)
+
+
+def land_home():
+    """The rounded home the panel checks a set against; None without one."""
+    home = (STATE.get("flights") or {}).get("home", "")
+    c = parse_coords(home) if home else None
+    return (land_e2(c[0]), land_e2(c[1])) if c else None
 
 
 def reset_state(overrides):
@@ -485,6 +566,10 @@ def reset_state(overrides):
     for k in [k for k, v in STATE.items() if v is None]:
         del STATE[k]
     TEAM_LEAGUE[0] = (STATE.get("team") or {}).get("l", "nfl")
+    # A starting set: lat, lon (e2) and n
+    saved = STATE.pop("land_set", None)
+    LAND["set"] = None if not saved else {"center": (saved["lat"], saved["lon"]), "places": saved.get("n", 0),
+                                          "lines": 0}
     saved = STATE.pop("markets", None) or []
     MARKET_LIST[:] = [(m["sym"], m["kind"]) for m in saved]
     players = STATE.get("players") or []
@@ -622,6 +707,13 @@ def state_doc():
         else:
             for k in ("home", "place"):
                 STATE["weather"].pop(k, None)
+    # rebuild_state_(): the landmarks against the saved home
+    for k in ("landmarks", "landmarks_n", "landmarks_saved"):
+        STATE.pop(k, None)
+    st = LAND["set"]
+    STATE["landmarks"] = "none" if not st else "ok" if st["center"] == land_home() else "other"
+    if st:
+        STATE["landmarks_n"], STATE["landmarks_saved"] = st["places"], True
     if "players" in STATE:
         STATE["players"] = [p for p in PLAYER_SLOTS if p]
     if MARKETS in display_ids():
@@ -1121,6 +1213,41 @@ def page_event_names():
     return set(re.findall(r'name: "([^"]+)"', defs)) | set(re.findall(r'case "([^"]+)":', on_state))
 
 
+def landmarks_ok():
+    """land_check() takes a good set and refuses each broken field, as the host tests do."""
+    def enc(places, lines, lat=4000, lon=-9000, reach=250):
+        b = bytearray(b"GL\x02\x00")
+        npt = sum(len(p) for _, p in lines)
+        for v in (lat, lon, len(places), len(lines), npt, reach):
+            b += v.to_bytes(2, "little", signed=True)
+        for dlat, dlon, cls, name in places:
+            b += dlat.to_bytes(2, "little", signed=True) + dlon.to_bytes(2, "little", signed=True)
+            b += bytes([cls, len(name)]) + name.encode().ljust(LAND_CAP["kLandName"], b"\0")
+        for kind, pts in lines:
+            b += bytes([kind, len(pts)])
+        for _, pts in lines:
+            for a, o in pts:
+                b += a.to_bytes(2, "little", signed=True) + o.to_bytes(2, "little", signed=True)
+        return bytes(b)
+    good = enc([(600, 2800, 4, "BRIGHTON"), (120, 400, 1, "ST CLAIR")], [(0, [(0, 0), (20, 20)]), (2, [(9, 9), (12, 12)])])
+    ok = land_check(good) == (None, {"center": (4000, -9000), "places": 2, "lines": 2})
+    la, lo = land_reach_box(4000, 250)
+    edge = enc([(la, lo, 2, "EDGE")], [(0, [(-la, -lo), (la, lo)])])
+    ok = ok and land_check(edge)[0] is None and (la, lo) == (9343, 12196)
+    bad = {"format": good[:2] + b"\x01" + good[3:], "length": good + b"\0", "counts": enc([], [], reach=0),
+           "name": enc([(0, 0, 1, "Brighton")], []), "place": enc([(0, lo + 1, 1, "A")], []),
+           "line": enc([], [(3, [(0, 0), (1, 1)])]), "point": enc([], [(0, [(0, 0), (la + 1, 1)])])}
+    ok = ok and land_check(enc([(0, 0, 0, "A")], []))[0] == "place"
+    for word, b in bad.items():
+        if land_check(b)[0] != word:
+            print(f"landmarks: {word} not refused: {land_check(b)}")
+            ok = False
+    if land_e2(380499) != 3805 or land_e2(-847349) != -8473 or land_e2(-50) != -1 or land_e2(-49) != 0:
+        print("landmarks: rounding")
+        ok = False
+    return ok
+
+
 def events_ok():
     """The events the page reads fit the panel's stream."""
     used = page_event_names()
@@ -1228,6 +1355,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, demo_doc())
         if u.path == "/0.css":
             return self._send(200, "text/css", (WEB / "app.css").read_bytes())
+        if re.fullmatch(r"/land/1/[\w.-]+", u.path):
+            f = REPO / "docs/site" / u.path[1:]
+            if not f.is_file():
+                return self._send(404, "text/plain", "")
+            return self._send(200, "application/json" if f.suffix == ".json" else "application/octet-stream", f.read_bytes())
         if u.path == "/gameday/state":
             if "state" in FAIL:
                 return self._send(500, "text/plain", "")
@@ -1315,6 +1447,19 @@ class Handler(BaseHTTPRequestHandler):
             if q["do"] == "power_ok" and STATE.get("health"):
                 STATE["health"]["power"] = "ok"
             return self._json(200, {"ok": True})
+        if u.path == "/gameday/landmarks":
+            n = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(n)
+            LOG.append({"path": u.path, "type": self.headers.get("Content-Type", ""), "n": n})
+            if n > LAND_CAP["kLandMaxBytes"]:
+                return self._json(413, {"error": "too big"})
+            err, info = land_check(body)
+            if err:
+                return self._json(400, {"error": err})
+            if info["center"] != land_home():
+                return self._json(409, {"error": "home changed"})
+            LAND["set"] = info
+            return self._json(200, {"ok": True, "places": info["places"], "lines": info["lines"]})
         if u.path == "/gameday/demo":
             q = {k: v[0] for k, v in pairs.items()}
             LOG.append({"path": u.path, "q": q})
@@ -1331,6 +1476,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--selftest"]:
-        sys.exit(0 if all([selftest(), events_ok(), shell_ok()]) else 1)
+        sys.exit(0 if all([selftest(), events_ok(), shell_ok(), landmarks_ok()]) else 1)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

@@ -14,6 +14,19 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.10
+
+Weather's radar shows nearby towns, state lines, coastlines and highways, the Flight Tracker gets a radar of the planes around home on bigger setups, and it always has a plane to show.
+
+- Weather's radar can show landmarks under the rain: nearby towns and cities with their names, state and province lines, coastlines and, on maps 128 wide or more, highways. They're dim, so they never look like rain. The town your home is in is named beside the white dot, and the ring now stays on top of the rain. Until the first frame comes in, **Loading radar** sits at the bottom left, clear of the towns.
+- The landmarks come from Natural Earth and GeoNames, worldwide, and your browser reads them from this project's site when you set the home on the device page, usually in under a second. For a home set before this release, tap **Add landmarks** under the home in the Flight Tracker or Weather card. Your browser asks for the same files as every other home in the same 4-degree square, about 440 km across, so only that square leaves it, never your home, and the panel itself never contacts a map service.
+- On four panels in a row, and on two rows of two with **Full screen** on, the Flight Tracker keeps the nearest plane's card on one half and shows a radar of the planes around home on the other, over the same landmarks, taking turns with the nearby list. The plane on the card is yellow on the radar, the nearest one has its callsign, and the others carry their number from the list. On two rows of two this takes the place of the tall full-screen card and list.
+- The Flight Tracker is never empty. When no plane is within your **Within** distance, it looks farther, up to 250 miles (400 km), and shows the nearest planes it finds, with their distances in yellow and the ticker saying how far the nearest one is. As soon as a plane is inside your distance again, it goes back to normal. With nothing at all out to 250 miles, it shows a calm sky and **No planes nearby right now**.
+- When the card shows the plane's picture rather than a photo, the picture moves in a small sky of its own: the plane rides a slow wave up and down, a rotor or propellers turn, a jet leaves a contrail, and clouds, birds, the sun or the moon and stars follow Weather's forecast and the time of day. It holds still in night hours and with **Off or dim**. Notes like **Looking for planes** show the same sky above their words.
+- On a card 128 wide or more, an airline's name too long for its room is left off instead of cut, and a plane whose type isn't known shows its registration, like **N123AB**. On three panels in a row, a plane alone nearby has **No others** beside it.
+- The panel's small letters now include the degree sign and accented letters, so names like Montréal show whole.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.9
 
 NFL halftime no longer reads "4th", Weather's forecast loads again, the board shows when a game starts instead of 0-0, and a new panel says when it's joining your Wi-Fi.

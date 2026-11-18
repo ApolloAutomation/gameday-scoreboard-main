@@ -1,4 +1,4 @@
-// Play animation GIFs for review: make -C tests review
+// Review images: make -C tests review
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -6,6 +6,7 @@
 
 #include "gif_write.h"
 #include "review_field.h"
+#include "review_map.h"
 #include "scene_render.h"
 
 using namespace espn;
@@ -53,6 +54,30 @@ int main(int argc, char **argv) {
     const char *fonts = getenv("REVIEW_FONTS");
     printf("%d field views\n", render_field_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
     if (only == "field")
+      return 0;
+  }
+  if (only.empty() || only == "map") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d radar maps\n", render_map_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "map")
+      return 0;
+  }
+  if (only.empty() || only == "planes") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d plane radars\n", render_plane_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "planes")
+      return 0;
+  }
+  if (only.empty() || only == "wide") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d wider reads\n", render_wide_views(dir, review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "wide")
+      return 0;
+  }
+  if (only.empty() || only == "sky") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d plane skies\n", render_sky_views(dir, "fixtures", review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "sky")
       return 0;
   }
   for (const ScenePlay &p : kScenePlays) {

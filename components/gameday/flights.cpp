@@ -385,10 +385,14 @@ void nearby_add(Nearby &n, const Plane &p) {
   for (size_t i = 0; i < n.n && p.hex[0] != '\0'; i++)
     if (strcmp(n.planes[i].hex, p.hex) == 0)
       return;
-  if (p.tier == Tier::AIR && n.air < UINT16_MAX)
+  const bool own = n.own_nm <= 0 || (p.dist_nm >= 0 && p.dist_nm <= n.own_nm);
+  if (p.tier == Tier::AIR && n.air < UINT16_MAX) {
     n.air++;
-  else if (p.tier == Tier::GROUND && n.ground < UINT16_MAX)
+    n.air_own += own;
+  } else if (p.tier == Tier::GROUND && n.ground < UINT16_MAX) {
     n.ground++;
+    n.ground_own += own;
+  }
   const float key = rank(p);
   size_t at = n.n;
   while (at > 0 && rank(n.planes[at - 1]) > key)
@@ -411,6 +415,22 @@ void nearby_finish(Nearby &n) {
   while (keep < n.n && n.planes[keep].tier == n.tier)
     keep++;
   n.n = keep;
+}
+
+Nearby nearby_own(const Nearby &n) {
+  if (n.own_nm <= 0)
+    return n;
+  Nearby o;
+  o.total = n.total;
+  o.air = o.air_own = n.air_own;
+  o.ground = o.ground_own = n.ground_own;
+  o.tier = n.tier;
+  for (uint8_t i = 0; i < n.n; i++) {
+    const Plane &p = n.planes[i];
+    if (p.tier == Tier::NOPOS || (p.dist_nm >= 0 && p.dist_nm <= n.own_nm))
+      o.planes[o.n++] = p;
+  }
+  return o;
 }
 
 uint8_t pick_card(const Nearby &n, const char *prev_hex) {
@@ -1316,6 +1336,11 @@ std::string where_text(const Plane &p, DistUnit u, Fmt f) {
   return dir[0] == '\0' ? d : d + " " + dir;
 }
 
+std::string reach_text(float nm, DistUnit u, bool short_form) {
+  const char *unit = u == DistUnit::MILES ? "mi" : u == DistUnit::KM ? "km" : "nm";
+  return fmt("%.0f", from_nm(nm, u)) + (short_form ? "" : " ") + unit;
+}
+
 const char *climb_text(const Plane &p) {
   if (p.tier == Tier::GROUND)
     return "Taxiing";
@@ -1334,8 +1359,9 @@ std::string fit_words(const std::string &s, size_t max) {
   std::string out = s;
   while (out.size() > max) {
     const size_t sp = out.rfind(' ');
+    // A word never cut: left out
     if (sp == std::string::npos || sp == 0)
-      return out.substr(0, max);
+      return "";
     out.resize(sp);
   }
   return out;
@@ -1346,13 +1372,14 @@ std::string fit_words(const std::string &s, size_t max) {
 namespace {
 
 struct Card {
-  std::string label, who, sub, tail, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
+  std::string label, who, sub, tail, reg, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
   const char *climb{""};
   const char *cat{nullptr};
   const AirlineName *brand{nullptr};  // whose logo shows
   uint32_t label_color{kColCallsign};
   uint32_t brand_color{kColAirline};
   uint32_t tail_color{kColTail};
+  uint32_t dist_color{kColDist};  // amber when read wider
   PlaneKind kind{PlaneKind::NONE};
   bool flip{false};
   bool route{false};
@@ -1401,6 +1428,7 @@ Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s)
   c.route = !leg.empty();
   c.sub = c.route ? leg : c.tail;
   c.type_code = p.type;
+  c.reg = p.reg;
   c.alt_full = alt_text(p, u.alt, Fmt::FULL);
   c.speed_full = speed_text(p, u.speed, Fmt::FULL);
   c.speed_short = speed_text(p, u.speed, Fmt::SHORT);
@@ -1427,10 +1455,21 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
 std::string pick_fit(const std::string &a, const std::string &b, size_t max) { return a.size() <= max ? a : cut(b, max); }
 
 // The plane centered in the box, scaled, if it fits.
+// Unscaled, it moves in its own sky.
 void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1) {
   const PlaneSprite *s = plane_sprite(c.kind);
   if (s == nullptr || s->w * scale > w || s->h * scale > h)
     return;
+  if (scale == 1) {
+    f.sky.x = (int16_t) x;
+    f.sky.y = (int16_t) y;
+    f.sky.w = (uint8_t) w;
+    f.sky.h = (uint8_t) h;
+    f.sky.kind = c.kind;
+    f.sky.flip = c.flip;
+    f.sky.tail = c.tail_color;
+    return;
+  }
   Art a;
   a.x = (int16_t) (x + (w - s->w * scale) / 2);
   a.y = (int16_t) (y + (h - s->h * scale) / 2);
@@ -1468,22 +1507,36 @@ std::string type_fit(const Card &c, size_t max) {
   return c.cat != nullptr ? fit_words(c.cat, max) : "";
 }
 
-void row(Frame &f, const Plane &p, int x0, int y, int w, const Units &u) {
-  put(f, x0 + 1, y, 40, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColCallsign, plane_label(p));
+// The type's line: the type, else the registration
+std::string type_line(const Card &c, size_t max) {
+  std::string t = type_fit(c, max);
+  if (t.empty() && !c.reg.empty() && c.reg != c.label && c.reg != c.tail && c.reg.size() <= max)
+    t = c.reg;
+  return t.empty() ? fit_words("Type unknown", max) : t;
+}
+
+uint32_t dist_ink(const FrameOpts &o) { return o.wide_nm > 0 ? kColRoute : kColDist; }
+
+void row(Frame &f, const Plane &p, int x0, int y, int w, const FrameOpts &o, int num = 0) {
+  const Units &u = o.units;
+  if (num > 0)
+    put(f, x0 + 1, y, 5, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColDim, std::to_string(num));
+  put(f, x0 + (num > 0 ? 7 : 1), y, num > 0 ? 36 : 40, BoardFont::S8, Align::LEFT,
+      p.emergency ? kColAlert : kColCallsign, plane_label(p));
   if (w >= 128) {
     put(f, x0 + 43, y, 20, BoardFont::S8, Align::LEFT, kColType, p.type);
     put(f, x0 + 65, y, 30, BoardFont::S8, Align::RIGHT, kColDim, alt_text(p, u.alt, Fmt::BARE));
-    put(f, x0 + 99, y, 28, BoardFont::S8, Align::RIGHT, kColDist, dist_text(p.dist_nm, u.dist, Fmt::BARE));
+    put(f, x0 + 99, y, 28, BoardFont::S8, Align::RIGHT, dist_ink(o), dist_text(p.dist_nm, u.dist, Fmt::BARE));
   } else {
-    put(f, x0 + 43, y, 20, BoardFont::S8, Align::RIGHT, kColDist, dist_text(p.dist_nm, u.dist, Fmt::BARE));
+    put(f, x0 + 43, y, 20, BoardFont::S8, Align::RIGHT, dist_ink(o), dist_text(p.dist_nm, u.dist, Fmt::BARE));
   }
 }
 
-void rows(Frame &f, const Nearby &n, uint8_t card, int x0, int y, int w, int limit, const Units &u) {
+void rows(Frame &f, const Nearby &n, uint8_t card, int x0, int y, int w, int limit, const FrameOpts &o) {
   for (uint8_t i = 0; i < n.n && y + 8 <= limit; i++) {
     if (i == card)
       continue;
-    row(f, n.planes[i], x0, y, w, u);
+    row(f, n.planes[i], x0, y, w, o);
     y += 8;
   }
 }
@@ -1491,6 +1544,21 @@ void rows(Frame &f, const Nearby &n, uint8_t card, int x0, int y, int w, int lim
 std::string count_text(const Nearby &n) {
   const unsigned c = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
   return std::to_string(c) + (c == 1 ? " plane" : " planes");
+}
+
+// A list's head: "Nearby", or how far it reaches.
+void list_head(Frame &f, const Nearby &n, const FrameOpts &o, int x0, int y, int lw) {
+  if (lw < 128) {
+    const std::string head = o.wide_nm > 0 ? "Within " + reach_text(o.wide_nm, o.units.dist, true) : count_text(n);
+    put(f, x0, y, lw, BoardFont::S8, Align::CENTER, o.wide_nm > 0 ? kColRoute : kColDim, head);
+    return;
+  }
+  const int cx = o.wide_nm > 0 ? 76 : 66;
+  if (o.wide_nm > 0)
+    put(f, x0 + 1, y, 75, BoardFont::S8, Align::LEFT, kColRoute, "Within " + reach_text(o.wide_nm, o.units.dist));
+  else
+    put(f, x0 + 1, y, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
+  put(f, x0 + cx, y, 127 - cx, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
 }
 
 // An airline's logo shares the top with a small callsign.
@@ -1512,21 +1580,18 @@ void compact(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   const std::string bare = c.speed_short.substr(0, c.speed_short.find_first_not_of("0123456789"));
   put(f, 27, 32, w - 28, BoardFont::S8, Align::RIGHT, kColValue, pick_fit(c.speed_short, bare, (size_t) (w - 28) / 5));
   put(f, 0, 40, w, BoardFont::S8, Align::CENTER, kColValue, c.alt_full);
-  put(f, 0, 48, w, BoardFont::S8, Align::CENTER, kColDist, pick_fit(c.where_full, c.where_short, (size_t) w / 5));
-  if (!o.ticker && n.n > 1)
+  put(f, 0, 48, w, BoardFont::S8, Align::CENTER, c.dist_color, pick_fit(c.where_full, c.where_short, (size_t) w / 5));
+  if (!o.ticker && o.wide_nm > 0)
+    put(f, 0, 56, w, BoardFont::S8, Align::CENTER, kColRoute, "Within " + reach_text(o.wide_nm, o.units.dist, true));
+  else if (!o.ticker && n.n > 1)
     put(f, 0, 56, w, BoardFont::S8, Align::CENTER, kColDim, "+" + std::to_string(n.n - 1) + " more");
 }
 
 // The list alone, nearest first.
 void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
   const int lw = o.w >= 128 ? 128 : 64;
-  if (lw >= 128) {
-    put(f, 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
-    put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
-  } else {
-    put(f, 0, 0, lw, BoardFont::S8, Align::CENTER, kColDim, count_text(n));
-  }
-  rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o.units);
+  list_head(f, n, o, 0, 0, lw);
+  rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o);
 }
 
 // The plane's card in the left 128 pixels.
@@ -1541,11 +1606,11 @@ void card_left(Frame &f, const Card &c) {
     put(f, rx, 8, rw, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
   put_logo(f, c, lx, 0);
   put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
-  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_fit(c, 14));
+  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
   put_art(f, c, 72, 17, 56, 21);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
-  put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, kColDist, pick_fit(c.where_full, c.where_short, 12));
+  put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
   put(f, 66, 46, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
 }
 
@@ -1555,7 +1620,7 @@ void card_tall(Frame &f, const Card &c) {
   put_logo(f, c, 0, 0, kLogoBigPx);
   put(f, x0, 0, tw, BoardFont::S16, Align::LEFT, c.label_color, c.label);
   put(f, x0, 17, tw, BoardFont::S8, Align::LEFT, kColAirline, fit_words(c.who, (size_t) tw / 5));
-  const std::string type = type_fit(c, (size_t) tw / 5);
+  const std::string type = type_line(c, (size_t) tw / 5);
   if (type != c.who)
     put(f, x0, 25, tw, BoardFont::S8, Align::LEFT, kColType, type);
   // The biggest font that holds the route.
@@ -1570,14 +1635,13 @@ void card_tall(Frame &f, const Card &c) {
   put_art(f, c, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
   put(f, 1, 104, 62, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 64, 104, 63, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
-  put(f, 1, 112, 70, BoardFont::S8, Align::LEFT, kColDist, pick_fit(c.where_full, c.where_short, 14));
+  put(f, 1, 112, 70, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 14));
   put(f, 72, 112, 55, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
 }
 
 // Full screen's list: each plane's logo and two lines.
 void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o, uint32_t now_s) {
-  put(f, 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
-  put(f, 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
+  list_head(f, n, o, 0, 0, 128);
   const int limit = o.ticker ? o.h - 8 : o.h;
   int y = 8;
   for (uint8_t i = 0; i < n.n && y + 16 <= limit; i++, y += 16) {
@@ -1591,7 +1655,7 @@ void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o
       f.logos.push_back(l);
     }
     put(f, 18, y, 45, BoardFont::S8, Align::LEFT, p.emergency ? kColAlert : kColCallsign, plane_label(p));
-    put(f, 64, y, 63, BoardFont::S8, Align::RIGHT, kColDist, where_text(p, o.units.dist, Fmt::SHORT));
+    put(f, 64, y, 63, BoardFont::S8, Align::RIGHT, dist_ink(o), where_text(p, o.units.dist, Fmt::SHORT));
     put(f, 18, y + 8, 22, BoardFont::S8, Align::LEFT, kColType, p.type);
     put(f, 42, y + 8, 40, BoardFont::S8, Align::LEFT, kColRoute, route_text(p, routes, now_s, "-"));
     put(f, 82, y + 8, 45, BoardFont::S8, Align::RIGHT, kColDim, alt_text(p, o.units.alt, Fmt::SHORT));
@@ -1601,15 +1665,30 @@ void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o
 void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   card_left(f, c);
   const int x0 = 128, lw = o.w - 128;
-  if (lw >= 128) {
-    put(f, x0 + 1, 0, 60, BoardFont::S8, Align::LEFT, kColDim, "Nearby");
-    put(f, x0 + 66, 0, 61, BoardFont::S8, Align::RIGHT, kColDim, count_text(n));
-  } else {
-    put(f, x0, 0, lw, BoardFont::S8, Align::CENTER, kColDim, count_text(n));
-  }
-  rows(f, n, o.card, x0, 8, lw >= 128 ? 128 : 64, o.ticker ? o.h - 8 : o.h, o.units);
+  list_head(f, n, o, x0, 0, lw);
+  rows(f, n, o.card, x0, 8, lw >= 128 ? 128 : 64, o.ticker ? o.h - 8 : o.h, o);
+  // The card's plane alone: say so
+  if (n.n == 1)
+    put(f, x0, 24, lw, BoardFont::S8, Align::CENTER, kColDim, "No others");
 }
 
+}
+
+uint8_t list_number(const Nearby &n, uint8_t card, uint8_t i, int rows) {
+  if (card >= n.n)
+    card = 0;
+  const int k = i < card ? i + 1 : i;
+  return i >= n.n || i == card || k > rows ? 0 : (uint8_t) k;
+}
+
+void radar_list(Frame &f, const Nearby &n, uint8_t card, const FrameOpts &o, int x0, int y0, int h) {
+  list_head(f, n, o, x0, y0, 128);
+  const int rows = (h - 8) / 8;
+  for (uint8_t i = 0; i < n.n; i++) {
+    const uint8_t k = list_number(n, card, i, rows);
+    if (k > 0)
+      row(f, n.planes[i], x0, y0 + 8 * k, 128, o, k);
+  }
 }
 
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s) {
@@ -1620,7 +1699,8 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   FrameOpts opts = o;
   if (opts.card >= near.n)
     opts.card = 0;
-  const Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
+  Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
+  c.dist_color = dist_ink(opts);
   const bool tall = esphome::gameday::tall_board(opts.w, opts.h);
   if (tall && opts.list)
     list_tall(f, near, routes, opts, now_s);
@@ -1686,8 +1766,12 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
       text = "Set your location on the device page";
       break;
     case Note::NONE_NEAR:
-      text = "No planes nearby";
-      sub = "within " + dist_text(radius_nm, o.units.dist, Fmt::FULL);
+      text = o.w >= 192 ? "No planes nearby right now" : "No planes nearby";
+      sub = "Checked out to " + reach_text(radius_nm, o.units.dist);
+      break;
+    case Note::WIDENING:
+      text = o.w >= 192 ? "Looking farther for planes" : "Looking farther";
+      sub = "Nothing within " + reach_text(radius_nm, o.units.dist);
       break;
     case Note::NO_DATA:
       text = "Can't reach flight data";
@@ -1703,8 +1787,18 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
   if (!sub.empty())
     wrap_into(lines, sub, max);
   Frame f;
-  const int limit = o.ticker ? o.h - 8 : o.h;
-  int y = (limit - (int) lines.size() * 8) / 2;
+  const int limit = o.ticker ? o.h - 8 : o.h, words = (int) lines.size() * 8;
+  // A sky band over the words, where they leave room
+  const int bw = o.w < 128 ? o.w : 128, bh = o.h >= 128 ? 48 : o.w < 128 ? 24 : 28;
+  int top = 0;
+  if (o.w >= 64 && limit - bh >= words) {
+    f.sky.x = (int16_t) ((o.w - bw) / 2);
+    f.sky.w = (uint8_t) bw;
+    f.sky.h = (uint8_t) bh;
+    f.sky.scale = bh == 48 ? 2 : 1;
+    top = bh;
+  }
+  int y = top + (limit - top - words) / 2;
   for (size_t i = 0; i < lines.size(); i++) {
     put(f, 0, y, o.w, BoardFont::S8, Align::CENTER, i < main ? kColValue : kColDim, lines[i]);
     y += 8;
@@ -1716,7 +1810,14 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
                           size_t *card_end) {
   if (near.n == 0)
     return "";
-  std::string out = count_text(near) + (near.tier == Tier::GROUND ? " on the ground" : " nearby");
+  std::string out;
+  // Read wider: say so before the planes
+  if (o.wide_nm > 0)
+    out = "No planes within " + reach_text(o.own_nm, o.units.dist) + ". Nearest: " +
+          where_text(near.planes[0], o.units.dist, Fmt::FULL) + " | ";
+  out += count_text(near) + (near.tier == Tier::GROUND        ? " on the ground"
+                             : o.wide_nm > 0 ? " within " + reach_text(o.wide_nm, o.units.dist)
+                                             : std::string(" nearby"));
   for (size_t k = 0; k < near.n && k < planes; k++) {
     const size_t i = k == 0 ? o.card : k <= o.card ? k - 1 : k;
     if (i >= near.n)

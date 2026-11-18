@@ -3929,6 +3929,8 @@ int run_field_tests(int &checks);        // test_field.cpp
 int run_weather_tests(int &checks);      // test_weather.cpp
 int run_app_poll_tests(int &checks);     // test_app_polls.cpp
 int run_request_size_tests(int &checks);  // test_request_size.cpp
+int run_landmark_tests(int &checks);      // defined in test_landmarks.cpp
+int run_sky_tests(int &checks);           // defined in test_sky.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -9757,6 +9759,8 @@ int main() {
   failures += run_weather_tests(checks);
   failures += run_app_poll_tests(checks);
   failures += run_request_size_tests(checks);
+  failures += run_landmark_tests(checks);
+  failures += run_sky_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

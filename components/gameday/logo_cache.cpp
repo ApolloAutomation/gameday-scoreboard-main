@@ -370,7 +370,7 @@ void LogoCache::run_() {
       if (decoded > 0) {
         job->pixels = std::move(img.pixels);
         job->image.emplace(job->pixels.data(), img.w, img.h, image::IMAGE_TYPE_RGB565,
-                           photo ? image::TRANSPARENCY_OPAQUE : image::TRANSPARENCY_ALPHA_CHANNEL);
+                           img.alpha ? image::TRANSPARENCY_ALPHA_CHANNEL : image::TRANSPARENCY_OPAQUE);
         job->state = State::READY;
         ::espn::logo_loaded(job->fails, job->wait_ms);
         this->loaded_ = true;
@@ -650,7 +650,7 @@ int LogoCache::decode_map_(const Bytes &body, uint8_t box_w, uint8_t box_h, Deco
     return -1;
   if (!ok)
     return 0;
-  out.pixels.assign((size_t) box_w * box_h * 2, 0);
+  out.pixels.assign((size_t) box_w * box_h * 3, 0);
   job.canvas.finish(out.pixels.data());
   out.w = box_w;
   out.h = box_h;
@@ -709,6 +709,7 @@ int LogoCache::decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, De
   Bytes rgb((size_t) fit.ow * fit.oh * 3);
   ::flights::photo_scale(px.data(), fit, rgb.data());
   out.pixels.assign((size_t) fit.ow * fit.oh * 2, 0);
+  out.alpha = false;
   ::flights::photo_light(rgb.data(), fit.ow, fit.oh, out.pixels.data());
   out.w = fit.ow;
   out.h = fit.oh;

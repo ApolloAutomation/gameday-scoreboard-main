@@ -32,6 +32,8 @@ static_assert(sizeof(Prefs) == 164, "Prefs is saved as it is: a new size resets 
 
 // Each unit's largest radius, all within kMaxRadiusNm.
 uint16_t radius_max(DistUnit u);
+// The next wider read past from; 0 past radius_max.
+uint16_t next_step(DistUnit u, uint16_t from);
 const char *dist_unit_key(DistUnit u);
 Home prefs_home(const Prefs &p);
 // Out-of-range or unterminated fields back to defaults.
@@ -48,6 +50,13 @@ Units units_for_zone(int tz_index);
 espn::AppSet prefs_set(Prefs &p, const std::string &key, const std::string &value);
 void prefs_state(const Prefs &p, const Units &u, JsonObject out);
 
+// Four wide, or 2x2 Full screen: the card beside a radar.
+bool radar_room(int w, int h);
+static const int kRadarW = 128, kRadarH = 56, kRadarRing = 26, kRadarRows = 6;
+// The radar's rings, planes, numbers and tag at x, y.
+// wide: the distance read past the owner's; 0 none.
+void radar_map(const Nearby &n, uint8_t card, const Prefs &p, uint16_t wide, int x, int y, espn::AppMap &out);
+
 class FlightsApp final : public espn::App {
  public:
   // Each screen's time where the card and list take turns.
@@ -56,6 +65,10 @@ class FlightsApp final : public espn::App {
   static const int64_t kOldS = 180;
   // Failed position reads in a row before "Can't reach".
   static const uint8_t kNoDataFails = 3;
+  // A wider read holds this long before narrowing.
+  static const int64_t kWidenHoldS = 300;
+  // Reads at the widest, empty: no more often.
+  static const uint32_t kCapPollMs = 120 * 1000;
 
   espn::Display id() const override { return espn::Display::FLIGHTS; }
   const char *const *hosts() const override;
@@ -86,6 +99,8 @@ class FlightsApp final : public espn::App {
   Source source() const { return this->got_src_; }
   const Feed &feed() const { return this->feed_; }
   const PhotoCache &photos() const { return this->photos_; }
+  // The next read's distance past the owner's; 0 none.
+  uint16_t wide() const { return this->wide_; }
 
  private:
   enum class Read : uint8_t { NONE = 0, POSITIONS, ROUTESET, ADSBDB, PHOTO };
@@ -95,10 +110,15 @@ class FlightsApp final : public espn::App {
     uint32_t in_ms{UINT32_MAX};
   };
   Next next_(int64_t now) const;
+  // Planes inside the owner's distance, else read wider
+  void widen_(int64_t now);
+  // An empty read at the widest step.
+  bool capped_() const;
   // A read that never came back counts as failed.
   void lost_(uint32_t now_ms);
   uint32_t rnd_();
   Units units_() const { return units_for_zone(espn::app_env().tz); }
+  void frame_(int w, int h, int64_t now, espn::AppFrame &out) const;
   // The card plane's photo key; false for none wanted.
   bool photo_ask_(int64_t now, char key[9]) const;
 
@@ -131,6 +151,12 @@ class FlightsApp final : public espn::App {
   uint8_t card_{0};
   char card_hex_[7]{};
   uint32_t seed_{0x9E3779B9u};
+  // Distances in the owner's unit; 0: the owner's own
+  uint16_t wide_{0};        // the next position read's
+  uint16_t read_wide_{0};   // the read in flight's
+  uint16_t shown_wide_{0};  // planes shown from past the owner's
+  uint16_t empty_at_{0};    // the last read found none this far
+  int64_t widen_s_{0};
   mutable bool list_{false};
   mutable int64_t screen_s_{0};
 };
