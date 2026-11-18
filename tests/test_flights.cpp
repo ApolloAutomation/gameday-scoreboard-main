@@ -12,6 +12,7 @@
 #include "app_flights.h"
 #include "flight_airlines.h"
 #include "flights.h"
+#include "sky.h"
 #include "timezones.h"
 
 using namespace flights;
@@ -647,8 +648,21 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
     for (const Box &t : boxes)
       FCHECK(apart(b, t), "%s: the photo clear of text", what);
   }
+  // The sky's box: inside, clear of text, its plane fits
+  if (f.sky.w > 0) {
+    const Box b{f.sky.x, f.sky.x + f.sky.w, f.sky.y, f.sky.y + f.sky.h - 1};
+    const PlaneSprite *sp = plane_sprite(f.sky.kind);
+    FCHECK(f.sky.w <= espn::kAppSkyMaxW && f.sky.h <= espn::kAppSkyMaxH && f.sky.scale >= 1, "%s: the sky drawable",
+           what);
+    FCHECK(sp == nullptr || (sp->w <= f.sky.w && sp->h <= f.sky.h), "%s: the plane fits its sky", what);
+    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the sky inside", what);
+    for (const Box &t : boxes)
+      FCHECK(apart(b, t), "%s: the sky clear of text", what);
+    pics.push_back(b);
+  }
   const bool tall_list = o.list && esphome::gameday::tall_board(o.w, o.h);
-  FCHECK(f.art.size() <= 1 && (f.logos.size() <= 1 || tall_list), "%s: one picture, one logo", what);
+  FCHECK(f.art.size() + (f.sky.kind != PlaneKind::NONE) <= 1 && (f.logos.size() <= 1 || tall_list),
+         "%s: one picture, one logo", what);
   for (const Logo &l : f.logos) {
     const Box b{l.x, l.x + l.px, l.y, l.y + l.px - 1};
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
@@ -743,7 +757,7 @@ void test_frames() {
          "the 64 card");
   o.card = 2;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(find_text(f, "B407") != nullptr && f.art.size() == 1 && f.art[0].kind == PlaneKind::HELI && f.logos.empty(),
+  FCHECK(find_text(f, "B407") != nullptr && f.sky.w > 0 && f.sky.kind == PlaneKind::HELI && f.logos.empty(),
          "no airline: a helicopter and its code");
   FCHECK(f.items[0].font == BoardFont::S16 && f.items[0].text == "N77NY", "the big callsign stays");
   // An airline missing from the table keeps its route.
@@ -767,7 +781,7 @@ void test_frames() {
     const Text *route = find_text(f, "DEN-LGA");
     FCHECK(route != nullptr && route->color == kColRoute && find_text(f, "NKS123") != nullptr && f.logos.empty(),
            "unlisted airline: callsign and route");
-    FCHECK(f.art.size() == 1 && f.art[0].kind == PlaneKind::NARROW, "unlisted airline: its picture");
+    FCHECK(f.sky.w > 0 && f.sky.kind == PlaneKind::NARROW, "unlisted airline: its picture");
   }
   un.planes[0].from[0] = un.planes[0].to[0] = '\0';
   strcpy(un.planes[0].flight, "NK123");
@@ -803,6 +817,42 @@ void test_frames() {
   const Frame ff = flight_frame(fast, nullptr, om, 100);
   FCHECK(find_text(ff, "1185") != nullptr && find_text(ff, "1185km/") == nullptr, "the speed whole");
   FCHECK(flight_frame(Nearby(), nullptr, o, 0).items.empty(), "no planes, no frame");
+
+  // A word is never cut: left out
+  FCHECK(fit_words("Southwest", 8).empty() && fit_words("Delta Air Lines", 9) == "Delta Air" &&
+             fit_words("Light plane", 11) == "Light plane",
+         "whole words only");
+  Nearby sw = read(file, jfk(1));
+  Plane &sp = sw.planes[0];
+  memset(sp.callsign, 0, sizeof(sp.callsign));
+  strcpy(sp.callsign, "SWA12345");
+  sp.brand[0] = sp.flight[0] = '\0';
+  FrameOpts o128;
+  o128.w = 128;
+  f = flight_frame(sw, nullptr, o128, 100);
+  bool cut = false;
+  for (const Text &t : f.items)
+    cut = cut || (t.color == kColAirline && t.text != "Southwest" && std::string("Southwest").rfind(t.text, 0) == 0);
+  FCHECK(find_text(f, "SWA12345") != nullptr && !cut, "a long callsign leaves the airline out, never cut");
+  // No type: the registration, else says so
+  for (int tall = 0; tall < 2; tall++) {
+    Nearby nt = read(file, jfk());
+    nt.n = 1;
+    Plane &q = nt.planes[0];
+    q.type[0] = '\0';
+    memset(q.category, 0, sizeof(q.category));
+    strcpy(q.reg, "N123AB");
+    FrameOpts ot;
+    ot.w = 128;
+    ot.h = tall ? 128 : 64;
+    f = flight_frame(nt, nullptr, ot, 100);
+    const Text *reg = find_text(f, "N123AB");
+    FCHECK(reg != nullptr && reg->color == kColType, "%s: no type, its registration on the type's line",
+           tall ? "tall" : "128");
+    q.reg[0] = '\0';
+    f = flight_frame(nt, nullptr, ot, 100);
+    FCHECK(find_text(f, "Type unknown") != nullptr, "%s: no type, no registration: says so", tall ? "tall" : "128");
+  }
 }
 
 // Full screen on a 2x2: the tall card and list.
@@ -867,27 +917,50 @@ void test_tall_frames() {
   o.h = 64;
   o.list = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.size() == 1 && f.art[0].scale == 1,
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.w == kPhotoW && f.sky.scale == 1,
          "the split card unchanged");
 }
 
 void test_notes() {
   for (int w : {64, 128, 192, 256})
-    for (int k = 0; k < 4; k++) {
-      FrameOpts o;
-      o.w = w;
-      const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES));
-      check_frame(f, o, "note");
-      FCHECK(!f.items.empty(), "a note");
-    }
+    for (int h : {32, 64, 128})
+      for (int ticker = 0; ticker < 2; ticker++)
+        for (int k = 0; k < 5 && (h > 32 || !ticker); k++) {
+          FrameOpts o;
+          o.w = w;
+          o.h = h;
+          o.ticker = ticker;
+          const Frame f = note_frame((Note) k, o, to_nm(10, DistUnit::MILES));
+          char what[48];
+          snprintf(what, sizeof what, "note %d at %dx%d", k, w, h);
+          check_frame(f, o, what);
+          FCHECK(!f.items.empty(), "a note");
+          // A sky over the words wherever a panel is that tall
+          const Sky &sk = f.sky;
+          if (h >= 64 && ticker)
+            FCHECK(sk.w == std::min(w, 128) && sk.x == (w - sk.w) / 2 && sk.y == 0 &&
+                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == (h == 128 ? 2 : 1) &&
+                       sk.kind == PlaneKind::NONE,
+                   "%s: its sky %d,%d %dx%d", what, sk.x, sk.y, sk.w, sk.h);
+          if (h == 32)
+            FCHECK(sk.w == 0, "%s: no room for a sky", what);
+        }
   FrameOpts o;
   o.w = 64;
   Frame f = note_frame(Note::NO_HOME, o, 10);
   FCHECK(f.items.size() == 4 && f.items[0].text == "Set your", "wrapped for one panel: %zu", f.items.size());
-  f = note_frame(Note::NONE_NEAR, o, to_nm(10, DistUnit::MILES));
-  FCHECK(f.items.size() == 3 && f.items[0].text == "No planes" && f.items[2].text == "within 10 mi", "%s",
-         f.items.back().text.c_str());
-  FCHECK(f.items[0].color == kColValue && f.items[2].color == kColDim, "the radius dimmer");
+  f = note_frame(Note::NONE_NEAR, o, to_nm(250, DistUnit::MILES));
+  FCHECK(f.items.size() == 4 && f.items[0].text == "No planes" && f.items[3].text == "to 250 mi" && f.sky.w == 64,
+         "%s", f.items.back().text.c_str());
+  FCHECK(f.items[0].color == kColValue && f.items[3].color == kColDim, "the radius dimmer");
+  f = note_frame(Note::WIDENING, o, to_nm(10, DistUnit::MILES));
+  FCHECK(f.items.size() == 4 && f.items[0].text == "Looking" && f.items[3].text == "within 10 mi" && f.sky.w == 64,
+         "looking farther on one panel: %zu", f.items.size());
+  o.w = 256;
+  f = note_frame(Note::NONE_NEAR, o, to_nm(250, DistUnit::MILES));
+  FCHECK(f.items.size() == 2 && f.items[0].text == "No planes nearby right now" &&
+             f.items[1].text == "Checked out to 250 mi",
+         "the standing screen four wide: %s", f.items[1].text.c_str());
   o.w = 128;
   f = note_frame(Note::NO_DATA, o, 10);
   FCHECK(f.items.size() == 1 && f.items[0].text == "Can't reach flight data", "one line on two panels");
@@ -1195,6 +1268,247 @@ const char *const kSpotted =
     "\"height\":280}},\"link\":\"https:\\/\\/www.planespotters.net\\/photo\\/1592852\\/n8766t?utm_source=api\","
     "\"photographer\":\"A. Spotter\"}]}";
 
+// Flightradar24's feed: planes dlat degrees north of home.
+std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24Now) {
+  const double lat = 40.71, lon = -74.01;
+  std::string out = "{\"full_count\":9,\"version\":4";
+  int k = 0;
+  for (double d : dlats) {
+    char one[200];
+    snprintf(one, sizeof one,
+             ",\"f%d\":[\"a%05d\",%.4f,%.4f,90,31000,410,\"1234\",\"\",\"A321\",\"N%dAA\",%lld,\"JFK\",\"CLT\","
+             "\"AA%d\",0,0,\"AAL%d\",0,\"AAL\"]",
+             k, k, lat + d, lon, k, (long long) at, k, k);
+    out += one;
+    k++;
+  }
+  return out + "}";
+}
+
+// The next position read, past any photo or route read.
+bool read_pos(Reads &x, const std::string &body) {
+  for (int i = 0; i < 8; i++) {
+    x.wait();
+    espn::AppRequest q;
+    if (!x.app.request(x.now, q))
+      continue;
+    x.last_url = q.url;
+    const bool pos = q.url.find("feed.js") != std::string::npos || q.url.find("/dist/") != std::string::npos;
+    espn::AppTextStream in(body);
+    const bool ok = pos && x.app.parse(in, x.now);
+    x.app.ended(espn::AppResult{pos ? 200 : 404, false, 0});
+    x.app.apply(ok, x.now);
+    if (pos)
+      return true;
+  }
+  return false;
+}
+
+const std::string kNoPlanes = "{\"full_count\":0,\"version\":4}";
+
+std::string fr24_at(uint16_t miles) {
+  Home h;
+  h.lat = 40.71;
+  h.lon = -74.01;
+  h.radius_nm = to_nm(miles, DistUnit::MILES);
+  return fr24_url(h);
+}
+
+bool frame_has_color(const espn::AppFrame &f, const std::string &text, uint32_t color) {
+  for (const espn::AppText &t : f.texts)
+    if (t.text == text && t.color == color)
+      return true;
+  return false;
+}
+
+void test_widen() {
+  // The steps: the page's, then wider, never past radius_max
+  for (DistUnit u : {DistUnit::MILES, DistUnit::KM, DistUnit::NM}) {
+    uint16_t at = 1, last = 0;
+    int n = 0;
+    for (uint16_t s; (s = next_step(u, at)) != 0; at = s, n++) {
+      FCHECK(s > at && s <= radius_max(u), "unit %d: %u after %u", (int) u, s, at);
+      last = s;
+    }
+    FCHECK(n == 8 && last == radius_max(u) && next_step(u, radius_max(u)) == 0, "unit %d: %d steps to %u", (int) u, n,
+           last);
+  }
+  FCHECK(next_step(DistUnit::MILES, 12) == 15 && next_step(DistUnit::KM, 10) == 25 &&
+             next_step(DistUnit::NM, 150) == 200,
+         "an owner's distance between steps goes to the next");
+
+  // Counts within the owner's distance past the eight kept
+  {
+    Home h;
+    h.lat = 40.71;
+    h.lon = -74.01;
+    h.radius_nm = to_nm(50, DistUnit::MILES);
+    h.own_nm = to_nm(10, DistUnit::MILES);
+    Nearby n;
+    FCHECK(parse_fr24(fr24_north({0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.5, 0.6}), h, kFr24Now,
+                      n),
+           "parses");
+    const Nearby in = nearby_own(n);
+    FCHECK(n.n == kNear && n.air == 12 && n.air_own == 10 && in.n == kNear && in.air == 10 && in.air_own == 10,
+           "ten inside of twelve: %u %u %u", n.air, n.air_own, in.air);
+  }
+
+  Reads r;
+  r.app.setup();
+  espn::app_env().tz = 0;
+  r.app.set("flyhome", "40.71,-74.01");
+  r.app.set("flyradius", "10mi");
+  r.app.shown(true);
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(10), "the owner's distance first: %s", r.last_url.c_str());
+  FCHECK(r.app.wide() == 250, "an empty read looks once at the widest: %u", r.app.wide());
+  FCHECK(r.app.poll_ms(r.now) == kFr24PollMs, "at the same pace");
+  espn::AppFrame f;
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 10 mi|" && f.sky.w == 128, "%s", frame_text(f).c_str());
+  JsonDocument d;
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "ok" && d["planes"] == 0 && d["wide"].isNull() && d["radius"] == 10, "the page: not wider yet");
+
+  // A failed read never widens further
+  r.wait();
+  FCHECK(r.step(503, "") && r.last_url == fr24_at(250) && r.app.wide() == 250, "a failure: %u", r.app.wide());
+  r.wait();
+  // Planes 30 and 120 mi out: within 50, read 100
+  FCHECK(r.step(200, fr24_north({0.4348, 1.739}, r.now)) && r.last_url == fr24_at(250) && r.app.nearby().n == 1 &&
+             r.app.wide() == 100,
+         "found from the widest: %s %u", r.last_url.c_str(), r.app.wide());
+  const int64_t widened = r.now;
+  r.wait();
+  FCHECK(r.step(200, fr24_north({0.4348}, r.now)) && r.last_url == fr24_at(100) && r.app.nearby().n == 1 &&
+             r.app.wide() == 100,
+         "read a step past it: %s", r.last_url.c_str());
+  d.clear();
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "wide" && d["wide"] == 50 && d["radius"] == 10 && d["planes"] == 1 && d["nearest"] == "AAL0",
+         "the page hears it is wider");
+  FCHECK(r.app.lit(r.now), "a far plane keeps it lit");
+
+  // Its screens say how far, distances in amber
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(frame_has_color(f, "30 mi N", kColRoute), "the card's distance amber: %s", frame_text(f).c_str());
+  FCHECK(f.ticker.find("No planes within 10 mi. Nearest: 30 mi N | 1 plane within 50 mi | AAL0") == 0, "%s",
+         f.ticker.c_str());
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now + 8, f);
+  FCHECK(frame_has_color(f, "Within 50 mi", kColRoute) && frame_has_color(f, "1 plane", kColDim),
+         "the list's head: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(64, 64, r.now + 16, f);
+  FCHECK(frame_has_color(f, "30mi N", kColRoute) || frame_has_color(f, "30 mi N", kColRoute), "the small card: %s",
+         frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(64, 64, r.now + 24, f);
+  FCHECK(frame_has_color(f, "Within 50mi", kColRoute), "the small list: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.frame(192, 64, r.now, f);
+  FCHECK(frame_has_color(f, "Within 50mi", kColRoute), "three wide: %s", frame_text(f).c_str());
+  f = espn::AppFrame();
+  r.app.shown(true);
+  r.app.frame(128, 128, r.now, f);
+  FCHECK(f.map.w == kRadarW && f.map.wide == 1 && strcmp(f.map.ring_text, "50MI") == 0 &&
+             strcmp(f.map.inner_text, "10") == 0 && f.map.inner == kRadarRing / 5 && f.map.n_blips == 1,
+         "the radar's rings: %s %s %u", f.map.ring_text, f.map.inner_text, f.map.inner);
+  {
+    // Without the owner's ring when it would be a dot
+    Prefs p;
+    p.lat_e4 = 407100;
+    p.lon_e4 = -740100;
+    p.radius = 5;
+    espn::AppMap m;
+    radar_map(r.app.nearby(), 0, p, 250, 0, 64, m);
+    FCHECK(m.wide == 1 && m.inner == 0 && m.inner_text[0] == '\0' && strcmp(m.ring_text, "250MI") == 0,
+           "a 5 mile ring in 250 is left out");
+    radar_map(r.app.nearby(), 0, p, 0, 0, 64, m);
+    FCHECK(m.wide == 0 && m.inner_text[0] == '\0' && strcmp(m.ring_text, "5MI") == 0, "not wider: as before");
+  }
+
+  // A plane inside shows at once; the read stays wide
+  r.now = widened + 60;
+  FCHECK(r.step(200, fr24_north({0.4348, 0.0725}, r.now)) && r.app.nearby().n == 1 &&
+             r.app.nearby().planes[0].dist_nm < to_nm(10, DistUnit::MILES) && r.app.wide() == 100,
+         "inside 10, still reading 100: %u", r.app.wide());
+  d.clear();
+  r.app.state(d.to<JsonObject>(), r.now);
+  FCHECK(d["status"] == "ok" && d["wide"].isNull() && d["planes"] == 1, "the page: back to normal");
+  f = espn::AppFrame();
+  r.app.frame(128, 64, r.now, f);
+  FCHECK(f.ticker.find("1 plane nearby") == 0 && !frame_has_color(f, "5.0 mi N", kColRoute), "%s", f.ticker.c_str());
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.last_url == fr24_at(100) && r.app.wide() == 100,
+         "held: %s", r.last_url.c_str());
+  r.now = widened + FlightsApp::kWidenHoldS - 1;
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 100, "not before the hold's end");
+  r.now = widened + FlightsApp::kWidenHoldS;
+  FCHECK(read_pos(r, fr24_north({0.4348, 0.0725}, r.now)) && r.app.wide() == 0, "after the hold: back");
+  FCHECK(read_pos(r, fr24_north({0.0725}, r.now + 20)) && r.last_url == fr24_at(10), "the owner's again: %s",
+         r.last_url.c_str());
+
+  // A new distance starts over
+  read_pos(r, kNoPlanes);
+  FCHECK(r.app.wide() == 250, "widening again");
+  r.app.set("flyradius", "25mi");
+  FCHECK(r.app.wide() == 0, "a new distance resets");
+  FCHECK(r.step(200, kNoPlanes) && r.last_url == fr24_at(25) && r.app.wide() == 250, "%s", r.last_url.c_str());
+
+  // Five miles to a plane 104 out: two reads
+  {
+    Reads q;
+    q.app.setup();
+    q.app.set("flyhome", "40.71,-74.01");
+    q.app.set("flyradius", "5mi");
+    q.app.shown(true);
+    q.step(200, kNoPlanes);
+    q.wait();
+    FCHECK(q.step(200, fr24_north({1.5}, q.now)) && q.last_url == fr24_at(250) && q.app.nearby().n == 1 &&
+               q.app.wide() == 250,
+           "found on the second read: %u", q.app.wide());
+    d.clear();
+    q.app.state(d.to<JsonObject>(), q.now);
+    FCHECK(d["status"] == "wide" && d["wide"] == 150 && d["radius"] == 5, "shown within 150");
+  }
+
+  // Nothing out to the widest: the standing screen, reads slower
+  Reads c;
+  c.app.setup();
+  c.app.set("flyhome", "40.71,-74.01");
+  c.app.set("flyradius", "150mi");
+  c.step(200, kNoPlanes);
+  FCHECK(c.app.wide() == 250 && c.app.poll_ms(c.now) == kFr24PollMs, "one step to the widest");
+  c.wait();
+  FCHECK(c.step(200, kNoPlanes) && c.last_url == fr24_at(250) && c.app.wide() == 250, "%s", c.last_url.c_str());
+  FCHECK(c.app.poll_ms(c.now) == 120000u, "then every two minutes: %u", c.app.poll_ms(c.now));
+  for (int w : {64, 128, 256})
+    for (int h : {64, 128}) {
+      if (w == 256 && h == 128)
+        continue;
+      f = espn::AppFrame();
+      c.app.frame(w, h, c.now, f);
+      FCHECK(f.sky.w > 0 && f.texts.size() >= 2 && f.texts.back().text.find("250 mi") != std::string::npos,
+             "%dx%d: %s", w, h, frame_text(f).c_str());
+    }
+  d.clear();
+  c.app.state(d.to<JsonObject>(), c.now);
+  FCHECK(d["status"] == "ok" && d["planes"] == 0 && d["wide"] == 250, "the page hears how far");
+  c.wait();
+  FCHECK(c.step(200, fr24_north({1.5}, c.now)) && c.app.nearby().n == 1 && c.app.poll_ms(c.now) == kFr24PollMs,
+         "a plane at 104 mi: the usual pace");
+
+  // adsb.fi asks for the wider distance too
+  Reads a;
+  a.app.setup();
+  a.app.set("flyhome", "-16.43,179.38");
+  a.app.set("flyradius", "50mi");
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/45") != std::string::npos, "%s", a.last_url.c_str());
+  a.wait();
+  FCHECK(a.step(200, "{\"ac\":[]}") && a.last_url.find("/dist/219") != std::string::npos, "%s", a.last_url.c_str());
+  espn::app_env().tz = 0;
+}
+
 void test_app() {
   const std::string fr24 = slurp(kFr24File);
   const std::string fi = slurp("fixtures/flights_adsbfi_jfk.json");
@@ -1213,6 +1527,10 @@ void test_app() {
   f = espn::AppFrame();
   r.app.frame(128, 64, r.now, f);
   FCHECK(frame_text(f) == "Looking for planes|", "before the first read: %s", frame_text(f).c_str());
+  // Its sky, filled from the home's place and time
+  FCHECK(f.sky.w == 128 && f.sky.h == 28 && f.sky.kind == 0 && f.sky.moon < 8 &&
+             f.sky.seed == espn::sky_seed("", r.now) && f.texts[0].y >= 28,
+         "a sky over the note: %dx%d seed %08x", f.sky.w, f.sky.h, (unsigned) f.sky.seed);
   FCHECK(r.app.poll_ms(r.now) == 0, "due at once");
   FCHECK(r.step(200, fr24) && r.last_url.find("data-cloud.flightradar24.com") != std::string::npos,
          "Flightradar24 first: %s", r.last_url.c_str());
@@ -1223,8 +1541,8 @@ void test_app() {
     // The airline logo as an icon the board loads
     espn::AppFrame wide;
     r.app.frame(256, 64, r.now, wide);
-    FCHECK(wide.icons.size() == 1 && wide.art.size() == 1, "a logo and a picture: %zu %zu", wide.icons.size(),
-           wide.art.size());
+    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0, "a logo and a picture: %zu %zu",
+           wide.icons.size(), wide.art.size());
     for (const espn::AppIcon &ic : wide.icons) {
       char url[160];
       const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, 0, url, sizeof url) : 0;
@@ -1256,7 +1574,7 @@ void test_app() {
     FCHECK(ph.url == "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg" && ph.x == kPhotoX &&
                ph.y == kPhotoY && ph.w == kPhotoW && ph.h == kPhotoH,
            "the photo in the picture's spot: %s", ph.url.c_str());
-    FCHECK(wide.art.size() == 1, "the picture until it loads");
+    FCHECK(wide.sky.w > 0, "the picture until it loads");
     std::string t = wide.ticker;
     t.insert(ph.at, ph.credit);
     FCHECK(t.rfind("27 planes nearby | SWA1678 Southwest", 0) == 0 &&
@@ -1310,7 +1628,7 @@ void test_app() {
     r.app.frame(w, 64, r.now + 16, f);
     FCHECK(app_has(f, "SWA1678") && !app_has(f, "N7QD"), "%d: then the card again", w);
   }
-  for (int w : {192, 256}) {
+  for (int w : {192}) {
     f = espn::AppFrame();
     r.app.frame(w, 64, r.now + 8, f);
     FCHECK(f.texts[0].text == "SWA1678" && frame_text(f).find("27 planes") != std::string::npos,
@@ -1447,7 +1765,7 @@ void test_app() {
   none.step(200, "{\"full_count\":1,\"version\":4}");
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
-  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "%s", frame_text(f).c_str());
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 16 km|", "%s", frame_text(f).c_str());
   FCHECK(!none.app.lit(none.now), "an empty sky lets it dim");
   for (int i = 0; i < 6; i++) {
     none.wait();
@@ -1455,7 +1773,7 @@ void test_app() {
   }
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
-  FCHECK(frame_text(f) == "No planes nearby|within 16 km|", "the last answer while it is fresh");
+  FCHECK(frame_text(f) == "Looking farther|Nothing within 16 km|", "the last answer while it is fresh");
   none.now += FlightsApp::kOldS;
   f = espn::AppFrame();
   none.app.frame(128, 64, none.now, f);
@@ -1633,8 +1951,7 @@ void test_photo_reads() {
   FCHECK(asked.size() <= n + 1, "a miss once: %zu", asked.size() - n);
   espn::AppFrame g;
   r.app.frame(256, 64, r.now, g);
-  FCHECK(g.photo.url.empty() && g.art.size() == 1, "the picture, no photo: %s %zu", g.photo.url.c_str(),
-         g.art.size());
+  FCHECK(g.photo.url.empty() && g.sky.w > 0, "the picture, no photo: %s %zu", g.photo.url.c_str(), g.art.size());
   FCHECK(r.app.photos().slots[0].state == PhotoState::NONE, "kept as a miss");
   // Off screen: none until a wide card is drawn again
   Reads s;
@@ -1649,11 +1966,284 @@ void test_photo_reads() {
   FCHECK(!s.app.request(s.now + 1, q) || q.url.find("planespotters") == std::string::npos, "off screen: none");
 }
 
+// Everything a frame hands the board, as one string.
+std::string frame_sig(const espn::AppFrame &f) {
+  std::string o;
+  char b[96];
+  for (const espn::AppText &t : f.texts) {
+    snprintf(b, sizeof b, "T%d,%d,%d,%d,%d,%06x:", t.x, t.y, t.w, (int) t.font, (int) t.align, (unsigned) t.color);
+    o += b + t.text + "\n";
+  }
+  for (const espn::AppArt &a : f.art) {
+    snprintf(b, sizeof b, "A%d,%d,%d,%d,%d,%d,%06x\n", a.x, a.y, a.w, a.h, a.flip, a.scale, (unsigned) a.ink[1]);
+    o += b;
+  }
+  // A plane in its sky: where its still picture was
+  const espn::AppSky &k = f.sky;
+  const PlaneSprite *sp = plane_sprite((PlaneKind) k.kind);
+  if (k.w > 0 && sp != nullptr) {
+    snprintf(b, sizeof b, "A%d,%d,%d,%d,%d,%d,%06x\n", k.x + (k.w - sp->w) / 2, k.y + (k.h - sp->h) / 2, sp->w, sp->h,
+             k.flip, k.scale, (unsigned) k.tail);
+    o += b;
+  } else if (k.w > 0) {
+    snprintf(b, sizeof b, "S%d,%d,%d,%d,%d\n", k.x, k.y, k.w, k.h, k.scale);
+    o += b;
+  }
+  for (const espn::AppIcon &i : f.icons) {
+    snprintf(b, sizeof b, "I%d,%d,%d,%d,%s\n", i.x, i.y, i.px, i.alt, i.key);
+    o += b;
+  }
+  snprintf(b, sizeof b, "P%d,%d,%d,%d,%zu,", f.photo.x, f.photo.y, f.photo.w, f.photo.h, f.photo.at);
+  o += b + f.photo.url + f.photo.credit + "\nK" + f.ticker + (f.map.w > 0 ? "\nM" : "\n");
+  return o;
+}
+
+uint32_t sig_hash(const std::string &s) {
+  uint32_t h = 2166136261u;
+  for (unsigned char c : s)
+    h = (h ^ c) * 16777619u;
+  return h;
+}
+
+Plane radar_plane(const char *cs, float north_nm, float east_nm, float track, Tier tier = Tier::AIR) {
+  Plane p;
+  snprintf(p.callsign, sizeof p.callsign, "%s", cs);
+  snprintf(p.hex, sizeof p.hex, "a%05x", (unsigned) sig_hash(cs) & 0xFFFFF);
+  p.lat = 40.71f + north_nm / 60.0f;
+  p.lon = -74.01f + east_nm / (60.0f * cosf(40.71f * 0.0174533f));
+  p.dist_nm = sqrtf(north_nm * north_nm + east_nm * east_nm);
+  p.track = track;
+  p.tier = tier;
+  return p;
+}
+
+// Four wide and 2x2 Full screen: the card beside a radar.
+void test_radar_frames() {
+  const std::string fr24 = slurp(kFr24File);
+  espn::app_env().tz = 0;
+  // Every other size draws as it did before the radar
+  {
+    Reads r;
+    r.app.setup();
+    std::string bare;
+    for (const auto &sz : {std::make_pair(128, 128), std::make_pair(256, 64)}) {
+      espn::AppFrame f;
+      r.app.frame(sz.first, sz.second, r.now, f);
+      bare += frame_sig(f);
+    }
+    r.app.set("flyhome", "40.71,-74.01");
+    r.app.set("flyradius", "28mi");
+    r.app.shown(true);
+    FCHECK(r.step(200, fr24), "planes");
+    std::string sig;
+    for (int w : {64, 128, 192})
+      for (int s : {0, 8, 16}) {
+        espn::AppFrame f;
+        r.app.frame(w, 64, r.now + s, f);
+        sig += frame_sig(f);
+      }
+    const Nearby &n = r.app.nearby();
+    FrameOpts o;
+    o.ticker = false;
+    std::string direct;
+    for (int w : {64, 128, 192, 256})
+      for (bool list : {false, true}) {
+        o.w = w;
+        o.list = list;
+        for (const Text &t : flight_frame(n, nullptr, o, 100).items)
+          direct += std::to_string(t.x) + "," + std::to_string(t.y) + t.text;
+      }
+    FCHECK(sig_hash(bare) == 0xeecf6540u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
+           (unsigned) sig_hash(bare));
+    FCHECK(sig_hash(sig) == 0xdcedfc3du, "64, 128 and 192 wide as before: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(direct) == 0x9b7325a1u, "the card and list as before: 0x%08x", (unsigned) sig_hash(direct));
+  }
+  for (int w = 32; w <= 320; w += 32)
+    for (int h : {32, 64, 96, 128})
+      FCHECK(radar_room(w, h) == ((w == 256 && h == 64) || (w == 128 && h == 128)), "radar room %dx%d", w, h);
+  for (const auto &sz : {std::make_pair(256, 64), std::make_pair(128, 128)}) {
+    const int w = sz.first, h = sz.second, hx = h == 64 ? 128 : 0, hy = h == 64 ? 0 : 64;
+    Reads r;
+    r.app.setup();
+    r.app.set("flyhome", "40.71,-74.01");
+    r.app.set("flyradius", "28mi");
+    r.app.shown(true);
+    FCHECK(r.step(200, fr24), "planes");
+    espn::AppFrame card, f;
+    r.app.frame(128, 64, r.now, card);
+    r.app.shown(true);
+    r.app.frame(w, h, r.now, f);
+    std::string want, got;
+    for (const espn::AppText &t : card.texts)
+      want += std::to_string(t.x) + "," + std::to_string(t.y) + t.text + "|";
+    for (const espn::AppText &t : f.texts)
+      got += std::to_string(t.x) + "," + std::to_string(t.y) + t.text + "|";
+    FCHECK(got == want, "%dx%d: the 128x64 card: %s", w, h, got.c_str());
+    FCHECK(f.ticker == card.ticker && f.ticker.rfind("27 planes nearby | SWA1678", 0) == 0, "%dx%d: today's ticker",
+           w, h);
+    FCHECK(f.art.size() == card.art.size() && f.icons.size() == card.icons.size() &&
+               memcmp(&f.sky, &card.sky, sizeof f.sky) == 0,
+           "%dx%d: its picture and logo", w, h);
+    const espn::AppMap &m = f.map;
+    FCHECK(m.radar == 1 && m.x == hx && m.y == hy && m.w == 128 && m.h == 56 && m.ring == 26 && m.inner == 13 &&
+               std::string(m.ring_text) == "28MI" && m.roads == 1,
+           "%dx%d: the radar at %d,%d %dx%d", w, h, m.x, m.y, m.w, m.h);
+    FCHECK(m.n_blips > 0 && m.tag_of == 0 && std::string(m.tag) == "SWA1678" &&
+               (m.blips[0].flags & espn::kBlipIsCard) && m.blips[0].ink == espn::kBlipCard,
+           "%dx%d: the nearest is the card's, tagged: %s", w, h, m.tag);
+    espn::AppFrame again;
+    r.app.frame(w, h, r.now + 3, again);
+    FCHECK(memcmp(&again.map, &m, sizeof m) == 0, "%dx%d: the same radar while nothing moves", w, h);
+    espn::AppFrame trimmed = f;
+    espn::app_frame_trim(trimmed);
+    FCHECK(trimmed.map.w == 128, "%dx%d: kept by the trim", w, h);
+    // 8 s later the list, numbered as on the radar
+    espn::AppFrame l;
+    r.app.frame(w, h, r.now + 8, l);
+    FCHECK(l.map.w == 0, "%dx%d: no radar on the list's turn", w, h);
+    int rows = 0;
+    bool head = false;
+    for (const espn::AppText &t : l.texts) {
+      if (t.x < hx || t.y < hy)
+        continue;
+      FCHECK(t.y + 8 <= hy + 56 && t.x + t.w <= hx + 128, "%dx%d: \"%s\" in the list's half", w, h, t.text.c_str());
+      head = head || (t.text == "Nearby" && t.y == hy);
+      if (t.x == hx + 1 && t.y > hy) {
+        const int k = (t.y - hy) / 8;
+        rows++;
+        FCHECK(t.text == std::to_string(k), "%dx%d: row %d numbered %s", w, h, k, t.text.c_str());
+      }
+    }
+    FCHECK(head && rows == 6, "%dx%d: the head and six rows: %d", w, h, rows);
+    FCHECK(l.ticker == f.ticker, "%dx%d: the ticker holds", w, h);
+    FCHECK(app_has(l, "SWA1678") && app_has(l, "Southwest"), "%dx%d: the card stays up", w, h);
+    // Each numbered blip is that row's plane
+    const Nearby &n = r.app.nearby();
+    for (int i = 0; i < m.n_blips; i++) {
+      const espn::AppBlip &b = m.blips[i];
+      if (b.number == 0)
+        continue;
+      std::string label;
+      for (const espn::AppText &t : l.texts)
+        if (t.x == hx + 7 && t.y == hy + 8 * b.number)
+          label = t.text;
+      bool match = false;
+      for (uint8_t k = 0; k < n.n; k++)
+        match = match || (list_number(n, 0, k, kRadarRows) == b.number && label == plane_label(n.planes[k]));
+      FCHECK(match, "%dx%d: blip %d is row %d, %s", w, h, i, b.number, label.c_str());
+    }
+    espn::AppFrame back;
+    r.app.frame(w, h, r.now + 16, back);
+    FCHECK(back.map.w == 128, "%dx%d: then the radar again", w, h);
+    // Before the first read and without a home: today's notes, whole
+    Reads q;
+    q.app.setup();
+    q.app.set("flyhome", "40.71,-74.01");
+    espn::AppFrame note;
+    q.app.frame(w, h, q.now, note);
+    FCHECK(frame_text(note) == "Looking for planes|" && note.map.w == 0, "%dx%d: the note", w, h);
+    // The card's plane alone: the radar, never an empty list
+    Reads one;
+    one.app.setup();
+    one.app.set("flyhome", "40.71,-74.01");
+    one.app.set("flyradius", "28mi");
+    one.app.shown(true);
+    FCHECK(one.step(200, fr24_north({0.1})) && one.app.nearby().n == 1, "%dx%d: one plane", w, h);
+    for (int s : {0, 8, 16}) {
+      espn::AppFrame o1;
+      one.app.frame(w, h, one.now + s, o1);
+      FCHECK(o1.map.w == 128 && o1.map.n_blips == 1 && !app_has(o1, "Nearby"),
+             "%dx%d at %d s: the radar stays for one plane", w, h, s);
+    }
+  }
+  // Three wide, the card's plane alone: the list says so
+  {
+    Reads one;
+    one.app.setup();
+    one.app.set("flyhome", "40.71,-74.01");
+    one.app.set("flyradius", "28mi");
+    one.app.shown(true);
+    FCHECK(one.step(200, fr24_north({0.1})), "one plane at 192");
+    espn::AppFrame o1;
+    one.app.frame(192, 64, one.now, o1);
+    bool said = false;
+    for (const espn::AppText &t : o1.texts)
+      said = said || (t.text == "No others" && t.x >= 128 && t.x + t.w <= 192);
+    FCHECK(said && app_has(o1, "1 plane"), "192x64: one plane, and no others: %s", frame_text(o1).c_str());
+    FCHECK(read_pos(one, fr24_north({0.1, 0.2})) && one.app.nearby().n == 2, "192x64: two planes");
+    espn::AppFrame o2;
+    one.app.frame(192, 64, one.now, o2);
+    FCHECK(!app_has(o2, "No others"), "192x64: two planes list the other");
+  }
+  // The blips themselves
+  Prefs p;
+  prefs_set(p, "flyhome", "40.71,-74.01");
+  prefs_set(p, "flyradius", "10mi");
+  const float r_nm = to_nm(10, DistUnit::MILES);
+  Nearby n;
+  n.planes[0] = radar_plane("NEAR1", 0.0f, -1.0f, 90);
+  n.planes[1] = radar_plane("", r_nm - 0.01f, 0.0f, 0);
+  snprintf(n.planes[1].reg, sizeof n.planes[1].reg, "N123AB");
+  n.planes[2] = radar_plane("CARD3", -3.0f, 2.0f, 180);
+  n.planes[3] = radar_plane("SOS4", 2.0f, 2.0f, 45);
+  n.planes[3].emergency = true;
+  n.planes[4] = radar_plane("NOTRK5", -2.0f, -4.0f, -1);
+  n.planes[5] = radar_plane("FAR6", r_nm + 0.5f, 0.0f, 0);
+  n.planes[6] = radar_plane("GND7", 1.0f, 5.0f, 10, Tier::GROUND);
+  n.planes[7] = radar_plane("SEV8", -5.0f, 5.0f, 270);
+  n.n = 8;
+  espn::AppMap m;
+  radar_map(n, 2, p, 0, 128, 0, m);
+  FCHECK(m.n_blips == 7, "the one past the ring left out: %d", m.n_blips);
+  const espn::AppBlip *edge = &m.blips[1];
+  FCHECK(edge->x == 64 && std::abs(edge->y - 2) <= 1, "one at the distance on the ring: %d,%d", edge->x, edge->y);
+  FCHECK(m.tag_of == 0 && std::string(m.tag) == "NEAR1", "the nearest tagged: %s", m.tag);
+  FCHECK(m.blips[2].ink == espn::kBlipCard && (m.blips[2].flags & espn::kBlipIsCard) && m.blips[2].number == 0,
+         "the card's plane marked, unnumbered");
+  FCHECK(m.blips[3].ink == espn::kBlipAlert, "the emergency red");
+  FCHECK(m.blips[4].ink == espn::kBlipPlane && !(m.blips[4].flags & espn::kBlipTrack), "no track: a dot");
+  FCHECK(m.blips[5].ink == espn::kBlipGround && (m.blips[5].flags & espn::kBlipOnGround), "on the ground");
+  FCHECK(m.blips[0].flags & espn::kBlipTrack && m.blips[0].track == 90, "a heading");
+  // The list's rows: the one past the ring is row 5 there
+  const int nums[7] = {1, 2, 0, 3, 4, 6, 0};
+  for (int i = 0; i < 7; i++)
+    FCHECK(m.blips[i].number == nums[i], "blip %d row %d", i, m.blips[i].number);
+  // No callsign: the registration
+  n.planes[0].callsign[0] = '\0';
+  snprintf(n.planes[0].reg, sizeof n.planes[0].reg, "g-abcd");
+  radar_map(n, 2, p, 0, 0, 64, m);
+  FCHECK(std::string(m.tag) == "G-ABCD" && m.y == 64, "the registration, upper case: %s", m.tag);
+  FCHECK(std::string(m.ring_text) == "10MI" && m.inner == 13, "10MI with a 5 mi ring");
+  prefs_set(p, "flyradius", "25km");
+  radar_map(n, 2, p, 0, 0, 64, m);
+  FCHECK(std::string(m.ring_text) == "25KM" && m.inner == 0, "25KM, no half ring");
+  // Never more than eight
+  Nearby full;
+  for (int i = 0; i < (int) kNear; i++)
+    full.planes[i] = radar_plane("P", 0.5f * (i + 1), 0.0f, 0);
+  full.n = kNear;
+  radar_map(full, 0, p, 0, 0, 64, m);
+  FCHECK(m.n_blips == espn::kAppBlips && m.blips[7].number == 0, "eight at most, the seventh row has no number");
+  // A home by the 180th meridian sees planes across it
+  Prefs dl;
+  prefs_set(dl, "flyhome", "-16.43,179.95");
+  prefs_set(dl, "flyradius", "10mi");
+  Nearby across;
+  across.planes[0] = radar_plane("EAST1", 0.0f, 3.0f, 90);
+  across.planes[0].lat = -16.43f;
+  across.planes[0].lon = -179.95f;
+  across.n = 1;
+  radar_map(across, 0, dl, 0, 0, 64, m);
+  FCHECK(m.n_blips == 1 && m.blips[0].x > 64 && m.blips[0].x < 64 + kRadarRing && std::abs(m.blips[0].y - 28) <= 1,
+         "across the line, just east: %d %d,%d", m.n_blips, m.blips[0].x, m.blips[0].y);
+}
+
 int run_flight_tests(int &total_checks) {
   test_fr24();
   test_fr24_url();
   test_prefs();
   test_app();
+  test_widen();
   test_photo_parts();
   test_photo_reads();
   test_adsbfi();
@@ -1672,6 +2262,7 @@ int run_flight_tests(int &total_checks) {
   test_pick();
   test_frames();
   test_tall_frames();
+  test_radar_frames();
   test_notes();
   test_ticker();
   total_checks += checks;

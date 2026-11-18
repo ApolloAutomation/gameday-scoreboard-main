@@ -9,6 +9,7 @@
 #include <ctime>
 #include <new>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -178,6 +179,66 @@ struct AppPhoto {
 };
 constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 120;
 
+// Landmarks under a radar (landmarks.h); compared as bytes.
+struct AppMapKeep {
+  int16_t x{0}, y{0}, w{0}, h{0};
+};
+// A plane on the radar, in canvas pixels.
+enum : uint8_t { kBlipPlane = 0, kBlipCard, kBlipAlert, kBlipGround };
+enum : uint8_t { kBlipTrack = 1, kBlipOnGround = 2, kBlipIsCard = 4 };
+struct AppBlip {
+  int16_t x{0}, y{0}, track{0};  // track in degrees
+  uint8_t ink{kBlipPlane};
+  uint8_t flags{0};
+  uint8_t number{0};  // its list row; 0 none
+  uint8_t pad{0};
+};
+constexpr int kAppBlips = 8;
+struct AppMap {
+  int16_t x{0}, y{0}, w{0}, h{0};  // area-local; w 0: none
+  int32_t lat_e4{0}, lon_e4{0};    // the map's middle
+  int32_t scale_q16{0};            // canvas px per zoom-7 world px
+  uint32_t set_id{0};              // the component fills it
+  AppMapKeep keep[4]{};            // boxes no place label covers
+  uint8_t roads{0};
+  uint8_t ring{0};  // a circle's radius labels stay off; 0 none
+  // The plane radar's rings, home and planes over the map
+  uint8_t radar{0};
+  uint8_t inner{0};  // dotted inner ring's radius; 0 none
+  char ring_text[6]{};
+  char tag[9]{};  // the nearest plane's name
+  int8_t tag_of{-1};  // its blip; -1 none
+  uint8_t n_blips{0};
+  uint8_t wide{0};  // read past the owner's distance
+  char inner_text[4]{};  // the inner ring's label
+  uint8_t pad[2]{};
+  AppBlip blips[kAppBlips]{};
+};
+static_assert(std::has_unique_object_representations_v<AppMap>, "AppMap compares as bytes");
+// The view's canvas buffers' cap.
+constexpr int kAppMapMaxW = 128, kAppMapMaxH = 120;
+
+// The sky a display knows now (Weather's).
+struct SkyNow {
+  bool day{true};
+  uint8_t cover{0};  // 0 clear to 3 overcast
+  uint8_t fall{0};   // 0 none, 1 rain, 2 snow
+  uint8_t fog{0}, wind{0};
+};
+enum : uint8_t { kSkyDay = 1, kSkyWx = 2, kSkyStill = 4 };
+// A drawn plane in a small moving sky (sky.h); compared as bytes.
+struct AppSky {
+  int16_t x{0}, y{0};  // area-local
+  uint8_t w{0}, h{0};  // w 0: none
+  uint8_t kind{0};     // a flights::PlaneKind; 0 the sky alone
+  uint8_t flip{0}, scale{1}, flags{0};
+  uint8_t cover{0}, fall{0}, fog{0}, wind{0}, moon{0}, pad{0};
+  uint32_t tail{0};
+  uint32_t seed{0};
+};
+static_assert(std::has_unique_object_representations_v<AppSky>, "AppSky compares as bytes");
+constexpr int kAppSkyMaxW = 128, kAppSkyMaxH = 48;
+
 // RGB565 then alpha, as runtime_image lays logos out.
 inline void app_art_paint(const AppArt &a, uint8_t *out) {
   const int s = a.scale < 1 ? 1 : a.scale, ow = a.w * s, n = ow * a.h * s;
@@ -205,6 +266,8 @@ struct AppFrame {
   std::vector<AppArt> art;
   AppFill bar;
   AppPhoto photo;
+  AppMap map;
+  AppSky sky;
 };
 
 // Full screen: the rows as labels, pitch apart from y0.
@@ -299,6 +362,12 @@ inline void app_frame_trim(AppFrame &f) {
     f.photo = AppPhoto();
   else if (p.w == 0 || p.h == 0)
     p.w = p.h = 0;
+  const AppMap &m = f.map;
+  if (m.x < 0 || m.y < 0 || m.w < 16 || m.h < 16 || m.w > kAppMapMaxW || m.h > kAppMapMaxH || m.scale_q16 <= 0)
+    f.map = AppMap();
+  const AppSky &k = f.sky;
+  if (k.x < 0 || k.y < 0 || k.w > kAppSkyMaxW || k.h > kAppSkyMaxH || k.scale < 1 || k.w < k.scale || k.h < k.scale)
+    f.sky = AppSky();
 }
 
 // Flat x, y pairs clipped to the area.
@@ -483,11 +552,15 @@ struct AppResult {
 };
 
 // What displays need from the panel; the component sets it.
+struct LandSet;
+
 struct AppEnv {
   struct tm (*local)(int64_t epoch){nullptr};  // null reads UTC
   uint8_t tz{0};  // index into kTimezones
   std::string version;  // the firmware's, "2026.11.2"
   uint32_t (*ms)(){nullptr};  // millis(), for animations; null is 0
+  const LandSet *land{nullptr};  // the map landmarks, main loop only
+  bool still{false};  // night hours or Off or dim: no motion
 };
 
 inline AppEnv &app_env() {
@@ -580,6 +653,8 @@ class App {
   virtual uint32_t redraw_ms() const { return 0; }
   // Its boxed photo failed, its stand-in too.
   virtual void photo_failed(int64_t /*now*/) {}
+  // The sky at home now, if it knows; false for none.
+  virtual bool sky(int64_t /*now*/, SkyNow & /*out*/) const { return false; }
 };
 
 // The displays this firmware has, by Display.

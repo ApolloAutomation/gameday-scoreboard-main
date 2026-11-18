@@ -688,8 +688,14 @@ jobs:
           bash scripts/keep_previous_ota.sh --selftest
           bash scripts/check_live_feed.sh --selftest
           python3 scripts/check_docs_links.py --selftest
+          python3 scripts/build_landmarks.py --selftest
+          bash scripts/add_land_files.sh --selftest
       - name: sprites.h is built from the current art
         run: python3 scripts/build_sprites.py --check
+      - name: Map landmark files check
+        run: python3 scripts/build_landmarks.py --check
+      - name: The small font's Latin-1 is built from Spleen
+        run: python3 scripts/build_small_font.py --check
       - name: Site pages have their search and sharing tags
         run: python3 scripts/site_seo.py check docs/site
       - name: Device page mock matches the firmware's set table
@@ -802,6 +808,9 @@ jobs:
           python3 scripts/site_seo.py build site
           ls -R site
           bash scripts/check_site_firmware.sh site "$GITHUB_REF_NAME"
+      # Map landmark formats only beta has yet, for beta panels.
+      - name: Add beta's map landmark files
+        run: bash scripts/add_land_files.sh site
       # Keep the bar panels' beta channel on the site through a release.
       - name: Add the beta channel
         env:

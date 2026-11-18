@@ -18,6 +18,12 @@ namespace esphome::gameday {
 
 struct UpdateFields;
 
+// A display's map canvas and its drawn plane's sky
+struct AppPics {
+  ::espn::AppMap map;
+  ::espn::AppSky sky;
+};
+
 // Index 0 is the team, 1 the opponent; nullptr skipped
 struct BoardView {
   lv_obj_t *game{nullptr};
@@ -74,11 +80,19 @@ struct BoardView {
   Art art[::espn::kAppArt];
   lv_obj_t *bar{nullptr};  // its box, under the rows
   lv_obj_t *photo{nullptr};  // its photo, under the rest
-  // Football's field under the labels, made on first use
+  // Football's field or a map, made on first use
   lv_obj_t *field{nullptr};
   uint16_t *field_buf{nullptr}, *field_next{nullptr};  // shown, and painted
   size_t field_px{0};
   ::espn::FieldPic field_shown{};
+  ::espn::AppMap map_shown{};
+  uint8_t canvas_kind{0};  // 0 none, 1 field, 2 map
+  // A drawn plane's moving sky, made on first use
+  lv_obj_t *sky{nullptr};
+  uint16_t *sky_buf{nullptr}, *sky_next{nullptr};  // shown, and painted
+  lv_timer_t *sky_timer{nullptr};
+  ::espn::AppSky sky_shown{};
+  uint32_t sky_t0{0};
   const lv_font_t *f8{nullptr}, *f12{nullptr}, *f16{nullptr}, *f24{nullptr}, *f32{nullptr};
   image::Image *blank{nullptr};  // a logo slot with nothing in it
   int16_t w{0};          // the board's width, from board_layout
@@ -160,6 +174,8 @@ struct AreaView {
 
 // The bound area, or nullptr before binding
 AreaView *area_view();
+// A view's AppPics slot (PSRAM, filled by the component)
+AppPics *&view_pics(const BoardView &v);
 // Once only, in PSRAM; nullptr when out of memory
 AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
                      image::Image *blank);

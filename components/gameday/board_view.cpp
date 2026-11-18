@@ -9,15 +9,19 @@
 
 #include <esp_heap_caps.h>
 
+#include "esphome/core/hal.h"
+
 #include "alerts.h"
 #include "badge.h"
 #include "board_layout.h"
 #include "espn_parse.h"
 #include "gameday.h"
+#include "landmarks.h"
 #include "logo_lru.h"
 #include "panel_text.h"
 #include "scene_view.h"
 #include "setup_qr.h"
+#include "sky.h"
 
 static_assert(LV_TXT_COLOR_CMD[0] == esphome::gameday::kRecolorCmd, "__init__.py defines LV_TXT_COLOR_CMD");
 
@@ -369,6 +373,13 @@ void put_icons(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Bottom up: the canvas, the photo, the box
+void sink_layers(BoardView &v) {
+  for (lv_obj_t *o : {v.bar, v.photo, v.field})
+    if (o != nullptr)
+      lv_obj_move_to_index(o, 0);
+}
+
 // The box under the board's labels, made on first use
 void put_bar(BoardView &v, const UpdateFields &f) {
   const ::espn::AppFill &b = f.bar;
@@ -377,9 +388,7 @@ void put_bar(BoardView &v, const UpdateFields &f) {
     if (!on || v.board == nullptr)
       return;
     v.bar = plain_bar(v.board, b.color);
-    lv_obj_move_to_index(v.bar, 0);
-    if (v.photo != nullptr)
-      lv_obj_move_to_index(v.photo, 0);
+    sink_layers(v);
   }
   if (on) {
     if (lv_obj_get_style_x(v.bar, LV_PART_MAIN) != b.x || lv_obj_get_style_y(v.bar, LV_PART_MAIN) != b.y)
@@ -535,21 +544,53 @@ void put_art(BoardView &v, const UpdateFields &f) {
   }
 }
 
+// Takes the painted pixels; redraws only the box that changed
+void blit(lv_obj_t *o, uint16_t *shown, const uint16_t *next, int bw, int bh, bool fresh) {
+  int x0 = bw, y0 = bh, x1 = -1, y1 = -1;
+  for (int y = 0; y < bh; y++)
+    for (int x = 0; x < bw; x++) {
+      const size_t i = (size_t) y * bw + x;
+      if (!fresh && shown[i] == next[i])
+        continue;
+      x0 = std::min(x0, x);
+      x1 = std::max(x1, x);
+      y0 = std::min(y0, y);
+      y1 = std::max(y1, y);
+      shown[i] = next[i];
+    }
+  if (fresh) {
+    lv_obj_invalidate(o);
+  } else if (x1 >= 0) {
+    // LVGL takes screen coordinates: the area's are offset
+    lv_area_t c, a;
+    lv_obj_get_coords(o, &c);
+    lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
+    lv_obj_invalidate_area(o, &a);
+  }
+}
+
 // Only the pixels that changed redraw
 void put_field(BoardView &v, const UpdateFields &f) {
   const ::espn::FieldPic &pic = f.field_pic;
-  if (!f.board || !f.field || pic.w <= 0 || pic.h <= 0) {
+  static const ::espn::AppMap kNoMap{};
+  // Another display's frame: its view's map
+  const AppPics *pics = f.game_state == "APP" ? view_pics(v) : nullptr;
+  const ::espn::AppMap &map = pics != nullptr ? pics->map : kNoMap;
+  const uint8_t kind = !f.board ? 0 : f.field && pic.w > 0 && pic.h > 0 ? 1 : !f.field && map.w > 0 && map.h > 0 ? 2 : 0;
+  if (kind == 0) {
     show(v.field, false);
     return;
   }
-  const size_t n = (size_t) pic.w * pic.h;
+  const int16_t bx = kind == 1 ? pic.x : map.x, by = kind == 1 ? pic.y : map.y;
+  const int16_t bw = kind == 1 ? pic.w : map.w, bh = kind == 1 ? pic.h : map.h;
+  const size_t n = (size_t) bw * bh;
   if (n > v.field_px) {
     heap_caps_free(v.field_buf);
     heap_caps_free(v.field_next);
     v.field_buf = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     v.field_next = static_cast<uint16_t *>(heap_caps_malloc(n * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     v.field_px = v.field_buf != nullptr && v.field_next != nullptr ? n : 0;
-    v.field_shown = ::espn::FieldPic();
+    v.canvas_kind = 0;
     if (v.field_px == 0) {
       show(v.field, false);
       return;
@@ -560,46 +601,112 @@ void put_field(BoardView &v, const UpdateFields &f) {
       return;
     v.field = lv_canvas_create(v.board);
     lv_obj_remove_flag(v.field, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-    lv_obj_move_to_index(v.field, 0);
+    sink_layers(v);
   }
   const ::espn::FieldPic &was = v.field_shown;
-  const bool fresh = was.w != pic.w || was.h != pic.h || was.x != pic.x || was.y != pic.y;
+  const ::espn::AppMap &mwas = v.map_shown;
+  const bool fresh = v.canvas_kind != kind ||
+                     (kind == 1 ? was.w != pic.w || was.h != pic.h || was.x != pic.x || was.y != pic.y
+                                : mwas.w != map.w || mwas.h != map.h || mwas.x != map.x || mwas.y != map.y);
   if (fresh) {
-    lv_canvas_set_buffer(v.field, v.field_buf, pic.w, pic.h, LV_COLOR_FORMAT_RGB565);
-    lv_obj_set_pos(v.field, pic.x, pic.y);
-    lv_obj_set_size(v.field, pic.w, pic.h);
+    lv_canvas_set_buffer(v.field, v.field_buf, bw, bh, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(v.field, bx, by);
+    lv_obj_set_size(v.field, bw, bh);
   }
-  if (fresh || !::espn::field_same(pic, v.field_shown)) {
+  const bool changed = kind == 1 ? !::espn::field_same(pic, was) : memcmp(&map, &mwas, sizeof map) != 0;
+  if (fresh || changed) {
     ::espn::Px565 p;
     p.px = v.field_next;
-    p.w = p.stride = pic.w;
-    p.h = pic.h;
-    p.clip = ::espn::PxBox{0, 0, pic.w, pic.h};
-    ::espn::field_paint(p, pic);
-    int x0 = pic.w, y0 = pic.h, x1 = -1, y1 = -1;
-    for (int y = 0; y < pic.h; y++)
-      for (int x = 0; x < pic.w; x++) {
-        const size_t i = (size_t) y * pic.w + x;
-        if (!fresh && v.field_buf[i] == v.field_next[i])
-          continue;
-        x0 = std::min(x0, x);
-        x1 = std::max(x1, x);
-        y0 = std::min(y0, y);
-        y1 = std::max(y1, y);
-        v.field_buf[i] = v.field_next[i];
-      }
-    if (fresh) {
-      lv_obj_invalidate(v.field);
-    } else if (x1 >= 0) {
-      // LVGL takes screen coordinates: the area's are offset
-      lv_area_t c, a;
-      lv_obj_get_coords(v.field, &c);
-      lv_area_set(&a, c.x1 + x0, c.y1 + y0, c.x1 + x1, c.y1 + y1);
-      lv_obj_invalidate_area(v.field, &a);
-    }
-    v.field_shown = pic;
+    p.w = p.stride = bw;
+    p.h = bh;
+    p.clip = ::espn::PxBox{0, 0, bw, bh};
+    if (kind == 1)
+      ::espn::field_paint(p, pic);
+    else
+      ::espn::map_paint(p, map, ::espn::app_env().land);
+    blit(v.field, v.field_buf, v.field_next, bw, bh, fresh);
+    if (kind == 1)
+      v.field_shown = pic;
+    else
+      v.map_shown = map;
+    v.canvas_kind = kind;
   }
   show(v.field, true);
+}
+
+// The drawn plane's sky at this moment; still holds its first pose
+void sky_draw(BoardView &v, bool fresh) {
+  ::espn::AppSky s = v.sky_shown;
+  if (::espn::app_env().still)
+    s.flags |= ::espn::kSkyStill;
+  ::espn::Px565 p;
+  p.px = v.sky_next;
+  p.w = p.stride = s.w;
+  p.h = s.h;
+  p.clip = ::espn::PxBox{0, 0, s.w, s.h};
+  ::espn::sky_paint(p, s, millis() - v.sky_t0);
+  blit(v.sky, v.sky_buf, v.sky_next, s.w, s.h, fresh);
+}
+
+void sky_tick(lv_timer_t *t) {
+  BoardView &v = *static_cast<BoardView *>(lv_timer_get_user_data(t));
+  // Hidden or another page: rests until the next frame
+  if (v.sky == nullptr || lv_obj_has_flag(v.sky, LV_OBJ_FLAG_HIDDEN) ||
+      lv_obj_get_screen(v.sky) != lv_screen_active()) {
+    lv_timer_pause(t);
+    return;
+  }
+  sky_draw(v, false);
+  if (::espn::app_env().still)
+    lv_timer_pause(t);
+}
+
+// The frame's moving sky, its own canvas and timer
+void put_sky(BoardView &v, const UpdateFields &f) {
+  const AppPics *pics = f.game_state == "APP" ? view_pics(v) : nullptr;
+  if (!f.board || pics == nullptr || pics->sky.w == 0 || pics->sky.h == 0) {
+    show(v.sky, false);
+    if (v.sky_timer != nullptr)
+      lv_timer_pause(v.sky_timer);
+    return;
+  }
+  if (v.sky_buf == nullptr) {
+    const size_t bytes = (size_t) ::espn::kAppSkyMaxW * ::espn::kAppSkyMaxH * 2;
+    v.sky_buf = static_cast<uint16_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    v.sky_next = static_cast<uint16_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (v.sky_buf == nullptr || v.sky_next == nullptr) {
+      heap_caps_free(v.sky_buf);
+      heap_caps_free(v.sky_next);
+      v.sky_buf = v.sky_next = nullptr;
+      return;
+    }
+  }
+  if (v.sky == nullptr) {
+    if (v.board == nullptr)
+      return;
+    v.sky = lv_canvas_create(v.board);
+    lv_obj_remove_flag(v.sky, (lv_obj_flag_t) (LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    v.sky_shown = ::espn::AppSky();
+  }
+  const ::espn::AppSky &s = pics->sky;
+  ::espn::AppSky &was = v.sky_shown;
+  const bool fresh = lv_obj_has_flag(v.sky, LV_OBJ_FLAG_HIDDEN) || was.x != s.x || was.y != s.y || was.w != s.w ||
+                     was.h != s.h;
+  if (fresh) {
+    lv_canvas_set_buffer(v.sky, v.sky_buf, s.w, s.h, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(v.sky, s.x, s.y);
+    lv_obj_set_size(v.sky, s.w, s.h);
+  }
+  if (memcmp(&s, &was, sizeof s) != 0) {
+    was = s;
+    v.sky_t0 = millis();
+  }
+  show(v.sky, true);
+  sky_draw(v, fresh);
+  if (v.sky_timer == nullptr)
+    v.sky_timer = lv_timer_create(sky_tick, ::espn::kSkyFrameMs, &v);
+  if (v.sky_timer != nullptr && !::espn::app_env().still)
+    lv_timer_resume(v.sky_timer);
 }
 
 // The frame's photo, from the logo cache
@@ -614,7 +721,7 @@ void put_photo(BoardView &v, const UpdateFields &f) {
     v.photo = lv_image_create(v.board);
     lv_obj_remove_style_all(v.photo);
     // Under the labels, lines and pictures
-    lv_obj_move_to_index(v.photo, 0);
+    sink_layers(v);
   }
   const lv_image_dsc_t *src = f.photo_img->get_lv_image_dsc();
   if (lv_image_get_src(v.photo) != src)
@@ -945,6 +1052,7 @@ DrawResult board_draw(BoardView &v, const UpdateFields &f, image::Image *team_lo
   put_art(v, f);
   put_photo(v, f);
   put_field(v, f);
+  put_sky(v, f);
   // Hidden game layout lends its ticker so it keeps scrolling
   lv_obj_t *host = v.game;
   switch (ticker_host(no_game, f.clock || f.board_card, f.board, f.join_line)) {
@@ -1185,6 +1293,15 @@ void clock_tick(const struct tm &t, bool card_date) {
 }
 
 AreaView *area_view() { return area_ptr; }
+
+AppPics *&view_pics(const BoardView &v) {
+  // The main board and the second area's
+  static const BoardView *who[2];
+  static AppPics *pics[2];
+  const int i = who[0] == &v || who[0] == nullptr ? 0 : 1;
+  who[i] = &v;
+  return pics[i];
+}
 
 AreaView *area_build(lv_obj_t *root, lv_obj_t *time, lv_obj_t *date, lv_obj_t *ticker, const BoardView &fonts,
                      image::Image *blank) {

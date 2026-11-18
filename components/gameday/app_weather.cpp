@@ -8,6 +8,7 @@
 #include "board_layout.h"
 #include "app_flights.h"
 #include "flights.h"
+#include "landmarks.h"
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize("Os")
@@ -181,6 +182,24 @@ bool WeatherApp::home_(int32_t &lat, int32_t &lon) const { return espn::app_home
 
 bool WeatherApp::for_home_(Read r, int32_t lat, int32_t lon) const {
   return r == Read::RADAR || (this->lat_[(int) r] == lat && this->lon_[(int) r] == lon);
+}
+
+bool WeatherApp::sky(int64_t now, espn::SkyNow &out) const {
+  if (!this->fresh_(Read::FORECAST, now))
+    return false;
+  const Now &n = this->fc_.now;
+  out.day = n.day;
+  for (uint8_t i = 0; i < this->fc_.n_days; i++) {
+    const Day &d = this->fc_.days[i];
+    if (d.sunrise > 0 && d.sunset > d.sunrise && now >= d.at && now < d.at + 86400)
+      out.day = now >= d.sunrise && now < d.sunset;
+  }
+  const uint8_t c = n.code;
+  out.cover = c <= 3 ? c : 3;
+  out.fog = c == 45 || c == 48;
+  out.fall = snowy(c) ? 2 : c >= 51 ? 1 : 0;
+  out.wind = n.gust_kmh10 > 300;
+  return true;
 }
 
 bool WeatherApp::fresh_(Read r, int64_t now) const {
@@ -951,7 +970,9 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   ph.keep_art = true;
   // Said until a frame draws
   ph.alt = (int8_t) out.texts.size();
-  put(out, 0, bh / 2 - 4, bw, BoardFont::S8, AppAlign::CENTER, kGray, bw >= 70 ? "Loading radar" : "Loading");
+  const char *loading = bw >= 70 ? "Loading radar" : "Loading";
+  const int lw = 5 * (int) strlen(loading);
+  put(out, 1, bh - 8, lw, BoardFont::S8, AppAlign::LEFT, kGray, loading);
   const bool rv = this->rv_(now);
   const int64_t t = rv ? this->rad_.t[k] : iem_frame_time(now, k, kFrames);
   put(out, 1, 0, 30, BoardFont::S8, AppAlign::LEFT, k + 1 == n ? kWhite : kGray, clock_text(espn::app_local(t)));
@@ -959,7 +980,23 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   const char *unit = u.mph ? "mi" : "km";
   int dist = 0, r = 0;
   const int cx = bw / 2, cy = bh / 2;
-  if (radar_ring(lat, bw, bh, u.mph, dist, r)) {
+  const bool ring = radar_ring(lat, bw, bh, u.mph, dist, r);
+  // Landmarks under the rain, where the images are
+  espn::AppMap &m = out.map;
+  m.w = (int16_t) bw;
+  m.h = (int16_t) bh;
+  m.lat_e4 = round_e4(lat);
+  m.lon_e4 = round_e4(lon);
+  m.scale_q16 = (int32_t) lroundf(espn::map_scale_weather(bw, bh) * 65536.0f);
+  m.keep[0] = espn::AppMapKeep{1, 0, 30, 8};
+  if (dist != 0)
+    m.keep[1] = espn::AppMapKeep{(int16_t) (bw - 26), (int16_t) (bh - 8), 25, 8};
+  // Lines and names keep 2 px off the words
+  m.keep[2] = espn::AppMapKeep{0, (int16_t) (bh - 10), (int16_t) (lw + 3), 10};
+  m.roads = bw >= 128;
+  // Names keep off it; it stays over the rain
+  m.ring = (uint8_t) r;
+  if (ring) {
     for (int i = 0; i <= 40; i++) {
       const float a = (float) i * 6.2831853f / 40.0f;
       out.line.pts.push_back({(int16_t) lroundf(cx + r * cosf(a)), (int16_t) lroundf(cy + r * sinf(a))});

@@ -1,6 +1,9 @@
 .esphome/
 firmware/.esphome/
 *.bin
+# Map landmark files and the set built from them
+!docs/site/land/**/*.bin
+!tests/fixtures/land_*.bin
 tests/build/
 secrets.yaml
 __pycache__/

@@ -70,27 +70,31 @@ struct MapCanvas {
     }
   }
 
-  // RGB565, low byte first, opaque.
+  // RGB565 low byte first, then an alpha plane.
   void finish(uint8_t *out) const {
-    for (int i = 0; i < this->bw * this->bh; i++) {
+    const int n = this->bw * this->bh;
+    for (int i = 0; i < n; i++) {
       const MapCell &c = this->cells[i];
-      uint32_t r = 0, g = 0, b = 0;
+      uint32_t r = 0, g = 0, b = 0, cover = 0;
       if (c.a > 0 && c.n > 0) {
         // The color under the ink, then its coverage
         uint32_t lift = std::min<uint32_t>(255, (uint32_t) c.a * kMapLift / c.n);
+        cover = lift;
         r = std::min<uint32_t>(255, (uint32_t) c.r * 256 / c.a);
         g = std::min<uint32_t>(255, (uint32_t) c.g * 256 / c.a);
         b = std::min<uint32_t>(255, (uint32_t) c.b * 256 / c.a);
         const uint32_t top = std::max(r, std::max(g, b));
         if (top > 0 && top < kMapVivid)
           lift = lift * kMapVivid / top;
-        r = std::min<uint32_t>(255, r * lift / 255);
-        g = std::min<uint32_t>(255, g * lift / 255);
-        b = std::min<uint32_t>(255, b * lift / 255);
+        // Over black this is the lit color
+        r = cover ? std::min<uint32_t>(255, std::min<uint32_t>(255, r * lift / 255) * 255 / cover) : 0;
+        g = cover ? std::min<uint32_t>(255, std::min<uint32_t>(255, g * lift / 255) * 255 / cover) : 0;
+        b = cover ? std::min<uint32_t>(255, std::min<uint32_t>(255, b * lift / 255) * 255 / cover) : 0;
       }
       const uint16_t v = (uint16_t) (((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
       out[2 * i] = (uint8_t) (v & 0xFF);
       out[2 * i + 1] = (uint8_t) (v >> 8);
+      out[2 * n + i] = (uint8_t) cover;
     }
   }
 };

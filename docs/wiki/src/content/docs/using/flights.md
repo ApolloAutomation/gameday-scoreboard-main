@@ -50,16 +50,35 @@ The card also shows the airline's logo and a picture of the plane.
 
 The list of the nearest planes, nearest first, has each one's callsign, type code, altitude and distance, or just the callsign and the distance where the list is one panel wide. Its first line says how many planes are nearby.
 
+**The picture moves.** When the card shows the plane's picture rather than a photo, the picture moves in a small sky of its own: it rides a slow wave up and down where there's room, a helicopter's rotor and a propeller plane's propellers turn, and a jet leaves a short dashed contrail as clouds drift past it. A plane whose type isn't known keeps a still picture. Behind it, clouds drift slowly by, a few birds glide across now and then by day, the sun sits in a corner by day, and the moon (in its phase) and a few softly twinkling stars come out at night. Wind streaks show on a gusty day. When [Weather](/using/weather/) is set up and has read the forecast for the same home, the sky follows it: clear, partly cloudy or overcast, with rain, snow or fog, and day and night from that day's sunrise and sunset. Without Weather, day and night come from the sun's place over your home, and the clouds are made up. Each plane gets its own sky, and it changes every ten minutes.
+
+Everything moves slowly and stays dim, so the plane is always the brightest thing in the picture and nothing flashes: a rotor or a propeller takes a small step four times a second, and no light goes on and off more than twice a second. During the night hours, and while **Off or dim** has dimmed the panel, the picture and its sky hold still.
+
+The notes the Flight Tracker shows instead of a plane, like **Looking for planes**, have a band of the same sky above their words when the area is at least 64 LEDs tall.
+
+On three panels in a row, when the plane on the card is the only one nearby, the list beside it says **No others**.
+
+On a card 128 wide or more, an airline's name too long for the room beside a long callsign is left off rather than cut (the logo still shows), and a plane whose type isn't known shows its registration on the type's line, like **N123AB**, or **Type unknown** when there's none.
+
 | Area | What it shows |
 | --- | --- |
 | 64x64 (one panel, or the right panel of three wide) | The card and the list take turns, about 8 seconds each. A speed too wide for the card, like 1185 km/h, shows as the number alone. |
 | 128x64 (one 128x64 panel, the right two panels of four wide, either half of two rows of two) | The card and the list take turns, about 8 seconds each. |
-| Three or four panels in a row, with no second area | The card on the left and the list beside it, together. |
+| Three panels in a row, with no second area | The card on the left and the list beside it, together. |
 
-**Full screen on two rows of two.** With **Full screen** on under **Shows** (see [The second area](/using/panel-sizes/#the-second-area)), the Flight Tracker fills all four panels, 128x128, and the card and the list still take turns, about 8 seconds each:
+**A radar on the extra panels.** When the Flight Tracker has the whole of four wide (with **Nothing** picked, or **Full screen** on) or of two rows of two (with **Full screen** on), half the panels show a radar of the planes around your home:
 
-- **The card**: the airline's logo big, 32 LEDs square, at the top left, the callsign in big letters beside it with the airline's name and the plane's type under it, then the route in big letters, like **ATL-BDL**, with the flight number at its right. The plane's photo fills the width of the panel under that, about 126 by 52 LEDs, cut to that shape, and until it comes in, or with no photo, the plane's picture shows there at twice its size, or three times for a small plane like a business jet or a helicopter. Under the picture are the altitude and the speed, then how far away and in which direction, and whether it's climbing, level or descending.
-- **The list**: the nearest seven planes, each with its airline's logo and two lines: the callsign and the distance, then the type, the route and the altitude.
+- On four wide, the nearest plane's card stays on the left two panels, and the right two panels show the radar and the nearby list in turn, about 8 seconds each.
+- On two rows of two, the top half shows the 128x64 card, with its photo or picture, and the bottom half shows the radar and the nearby list in turn. The list shows six planes with their type, altitude and distance, and the routes of the nearest three stay in the ticker.
+- When the plane on the card is the only one nearby, the radar stays on screen rather than an empty list.
+
+On the radar, your home is the white dot in the middle, north is up (the **N** on the ring), and the ring is your **Within** distance, labeled at the bottom right, like **10MI**. When the distance is an even number, a dotted ring marks half of it. Each plane is a small arrow pointing the way it's flying, or a dot when its heading isn't known; a short dash is a plane on the ground. The plane on the card is yellow with brackets around it, so the two halves read together, and a plane in an emergency is red. Planes farther than your distance are left out.
+
+The town or city your home is in is named near the white dot, clear of the planes' labels, when there's room for it. The nearest plane has its callsign beside it (its registration when it has no callsign). The others carry the number of their row in the nearby list, which is numbered **1** to **6** on these two layouts, so a row in the list can be found on the radar. A number with no room beside its plane is left off.
+
+Under the planes, the radar shows the same [map landmarks](/using/weather/#what-the-panel-shows) as Weather's radar, when your browser has added them: nearby towns, state lines, coastlines and highways, dim so the planes stand out. A home by the 180th meridian sees planes on both sides of it, but its landmarks stop at the meridian. Without them the radar shows the rings and the planes on black. Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+
+Every other size, and the Flight Tracker in a second area, shows the card and the list as in the table above.
 
 The ticker along the bottom says how many planes are nearby, then the nearest three, with the airline, the type, the route, the altitude, the speed and where each one is.
 
@@ -69,8 +88,24 @@ The panel shows a message instead of planes when it has none to show:
 
 - **Set your location on the device page**: there's no home location yet.
 - **Looking for planes**: the first answer hasn't come in yet, or the Flight Tracker has just come back on screen.
-- **No planes nearby**, with the distance under it: nothing is flying within your **Within** distance right now. A plane the flight data has no recent position for doesn't count as nearby.
+- **Looking farther**, with the distance it found empty under it, like **Nothing within 10 mi**: nothing is flying within your **Within** distance right now, so the panel looks farther, as below. A plane the flight data has no recent position for doesn't count as nearby.
+- **No planes nearby right now**, with **Checked out to 250 mi** under it: nothing is flying even 250 miles out.
 - **Can't reach flight data**: three reads in a row failed, and the panel has no planes from the last 3 minutes. The panel keeps trying.
+
+**The Flight Tracker always has something to show.** When a read finds no plane within your **Within** distance, the next read looks all the way out to 250 miles (400 km, or 200 nautical miles), at the usual pace. Meanwhile it shows **Looking farther**, with the distance it just found empty under it, like **Nothing within 10 mi**. From what that read finds, the panel picks the smallest of the distances 15, 25, 50, 100, 150 and 250 miles (25, 50, 100, 150, 250 and 400 km, or up to 200 nautical miles) that holds the nearest plane, shows the planes within it, and keeps reading one distance wider so a plane drifting out stays found.
+
+Once it finds a plane, it shows the nearest ones it found and says plainly that they're farther than your distance:
+
+- every distance is in yellow instead of green;
+- the list's first line says how far it looked, like **Within 50 mi**, in place of **Nearby**;
+- the ticker starts with **No planes within 10 mi. Nearest: 42 mi SW**;
+- on the radar the ring is the wider distance, its label in yellow, like **50MI**, and a dotted ring with a small label, like **10**, marks your own distance (left out when it would be a tiny circle).
+
+Your **Within** distance never changes. As soon as a plane is inside it again, the panel shows only the planes inside it, as usual; it keeps reading the wider circle for 5 minutes after the last plane it found farther out, so a plane passing through doesn't make it flip back and forth, then reads your distance again. A new home, distance or receiver starts over at your distance.
+
+When there's nothing at all out to 250 miles (400 km, 200 nautical miles), the panel shows a calm sky with **No planes nearby right now** and **Checked out to 250 mi**, and reads every 2 minutes until a plane shows up. The device page's line says so too, like **No planes within 10 mi; showing the nearest, up to 50 mi away.**
+
+A wider read asks the flight data service for a bigger circle, so it's a larger download, and it only happens while the sky near you is empty.
 
 At night, with [night hours](/using/brightness-and-clock/#night-hours) on, the clock takes the Flight Tracker's place until they end, and the device page says so.
 
@@ -106,4 +141,8 @@ The receiver's planes need no internet, but their routes still come from adsb.im
 
 The home location stays on the panel, to four decimal places (about 10 meters), with the place's name if you looked one up. Each read sends the flight data service a box around it, not the spot itself: the center is rounded to about a kilometer first, and the box reaches a little past your **Within** distance all around it. adsb.fi and adsb.lol get that rounded center and the distance. The panel still works out each plane's distance and direction from your exact spot. Route lookups send only the planes' callsigns and positions, over plain HTTP to adsb.im. A logo download sends only the airline's code, never your location, and a photo lookup only the plane's address or registration.
 
-Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel. **Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.
+Looking up a town or a ZIP code goes from your browser to Open-Meteo's place search, not from the panel.
+
+Setting the home on the device page also has your browser read map landmarks for [Weather's radar](/using/weather/#what-the-panel-shows), and for the flight radar on four panels in a row or two rows of two, from this project's site: the same files for every home in the home's 4-degree square (about 440 km across), so only which square the home is in leaves your browser, never the home itself. The card's **Radar map** row shows how that went, with **Add landmarks** for a home set before v2026.11.10; see [The device page](/using/device-page/). Map landmarks from [Natural Earth](https://www.naturalearthdata.com) and [GeoNames](https://www.geonames.org) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+
+**Clear** removes the location from the panel, and a [factory reset](/using/buttons-and-resets/) does too.

@@ -69,6 +69,7 @@ class WeatherApp final : public espn::App {
   uint32_t redraw_ms() const override { return this->redraw_; }
   void photo_failed(int64_t now) override;
   std::string ticker_warning(int64_t now, uint32_t &color) const override;
+  bool sky(int64_t now, espn::SkyNow &out) const override;
 
   // The pages to rotate now, in order.
   size_t rotation(int64_t now, Page *out, size_t cap) const;
