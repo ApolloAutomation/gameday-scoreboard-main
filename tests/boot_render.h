@@ -18,7 +18,6 @@ struct BootShot {
   int dog{1};  // boot_view's dog request
   bool qr{false};
   uint32_t since_ms{1}, now_ms{1};
-  bool blink{false};
   // Code modules, top row first; empty draws a stand-in
   std::vector<std::vector<bool>> code;
 };
@@ -38,7 +37,7 @@ inline Canvas boot_render(const BootShot &s, const ReviewFonts &fonts) {
     p.px = buf.data();
     p.w = p.h = p.stride = kDogSize;
     p.clip = PxBox{0, 0, kDogSize, kDogSize};
-    paint_apollo(p, s.blink, s.w >= 128);
+    paint_apollo(p);
     for (int y = 0; y < kDogSize; y++)
       for (int x = 0; x < kDogSize; x++)
         cv.put(b.dog.x + x, b.dog.y + y, buf[(size_t) y * kDogSize + x]);

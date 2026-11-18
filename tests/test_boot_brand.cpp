@@ -1,7 +1,8 @@
-// Apollo Pulse's start-up screen: Apollo's art, his blink, the layouts.
+// Apollo Pulse's start-up screen: Apollo's logo, the layouts.
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <string>
 #include <vector>
 
@@ -27,104 +28,90 @@ int failures = 0;
     }                                             \
   } while (0)
 
-// One frame of apollo.txt as legend slots
-std::vector<std::vector<int>> art_rows(const std::string &frame) {
-  std::ifstream in("../firmware/art/sprites/apollo.txt");
-  std::string line, legend;
-  std::vector<std::vector<int>> rows;
-  bool mine = false;
-  while (std::getline(in, line)) {
-    if (line.rfind("@legend ", 0) == 0)
-      legend = line.substr(8);
-    else if (line.rfind("@frame ", 0) == 0)
-      mine = line.rfind("@frame " + frame + " ", 0) == 0;
-    else if (line.empty() || line[0] == '#')
-      mine = mine && !line.empty();
-    else if (mine) {
-      std::vector<int> r;
-      for (char c : line)
-        r.push_back((int) legend.find(c));
-      rows.push_back(r);
-    }
-  }
-  return rows;
-}
-
-std::vector<std::vector<int>> decode(const RleSprite &s) {
-  std::vector<std::vector<int>> rows(s.h, std::vector<int>(s.w));
-  int i = 0;
-  for (int k = 0; k < s.n; k++)
-    for (int j = 0; j <= (s.runs[k] & 15); j++, i++)
-      if (i < s.w * s.h)
-        rows[i / s.w][i % s.w] = s.runs[k] >> 4;
-  BCHECK(i == s.w * s.h, "runs cover %d of %d pixels", i, s.w * s.h);
-  return rows;
-}
-
-std::vector<uint16_t> dog_px(bool blink, bool ledge) {
+std::vector<uint16_t> dog_px() {
   std::vector<uint16_t> buf((size_t) kDogSize * kDogSize, 0x1234);
   Px565 p;
   p.px = buf.data();
   p.w = p.h = p.stride = kDogSize;
   p.clip = PxBox{0, 0, kDogSize, kDogSize};
-  paint_apollo(p, blink, ledge);
+  paint_apollo(p);
   return buf;
 }
 
-int count(const std::vector<uint16_t> &px, uint16_t c) {
-  int n = 0;
-  for (uint16_t v : px)
-    n += v == c;
-  return n;
+int r8(uint16_t c) { return (c >> 11) * 255 / 31; }
+int g8(uint16_t c) { return ((c >> 5) & 63) * 255 / 63; }
+int b8(uint16_t c) { return (c & 31) * 255 / 31; }
+bool near(uint16_t c, uint32_t rgb, int tol) {
+  return abs(r8(c) - (int) (rgb >> 16)) <= tol && abs(g8(c) - (int) ((rgb >> 8) & 255)) <= tol &&
+         abs(b8(c) - (int) (rgb & 255)) <= tol;
 }
 
 void test_art() {
-  const RleSprite &face = kSprApollo[SPR_APOLLO_FACE];
-  const RleSprite &blink = kSprApollo[SPR_APOLLO_BLINK];
-  BCHECK(decode(face) == art_rows("apollo.face"), "the packed face is apollo.txt's");
-  BCHECK(decode(blink) == art_rows("apollo.blink"), "the packed blink is apollo.txt's");
-  BCHECK(face.w <= kDogSize && face.h < kDogLedgeY, "face %dx%d sits above the ledge", face.w, face.h);
-  const PxBox fb{(int16_t) (kDogNoseX - face.ax), (int16_t) (kDogNoseY - face.ay), face.w, face.h};
-  BCHECK(fb.x >= 0 && fb.y >= 0 && fb.x + fb.w <= kDogSize && fb.y + fb.h <= kDogLedgeY, "face inside the box");
+  BCHECK(kApolloNavy == kBrandNavy, "apollo_logo.h laid on today's navy: rerun build_apollo.py");
+  BCHECK(kApolloH == kDogSize && kApolloW > 40 && kApolloW <= kDogSize, "Apollo %dx%d in his box", kApolloW,
+         kApolloH);
+  const int n = (int) (sizeof kApolloPal / sizeof kApolloPal[0]);
+  for (uint8_t i : kApolloPx)
+    BCHECK(i < n, "index %d past the palette", i);
 
-  const std::vector<uint16_t> px = dog_px(false, true);
+  const std::vector<uint16_t> px = dog_px();
   auto at = [&](int x, int y) { return px[(size_t) y * kDogSize + x]; };
-  const uint16_t *pal = apollo_palette();
-  BCHECK(at(kDogNoseX, kDogNoseY) == pal[1], "the nose's top is black");
-  BCHECK(count(px, pal[5]) == 2, "two eye glints: %d", count(px, pal[5]));
-  BCHECK(count(px, pal[4]) > 40, "a red tongue: %d px", count(px, pal[4]));
-  BCHECK(count(px, pal[3]) > 800, "mostly orange: %d px", count(px, pal[3]));
-  BCHECK(count(px, 0x1234) == 0, "every pixel painted");
+  const uint16_t navy = rgb565(kBrandNavy);
+  BCHECK(std::count(px.begin(), px.end(), (uint16_t) 0x1234) == 0, "every pixel painted");
   for (int c : {0, kDogSize - 1})
     for (int r : {0, kDogSize - 1})
-      BCHECK(at(c, r) == rgb565(kBrandNavy), "corner %d,%d navy", c, r);
-  for (int x = 1; x < kDogSize - 1; x++)
-    BCHECK(at(x, kDogLedgeY) == pal[1], "ledge at x %d", x);
-  BCHECK(dog_px(false, false)[(size_t) kDogLedgeY * kDogSize + 1] == rgb565(kBrandNavy), "no ledge when asked");
-}
+      BCHECK(at(c, r) == navy, "corner %d,%d navy", c, r);
+  for (int y = 0; y < kDogSize; y++)
+    for (int x = 0; x < (kDogSize - kApolloW) / 2; x++)
+      BCHECK(at(x, y) == navy && at(kDogSize - 1 - x, y) == navy, "navy beside him at row %d", y);
 
-void test_blink() {
-  const std::vector<uint16_t> open = dog_px(false, true), shut = dog_px(true, true);
-  const PxBox b = apollo_blink_box();
-  int changed = 0;
+  // The logo's own colors
+  int orange = 0, charcoal = 0, tongue = 0, ink = 0;
+  for (uint16_t c : px) {
+    orange += near(c, 0xD47C3D, 12);
+    charcoal += near(c, 0x3D3D3B, 12);
+    tongue += near(c, 0xAE4144, 12);
+    ink += near(c, 0x0F0E0C, 12);
+  }
+  BCHECK(orange > 400 && charcoal > 250 && tongue > 60 && ink > 300, "orange %d charcoal %d tongue %d ink %d", orange,
+         charcoal, tongue, ink);
+
+  // An eye's glint each side, in the upper half
+  int glint_l = 0, glint_r = 0;
+  for (int y = 16; y < 40; y++)
+    for (int x = 0; x < kDogSize; x++) {
+      const uint16_t c = at(x, y);
+      if (r8(c) > 140 && g8(c) > 140 && b8(c) > 140)
+        (x < kDogSize / 2 ? glint_l : glint_r)++;
+    }
+  BCHECK(glint_l >= 1 && glint_r >= 1, "glints left %d right %d", glint_l, glint_r);
+
+  // No light halo: what touches navy is navy or darker
+  const int navy_sum = r8(navy) + g8(navy) + b8(navy);
   for (int y = 0; y < kDogSize; y++)
     for (int x = 0; x < kDogSize; x++) {
-      const size_t i = (size_t) y * kDogSize + x;
-      if (open[i] == shut[i])
+      const uint16_t c = at(x, y);
+      if (c == navy)
         continue;
-      changed++;
-      BCHECK(x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h, "blink changes %d,%d outside its band", x, y);
+      bool edge = false;
+      for (int d = 0; d < 4; d++) {
+        const int nx = x + (d == 0) - (d == 1), ny = y + (d == 2) - (d == 3);
+        edge |= nx >= 0 && ny >= 0 && nx < kDogSize && ny < kDogSize && at(nx, ny) == navy;
+      }
+      if (edge)
+        BCHECK(r8(c) + g8(c) + b8(c) <= navy_sum + 24, "light edge at %d,%d", x, y);
     }
-  BCHECK(changed > 10 && changed < 80, "a blink changes %d pixels", changed);
-  BCHECK(count(shut, apollo_palette()[5]) == 0, "both eyes shut");
-  // Repainting only the band restores the open face
-  std::vector<uint16_t> buf = shut;
-  Px565 p;
-  p.px = buf.data();
-  p.w = p.h = p.stride = kDogSize;
-  p.clip = b;
-  paint_apollo(p, false, true);
-  BCHECK(buf == open, "the band alone reopens his eyes");
+
+  // His ledge: the bar covers it on one panel
+  int ledge = 0;
+  for (int x = 0; x < kDogSize; x++)
+    ledge += r8(at(x, kApolloLedgeY)) + g8(at(x, kApolloLedgeY)) + b8(at(x, kApolloLedgeY)) < navy_sum;
+  BCHECK(ledge * 10 >= kApolloW * 9, "the ledge row %d holds %d dark px", kApolloLedgeY, ledge);
+  const BootBoxes one = boot_boxes(64, 64, false, true);
+  BCHECK(one.bar.y <= kApolloLedgeY && kApolloLedgeY < one.bar.y + one.bar.h && one.bar.y + one.bar.h == kDogSize,
+         "one panel's bar %d covers the ledge %d", one.bar.y, kApolloLedgeY);
+  BCHECK(one.bar.x <= (kDogSize - kApolloW) / 2 && one.bar.x + one.bar.w >= (kDogSize + kApolloW) / 2,
+         "the bar spans the ledge");
 }
 
 void test_timing() {
@@ -134,56 +121,6 @@ void test_timing() {
   BCHECK(dog_turn(1000, 9000), "and round again");
   BCHECK(dog_turn(0xFFFFF800u, 0x00000100u) && !dog_turn(0xFFFFF800u, 0x00001000u), "survives the millis() wrap");
 
-  for (uint32_t seed : {0u, 1u, 0x2F6A70u, 0xDEADBEEFu}) {
-    bool was = false;
-    uint32_t shut_at = 0, last_open_end = 0, last_start = 0;
-    int blinks = 0, doubles = 0, starts = 0;
-    for (uint32_t t = 0; t < 10 * 60 * 1000; t += 10) {
-      const bool on = blink_on(t, seed);
-      if (on && !was) {
-        shut_at = t;
-        const uint32_t gap = t - last_open_end;
-        if (blinks > 0 && gap < 1000) {
-          doubles++;
-          BCHECK(gap == kBlinkShutMs, "the double's open spell %u ms", (unsigned) gap);
-        } else {
-          if (starts > 0)
-            BCHECK(t - last_start >= 4200 && t - last_start <= 6000, "seed %u: %u ms between blinks",
-                   (unsigned) seed, (unsigned) (t - last_start));
-          last_start = t;
-          starts++;
-        }
-        blinks++;
-      }
-      if (!on && was) {
-        BCHECK(t - shut_at == kBlinkShutMs, "eyes shut %u ms", (unsigned) (t - shut_at));
-        last_open_end = t;
-      }
-      was = on;
-    }
-    BCHECK(starts >= 100 && starts <= 143, "seed %u: %d blinks in 10 min", (unsigned) seed, starts);
-    BCHECK(doubles * 3 >= starts - 3 && doubles * 3 <= starts + 3, "every third a double: %d of %d", doubles,
-           starts);
-  }
-  // Neighbouring panels' blinks rarely start together
-  int starts = 0, together = 0, worst = 0;
-  for (uint32_t a = 0x2F6A70u; a < 0x2F6A70u + 20; a++) {
-    int mine = 0, both = 0;
-    bool was = false;
-    for (uint32_t t = 0; t < 600000; t += 10) {
-      const bool on = blink_on(t, a);
-      if (on && !was) {
-        mine++;
-        both += blink_on(t, a + 1);
-      }
-      was = on;
-    }
-    starts += mine;
-    together += both;
-    worst = both * 100 / mine > worst ? both * 100 / mine : worst;
-  }
-  BCHECK(together * 20 < starts, "%d of %d blinks start with the next panel's", together, starts);
-  BCHECK(worst < 25, "at worst %d%% of one pair's blinks together", worst);
 }
 
 struct Size {
@@ -269,14 +206,13 @@ void test_screens() {
   for (const Size &s : kSizes)
     for (int qr = 0; qr < 2; qr++)
       for (int dog = 0; dog < 4; dog++)
-        for (int blink = 0; blink < 2; blink++) {
+        {
           BootShot shot;
           shot.w = s.w;
           shot.h = s.h;
           memcpy(shot.lines, busy, sizeof busy);
           shot.qr = qr;
           shot.dog = dog;
-          shot.blink = blink;
           shot.pct = 100;
           const Canvas cv = boot_render(shot, fonts);
           const double d = boot_drive(cv);
@@ -302,7 +238,6 @@ void test_screens() {
 
 int run_boot_brand_tests(int &total_checks) {
   test_art();
-  test_blink();
   test_timing();
   test_boxes();
   test_screens();

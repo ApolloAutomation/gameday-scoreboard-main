@@ -77,9 +77,10 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   device page's `http://<ip>/` (`components/gameday/setup_qr.h`). `boot_view`
   sets it with `lv_qrcode_update`, only when the text changes. The overlay
   wears the Apollo Pulse brand: navy, APOLLO PULSE, a green-on-blue bar and
-  Apollo the dog, a 64x64 canvas (`boot_dog.cpp`) painted from the run-packed
-  `apollo` sprite with a blink every few seconds. `boot_brand.h` places the
-  dog, the QR box and the words for each panel layout.
+  Apollo the dog, a 64x64 canvas (`boot_dog.cpp`) painted from Apollo
+  Automation's logo, scaled to 64 rows by `scripts/build_apollo.py` from
+  `firmware/art/apollo/apollo.png` into `apollo_logo.h`. `boot_brand.h`
+  places the dog, the QR box and the words for each panel layout.
 - `gameday-live.yaml`: the scoreboard page's widgets, for boards 64, 128,
   192 and 256 pixels wide, with the splashes and fireworks (which splashes
   get them: `splash_fireworks`, `alerts.h`). `tt_bind_view` hands the
@@ -971,7 +972,8 @@ Generators (`build_web.py`, `build_teams.py`, `build_team_colors.py`,
 `build_timezones.py`, `build_circuits.py` for `circuits.h`,
 `build_airlines.py` for `flight_airlines.h`, and `build_sprites.py`, which
 packs the play animations' art in `firmware/art/sprites/*.txt` into
-`sprites.h`), release and site helpers (`release_notes.py`,
+`sprites.h`, and `build_apollo.py`, which scales Apollo Automation's logo
+in `firmware/art/apollo/apollo.png` into `apollo_logo.h`), release and site helpers (`release_notes.py`,
 `site_seo.py`, `check_site_firmware.sh`, `add_beta_channel.sh`,
 `beta_version.sh`, `set_manifest_name.sh`, `keep_previous_ota.sh`,
 `check_live_feed.sh`, `publish_mirror.sh`, `check_docs_links.py`), the size
@@ -979,9 +981,10 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
 `burnin_monitor.py`, `improv_scan.py`, `crash_report.py`,
 `bar_report_qr.sh`). Every Python tool but the generators has
 `--selftest`, and so do `build_airlines.py`, `build_sprites.py`,
-`beta_version.sh`, `set_manifest_name.sh`, `keep_previous_ota.sh` and
-`check_live_feed.sh`; CI's `build_sprites.py --check` fails a stale
-`sprites.h`.
+`build_apollo.py`, `beta_version.sh`, `set_manifest_name.sh`,
+`keep_previous_ota.sh` and `check_live_feed.sh`; CI's `build_sprites.py
+--check` and `build_apollo.py --check` fail a stale `sprites.h` or
+`apollo_logo.h`.
 
 ## Tests (`tests/`)
 

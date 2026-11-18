@@ -244,8 +244,8 @@ script:
           lv_obj_set_width(id(boot_bar), b.bar.w);
           lv_obj_set_pos(id(boot_bar), b.bar.x, b.bar.y);
           if (!b.qr.empty()) lv_obj_set_pos(id(boot_qr_box), b.qr.x, b.qr.y);
-          // One 64x64: the bar is his ledge
-          if (b.dog.empty() || !gameday::boot_dog_show(id(boot_overlay), b.dog.x, b.dog.y, W >= 128))
+          // One 64x64: the bar covers his ledge
+          if (b.dog.empty() || !gameday::boot_dog_show(id(boot_overlay), b.dog.x, b.dog.y))
             gameday::boot_dog_hide();
 
   # Pick the layout (see boot_layout) and show the QR code holding qr, or
@@ -668,7 +668,6 @@ script:
                 const bool wide = gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default()), 3);
                 id(boot_qr_cycle).execute(0, false);
                 id(boot_view).execute("", 3);
-                gameday::boot_dog_open();
                 if (wide)
                   id(boot_set_lines).execute("Updating", "Keep it plugged in", "Back in a minute", "", false);
                 else
@@ -966,9 +965,6 @@ interval:
           id(boot_bar_value) = (id(boot_bar_value) + 3) % 130;
           int v = id(boot_bar_value) > 100 ? 100 : id(boot_bar_value);
           lv_bar_set_value(id(boot_bar), v, LV_ANIM_OFF);
-          // Panels side by side blink apart
-          static const uint32_t seed = fnv1_hash(App.get_name());
-          gameday::boot_dog_blink(millis(), seed);
   - interval: 100ms
     id: boot_hold_check
     then:

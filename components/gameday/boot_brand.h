@@ -3,8 +3,8 @@
 
 #include <cstdint>
 
+#include "apollo_logo.h"
 #include "px565.h"
-#include "sprites.h"
 
 namespace esphome::gameday {
 
@@ -15,37 +15,17 @@ static const uint32_t kBrandGreen = 0x9ABD32;
 static const uint32_t kBrandOrange = 0xD57D3B;
 static const uint32_t kBrandLight = 0xD4E8F8;
 
-// Apollo's palette, by apollo.txt's legend
-inline const uint16_t *apollo_palette() {
-  static const uint16_t kPal[16] = {0,
-                                    ::espn::rgb565(0x000000),
-                                    ::espn::rgb565(0x5A5A57),
-                                    ::espn::rgb565(kBrandOrange),
-                                    ::espn::rgb565(0xB34845),
-                                    ::espn::rgb565(0xFFFFFF)};
-  return kPal;
-}
-
 static const int kDogSize = 64;
-// Top of the nose in the dog's box
-static const int kDogNoseX = 32, kDogNoseY = 34;
-static const int kDogLedgeY = 59;
+// His ledge's rows: where one panel's bar sits
+static const int kDogBarY = kDogSize - 3;
 
-// The eye band the blink repaints, in the dog's box
-inline ::espn::PxBox apollo_blink_box() {
-  const ::espn::RleSprite &b = ::espn::kSprApollo[::espn::SPR_APOLLO_BLINK];
-  return ::espn::PxBox{(int16_t) (kDogNoseX - b.ax), (int16_t) (kDogNoseY - b.ay), (int16_t) b.w, (int16_t) b.h};
-}
-
-// Navy, Apollo, shut eyes on blink, his ledge
-inline void paint_apollo(::espn::Px565 &p, bool blink, bool ledge) {
-  const uint16_t *pal = apollo_palette();
+// Navy, then Apollo centered in his 64x64 box
+inline void paint_apollo(::espn::Px565 &p) {
   p.fill(0, 0, kDogSize, kDogSize, ::espn::rgb565(kBrandNavy));
-  ::espn::px_sprite_rle(p, ::espn::kSprApollo[::espn::SPR_APOLLO_FACE], kDogNoseX, kDogNoseY, pal, 1);
-  if (blink)
-    ::espn::px_sprite_rle(p, ::espn::kSprApollo[::espn::SPR_APOLLO_BLINK], kDogNoseX, kDogNoseY, pal, 1);
-  if (ledge)
-    p.hline(1, kDogLedgeY, kDogSize - 2, pal[1]);
+  const int x0 = (kDogSize - ::espn::kApolloW) / 2, y0 = kDogSize - ::espn::kApolloH;
+  for (int y = 0; y < ::espn::kApolloH; y++)
+    for (int x = 0; x < ::espn::kApolloW; x++)
+      p.put(x0 + x, y0 + y, ::espn::kApolloPal[::espn::kApolloPx[y * ::espn::kApolloW + x]]);
 }
 
 // Words: 64 px, 128 px or more, or beside Apollo
@@ -68,7 +48,7 @@ inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog, bool tall = false) 
       b.qr = slot(0, 0);
     if (dog && !qr) {
       b.dog = slot(0, 0);
-      b.bar = ::espn::PxBox{4, kDogLedgeY, 56, 3};
+      b.bar = ::espn::PxBox{4, kDogBarY, 56, 3};
       return b;
     }
     b.mode = BootWords::NARROW;
@@ -154,32 +134,6 @@ inline bool boot_dog_wanted(int W, int H, int dog, bool qr, uint32_t since_ms, u
 // Words get 128 px or more for this request
 inline bool boot_words_wide(int W, int H, int dog = 1) {
   return boot_boxes(W, H, false, boot_dog_wanted(W, H, dog, false, 0, 0)).cw >= 128;
-}
-
-// A blink every 4.2 to 6 s
-static const uint32_t kBlinkSlotMs = 5100, kBlinkJitterMs = 900, kBlinkShutMs = 120;
-inline uint32_t blink_hash(uint32_t v) {
-  v ^= v >> 16;
-  v *= 0x7FEB352Du;
-  v ^= v >> 15;
-  v *= 0x846CA68Bu;
-  v ^= v >> 16;
-  return v;
-}
-
-// Eyes shut now; every third blink is a double
-inline bool blink_on(uint32_t now_ms, uint32_t seed) {
-  // Each panel's slots start at its own phase
-  now_ms += blink_hash(seed) % kBlinkSlotMs;
-  const uint32_t slot = now_ms / kBlinkSlotMs;
-  const uint32_t at = blink_hash(slot ^ seed) % kBlinkJitterMs;
-  const uint32_t t = now_ms % kBlinkSlotMs;
-  if (t < at)
-    return false;
-  const uint32_t in = t - at;
-  if ((slot + seed) % 3 == 2)
-    return in < kBlinkShutMs || (in >= 2 * kBlinkShutMs && in < 3 * kBlinkShutMs);
-  return in < kBlinkShutMs;
 }
 
 }  // namespace esphome::gameday
