@@ -1,8 +1,11 @@
 // The Flight Tracker display (app_flights.h).
 #include "app_flights.h"
 
+#include <cmath>
 #include <cstring>
 
+#include "landmarks.h"
+#include "sky.h"
 #include "timezones.h"
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -110,6 +113,15 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     ic.mark = true;
     out.icons.push_back(ic);
   }
+  const Sky &k = fr.sky;
+  out.sky.x = k.x;
+  out.sky.y = k.y;
+  out.sky.w = k.w;
+  out.sky.h = k.h;
+  out.sky.scale = k.scale;
+  out.sky.kind = (uint8_t) k.kind;
+  out.sky.flip = k.flip;
+  out.sky.tail = k.tail;
   out.photo.x = fr.photo.x;
   out.photo.y = fr.photo.y;
   out.photo.w = fr.photo.w;
@@ -125,6 +137,17 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
 // ---- Settings ----------------------------------------------------------------
 
 uint16_t radius_max(DistUnit u) { return u == DistUnit::KM ? 400 : u == DistUnit::NM ? 200 : 250; }
+
+uint16_t next_step(DistUnit u, uint16_t from) {
+  // The page's choices, then wider, to radius_max
+  static const uint16_t kSteps[3][8] = {{5, 10, 15, 25, 50, 100, 150, 250},
+                                        {5, 10, 25, 50, 100, 150, 250, 400},
+                                        {5, 10, 15, 25, 50, 100, 150, 200}};
+  for (uint16_t s : kSteps[(int) u <= 2 ? (int) u : 0])
+    if (s > from)
+      return s;
+  return 0;
+}
 
 const char *dist_unit_key(DistUnit u) { return u == DistUnit::KM ? "km" : u == DistUnit::NM ? "nm" : "mi"; }
 
@@ -261,6 +284,75 @@ void prefs_state(const Prefs &p, const Units &u, JsonObject out) {
   out["units"] = u.dist == DistUnit::MILES ? "imperial" : "metric";
 }
 
+bool radar_room(int w, int h) { return (w == 256 && h == 64) || (w == 128 && h == 128); }
+
+void radar_map(const Nearby &n, uint8_t card, const Prefs &p, uint16_t wide, int x, int y, espn::AppMap &m) {
+  m = espn::AppMap();
+  m.x = (int16_t) x;
+  m.y = (int16_t) y;
+  m.w = kRadarW;
+  m.h = kRadarH;
+  m.lat_e4 = p.lat_e4;
+  m.lon_e4 = p.lon_e4;
+  m.roads = 1;
+  m.radar = 1;
+  m.ring = kRadarRing;
+  const uint16_t reach = wide > p.radius ? wide : p.radius;
+  m.inner = p.radius % 2 == 0 ? kRadarRing / 2 : 0;
+  if (reach != p.radius) {
+    // The owner's distance inside, labeled when it shows
+    m.wide = 1;
+    m.inner = (uint8_t) (kRadarRing * p.radius / reach);
+    if (m.inner < 3)
+      m.inner = 0;
+    else
+      snprintf(m.inner_text, sizeof m.inner_text, "%u", p.radius > 999 ? 999u : (unsigned) p.radius);
+  }
+  const float r_nm = to_nm(reach, (DistUnit) p.radius_unit);
+  m.scale_q16 = (int32_t) lroundf(espn::map_scale_ring(p.lat_e4, kRadarRing, r_nm * 1852.0f) * 65536.0f);
+  snprintf(m.ring_text, sizeof m.ring_text, "%u%s", reach > 999 ? 999u : (unsigned) reach,
+           p.radius_unit == (uint8_t) DistUnit::KM ? "KM" : p.radius_unit == (uint8_t) DistUnit::NM ? "NM" : "MI");
+  const espn::MapProj pr = espn::map_proj(m.lat_e4, m.lon_e4, m.scale_q16 / 65536.0f, m.w, m.h);
+  if (card >= n.n)
+    card = 0;
+  for (uint8_t i = 0; i < n.n && m.n_blips < espn::kAppBlips; i++) {
+    const Plane &pl = n.planes[i];
+    int bx, by;
+    if (pl.tier == Tier::NOPOS || pl.dist_nm < 0 || pl.dist_nm > r_nm || !espn::map_xy(pr, pl.lat, pl.lon, bx, by))
+      continue;
+    // Mercator may push it past the ring: back onto it
+    const float dx = bx - pr.ox, dy = by - pr.oy, d = sqrtf(dx * dx + dy * dy);
+    if (d > kRadarRing) {
+      bx = pr.ox + (int) lroundf(dx * kRadarRing / d);
+      by = pr.oy + (int) lroundf(dy * kRadarRing / d);
+    }
+    espn::AppBlip &b = m.blips[m.n_blips];
+    b.x = (int16_t) bx;
+    b.y = (int16_t) by;
+    const bool ground = pl.tier == Tier::GROUND;
+    b.ink = pl.emergency ? espn::kBlipAlert : i == card ? espn::kBlipCard : ground ? espn::kBlipGround : espn::kBlipPlane;
+    b.flags = (uint8_t) ((i == card ? espn::kBlipIsCard : 0) | (ground ? espn::kBlipOnGround : 0));
+    if (!ground && pl.track >= 0) {
+      b.track = (int16_t) lroundf(pl.track);
+      b.flags |= espn::kBlipTrack;
+    }
+    b.number = list_number(n, card, i, kRadarRows);
+    // The nearest drawn: its callsign, else registration
+    const char *name = pl.callsign[0] != '\0' ? pl.callsign : pl.reg;
+    if (m.tag_of < 0 && name[0] != '\0') {
+      size_t k = 0;
+      for (const char *c = name; *c != '\0' && k + 1 < sizeof m.tag; c++)
+        if (*c != ' ' && espn::font3x5_has(*c))
+          m.tag[k++] = (char) (*c >= 'a' && *c <= 'z' ? *c - 32 : *c);
+      if (k > 0)
+        m.tag_of = (int8_t) m.n_blips;
+      else
+        m.tag[0] = '\0';
+    }
+    m.n_blips++;
+  }
+}
+
 // ---- The display ---------------------------------------------------------------
 
 const char *const *FlightsApp::hosts() const { return kHosts; }
@@ -284,6 +376,8 @@ espn::AppSet FlightsApp::set(const std::string &key, const std::string &value) {
     this->got_s_ = 0;
     this->fails_ = 0;
     this->card_hex_[0] = '\0';
+    this->wide_ = this->shown_wide_ = this->empty_at_ = 0;
+    this->widen_s_ = 0;
     for (size_t i = 0; i < kSources; i++)
       this->feed_.read_once[i] = false;
     // A new receiver isn't held to the old one's waits.
@@ -310,7 +404,13 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
     return;
   }
   // Not read lately: off screen, or failing.
-  out["status"] = failing ? "failing" : now != 0 && now - this->got_s_ > kOldS ? "old" : "ok";
+  const bool old = now != 0 && now - this->got_s_ > kOldS;
+  out["status"] = failing ? "failing" : old ? "old" : this->shown_wide_ != 0 ? "wide" : "ok";
+  // How far it looked: planes past the owner's, or none
+  if (this->shown_wide_ != 0)
+    out["wide"] = this->shown_wide_;
+  else if (this->near_.n == 0 && this->empty_at_ > this->prefs_.radius)
+    out["wide"] = this->empty_at_;
   out["source"] = source_key(this->got_src_);
   const Nearby &n = this->near_;
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
@@ -366,6 +466,11 @@ FlightsApp::Next FlightsApp::next_(int64_t now) const {
   n.read = Read::POSITIONS;
   n.source = pick.source;
   n.in_ms = pick.in_ms;
+  // Nothing out to the widest: read it less often
+  if (this->capped_()) {
+    const uint32_t since = now_ms - this->feed_.last_ms[(size_t) pick.source];
+    n.in_ms = std::max(n.in_ms, since >= kCapPollMs ? 0 : kCapPollMs - since);
+  }
   if (this->got_s_ == 0 || n.in_ms == 0)
     return n;
   auto after = [now_ms](const espn::HostWait &w, uint32_t last, uint32_t gap) {
@@ -449,6 +554,11 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out = espn::AppRequest();
   this->read_home_ = prefs_home(this->prefs_);
+  this->read_wide_ = n.read == Read::POSITIONS ? this->wide_ : 0;
+  if (this->read_wide_ != 0) {
+    this->read_home_.own_nm = this->read_home_.radius_nm;
+    this->read_home_.radius_nm = to_nm(this->read_wide_, (DistUnit) this->prefs_.radius_unit);
+  }
   // The free services ask who's calling
   auto named = [&out]() { espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version)); };
   switch (n.read) {
@@ -529,7 +639,7 @@ void FlightsApp::apply(bool ok, int64_t now) {
     case Read::POSITIONS:
       feed_done(this->feed_, this->read_src_, ok ? 200 : this->status_, ok, this->retry_ms_, this->rnd_(), now_ms);
       if (ok) {
-        this->near_ = this->pending_;
+        this->widen_(now);
         this->got_s_ = now;
         this->got_src_ = this->read_src_;
         this->fails_ = 0;
@@ -582,7 +692,64 @@ void FlightsApp::apply(bool ok, int64_t now) {
   this->read_ = Read::NONE;
 }
 
+bool FlightsApp::capped_() const {
+  return this->got_s_ != 0 && this->near_.n == 0 && this->empty_at_ != 0 &&
+         next_step((DistUnit) this->prefs_.radius_unit, this->empty_at_) == 0;
+}
+
+void FlightsApp::widen_(int64_t now) {
+  const DistUnit u = (DistUnit) this->prefs_.radius_unit;
+  const uint16_t own = this->prefs_.radius, at = this->read_wide_ != 0 ? this->read_wide_ : own;
+  const Nearby &got = this->pending_;
+  // Planes inside the owner's distance show alone
+  this->near_ = nearby_own(got);
+  this->shown_wide_ = 0;
+  this->empty_at_ = got.n == 0 ? at : 0;
+  if (this->near_.n > 0) {
+    if (this->wide_ != 0 && now - this->widen_s_ >= kWidenHoldS)
+      this->wide_ = 0;
+    return;
+  }
+  if (got.n == 0) {
+    // None at all: one read at the widest
+    this->near_ = got;
+    if (at < radius_max(u)) {
+      this->wide_ = radius_max(u);
+      this->widen_s_ = now;
+    }
+    return;
+  }
+  // The smallest step that holds the nearest
+  float d = -1;
+  for (uint8_t i = 0; i < got.n; i++)
+    if (got.planes[i].dist_nm >= 0 && (d < 0 || got.planes[i].dist_nm < d))
+      d = got.planes[i].dist_nm;
+  uint16_t step = at;
+  for (uint16_t s = next_step(u, own); s != 0 && s < at; s = next_step(u, s))
+    if (to_nm(s, u) >= d) {
+      step = s;
+      break;
+    }
+  Nearby in = got;
+  in.own_nm = to_nm(step, u);
+  this->near_ = nearby_own(in);
+  this->near_.air = this->near_.ground = 0;
+  for (uint8_t i = 0; i < this->near_.n; i++)
+    (this->near_.planes[i].tier == Tier::GROUND ? this->near_.ground : this->near_.air)++;
+  this->shown_wide_ = step;
+  // Read a step past it: drifting planes stay found
+  const uint16_t next = next_step(u, step);
+  this->wide_ = next != 0 && next < at ? next : at;
+  this->widen_s_ = now;
+}
+
 void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
+  this->frame_(w, h, now, out);
+  if (out.sky.w > 0)
+    espn::sky_fill(out.sky, this->card_hex_, this->prefs_.lat_e4, this->prefs_.lon_e4, now);
+}
+
+void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
   FrameOpts o;
   o.w = w;
   o.h = h;
@@ -596,12 +763,20 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
     put_text(out, note_frame(this->fails_ >= kNoDataFails ? Note::NO_DATA : Note::LOADING, o, home.radius_nm));
     return;
   }
+  const DistUnit unit = (DistUnit) this->prefs_.radius_unit;
   if (this->near_.n == 0) {
-    put_text(out, note_frame(Note::NONE_NEAR, o, home.radius_nm));
+    // Still widening, or none out to the widest
+    const uint16_t at = this->empty_at_ != 0 ? this->empty_at_ : this->prefs_.radius;
+    put_text(out, note_frame(this->capped_() ? Note::NONE_NEAR : Note::WIDENING, o, to_nm(at, unit)));
     return;
   }
-  // The card and the list take turns under 192 wide.
-  if (w < 192) {
+  if (this->shown_wide_ != 0) {
+    o.wide_nm = to_nm(this->shown_wide_, unit);
+    o.own_nm = home.radius_nm;
+  }
+  // Card and list take turns, or radar and list
+  const bool radar = radar_room(w, h);
+  if (w < 192 || radar) {
     if (this->screen_s_ == 0 || now < this->screen_s_) {
       this->screen_s_ = now;
     } else if (now - this->screen_s_ >= (int64_t) (kScreenMs / 1000) - 1) {
@@ -609,15 +784,31 @@ void FlightsApp::frame(int w, int h, int64_t now, espn::AppFrame &out) const {
       this->screen_s_ = now;
     }
   }
-  o.card = this->card_;
-  o.list = w < 192 && this->list_;
+  o.card = this->card_ < this->near_.n ? this->card_ : 0;
+  o.list = w < 192 && !radar && this->list_;
   char key[9];
   if (w >= 128) {
     this->photo_room_ = true;
-    if (photo_key(this->near_.planes[this->card_ < this->near_.n ? this->card_ : 0], key))
+    if (photo_key(this->near_.planes[o.card], key))
       o.photo = this->photos_.find(key, (uint32_t) now);
   }
-  put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
+  if (!radar) {
+    put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
+    return;
+  }
+  // The 128x64 card, the radar or list beside
+  o.w = 128;
+  o.h = 64;
+  o.ticker = false;
+  Frame fr = flight_frame(this->near_, &this->routes_, o, (uint32_t) now);
+  const int hx = h == 64 ? 128 : 0, hy = h == 64 ? 0 : 64;
+  // The card's plane alone: the radar stays
+  if (this->list_ && this->near_.n > 1)
+    radar_list(fr, this->near_, o.card, o, hx, hy, kRadarH);
+  else
+    radar_map(this->near_, o.card, this->prefs_, this->shown_wide_, hx, hy, out.map);
+  fr.ticker = flight_ticker(this->near_, &this->routes_, o, (uint32_t) now, 3, &fr.photo.at);
+  put_text(out, fr);
 }
 
 }

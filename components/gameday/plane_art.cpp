@@ -236,6 +236,31 @@ const PlaneSprite *plane_sprite(PlaneKind k) {
   return i >= 1 && i < kPlaneKinds ? &kSprites[i - 1] : nullptr;
 }
 
+PlaneMotion plane_motion(PlaneKind k) {
+  switch (k) {
+    case PlaneKind::NONE:
+    case PlaneKind::GENERIC:
+      return PlaneMotion::STILL;
+    case PlaneKind::HELI:
+      return PlaneMotion::ROTOR;
+    case PlaneKind::LIGHT:
+    case PlaneKind::TWIN_PROP:
+    case PlaneKind::TURBOPROP:
+      return PlaneMotion::PROP;
+    default:
+      return PlaneMotion::JET;
+  }
+}
+
+const PropSpot *prop_spot(PlaneKind k) {
+  static const PropSpot kSpots[] = {
+      {PlaneKind::LIGHT, 14, 2, 4}, {PlaneKind::TWIN_PROP, 18, 5, 7}, {PlaneKind::TURBOPROP, 24, 1, 7}};
+  for (const PropSpot &s : kSpots)
+    if (s.kind == k)
+      return &s;
+  return nullptr;
+}
+
 PlaneKind plane_kind(const char *type, const char *category) {
   if (type != nullptr && type[0] != '\0') {
     PlaneKind best = PlaneKind::NONE;

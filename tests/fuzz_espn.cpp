@@ -804,7 +804,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       c.cells = cells.data();
       for (size_t i = 0; i + 4 <= size && i < 16384; i += 4)
         c.paint((uint32_t) (i / 4) % sw, (uint32_t) (i / 4 / sw) % sh, 1 + data[i] % 3, 1 + data[i + 1] % 3, data + i);
-      std::vector<uint8_t> px((size_t) bw * bh * 2);
+      std::vector<uint8_t> px((size_t) bw * bh * 3);
       c.finish(px.data());
       sink = sink + px[0];
     }

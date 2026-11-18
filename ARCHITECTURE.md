@@ -125,7 +125,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
-  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
+  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `sky.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
   `weather.cpp/.h`, `weather_art.cpp`, `map_canvas.h` and `app_weather.cpp/.h` (Weather), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
@@ -393,7 +393,15 @@ The card's airline is Flightradar24's airline field (`Plane::brand`, the
 paint on the plane), else the callsign's. `plane_art.cpp` holds the side
 views, ASCII art packed to 2 bits a pixel at compile time, and maps an
 ICAO type code, else the ADS-B category, to one of them; `put_art` in
-`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. On a card
+`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. Unscaled,
+the card's picture is an `AppSky` instead (`sky.cpp`): `sky_paint` draws the
+plane with its rotor, propeller or contrail moving, over clouds, birds, the
+sun or moon and Weather's rain or snow (`App::sky`), as a pure function of
+the time; `put_sky` gives it its own canvas and a 100 ms LVGL timer that
+repaints the box and invalidates only the pixels that changed, the way the
+field's canvas does. The timer stops while the sky is hidden or another page
+is up, and in night hours or Off or dim (`AppEnv::still`), when the picture
+holds its first pose. A loaded photo hides the sky as it hides the art. On a card
 128 wide or more the card's plane also gets a photo: a read of
 Planespotters' API (`Read::PHOTO`, by hex, else registration, with a
 User-Agent naming the project) through the fetch task like the others, one
@@ -450,6 +458,54 @@ board's ticker (`board_ticker_lead`) unless that ticker already says them;
 after a display's setting changes, like the switch or the shared home. A
 display's read now always counts as that display's in `open_`, so two
 displays can share a host, as F1 and Weather share Open-Meteo.
+
+**Map landmarks.** Under the radar the canvas Football's field uses
+(`put_field`, now the field or a map, never both) draws towns, state lines,
+coastlines and motorways (`landmarks.h`): a radar frame names its box,
+middle, scale and the labels to keep clear in `AppFrame::map` (`AppMap`,
+compared as bytes, so a radar step that only changes the image repaints
+nothing), and `map_paint` projects the set with the images' zoom-7 Web
+Mercator onto black, places labels biggest first where they fit, and leaves
+the image's alpha (`MapCanvas::finish` now writes RGB565 with an alpha
+plane, the same picture over black) to lay rain over it. The set comes from
+the device page: the browser reads `land/1/index.json` from the project
+site (`SITE_URL`) and the 4-degree squares it lists within 250 km of
+anywhere in the home's own square (`land/1/<lat>_<lon>.bin`: places with
+a class and a rounded size, then delta-coded lines on the set's own
+1/4000-degree grid), so every home in a square asks for the same files
+and the requests show only which square the home is in. The files are committed under
+`docs/site/land/1/`, built by `scripts/build_landmarks.py` from Natural
+Earth 10m and GeoNames cities500, and checked in CI by its `--check`; a
+format change is a new folder, and `scripts/add_land_files.sh` adds a
+format only beta has to each site deploy, so beta panels find their files
+before main does. The page joins the squares' pieces, keeps towns to
+250 km (villages to 30) and lines to 160 km, and simplifies that to at
+most 64 places (names up to 14 characters, shortened by whole words or
+dropped, never cut) and 1,600 line points, coast, borders and roads each
+with a share of the caps, ranked by length and nearness, and
+posts at most 8 KB as
+`application/octet-stream` to `/gameday/landmarks`, which ESPHome's web
+server streams to `handleBody` into a PSRAM staging buffer. `land_check`
+proves every count, name and offset before the main loop swaps the set in
+(`app_env().land`), and the panel keeps it in its own NVS namespace,
+`gd_land`, apart from the preferences, so no saved struct changes. A set for
+another rounded home is not drawn, and a Weather radar with no set draws no
+canvas at all. Lines are clipped to the canvas before they are walked, a
+point past the projection's reach breaks its line, and longitudes are taken
+the short way round the 180th meridian. The frame's map and sky go to the
+board in an `AppPics` in PSRAM, one per view (`view_pics`), not in
+`UpdateFields`, so the main loop's frames keep their size.
+
+**The plane radar.** When the Flight Tracker has a 256x64 or 128x128 frame
+(`radar_room`), `FlightsApp::frame` draws the 128x64 card in one half and
+gives the other half, 128x56, to the radar and the numbered list in turn on
+the list clock (`list_`, `kScreenMs`); every other size takes the old path
+unchanged. The radar is an `AppMap` with `radar` set: rings at the owner's
+distance, the planes as `AppBlip`s (position, heading, ink, list row from
+`list_number`, the same numbering `radar_list` prints) and the nearest
+plane's tag, so it repaints only when a read moves something. `map_paint`
+draws the landmarks under it when the set matches, and the rings, planes,
+numbers and tag (`map_marks`, placed clear of each other) either way.
 
 **Big plays in other games.** The watcher (`watch.h`, "Switch to big plays
 in other games", `ALERT9_NOWATCH` in `Prefs9`) reads other live games in
@@ -747,6 +803,7 @@ isn't stable when stripped again.
 | `POST /gameday/action?do=` | `refresh`, `qc`, `power_ok` (and the demo's `demo`, `demo_stop`) |
 | `GET/POST /gameday/wifi` | The saved networks; `forget=<ssid>` |
 | `GET /gameday/crash`, `POST ?clear=1` | The stored crash report |
+| `POST /gameday/landmarks` | The map landmarks for the saved home (`landmarks.h`), streamed to `handleBody`; 400 unreadable, 409 another home, 413 over 8 KB, 503 no room; the state's `landmarks` (`none`, `ok`, `other`), `landmarks_n` and `landmarks_saved` follow it |
 | `GET /gameday/heap` | Free memory, for the burn-in monitor; `stack` is the main loop's lowest free stack in bytes (FreeRTOS's high-water mark, read every 10 s; 0 until the first read) |
 
 The page reads the state document, re-reads it when ESPHome's event stream
@@ -940,7 +997,10 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
   feeds, sources and failover, routes, photo lookups, screens, settings and
   the display's reads), `test_weather.cpp` (Weather: each source, failover,
-  units, icons, the radar's map math, pages and frames at every size), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  units, icons, the radar's map math, pages and frames at every size),
+  `test_landmarks.cpp` (the landmark set's check, its projection and the
+  base layer's lines and labels), `test_sky.cpp` (the moving pictures: the plane's clarity, calm
+  motion, still in night hours, day and night, weather and the sun's times), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
   decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
   (the photo's cut, scaling and lighting) and `test_networks.cpp`
