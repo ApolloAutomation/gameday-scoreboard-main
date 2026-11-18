@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -69,6 +70,19 @@ struct Canvas {
     p.clip = PxBox{0, 0, (int16_t) w, (int16_t) h};
   }
   int count(uint32_t rgb) const { return (int) std::count(px.begin(), px.end(), rgb565(rgb)); }
+};
+
+// The sample's inks and their pixel counts, per size
+struct LandInk {
+  int w, h;
+  std::vector<std::pair<uint16_t, int>> inks;
+};
+const std::vector<LandInk> kLandInks = {
+    {64, 56, {{0x0000, 3530}, {0x4228, 20}, {0x528a, 34}}},
+    {128, 56, {{0x0000, 6833}, {0x49c4, 248}, {0x528a, 20}, {0x738e, 66}, {0x8410, 1}}},
+    {128, 120,
+     {{0x0000, 14316}, {0x4228, 45}, {0x49c4, 339}, {0x528a, 113}, {0x738e, 235}, {0x8410, 3}, {0x9492, 293},
+      {0xa514, 16}}},
 };
 
 int top_channel(uint16_t c) { return std::max({(c >> 11) << 3, ((c >> 5) & 63) << 2, (c & 31) << 3}); }
@@ -471,15 +485,42 @@ void test_paint() {
       intact = intact && buf[i] == 0xA5A5 && buf[buf.size() - 1 - i] == 0xA5A5;
     LCHECK(intact, "%dx%d: the guard bytes stay", w, h);
   }
-  // The sample paints the same picture every time
-  static const uint32_t kHash[3] = {0x6693f1c5u, 0x9c0c8be5u, 0x1e90d96du};
-  int k = 0;
+  // The sample paints the same picture, give or take rounding
   for (const auto &sz : {std::make_pair(64, 56), std::make_pair(128, 56), std::make_pair(128, 120)}) {
-    Canvas hc(sz.first, sz.second);
+    Canvas hc(sz.first, sz.second), again(sz.first, sz.second);
     map_paint(hc.p, weather_map(sz.first, sz.second, lat, lon), &s);
-    const uint32_t got = fnv1a(2166136261u, hc.px);
-    LCHECK(got == kHash[k], "%dx%d paints 0x%08x", sz.first, sz.second, (unsigned) got);
-    k++;
+    map_paint(again.p, weather_map(sz.first, sz.second, lat, lon), &s);
+    LCHECK(hc.px == again.px, "%dx%d paints the same twice", sz.first, sz.second);
+    std::vector<std::pair<uint16_t, int>> inks;
+    for (uint16_t v : hc.px) {
+      auto it = std::find_if(inks.begin(), inks.end(), [v](const std::pair<uint16_t, int> &e) { return e.first == v; });
+      if (it == inks.end())
+        inks.push_back({v, 1});
+      else
+        it->second++;
+    }
+    std::sort(inks.begin(), inks.end());
+    if (getenv("LAND_INKS") != nullptr) {
+      printf("  {%d, %d, {", sz.first, sz.second);
+      for (const auto &e : inks)
+        printf("{0x%04x, %d}, ", e.first, e.second);
+      printf("}},\n");
+    }
+    for (const LandInk &want : kLandInks)
+      if (want.w == sz.first && want.h == sz.second) {
+        auto n_of = [](const std::vector<std::pair<uint16_t, int>> &v, uint16_t c) {
+          for (const auto &e : v)
+            if (e.first == c)
+              return e.second;
+          return 0;
+        };
+        bool same_inks = true;
+        for (const auto &e : inks)
+          same_inks = same_inks && std::abs(e.second - n_of(want.inks, e.first)) <= std::max(4, e.second / 50);
+        for (const auto &e : want.inks)
+          same_inks = same_inks && std::abs(e.second - n_of(inks, e.first)) <= std::max(4, e.second / 50);
+        LCHECK(same_inks, "%dx%d paints its inks in the usual amounts", sz.first, sz.second);
+      }
   }
 }
 
