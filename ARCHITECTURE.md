@@ -44,8 +44,8 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   for.
 - **esphome**: the project name `ApolloAutomation.gameday-scoreboard`, and
   `on_boot` steps at priority 300 (apply brightness through the guard), 260
-  (name the hotspot "Apollo Pulse xxxxxx", `hotspot_ssid` in setup_qr.h) and 240 (setup after a Wi-Fi reset,
-  Bluetooth grace or Bluetooth on).
+  (name the hotspot "Apollo Pulse xxxxxx", `hotspot_ssid` in setup_qr.h)
+  and 240 (setup after a Wi-Fi reset, Bluetooth grace or Bluetooth on).
 - **external_components**: the local `components/` (`gameday`,
   `panel_layout`, `improv_ble`, `saved_networks`, `crash_report`), plus
   `lvgl-page-manager` and `lvgl-canvas-fx` from pavlov-net.

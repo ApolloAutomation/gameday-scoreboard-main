@@ -19,7 +19,7 @@ struct BootShot {
   bool qr{false};
   uint32_t since_ms{1}, now_ms{1};
   bool blink{false};
-  // Modules of the code, rows top down; empty draws a stand-in
+  // Code modules, top row first; empty draws a stand-in
   std::vector<std::vector<bool>> code;
 };
 
@@ -30,7 +30,8 @@ inline Canvas boot_render(const BootShot &s, const ReviewFonts &fonts) {
   cv.h = s.h;
   cv.px.assign((size_t) s.w * s.h, rgb565(kBrandNavy));
   const bool want = boot_dog_wanted(s.w, s.h, s.dog, s.qr, s.since_ms, s.now_ms);
-  const BootBoxes b = boot_boxes(s.w, s.h, s.qr, want);
+  const bool tall = s.lines[3][0] == 0;
+  const BootBoxes b = boot_boxes(s.w, s.h, s.qr, want, tall);
   if (!b.dog.empty()) {
     std::vector<uint16_t> buf((size_t) kDogSize * kDogSize);
     Px565 p;
@@ -56,15 +57,17 @@ inline Canvas boot_render(const BootShot &s, const ReviewFonts &fonts) {
     review_text(cv, fonts, t, false);
   };
   if (b.mode != BootWords::NONE) {
-    if (b.mode == BootWords::BESIDE) {
-      text(b.x0, b.y0 + 1, b.cw, BoardFont::S16, kBrandLight, "APOLLO");
-      text(b.x0, b.y0 + 17, b.cw, BoardFont::S16, kBrandLight, "PULSE");
+    const int ty = b.y0 + boot_title_y(b.mode, tall);
+    if (boot_title_split(b.mode, tall)) {
+      const BoardFont f = b.mode == BootWords::BESIDE ? BoardFont::S16 : BoardFont::S12;
+      text(b.x0, ty, b.cw, f, kBrandLight, "APOLLO");
+      text(b.x0, ty + font_rows(f), b.cw, f, kBrandLight, "PULSE");
     } else {
-      text(b.x0, b.y0 + 2, b.cw, b.mode == BootWords::WIDE ? BoardFont::S16 : BoardFont::S8, kBrandLight,
+      text(b.x0, ty, b.cw, b.mode == BootWords::WIDE ? BoardFont::S16 : BoardFont::S8, kBrandLight,
            "APOLLO PULSE");
     }
     for (int i = 0; i < 4; i++) {
-      const int y = boot_line_y(b.mode, i);
+      const int y = boot_line_y(b.mode, i, tall);
       if (y < 0)
         continue;
       const BoardFont f = i == 1 && b.mode == BootWords::WIDE ? BoardFont::S12 : BoardFont::S8;
@@ -94,7 +97,7 @@ inline Canvas boot_render(const BootShot &s, const ReviewFonts &fonts) {
   return cv;
 }
 
-// Linear LED drive of the screen, all white 1.0 (CIE 1931)
+// Linear LED drive, all white is 1.0 (CIE 1931)
 inline double boot_drive(const Canvas &cv) {
   auto lin = [](double v) {
     const double l = v * 100.0;

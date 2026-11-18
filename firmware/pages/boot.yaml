@@ -160,7 +160,7 @@ globals:
   - id: boot_qr_frame
     type: int
     initial_value: '0'
-  # Which layout boot_layout last applied: QR up 1, dog shown 2
+  # boot_layout's last layout: QR up 1, dog 2
   - id: boot_layout_key
     type: int
     initial_value: '-1'
@@ -168,6 +168,10 @@ globals:
   - id: boot_words_mode
     type: int
     initial_value: '0'
+  # Three lines or fewer: a 64 px column's bigger name
+  - id: boot_words_tall
+    type: bool
+    initial_value: 'true'
   # boot_view's dog request, and when it last changed
   - id: boot_dog_mode
     type: int
@@ -209,29 +213,30 @@ script:
       - lambda: |-
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
           const int H = lv_disp_get_ver_res(lv_disp_get_default());
-          const auto b = gameday::boot_boxes(W, H, qr, dog);
+          const bool tall = id(boot_words_tall);
+          const auto b = gameday::boot_boxes(W, H, qr, dog, tall);
           using gameday::BootWords;
           id(boot_words_mode) = (int) b.mode;
           const bool words = b.mode != BootWords::NONE;
-          const bool beside = b.mode == BootWords::BESIDE;
-          const bool big = b.mode == BootWords::WIDE || beside;
+          const bool split = gameday::boot_title_split(b.mode, tall);
           auto show = [](lv_obj_t *o, bool on) {
             if (on) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
             else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
           };
           lv_obj_t *lines[4] = {id(boot_la), id(boot_lb), id(boot_lc), id(boot_ld)};
           for (int i = 0; i < 4; i++) {
-            const int y = gameday::boot_line_y(b.mode, i);
+            const int y = gameday::boot_line_y(b.mode, i, tall);
             show(lines[i], y >= 0);
             if (y < 0) continue;
             lv_obj_set_width(lines[i], b.cw - 4);
             lv_obj_set_pos(lines[i], b.x0 + 2, b.y0 + y);
           }
           lv_obj_set_style_text_font(id(boot_lb), b.mode == BootWords::WIDE ? id(spleen_12) : id(spleen_8), 0);
-          lv_obj_set_style_text_font(id(boot_title), big ? id(spleen_16) : id(spleen_8), 0);
-          lv_label_set_text(id(boot_title), beside ? "APOLLO\nPULSE" : "APOLLO PULSE");
+          auto *tf = b.mode == BootWords::NARROW ? (tall ? id(spleen_12) : id(spleen_8)) : id(spleen_16);
+          lv_obj_set_style_text_font(id(boot_title), tf, 0);
+          lv_label_set_text(id(boot_title), split ? "APOLLO\nPULSE" : "APOLLO PULSE");
           lv_obj_set_width(id(boot_title), words ? b.cw : 64);
-          lv_obj_set_pos(id(boot_title), b.x0, b.y0 + gameday::boot_title_y(b.mode));
+          lv_obj_set_pos(id(boot_title), b.x0, b.y0 + gameday::boot_title_y(b.mode, tall));
           show(id(boot_title), words);
           lv_obj_set_width(id(boot_rule), b.bar.w);
           lv_obj_set_pos(id(boot_rule), b.bar.x, b.rule_y);
@@ -314,6 +319,12 @@ script:
           put(id(boot_lb), lb);
           put(id(boot_lc), lc);
           put(id(boot_ld), ld);
+          if (ld.empty() != id(boot_words_tall)) {
+            id(boot_words_tall) = ld.empty();
+            const int key = id(boot_layout_key);
+            if (id(boot_words_mode) == (int) gameday::BootWords::NARROW && key >= 0)
+              id(boot_layout).execute(key & 1, key & 2);
+          }
           if (busy) lv_obj_clear_flag(id(boot_bar), LV_OBJ_FLAG_HIDDEN);
           else lv_obj_add_flag(id(boot_bar), LV_OBJ_FLAG_HIDDEN);
           // The orange rule stands in for the bar
@@ -653,9 +664,11 @@ script:
                 id: boot_overlay
                 hidden: false
             - lambda: |-
-                const bool wide = gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default()));
+                // The warning keeps its big words
+                const bool wide = gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default()), 3);
                 id(boot_qr_cycle).execute(0, false);
-                id(boot_view).execute("", 2);
+                id(boot_view).execute("", 3);
+                gameday::boot_dog_open();
                 if (wide)
                   id(boot_set_lines).execute("Updating", "Keep it plugged in", "Back in a minute", "", false);
                 else

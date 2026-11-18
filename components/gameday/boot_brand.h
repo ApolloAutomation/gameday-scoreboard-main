@@ -19,7 +19,7 @@ static const uint32_t kBrandLight = 0xD4E8F8;
 inline const uint16_t *apollo_palette() {
   static const uint16_t kPal[16] = {0,
                                     ::espn::rgb565(0x000000),
-                                    ::espn::rgb565(0x3D3D3B),
+                                    ::espn::rgb565(0x5A5A57),
                                     ::espn::rgb565(kBrandOrange),
                                     ::espn::rgb565(0xB34845),
                                     ::espn::rgb565(0xFFFFFF)};
@@ -59,8 +59,8 @@ struct BootBoxes {
   int16_t rule_y{0};
 };
 
-// dog: Apollo wanted, and on one 64x64 it is his turn
-inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog) {
+// dog: Apollo shown; tall: three lines in 64 px
+inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog, bool tall = false) {
   BootBoxes b;
   auto slot = [](int x, int y) { return ::espn::PxBox{(int16_t) x, (int16_t) y, kDogSize, kDogSize}; };
   if (W < 128) {
@@ -74,7 +74,7 @@ inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog) {
     b.mode = BootWords::NARROW;
     b.cw = (int16_t) W;
   } else if (H > 64) {
-    // Two rows of two: the dog or the code on top
+    // 2x2: the dog or the code on top
     if (qr || dog) {
       (qr ? b.qr : b.dog) = slot((W - kDogSize) / 2, 0);
       b.y0 = kDogSize;
@@ -102,16 +102,16 @@ inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog) {
   const int x0 = b.x0, y0 = b.y0;
   switch (b.mode) {
     case BootWords::NARROW:
-      b.bar = ::espn::PxBox{(int16_t) (x0 + 4), (int16_t) (y0 + 11), 56, 3};
-      b.rule_y = (int16_t) (y0 + 12);
+      b.bar = ::espn::PxBox{(int16_t) (x0 + 4), (int16_t) (y0 + (tall ? 25 : 11)), 56, 3};
+      b.rule_y = (int16_t) (b.bar.y + 1);
       break;
     case BootWords::WIDE:
-      b.bar = ::espn::PxBox{(int16_t) (x0 + 4), (int16_t) (y0 + 19), (int16_t) (b.cw - 8), 3};
+      b.bar = ::espn::PxBox{(int16_t) (x0 + 4), (int16_t) (y0 + 18), (int16_t) (b.cw - 8), 3};
       b.rule_y = (int16_t) (y0 + 19);
       break;
     case BootWords::BESIDE:
-      b.bar = ::espn::PxBox{(int16_t) (x0 + 6), (int16_t) (y0 + 33), 52, 3};
-      b.rule_y = (int16_t) (y0 + 34);
+      b.bar = ::espn::PxBox{(int16_t) (x0 + 6), (int16_t) (y0 + 32), 52, 3};
+      b.rule_y = (int16_t) (y0 + 33);
       break;
     default:
       break;
@@ -119,17 +119,22 @@ inline BootBoxes boot_boxes(int W, int H, bool qr, bool dog) {
   return b;
 }
 
-// The words keep 128 px or more beside Apollo
-inline bool boot_words_wide(int W, int H) { return boot_boxes(W, H, false, true).cw >= 128; }
-
 // Line tops for la..ld, relative to y0; -1 unused
-inline int boot_line_y(BootWords m, int i) {
-  static const int8_t kY[3][4] = {{16, 26, 36, 46}, {22, 31, 44, 53}, {37, 46, 55, -1}};
-  return m == BootWords::NARROW ? kY[0][i] : m == BootWords::WIDE ? kY[1][i] : m == BootWords::BESIDE ? kY[2][i] : -1;
+inline int boot_line_y(BootWords m, int i, bool tall = false) {
+  static const int8_t kY[4][4] = {{16, 26, 36, 46}, {31, 41, 51, -1}, {23, 32, 45, 54}, {37, 46, 55, -1}};
+  return m == BootWords::NARROW ? kY[tall ? 1 : 0][i]
+         : m == BootWords::WIDE ? kY[2][i]
+         : m == BootWords::BESIDE ? kY[3][i]
+                                  : -1;
+}
+
+// The name in two lines: beside Apollo, or tall
+inline bool boot_title_split(BootWords m, bool tall) {
+  return m == BootWords::BESIDE || (m == BootWords::NARROW && tall);
 }
 
 // Name top, relative to y0
-inline int boot_title_y(BootWords m) { return m == BootWords::BESIDE ? 1 : 2; }
+inline int boot_title_y(BootWords m, bool tall = false) { return boot_title_split(m, tall) ? 1 : 2; }
 
 // Busy states on one 64x64: the dog, then the words
 static const uint32_t kDogTurnMs = 4000;
@@ -137,7 +142,7 @@ inline bool dog_turn(uint32_t since_ms, uint32_t now_ms) {
   return since_ms == 0 || ((uint32_t) (now_ms - since_ms) / kDogTurnMs) % 2 == 0;
 }
 
-// dog: 0 none, 1 busy, 2 beside words, 3 not BESIDE
+// dog 0 none, 1 busy, 2 beside, 3 wide only
 inline bool boot_dog_wanted(int W, int H, int dog, bool qr, uint32_t since_ms, uint32_t now_ms) {
   if (dog == 0)
     return false;
@@ -146,7 +151,12 @@ inline bool boot_dog_wanted(int W, int H, int dog, bool qr, uint32_t since_ms, u
   return dog != 3 || boot_boxes(W, H, qr, true).mode != BootWords::BESIDE;
 }
 
-// One blink a 5.1 s slot: gaps 4.2 to 6 s
+// Words get 128 px or more for this request
+inline bool boot_words_wide(int W, int H, int dog = 1) {
+  return boot_boxes(W, H, false, boot_dog_wanted(W, H, dog, false, 0, 0)).cw >= 128;
+}
+
+// A blink every 4.2 to 6 s
 static const uint32_t kBlinkSlotMs = 5100, kBlinkJitterMs = 900, kBlinkShutMs = 120;
 inline uint32_t blink_hash(uint32_t v) {
   v ^= v >> 16;

@@ -16,6 +16,8 @@ bool boot_dog_show(lv_obj_t *parent, int x, int y, bool ledge);
 void boot_dog_hide();
 // Repaints only his eyes when the blink changes
 void boot_dog_blink(uint32_t now_ms, uint32_t seed);
+// Eyes open, before the blink stops
+void boot_dog_open();
 
 }  // namespace esphome::gameday
 

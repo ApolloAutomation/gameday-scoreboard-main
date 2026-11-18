@@ -12,8 +12,7 @@ namespace esphome::gameday {
 // phone then offers ESPHome's captive portal to pick the home network: an
 // iPhone opens it, and many Android phones post a sign-in notification
 // instead. It is at http://192.168.4.1/ either way.
-// The hotspot's name always starts "Apollo Pulse " (hotspot_ssid), so it
-// can never be read as a hex name and needs no quotes.
+// Hotspot names start "Apollo Pulse ": never hex, no quotes
 inline std::string wifi_join_qr(const std::string &ssid) {
   std::string out = "WIFI:T:nopass;S:";
   for (char c : ssid) {
@@ -25,7 +24,7 @@ inline std::string wifi_join_qr(const std::string &ssid) {
   return out;
 }
 
-// The six characters after the dash in gameday-2f6a70; empty without one
+// What follows the last dash: 2f6a70; empty without one
 inline std::string hotspot_suffix(const std::string &app_name) {
   const size_t dash = app_name.rfind('-');
   return dash == std::string::npos ? std::string() : app_name.substr(dash + 1);

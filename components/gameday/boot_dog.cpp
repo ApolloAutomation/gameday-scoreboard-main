@@ -55,11 +55,10 @@ void boot_dog_hide() {
     lv_obj_add_flag(canvas, LV_OBJ_FLAG_HIDDEN);
 }
 
-void boot_dog_blink(uint32_t now_ms, uint32_t seed) {
-  if (canvas == nullptr || lv_obj_has_flag(canvas, LV_OBJ_FLAG_HIDDEN))
-    return;
-  const bool on = blink_on(now_ms, seed);
-  if (on == shut)
+namespace {
+
+void set_eyes(bool on) {
+  if (on == shut || canvas == nullptr)
     return;
   shut = on;
   const ::espn::PxBox b = apollo_blink_box();
@@ -70,6 +69,15 @@ void boot_dog_blink(uint32_t now_ms, uint32_t seed) {
   lv_area_set(&a, c.x1 + b.x, c.y1 + b.y, c.x1 + b.x + b.w - 1, c.y1 + b.y + b.h - 1);
   lv_obj_invalidate_area(canvas, &a);
 }
+
+}  // namespace
+
+void boot_dog_blink(uint32_t now_ms, uint32_t seed) {
+  if (canvas != nullptr && !lv_obj_has_flag(canvas, LV_OBJ_FLAG_HIDDEN))
+    set_eyes(blink_on(now_ms, seed));
+}
+
+void boot_dog_open() { set_eyes(false); }
 
 }  // namespace esphome::gameday
 

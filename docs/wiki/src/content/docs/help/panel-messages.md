@@ -12,7 +12,9 @@ The panel says what's going on in words on the screen, or in the ticker along th
 These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the QR code sits on the left half with the words beside it, and without a QR code up the words use the whole width. On a single 64x64 panel the words and the QR code take turns. Your phone's camera reads every QR code here, so none of them needs an app: off Wi-Fi the code joins the panel's own hotspot, and on Wi-Fi it opens the panel's device page.
 
 :::note[Coming in the next release]
-The start-up screen says **APOLLO PULSE** in light blue on navy, with Apollo, the Apollo Automation dog, beside the words, and a green bar under the name while the panel is busy. The hotspot's turn says **Join Wi-Fi / Apollo Pulse / 2f6a70**, for the hotspot `Apollo Pulse 2f6a70`. On a single 64x64 panel, **Starting**, **Connecting**, **Looking up scores** and the other screens with the bar and no QR code take turns with Apollo, about 4 seconds each. On 128x64, Apollo has the left half when there's no QR code, with **APOLLO / PULSE** in two lines beside him. On three or four panels in a row, Apollo sits at the left end and the QR code beside him. On two rows of two, Apollo or the QR code sits in the middle of the top half, with the words under it.
+The start-up screen says **APOLLO PULSE** in light blue on navy, with Apollo, the Apollo Automation dog, beside the words, and a green bar under the name while the panel is busy. Wherever this page says **Join Wi-Fi / Game Day / 2f6a70**, the panel says **Join Wi-Fi / Apollo Pulse / 2f6a70**, for the hotspot `Apollo Pulse 2f6a70`.
+
+On a single 64x64 panel, **Starting**, **Connecting**, **Looking up scores** and the other screens with the bar and no QR code take turns with Apollo, about 4 seconds each. On 128x64, Apollo has the left half when there's no QR code, with **APOLLO / PULSE** in two lines beside him and the words under it, as short as on a 64x64 panel: **Connecting** and the network's name, and **Looking up / scores**. On three or four panels in a row, Apollo sits at the left end and the QR code beside him. On two rows of two, Apollo or the QR code sits in the middle of the top half, with the words under it.
 :::
 
 | The panel says | What it means | What to do |
@@ -30,10 +32,6 @@ The start-up screen says **APOLLO PULSE** in light blue on navy, with Apollo, th
 
 A panel joining Wi-Fi for the first time, from the hotspot's setup page or the installer's Wi-Fi dialog, says **JOINING** and the network's name. If it still isn't on after about 30 seconds, it says **Can't join** and the network's name, with **scan to fix** and the hotspot's QR code taking turns with **Join Wi-Fi / Game Day / 2f6a70**. It keeps trying that network. If you mistyped the password or picked the wrong network, scan the code and give it again on the setup page. See [The panel won't join my Wi-Fi](/help/troubleshooting/#the-panel-wont-join-my-wi-fi).
 
-:::note[Coming in the next release]
-The hotspot's turn says **Join Wi-Fi / Apollo Pulse / 2f6a70**.
-:::
-
 ## When the Wi-Fi is the problem
 
 | The panel says | What it means | What to do |
@@ -41,10 +39,6 @@ The hotspot's turn says **Join Wi-Fi / Apollo Pulse / 2f6a70**.
 | **Wi-Fi / lost / reconnecting** | The panel has been off its Wi-Fi for more than about 10 seconds and is trying to get back on. | If the router or internet is down, wait: the panel rejoins by itself. If you changed your router or Wi-Fi password, wait a few minutes: the panel brings up its hotspot and shows a QR code to scan (next row). |
 | **Wi-Fi / lost / scan to fix**, with a QR code, taking turns with **Join Wi-Fi / Game Day / 2f6a70** | The panel is still off its Wi-Fi and its hotspot is up. It keeps trying its saved networks. The QR code is the hotspot's Wi-Fi code. | If you changed the router or the password, scan the code with your phone's camera, join, and give the panel the new one on the page that opens. If the router is only down, wait. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password). |
 | **Wi-Fi needs / sign-in / use home or / a hotspot**, with a QR code | The panel joined the network, but the network wants a sign-in on a web page, like many bar, hotel and dorm networks. The panel can't sign in. The QR code opens the panel's device page by IP address. | Set it up on a home network or a phone hotspot. From a phone on the same Wi-Fi, scan the code and tap **Reset Wi-Fi** in the Device card to put the panel back into setup. If the page won't open, use the button's [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi). The message goes by itself once scores come through. |
-
-:::note[Coming in the next release]
-Where these say **Join Wi-Fi / Game Day / 2f6a70**, the panel says **Join Wi-Fi / Apollo Pulse / 2f6a70**, for the hotspot `Apollo Pulse 2f6a70`.
-:::
 
 ## On the scoreboard
 
@@ -116,7 +110,7 @@ If the whole panel lights red, green, blue and white in turn, then a white line 
 While an update installs, the panel says **Updating**, **Keep it plugged in** and **Back in a minute** (on a single 64x64 panel, **Updating**, **Keep it plugged in**). Leave it powered. It restarts on the new version and comes back on its start-up screen, or goes back to what it was showing if the install doesn't go through. The device page shows how the update is going, and a bar at its top with **Install** whenever an update is out. See [Updates](/using/updates/).
 
 :::note[Coming in the next release]
-Apollo, the Apollo Automation dog, sits beside the words while it updates, except on a single 64x64 panel.
+On three or four panels in a row and on two rows of two, Apollo, the Apollo Automation dog, sits beside the words while it updates. On 128x64 and 64x64 panels the words keep the whole screen, as above.
 :::
 
 | The device page says | What it means |

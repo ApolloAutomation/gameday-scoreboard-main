@@ -800,7 +800,7 @@ static void test_setup_qr() {
   CHECK_EQ(wifi_join_qr("a;b,c:d\\e\"f"), std::string("WIFI:T:nopass;S:a\\;b\\,c\\:d\\\\e\\\"f;;"));
   CHECK_EQ(wifi_join_qr("Café's"), std::string("WIFI:T:nopass;S:Café's;;"));
   CHECK_EQ(wifi_join_qr(""), std::string("WIFI:T:nopass;S:;;"));
-  // 37 characters: version 3 at M holds 42, 29x29 at 1 px per module on its 33 px canvas
+  // 37 characters; version 3 at M holds 42
   CHECK_EQ(wifi_join_qr(hotspot_ssid("gameday-2f6a70")).size(), (size_t) 37);
   CHECK(wifi_join_qr(hotspot_ssid("gameday-ffffff")).size() <= 42);
 

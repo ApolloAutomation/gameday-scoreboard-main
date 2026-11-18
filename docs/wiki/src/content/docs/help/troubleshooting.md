@@ -7,6 +7,10 @@ sidebar:
 
 Find what you're seeing, then try the fix. Each entry ends with why it happens, in case the fix doesn't take.
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. Where this page says the **Game Day** hotspot, look for that name.
+:::
+
 ## The app can't find my panel
 
 The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own [device page](/using/device-page/), and its hotspot sets up Wi-Fi (see [Set up your panel](/get-started/setup/)).
@@ -22,10 +26,6 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 ## The setup page doesn't open
 
 You joined the panel's **Game Day** hotspot and no page opened.
-
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
-:::
 
 - Look for a notification to sign in to the network and tap it. Many Android phones post one instead of opening the page.
 - If your phone says the network has no internet, choose to stay connected, or to use the network as it is.

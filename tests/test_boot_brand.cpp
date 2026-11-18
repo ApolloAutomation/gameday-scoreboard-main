@@ -195,13 +195,14 @@ void test_boxes() {
   const PxBox none{};
   for (const Size &s : kSizes)
     for (int qr = 0; qr < 2; qr++)
-      for (int dog = 0; dog < 2; dog++) {
-        const BootBoxes b = boot_boxes(s.w, s.h, qr, dog);
+      for (int dog = 0; dog < 4; dog++) {
+        const bool tall = dog & 2;
+        const BootBoxes b = boot_boxes(s.w, s.h, qr, dog & 1, tall);
         const PxBox scr{0, 0, (int16_t) s.w, (int16_t) s.h};
         const PxBox words = b.mode == BootWords::NONE ? none : PxBox{b.x0, b.y0, b.cw, 64};
         const char *tag = "";
         char buf[64];
-        snprintf(buf, sizeof buf, "%dx%d qr %d dog %d", s.w, s.h, qr, dog);
+        snprintf(buf, sizeof buf, "%dx%d qr %d dog %d tall %d", s.w, s.h, qr, dog & 1, tall);
         tag = buf;
         for (const PxBox &x : {b.dog, b.qr, words, b.bar})
           BCHECK(x.empty() || box_clip(x, scr).w == x.w && box_clip(x, scr).h == x.h, "%s: a box off screen", tag);
@@ -214,18 +215,25 @@ void test_boxes() {
         if (qr)
           BCHECK(b.qr.w == 64 && b.qr.h == 64, "%s: the code's box 64x64", tag);
         // The words' longest lines fit their column
-        const int name = b.mode == BootWords::WIDE ? 12 * 8 : b.mode == BootWords::BESIDE ? 6 * 8 : 12 * 5;
+        const bool split = boot_title_split(b.mode, tall);
+        const BoardFont tf = b.mode == BootWords::NARROW ? (tall ? BoardFont::S12 : BoardFont::S8) : BoardFont::S16;
+        const int name = (split ? 6 : 12) * font_px(tf);
         if (b.mode != BootWords::NONE) {
           BCHECK(name <= b.cw, "%s: APOLLO PULSE %d px in %d", tag, name, b.cw);
           BCHECK(12 * 5 <= b.cw - 4, "%s: Apollo Pulse and reconnecting fit", tag);
-          BCHECK(b.bar.w >= 50 && b.bar.y > b.y0 + 9, "%s: the bar under the name", tag);
+          // Two clear rows each side of the bar
+          const int ink = b.y0 + boot_title_y(b.mode, tall) + (split ? font_rows(tf) : 0) + font_ink_bottom(tf);
+          BCHECK(b.bar.w >= 50 && b.bar.y >= ink + 3, "%s: the bar %d under the name's ink %d", tag, b.bar.y, ink);
           for (int i = 0; i < 4; i++) {
-            const int y = boot_line_y(b.mode, i);
-            BCHECK(y < 0 || b.y0 + y + 8 <= s.h, "%s: line %d inside", tag, i);
-            BCHECK(y < 0 || b.bar.y + b.bar.h <= b.y0 + y, "%s: line %d under the bar", tag, i);
+            const int y = boot_line_y(b.mode, i, tall);
+            const BoardFont lf = i == 1 && b.mode == BootWords::WIDE ? BoardFont::S12 : BoardFont::S8;
+            BCHECK(y < 0 || b.y0 + y + font_desc_bottom(lf) < s.h, "%s: line %d inside", tag, i);
+            BCHECK(y < 0 || i > 0 || b.bar.y + b.bar.h + 2 <= b.y0 + y + font_ink_top(lf), "%s: line %d off the bar",
+                   tag, i);
+            BCHECK(i < 3 || !tall || b.mode != BootWords::NARROW || y < 0, "%s: tall holds three lines", tag);
           }
         } else {
-          BCHECK(s.w < 128 && dog && !qr, "%s: words only give way on one 64x64", tag);
+          BCHECK(s.w < 128 && (dog & 1) && !qr, "%s: words only give way on one 64x64", tag);
         }
       }
   // Where Apollo goes
@@ -245,6 +253,8 @@ void test_boxes() {
   BCHECK(!boot_words_wide(64, 64) && !boot_words_wide(128, 64) && boot_words_wide(192, 64) &&
              boot_words_wide(128, 128),
          "wide words where 128 px stay beside him");
+  BCHECK(!boot_words_wide(64, 64, 3) && boot_words_wide(128, 64, 3) && boot_words_wide(256, 64, 3),
+         "Updating keeps its wide words on 128x64");
   // Four lines never sit beside him
   BCHECK(!boot_dog_wanted(128, 64, 3, false, 1, 1) && boot_dog_wanted(192, 64, 3, false, 1, 1),
          "the address keeps four lines");

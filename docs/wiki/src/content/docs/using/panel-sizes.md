@@ -33,7 +33,7 @@ With **Clock size** set to **Large**, the logos and the records under them sit f
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
 :::note[Coming in the next release]
-With no QR code up, Apollo, the Apollo Automation dog, has the left half of the start-up screen, with **APOLLO / PULSE** in two lines beside him and the bar and the words under it. The boot button's address still takes the whole width.
+With no QR code up, Apollo, the Apollo Automation dog, has the left half of the start-up screen, with **APOLLO / PULSE** in two lines beside him and the bar and the words under it. The boot button's address and the update screen still take the whole width.
 :::
 
 ### Three or four wide: 192x64 and 256x64

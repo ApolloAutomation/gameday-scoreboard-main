@@ -28,7 +28,7 @@ If you just installed the firmware from your browser, the installer offers to pu
 While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`. Once the hotspot is up, the panel takes a turn showing **Join Wi-Fi / Game Day** and those six characters, so you know which network is yours. Two panels in one house each get their own name.
 
 :::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's turn says **Join Wi-Fi / Apollo Pulse** and those six characters.
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's turn says **Join Wi-Fi / Apollo Pulse** and those six characters. Where this page says the **Game Day** hotspot, look for that name.
 :::
 
 1. Join that network. On a phone, point the camera at the QR code on the panel and tap to join; on a 64x64 panel, wait for the code's turn. Or pick the network from the Wi-Fi list on any phone or laptop. A setup page opens. If it doesn't, tap your phone's notification to sign in to the network, or open `192.168.4.1` in a browser. If your phone says the network has no internet, choose to stay connected.
@@ -88,10 +88,6 @@ To skip the QR code and the address when the panel starts, turn off **Show how t
 When the panel loses its Wi-Fi for more than about 10 seconds, it covers the score and says **Wi-Fi / lost / reconnecting**, with no QR code, while it tries to get back on. A shorter drop, like a mesh system moving the panel to another access point, never covers the score. If the router was only down, there's nothing to do: the panel rejoins by itself once it's back.
 
 For a new router or password, use the panel's **Game Day** hotspot. It comes up within a few minutes of the panel losing Wi-Fi, and then the panel says **Wi-Fi / lost / scan to fix** with the hotspot's QR code, and takes turns showing the hotspot's name. Scan the code with your phone's camera, or join the hotspot as above, and give the panel the new network or password on the page that opens.
-
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
-:::
 
 If you use the Game Day app: about 30 seconds into the outage the panel turns Bluetooth back on, so the app can find it (with three or four panels it stays off), and you give it the new network or password the same way as the first time. If the app hands the panel a wrong password while it's in an outage, the panel goes back to the network it had.
 
