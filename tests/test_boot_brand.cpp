@@ -205,33 +205,32 @@ void test_screens() {
   const char *busy[4] = {"", "Looking up", "scores", ""};
   for (const Size &s : kSizes)
     for (int qr = 0; qr < 2; qr++)
-      for (int dog = 0; dog < 4; dog++)
-        {
-          BootShot shot;
-          shot.w = s.w;
-          shot.h = s.h;
-          memcpy(shot.lines, busy, sizeof busy);
-          shot.qr = qr;
-          shot.dog = dog;
-          shot.pct = 100;
-          const Canvas cv = boot_render(shot, fonts);
-          const double d = boot_drive(cv);
-          BCHECK(d < 0.15, "%dx%d qr %d dog %d: drives %.3f of full white", s.w, s.h, qr, dog, d);
-          if (!qr)
-            continue;
-          // Black all round the 29 px code
-          const BootBoxes b = boot_boxes(s.w, s.h, true, boot_dog_wanted(s.w, s.h, dog, true, 1, 1));
-          int lit = 0;
-          for (int y = b.qr.y; y < b.qr.y + 64; y++)
-            for (int x = b.qr.x; x < b.qr.x + 64; x++) {
-              const bool code = x >= b.qr.x + 17 && x < b.qr.x + 46 && y >= b.qr.y + 17 && y < b.qr.y + 46;
-              const uint16_t c = cv.px[(size_t) y * cv.w + x];
-              if (!code)
-                BCHECK(c == 0, "%dx%d: quiet zone lit at %d,%d", s.w, s.h, x, y);
-              lit += c != 0;
-            }
-          BCHECK(lit > 200, "%dx%d: the code is drawn", s.w, s.h);
-        }
+      for (int dog = 0; dog < 4; dog++) {
+        BootShot shot;
+        shot.w = s.w;
+        shot.h = s.h;
+        memcpy(shot.lines, busy, sizeof busy);
+        shot.qr = qr;
+        shot.dog = dog;
+        shot.pct = 100;
+        const Canvas cv = boot_render(shot, fonts);
+        const double d = boot_drive(cv);
+        BCHECK(d < 0.15, "%dx%d qr %d dog %d: drives %.3f of full white", s.w, s.h, qr, dog, d);
+        if (!qr)
+          continue;
+        // Black all round the 29 px code
+        const BootBoxes b = boot_boxes(s.w, s.h, true, boot_dog_wanted(s.w, s.h, dog, true, 1, 1));
+        int lit = 0;
+        for (int y = b.qr.y; y < b.qr.y + 64; y++)
+          for (int x = b.qr.x; x < b.qr.x + 64; x++) {
+            const bool code = x >= b.qr.x + 17 && x < b.qr.x + 46 && y >= b.qr.y + 17 && y < b.qr.y + 46;
+            const uint16_t c = cv.px[(size_t) y * cv.w + x];
+            if (!code)
+              BCHECK(c == 0, "%dx%d: quiet zone lit at %d,%d", s.w, s.h, x, y);
+            lit += c != 0;
+          }
+        BCHECK(lit > 200, "%dx%d: the code is drawn", s.w, s.h);
+      }
 }
 
 }  // namespace

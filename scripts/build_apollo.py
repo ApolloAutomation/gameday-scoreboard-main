@@ -31,6 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "firmware", "art", "apollo", "apollo.png")
 BRAND = os.path.join(ROOT, "components", "gameday", "boot_brand.h")
 OUT = os.path.join(ROOT, "components", "gameday", "apollo_logo.h")
+# One size: 2x2 screens' words fill below
 HEIGHT = 64
 LOBES = 3
 BITS = 14
