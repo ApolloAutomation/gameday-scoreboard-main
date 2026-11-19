@@ -3923,6 +3923,7 @@ int run_plane_art_tests(int &checks);  // test_plane_art.cpp
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
+int run_ticker_tests(int &checks);
 int run_layout_tests(int &checks);
 int run_app_tests(int &checks);
 int run_f1_tests(int &checks);
@@ -9754,6 +9755,7 @@ int main() {
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
+  failures += run_ticker_tests(checks);
   failures += run_layout_tests(checks);
   failures += run_app_tests(checks);
   failures += run_f1_tests(checks);
