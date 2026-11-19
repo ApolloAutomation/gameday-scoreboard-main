@@ -35,6 +35,10 @@ Every network you set the panel up on is added to the top of the list. There are
 
 The six characters are the same as in the panel's address, so two panels in one house are easy to tell apart. See [Set up your panel](/get-started/setup/).
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. Where this page says the **Game Day** hotspot, look for that name.
+:::
+
 Taking the panel somewhere new? When it can't find any saved network, it says **Wi-Fi lost** and, within a few minutes, brings up its hotspot, as below, so you can give it the new network there. To put it into setup straight away, use [Reset Wi-Fi](/using/buttons-and-resets/#reset-wi-fi).
 
 ## When Wi-Fi drops

@@ -11,6 +11,10 @@ You need a phone or computer with a web browser, and your Wi-Fi password. It tak
 
 Connect the power supply that came with the panel. The panel lights up with **GAME DAY** across the top and **Starting** under it.
 
+:::note[Coming in the next release]
+The panel is now called Apollo Pulse. Its start-up screen is black, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words. While the panel is busy, a green bar runs under the name, and under that the panel says what it's doing, starting with **Starting**. On a single 64x64 panel, Apollo and the words take turns, about 4 seconds each, with the bar as the ledge under his paws. The setup screen keeps its QR code and its words as below.
+:::
+
 A panel that isn't on Wi-Fi yet then shows **SETUP** and starts its own Wi-Fi hotspot. In the moment before the hotspot is up, it says **SETUP / Starting / hotspot**, with no QR code. Then a QR code appears: it's the hotspot's Wi-Fi code, and the words say **SETUP / Scan to / join Wi-Fi**. On the 128x64 panel the QR code sits on the left half and the words sit beside it. On a single 64x64 panel there is no room for both, so the words and the QR code take turns: about 5 seconds of words, then 8 seconds of QR code.
 
 Point the camera of any iPhone or Android phone at the QR code and tap to join, then pick your Wi-Fi network on the setup page, as below. Your phone's camera and browser are all you need, with no app to install. The installer's Wi-Fi dialog sets the panel up too.
@@ -22,6 +26,10 @@ If you just installed the firmware from your browser, the installer offers to pu
 ## Use the panel's hotspot
 
 While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`. Once the hotspot is up, the panel takes a turn showing **Join Wi-Fi / Game Day** and those six characters, so you know which network is yours. Two panels in one house each get their own name.
+
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's turn says **Join Wi-Fi / Apollo Pulse** and those six characters. Where this page says the **Game Day** hotspot, look for that name.
+:::
 
 1. Join that network. On a phone, point the camera at the QR code on the panel and tap to join; on a 64x64 panel, wait for the code's turn. Or pick the network from the Wi-Fi list on any phone or laptop. A setup page opens. If it doesn't, tap your phone's notification to sign in to the network, or open `192.168.4.1` in a browser. If your phone says the network has no internet, choose to stay connected.
 2. Pick your Wi-Fi network and enter the password.

@@ -32,13 +32,25 @@ With **Clock size** set to **Large**, the logos and the records under them sit f
 
 On the start-up screen, the QR code sits on the left half with the words beside it. It joins the panel's hotspot during setup, once the hotspot is up, and opens the device page once the panel is on Wi-Fi. Without a QR code up, the words use the whole width.
 
+:::note[Coming in the next release]
+With no QR code up, Apollo, the Apollo Automation dog, has the left half of the start-up screen, with **APOLLO / PULSE** in two lines beside him and the bar and the words under it. The boot button's address and the update screen still take the whole width.
+:::
+
 ### Three or four wide: 192x64 and 256x64
 
 The wide layout spreads across the whole width: the logos at the far ends, the abbreviations and big scores between them, the game clock and the situation row in the middle, and the ticker along the whole bottom. A golf or racing leaderboard sits in the middle. The game clock is far from the records under the logos, so a rank or a standing there always has its 7 characters. A splash has the team's logo at the left end, its words in the middle, and the points at the right end. A touchdown's or a win's fireworks go off above the words, across the middle of the row, or behind them when the words take three lines. On the start-up screen, the words take everything to the right of the QR code. With a [second area](#the-second-area) picked, the board takes the left two panels, seen from the front, and is laid out as on one 128x64 panel.
 
+:::note[Coming in the next release]
+On the start-up screen, Apollo, the Apollo Automation dog, sits on the left panel, the QR code, when there is one, on the panel beside him, and the words take the rest.
+:::
+
 ### Two rows of two: 128x128
 
 The top half is the 128x64 board, the same as on one 128x64 panel, its ticker along its bottom with your [favorite players](/using/favorite-players/)' stat lines and your bets in it as on any board. The bottom half is the [second area](#the-second-area), which starts on **Clock and date**: the time and the date, and under them its own ticker in bigger letters with your next games. The heat and power line, **Too warm, dimming** or **Check power supply**, goes along the bottom edge. Under the off-season clock or the idle display's clock, which already show the time, the bottom half leaves the time out: it shows its ticker, with the date above it when the clock has your next game under the time instead of the date. The board's splashes, a favorite player's celebration and a [big play in another game](/using/modes/#big-plays-in-other-games) cover all four panels, with the logo, the words and the points down the middle. The fireworks go off around the logo, in the rows above the words, so the words and the points under them stay clear. A celebration with fireworks in the bottom half gets them there too, when the board isn't showing its own. See [Splashes](#splashes). The start-up and setup screens sit in the middle of the four panels.
+
+:::note[Coming in the next release]
+On the start-up and setup screens, Apollo, the Apollo Automation dog, or the QR code when there is one, sits in the middle of the top half, and the words take the bottom half.
+:::
 
 ### Single: 64x64
 
@@ -51,6 +63,10 @@ A single panel has no room for the records, the timeout pips, the red card marks
 Before and after the game, a ranked college team's rank goes in front of its abbreviation, like "#5 OSU", when the two fit in the 6 characters there. See [Ranks and standings](/using/ticker/#ranks-and-standings).
 
 The off-season clock shows the date under the time, and the next game goes in the ticker. On the start-up screen, the QR code and the words take turns.
+
+:::note[Coming in the next release]
+Apollo, the Apollo Automation dog, takes turns with the words too, about 4 seconds each, while the panel is starting, joining Wi-Fi or looking up scores.
+:::
 
 ### Field view
 

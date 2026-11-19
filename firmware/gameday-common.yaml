@@ -109,7 +109,7 @@ esphome:
               switch.is_on: power
             then:
               - script.execute: gd_repaint
-    # Name the hotspot after this panel, "Game Day 2f6a70", so two panels
+    # Name the hotspot after this panel, "Apollo Pulse 2f6a70", so two panels
     # waiting for setup in one house can be told apart. The six characters are
     # the end of the panel's network name (gameday-2f6a70), the same ones the
     # setup screen shows. Wi-Fi sets up at 250 and reads the name then.
@@ -118,11 +118,10 @@ esphome:
         - lambda: |-
             auto *w = wifi::global_wifi_component;
             const std::string &name = App.get_name();
-            const size_t dash = name.rfind('-');
-            if (w == nullptr || dash == std::string::npos)
+            if (w == nullptr || name.rfind('-') == std::string::npos)
               return;
             wifi::WiFiAP ap = w->get_ap();
-            ap.set_ssid("Game Day " + name.substr(dash + 1));
+            ap.set_ssid(gameday::hotspot_ssid(name));
             w->set_ap(ap);
     # After "Reset Wi-Fi" the network in memory is blank (components/saved_networks
     # keeps the saved ones for the next boot). ESPHome still counts it as a

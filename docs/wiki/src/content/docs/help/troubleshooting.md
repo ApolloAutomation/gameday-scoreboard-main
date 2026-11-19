@@ -7,6 +7,10 @@ sidebar:
 
 Find what you're seeing, then try the fix. Each entry ends with why it happens, in case the fix doesn't take.
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. Where this page says the **Game Day** hotspot, look for that name.
+:::
+
 ## The app can't find my panel
 
 The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own [device page](/using/device-page/), and its hotspot sets up Wi-Fi (see [Set up your panel](/get-started/setup/)).

@@ -31,6 +31,10 @@ The two pictures install two builds of the same firmware. The 64x64 choice insta
 
 If you close the dialog, the panel starts a hotspot named Game Day plus six letters and numbers, like Game Day 2f6a70, and shows a QR code that joins it. Scan the code with your phone's camera, or join the hotspot from any phone or laptop, and a setup page opens. The panel only joins 2.4 GHz networks.
 
+:::note[Coming in the next release]
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
+:::
+
 ## Set it up
 
 From here a board you built works like any Game Day Scoreboard. Follow [Set up your panel](/get-started/setup/) to finish joining Wi-Fi, then [Pick your team](/get-started/pick-your-team/).
