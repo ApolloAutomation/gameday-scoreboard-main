@@ -1,6 +1,6 @@
 ---
 title: "Panels and power"
-description: "Which HUB75 panels the Game Day Scoreboard firmware drives, how to chain two to four, and how to power them."
+description: "Which HUB75 panels the Apollo Pulse firmware drives, how to chain two to four, and how to power them."
 sidebar:
   order: 3
 ---

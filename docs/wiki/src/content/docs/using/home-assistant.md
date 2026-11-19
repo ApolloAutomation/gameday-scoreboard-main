@@ -27,6 +27,8 @@ Once it's added, the panel shows up as a device under the ESPHome integration, w
 
 [![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=esphome)
 
+Home Assistant names the device **Game Day Scoreboard** and the panel's six characters, like `Game Day Scoreboard 2f6a70`, and its entities' names start with it, like **Game Day Scoreboard 2f6a70 Team**. That's the panel's name from before it was called Apollo Pulse: it's the same panel, and you can rename the device in Home Assistant.
+
 Picking a team or a mode from Home Assistant counts as setting the panel up, the same as the device page, so the ticker stops asking you to pick a team.
 
 Want to change the firmware itself, for example to add your own API key? Adopt the panel in [ESPHome Device Builder](#adopting-it-in-esphome-device-builder), or build it from the YAML with ESPHome (see [Build it yourself](/diy/build-from-source/)).
@@ -47,7 +49,7 @@ Device Builder builds from the firmware repo's `main` branch, which the releases
 
 | Entity | What it is |
 | --- | --- |
-| **Team** | The team the panel follows in My team. Every league except men's college basketball and minor league baseball, whose lists would make it too long for one entity; pick those teams on the device page. AHL and ECHL teams are in it, like "AHL: Syracuse Crunch" and "ECHL: Rapid City Rush". The golf tours, **Golf: PGA Tour** and **Golf: LPGA Tour**, come after the NHL teams, and the racing series, **Racing: Formula 1** and **Racing: NASCAR Cup Series**, at the end of the list. |
+| **Team** | The team the panel follows in My team. Every league except men's college basketball and minor league baseball, whose lists would make it too long for one entity; pick those teams on the device page. AHL and ECHL teams are in it, like "AHL: Syracuse Crunch" and "ECHL: Rapid City Rush". The golf tours, **Golf: PGA Tour** and **Golf: LPGA Tour**, come after the NHL teams, then the racing series, **Racing: Formula 1** and **Racing: NASCAR Cup Series**, and the AHL and ECHL teams at the end of the list. |
 | **Mode** | My team, Favorite teams or Live games, plus the older Live NFL, Live college and Live anything. |
 | **Power** | The panel's lights on or off. |
 | **Brightness** | 1 to 255. |
@@ -73,7 +75,7 @@ While a racing series is the team, **Game Status** is the race weekend in one li
 
 A few diagnostic sensors, the Wi-Fi signal and the free memory readings, are there but turned off until you turn them on in Home Assistant.
 
-The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The scoreboard doesn't use it.
+The firmware for the MoonHub75 pinout, on an Apollo M-1 or a board you built, also shows a **Microphone Enabled** switch, because the M-1 and the MoonHub75 carry a microphone. The panel doesn't use it.
 
 Favorites, the timezone, the ticker switches, the celebrations, the Live games leagues, the panel layout and the newer settings, like the idle display, the night hours, the second area and its **Full screen** switch, favorite players, bets and [Weather](/using/weather/) with its **Weather warnings in the ticker** switch, have no entities. Set them on the device page. Game Status leaves out bets, favorite players' stat lines and the address line the ticker shows after joining Wi-Fi.
 

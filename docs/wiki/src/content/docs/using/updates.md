@@ -30,7 +30,7 @@ If the check can't reach the update server, the page says **Could not reach the 
 1. Open the device page and tap **Install** in the Firmware box.
 2. Confirm. The panel downloads the update and restarts.
 
-When an update is out, a bar at the top of the device page says **Update available** and the version (or **Update didn't take** or **Update didn't install** for one that failed), with **Install** and **Later**. **Install** asks to confirm, just like the button in the Firmware box. **Later** hides the bar for that version in that browser; a newer version brings it back, and the Firmware box still offers it. While an update installs, the bar says **Installing** and the version, **Keep the panel powered.**, and the panel itself says **Updating**, **Keep it plugged in** until it restarts on the new version. If the install doesn't go through, the panel goes back to what it was showing.
+When an update is out, a bar at the top of the device page says **Update available** and the version (or **Update didn't take** or **Update didn't install** for one that failed), with **Install** and **Later**. **Install** asks to confirm, just like the button in the Firmware box. With **Install updates automatically** on, the bar and the Firmware box add **It installs on its own between 3 and 5 AM.** **Later** hides the bar for that version in that browser; a newer version brings it back, and the Firmware box still offers it. While an update installs, the bar says **Installing** and the version, **Keep the panel powered.**, and the panel itself says **Updating**, **Keep it plugged in** and **Back in a minute** in big words across its whole width (**Updating**, **Keep it**, **plugged in** on a single 64x64 panel) until it restarts on the new version. If the install doesn't go through, the panel goes back to what it was showing.
 
 The Device card, where the Firmware box is, starts folded. When an update is out, or one didn't take, the card opens by itself with **Install** in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say **Update available** and the version, **Update didn't take**, or **Installing** and the version: tap **Device** to open it. See [The Device card](/using/device-page/#the-device-card).
 
@@ -54,6 +54,10 @@ You can install an update at any time, during a game too. Your team, favorites a
 A new release waits a night. The panel doesn't install a release on its own in the first 3 to 5 AM window after it sees that release, only in a later one, so there's time to pull a release that has a problem before panels take it by themselves. A release that comes out in the evening installs the night after next. **Install** on the device page still installs it right away, and betas with **Follow beta** on don't wait.
 
 With the switch off, the panel still checks and the device page tells you when an update is out, but nothing installs until you tap **Install**. Home Assistant has the same switch; see [Home Assistant (optional)](/using/home-assistant/).
+
+## Uploading a firmware file
+
+The panel's `/update` address, where you can upload a firmware file by hand, works only while the panel's setup hotspot is up: join the hotspot and open `192.168.4.1/update`. On your home Wi-Fi it's off, so a web page opened at home can't install firmware on the panel. **Install** on the device page and Home Assistant's **Firmware** entity work as usual. This is so from v2026.11.9 on.
 
 ## An update that didn't take
 

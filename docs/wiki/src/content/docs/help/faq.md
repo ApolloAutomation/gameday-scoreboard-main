@@ -1,9 +1,17 @@
 ---
 title: "FAQ"
-description: "Common questions about Game Day Scoreboard: the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and where to get support."
+description: "Common questions about Apollo Pulse: its old name, the offseason, using it outside, Home Assistant, how often it checks scores, running costs, favorites, the remote, updates and where to get support."
 sidebar:
   order: 4
 ---
+
+## Is Apollo Pulse the Game Day Scoreboard?
+
+Yes. Apollo Pulse used to be called Game Day Scoreboard. It's the same firmware, with the same settings, and it updates the same way. Its address is still `gameday-2f6a70.local`, with your panel's six characters, and Home Assistant still lists it as **Game Day Scoreboard** with those six characters.
+
+:::note[Coming in the next release]
+The panel's start-up and setup screens, its hotspot, `Apollo Pulse 2f6a70`, and its device page say Apollo Pulse.
+:::
 
 ## My team's season is over. What does the panel show?
 
@@ -33,7 +41,7 @@ Once the panel is on your Wi-Fi, its QR code opens the device page, where you pi
 
 ## Does it need Home Assistant?
 
-No. The panel runs on its own and gets its scores by itself, from ESPN, and from MLB and HockeyTech for minor league baseball, the AHL and the ECHL. If you use Home Assistant, it finds the panel on your network and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
+No. The panel runs on its own and gets its scores by itself, from ESPN, and from MLB and HockeyTech for minor league baseball, the AHL and the ECHL. If you use Home Assistant, it finds the panel on your network, listed as **Game Day Scoreboard** and its six characters, the panel's old name, and you can automate the team, mode, power, brightness and more. See [Home Assistant](/using/home-assistant/).
 
 ## How often does it check scores?
 

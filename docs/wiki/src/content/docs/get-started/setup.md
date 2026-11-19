@@ -12,7 +12,9 @@ You need a phone or computer with a web browser, and your Wi-Fi password. It tak
 Connect the power supply that came with the panel. The panel lights up with **GAME DAY** across the top and **Starting** under it.
 
 :::note[Coming in the next release]
-The panel is now called Apollo Pulse. Its start-up screen is black, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words. While the panel is busy, a green bar runs under the name, and under that the panel says what it's doing, starting with **Starting**. On a single 64x64 panel, Apollo and the words take turns, about 4 seconds each, with the bar as the ledge under his paws. The setup screen keeps its QR code and its words as below.
+The panel is now called Apollo Pulse. Its start-up screen is black, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words. While the panel is busy, a green bar runs under the name, and under that the panel says what it's doing, starting with **Starting**. On a single 64x64 panel, Apollo and the words take turns, about 4 seconds each, with the bar as the ledge under his paws.
+
+Apollo shows only while no QR code is up. On the setup screen the QR code takes his place and keeps its words as below: on the 128x64 panel the code has the left half, and the name sits beside it in two lines, **APOLLO / PULSE**, above the words. On a single 64x64 panel the code and the words take turns with no Apollo, and the name is in two lines above the words there too.
 :::
 
 A panel that isn't on Wi-Fi yet then shows **SETUP** and starts its own Wi-Fi hotspot. In the moment before the hotspot is up, it says **SETUP / Starting / hotspot**, with no QR code. Then a QR code appears: it's the hotspot's Wi-Fi code, and the words say **SETUP / Scan to / join Wi-Fi**. On the 128x64 panel the QR code sits on the left half and the words sit beside it. On a single 64x64 panel there is no room for both, so the words and the QR code take turns: about 5 seconds of words, then 8 seconds of QR code.
@@ -28,7 +30,7 @@ If you just installed the firmware from your browser, the installer offers to pu
 While it shows SETUP, the panel also starts its own Wi-Fi network, named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`. Once the hotspot is up, the panel takes a turn showing **Join Wi-Fi / Game Day** and those six characters, so you know which network is yours. Two panels in one house each get their own name.
 
 :::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's turn says **Join Wi-Fi / Apollo Pulse** and those six characters. Where this page says the **Game Day** hotspot, look for that name.
+The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's turn says **Join Wi-Fi / Apollo Pulse** and those six characters. Where this page says the **Game Day** hotspot, look for that name. After **Reset Wi-Fi** or **Factory reset** on the device page, the page's message tells you to join the panel's `Apollo Pulse 2f6a70` Wi-Fi.
 :::
 
 1. Join that network. On a phone, point the camera at the QR code on the panel and tap to join; on a 64x64 panel, wait for the code's turn. Or pick the network from the Wi-Fi list on any phone or laptop. A setup page opens. If it doesn't, tap your phone's notification to sign in to the network, or open `192.168.4.1` in a browser. If your phone says the network has no internet, choose to stay connected.
@@ -45,7 +47,7 @@ While it joins, a new panel says **JOINING** and the name of the network you pic
 
 Once the panel is on your Wi-Fi, its own web page, the device page, holds every setting. To open it, scan the QR code the panel shows with your phone's camera, or open the address it shows in a browser (both below). Your phone or computer has to be on the same Wi-Fi. See [The device page](/using/device-page/).
 
-If you run Home Assistant, it finds the panel as a new ESPHome device, and picking a team or a mode there sets the panel up too. See [Home Assistant](/using/home-assistant/).
+If you run Home Assistant, it finds the panel as a new ESPHome device, and picking a team or a mode there sets the panel up too. Home Assistant lists it as **Game Day Scoreboard** and its six characters, like `Game Day Scoreboard 2f6a70`, the panel's name from before it was called Apollo Pulse, so look for that name. You can rename it in Home Assistant. See [Home Assistant](/using/home-assistant/).
 
 ## The Game Day app
 
@@ -68,6 +70,10 @@ Some bar, hotel and dorm Wi-Fi lets the panel join and then wants a sign-in on a
 ## What the panel shows once it's online
 
 Right after it joins your Wi-Fi, the panel shows a QR code that opens its own device page, at its IP address, like `http://192.168.1.50`. Point your phone's camera at it and tap the link to pick your team, with no app and no `.local` name to type. Your phone has to be on the same Wi-Fi as the panel. On the 128x64 panel the words **Scan to / pick your / team** sit beside the code.
+
+:::note[Coming in the next release]
+On the 128x64 panel, the name sits beside the QR code in two lines, **APOLLO / PULSE**, above **Scan to / pick your / team**. Once the panel is on Wi-Fi and not busy, here and on the address's turn, a thin orange line under the name stands in for the green bar.
+:::
 
 After about 13 seconds the panel's address takes a 5 second turn: **Open gameday-2f6a70.local**, with your panel's own six characters. That address is the device page too, by name. The six characters are the same ones in the hotspot's name. Open the address in a browser on any phone or computer on the same Wi-Fi to pick your team and change settings. See [The device page](/using/device-page/).
 

@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Fixes for the common Game Day Scoreboard problems, each starting from what you see on the panel, the app or the device page."
+description: "Fixes for the common Apollo Pulse problems, each starting from what you see on the panel, the app or the device page."
 sidebar:
   order: 2
 ---
@@ -76,7 +76,7 @@ Open the device page and find **Matrix** in the Setup card (tap **Setup** if it'
 
 | Your panel | Pick |
 | --- | --- |
-| The 128x64 panel from the Game Day Scoreboard, or two 64x64 panels side by side | **One 128x64 panel** |
+| The 128x64 panel that comes with the scoreboard75 controller board, or two 64x64 panels side by side | **One 128x64 panel** |
 | A single 64x64 panel | **One 64x64 panel** |
 | Three or four 64x64 panels side by side | **Three wide** or **Four wide** |
 | Four 64x64 panels in two rows of two | **Two rows of two** |

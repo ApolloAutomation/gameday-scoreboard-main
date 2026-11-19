@@ -1,6 +1,6 @@
 ---
 title: "Build it yourself"
-description: "Compile the Game Day Scoreboard firmware from its YAML with ESPHome, flash it over USB, and run the host tests."
+description: "Compile the Apollo Pulse firmware from its YAML with ESPHome, flash it over USB, and run the host tests."
 sidebar:
   order: 5
 ---
@@ -14,6 +14,8 @@ Build from the YAML when your board has its own pins, when you want to change so
 | `firmware/gameday.yaml` | The release build for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares. It names the build and picks the pin map. |
 | `firmware/gameday-2panel.yaml` | `gameday.yaml` starting two panels wide. The M-1 installer offers it for a 128x64 display. |
 | `firmware/gameday-scoreboard75.yaml` | The release build for the scoreboard75 controller board. Not for other boards. |
+| `firmware/gameday-bar.yaml`, `firmware/gameday-scoreboard75-bar.yaml` | Builds for panels in bars, which follow the beta versions and install them on their own at night. Never released; don't flash them on your own panel. |
+| `firmware/gameday-demo.yaml`, `firmware/gameday-scoreboard75-demo.yaml` | Test builds with a scripted demo. Never released; don't flash them on a panel you use. |
 | `firmware/controllers/` | One pin map per board: `moonhub75.yaml` and `scoreboard75.yaml`. |
 | `firmware/gameday-common.yaml` | Everything else: version, update feed, Wi-Fi, the panel layout, the pages and settings. Don't build it directly. |
 | `firmware/pages/` | The pages drawn on the panel. The scoreboard is `gameday-live.yaml`. |
@@ -107,7 +109,13 @@ The parser and game logic have host tests. They need g++.
 make -C tests
 ```
 
-The device page has browser tests against a mock panel, in `tests/web`. They need Node and Python 3. Run these once:
+The device page has browser tests against a mock panel, in `tests/web`. They need Node and Python 3. Every command here runs in `tests/web`, not at the top of the repo:
+
+```sh
+cd tests/web
+```
+
+Run these once:
 
 ```sh
 npm ci
@@ -117,7 +125,7 @@ npm ci
 npx playwright install chromium
 ```
 
-Then run the tests from `tests/web`:
+Then run the tests:
 
 ```sh
 npm test
@@ -132,6 +140,27 @@ python3 scripts/build_web.py
 ```
 
 That rewrites `firmware/web/bundle.js` and `firmware/web/bundle-demo.js`. A pull request commits both with the change, since CI fails when they don't match the sources.
+
+## Generated files
+
+A few files in `components/gameday` are made by scripts. Don't edit them by hand: change the script's source and run it again.
+
+| File | Made by |
+| --- | --- |
+| `teams.h` | `scripts/build_teams.py` |
+| `team_colors.h` | `scripts/build_team_colors.py` |
+| `timezones_parsed.h` | `scripts/build_timezones.py` |
+| `circuits.h` | `scripts/build_circuits.py` |
+| `flight_airlines.h` | `scripts/build_airlines.py` |
+| `sprites.h` | `scripts/build_sprites.py`, from the play animations' art in `firmware/art/sprites/*.txt` |
+
+:::note[Coming in the next release]
+`apollo_logo.h`, Apollo on the start-up screen, is made by `scripts/build_apollo.py` from `firmware/art/apollo/apollo.png`.
+:::
+
+## Size budget
+
+`firmware/budget.json` holds a ceiling for each release build's flash and internal RAM. CI's **Size budget** job fails a pull request that goes over one, or that grows a build by more than the file allows in one go. A change that needs more raises that one entry in the same pull request and says why. Your own copy can be as big as your board allows, but a pull request back to the project has to fit.
 
 ## Contributing
 

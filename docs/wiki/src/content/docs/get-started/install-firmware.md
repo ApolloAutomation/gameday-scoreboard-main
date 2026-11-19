@@ -1,11 +1,11 @@
 ---
 title: "Install or reinstall the firmware"
-description: "Install or reinstall the Game Day Scoreboard firmware from a desktop browser over USB, and when you would need to."
+description: "Install or reinstall the Apollo Pulse firmware from a desktop browser over USB, and when you would need to."
 sidebar:
   order: 5
 ---
 
-An Apollo M-1 ships with WLED, so you install Game Day Scoreboard on it once from your browser, as below. A Game Day Scoreboard unit with the scoreboard75 controller board comes with the firmware installed. After that the panel updates itself over Wi-Fi. See [Updates](/using/updates/) for the normal way new versions arrive.
+An Apollo M-1 ships with WLED, so you install Apollo Pulse on it once from your browser, as below. A Game Day Scoreboard unit with the scoreboard75 controller board comes with the firmware installed. After that the panel updates itself over Wi-Fi. See [Updates](/using/updates/) for the normal way new versions arrive.
 
 ## When you need it
 

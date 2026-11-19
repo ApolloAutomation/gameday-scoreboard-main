@@ -16,7 +16,7 @@ One firmware drives six arrangements of HUB75 LED panels. The panel size is a se
 | Four 64x64 panels side by side | Wide, 256x64 | **Four wide** |
 | Four 64x64 panels in two rows of two | Two rows, 128x128 | **Two rows of two** |
 
-The Game Day Scoreboard ships with one 128x64 panel, and its firmware starts on the wide layout. Built your own? See [Panels](/diy/panels/).
+A panel on the scoreboard75 controller board ships with one 128x64 panel and starts on the wide layout. An Apollo M-1 starts on the layout you picked in the installer, one 64x64 panel or one 128x64 panel. Built your own? See [Panels](/diy/panels/).
 
 With three or four panels, Bluetooth setup is off, so the panel sets up Wi-Fi through its hotspot only: scan the QR code on its setup screen with your phone's camera. Power them from a supply rated for all of them. See [Panels and power](/diy/panels/).
 
@@ -83,6 +83,10 @@ With **Text size** set to **Large**, the ticker's bigger letters take a few of t
 ## The second area
 
 Two rows of two, and three or four panels in a row, can show something else beside the board, with a ticker of its own, so the two never show the same line.
+
+:::note[Coming in the next release]
+On three or four panels in a row, the two tickers share the bottom line, so they're kept apart: the board's ticker stops a few dots short of the second area, behind a dim divider, and the second area's ticker holds still, showing one item at a time in small letters every few seconds, behind a small mark for what it shows. Under the area's clock it scrolls as before. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
+:::
 
 | Arrangement | The second area | Starts on |
 | --- | --- | --- |
@@ -161,7 +165,7 @@ The logo is the one the panel already has for the board. If it hasn't downloaded
 
 For **Two rows of two**, a **How the rows are mounted** choice appears under the pictures once the panel is back: **Bottom row upside down** (folded under, where a new panel starts), **All upright** or **Top row upside down**. Changing it restarts the panel too. See [Panels and power](/diy/panels/#chain-the-panels) for the wiring.
 
-Your team and settings stay as they were. A [factory reset](/using/buttons-and-resets/) puts the layout back to the one the firmware starts on: 128x64 for the Game Day Scoreboard and the two-panel DIY build, 64x64 for the one-panel DIY build.
+Your team and settings stay as they were. A [factory reset](/using/buttons-and-resets/) puts the layout back to the one the firmware starts on: 128x64 on the scoreboard75 controller board, and 64x64 on an Apollo M-1 or a board you built on its pinout. An M-1 installed with the 128x64 choice returns to 128x64 until its first update, and to 64x64 after it, since updates come from the one-panel build.
 
 ## Wrong size?
 
