@@ -252,6 +252,12 @@ the script's `DROP` table and a rebuild. Changing the file format means a
 new folder (`land/2/`) and a new `LAND_URL` in `app.js`, never an edit of
 `land/1/`, since panels on older firmware keep reading it.
 
+A local build reads the live site's files. To try files that aren't on the
+site yet, run `python3 scripts/build_landmarks.py --serve` and paste the
+line it prints into the device page's browser console; it sets
+`localStorage["gd.landBase"]`, which the page reads instead of the site.
+`localStorage.removeItem("gd.landBase")` goes back.
+
 ## Airport names
 
 The Flight Tracker names a route's airports by their city, like **SDF
@@ -263,16 +269,13 @@ from `python3 scripts/build_airports.py`, which downloads OurAirports'
 and scheduled flights, and every large one. Run it with `--cache DIR` to
 keep the download, review the `.tsv`'s diff and commit both files. A wrong
 city is fixed with a line in the script's `CITY` table, an airport's own
-name where a city has two in its `PART` table, then a rerun. `--check`
+name where a city has two in its `PART` table, then a rerun. A former
+code OurAirports keeps in an airport's keywords with its ICAO form (PBI
+and KPBI for DJT) gets its own line, so routes that still send it find
+the name. `--check`
 (also in CI) fails when the header isn't what the `.tsv` packs to or the
 `.tsv` was made by other rules; `--check --cache DIR` also remakes the
 `.tsv` from the kept download and compares.
-
-A local build reads the live site's files. To try files that aren't on the
-site yet, run `python3 scripts/build_landmarks.py --serve` and paste the
-line it prints into the device page's browser console; it sets
-`localStorage["gd.landBase"]`, which the page reads instead of the site.
-`localStorage.removeItem("gd.landBase")` goes back.
 
 ## License
 

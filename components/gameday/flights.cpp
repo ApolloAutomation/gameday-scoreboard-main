@@ -970,7 +970,7 @@ namespace {
 
 struct BitIn {
   const uint8_t *p;
-  size_t n;  // bits
+  size_t n;  // the stream's length in bits
   uint32_t at;
   int bit() {
     if (this->at >= this->n)
@@ -1168,18 +1168,28 @@ std::string route_words(const std::string &from, const std::string &to) {
   return stop_text(from, StopFit::FULL) + " to " + stop_text(to, StopFit::FULL);
 }
 
-bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b) {
-  a.clear();
-  b.clear();
-  AirportName x;
-  if (!airport_name(from.c_str(), x) && !airport_name(to.c_str(), x))
-    return false;
+namespace {
+
+// A stop's longest fitting words; true if named.
+bool stop_line(const std::string &code, const char *lead, size_t max, std::string &out) {
   for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::PLACE}) {
-    a = stop_text(from, f);
-    b = "to " + stop_text(to, f);
-    if (glyphs(a) <= max && glyphs(b) <= max)
+    const std::string s = stop_text(code, f);
+    if (s == code)
+      break;
+    out = lead + s;
+    if (glyphs(out) <= max)
       return true;
   }
+  out = lead + code;
+  return false;
+}
+
+}
+
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b) {
+  const bool named = stop_line(from, "", max, a);
+  if ((stop_line(to, "to ", max, b) || named) && glyphs(a) <= max && glyphs(b) <= max)
+    return true;
   a.clear();
   b.clear();
   return false;

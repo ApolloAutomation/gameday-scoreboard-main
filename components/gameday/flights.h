@@ -513,14 +513,13 @@ struct AirportName {
 // By IATA, else ICAO; false when unknown.
 bool airport_name(const char *code, AirportName &out);
 
-// A stop's words, longest first: "ORD Chicago O'Hare",
-// "ORD Chicago", "Chicago", "ORD". Unknown: the code.
+// "ORD Chicago O'Hare", "ORD Chicago", "Chicago", "ORD".
 enum class StopFit : uint8_t { FULL = 0, CITY, PLACE, CODE };
+// A stop's words at that fit; unknown: the code.
 std::string stop_text(const std::string &code, StopFit fit);
 // The ticker's: "SDF Louisville to ORD Chicago O'Hare".
 std::string route_words(const std::string &from, const std::string &to);
-// Two lines, "SDF Louisville" and "to ORD Chicago",
-// each within max glyphs; false: the codes alone.
+// Each line's longest fit; false when neither is named.
 bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b);
 // UTF-8 glyphs, as the panel draws them.
 size_t glyphs(const std::string &s);

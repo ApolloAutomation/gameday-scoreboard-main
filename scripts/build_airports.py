@@ -14,8 +14,22 @@ airport. This script keeps each one with a three-letter IATA code and
 scheduled service, and every large airport, and names it by the place
 people know: the municipality, cleaned for a small panel (no "(Roissy)" or
 ", Essex", letters past Latin-1 folded to ASCII), or one of the overrides
-below where the municipality misleads. Run it when OurAirports changes
-enough to matter, review the .tsv's diff and commit both files.
+below where the municipality misleads. A name with any letter past
+Latin-1 is folded whole to ASCII ("Lodz", not "Lódz"). A former code
+OurAirports keeps in an airport's keywords with its ICAO form, like PBI and
+KPBI for DJT, gets a line of its own with the same name, since route
+sources may still send it. Run it when OurAirports changes enough to
+matter, review the .tsv's diff and commit both files.
+
+The header packs the rows into one bit stream, in blocks of BLOCK airports
+by IATA; kAirportHead[k] is block k's first IATA (base 26) and bit offset.
+Each airport, high bit first: the IATA's gap from the one before (Rice
+coded, none on a block's first); 2 bits for the ICAO (0 none, 1 "K" + IATA,
+2 "C" + IATA, 3 in the ICAO index); then Huffman symbols for the city, SEP
+and the airport part when there is one, and END. A word's first letter
+(after the start, a space, a dash or SEP) has its own code table. The ICAO
+index lists the mode-3 airports by ICAO in blocks the same way: each one's
+gap (Rice coded) and its 13-bit place in the names.
 
   (no option)  download airports.csv, rewrite the .tsv and the header
   --cache D    keep and reuse the download in folder D
@@ -46,10 +60,10 @@ PART_MAX = 12
 CITY = {
     "BSL": "Basel", "CGN": "Cologne", "EDI": "Edinburgh", "IAD": "Washington", "NRT": "Tokyo",
     "KUL": "Kuala Lumpur", "MXP": "Milan", "LIN": "Milan", "BGY": "Milan", "ATH": "Athens",
-    "WMI": "Warsaw", "NYO": "Stockholm", "TRF": "Oslo", "STN": "London", "LTN": "London",
+    "WMI": "Warsaw", "NYO": "Stockholm", "STN": "London", "LTN": "London",
     "SEN": "London", "LCY": "London", "LGW": "London", "PIE": "St. Petersburg", "SWF": "Newburgh",
     "ICN": "Seoul", "GMP": "Seoul", "KIX": "Osaka", "UKB": "Kobe", "TPE": "Taipei", "TSA": "Taipei",
-    "CTS": "Sapporo", "BVA": "Paris", "XCR": "Paris", "HHN": "Frankfurt", "CRL": "Brussels",
+    "CTS": "Sapporo", "BVA": "Paris", "XCR": "Paris", "HHN": "Frankfurt",
     "EIN": "Eindhoven", "TSF": "Venice", "CIA": "Rome", "PSA": "Pisa", "VCE": "Venice",
     "NCE": "Nice", "GVA": "Geneva", "ZRH": "Zurich", "VIE": "Vienna", "MUC": "Munich",
     "FRA": "Frankfurt", "DUS": "Düsseldorf", "HAM": "Hamburg", "BER": "Berlin", "CPH": "Copenhagen",
@@ -78,6 +92,23 @@ CITY = {
     "USA": "Concord", "IST": "Istanbul", "SAW": "Istanbul", "NAP": "Naples", "BLQ": "Bologna",
     "TXL": "Berlin", "MAN": "Manchester", "BFS": "Belfast", "BHD": "Belfast", "DMK": "Bangkok",
     "BKK": "Bangkok", "CGK": "Jakarta", "HKG": "Hong Kong", "SIN": "Singapore", "DOH": "Doha",
+    "KBP": "Kyiv", "PTY": "Panama City", "BLB": "Panama City", "PAC": "Panama City", "STT": "St. Thomas",
+    "STX": "St. Croix", "JTR": "Santorini", "USM": "Koh Samui", "VPS": "Destin", "SPC": "La Palma",
+    "GJL": "Jijel", "ENU": "Enugu", "IOM": "Isle of Man", "NOC": "Knock", "EVE": "Harstad-Narvik",
+    "LLW": "Lilongwe", "OUD": "Oujda", "BEM": "Beni Mellal", "DXN": "Noida", "ECN": "Ercan",
+    "BNX": "Banja Luka", "TZL": "Tuzla", "RTB": "Roatán", "MZT": "Mazatlán", "VRA": "Varadero",
+    "HEA": "Herat", "NUM": "Neom", "GWD": "Gwadar", "TKK": "Chuuk", "ROR": "Palau", "KSA": "Kosrae",
+    "MZG": "Penghu", "IBR": "Ibaraki", "FSZ": "Shizuoka", "KCZ": "Kochi", "SDJ": "Sendai",
+    "YNY": "Yangyang", "ILO": "Iloilo", "RSI": "Red Sea", "UYU": "Uyuni", "ESM": "Esmeraldas",
+    "DSY": "Dara Sakor", "SFS": "Subic Bay", "SPB": "St. Thomas", "SSB": "St. Croix", "COV": "Adana-Mersin", "YKF": "Waterloo", "MME": "Teesside",
+    "HUY": "Humberside", "KIR": "Kerry", "LCG": "A Coruña", "LEN": "León", "EAS": "San Sebastián",
+    "VIT": "Vitoria", "ETZ": "Metz", "RNS": "Rennes", "CUF": "Cuneo", "VBS": "Brescia", "AOI": "Ancona",
+    "BWK": "Brac", "HDF": "Heringsdorf", "MBS": "Saginaw", "CMI": "Champaign", "CWA": "Wausau",
+    "TRI": "Tri-Cities", "MQT": "Marquette", "SUN": "Sun Valley", "TTN": "Trenton", "OCJ": "Ocho Rios",
+    "MTT": "Minatitlán", "TAM": "Tampico", "AKJ": "Asahikawa", "GAJ": "Yamagata", "FKS": "Fukushima",
+    "RJA": "Rajahmundry", "KUU": "Kullu", "ABX": "Albury", "KGI": "Kalgoorlie", "WGA": "Wagga Wagga",
+    "GET": "Geraldton", "AYQ": "Uluru", "CRV": "Crotone", "JSH": "Sitia", "GRK": "Killeen",
+    "PIB": "Hattiesburg", "CIU": "Sault Ste. Marie", "CKB": "Clarksburg",
 }
 
 # The airport's own short name, where two share a city.
@@ -95,9 +126,11 @@ PART = {
     "GIG": "Galeão", "SDU": "Santos Dumont", "IST": "IST", "SAW": "Sabiha", "DXB": "DXB",
     "DWC": "Al Maktoum", "BKK": "Suvarnabhumi", "DMK": "Don Mueang", "TPE": "Taoyuan",
     "TSA": "Songshan", "YYZ": "Pearson", "YTZ": "Billy Bishop", "YUL": "Trudeau",
-    "MIA": "MIA", "OPF": "Opa-locka", "MCO": "MCO", "SFB": "Sanford", "BFS": "Intl",
+    "MIA": "MIA", "OPF": "Opa-locka", "MCO": "MCO", "SFB": "Sanford", "BFS": "Aldergrove",
     "BHD": "City", "HHN": "Hahn", "FRA": "FRA", "WAW": "Chopin", "WMI": "Modlin",
     "LAX": "LAX", "LGB": "Long Beach", "JAC": "", "AGS": "", "AUG": "", "SGF": "",
+    "SEA": "Sea-Tac", "BFI": "Boeing Field", "NLU": "Felipe Ángeles", "MEX": "Benito Juárez",
+    "KBP": "Boryspil", "PTY": "Tocumen", "BLB": "Pacífico", "PAC": "Albrook", "CRL": "", "SPB": "Harbor", "SSB": "Harbor",
 }
 
 GENERIC = {
@@ -113,23 +146,23 @@ GENERIC = {
 CONNECT = {"de", "do", "da", "dos", "das", "del", "la", "le", "les", "di", "of", "the", "on", "upon", "y", "e", "and",
            "an", "am", "bei", "-"}
 
-# Letters past Latin-1 that NFKD leaves alone.
+# Letters NFKD leaves alone.
 FOLD = {"ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "ı": "i", "ŀ": "l", "Ŀ": "L", "ħ": "h", "Ħ": "H",
-        "ʻ": "'", "ʼ": "'", "’": "'", "‘": "'", "–": "-", "—": "-", "ŋ": "n", "Ŋ": "N", "ə": "e", "Ə": "E"}
+        "ŋ": "n", "Ŋ": "N", "ə": "e", "Ə": "E", "ß": "ss", "ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE",
+        "þ": "th", "Þ": "Th", "ð": "d", "Ð": "D"}
+# Punctuation past Latin-1, folded alone.
+MARKS = {"ʻ": "'", "ʼ": "'", "’": "'", "‘": "'", "–": "-", "—": "-"}
+
+
+def ascii_of(s):
+    return "".join(FOLD.get(ch) or unicodedata.normalize("NFKD", ch).encode("ascii", "ignore").decode() for ch in s)
 
 
 def fold(s):
-    """Latin-1 kept; anything past it to ASCII."""
-    out = []
-    for ch in s:
-        if ord(ch) < 0x100:
-            out.append(ch)
-        elif ch in FOLD:
-            out.append(FOLD[ch])
-        else:
-            base = unicodedata.normalize("NFKD", ch).encode("ascii", "ignore").decode()
-            out.append(base)
-    s = "".join(out)
+    """Latin-1 kept, else the whole name to ASCII."""
+    s = "".join(MARKS.get(ch, ch) for ch in s)
+    if any(ord(ch) >= 0x100 for ch in s):
+        s = ascii_of(s)
     s = "".join(c for c in s if (0x20 <= ord(c) < 0x7F and c != "|") or 0xC0 <= ord(c) <= 0xFF and c not in "×÷")
     return re.sub(r"\s+", " ", s).strip()
 
@@ -154,6 +187,7 @@ def city_of(muni):
     s = re.sub(r"-(Borneo|Sumatra|Celebes|Java|Papua)$", "", s)
     if s.isupper() and len(s) > 3:
         s = s.title()
+    s = re.sub(r"\b(St|Ste)(?= )", r"\1.", s)
     return whole(s, CITY_MAX)
 
 
@@ -167,19 +201,34 @@ def name_city(name):
 
 def part_of(name, city):
     """The airport's own name: "Chicago O'Hare ..." to "O'Hare"."""
-    s = fold(re.sub(r"\s*\([^)]*\)", "", name))
+    s = "".join(MARKS.get(ch, ch) for ch in re.sub(r"\s*\([^)]*\)", "", name))
     drop = {w.lower() for w in re.split(r"[\s/-]+", city)}
-    keep = [w for w in re.split(r"[\s/–]+", s) if w and w.lower().strip(".,") not in GENERIC | drop]
-    keep = [w.strip(",") for w in keep if not re.fullmatch(r"[A-Z]\.?", w)]
+    keep = [w for w in re.split(r"[\s/]+", s) if w and fold(w).lower().strip(".,") not in GENERIC | drop]
+    keep = [w.strip(",") for w in keep if not re.fullmatch(r"[A-Z]\.?|-", w)]
     if not keep or len(keep) > 2:
         return ""
-    out = " ".join(keep)
+    out = fold(" ".join(keep))
     return out if len(out) <= PART_MAX else ""
 
 
 def wanted(r):
     return re.fullmatch(r"[A-Z]{3}", r.get("iata_code") or "") is not None and (
         r.get("scheduled_service") == "yes" or r.get("type") == "large_airport") and r.get("type") != "closed"
+
+
+def former_codes(records, keep):
+    """{former IATA: (its ICAO, today's IATA)} from keywords."""
+    taken = {r.get("iata_code") for r in records}
+    taken |= {r.get(k) for r in records for k in ("ident", "icao_code", "gps_code")}
+    seen = {}
+    for code, (_, r) in sorted(keep.items()):
+        words = sorted({w.strip() for w in (r.get("keywords") or "").split(",")})
+        for w in words:
+            if re.fullmatch(r"[A-Z]{3}", w) and w not in taken:
+                icao = [x for x in words if re.fullmatch(r"[A-Z]" + w, x) and (x not in taken or x == r.get("ident"))]
+                if icao:
+                    seen.setdefault(w, []).append((icao[0], code))
+    return {w: v[0] for w, v in seen.items() if len(v) == 1}
 
 
 def rows_of(records):
@@ -213,14 +262,18 @@ def rows_of(records):
         if part == city:
             part = ""
         out.append((code, icao, city, part))
+    names = {r[0]: r for r in out}
+    for old, (icao, now) in former_codes(records, keep).items():
+        out.append((old, icao, names[now][2], names[now][3]))
     return sorted(out)
 
 
 def rules():
     """A hash of everything that turns the download into the .tsv."""
-    src = "".join(inspect.getsource(f) for f in (fold, whole, city_of, name_city, part_of, wanted, rows_of))
-    data = repr((sorted(CITY.items()), sorted(PART.items()), sorted(GENERIC), sorted(FOLD.items()), sorted(CONNECT),
-                 CITY_MAX, PART_MAX))
+    src = "".join(inspect.getsource(f) for f in (ascii_of, fold, whole, city_of, name_city, part_of, wanted,
+                                                  former_codes, rows_of))
+    data = repr((sorted(CITY.items()), sorted(PART.items()), sorted(GENERIC), sorted(FOLD.items()),
+                 sorted(MARKS.items()), sorted(CONNECT), CITY_MAX, PART_MAX))
     return hashlib.sha256((src + data).encode()).hexdigest()[:16]
 
 
@@ -244,20 +297,7 @@ def read_tsv(text):
     return rules_line, rows
 
 
-# ---- Packing ---------------------------------------------------------------------
-#
-# Names: one bit stream, in blocks of BLOCK airports by IATA. kAirportHead[k]
-# is block k's first IATA (base 26) and bit offset. Each airport, high bit
-# first:
-#   IATA: the gap from the one before, Rice coded (none on a block's first)
-#   ICAO: 2 bits: 0 none, 1 "K" + IATA, 2 "C" + IATA, 3 in the ICAO index
-#   name: Huffman symbols: the city, then SEP and the airport part when
-#         there is one, then END. A word's first letter (after the start, a
-#         space, a dash or SEP) has its own code.
-# ICAO index: the mode-3 airports by ICAO, in blocks the same way:
-#   kAirportIcaoHead[k] the block's first ICAO (base 26) and bit offset,
-#   each airport the gap (Rice coded, none on a block's first) and its
-#   13-bit place in the names.
+# ---- Packing (format in the docstring) -------------------------------------------
 
 SEP, END = 256, 257
 IATA_RICE = 2
@@ -489,9 +529,8 @@ def header_text(rows):
         "",
     ]
     for k, (order, _, counts) in enumerate(p.tables):
-        what = "a word's first letter" if k == 0 else "the other letters"
-        lines += [f"// Huffman codes for {what}: how many of each length, 1 to 15,",
-                  "// then the symbols in code order (Latin-1, SEP, END).",
+        what = "first letters" if k == 0 else "other letters"
+        lines += [f"// Huffman counts by length, then symbols: {what}",
                   f"static const uint8_t kAirportCounts{k}[16] = {{" + ", ".join(map(str, counts)) + "};",
                   f"static const uint16_t kAirportSymbols{k}[] = {{"]
         lines += wrap([str(s) for s in order])
@@ -586,7 +625,13 @@ def selftest():
     eq(city_of("London, Essex"), "London", "a county after a comma")
     eq(city_of("Köln (Cologne)"), "Köln", "Latin-1 kept")
     eq(city_of("İstanbul"), "Istanbul", "past Latin-1 folded")
-    eq(city_of("Łódź"), "Lódz", "Ł and ź folded, ó kept")
+    eq(city_of("Łódź"), "Lodz", "folded whole, not half")
+    eq(city_of("České Budějovice"), "Ceske Budejovice", "every letter folded")
+    eq(city_of("St Louis"), "St. Louis", "St. with its period")
+    eq(city_of("Ste Agathe"), "Ste. Agathe", "Ste. with its period")
+    eq(city_of("St. Petersburg"), "St. Petersburg", "St. kept")
+    eq(city_of("Saint-Laurent"), "Saint-Laurent", "Saint left alone")
+    eq(city_of("Stockholm"), "Stockholm", "St inside a word")
     eq(city_of("Nowy Dwór Mazowiecki Long Town"), "Nowy Dwór Mazowiecki", "whole words only")
     eq(city_of("São José do Rio Preto"), "São José do Rio Preto", "a long name whole")
     eq(city_of("WHATI"), "Whati", "capitals")
@@ -601,6 +646,10 @@ def selftest():
     eq(part_of("Rhode Island T. F. Green International Airport", "Providence"), "", "too many words")
     eq(part_of("Dallas Love Field", "Dallas"), "Love", "a field")
     eq(fold("Zürich – Kloten"), "Zürich - Kloten", "a dash")
+    eq(fold("Ka’anapali"), "Ka'anapali", "a quote mark alone")
+    eq(part_of("King County International Airport - Boeing Field", "Seattle"), "King Boeing", "a lone dash")
+    for code, name in list(CITY.items()) + list(PART.items()):
+        eq(fold(name), name, f"{code}'s override is folded already")
     recs = [
         {"iata_code": "ORD", "icao_code": "KORD", "type": "large_airport", "scheduled_service": "yes",
          "municipality": "Chicago", "name": "Chicago O'Hare International Airport", "iso_country": "US"},
@@ -631,6 +680,24 @@ def selftest():
     eq(unpack(Packed(many)), many, "many blocks read back")
     eq(read_tsv(tsv_text(rows))[1], rows, "the .tsv reads back")
     eq(read_tsv(tsv_text(rows))[0], rules(), "the .tsv names its rules")
+    renamed = [
+        {"iata_code": "DJT", "icao_code": "KDJT", "ident": "KDJT", "type": "large_airport",
+         "scheduled_service": "yes", "municipality": "West Palm Beach", "name": "Trump International Airport",
+         "iso_region": "US-FL", "keywords": "PBI, KPBI, MFW, South Florida"},
+        {"iata_code": "FLL", "icao_code": "KFLL", "ident": "KFLL", "type": "large_airport",
+         "scheduled_service": "yes", "municipality": "Fort Lauderdale", "name": "Fort Lauderdale Airport",
+         "iso_region": "US-FL", "keywords": "MFW, South Florida"},
+        {"iata_code": "JFK", "icao_code": "KJFK", "ident": "KJFK", "type": "large_airport",
+         "scheduled_service": "yes", "municipality": "New York", "name": "John F. Kennedy Airport",
+         "iso_region": "US-NY", "keywords": "NYC, Idlewild, EWR, KEWR"},
+        {"iata_code": "EWR", "icao_code": "KEWR", "ident": "KEWR", "type": "large_airport",
+         "scheduled_service": "yes", "municipality": "Newark", "name": "Newark Liberty Airport",
+         "iso_region": "US-NJ", "keywords": "NYC"},
+    ]
+    eq(rows_of(renamed), [("DJT", "KDJT", "West Palm Beach", ""), ("EWR", "KEWR", "Newark", ""),
+                          ("FLL", "KFLL", "Fort Lauderdale", ""), ("JFK", "KJFK", "New York", "JFK"),
+                          ("PBI", "KPBI", "West Palm Beach", "")],
+       "a former code from keywords, with its ICAO; a metro code or a code in use not")
     print("build_airports selftest:", "ok" if not bad else f"{bad} failures")
     return 1 if bad else 0
 

@@ -1021,7 +1021,28 @@ void test_airports() {
   FCHECK_EQ(city_of("STN"), "London|Stansted");    // "London, Essex"
   FCHECK_EQ(city_of("EDI"), "Edinburgh");          // "Ingliston, Edinburgh"
   FCHECK_EQ(city_of("IST"), "Istanbul|IST");       // past Latin-1, folded
-  FCHECK_EQ(city_of("LCJ"), "L\xC3\xB3" "dz");     // "Łódź": Ł and ź folded, ó kept
+  FCHECK_EQ(city_of("LCJ"), "Lodz");                // "Łódź": folded whole
+  FCHECK_EQ(city_of("JCL"), "Ceske Budejovice");
+  FCHECK_EQ(city_of("STL"), "St. Louis");
+  FCHECK_EQ(city_of("PIE"), "St. Petersburg");
+  // A former code still finds the airport
+  FCHECK_EQ(city_of("DJT"), "West Palm Beach");
+  FCHECK_EQ(city_of("PBI"), "West Palm Beach");
+  FCHECK_EQ(city_of("KPBI"), "West Palm Beach");
+  // The place people say, and which airport
+  FCHECK_EQ(city_of("KBP"), "Kyiv|Boryspil");
+  FCHECK_EQ(city_of("PTY"), "Panama City|Tocumen");
+  FCHECK_EQ(city_of("STT"), "St. Thomas|Cyril King");
+  FCHECK_EQ(city_of("JTR"), "Santorini");
+  FCHECK_EQ(city_of("USM"), "Koh Samui");
+  FCHECK_EQ(city_of("VPS"), "Destin");
+  FCHECK_EQ(city_of("SEA"), "Seattle|Sea-Tac");
+  FCHECK_EQ(city_of("BFI"), "Seattle|Boeing Field");
+  FCHECK_EQ(city_of("CRL"), "Charleroi");
+  FCHECK_EQ(city_of("NLU"), "Mexico City|Felipe \xC3\x81ngeles");
+  FCHECK_EQ(city_of("TRF"), "Sandefjord|Torp");
+  FCHECK_EQ(city_of("BFS"), "Belfast|Aldergrove");
+  FCHECK_EQ(city_of("ISL"), "Istanbul|Atat\xC3\xBCrk");
   FCHECK_EQ(city_of("GRU"), "S\xC3\xA3o Paulo|Guarulhos");
   FCHECK_EQ(city_of("KEF"), "Reykjav\xC3\xADk");
   FCHECK_EQ(city_of("MXP"), "Milan|Malpensa");     // "Ferno (VA)"
@@ -1054,15 +1075,23 @@ void test_airports() {
       {"LEX", "ATL", 14, true, "LEX Lexington", "to ATL Atlanta"},
       {"JFK", "LHR", 14, true, "JFK New York", "to LHR London"},
       {"JFK", "LHR", 25, true, "JFK New York", "to LHR London Heathrow"},
-      {"LAX", "NRT", 14, true, "Los Angeles", "to Tokyo"},
+      {"LAX", "NRT", 14, true, "Los Angeles", "to NRT Tokyo"},
       {"LAX", "NRT", 25, true, "LAX Los Angeles", "to NRT Tokyo Narita"},
       {"CVG", "MCO", 14, true, "CVG Cincinnati", "to MCO Orlando"},
       {"OWB", "PAH", 14, true, "OWB Owensboro", "to PAH Paducah"},
       {"SDF", "QQQ", 14, true, "SDF Louisville", "to QQQ"},
       {"QQQ", "SDF", 25, true, "QQQ", "to SDF Louisville"},
       {"QQQ", "ZZZ", 25, false, "", ""},
-      {"LDX", "CAY", 14, false, "", ""},
-      {"LDX", "CAY", 25, true, "Saint-Laurent-du-Maroni", "to Cayenne"},
+      {"LDX", "CAY", 14, true, "LDX", "to CAY Cayenne"},
+      {"ATL", "LAX", 14, true, "ATL Atlanta", "to Los Angeles"},
+      {"ORD", "LGA", 14, true, "ORD Chicago", "to New York"},
+      {"MDW", "DCA", 14, true, "MDW Chicago", "to Washington"},
+      {"EWR", "SFO", 14, true, "EWR Newark", "to SFO"},
+      {"DFW", "IAD", 14, true, "DFW", "to Washington"},
+      {"PBI", "ATL", 25, true, "PBI West Palm Beach", "to ATL Atlanta"},
+      {"DFW", "IAD", 25, true, "DFW Dallas-Fort Worth", "to IAD Washington Dulles"},
+      {"QQQ", "LDX", 14, false, "", ""},
+      {"LDX", "CAY", 25, true, "Saint-Laurent-du-Maroni", "to CAY Cayenne"},
       {"SDF", "ORD", 8, false, "", ""},
   };
   for (const Fit &t : kFits) {
@@ -1092,11 +1121,17 @@ void test_airports() {
       std::string a, b;
       if (!route_lines(code, "SDF", max, a, b))
         continue;
-      bool level = false;
-      for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::PLACE})
-        level = level || (a == stop_text(code, f) && b == "to " + stop_text("SDF", f));
-      FCHECK(level && glyphs(a) <= max && glyphs(b) <= max, "%s in %zu: \"%s\" / \"%s\"", code, max, a.c_str(),
-             b.c_str());
+      // Each line the longest of its levels that fits
+      std::string wa, wb;
+      for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::PLACE, StopFit::CODE}) {
+        const std::string sa = stop_text(code, f), sb = "to " + stop_text("SDF", f);
+        if (wa.empty() && (glyphs(sa) <= max || f == StopFit::CODE))
+          wa = sa;
+        if (wb.empty() && (glyphs(sb) <= max || f == StopFit::CODE))
+          wb = sb;
+      }
+      FCHECK(a == wa && b == wb && glyphs(a) <= max && glyphs(b) <= max, "%s in %zu: \"%s\" / \"%s\"", code, max,
+             a.c_str(), b.c_str());
     }
     // The card draws exactly those lines, or the codes
     const Nearby n = one_route(code, "SDF");
@@ -1151,6 +1186,28 @@ void test_airports() {
   o.list = true;
   f = flight_frame(one_route("SDF", "ORD"), &none, o, 100);
   FCHECK(find_text(f, "SDF-ORD") != nullptr, "the full-screen list: codes");
+
+  // The full-screen card's flight number, only beside room
+  o.list = false;
+  struct Tail {
+    const char *from, *to, *a, *b;
+    int y;
+  };
+  static const Tail kTails[] = {
+      {"DFW", "IAD", "DFW Dallas-Fort Worth", "to IAD Washington Dulles", -1},
+      {"LEX", "ATL", "LEX Lexington", "to ATL Atlanta", 34},
+      {"MDW", "ATL", "MDW Chicago Midway", "to ATL Atlanta", 42},
+  };
+  for (const Tail &t : kTails) {
+    Nearby n = one_route(t.from, t.to);
+    snprintf(n.planes[0].flight, sizeof(n.planes[0].flight), "%s", "B6123456");
+    f = flight_frame(n, &none, o, 100);
+    check_frame(f, o, t.from);
+    const Text *tail = find_text(f, "B6123456");
+    FCHECK(find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr &&
+               (t.y < 0 ? tail == nullptr : tail != nullptr && tail->y == t.y && tail->align == Align::RIGHT),
+           "%s-%s full screen, the flight number at %d", t.from, t.to, t.y);
+  }
 }
 
 void test_ticker() {
@@ -1268,11 +1325,11 @@ void test_fr24() {
   const Frame f = flight_frame(n, &cache, o, 100);
   bool from = false, to = false, number = false;
   for (const Text &t : f.items) {
-    from = from || (t.text == "Denver" && t.color == kColRoute);
+    from = from || (t.text == "DEN Denver" && t.color == kColRoute);
     to = to || (t.text == "to New York" && t.color == kColRoute);
     number = number || t.text == "WN1678";
   }
-  FCHECK(from && to && number, "Denver, to New York and WN1678 on the card");
+  FCHECK(from && to && number, "DEN Denver, to New York and WN1678 on the card");
   FCHECK(f.ticker.find("SWA1678 Southwest, Boeing 737 MAX 8, DEN Denver to LGA New York LaGuardia, 5,450 ft") !=
              std::string::npos,
          "%s", f.ticker.c_str());
@@ -2244,8 +2301,8 @@ void test_radar_frames() {
       }
     FCHECK(sig_hash(bare) == 0xeecf6540u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
            (unsigned) sig_hash(bare));
-    FCHECK(sig_hash(sig) == 0x434c9217u, "64, 128 and 192 wide as before: 0x%08x", (unsigned) sig_hash(sig));
-    FCHECK(sig_hash(direct) == 0x6fc30564u, "the card and list as before: 0x%08x", (unsigned) sig_hash(direct));
+    FCHECK(sig_hash(sig) == 0x636f57bcu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(direct) == 0x385834d9u, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
   }
   for (int w = 32; w <= 320; w += 32)
     for (int h : {32, 64, 96, 128})
