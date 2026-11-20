@@ -154,9 +154,7 @@ A few files in `components/gameday` are made by scripts. Don't edit them by hand
 | `flight_airlines.h` | `scripts/build_airlines.py` |
 | `sprites.h` | `scripts/build_sprites.py`, from the play animations' art in `firmware/art/sprites/*.txt` |
 
-:::note[Coming in the next release]
 `apollo_logo.h`, Apollo on the start-up screen, is made by `scripts/build_apollo.py` from `firmware/art/apollo/apollo.png`.
-:::
 
 ## Size budget
 

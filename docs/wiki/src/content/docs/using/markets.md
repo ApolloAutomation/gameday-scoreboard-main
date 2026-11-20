@@ -36,9 +36,7 @@ Each symbol gets a row: its logo, where there's room, then the symbol, its price
 
 **The ticker.** Every symbol with its price, change and percent, the change in green or red, like **AAPL 355.63 +7.12 +2.04% | BTC 73,738.65 -186.54 -0.25%**.
 
-:::note[Coming in the next release]
-On three or four panels in a row, with Stocks & Crypto in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a rising chart, in a softer, tinted color than the board's white. A long line is split over a few turns, keeping a number and its unit together. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls as before. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
-:::
+On three or four panels in a row, with Stocks & Crypto in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a rising chart, in a softer, tinted color than the board's white. A long line is split over a few turns, keeping a number and its unit together. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
 
 **Big and small numbers.** A price too long for its column loses its commas, then its cents, then shortens to thousands, like **73,738.65**, **73738.65**, **73,739** or **74K**. A price under a dollar shows up to four digits after the zeros, like **0.06726**, fewer when its column is narrow, and a price too small for its column shows as a power of ten, like **4.3e-6** for 0.00000435.
 

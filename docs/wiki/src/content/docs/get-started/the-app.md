@@ -32,9 +32,5 @@ The panel's QR codes don't open the app or its project's page, so you never need
 
 You don't need the app to use the panel.
 
-- **To put it on Wi-Fi**, join the panel's own hotspot: scan the QR code on the panel with your phone's camera, or pick the hotspot from the Wi-Fi list on any phone or laptop. It's named **Game Day** plus six letters and numbers, like `Game Day 2f6a70`, and a setup page opens when you join it. See [Set up your panel](/get-started/setup/#use-the-panels-hotspot).
+- **To put it on Wi-Fi**, join the panel's own hotspot: scan the QR code on the panel with your phone's camera, or pick the hotspot from the Wi-Fi list on any phone or laptop. It's named **Apollo Pulse** plus six letters and numbers, like `Apollo Pulse 2f6a70`, and a setup page opens when you join it. See [Set up your panel](/get-started/setup/#use-the-panels-hotspot).
 - **To pick your team and change settings**, open the panel's device page in any browser on the same Wi-Fi: scan the QR code the panel shows once it's on your Wi-Fi, or open the `gameday-xxxxxx.local` name or IP address the panel shows. Everything the app sets is there. See [The device page](/using/device-page/).
-
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
-:::

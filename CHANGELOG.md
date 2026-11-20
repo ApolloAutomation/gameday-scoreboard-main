@@ -14,6 +14,19 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.11
+
+The panel is now called Apollo Pulse, with Apollo the dog on its start-up and setup screens, and on three or four panels in a row the second area's ticker holds still beside the board's so the two read apart.
+
+- The panel is now called Apollo Pulse. Its start-up, loading and setup screens are black, with **APOLLO PULSE** in light blue and Apollo, the Apollo Automation dog, beside the words, a green bar under the name while the panel is busy, and a thin orange line once it's on Wi-Fi and not busy. On a single 64x64 panel Apollo and the words take turns. Where a QR code is up, it takes Apollo's place.
+- The setup hotspot is named **Apollo Pulse** plus the panel's six letters and numbers, like `Apollo Pulse 2f6a70`, and the panel's **Join Wi-Fi** turn says that name. The device page's heading and browser tab say Apollo Pulse, with the panel's six characters in the tab, and its messages after **Reset Wi-Fi** or **Factory reset** name the new hotspot.
+- While an update installs on three or four panels in a row or two rows of two, Apollo sits beside or above **Updating** and **Keep it plugged in**.
+- Nothing else changes with the name: the panel's address is still `gameday-xxxxxx.local`, with its six characters, it keeps every setting and updates the same way, and Home Assistant still lists it as Game Day Scoreboard.
+- On three or four panels in a row with a second area, the board's ticker stops a few dots short of it, behind a dim divider, and the second area's ticker holds still, showing one item at a time in small letters every few seconds. Its words are in a softer, tinted color than the board's white, behind a small mark for what it shows: a plane, a cloud, a rising chart, a checkered flag, a team's abbreviation or a ball. A long item is split over a few turns, keeping a team and its score or a number and its unit together, with three dots on each later turn. Bets and player props keep their colors. Under the area's clock it scrolls as before and the board's ticker runs the full width.
+- On three or four panels in a row, **Large** text no longer makes a game's ticker in the second area bigger; on two rows of two it still does.
+- The help site and the What's new page now say Apollo Pulse.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.10
 
 Weather's radar shows nearby towns, state lines, coastlines and highways, the Flight Tracker gets a radar of the planes around home on bigger setups, and it always has a plane to show.

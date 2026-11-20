@@ -82,9 +82,7 @@ Every other size, and the Flight Tracker in a second area, shows the card and th
 
 The ticker along the bottom says how many planes are nearby, then the nearest three, with the airline, the type, the route, the altitude, the speed and where each one is.
 
-:::note[Coming in the next release]
-On three or four panels in a row, with the Flight Tracker in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a small plane, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls as before. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
-:::
+On three or four panels in a row, with the Flight Tracker in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a small plane, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
 
 The card stays on the same plane until another one is clearly nearer, so it doesn't flip between two planes at about the same distance. When nothing nearby is in the air, planes on the ground show instead, when the flight data lists them.
 

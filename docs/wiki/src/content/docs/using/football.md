@@ -68,9 +68,7 @@ Splashes and play animations show over the field just as over the scoreboard, an
 
 On two rows of two and on three or four panels in a row, **Game details** in the second area puts the field beside the scoreboard instead: the board stays the scoreboard, and the second area shows the field with the down and distance over it, each side's chance to win as a bar under it, the drive's plays, yards and time, and the chance to win in each team's color, with the leaders and the drive in its own ticker. It's off unless you turn it on, it takes the place of the clock, the date or today's scores only, and it doesn't show while the main board shows the Field view. See [The second area](/using/panel-sizes/#the-second-area).
 
-:::note[Coming in the next release]
-On three or four panels in a row, with **Game details** in the second area beside the board, its ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind the team's abbreviation, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls as before. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
-:::
+On three or four panels in a row, with **Game details** in the second area beside the board, its ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind the team's abbreviation, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
 
 ## Scoring splashes
 
