@@ -1,6 +1,6 @@
 ---
 title: "Get support"
-description: "How to get help with Game Day Scoreboard on GitHub, what to include in an issue, and where to find the crash report."
+description: "How to get help with Apollo Pulse on GitHub, what to include in an issue, and where to find the crash report."
 sidebar:
   order: 5
 ---
@@ -9,7 +9,7 @@ Try [Troubleshooting](/help/troubleshooting/) and [What the panel is telling you
 
 ## Open an issue on GitHub
 
-Support is on GitHub. [Open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues) and pick the bug or feature form. Bug reports from any panel are welcome, whether it's a Game Day Scoreboard or a board you built. Issues are public, so leave out Wi-Fi passwords.
+Support is on GitHub. [Open an issue](https://github.com/ApolloAutomation/gameday-scoreboard-main/issues) and pick the bug or feature form. Bug reports from any panel are welcome, whether it's an Apollo M-1, a scoreboard75 controller board or a board you built. Issues are public, so leave out Wi-Fi passwords.
 
 Include what you can of this:
 

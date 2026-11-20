@@ -9,7 +9,7 @@ Favorite teams lets the panel follow up to 16 teams from any league, in the orde
 
 ## Setting up your list
 
-On the device page, open the **Favorites** card and tap **Add a favorite**. The team chooser opens; tap a team to add it to the end of the list. Each row has buttons to move the team up or down and to remove it. The Game Day app edits the same list.
+On the device page, open the **Favorites** card and tap **Add a favorite**. The team chooser opens; tap a team to add it to the end of the list. Each row has buttons to move the team up or down and to remove it. The Game Day app, a separate project Apollo Automation doesn't maintain, edits the same list where it still works with this firmware.
 
 A golf tour or a racing series can't be a favorite yet, so the chooser hides its **Golf** and **Racing** tabs while you add one. Follow a tour or a series in **My team** instead. See [Golf](/using/golf/) and [Racing](/using/racing/).
 

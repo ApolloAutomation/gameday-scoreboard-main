@@ -1,5 +1,5 @@
 ---
-title: "Using your scoreboard"
+title: "Using your panel"
 description: "Everything the panel does once it's set up, and the three places you control it from."
 sidebar:
   order: 1

@@ -26,7 +26,7 @@ if (first === -1) {
 const releases = lines.slice(first).join('\n').trimEnd();
 const page = `---
 title: "What's new"
-description: "Every Game Day Scoreboard firmware release, newest first."
+description: "Every Apollo Pulse firmware release, newest first."
 editUrl: false
 tableOfContents:
   maxHeadingLevel: 2

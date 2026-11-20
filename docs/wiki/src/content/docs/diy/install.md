@@ -1,6 +1,6 @@
 ---
 title: "Install the firmware"
-description: "Flash the Game Day Scoreboard firmware onto an Apollo M-1 or another MoonHub75-pinout board from your browser, and how updates reach it."
+description: "Flash the Apollo Pulse firmware onto an Apollo M-1 or another MoonHub75-pinout board from your browser, and how updates reach it."
 sidebar:
   order: 4
 ---
@@ -20,7 +20,7 @@ Installing erases whatever firmware was on the board. This installer is for boar
 ## Install
 
 1. Open the [Apollo M-1 and MoonHub75 installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) in Chrome or Edge.
-2. Click the picture that matches your panels: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). This sets the layout the scoreboard starts with. The Install button appears once you pick.
+2. Click the picture that matches your panels: **One 64x64 panel**, or **One 128x64 panel** (or two 64x64 side by side). This sets the layout the panel starts with. The Install button appears once you pick.
 3. Plug the board into the computer over USB.
 4. Click **Install for Apollo M-1 / MoonHub75** and pick the board's port when the browser asks.
 5. When the install finishes, enter your Wi-Fi details in the dialog that follows.
@@ -37,11 +37,11 @@ The hotspot is named **Apollo Pulse** plus the same six letters and numbers, lik
 
 ## Set it up
 
-From here a board you built works like any Game Day Scoreboard. Follow [Set up your panel](/get-started/setup/) to finish joining Wi-Fi, then [Pick your team](/get-started/pick-your-team/).
+From here a board you built works like any Apollo Pulse panel. Follow [Set up your panel](/get-started/setup/) to finish joining Wi-Fi, then [Pick your team](/get-started/pick-your-team/).
 
 ## How updates work
 
-A DIY board gets every release, built for its pinout, from the same release feed as a Game Day Scoreboard. It checks for a new release every 6 hours. When one is out, an Install button appears on the device page and the update goes over Wi-Fi. Turn on **Install updates automatically** and the panel installs a new release on its own between 3 and 5 AM, never while a game it follows is live. It's off unless you turn it on. See [Updates](/using/updates/).
+A DIY board gets every release, built for its pinout, from the same release feed as a ready-made panel. It checks for a new release every 6 hours. When one is out, an Install button appears on the device page and the update goes over Wi-Fi. Turn on **Install updates automatically** and the panel installs a new release on its own between 3 and 5 AM, never while a game it follows is live. It's off unless you turn it on. See [Updates](/using/updates/).
 
 A **Follow beta** switch in the Device card gets test versions of the next release before everyone else. They can have bugs. A beta is named for a coming release, plus a build number, like `2026.11.11-beta.20`. With **Follow beta** on, the panel is offered each newer beta, to take with **Install**, or overnight with **Install updates automatically** on. Turn it on while the panel runs a release and it waits for a beta of the next release; until one is out, the Firmware box says **You're ahead of the latest beta**. Turn it off while the panel runs a beta and it waits for the next release. Once that release ships, the Firmware box offers it with **Install**, and the panel installs it overnight with **Install updates automatically** on.
 

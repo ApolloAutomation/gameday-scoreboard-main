@@ -9,7 +9,7 @@ You follow a racing series the way you follow a team or a golf tour. Pick **Form
 
 ## Following a series
 
-On the device page, tap **Change team** and open the **Racing** tab, which holds both series. Tap **Formula 1** or **NASCAR Cup Series**. Search finds them too, by their names or by "racing". In Home Assistant, the **Team** entity has **Racing: Formula 1** and **Racing: NASCAR Cup Series** at the end of its list.
+On the device page, tap **Change team** and open the **Racing** tab, which holds both series. Tap **Formula 1** or **NASCAR Cup Series**. Search finds them too, by their names or by "racing". In Home Assistant, the **Team** entity has **Racing: Formula 1** and **Racing: NASCAR Cup Series** after the golf tours, before the AHL and ECHL teams.
 
 The series is your team in **My team**. In **Live games**, when nothing is live, the panel shows your series the way it would show your team, with "No live NFL games, showing F1" at the front of the ticker. See [Show: My team, Favorite teams, Live games](/using/modes/#when-nothing-is-live).
 

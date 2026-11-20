@@ -1,6 +1,6 @@
 ---
 title: "Boards"
-description: "Which ESP32-S3 boards run the Game Day Scoreboard firmware, the Apollo M-1 and MoonHub75 pinout, and the flash and PSRAM it needs."
+description: "Which ESP32-S3 boards run the Apollo Pulse firmware, the Apollo M-1 and MoonHub75 pinout, and the flash and PSRAM it needs."
 sidebar:
   order: 2
 ---
@@ -11,7 +11,7 @@ The prebuilt firmware for DIY builds targets one pinout, the [MoonHub75](https:/
 
 The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [Apollo M-1 installer](/diy/install/) and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
 
-Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as both boards carry one. The scoreboard pages don't use it.
+Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as both boards carry one. The panel's pages don't use it.
 
 ## An ESP32-S3 board wired to the MoonHub75 pinout
 

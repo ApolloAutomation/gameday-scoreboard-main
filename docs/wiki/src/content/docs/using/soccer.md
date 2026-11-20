@@ -21,6 +21,8 @@ The next-game card shows both logos, your club on the left, with each club's rec
 - the three-way odds, like "ARS -275, draw +425, LEE +700", when ESPN has them and **Pre-game odds and TV** is on
 - the stadium
 
+An MLS or Premier League club can show its seed or its place in its conference or league where its record goes, when ESPN has them, with **Standing next to pro teams** on the device page.
+
 Before the match the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A match with no date yet shows neither.
 
 ## During the match
@@ -58,7 +60,7 @@ Goals, penalty goals and red cards each have a switch in the Celebrations card. 
 
 Before a goal's or a penalty goal's splash, the panel plays the goal across the whole screen for about 3 seconds, in pixel art, with players in the scoring club's colors under the stadium lights: the striker runs onto the ball and shoots, the ball spins across the panel past the diving keeper into the top corner, and the net bulges where it hits while the striker slides on his knees. A caption across the top says what happened, with the scorer's name when ESPN gives it and the setup has room, like **SAKA GOAL**, **PENALTY GOAL** or **OWN GOAL**, and under it the club's abbreviation in its color, its new score and **+1** in gold. A name of more than one word shows whole, like **VAN DIJK GOAL**, or by its last word when the whole name doesn't fit, as on the latest goal row. Then a long **GOOOOAAALLL** grows in letter by letter across the top in the club's colors, with a flash at the end, and the score line moves down into the stands under it. The word stretches to fit: GOOOAL on a single panel, and in letters twice as big on two rows of two; more O's, A's and L's on 128x64 and on three or four panels in a row, up to 25 letters on four.
 
-The scoring club always shoots from its own side of the board toward the other side, so a goal by the club on the right goes right to left. Then the splash shows for its usual 7 seconds. An own goal plays for the club it counts for. Kicks in a shootout get no animation, and neither does a goal the panel can't pin on one club, like two goals, one for each side, between two reads. **Play animations** in the Celebrations card turns it off, and **Try it** there plays one now. See [Celebrations](/using/device-page/#celebrations).
+The scoring club always shoots from its own side of the board toward the other side, so a goal by the club on the right goes right to left. Then the splash shows for its usual 7 seconds. An own goal plays for the club it counts for. Kicks in a shootout get no animation, and neither does a goal the panel can't pin on one club, like two goals, one for each side, between two reads. **Play animations** in the Celebrations card turns it off, and **Try it** there plays one now, while the panel shows the Scoreboard page. See [Celebrations](/using/device-page/#celebrations).
 
 At full time a win gets a victory splash with fireworks, your logo and "WINS". A draw gets no splash. When a shootout decides a level game, winning the shootout counts as the win.
 

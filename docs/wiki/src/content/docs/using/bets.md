@@ -15,7 +15,7 @@ Keep an eye on bets you've placed. You type each one into the **Bets** card on t
 | **Total, over** or **Total, under** | Over 47.5 | Both teams' points added up, against the line. Pick either team in the game, so the panel knows which game it is. |
 | **Moneyline** | Bills | Whether the team is ahead. A moneyline has no line to type. |
 
-Lines are whole or half points, like 3 or 3.5, and a comma works in place of the point, like 3,5. Spreads go up to 99.5 either way, and totals up to 999.5. The panel keeps up to eight bets. Golf tours and racing series can't take a bet. Minor league teams can: they're in the chooser's **MiLB** tab, and search finds them by level too, like "double-a". So can AHL and ECHL teams, in its **AHL** and **ECHL** tabs. Their games aren't in **On now**, so pick the team from its tab or search for it.
+Lines are whole or half points, like 3 or 3.5, and a comma works in place of the point, like 3,5. Spreads go up to 99.5 either way, and totals up to 999.5. The panel keeps up to eight bets. Golf tours and racing series can't take a bet. Minor league teams can: they're in the chooser's **MiLB** tab, and search finds them by level too, like "double-a". So can AHL and ECHL teams, in its **AHL** and **ECHL** tabs. AHL and ECHL games aren't in **On now**, so pick those teams from their tabs or search for them.
 
 ## Adding a bet
 

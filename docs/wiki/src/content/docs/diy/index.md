@@ -1,13 +1,13 @@
 ---
 title: "DIY: run it on your own board"
-description: "Run the open-source Game Day Scoreboard firmware on an ESP32-S3 HUB75 board and panel you put together yourself."
+description: "Run the open-source Apollo Pulse firmware on an ESP32-S3 HUB75 board and panel you put together yourself."
 sidebar:
   order: 1
 ---
 
-The Game Day Scoreboard firmware is open source under the MIT license. If you have an ESP32-S3 HUB75 controller and a panel, you can run it for free, with every league and setting a Game Day Scoreboard has.
+The Apollo Pulse firmware, formerly Game Day Scoreboard, is open source under the MIT license. If you have an ESP32-S3 HUB75 controller and a panel, you can run it for free, with every league, display and setting a ready-made panel has.
 
-These pages are for makers who build their own. If you bought a Game Day Scoreboard, start at [Set up your panel](/get-started/setup/) instead.
+These pages are for makers who build their own. If you bought a panel that came with the firmware installed, start at [Set up your panel](/get-started/setup/) instead.
 
 ## What you need
 
@@ -23,9 +23,9 @@ These pages are for makers who build their own. If you bought a Game Day Scorebo
 1. Choose a board. [Boards](/diy/boards/) covers the Apollo M-1 and the MoonHub75, a bare ESP32-S3 wired to the same pins, and other boards.
 2. Wire the panel and power it. [Panels and power](/diy/panels/) covers sizes, chaining panels and the supply.
 3. Install from the M-1 installer. [Install the firmware](/diy/install/) walks through it and explains how updates reach your board.
-4. Set it up like any owner. Joining Wi-Fi and picking a team work the same as on a Game Day Scoreboard. Follow [Set up your panel](/get-started/setup/).
+4. Set it up like any owner. Joining Wi-Fi and picking a team work the same as on a ready-made panel. Follow [Set up your panel](/get-started/setup/).
 
 ## More for builders
 
 - [Build it yourself](/diy/build-from-source/) compiles the firmware from the YAML with ESPHome, for a board with its own pins or a change of your own.
-- [What's different from a Game Day Scoreboard](/diy/whats-different/) lists what you take on yourself, and where to get help.
+- [What's different from a ready-made panel](/diy/whats-different/) lists what you take on yourself, and where to get help.

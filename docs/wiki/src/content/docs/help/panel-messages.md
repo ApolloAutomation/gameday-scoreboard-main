@@ -1,6 +1,6 @@
 ---
 title: "What the panel is telling you"
-description: "Every message and icon the Game Day Scoreboard panel shows when it needs you or something is wrong, what each means and what to do."
+description: "Every message and icon the Apollo Pulse panel shows when it needs you or something is wrong, what each means and what to do."
 sidebar:
   order: 3
 ---
@@ -14,7 +14,13 @@ These show on the start-up screen, under **GAME DAY**. On the 128x64 panel the Q
 :::note[Coming in the next release]
 The start-up screen says **APOLLO PULSE** in light blue on black, with Apollo, the Apollo Automation dog, beside the words, and a green bar under the name while the panel is busy. Wherever this page says **Join Wi-Fi / Game Day / 2f6a70**, the panel says **Join Wi-Fi / Apollo Pulse / 2f6a70**, for the hotspot `Apollo Pulse 2f6a70`.
 
-On a single 64x64 panel, **Starting**, **Connecting**, **Looking up scores** and the other screens with the bar and no QR code take turns with Apollo, about 4 seconds each. On 128x64, Apollo has the left half when there's no QR code, with **APOLLO / PULSE** in two lines beside him and the words under it, as short as on a 64x64 panel: **Connecting** and the network's name, and **Looking up / scores**. On three or four panels in a row, Apollo sits at the left end and the QR code beside him. On two rows of two, Apollo or the QR code sits in the middle of the top half, with the words under it.
+On a single 64x64 panel, the screens that come before any QR code take turns with Apollo, about 4 seconds each: **Starting**, **Connecting**, **Looking up scores**, **JOINING**, **SETUP / Starting / hotspot**, **Wi-Fi / lost / reconnecting** and **Can't join / retrying**. Once a QR code is part of the screen, its word turns never show Apollo: **SETUP / Scan to / join Wi-Fi**, **Join Wi-Fi / Apollo Pulse / 2f6a70**, **Unplug it to / rejoin / saved Wi-Fi**, **Wi-Fi / lost / scan to fix** and **Can't join / scan to fix**. With three lines of words or fewer, the name is in two lines above them.
+
+On 128x64, Apollo has the left half when there's no QR code, with **APOLLO / PULSE** in two lines beside him and the words under it, as short as on a 64x64 panel: **Connecting** and the network's name, and **Looking up / scores**. When a QR code is up, it has the left half instead, with no Apollo, and the name sits beside it in two lines above the words. The button's address screen, its countdown and **Updating** keep the whole width, with no Apollo.
+
+On three or four panels in a row, Apollo sits at the left end and the QR code beside him. On two rows of two, Apollo or the QR code sits in the middle of the top half, with the words under it.
+
+On Wi-Fi, the screens where the panel isn't busy, like the QR code after joining, the address and **Updating**, show a thin orange line under the name instead of the green bar.
 :::
 
 | The panel says | What it means | What to do |
@@ -76,6 +82,20 @@ A panel with no team picked also brings the QR code that opens its device page b
 
 An AHL or ECHL team with no small logo shows its abbreviation in a box in the logo's place. See [Hockey: AHL and ECHL](/using/minor-league-hockey/).
 
+## On the other displays and the second area
+
+These show on Weather, the Flight Tracker, Stocks & Crypto or F1, on the main board or in the second area, or in the second area's ticker.
+
+| The panel says | What it means | What to do |
+| --- | --- | --- |
+| **Set your home on the device page** | Weather has no home to show the weather for. | Set a home in the Weather card or the Flight Tracker card on the device page; the two share it. See [Weather](/using/weather/). |
+| **Can't reach weather data** | Weather's reads keep failing, and it has no forecast to show. | Check the internet connection. The panel keeps trying. |
+| **Set your location on the device page** | The Flight Tracker has no home to look for planes around. | Set a home in the Flight Tracker card on the device page. See [Flight Tracker](/using/flights/). |
+| **Can't reach flight data** | Three reads in a row failed, and the panel has no planes from the last 3 minutes. | Check the internet connection. The panel keeps trying. |
+| **Can't reach Yahoo Finance**, or **Can't reach Yahoo Finance, Kraken or Nasdaq**, in the ticker | Stocks & Crypto has no prices yet, because its reads keep failing: from Yahoo Finance, or from its backups too. | Check the internet connection. The panel keeps trying. See [Stocks & Crypto](/using/markets/). |
+| **Can't reach the F1 schedule** in the ticker | F1 can't read the season's schedule, so it has nothing to show yet. | Check the internet connection. The panel keeps trying. See [F1](/using/f1/). |
+| **Pick the second team on the device page** in the second area | The second area is set to **A second team's game**, with no team picked. | Pick one under **Shows** in the Quick settings card. See [The second area](/using/panel-sizes/#the-second-area). |
+
 ## When you hold the button
 
 The button on the controller shows the panel's address and resets it. Nothing resets until you let go, and the screen says what letting go will do. See [Buttons and resets](/using/buttons-and-resets/).
@@ -110,7 +130,7 @@ If the whole panel lights red, green, blue and white in turn, then a white line 
 While an update installs, the panel says **Updating**, **Keep it plugged in** and **Back in a minute** (on a single 64x64 panel, **Updating**, **Keep it plugged in**). Leave it powered. It restarts on the new version and comes back on its start-up screen, or goes back to what it was showing if the install doesn't go through. The device page shows how the update is going, and a bar at its top with **Install** whenever an update is out. See [Updates](/using/updates/).
 
 :::note[Coming in the next release]
-On three or four panels in a row and on two rows of two, Apollo, the Apollo Automation dog, sits beside the words while it updates. On 128x64 and 64x64 panels the words keep the whole screen, as above.
+On three or four panels in a row, Apollo, the Apollo Automation dog, sits at the left end, beside the words, while it updates. On two rows of two he sits in the middle of the top half, with the words under him. On 128x64 and 64x64 panels the words keep the whole screen, as above.
 :::
 
 | The device page says | What it means |
