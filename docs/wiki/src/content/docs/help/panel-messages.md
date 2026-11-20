@@ -20,7 +20,7 @@ On 128x64, Apollo has the left half when there's no QR code, with **APOLLO / PUL
 
 On three or four panels in a row, Apollo sits at the left end and the QR code beside him. On two rows of two, Apollo or the QR code sits in the middle of the top half, with the words under it.
 
-On Wi-Fi, the screens that aren't busy, the QR code after joining and the address, show a thin orange line under the name instead of the green bar.
+On Wi-Fi, the screens where the panel isn't busy, like the QR code after joining, the address and **Updating**, show a thin orange line under the name instead of the green bar.
 :::
 
 | The panel says | What it means | What to do |

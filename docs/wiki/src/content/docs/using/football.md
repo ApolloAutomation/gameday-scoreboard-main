@@ -13,7 +13,7 @@ The next-game card shows both team logos, your team on the left, with each team'
 
 Before the game the board leaves the scores out, so it never reads 0-0. Where the scores go it shows the day, like "Sun", "Tomorrow" or "Sep 14", with the start time, like "4:25 PM", under it. On a single 64x64 panel the day takes the abbreviations' row and the time the scores' row. With **My team today** as the idle display, the countdown, like "in 2h 15m", takes the start time's place. A game with no date yet shows neither.
 
-On the device page, the **Up next** list shows your NFL or college team's next three games after the one on the board, with the opponent, the day and time and the TV channel.
+In My team, the **Up next** list on the device page shows your NFL or college team's next three games after the one on the board, with the opponent, the day and time and the TV channel.
 
 The ticker along the bottom carries:
 

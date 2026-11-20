@@ -34,7 +34,7 @@ The nearest plane's card has:
 
 - its callsign, like **DAL2503**, or its registration when it has no callsign, in red during an emergency (squawk 7500, 7600 or 7700, or an emergency the plane declares; an air ambulance's lifeguard flag or low fuel isn't one)
 - the airline, like **Delta**, or the aircraft type for a private plane
-- the route, like **ORD-LGA**, in gold, when it's known; otherwise the flight number, like **DL2503**, when it isn't the same as the callsign, or else the registration, like **N123AB**, and nothing when the plane has neither
+- the route, like **ORD-LGA**, in gold, when it's known; otherwise the flight number, like **DL2503**, when it isn't the same as the callsign, or else the registration, like **N123AB**, when the top line isn't already showing it, and nothing when there's neither
 - the aircraft type, like **Airbus A220-300** (just the code, like **BCS3**, on one 64x64 panel)
 - the altitude and the ground speed
 - how far away it is and in which direction, like **2.4 mi SW**
