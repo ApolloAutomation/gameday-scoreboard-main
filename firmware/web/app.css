@@ -35,9 +35,9 @@ button { font: inherit; color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .mark {
-  width: 34px; height: 34px; border-radius: 9px; background: #1a1f2a;
+  width: 34px; height: 34px; border-radius: 9px; background: #4379aa;
   display: grid; place-items: center; font-size: 15px; font-weight: 800;
-  letter-spacing: .03em; color: var(--gold);
+  letter-spacing: .03em; color: #fff;
 }
 .brand h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
 .brand small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }

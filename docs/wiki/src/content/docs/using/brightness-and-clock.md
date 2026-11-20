@@ -5,7 +5,7 @@ sidebar:
   order: 17
 ---
 
-**Panel on** and **Brightness** are in the Quick settings card at the top of the device page, right under the board. The Panel card under it holds the rest of the settings for the screen itself: **Ticker speed**, **Showing**, **Clock size**, **Text size** and **Night hours**. The Game Day app and Home Assistant have **Panel on**, **Brightness** and **Ticker speed** too, and **Showing**'s choice between the scoreboard and the clock page, but not the other displays; see [Showing](#showing-the-scoreboard-the-clock-or-another-display). See [Settings](/using/device-page/#settings).
+**Panel on** and **Brightness** are in the Quick settings card at the top of the device page, right under the board. The Panel card under it holds the rest of the settings for the screen itself: **Ticker speed**, **Showing**, **Clock size**, **Text size**, **Game board** with its **Try it** (see [Field view](/using/football/#field-view)), **Standing next to pro teams** (see [Ranks and standings](/using/ticker/#ranks-and-standings)) and **Night hours**. The Game Day app and Home Assistant have **Panel on**, **Brightness** and **Ticker speed** too, and **Showing**'s choice between the scoreboard and the clock page, but not the other displays; see [Showing](#showing-the-scoreboard-the-clock-or-another-display). See [Settings](/using/device-page/#settings).
 
 ## Brightness
 
@@ -28,6 +28,8 @@ A few things turn a dark panel back on by themselves, since they mean someone wa
 The panel always comes back on after a restart or a power cut.
 
 With the **Idle display** set to **Off or dim**, the panel also goes dark, or down to its **Dim to** level, while none of the games it follows is on, and lights up again by itself when one starts. That isn't the same as **Panel on**: the switch stays on, Home Assistant still sees the panel as on, and your Brightness setting doesn't change. Pressing **ON** on the remote doesn't light a panel that's dark this way; pick another idle display, or turn **Off or dim** back off, to see it. The remote's brighter and dimmer buttons do nothing while the panel is dark or dimmed this way, so they can't change your Brightness without you seeing it; **NIGHT** still sets your Brightness to the night level. The panel stays lit while it isn't on Wi-Fi, so you can see its screens about getting connected. See [When nothing is on: the idle display](/using/modes/#when-nothing-is-on-the-idle-display).
+
+With a display on the main board, that display decides what lights the panel: an F1 session, a market you listed opening, a plane nearby, or a National Weather Service warning or watch for Weather. See [F1](/using/f1/), [Stocks & Crypto](/using/markets/), [Flight Tracker](/using/flights/) and [Weather](/using/weather/).
 
 With a [second area](/using/panel-sizes/#the-second-area), **Off or dim** darkens or dims the whole panel, and the panel lights up for the second area too while its team's game is on or its final is still up, or while a big play has it. What the board shows stays as the idle display says. Today's scores aren't read while the panel is dark or dimmed this way.
 

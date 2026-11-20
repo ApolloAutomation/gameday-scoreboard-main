@@ -19,6 +19,8 @@ A ranked men's college basketball team shows its rank in front of its name. Befo
 
 An NBA or WNBA team can show its playoff seed or its place in its division or conference where its record goes, with **Standing next to pro teams** on the device page.
 
+Home Assistant's **Team** list leaves men's college basketball teams out, since their 365 teams would make the list too long for one entity. Pick them on the device page. Once you do, Home Assistant's **Game Status** follows the game like any other.
+
 ## During the game
 
 - **The clock and period** under the scores, like "1:04 4th", or "45.3 4th" in the last minute, when ESPN drops the minutes. Overtime reads "OT", then "2OT" and so on. College games play halves, so the clock reads "12:34 1st" or "12:34 2nd".

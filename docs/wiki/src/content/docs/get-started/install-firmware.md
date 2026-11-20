@@ -1,11 +1,11 @@
 ---
 title: "Install or reinstall the firmware"
-description: "Install or reinstall the Game Day Scoreboard firmware from a desktop browser over USB, and when you would need to."
+description: "Install or reinstall the Apollo Pulse firmware from a desktop browser over USB, and when you would need to."
 sidebar:
   order: 5
 ---
 
-An Apollo M-1 ships with WLED, so you install Game Day Scoreboard on it once from your browser, as below. A Game Day Scoreboard unit with the scoreboard75 controller board comes with the firmware installed. After that the panel updates itself over Wi-Fi. See [Updates](/using/updates/) for the normal way new versions arrive.
+An Apollo M-1 ships with WLED, so you install Apollo Pulse on it once from your browser, as below. A ready-made Apollo Pulse panel on the scoreboard75 controller board comes with the firmware installed. After that the panel updates itself over Wi-Fi. See [Updates](/using/updates/) for the normal way new versions arrive.
 
 ## When you need it
 
@@ -29,12 +29,14 @@ You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 5. Wait for the install to finish.
 6. The same dialog then offers to put the panel on your Wi-Fi. Enter your network name and password.
 
-If you skip the Wi-Fi step, the panel shows **SETUP** and starts its **Game Day** hotspot. The setup screen's QR code joins the hotspot: scan it with your phone's camera and the setup page opens. Carry on from [Set up your panel](/get-started/setup/).
+If you skip the Wi-Fi step, the panel shows **SETUP** and starts its **Apollo Pulse** hotspot. The setup screen's QR code joins the hotspot: scan it with your phone's camera and the setup page opens. Carry on from [Set up your panel](/get-started/setup/).
+
+The hotspot is named **Apollo Pulse** plus six letters and numbers, like `Apollo Pulse 2f6a70`.
 
 If the installer says the browser can't talk to the controller over USB, switch to Chrome or Edge on a desktop computer.
 
 ## Which controller do I have?
 
-The Apollo M-1 is Apollo Automation's controller, with Rev6 printed on the back. The scoreboard75 is the board built into the Game Day Scoreboard unit that comes with a 128x64 panel. Picking the wrong one installs firmware for other pins, and the panel stays dark; install again with the right choice.
+The Apollo M-1 is Apollo Automation's controller, with Rev6 printed on the back. The scoreboard75 is the board built into the ready-made panel that comes with a 128x64 panel. Picking the wrong one installs firmware for other pins, and the panel stays dark; install again with the right choice.
 
 A MoonHub75 board uses the Apollo M-1 choices. For your own ESP32-S3 board, see [Install on your own board](/diy/install/).

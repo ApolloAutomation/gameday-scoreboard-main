@@ -1,6 +1,6 @@
 ---
-title: "What's different from a Game Day Scoreboard"
-description: "What you take on yourself when you run the Game Day Scoreboard firmware on your own board, and where to get help."
+title: "What's different from a ready-made panel"
+description: "What you take on yourself when you run the Apollo Pulse firmware on your own board, and where to get help."
 sidebar:
   order: 6
 ---
@@ -17,17 +17,17 @@ A board you built on the MoonHub75 pinout installs from the [Apollo M-1 and Moon
 
 ## Layout default
 
-The Game Day Scoreboard ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where a factory reset returns it. A board installed with the 128x64 choice switches to the one-panel build at its first update. A factory reset after that returns it to 64x64 too, so pick the 128x64 layout again on the device page.
+The ready-made panel on the scoreboard75 controller board ships with one 128x64 panel and starts two panels wide. The one-panel DIY build starts as one 64x64 panel, and that's also where a factory reset returns it. A board installed with the 128x64 choice switches to the one-panel build at its first update. A factory reset after that returns it to 64x64 too, so pick the 128x64 layout again on the device page.
 
 ## The boot button
 
-On a Game Day Scoreboard the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and longer holds reset Wi-Fi or erase everything.
+On the ready-made panel the button is on the controller. On your board it's whatever you wired to GPIO0, usually the BOOT button. It does the same things: a click turns the panel on or off, a 1.5 second hold shows the panel's address and IP address, and longer holds reset Wi-Fi or erase everything.
 
 Nothing resets until you let go of the button. Hold it and the screen counts down from 5 seconds. Let go between 10 and 20 seconds to reset Wi-Fi, or between 20 and 30 seconds for a factory reset. At 30 seconds it says **Release to / cancel**, and letting go then resets nothing. See [Buttons and resets](/using/buttons-and-resets/).
 
 ## No factory check
 
-Every Game Day Scoreboard runs a test screen at the factory before it ships. A board you built skips that, so check it yourself. Once your panel is on Wi-Fi, start the same test screen from a computer on your network:
+Every ready-made panel runs a test screen at the factory before it ships. A board you built skips that, so check it yourself. Once your panel is on Wi-Fi, start the same test screen from a computer on your network:
 
 ```sh
 curl -X POST "http://gameday-xxxxxx.local/gameday/action?do=qc"
@@ -41,4 +41,4 @@ For a panel you built, [open an issue on GitHub](https://github.com/ApolloAutoma
 
 ## Rather buy one?
 
-The Game Day Scoreboard comes with the scoreboard75 controller board, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).
+The ready-made panel comes with the scoreboard75 controller board, a 128x64 panel and everything set up. It's at [gameday-scoreboard.com](https://gameday-scoreboard.com).

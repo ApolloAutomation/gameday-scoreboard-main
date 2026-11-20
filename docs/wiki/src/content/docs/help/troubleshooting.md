@@ -1,6 +1,6 @@
 ---
 title: "Troubleshooting"
-description: "Fixes for the common Game Day Scoreboard problems, each starting from what you see on the panel, the app or the device page."
+description: "Fixes for the common Apollo Pulse problems, each starting from what you see on the panel, the app or the device page."
 sidebar:
   order: 2
 ---
@@ -21,7 +21,7 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 ## The setup page doesn't open
 
-You joined the panel's **Game Day** hotspot and no page opened.
+You joined the panel's **Apollo Pulse** hotspot and no page opened.
 
 - Look for a notification to sign in to the network and tap it. Many Android phones post one instead of opening the page.
 - If your phone says the network has no internet, choose to stay connected, or to use the network as it is.
@@ -48,7 +48,7 @@ If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotsp
 
 The panel says **Wi-Fi / lost / reconnecting** while it tries to get back on. If your router restarted or the internet dropped, wait. The panel rejoins by itself when the network comes back and the score returns.
 
-If you changed your router or your Wi-Fi password, wait for the panel's **Game Day** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
+If you changed your router or your Wi-Fi password, wait for the panel's **Apollo Pulse** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
 
 **Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, except with three or four panels, and restarts itself once, a minute into the outage.
 
@@ -72,7 +72,7 @@ Open the device page and find **Matrix** in the Setup card (tap **Setup** if it'
 
 | Your panel | Pick |
 | --- | --- |
-| The 128x64 panel from the Game Day Scoreboard, or two 64x64 panels side by side | **One 128x64 panel** |
+| The 128x64 panel that comes with the scoreboard75 controller board, or two 64x64 panels side by side | **One 128x64 panel** |
 | A single 64x64 panel | **One 64x64 panel** |
 | Three or four 64x64 panels side by side | **Three wide** or **Four wide** |
 | Four 64x64 panels in two rows of two | **Two rows of two** |

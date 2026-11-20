@@ -36,7 +36,7 @@
     document.head.appendChild(vp);
   }
   document.documentElement.lang = "en";
-  document.title = "Game Day Scoreboard";
+  document.title = "Apollo Pulse";
 
   // Where the project lives. SITE_URL is the installer and changelog site,
   // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
@@ -131,8 +131,8 @@
   <div class="wrap">
     <header class="top">
       <div class="brand">
-        <div class="mark">GD</div>
-        <div><h1>Game Day Scoreboard<small id="devname">connecting</small></h1></div>
+        <div class="mark">AP</div>
+        <div><h1>Apollo Pulse<small id="devname">connecting</small></h1></div>
       </div>
       <div class="conn" id="conn" aria-live="polite"><i></i><span>offline</span></div>
     </header>
@@ -440,7 +440,7 @@
         </div>
         <div id="netsCard" hidden>
           <div class="sub">Wi-Fi networks</div>
-          <p class="hint">The panel joins the first of these it can see, the last one that worked first. A network you set it up on, through its Game Day hotspot or the installer, is added here.</p>
+          <p class="hint">The panel joins the first of these it can see, the last one that worked first. A network you set it up on, through its Apollo Pulse hotspot or the installer, is added here.</p>
           <div id="nets"></div>
           <p class="hint" id="netsEmpty" hidden>No saved networks.</p>
         </div>
@@ -3319,7 +3319,7 @@
       $("#hostname").textContent = S.name + ".local";
       // Its six characters tell two panels' tabs apart
       const tail = S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-      document.title = "Game Day Scoreboard" + (tail ? " " + tail : "");
+      document.title = "Apollo Pulse" + (tail ? " " + tail : "");
     }
     renderData();
     renderHealth();
@@ -3548,7 +3548,7 @@
     clearInterval(pollTimer);
     clearTimeout(stateTimer);
     const tail = S && S.name && S.name.includes("-") ? S.name.slice(S.name.lastIndexOf("-") + 1) : "";
-    showRestart(why + " To set it up again, join its \"Game Day" + (tail ? " " + tail : "") + "\" Wi-Fi.");
+    showRestart(why + " To set it up again, join its \"Apollo Pulse" + (tail ? " " + tail : "") + "\" Wi-Fi.");
   };
 
   // ---- check for updates -----------------------------------------------------

@@ -13,6 +13,7 @@
 #include "apps.h"
 #include "board_layout.h"
 #include "field.h"
+#include "ticker_seam.h"
 
 namespace esphome::gameday {
 
@@ -170,6 +171,21 @@ struct AreaView {
   int16_t w{0}, h{0};
   bool time_split{false};  // time shows digits only; AM/PM goes in ampm
   uint32_t splash_color{0};  // its flash, should the board take the fireworks
+  // Beside the board: a divider, a tag, still pages
+  ::espn::TickerSeam seam;
+  lv_obj_t *seam_line{nullptr};
+  lv_obj_t *tag_img{nullptr}, *tag_lbl{nullptr};
+  lv_image_dsc_t tag_dsc{};
+  uint8_t tag_buf[::espn::kTagBytes]{};
+  ::espn::TickerTag tag;
+  ::espn::TagIcon tag_drawn{::espn::TagIcon::NONE};  // what tag_buf holds
+  uint32_t tag_drawn_rgb{0};
+  ::espn::AreaView kind{::espn::AreaView::NONE};
+  ::espn::SplitShow split_show{::espn::SplitShow::OFF};
+  std::string pages;  // each page ends with a newline
+  size_t page{0};
+  uint32_t page_ms{0};
+  bool paged{false};
 };
 
 // The bound area, or nullptr before binding
@@ -186,6 +202,8 @@ DrawResult area_draw(AreaView &a, const UpdateFields &f, bool clock, bool main_c
 void area_hide_splash(AreaView &a);
 // Hides the card, clock and ticker while off
 void area_clear(AreaView &a);
+// What the area shows next, for its ticker's tag
+void area_ticker_tag(AreaView &a, ::espn::AreaView view, ::espn::SplitShow show);
 
 }  // namespace esphome::gameday
 
