@@ -23,13 +23,11 @@ Built your own on a MoonHub75 board or another ESP32-S3 board, or putting the fi
 
 ## From the box to your team
 
-1. **Plug it in.** Connect the power supply. After a few seconds the panel shows **SETUP** and a QR code that joins its own **Game Day** hotspot. See [Set up your panel](/get-started/setup/).
+1. **Plug it in.** Connect the power supply. After a few seconds the panel shows **SETUP** and a QR code that joins its own **Apollo Pulse** hotspot. See [Set up your panel](/get-started/setup/).
 2. **Put it on your Wi-Fi.** Point your phone's camera at the QR code to join the hotspot, or join it from any phone or laptop, and pick your network on the page that opens. Right after an install, the installer's Wi-Fi dialog does it too. Both are on [Set up your panel](/get-started/setup/).
 3. **Pick your team.** Once the panel is on your Wi-Fi, its QR code opens its own web page, the device page. Choose your team there, or from [Home Assistant](/using/home-assistant/). See [Pick your team](/get-started/pick-your-team/).
 
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's start-up and setup screens say **APOLLO PULSE**, and the device page's heading and browser tab say **Apollo Pulse**.
-:::
+The hotspot is named **Apollo Pulse** plus six letters and numbers, like `Apollo Pulse 2f6a70`. The panel's start-up and setup screens say **APOLLO PULSE**, and the device page's heading and browser tab say **Apollo Pulse**.
 
 That's all the setup there is, and there's no app to install. Before a game the panel shows the matchup and the start time. When the game starts it switches to the live board, celebrates scores, and stays on the final for a while before it looks up the next game.
 

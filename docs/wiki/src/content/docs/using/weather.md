@@ -47,9 +47,7 @@ Under the rain, the radar can show landmarks to keep you oriented: nearby towns 
 
 The ticker along the bottom keeps the same words through the pages: any alerts first, in their colors, with what each one says, then home's temperature, sky and what it feels like, today's high and low with the chance of rain, sunrise and sunset, the wind and gusts, the humidity and the air quality in its band's color.
 
-:::note[Coming in the next release]
-On three or four panels in a row, with Weather in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a small cloud, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls as before. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
-:::
+On three or four panels in a row, with Weather in the second area beside the board, this ticker holds still instead of scrolling: it shows one item at a time in small letters, a new one every few seconds, behind a small cloud, in a softer, tinted color than the board's white. The board's ticker stops a few dots short of it, behind a dim divider. On two rows of two it scrolls. See [The second area's ticker](/using/ticker/#the-second-areas-ticker).
 
 On a day of snow the ticker says the chance of snow instead, like **99% chance of snow**, and the **Now** page's label reads **Snow** or **Snow today** in place of **Rain** or **Rain today**. The radar page's column of the next hours says **Snow** when the first of them is snowy.
 

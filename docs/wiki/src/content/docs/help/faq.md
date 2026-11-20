@@ -9,9 +9,7 @@ sidebar:
 
 Yes. Apollo Pulse used to be called Game Day Scoreboard. It's the same firmware, with the same settings, and it updates the same way. Its address is still `gameday-2f6a70.local`, with your panel's six characters, and Home Assistant still lists it as **Game Day Scoreboard** with those six characters.
 
-:::note[Coming in the next release]
 The panel's start-up and setup screens, its hotspot, `Apollo Pulse 2f6a70`, and its device page say Apollo Pulse.
-:::
 
 ## My team's season is over. What does the panel show?
 
@@ -31,11 +29,7 @@ The panel is made for indoor use. Keep it, its controller and its power supply o
 
 ## I don't have an iPhone. Can I still set it up?
 
-Yes. Any phone's camera does it, and you don't need an app. While the panel shows **SETUP**, point the camera at the QR code and tap to join the panel's own hotspot, then pick your Wi-Fi network on the setup page that opens, enter the password and save. If no page opens, open `192.168.4.1` in a browser. You can also join the hotspot from any phone or laptop by the name the panel shows, like `Game Day 2f6a70`.
-
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
-:::
+Yes. Any phone's camera does it, and you don't need an app. While the panel shows **SETUP**, point the camera at the QR code and tap to join the panel's own hotspot, then pick your Wi-Fi network on the setup page that opens, enter the password and save. If no page opens, open `192.168.4.1` in a browser. You can also join the hotspot from any phone or laptop by the name the panel shows, like `Apollo Pulse 2f6a70`.
 
 Once the panel is on your Wi-Fi, its QR code opens the device page, where you pick your team and change every setting. You can also open the panel's address in a browser. See [Set up your panel](/get-started/setup/).
 

@@ -7,9 +7,7 @@ sidebar:
 
 Every panel serves its own web page. Open it in a browser on any phone or computer on the same Wi-Fi, at the `gameday-xxxxxx.local` name the panel shows when it starts (your panel's six characters, like `gameday-2f6a70.local`), or at its IP address if your phone won't open `.local` names. The QR code the panel shows after it joins Wi-Fi opens this page at the IP address: point your phone's camera at it. Hold the button on the controller for about 1.5 seconds and the panel shows its name and IP address, without the QR code. See [Wi-Fi](/using/wifi/) for more on the address.
 
-:::note[Coming in the next release]
 The page's heading says **Apollo Pulse**, with an **AP** mark, and the browser tab says **Apollo Pulse** and the panel's six characters, like `Apollo Pulse 2f6a70`, so two panels' tabs are easy to tell apart. After **Reset Wi-Fi** or **Factory reset**, the page's message tells you to join the panel's `Apollo Pulse 2f6a70` Wi-Fi to set it up again, and the hint under **Wi-Fi networks** names its Apollo Pulse hotspot.
-:::
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). In firmware v2026.11.7 and earlier, your browser also loads ESPHome's standard device page script from ESPHome's own site (oi.esphome.io) each time the page opens. That script asks Iconify (api.iconify.design) for its icons and keeps a second connection to the panel open, and a phone that can't reach ESPHome's server shows the page small, like a desktop page. From v2026.11.8 on, the page leaves that script out and loads everything else from the panel. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
@@ -290,7 +288,7 @@ An install that didn't start, or failed without the panel restarting, opens the 
 
 **Follow beta** is off unless you turn it on. Beta versions are test builds of the next release, for test panels, and they can have bugs. Leave it off on a panel you just want to watch games on.
 
-With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.11-beta.20**. Betas go in build order, and every beta comes before the release with its number:
+With **Follow beta** on, the Firmware box and **Check for updates** show the latest beta instead of the latest release. A beta is named for a coming release plus a build number, like **v2026.11.12-beta.20**. Betas go in build order, and every beta comes before the release with its number:
 
 - On a beta, the panel is offered each newer beta. Tap **Install**, or turn on **Install updates automatically** and it installs new betas overnight.
 - On a release, the panel waits for a beta of the next release. Until one comes out, the Firmware box says **You're ahead of the latest beta**, and nothing installs. An older beta is never offered.

@@ -7,10 +7,6 @@ sidebar:
 
 Find what you're seeing, then try the fix. Each entry ends with why it happens, in case the fix doesn't take.
 
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`. Where this page says the **Game Day** hotspot, look for that name.
-:::
-
 ## The app can't find my panel
 
 The Game Day app is a separate project that Apollo Automation does not maintain, and it may not find panels running this firmware. Everything it sets is on the panel's own [device page](/using/device-page/), and its hotspot sets up Wi-Fi (see [Set up your panel](/get-started/setup/)).
@@ -25,7 +21,7 @@ A panel that isn't set up yet shows **SETUP**. The app finds that one over Bluet
 
 ## The setup page doesn't open
 
-You joined the panel's **Game Day** hotspot and no page opened.
+You joined the panel's **Apollo Pulse** hotspot and no page opened.
 
 - Look for a notification to sign in to the network and tap it. Many Android phones post one instead of opening the page.
 - If your phone says the network has no internet, choose to stay connected, or to use the network as it is.
@@ -52,7 +48,7 @@ If the panel joins but then says **Wi-Fi needs / sign-in / use home or / a hotsp
 
 The panel says **Wi-Fi / lost / reconnecting** while it tries to get back on. If your router restarted or the internet dropped, wait. The panel rejoins by itself when the network comes back and the score returns.
 
-If you changed your router or your Wi-Fi password, wait for the panel's **Game Day** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
+If you changed your router or your Wi-Fi password, wait for the panel's **Apollo Pulse** hotspot to come up, within a few minutes. The panel then says **Wi-Fi / lost / scan to fix**: scan that QR code with your phone's camera to join the hotspot, and give the panel the new network or password on the page that opens. The Game Day app can do the same where it finds the panel. See [New router or Wi-Fi password](/get-started/setup/#new-router-or-wi-fi-password).
 
 **Why:** the panel says so when it has been off its network for more than about 10 seconds. It turns Bluetooth back on so the app can reach it, except with three or four panels, and restarts itself once, a minute into the outage.
 

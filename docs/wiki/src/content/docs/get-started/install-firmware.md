@@ -29,11 +29,9 @@ You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 5. Wait for the install to finish.
 6. The same dialog then offers to put the panel on your Wi-Fi. Enter your network name and password.
 
-If you skip the Wi-Fi step, the panel shows **SETUP** and starts its **Game Day** hotspot. The setup screen's QR code joins the hotspot: scan it with your phone's camera and the setup page opens. Carry on from [Set up your panel](/get-started/setup/).
+If you skip the Wi-Fi step, the panel shows **SETUP** and starts its **Apollo Pulse** hotspot. The setup screen's QR code joins the hotspot: scan it with your phone's camera and the setup page opens. Carry on from [Set up your panel](/get-started/setup/).
 
-:::note[Coming in the next release]
-The hotspot is named **Apollo Pulse** plus the same six letters and numbers, like `Apollo Pulse 2f6a70`.
-:::
+The hotspot is named **Apollo Pulse** plus six letters and numbers, like `Apollo Pulse 2f6a70`.
 
 If the installer says the browser can't talk to the controller over USB, switch to Chrome or Edge on a desktop computer.
 
