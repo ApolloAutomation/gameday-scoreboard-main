@@ -23,6 +23,8 @@ Before the game the board leaves the scores out, so it never reads 0-0. Where th
 
 MLB has no Up next list on the device page: a team's season schedule is too large for the panel to read.
 
+An MLB team can show its playoff seed or its place in its division or league where its record goes, with **Standing next to pro teams** on the device page.
+
 ## During the game
 
 - **The inning** in the clock row, in ESPN's words, like "Top 5th", "Mid 5th" or "Rain Delay".
@@ -55,7 +57,7 @@ A home run, a grand slam and a walk-off get fireworks on black with the words in
 
 Before a home run's, a grand slam's or a home run walk-off's splash, the panel plays the home run across the whole screen for about 3.5 seconds, in pixel art with players in the team's colors: the pitch, the swing, and the ball flying over the outfield wall while the outfielder leaps for it and misses. The batter flips his bat and starts his trot. When ESPN says how far it went, the ball lands just past the wall, in the stands, or flies off the screen for the longest ones. A caption across the top says what happened all the while, like **2-RUN HOME RUN**, **GRAND SLAM** or **WALK-OFF HR**, with the batter's name, the distance and where it went when ESPN says and the setup has room, like **MESA 2-RUN HOME RUN 401 FT RIGHT CENTER** on three or four panels in a row. A single panel and two rows of two keep the distance ahead of the name, like **2-RUN HR 401 FT**. Under it go the team's abbreviation in its color, its new score and the runs in gold, like **MIA 5 +2**. Then the splash shows for its usual 7 seconds. A home run told from the score alone, in another game, plays without a distance. **Play animations** in the Celebrations card turns them off. See [Celebrations](/using/device-page/#celebrations).
 
-Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. See [Celebrations](/using/device-page/#celebrations).
+Runs, home runs, grand slams and walk-offs each have a switch in the Celebrations card. With **Grand slam** off, a grand slam shows as a home run, and with **Home run** off, as runs. **Play animations** turns the home run's play off, and **Try it** there, **Home run**, plays a sample now, in your team's colors with the score line marked **SAMPLE**, while the panel shows the Scoreboard page. See [Celebrations](/using/device-page/#celebrations).
 
 When your team wins, a victory splash with fireworks shows your logo and "WINS".
 

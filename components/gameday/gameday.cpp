@@ -5613,6 +5613,7 @@ void GamedayComponent::emit_a2_(const ::espn::Splash &splash) {
   // Cached logos; a missing one shows its badge
   image::Image *team_logo = clock ? nullptr : this->logos_.get(f.team_logo);
   image::Image *opp_logo = clock ? nullptr : this->logos_.get(f.opponent_logo);
+  area_ticker_tag(*av, v, this->a2_show_());
   const DrawResult r = area_draw(*av, f, clock, m.clock, clock_card_date(this->split_area().main_w, !m.next_line.empty()),
                                  team_logo, opp_logo);
   this->a2_logo_[0] = clock ? std::string() : f.team_logo;

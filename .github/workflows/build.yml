@@ -684,6 +684,7 @@ jobs:
           python3 scripts/build_airlines.py --selftest
           bash scripts/beta_version.sh --selftest
           python3 scripts/build_sprites.py --selftest
+          python3 scripts/build_apollo.py --selftest
           bash scripts/set_manifest_name.sh --selftest
           bash scripts/keep_previous_ota.sh --selftest
           bash scripts/check_live_feed.sh --selftest
@@ -692,6 +693,8 @@ jobs:
           bash scripts/add_land_files.sh --selftest
       - name: sprites.h is built from the current art
         run: python3 scripts/build_sprites.py --check
+      - name: apollo_logo.h is built from the logo
+        run: python3 scripts/build_apollo.py --check
       - name: Map landmark files check
         run: python3 scripts/build_landmarks.py --check
       - name: The small font's Latin-1 is built from Spleen

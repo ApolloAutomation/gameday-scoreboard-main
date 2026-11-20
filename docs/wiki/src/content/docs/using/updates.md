@@ -30,7 +30,9 @@ If the check can't reach the update server, the page says **Could not reach the 
 1. Open the device page and tap **Install** in the Firmware box.
 2. Confirm. The panel downloads the update and restarts.
 
-When an update is out, a bar at the top of the device page says **Update available** and the version (or **Update didn't take** or **Update didn't install** for one that failed), with **Install** and **Later**. **Install** asks to confirm, just like the button in the Firmware box. **Later** hides the bar for that version in that browser; a newer version brings it back, and the Firmware box still offers it. While an update installs, the bar says **Installing** and the version, **Keep the panel powered.**, and the panel itself says **Updating**, **Keep it plugged in** until it restarts on the new version. If the install doesn't go through, the panel goes back to what it was showing.
+When an update is out, a bar at the top of the device page says **Update available** and the version (or **Update didn't take** or **Update didn't install** for one that failed), with **Install** and **Later**. **Install** asks to confirm, just like the button in the Firmware box. With **Install updates automatically** on, the bar and the Firmware box add **It installs on its own between 3 and 5 AM.** **Later** hides the bar for that version in that browser; a newer version brings it back, and the Firmware box still offers it. While an update installs, the bar says **Installing** and the version, **Keep the panel powered.**, and the panel itself says **Updating**, **Keep it plugged in** and **Back in a minute** in big words across its whole width (**Updating**, **Keep it**, **plugged in** on a single 64x64 panel) until it restarts on the new version. If the install doesn't go through, the panel goes back to what it was showing.
+
+On three or four panels in a row, Apollo the dog sits beside these words, and on two rows of two he sits above them. See [What the panel is telling you](/help/panel-messages/).
 
 The Device card, where the Firmware box is, starts folded. When an update is out, or one didn't take, the card opens by itself with **Install** in sight, unless you've opened or folded it yourself in that browser. While it's folded, the words beside **Device** say **Update available** and the version, **Update didn't take**, or **Installing** and the version: tap **Device** to open it. See [The Device card](/using/device-page/#the-device-card).
 
@@ -55,6 +57,10 @@ A new release waits a night. The panel doesn't install a release on its own in t
 
 With the switch off, the panel still checks and the device page tells you when an update is out, but nothing installs until you tap **Install**. Home Assistant has the same switch; see [Home Assistant (optional)](/using/home-assistant/).
 
+## Uploading a firmware file
+
+The panel's `/update` address, where you can upload a firmware file by hand, works only while the panel's setup hotspot is up: join the hotspot and open `192.168.4.1/update`. On your home Wi-Fi it's off, so a web page opened at home can't install firmware on the panel. **Install** on the device page and Home Assistant's **Firmware** entity work as usual. This is so from v2026.11.9 on.
+
 ## An update that didn't take
 
 If a new version crashes as it starts, the panel goes back to the firmware it had. It remembers that version and doesn't install it on its own again, so it never restarts into the same bad update every night. A later release still installs, and **Install** on the device page still tries the one that failed.
@@ -65,7 +71,7 @@ While that version is the one on offer, the Firmware box says **The update to** 
 
 Beta versions are test builds of the next release, for test panels. They can have bugs. Panels you own run the published releases.
 
-A beta carries the number of a coming release, plus a build number, like 2026.11.11-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.11 is newer than any 2026.11.11 beta.
+A beta carries the number of a coming release, plus a build number, like 2026.11.12-beta.20. A higher build number is a newer beta, and every beta comes before the release with its number: 2026.11.12 is newer than any 2026.11.12 beta.
 
 The **Follow beta** switch in the Device card points a panel at the beta versions: the Firmware box and **Check for updates** show the latest beta instead of the latest release. When a newer beta is out, tap **Install** to take it. With **Install updates automatically** on too, the panel installs each new beta overnight by the same rules as a release. A beta has no section in the changelog, so its **Release notes** link opens the change on GitHub that it was built from.
 

@@ -17,9 +17,11 @@ esphome:
             id(shared_scroll_speed).add_on_state_callback([](float sp) {
               id(tt_ticker_timing).execute();
               // Restart the scroll so the new speed shows straight away.
+              // A paged second-area ticker keeps still.
               for (lv_obj_t *l : {id(tt_game_status_lbl), id(gd_lower_ticker_lbl)}) {
+                const lv_label_long_mode_t m = lv_label_get_long_mode(l);
                 lv_label_set_long_mode(l, LV_LABEL_LONG_CLIP);
-                lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
+                lv_label_set_long_mode(l, m);
               }
             });
 

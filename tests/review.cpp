@@ -7,6 +7,7 @@
 #include "gif_write.h"
 #include "review_field.h"
 #include "review_map.h"
+#include "review_ticker.h"
 #include "scene_render.h"
 
 using namespace espn;
@@ -72,6 +73,12 @@ int main(int argc, char **argv) {
     const char *fonts = getenv("REVIEW_FONTS");
     printf("%d wider reads\n", render_wide_views(dir, review_fonts(fonts != nullptr ? fonts : "")));
     if (only == "wide")
+      return 0;
+  }
+  if (only.empty() || only == "ticker") {
+    const char *fonts = getenv("REVIEW_FONTS");
+    printf("%d ticker rows\n", render_ticker_views(dir, review_fonts(fonts != nullptr ? fonts : "")));
+    if (only == "ticker")
       return 0;
   }
   if (only.empty() || only == "sky") {

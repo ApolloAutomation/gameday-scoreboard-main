@@ -11,7 +11,7 @@
 # components/gameday/setup_qr.h writes the text.
 #
 #   - Off Wi-Fi (setup and Wi-Fi lost) the code is a Wi-Fi join code for the
-#     panel's own open hotspot, "Game Day 2f6a70", named in on_boot. The
+#     panel's own open hotspot, "Apollo Pulse 2f6a70", named in on_boot. The
 #     iPhone and Android cameras both offer to join it, and the phone then
 #     offers ESPHome's captive portal (192.168.4.1) to pick the home
 #     network. It only shows once the hotspot is really up, so it never
@@ -21,12 +21,9 @@
 #     http://192.168.1.50/, not by its .local name, which many Android phones
 #     can't open.
 #
-# On a 128 px chain the code sits on the left half and the lines move to the
-# right half, so nothing has to take turns with it; with no code up the
-# lines use the whole width. On a single 64 px panel there is no room for
-# both, so the code takes turns with the lines. See boot_qr_box below for
-# the sizing and boot_qr_cycle for the timing.
-# Wider chains put lines right of the code; 2x2 centers.
+# Every panel size's layout: components/gameday/boot_brand.h
+# See boot_qr_box for the code's sizing
+# and boot_qr_cycle for the timing.
 #
 #   connected   64:  page QR (13 s), then Open / gameday- / 2f6a70.local (5 s)
 #               128: page QR + Scan to / pick your / team, the address taking
@@ -34,13 +31,13 @@
 #   wifi lost   Wi-Fi / lost / reconnecting, full width, no QR, until the
 #               hotspot is up, then
 #               64:  Wi-Fi / lost / scan to fix (5 s), hotspot QR (8 s),
-#                    Join Wi-Fi / Game Day / 2f6a70 (5 s)
+#                    Join Wi-Fi / Apollo Pulse / 2f6a70 (5 s)
 #               128: hotspot QR + Wi-Fi / lost / scan to fix (13 s), then
 #                    the hotspot lines (5 s)
 #   setup       SETUP / Starting / hotspot, full width, no QR, until the
 #               hotspot is up (on a new panel, almost at once), then
 #               64:  SETUP / Scan to / join Wi-Fi (5 s), hotspot QR (8 s),
-#                    Join Wi-Fi / Game Day / 2f6a70 (5 s), the hotspot's own
+#                    Join Wi-Fi / Apollo Pulse / 2f6a70 (5 s), the hotspot's own
 #                    name
 #               128: hotspot QR + SETUP / Scan to / join Wi-Fi (13 s), then
 #                    the hotspot lines (5 s)
@@ -163,10 +160,24 @@ globals:
   - id: boot_qr_frame
     type: int
     initial_value: '0'
-  # Which layout boot_layout last applied: 1 for the QR-left, lines-right
-  # split of a 128 px chain, 0 for full width.
-  - id: boot_layout_side
+  # boot_layout's last layout: QR up 1, dog 2
+  - id: boot_layout_key
     type: int
+    initial_value: '-1'
+  # The words' place (gameday::BootWords) boot_layout last applied
+  - id: boot_words_mode
+    type: int
+    initial_value: '0'
+  # Three lines or fewer: a 64 px column's bigger name
+  - id: boot_words_tall
+    type: bool
+    initial_value: 'true'
+  # boot_view's dog request, and when it last changed
+  - id: boot_dog_mode
+    type: int
+    initial_value: '-1'
+  - id: boot_dog_since_ms
+    type: uint32_t
     initial_value: '0'
   # millis() when the overlay started holding for the first scoreboard (see
   # boot_hide), 0 while it is not holding.
@@ -193,48 +204,49 @@ globals:
     initial_value: 'false'
 
 script:
-  # side: lines beside the QR; ignored on 64 px.
+  # Places Apollo, the QR box and the words (components/gameday/boot_brand.h)
   - id: boot_layout
     parameters:
-      side: bool
+      qr: bool
+      dog: bool
     then:
       - lambda: |-
           const int W = lv_disp_get_hor_res(lv_disp_get_default());
           const int H = lv_disp_get_ver_res(lv_disp_get_default());
-          const bool col = side && W >= 128;
-          const int x0 = col ? 64 : 0;
-          const int cw = W - x0;
-          const bool wide = cw >= 128;
-          const int y0 = H > 64 ? (H - 64) / 2 : 0;
+          const bool tall = id(boot_words_tall);
+          const auto b = gameday::boot_boxes(W, H, qr, dog, tall);
+          using gameday::BootWords;
+          id(boot_words_mode) = (int) b.mode;
+          const bool words = b.mode != BootWords::NONE;
+          const bool split = gameday::boot_title_split(b.mode, tall);
+          auto show = [](lv_obj_t *o, bool on) {
+            if (on) lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+          };
           lv_obj_t *lines[4] = {id(boot_la), id(boot_lb), id(boot_lc), id(boot_ld)};
-          for (auto *l : lines) {
-            lv_obj_set_width(l, cw - 4);
-            lv_obj_set_x(l, x0 + 2);
+          for (int i = 0; i < 4; i++) {
+            const int y = gameday::boot_line_y(b.mode, i, tall);
+            show(lines[i], y >= 0);
+            if (y < 0) continue;
+            lv_obj_set_width(lines[i], b.cw - 4);
+            lv_obj_set_pos(lines[i], b.x0 + 2, b.y0 + y);
           }
-          lv_obj_set_width(id(boot_title), cw);
-          lv_obj_set_width(id(boot_rule), cw - 8);
-          lv_obj_set_width(id(boot_bar), cw - 16);
-          lv_obj_set_pos(id(boot_bar), x0 + 8, y0 + (wide ? 60 : 59));
-          lv_obj_set_pos(id(boot_qr_box), 0, y0);
-          if (wide) {
-            lv_obj_set_style_text_font(id(boot_title), id(spleen_16), 0);
-            lv_obj_set_pos(id(boot_title), x0, y0 + 2);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 19);
-            lv_obj_set_style_text_font(id(boot_lb), id(spleen_12), 0);
-            lv_obj_set_y(id(boot_la), y0 + 22);
-            lv_obj_set_y(id(boot_lb), y0 + 31);
-            lv_obj_set_y(id(boot_lc), y0 + 44);
-            lv_obj_set_y(id(boot_ld), y0 + 53);
-          } else {
-            lv_obj_set_style_text_font(id(boot_title), id(spleen_12), 0);
-            lv_obj_set_pos(id(boot_title), x0, y0 + 1);
-            lv_obj_set_pos(id(boot_rule), x0 + 4, y0 + 14);
-            lv_obj_set_style_text_font(id(boot_lb), id(spleen_8), 0);
-            lv_obj_set_y(id(boot_la), y0 + 16);
-            lv_obj_set_y(id(boot_lb), y0 + 26);
-            lv_obj_set_y(id(boot_lc), y0 + 36);
-            lv_obj_set_y(id(boot_ld), y0 + 46);
-          }
+          lv_obj_set_style_text_font(id(boot_lb), b.mode == BootWords::WIDE ? id(spleen_12) : id(spleen_8), 0);
+          auto *tf = b.mode == BootWords::NARROW ? (tall ? id(spleen_12) : id(spleen_8)) : id(spleen_16);
+          lv_obj_set_style_text_font(id(boot_title), tf, 0);
+          lv_label_set_text(id(boot_title), split ? "APOLLO\nPULSE" : "APOLLO PULSE");
+          lv_obj_set_width(id(boot_title), words ? b.cw : 64);
+          lv_obj_set_pos(id(boot_title), b.x0, b.y0 + gameday::boot_title_y(b.mode, tall));
+          show(id(boot_title), words);
+          lv_obj_set_width(id(boot_rule), b.bar.w);
+          lv_obj_set_pos(id(boot_rule), b.bar.x, b.rule_y);
+          if (!words) show(id(boot_rule), false);
+          lv_obj_set_width(id(boot_bar), b.bar.w);
+          lv_obj_set_pos(id(boot_bar), b.bar.x, b.bar.y);
+          if (!b.qr.empty()) lv_obj_set_pos(id(boot_qr_box), b.qr.x, b.qr.y);
+          // One 64x64: the bar covers his ledge
+          if (b.dog.empty() || !gameday::boot_dog_show(id(boot_overlay), b.dog.x, b.dog.y))
+            gameday::boot_dog_hide();
 
   # Pick the layout (see boot_layout) and show the QR code holding qr, or
   # hide it when qr is empty. boot_refresh calls this twice a second, so the
@@ -242,16 +254,13 @@ script:
   # when its text does: lv_qrcode_update, the call behind ESPHome's
   # lvgl.qrcode.update, redraws every module. A text LVGL can't encode
   # leaves the code hidden rather than up as a blank square.
+  # dog: as gameday::boot_dog_wanted
   - id: boot_view
     parameters:
-      side: bool
       qr: string
+      dog: int
     then:
       - lambda: |-
-          if (id(boot_layout_side) != (int) side) {
-            id(boot_layout_side) = side;
-            id(boot_layout).execute(side);
-          }
           static std::string encoded;
           static bool encoded_ok = false;
           if (!qr.empty() && qr != encoded) {
@@ -260,7 +269,20 @@ script:
             if (!encoded_ok)
               ESP_LOGW("boot", "QR code would not encode: %s", qr.c_str());
           }
-          if (!qr.empty() && encoded_ok) lv_obj_clear_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
+          const bool qr_up = !qr.empty() && encoded_ok;
+          if (dog != id(boot_dog_mode)) {
+            id(boot_dog_mode) = dog;
+            id(boot_dog_since_ms) = millis() == 0 ? 1 : millis();
+          }
+          const int W = lv_disp_get_hor_res(lv_disp_get_default());
+          const int H = lv_disp_get_ver_res(lv_disp_get_default());
+          const bool want = gameday::boot_dog_wanted(W, H, dog, qr_up, id(boot_dog_since_ms), millis());
+          const int key = (qr_up ? 1 : 0) + (want ? 2 : 0);
+          if (key != id(boot_layout_key)) {
+            id(boot_layout_key) = key;
+            id(boot_layout).execute(qr_up, want);
+          }
+          if (qr_up) lv_obj_clear_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
           else lv_obj_add_flag(id(boot_qr_box), LV_OBJ_FLAG_HIDDEN);
 
   # Write the four lines. A line wider than its column scrolls at 12 px/s,
@@ -297,8 +319,19 @@ script:
           put(id(boot_lb), lb);
           put(id(boot_lc), lc);
           put(id(boot_ld), ld);
+          if (ld.empty() != id(boot_words_tall)) {
+            id(boot_words_tall) = ld.empty();
+            const int key = id(boot_layout_key);
+            if (id(boot_words_mode) == (int) gameday::BootWords::NARROW && key >= 0)
+              id(boot_layout).execute(key & 1, key & 2);
+          }
           if (busy) lv_obj_clear_flag(id(boot_bar), LV_OBJ_FLAG_HIDDEN);
           else lv_obj_add_flag(id(boot_bar), LV_OBJ_FLAG_HIDDEN);
+          // The orange rule stands in for the bar
+          if (busy || id(boot_words_mode) == (int) gameday::BootWords::NONE)
+            lv_obj_add_flag(id(boot_rule), LV_OBJ_FLAG_HIDDEN);
+          else
+            lv_obj_clear_flag(id(boot_rule), LV_OBJ_FLAG_HIDDEN);
 
   # The timing for states that take turns. Sets boot_qr_frame: 0 for the
   # first 5 s, 1 for the next 8 s, then 2 for 5 s when extra is true, and for
@@ -445,7 +478,7 @@ script:
               // QR, full width.
               const std::string ip = sta_ip();
               id(boot_qr_cycle).execute(0, false);
-              id(boot_view).execute(false, "");
+              id(boot_view).execute("", 3);
               if (wide)
                 id(boot_set_lines).execute("On your phone, open", host, "or " + ip, "then pick your team", false);
               else if (h2.empty())
@@ -466,7 +499,7 @@ script:
               // No hotspot code here: the hotspot only runs off Wi-Fi.
               const std::string page = gameday::device_page_qr(sta_ip());
               id(boot_qr_cycle).execute(5, false);
-              id(boot_view).execute(wide && !page.empty(), (wide || id(boot_qr_frame) == 1) ? page : std::string());
+              id(boot_view).execute((wide || id(boot_qr_frame) == 1) ? page : std::string(), 3);
               id(boot_set_lines).execute("Wi-Fi needs", "sign-in", "use home or", "a hotspot", false);
             } else if (id(boot_hold_since_ms) != 0) {
               id(boot_hold_view).execute();
@@ -484,7 +517,7 @@ script:
                 id(boot_qr_cycle).execute(1, id(gameday_ctl).show_boot_address());
                 const std::string page = gameday::device_page_qr(sta_ip());
                 const bool addr = id(boot_qr_frame) == 2 || page.empty();
-                id(boot_view).execute(wide && !page.empty(), (wide || !addr) ? page : std::string());
+                id(boot_view).execute((wide || !addr) ? page : std::string(), 2);
                 if (addr)
                   id(boot_set_lines).execute("Open", h1, h2, "", false);
                 else if (wide)
@@ -527,12 +560,11 @@ script:
             const bool ap = !joining && w->is_ap_active();
             id(boot_qr_cycle).execute(joining ? 0 : 2, ap);
             const int frame = id(boot_qr_frame);
-            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
+            id(boot_view).execute(ap && (wide || frame == 1) ? hotspot_qr() : std::string(), ap ? 2 : 1);
             if (joining) {
               id(boot_set_lines).execute("JOINING", join_name, "", "", true);
             } else if (ap && frame == 2) {
-              const std::string &name = App.get_name();
-              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+              id(boot_set_lines).execute("Join Wi-Fi", gameday::kHotspotName, gameday::hotspot_suffix(App.get_name()), "", true);
             } else
               id(boot_set_lines).execute("Can't join", join_name, ap ? "scan to fix" : "retrying", "", true);
           } else if (lost) {
@@ -552,15 +584,14 @@ script:
             const bool ap = !provisioning && w->is_ap_active();
             id(boot_qr_cycle).execute(provisioning ? 0 : 2, ap);
             const int frame = id(boot_qr_frame);
-            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
+            id(boot_view).execute(ap && (wide || frame == 1) ? hotspot_qr() : std::string(), ap ? 2 : 1);
             if (provisioning) {
               const std::string joining = w->get_sta().get_ssid().str();
               id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
             } else if (!ap) {
               id(boot_set_lines).execute("Wi-Fi", "lost", "reconnecting", "", true);
             } else if (frame == 2) {
-              const std::string &name = App.get_name();
-              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+              id(boot_set_lines).execute("Join Wi-Fi", gameday::kHotspotName, gameday::hotspot_suffix(App.get_name()), "", true);
             } else
               id(boot_set_lines).execute("Wi-Fi", "lost", "scan to fix", "", true);
           } else if (!w->has_sta() || w->is_ap_active()) {
@@ -576,25 +607,24 @@ script:
             const bool ap = !provisioning && w->is_ap_active();
             id(boot_qr_cycle).execute(provisioning ? 0 : id(gd_networks).in_setup() ? 4 : 3, ap);
             const int frame = id(boot_qr_frame);
-            id(boot_view).execute(wide && ap, ap && (wide || frame == 1) ? hotspot_qr() : std::string());
+            id(boot_view).execute(ap && (wide || frame == 1) ? hotspot_qr() : std::string(), ap ? 2 : 1);
             if (provisioning) {
               const std::string joining = w->get_sta().get_ssid().str();
               id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
             } else if (frame == 3) {
               id(boot_set_lines).execute("Unplug it to", "rejoin", "saved Wi-Fi", "", true);
             } else if (frame == 2) {
-              // The hotspot is "Game Day <suffix>", named in on_boot.
-              const std::string &name = App.get_name();
-              id(boot_set_lines).execute("Join Wi-Fi", "Game Day", name.substr(name.rfind('-') + 1), "", true);
+              // The hotspot is "Apollo Pulse <suffix>", named in on_boot.
+              id(boot_set_lines).execute("Join Wi-Fi", gameday::kHotspotName, gameday::hotspot_suffix(App.get_name()), "", true);
             } else if (ap) {
               id(boot_set_lines).execute("SETUP", "Scan to", "join Wi-Fi", "", true);
             } else
               id(boot_set_lines).execute("SETUP", "Starting", "hotspot", "", true);
           } else {
             id(boot_qr_cycle).execute(0, false);
-            id(boot_view).execute(false, "");
+            id(boot_view).execute("", 1);
             char ssid[wifi::SSID_BUFFER_SIZE];
-            id(boot_set_lines).execute(wide ? "Connecting to" : "Connecting", w->wifi_ssid_to(ssid), "", "", true);
+            id(boot_set_lines).execute(gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default())) ? "Connecting to" : "Connecting", w->wifi_ssid_to(ssid), "", "", true);
           }
 
   # Keep the address up for a while after connecting, then clear the overlay
@@ -611,9 +641,10 @@ script:
   - id: boot_hold_view
     then:
       - lambda: |-
-          const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
+          // Beside Apollo on 128x64: two lines
+          const bool wide = gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default()));
           id(boot_qr_cycle).execute(0, false);
-          id(boot_view).execute(false, "");
+          id(boot_view).execute("", 1);
           if (wide)
             id(boot_set_lines).execute("", "Looking up scores", "", "", true);
           else
@@ -633,9 +664,10 @@ script:
                 id: boot_overlay
                 hidden: false
             - lambda: |-
-                const bool wide = lv_disp_get_hor_res(lv_disp_get_default()) >= 128;
+                // The warning keeps its big words
+                const bool wide = gameday::boot_words_wide(lv_disp_get_hor_res(lv_disp_get_default()), lv_disp_get_ver_res(lv_disp_get_default()), 3);
                 id(boot_qr_cycle).execute(0, false);
-                id(boot_view).execute(false, "");
+                id(boot_view).execute("", 3);
                 if (wide)
                   id(boot_set_lines).execute("Updating", "Keep it plugged in", "Back in a minute", "", false);
                 else
@@ -795,7 +827,7 @@ script:
             // nothing else would take it down. Full width, so the warning
             // is not squeezed into half a chain.
             id(boot_qr_cycle).execute(0, false);
-            id(boot_view).execute(false, "");
+            id(boot_view).execute("", 0);
           }
           if (stage != id(boot_hold_stage)) {
             static const char *const LOG[] = {"keep holding for a Wi-Fi reset", "release to reset Wi-Fi",
@@ -971,7 +1003,7 @@ improv_ble:
   on_provisioning:
     - lambda: |-
         id(boot_qr_cycle).execute(0, false);
-        id(boot_view).execute(false, "");
+        id(boot_view).execute("", 1);
         // Name the network just handed over, so a wrong pick shows here.
         const std::string joining = wifi::global_wifi_component->get_sta().get_ssid().str();
         id(boot_set_lines).execute("JOINING", joining.empty() ? std::string("Wi-Fi") : joining, "", "", true);
@@ -1022,13 +1054,14 @@ binary_sensor:
 
 lvgl:
   style_definitions:
+    # Apollo Automation's light blue on black
     - id: boot_st_title
       text_font: spleen_16
-      text_color: 0xFFD000
+      text_color: 0xD4E8F8
     - id: boot_st_big
       text_color: 0xFFFFFF
     - id: boot_st_small
-      text_color: 0xB0B8C4
+      text_color: 0xD4E8F8
   top_layer:
     widgets:
       - obj:
@@ -1051,7 +1084,7 @@ lvgl:
                 y: 2
                 width: 128
                 text_align: CENTER
-                text: "GAME DAY"
+                text: "APOLLO PULSE"
                 styles: [boot_st_title]
             - obj:
                 id: boot_rule
@@ -1061,7 +1094,7 @@ lvgl:
                 width: 120
                 height: 1
                 bg_opa: COVER
-                bg_color: 0xFFD000
+                bg_color: 0xD57D3B
             - label:
                 id: boot_la
                 x: 2
@@ -1108,20 +1141,19 @@ lvgl:
                 max_value: 100
                 value: 0
                 bg_opa: COVER
-                bg_color: 0x202020
+                bg_color: 0x4379AA
+                radius: 0
                 indicator:
                   bg_opa: COVER
-                  bg_color: 0xFFD000
+                  bg_color: 0x9ABD32
+                  radius: 0
             # The QR code: the hotspot's Wi-Fi join code off Wi-Fi, the
             # device page on it (components/gameday/setup_qr.h). boot_view
             # sets its text, with lv_qrcode_update, and shows and hides it.
-            # Always the left 64 px: the whole screen of a single panel,
-            # taking turns with the lines, or the left half of a 128 px chain
-            # with the lines beside it. Listed last so it draws over the
-            # lines and bar, and the black box keeps them out from under the
-            # code. No text here: it stays hidden until boot_view gives it
-            # one.
-            # Longer chains: the left end; 2x2: middle rows.
+            # Placed by boot_layout.
+            # Listed last so it draws over the lines and bar, and the black
+            # box keeps them out from under the code. No text here: it stays
+            # hidden until boot_view gives it one.
             #
             # One LED per module, white modules on black, the geometry the
             # M-1's WLED setup card proved on the panel's glass (WLED-M1,
@@ -1135,8 +1167,8 @@ lvgl:
             # LVGL (9.5) encodes in byte mode at error correction M, raised to
             # Q when the data still fits that version, and scales by the
             # largest whole number that fits the canvas, centered. The
-            # 33 byte join code, WIFI:T:nopass;S:Game Day 2f6a70;;, is
-            # version 3: 29x29 modules, 1 px each on this 33 px canvas. The
+            # 37 byte join code, WIFI:T:nopass;S:Apollo Pulse 2f6a70;;, is
+            # version 3 at M: 29x29 modules, 1 px each on this 33 px canvas. The
             # page's address, http://192.168.1.50 (setup_qr.h leaves off the
             # slash), is version 2: 25x25, error correction Q up to 20 bytes
             # and M up to the longest address, 22. A code that needed more
@@ -1172,5 +1204,6 @@ esphome:
     - priority: -100.0
       then:
         - script.execute:
-            id: boot_layout
-            side: false
+            id: boot_view
+            qr: ""
+            dog: 1

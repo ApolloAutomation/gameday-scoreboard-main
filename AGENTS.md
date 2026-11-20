@@ -60,8 +60,8 @@ the same ground for people; this file is the short version.
   conventions.
 - `scripts`: generators (`build_web.py`, `build_teams.py`,
   `build_team_colors.py`, `build_timezones.py`, `build_circuits.py`,
-  `build_airlines.py`, `build_sprites.py`), release notes and factory
-  tools.
+  `build_airlines.py`, `build_sprites.py`, `build_apollo.py`), release
+  notes and factory tools.
 - `tests`: host tests for the parser and game logic, and Playwright tests
   for the device page in `tests/web`.
 
@@ -75,7 +75,8 @@ the same ground for people; this file is the short version.
   `make -C tests replay` and runs the `--selftest` of
   `scripts/size_budget.py`, `factory_flash.py`, `burnin_monitor.py`,
   `improv_scan.py`, `crash_report.py`, `site_seo.py`, `release_notes.py`,
-  `build_airlines.py`, `build_sprites.py`, `check_docs_links.py`,
+  `build_airlines.py`, `build_sprites.py`, `build_apollo.py`,
+  `check_docs_links.py`,
   `scripts/beta_version.sh`, `set_manifest_name.sh`,
   `keep_previous_ota.sh`, `check_live_feed.sh` and
   `tests/web/mock_device.py`. The last checks the device page's mock
@@ -123,7 +124,10 @@ the same ground for people; this file is the short version.
   Stats API, `--league ahl --league echl` the hockey teams from HockeyTech).
   The play animations' art is ASCII in `firmware/art/sprites/*.txt`: edit
   it there and rerun `build_sprites.py`. CI's `build_sprites.py --check`
-  fails a stale `sprites.h`.
+  fails a stale `sprites.h`. `apollo_logo.h`, Apollo on the start-up
+  screen, is `build_apollo.py`'s scaling of `firmware/art/apollo/apollo.png`
+  (Apollo Automation's logo); CI's `build_apollo.py --check` fails a stale
+  one.
 
 ## Rules
 

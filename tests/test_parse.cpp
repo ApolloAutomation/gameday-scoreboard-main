@@ -788,14 +788,21 @@ static void test_ticker_speed() {
 // device page by IP. No app in either.
 static void test_setup_qr() {
   using esphome::gameday::device_page_qr;
+  using esphome::gameday::hotspot_ssid;
   using esphome::gameday::wifi_join_qr;
-  CHECK_EQ(wifi_join_qr("Game Day 2f6a70"), std::string("WIFI:T:nopass;S:Game Day 2f6a70;;"));
+  CHECK_EQ(hotspot_ssid("gameday-2f6a70"), std::string("Apollo Pulse 2f6a70"));
+  CHECK_EQ(hotspot_ssid("gameday"), std::string("Apollo Pulse "));
+  CHECK_EQ(esphome::gameday::hotspot_suffix("gameday-2f6a70"), std::string("2f6a70"));
+  // Wi-Fi names stop at 32 bytes
+  CHECK(hotspot_ssid("gameday-2f6a70").size() <= 32);
+  CHECK_EQ(wifi_join_qr(hotspot_ssid("gameday-2f6a70")), std::string("WIFI:T:nopass;S:Apollo Pulse 2f6a70;;"));
   // The Wi-Fi QR format's specials, each escaped with a backslash
   CHECK_EQ(wifi_join_qr("a;b,c:d\\e\"f"), std::string("WIFI:T:nopass;S:a\\;b\\,c\\:d\\\\e\\\"f;;"));
   CHECK_EQ(wifi_join_qr("Café's"), std::string("WIFI:T:nopass;S:Café's;;"));
   CHECK_EQ(wifi_join_qr(""), std::string("WIFI:T:nopass;S:;;"));
-  // 33 characters: LVGL's version 3 at M, 29x29 at 1 px per module on its 33 px canvas
-  CHECK_EQ(wifi_join_qr("Game Day 2f6a70").size(), (size_t) 33);
+  // 37 characters; version 3 at M holds 42
+  CHECK_EQ(wifi_join_qr(hotspot_ssid("gameday-2f6a70")).size(), (size_t) 37);
+  CHECK(wifi_join_qr(hotspot_ssid("gameday-ffffff")).size() <= 42);
 
   CHECK_EQ(device_page_qr("192.168.1.50"), std::string("http://192.168.1.50"));
   CHECK_EQ(device_page_qr(""), std::string(""));
@@ -3916,6 +3923,7 @@ int run_plane_art_tests(int &checks);  // test_plane_art.cpp
 int run_mlbstats_tests(int &checks);
 int run_hockeytech_tests(int &checks);
 int run_split_tests(int &checks);
+int run_ticker_tests(int &checks);
 int run_layout_tests(int &checks);
 int run_app_tests(int &checks);
 int run_f1_tests(int &checks);
@@ -3931,6 +3939,7 @@ int run_app_poll_tests(int &checks);     // test_app_polls.cpp
 int run_request_size_tests(int &checks);  // test_request_size.cpp
 int run_landmark_tests(int &checks);      // defined in test_landmarks.cpp
 int run_sky_tests(int &checks);           // defined in test_sky.cpp
+int run_boot_brand_tests(int &checks);    // defined in test_boot_brand.cpp
 
 static void test_logo_lru() {
   using espn::LogoSlot;
@@ -9746,6 +9755,7 @@ int main() {
   failures += run_mlbstats_tests(checks);
   failures += run_hockeytech_tests(checks);
   failures += run_split_tests(checks);
+  failures += run_ticker_tests(checks);
   failures += run_layout_tests(checks);
   failures += run_app_tests(checks);
   failures += run_f1_tests(checks);
@@ -9761,6 +9771,7 @@ int main() {
   failures += run_request_size_tests(checks);
   failures += run_landmark_tests(checks);
   failures += run_sky_tests(checks);
+  failures += run_boot_brand_tests(checks);
   printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
