@@ -252,6 +252,22 @@ the script's `DROP` table and a rebuild. Changing the file format means a
 new folder (`land/2/`) and a new `LAND_URL` in `app.js`, never an edit of
 `land/1/`, since panels on older firmware keep reading it.
 
+## Airport names
+
+The Flight Tracker names a route's airports by their city, like **SDF
+Louisville**, from a table in the firmware. `firmware/data/airports.tsv`
+holds it as text, one airport a line, and
+`components/gameday/flight_airports.h` packs it for the panel; both come
+from `python3 scripts/build_airports.py`, which downloads OurAirports'
+`airports.csv` (public domain) and keeps every airport with an IATA code
+and scheduled flights, and every large one. Run it with `--cache DIR` to
+keep the download, review the `.tsv`'s diff and commit both files. A wrong
+city is fixed with a line in the script's `CITY` table, an airport's own
+name where a city has two in its `PART` table, then a rerun. `--check`
+(also in CI) fails when the header isn't what the `.tsv` packs to or the
+`.tsv` was made by other rules; `--check --cache DIR` also remakes the
+`.tsv` from the kept download and compares.
+
 A local build reads the live site's files. To try files that aren't on the
 site yet, run `python3 scripts/build_landmarks.py --serve` and paste the
 line it prints into the device page's browser console; it sets

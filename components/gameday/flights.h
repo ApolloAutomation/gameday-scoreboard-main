@@ -499,6 +499,31 @@ bool route_fits(const Stop &a, const Stop &b, const Plane &p);
 std::string leg_text(const Leg &l, const char *sep);
 // Flightradar24's route, else a looked-up leg that fits.
 std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep);
+// The same route's two codes; false when none.
+bool route_codes(const Plane &p, RouteCache *routes, uint32_t now_s, std::string &from, std::string &to);
+
+// ---- Airports ----------------------------------------------------------------
+
+// An airport's place, from OurAirports (flight_airports.h).
+struct AirportName {
+  std::string city;  // UTF-8, Latin-1 letters: "Chicago", "São Paulo"
+  std::string part;  // where a city has two: "O'Hare"
+};
+
+// By IATA, else ICAO; false when unknown.
+bool airport_name(const char *code, AirportName &out);
+
+// A stop's words, longest first: "ORD Chicago O'Hare",
+// "ORD Chicago", "Chicago", "ORD". Unknown: the code.
+enum class StopFit : uint8_t { FULL = 0, CITY, PLACE, CODE };
+std::string stop_text(const std::string &code, StopFit fit);
+// The ticker's: "SDF Louisville to ORD Chicago O'Hare".
+std::string route_words(const std::string &from, const std::string &to);
+// Two lines, "SDF Louisville" and "to ORD Chicago",
+// each within max glyphs; false: the codes alone.
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b);
+// UTF-8 glyphs, as the panel draws them.
+size_t glyphs(const std::string &s);
 
 struct RouteAsk {
   char callsign[kNear][9]{};

@@ -40,6 +40,12 @@ The nearest plane's card has:
 - how far away it is and in which direction, like **2.4 mi SW**
 - except on a 64x64 area, whether it's climbing, descending or level
 
+:::note[Coming in the next release]
+The route names its airports' places, not only their codes. On a card 128 wide or more (one 128x64 panel, either half of two rows of two, three or four panels in a row, and the full-screen card), the route takes two gold lines, like **SDF Louisville** and **to ORD Chicago**. Where a city has more than one busy airport, the airport's own name follows when there's room, like **to ORD Chicago O'Hare** or **to LHR London Heathrow**. When that's too long, the airport's name goes first, then the codes, like **Los Angeles** and **to Tokyo**; a word is never cut, and a route whose places don't fit shows its codes, like **LAX-NRT**, as before. On a 64x64 area the card keeps the codes. The ticker always names the places in full, like **SDF Louisville to ORD Chicago O'Hare**, and the full-screen list of nearby planes keeps the codes.
+
+The place is the city people know the airport by, from a table of about 4,000 airports with scheduled flights built into the panel, so it needs no internet and asks no one: **Louisville** for SDF, **Chicago** for ORD, **Tokyo** for Narita. Accented letters show as they're written, like **São Paulo** or **Reykjavík**. An airport the table doesn't have, or a code the panel doesn't know, shows its code alone, like **to QQQ**.
+:::
+
 The card also shows the airline's logo and a picture of the plane.
 
 - **The logo** is the airline painted on the plane, like Delta's red triangle. A flight that Republic flies for American shows American's logo, with **Republic** as the airline's name, when Flightradar24 says so. Until the logo comes in, or for an airline whose logo is only a long name or can't be found, the airline's code shows in its place, like **WN** for Southwest or **EJA** for NetJets.
@@ -118,6 +124,9 @@ With the **Idle display** on **Off or dim** and the Flight Tracker on the main b
 - **Flightradar24**: the panel reads Flightradar24's public live map feed about every 20 seconds while the Flight Tracker is on screen. It has each plane's route and flight number too. One read for the planes near a city is about 5 KB, about 1 MB an hour.
 - **adsb.fi, then adsb.lol**: when Flightradar24 fails twice in a row, or turns the panel away, the panel switches to adsb.fi on its own, and to adsb.lol if adsb.fi is out too. adsb.lol is read at most every 3 minutes. The panel goes back to Flightradar24 once its wait is over, longer each time it fails again, and as long as it asks when it turns the panel away. A read from adsb.fi is larger, about 30 KB for 50 planes, about 5 MB an hour.
 - **Routes**: for an airline flight whose source has no full route (adsb.fi, adsb.lol, your own receiver, and some Flightradar24 flights), the panel looks the route up from adsb.im, at most every 30 seconds, over plain HTTP, or from adsbdb while adsb.im is failing or turning the panel away. It shows a route only when it fits where the plane is and the way it's heading, and keeps each route for 3 hours.
+:::note[Coming in the next release]
+- **Airport names**: the places a route names come from [OurAirports](https://ourairports.com/data/) (public domain), built into the panel's firmware, so they need no lookup.
+:::
 - **Nothing while it's off screen**: the Flight Tracker reads only while it's on the main board or in the second area. Off screen, the device page says it isn't reading planes, rather than an old count.
 - **Near the 180th meridian**: Flightradar24's box can't reach across it, so for a home whose circle crosses it, like in Fiji, the panel reads adsb.fi first. The card's line then names adsb.fi without saying Flightradar24 is out.
 

@@ -2,6 +2,7 @@
 #include "flights.h"
 
 #include "flight_airlines.h"
+#include "flight_airports.h"
 
 #include <algorithm>
 #include <cctype>
@@ -943,11 +944,245 @@ std::string leg_text(const Leg &l, const char *sep) {
   return std::string(l.from->code) + sep + l.to->code;
 }
 
-std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep) {
-  if (p.from[0] != '\0' && p.to[0] != '\0')
-    return std::string(p.from) + sep + p.to;
+bool route_codes(const Plane &p, RouteCache *routes, uint32_t now_s, std::string &from, std::string &to) {
+  if (p.from[0] != '\0' && p.to[0] != '\0') {
+    from = p.from;
+    to = p.to;
+    return true;
+  }
   const Route *r = routes != nullptr ? routes->find(p.callsign, now_s) : nullptr;
-  return r != nullptr ? leg_text(route_leg(*r, p), sep) : "";
+  const Leg l = r != nullptr ? route_leg(*r, p) : Leg();
+  if (!l.shown())
+    return false;
+  from = l.from->code;
+  to = l.to->code;
+  return true;
+}
+
+std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep) {
+  std::string from, to;
+  return route_codes(p, routes, now_s, from, to) ? from + sep + to : "";
+}
+
+// ---- Airports ----------------------------------------------------------------
+
+namespace {
+
+struct BitIn {
+  const uint8_t *p;
+  size_t n;  // bits
+  uint32_t at;
+  int bit() {
+    if (this->at >= this->n)
+      return 1;  // past the end reads as stops
+    const int b = (this->p[this->at >> 3] >> (7 - (this->at & 7))) & 1;
+    this->at++;
+    return b;
+  }
+  uint32_t get(int k) {
+    uint32_t v = 0;
+    while (k-- > 0)
+      v = v << 1 | (uint32_t) this->bit();
+    return v;
+  }
+  uint32_t rice(int k) {
+    uint32_t q = 0;
+    while (this->bit() == 0 && q < 4096)
+      q++;
+    return q << k | this->get(k);
+  }
+};
+
+// Canonical Huffman; kAirportEnd on a bad code.
+uint16_t airport_symbol(BitIn &in, const uint8_t *counts, const uint16_t *syms) {
+  uint32_t code = 0, first = 0, idx = 0;
+  for (int len = 1; len < 16; len++) {
+    code = code << 1 | (uint32_t) in.bit();
+    if (code - first < counts[len])
+      return syms[idx + code - first];
+    idx += counts[len];
+    first = (first + counts[len]) << 1;
+  }
+  return kAirportEnd;
+}
+
+// One airport's name, into out when given.
+void airport_read(BitIn &in, AirportName *out) {
+  uint16_t prev = 0x20;
+  bool part = false;
+  for (int k = 0; k < 64; k++) {
+    const bool word = prev == 0x20 || prev == '-' || prev == kAirportSep;
+    const uint16_t s = word ? airport_symbol(in, kAirportCounts0, kAirportSymbols0)
+                            : airport_symbol(in, kAirportCounts1, kAirportSymbols1);
+    if (s == kAirportEnd)
+      return;
+    prev = s;
+    if (s == kAirportSep) {
+      part = true;
+      continue;
+    }
+    if (out == nullptr)
+      continue;
+    std::string &to = part ? out->part : out->city;
+    if (s < 0x80) {
+      to += (char) s;
+    } else {
+      to += (char) (0xC0 | (s >> 6));
+      to += (char) (0x80 | (s & 0x3F));
+    }
+  }
+}
+
+// Base 26 of n capitals; -1 otherwise.
+int32_t airport_b26(const char *c, int n) {
+  int32_t v = 0;
+  for (int i = 0; i < n; i++) {
+    if (c[i] < 'A' || c[i] > 'Z')
+      return -1;
+    v = v * 26 + (c[i] - 'A');
+  }
+  return c[n] == '\0' ? v : -1;
+}
+
+// Block holding v: the last head at or under it.
+int airport_block(const AirportHead *heads, size_t n, uint32_t v) {
+  size_t lo = 0, hi = n;
+  while (lo < hi) {
+    const size_t mid = (lo + hi) / 2;
+    if (heads[mid].code <= v)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return (int) lo - 1;
+}
+
+const size_t kHeads = sizeof(kAirportHead) / sizeof(kAirportHead[0]);
+const size_t kIcaoHeads = sizeof(kAirportIcaoHead) / sizeof(kAirportIcaoHead[0]);
+
+// Walks block k's airports; at returns true to stop.
+template<typename F> void airport_walk(int k, F at) {
+  BitIn in{kAirportBits, sizeof(kAirportBits) * 8, kAirportHead[k].bit};
+  uint32_t v = kAirportHead[k].code;
+  const int n = std::min<int>(kAirportBlock, kAirportCount - k * kAirportBlock);
+  for (int j = 0; j < n; j++) {
+    if (j > 0)
+      v += in.rice(kAirportIataRice) + 1;
+    const uint32_t mode = in.get(2);
+    if (at(j, v, mode, in))
+      return;
+    airport_read(in, nullptr);
+  }
+}
+
+// By IATA; mode: how its ICAO is made.
+bool airport_iata(const char *code, AirportName &out, uint32_t *mode) {
+  const int32_t v = airport_b26(code, 3);
+  const int k = v < 0 ? -1 : airport_block(kAirportHead, kHeads, (uint32_t) v);
+  bool found = false;
+  if (k < 0)
+    return false;
+  airport_walk(k, [&](int, uint32_t at, uint32_t m, BitIn &in) {
+    if (at < (uint32_t) v)
+      return false;
+    if (at == (uint32_t) v) {
+      airport_read(in, &out);
+      if (mode != nullptr)
+        *mode = m;
+      found = true;
+    }
+    return true;
+  });
+  return found;
+}
+
+// The entry'th airport's name.
+void airport_entry(uint32_t entry, AirportName &out) {
+  if (entry >= kAirportCount)
+    return;
+  airport_walk((int) (entry / kAirportBlock), [&](int j, uint32_t, uint32_t, BitIn &in) {
+    if ((uint32_t) j != entry % kAirportBlock)
+      return false;
+    airport_read(in, &out);
+    return true;
+  });
+}
+
+bool airport_icao(const char *code, AirportName &out) {
+  // "K" + IATA and "C" + IATA aren't in the index
+  uint32_t mode = 0;
+  if ((code[0] == 'K' || code[0] == 'C') && airport_iata(code + 1, out, &mode) && mode == (code[0] == 'K' ? 1u : 2u))
+    return true;
+  out = AirportName();
+  const int32_t v = airport_b26(code, 4);
+  const int k = v < 0 ? -1 : airport_block(kAirportIcaoHead, kIcaoHeads, (uint32_t) v);
+  if (k < 0)
+    return false;
+  BitIn in{kAirportIcaoBits, sizeof(kAirportIcaoBits) * 8, kAirportIcaoHead[k].bit};
+  uint32_t at = kAirportIcaoHead[k].code;
+  const int n = std::min<int>(kAirportBlock, kAirportIcaoCount - k * kAirportBlock);
+  for (int j = 0; j < n; j++) {
+    if (j > 0)
+      at += in.rice(kAirportIcaoRice) + 1;
+    const uint32_t entry = in.get(kAirportEntryBits);
+    if (at > (uint32_t) v)
+      return false;
+    if (at == (uint32_t) v) {
+      airport_entry(entry, out);
+      return !out.city.empty();
+    }
+  }
+  return false;
+}
+
+}
+
+bool airport_name(const char *code, AirportName &out) {
+  out = AirportName();
+  if (code == nullptr)
+    return false;
+  const size_t n = strnlen(code, 5);
+  return n == 3 ? airport_iata(code, out, nullptr) : n == 4 && airport_icao(code, out);
+}
+
+size_t glyphs(const std::string &s) {
+  size_t n = 0;
+  for (char c : s)
+    n += ((unsigned char) c & 0xC0) != 0x80 ? 1 : 0;
+  return n;
+}
+
+std::string stop_text(const std::string &code, StopFit fit) {
+  AirportName a;
+  if (fit == StopFit::CODE || !airport_name(code.c_str(), a) || a.city.empty())
+    return code;
+  if (fit == StopFit::PLACE)
+    return a.city;
+  std::string out = code + " " + a.city;
+  if (fit == StopFit::FULL && !a.part.empty() && a.part != code)
+    out += " " + a.part;
+  return out;
+}
+
+std::string route_words(const std::string &from, const std::string &to) {
+  return stop_text(from, StopFit::FULL) + " to " + stop_text(to, StopFit::FULL);
+}
+
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b) {
+  a.clear();
+  b.clear();
+  AirportName x;
+  if (!airport_name(from.c_str(), x) && !airport_name(to.c_str(), x))
+    return false;
+  for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::PLACE}) {
+    a = stop_text(from, f);
+    b = "to " + stop_text(to, f);
+    if (glyphs(a) <= max && glyphs(b) <= max)
+      return true;
+  }
+  a.clear();
+  b.clear();
+  return false;
 }
 
 int RouteCache::index_(const char *cs, uint32_t now_s) const {
@@ -1373,6 +1608,7 @@ namespace {
 
 struct Card {
   std::string label, who, sub, tail, reg, type_code, alt_full, speed_full, speed_short, where_full, where_short, chip;
+  std::string from, to;  // the route's codes
   const char *climb{""};
   const char *cat{nullptr};
   const AirlineName *brand{nullptr};  // whose logo shows
@@ -1410,7 +1646,7 @@ Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s)
     c.who = c.brand->name;
   if (c.who.empty())
     c.who = p.type[0] != '\0' ? type_text(p.type, 16) : cat != nullptr ? cat : "";
-  const std::string leg = route_text(p, routes, now_s, "-");
+  const bool leg = route_codes(p, routes, now_s, c.from, c.to);
   const std::string fn = p.flight[0] != '\0' ? std::string(p.flight) : flight_number(p.callsign);
   if (c.brand != nullptr) {
     c.chip = logo_chip(*c.brand, fn);
@@ -1425,8 +1661,8 @@ Card card_of(const Plane &p, RouteCache *routes, const Units &u, uint32_t now_s)
     c.tail = fn;
   else if (p.reg[0] != '\0' && c.label != p.reg)
     c.tail = p.reg;
-  c.route = !leg.empty();
-  c.sub = c.route ? leg : c.tail;
+  c.route = leg;
+  c.sub = c.route ? c.from + "-" + c.to : c.tail;
   c.type_code = p.type;
   c.reg = p.reg;
   c.alt_full = alt_text(p, u.alt, Fmt::FULL);
@@ -1448,7 +1684,13 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
   t.font = font;
   t.align = a;
   t.color = color;
-  t.text = cut(text, (size_t) (w / font_px(font)));
+  // Whole glyphs, so UTF-8 stays whole
+  const size_t max = (size_t) (w / font_px(font));
+  size_t at = 0;
+  for (size_t n = 0; at < text.size(); at++)
+    if (((unsigned char) text[at] & 0xC0) != 0x80 && n++ == max)
+      break;
+  t.text = text.substr(0, at);
   f.items.push_back(t);
 }
 
@@ -1605,7 +1847,14 @@ void card_left(Frame &f, const Card &c) {
   if (c.route)
     put(f, rx, 8, rw, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
   put_logo(f, c, lx, 0);
-  put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+  // Places on two lines, 7 apart, else the codes
+  std::string a, b;
+  if (c.route && route_lines(c.from, c.to, 14, a, b)) {
+    put(f, 1, 16, 70, BoardFont::S8, Align::LEFT, kColRoute, a);
+    put(f, 1, 23, 70, BoardFont::S8, Align::LEFT, kColRoute, b);
+  } else {
+    put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+  }
   put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
   put_art(f, c, 72, 17, 56, 21);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
@@ -1623,13 +1872,25 @@ void card_tall(Frame &f, const Card &c) {
   const std::string type = type_line(c, (size_t) tw / 5);
   if (type != c.who)
     put(f, x0, 25, tw, BoardFont::S8, Align::LEFT, kColType, type);
-  // The biggest font that holds the route.
-  const BoardFont rf = c.sub.size() * 8 <= 127 ? BoardFont::S16 : c.sub.size() * 6 <= 127 ? BoardFont::S12 : BoardFont::S8;
-  put(f, 1, 34 + (16 - font_rows(rf)) / 2, 127, rf, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
-  // The flight number beside a short route
-  const int rx = 4 + (int) c.sub.size() * font_px(rf);
-  if (c.route && !c.tail.empty() && rx + (int) c.tail.size() * 5 <= 127)
-    put(f, rx, 38, 127 - rx, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+  std::string a, b;
+  if (c.route && route_lines(c.from, c.to, 25, a, b)) {
+    // Places on two lines, the flight number where it fits
+    put(f, 1, 34, 127, BoardFont::S8, Align::LEFT, kColRoute, a);
+    put(f, 1, 42, 127, BoardFont::S8, Align::LEFT, kColRoute, b);
+    const size_t n = glyphs(c.tail);
+    const int ty = glyphs(a) + 1 + n <= 25 ? 34 : glyphs(b) + 1 + n <= 25 ? 42 : -1;
+    if (!c.tail.empty() && ty >= 0)
+      put(f, 1, ty, 127, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+  } else {
+    // The biggest font that holds the route.
+    const BoardFont rf =
+        c.sub.size() * 8 <= 127 ? BoardFont::S16 : c.sub.size() * 6 <= 127 ? BoardFont::S12 : BoardFont::S8;
+    put(f, 1, 34 + (16 - font_rows(rf)) / 2, 127, rf, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
+    // The flight number beside a short route
+    const int rx = 4 + (int) c.sub.size() * font_px(rf);
+    if (c.route && !c.tail.empty() && rx + (int) c.tail.size() * 5 <= 127)
+      put(f, rx, 38, 127 - rx, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+  }
   // Small planes bigger, still under an airliner
   const PlaneSprite *sp = plane_sprite(c.kind);
   put_art(f, c, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
@@ -1834,7 +2095,9 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
     add(airline_name(p.callsign), " ");
     const char *cat = category_text(p.category);
     add(p.type[0] != '\0' ? type_text(p.type, 17) : cat != nullptr ? cat : "", ", ");
-    add(route_text(p, routes, now_s, " to "), ", ");
+    std::string from, to;
+    if (route_codes(p, routes, now_s, from, to))
+      add(route_words(from, to), ", ");
     add(alt_text(p, o.units.alt, Fmt::FULL), ", ");
     add(speed_text(p, o.units.speed, Fmt::FULL), ", ");
     add(where_text(p, o.units.dist, Fmt::FULL), ", ");
@@ -1845,6 +2108,6 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
   return out;
 }
 
-int text_px(const Text &t) { return (int) t.text.size() * font_px(t.font); }
+int text_px(const Text &t) { return (int) glyphs(t.text) * font_px(t.font); }
 
 }
