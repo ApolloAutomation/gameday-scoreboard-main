@@ -31,7 +31,7 @@ You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 5. Wait for the install to finish.
 6. The installer then offers to put the panel on your Wi-Fi. Enter your network name and password.
 
-The panel starts on one 64x64 panel. For a 128x64 panel or more panels, pick the layout on the device page once the panel is on Wi-Fi. See [Panel sizes](/using/panel-sizes/).
+The panel starts on one 64x64 panel. For a 128x64 panel or more panels, pick your panel size on the device page once the panel is on Wi-Fi. See [Panel sizes](/using/panel-sizes/).
 
 ### scoreboard75 controller board
 

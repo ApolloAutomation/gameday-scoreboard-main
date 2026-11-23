@@ -16,7 +16,7 @@ One firmware drives six arrangements of HUB75 LED panels. The panel size is a se
 | Four 64x64 panels side by side | Wide, 256x64 | **Four wide** |
 | Four 64x64 panels in two rows of two | Two rows, 128x128 | **Two rows of two** |
 
-A panel on the scoreboard75 controller board ships with one 128x64 panel and starts on the wide layout. An Apollo M-1 installed from the Apollo installer starts on one 64x64 panel; pick your layout on the device page. Built your own? See [Panels](/diy/panels/).
+A panel on the scoreboard75 controller board ships with one 128x64 panel and starts on the wide layout. An Apollo M-1 starts on one 64x64 panel. Pick your panel size on the device page. Built your own? See [Panels](/diy/panels/).
 
 With three or four panels, Bluetooth setup is off, so the panel sets up Wi-Fi through its hotspot only: scan the QR code on its setup screen with your phone's camera. Power them from a supply rated for all of them. See [Panels and power](/diy/panels/).
 

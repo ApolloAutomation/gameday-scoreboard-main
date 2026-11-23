@@ -7,7 +7,7 @@ sidebar:
 
 An Apollo M-1 installs from the [Apollo installer for the M-1](https://install.apolloautomation.com/#/m-1): pick **Game Day Scoreboard (Rev6 only)**, then **Connect & Install**. See [Install the firmware](/get-started/install-firmware/).
 
-For another board on the MoonHub75 pinout, or to start an M-1 two panels wide, the [Apollo M-1 and MoonHub75 installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares, from your browser. You don't need ESPHome or any other software.
+For another board on the MoonHub75 pinout, the [Apollo M-1 and MoonHub75 installer](https://apolloautomation.github.io/gameday-scoreboard-main/install/diy/) flashes the prebuilt firmware for the MoonHub75 pinout, which the Apollo M-1 (Rev6) shares, from your browser. You don't need ESPHome or any other software.
 
 :::caution
 Installing erases whatever firmware was on the board. This installer is for boards on the MoonHub75 pinout only, the Apollo M-1 Rev6 among them. If you have a scoreboard75 controller board, pick it on the [installer on the home page](https://apolloautomation.github.io/gameday-scoreboard-main/) instead.
