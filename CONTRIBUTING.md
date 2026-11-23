@@ -45,7 +45,7 @@ more than anything.
 
 Issues are public. Leave out Wi-Fi passwords and anything else private.
 
-Need help with a panel? The [docs](docs/wiki/src/content/docs/) cover
+Need help with a panel? The [docs](https://apolloautomation.github.io/gameday-scoreboard-main/docs/) cover
 setup, every setting and the common fixes, and the
 [support page](https://apolloautomation.github.io/gameday-scoreboard-main/support/) has the quick answers.
 
@@ -175,7 +175,9 @@ what you tested on: controller, layout, how long, what it showed.
 
 The docs are built from `docs/wiki` (Astro + Starlight); the pages are
 the markdown under [docs/wiki/src/content/docs/](docs/wiki/src/content/docs/).
-They have no published home of their own yet, and CI builds them on every
+They're published with the project's site, under `/docs/` at
+https://apolloautomation.github.io/gameday-scoreboard-main/docs/, by the same deploys that
+publish the site from `main` and release tags, and CI builds them on every
 pull request that touches them. On GitHub the pages read as plain markdown:
 links between pages and the note boxes only work in the built site, which
 `npm run dev` in `docs/wiki` previews. If your change alters what
@@ -215,8 +217,10 @@ these places:
 
 - `site_base` in `firmware/gameday-common.yaml`. Every update URL is built
   from it, the bar builds' included.
-- `SITE_URL` in the `env:` block of `.github/workflows/build.yml` and of
-  `.github/workflows/site.yml`.
+- `SITE_URL` in the `env:` block of `.github/workflows/build.yml`,
+  `.github/workflows/site.yml` and `.github/workflows/docs.yml`, and the
+  fallback for it in `docs/wiki/astro.config.mjs`, which builds the docs
+  for that address's `/docs/`.
 - `SITE_URL` in `firmware/web/app.js` (the device page's changelog link
   and its map landmark files).
   Run `python3 scripts/build_web.py` afterwards and commit both bundles.
@@ -257,6 +261,25 @@ site yet, run `python3 scripts/build_landmarks.py --serve` and paste the
 line it prints into the device page's browser console; it sets
 `localStorage["gd.landBase"]`, which the page reads instead of the site.
 `localStorage.removeItem("gd.landBase")` goes back.
+
+## Airport names
+
+The Flight Tracker names a route's airports by their city, like **SDF
+Louisville**, from a table in the firmware. `firmware/data/airports.tsv`
+holds it as text, one airport a line, and
+`components/gameday/flight_airports.h` packs it for the panel; both come
+from `python3 scripts/build_airports.py`, which downloads OurAirports'
+`airports.csv` (public domain) and keeps every airport with an IATA code
+and scheduled flights, and every large one. Run it with `--cache DIR` to
+keep the download, review the `.tsv`'s diff and commit both files. A wrong
+city is fixed with a line in the script's `CITY` table, an airport's own
+name where a city has two in its `PART` table, then a rerun. A former
+code OurAirports keeps in an airport's keywords with its ICAO form (PBI
+and KPBI for DJT) gets its own line, so routes that still send it find
+the name. `--check`
+(also in CI) fails when the header isn't what the `.tsv` packs to or the
+`.tsv` was made by other rules; `--check --cache DIR` also remakes the
+`.tsv` from the kept download and compares.
 
 ## License
 

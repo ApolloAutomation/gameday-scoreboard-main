@@ -2,9 +2,50 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// The project's site; the docs live under its /docs/.
+const SITE_URL = (process.env.SITE_URL || 'https://apolloautomation.github.io/gameday-scoreboard-main').replace(/\/+$/, '');
+const site = new URL(SITE_URL);
+const base = `${site.pathname.replace(/\/+$/, '')}/docs`;
+const DOCS_URL = `${site.origin}${base}`;
+
+// Page links written from the docs root get the base.
+function withBase(href) {
+	if (typeof href !== 'string' || !href.startsWith('/') || href.startsWith('//')) return href;
+	if (href === base || href.startsWith(`${base}/`)) return href;
+	return base + href;
+}
+
+const baseLinks = {
+	name: 'docs-base-links',
+	element: {
+		filter: ['a', 'img'],
+		visit(node, ctx) {
+			for (const key of ['href', 'src']) {
+				const value = node.properties?.[key];
+				const next = withBase(value);
+				if (next !== value) ctx.setProperty(node, key, next);
+			}
+		},
+	},
+};
+
+// Adds baseLinks to Astro's Markdown processor.
+const docsBaseLinks = {
+	name: 'docs-base-links',
+	hooks: {
+		'astro:config:setup': ({ config }) => {
+			const plugins = config.markdown.processor?.options?.hastPlugins;
+			if (!plugins) throw new Error('docs-base-links: Markdown processor takes no hast plugins');
+			plugins.push(baseLinks);
+		},
+	},
+};
+
 export default defineConfig({
-	site: 'https://docs.gameday-scoreboard.com',
+	site: site.origin,
+	base,
 	integrations: [
+		docsBaseLinks,
 		starlight({
 			title: 'Apollo Pulse',
 			description:
@@ -22,11 +63,14 @@ export default defineConfig({
 				baseUrl: 'https://github.com/ApolloAutomation/gameday-scoreboard-main/edit/dev/docs/wiki/',
 			},
 			lastUpdated: true,
+			// Pages never serves a 404 under /docs/.
+			disable404Route: true,
 			head: [
 				{ tag: 'meta', attrs: { property: 'og:site_name', content: 'Apollo Pulse' } },
 				{ tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
-				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://docs.gameday-scoreboard.com/og.jpg' } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: `${DOCS_URL}/og.jpg` } },
 				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: `${DOCS_URL}/og.jpg` } },
 				{ tag: 'meta', attrs: { name: 'twitter:site', content: '@GameDayScore' } },
 			],
 			customCss: ['./src/styles/custom.css'],
@@ -35,7 +79,7 @@ export default defineConfig({
 				{ label: 'Using your panel', items: [{ autogenerate: { directory: 'using' } }] },
 				{ label: 'Help', items: [{ autogenerate: { directory: 'help' } }] },
 				{ label: 'DIY', items: [{ autogenerate: { directory: 'diy' } }] },
-				{ label: "What's new", link: '/changelog/' },
+				{ label: "What's new", slug: 'changelog' },
 			],
 		}),
 	],
