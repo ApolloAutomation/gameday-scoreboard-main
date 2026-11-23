@@ -477,6 +477,7 @@
 
     <p class="foot">
       <span id="ver"></span><span>·</span>
+      <a href="${SITE_URL}/docs/" target="_blank" rel="noopener">Help</a><span>·</span>
       <a href="https://github.com/${REPO}" target="_blank" rel="noopener">gameday-scoreboard</a>
       <span>·</span><span>scores from ESPN, MLB and HockeyTech</span>
     </p>

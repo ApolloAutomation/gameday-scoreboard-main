@@ -10,7 +10,7 @@
 
 A standalone scoreboard for HUB75 LED matrix panels. Install it from your browser, join it to WiFi, pick your team on the panel's own web page, and it follows the game from ESPN by itself. Nothing else to run. It covers the NFL, college football, MLB, minor league baseball (Triple-A to Single-A, read from MLB's own stats API, since ESPN doesn't carry it), the NBA, the WNBA, men's college basketball, the NHL, the AHL and the ECHL (read from HockeyTech, the stats service those leagues use), MLS, the Premier League, golf's PGA Tour and LPGA Tour, Formula 1 and the NASCAR Cup Series.
 
-Watch the [full demo](https://apolloautomation.github.io/gameday-scoreboard-main/) on the installer page. The [docs](docs/wiki/src/content/docs/) cover setup, every setting, each sport's board, troubleshooting and running the firmware on your own board.
+Watch the [full demo](https://apolloautomation.github.io/gameday-scoreboard-main/) on the installer page. The docs cover setup, every setting, each sport's board, troubleshooting and running the firmware on your own board. From the next release on they're published at [the site's /docs/](https://apolloautomation.github.io/gameday-scoreboard-main/docs/); until then they're [in this repo](docs/wiki/src/content/docs/).
 
 If you already use Home Assistant and want room lighting to celebrate too, [gameday-matrix](https://github.com/bharvey88/gameday-matrix) does the same thing through a blueprint.
 
@@ -57,7 +57,7 @@ The MoonHub75 pinout, which the M-1 Rev6 shares, under the names ESPHome uses (t
 2. Enter your WiFi details in the dialog that follows the install. If you skip it, the panel starts a hotspot named Apollo Pulse plus six letters and numbers, like Apollo Pulse 2f6a70 (Game Day 2f6a70 on older firmware), and shows its name and a QR code for it. Point any iPhone or Android camera at the code to join the hotspot, or join it by name from any phone or laptop, and a setup page opens.
 3. Once it's on WiFi the panel's QR code opens its own page by IP address, and the panel shows the page's `gameday-xxxxxx.local` name. Scan the code, or open that name on your phone or computer on the same WiFi, and pick your team there, or add the panel to Home Assistant (below). Until you pick a team or a mode, from that page or Home Assistant, the ticker asks you to and gives the panel's IP address for phones that can't resolve `.local` names. Holding the controller's boot button for 1.5 seconds shows the name and the IP address again any time.
 
-From the first Apollo Automation release on, the project's site at that address has the installers and the demo, the DIY, support and changelog pages, and the update feed the panels read. The [docs](docs/wiki/src/content/docs/) are in this repo.
+From the first Apollo Automation release on, the project's site at that address has the installers and the demo, the DIY, support and changelog pages, and the update feed the panels read, and from the next release on the [docs](https://apolloautomation.github.io/gameday-scoreboard-main/docs/) under it at `/docs/`.
 
 A phone's camera and browser are enough to set a panel up. The QR code is the hotspot's Wi-Fi code whenever the panel is off WiFi and its hotspot is up, during setup and a few minutes into an outage, so a new router or password is fixed the same way. None of it needs the Game Day app, a separate project that Apollo Automation does not maintain, which may not find panels running this firmware; the hotspot and the device page do everything it does.
 
