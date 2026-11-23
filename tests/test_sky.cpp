@@ -150,7 +150,12 @@ void spot_at(const AppSky &s, uint32_t t, std::set<int> &out) {
   const PlaneSprite *sp = flights::plane_sprite((PlaneKind) s.kind);
   int px, py;
   sky_plane_at(s, *sp, t, px, py);
-  auto add = [&](int x, int y) { out.insert(y * s.w + (s.flip ? s.w - 1 - x : x)); };
+  const int sc = s.scale < 1 ? 1 : s.scale;
+  auto add = [&](int x, int y) {
+    for (int j = 0; j < sc; j++)
+      for (int i = 0; i < sc; i++)
+        out.insert((y * sc + j) * s.w + (s.flip ? s.w - 1 - (x * sc + i) : x * sc + i));
+  };
   if ((PlaneKind) s.kind == PlaneKind::HELI) {
     for (int x = 0; x < sp->w; x++)
       add(px + x, py);
@@ -195,6 +200,8 @@ void check_calm(const AppSky &s, const char *what) {
   const int steps = (int) (kEnd / kStep);
   std::vector<std::vector<uint8_t>> lum(steps, std::vector<uint8_t>(n));
   std::set<int> spot;
+  // Steps where the plane moved a row
+  std::vector<char> moved(steps, 0);
   int worst_changed = 0, worst_total = 0;
   long prev_total = -1;
   std::vector<uint16_t> prev;
@@ -214,9 +221,11 @@ void check_calm(const AppSky &s, const char *what) {
       int x0, y0, x1, y1;
       sky_plane_at(s, *sp, t, x0, y0);
       sky_plane_at(s, *sp, t > kStep ? t - kStep : 0, x1, y1);
-      SCHECK(std::abs(y0 - y1) <= s.scale, "%s: the plane moves a row at most a step", what);
-      for (int y = std::min(y0, y1) - 1; y <= std::max(y0, y1) + sp->h; y++)
-        for (int x = x0 - 1; x <= x0 + sp->w; x++)
+      SCHECK(std::abs(y0 - y1) <= 1, "%s: the plane moves a row at most a step", what);
+      moved[k] = k > 0 && y0 != y1;
+      const int sc = s.scale < 1 ? 1 : s.scale;
+      for (int y = std::min(y0, y1) * sc - 1; y <= (std::max(y0, y1) + sp->h) * sc; y++)
+        for (int x = x0 * sc - 1; x <= (x0 + sp->w) * sc; x++)
           if (x >= 0 && y >= 0 && x < s.w && y < s.h)
             band.insert(y * s.w + (s.flip ? s.w - 1 - x : x));
     }
@@ -244,16 +253,20 @@ void check_calm(const AppSky &s, const char *what) {
       series[k] = lum[k][i];
     if (crosses(series) <= 6)
       continue;
-    // Rotors and propellers too
+    // Rotors and propellers too, the wave's steps held
     if (spot.count(i) != 0) {
-      spin += crosses(series) > 8;
+      for (int k = 1; k < steps; k++)
+        series[k] = moved[k] ? series[k - 1] : series[k];
+      if (crosses(series) <= 6)
+        continue;
+      spin++;
       spin_at = i;
     } else {
       flicker++;
       at = i;
     }
   }
-  SCHECK(spin == 0, "%s: %d rotor or propeller pixels flash more than 4 times a second (one at %d,%d)", what, spin,
+  SCHECK(spin == 0, "%s: %d rotor or propeller pixels flash more than 3 times a second (one at %d,%d)", what, spin,
          spin_at < 0 ? 0 : spin_at % s.w, spin_at < 0 ? 0 : spin_at / s.w);
   const int side = 8 * s.scale;
   for (int by = 0; by + side <= s.h; by += side / 2)
@@ -332,7 +345,7 @@ std::vector<std::pair<int, uint8_t>> plane_cells(const AppSky &s, uint32_t t) {
   return out;
 }
 
-// The plane as it always drew, whole, a dark halo round it.
+// The plane drawn whole, a dark halo round it.
 void test_plane() {
   const uint16_t ink[4] = {0, rgb565(flights::kColBody), rgb565(0xD02020), rgb565(flights::kColDetail)};
   for (PlaneKind k : kKinds) {
@@ -396,7 +409,7 @@ void test_plane() {
   SCHECK(beside > 0 && dark == beside, "a blue tail's halo is black by day: %d of %d", dark, beside);
 }
 
-// Channels off or 8 up, a blue sky, the plane brightest.
+// Lit channels 8 up, blue sky, plane brightest.
 void test_lit() {
   const int body = luma(rgb565(flights::kColBody));
   for (const auto &b : kBoxes)
@@ -584,6 +597,10 @@ void test_lights() {
         // None in the sky
         for (int i = 0; i < sky_rows(b[1]) * b[0]; i++)
           by_day += n[(size_t) i] == lamp || n[(size_t) i] == window;
+        // Tall boxes: windows above the street only
+        const int hy = b[1] - (b[1] / 8 < 2 ? 2 : b[1] / 8);
+        for (int i = hy * b[0]; land == 2 && b[1] >= 40 && i < b[0] * b[1]; i++)
+          by_day += n[(size_t) i] == window;
       }
       const int cap = land == 2 ? (b[1] >= 40 ? 4000 : b[1] < 21 ? 4 : 6) : (b[0] + 6) / 24 + 1;
       SCHECK(by_day == 0 && (land == 3 || any > 0) && most <= cap && masts <= 1,
@@ -665,6 +682,27 @@ void test_calm() {
           snprintf(what, sizeof what, "kind %d %dx%d elev %d fall %d", (int) k, s.w, s.h, elev, fall);
           check_calm(s, what);
         }
+      }
+  // The full-screen card's scene, doubled and tripled
+  for (PlaneKind k : kKinds)
+    for (int sc : {2, 3})
+      for (int elev : {-25, 2, 40}) {
+        const PlaneSprite *sp = flights::plane_sprite(k);
+        if (sp->w * sc > 128 || sp->h * sc > 48)
+          continue;
+        AppSky s = sky_of(k, 128, 48, k == PlaneKind::NARROW, elev, 1, 0, (int) k % 5);
+        s.scale = (uint8_t) sc;
+        s.wind = 1;
+        snprintf(what, sizeof what, "kind %d x%d 128x48 elev %d", (int) k, sc, elev);
+        check_calm(s, what);
+      }
+  // A clear or partly cloudy coast, low sun and high
+  for (int h : {28, 48})
+    for (uint8_t cover : {0, 1})
+      for (int elev : {2, 40}) {
+        AppSky s = sky_of(PlaneKind::NONE, 128, h, false, elev, cover, 0, 3);
+        snprintf(what, sizeof what, "coast 128x%d cover %d elev %d", h, cover, elev);
+        check_calm(s, what);
       }
   // The scene alone, over a note, at each band
   for (const auto &b : {std::make_pair(64, 24), std::make_pair(128, 28), std::make_pair(128, 48)})
@@ -753,6 +791,60 @@ void test_weather() {
   // No home: the clock's hours stand in
   sky_fill(s, "a1b2c3", INT32_MIN, 0, 1782042000);
   SCHECK(s.home == 0 && (s.flags >> kSkyLandShift) == 0 && s.elev >= -30 && s.elev <= 60, "no home: hills by the clock");
+  // Level at 06:00 and 18:00, highest at noon
+  const auto local = app_env().local;
+  app_env().local = nullptr;
+  const int64_t day = 1782000000;
+  const int want[3] = {0, 50, 0};
+  for (int k = 0; k < 3; k++) {
+    sky_fill(s, "a1b2c3", INT32_MIN, 0, day + 21600 * (k + 1));
+    SCHECK(s.elev == want[k], "no home at %02d:00: elev %d, wants %d", 6 * (k + 1), s.elev, want[k]);
+  }
+  sky_fill(s, "a1b2c3", INT32_MIN, 0, day);
+  SCHECK(s.elev == -30, "no home at midnight: elev %d", s.elev);
+  app_env().local = local;
+}
+
+// The sun's disc stays clear of the plane.
+void test_sun_clear() {
+  const uint16_t sun[2] = {lit565(0xFFD66E), lit565(0xFFECAA)};
+  int seen = 0;
+  for (PlaneKind k : kKinds) {
+    const PlaneSprite *sp = flights::plane_sprite(k);
+    for (int sc : {2, 3})
+      for (int flip = 0; flip < 2; flip++)
+        for (int am = 0; am < 2; am++)
+          for (int elev = 0; elev <= 60; elev++) {
+            if (sp->w * sc > 128 || sp->h * sc > 48)
+              continue;
+            AppSky s = sky_of(k, 128, 48, flip, elev, 0, 0, 0, am ? kSkyAm : 0);
+            s.scale = (uint8_t) sc;
+            // The box over the wave, 2 px round
+            int bx, lo = 1 << 20, hi = -(1 << 20);
+            for (uint32_t t = 0; t < 8000; t += 100) {
+              int y;
+              sky_plane_at(s, *sp, t, bx, y);
+              lo = std::min(lo, y);
+              hi = std::max(hi, y);
+            }
+            const int x0 = bx * sc - 2, x1 = (bx + sp->w) * sc + 1, y0 = lo * sc - 2, y1 = (hi + sp->h) * sc + 1;
+            int in = 0;
+            for (uint32_t t : {0u, 1800u, 5400u}) {
+              const std::vector<uint16_t> px = paint(s, t);
+              for (int y = 0; y < s.h; y++)
+                for (int x = 0; x < s.w; x++) {
+                  const uint16_t c = px[(size_t) y * s.w + (flip ? s.w - 1 - x : x)];
+                  if (c != sun[0] && c != sun[1])
+                    continue;
+                  seen++;
+                  in += x >= x0 && x <= x1 && y >= y0 && y <= y1;
+                }
+            }
+            SCHECK(in == 0, "kind %d x%d flip %d %s elev %d: %d sun pixels by the plane", (int) k, sc, flip,
+                   am ? "am" : "pm", elev, in);
+          }
+  }
+  SCHECK(seen > 0, "the sun shows beside the plane");
 }
 
 // The scene draws at full size whatever the plane's scale.
@@ -816,6 +908,7 @@ int run_sky_tests(int &total_checks) {
   test_variety();
   test_weather();
   test_scale();
+  test_sun_clear();
   total_checks += checks;
   printf("sky: %d checks, %d failures\n", checks, failures);
   return failures;

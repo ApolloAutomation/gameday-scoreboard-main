@@ -492,7 +492,6 @@ void FlightsApp::lost_(uint32_t now_ms) {
     case Read::ADSBDB:
       this->db_wait_.fail(false, 0, this->rnd_(), now_ms);
       break;
-      break;
     default:
       break;
   }

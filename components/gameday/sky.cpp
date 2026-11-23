@@ -86,7 +86,7 @@ const uint8_t kMorn[4][2][3] = {
 };
 // Under cloud the sky leans to these
 const int8_t kSlateElev[4] = {-18, -9, 6, 15};
-const uint32_t kSlate[4] = {0x0A0E22, 0x383254, 0x383254, 0x3E5070};
+const uint32_t kSlate[4] = {0x0A0E22, 0x383254, 0x383254, 0x34507E};
 // Each scenery's land and its lit top by day
 const uint32_t kLandDay[5][2] = {
     {0x0A4014, 0x247424}, {0x1E2C54, 0x46608C}, {0x283048, 0x404C68}, {0x0A4014, 0x247424}, {0x0E3C10, 0x3C8228}};
@@ -133,6 +133,7 @@ struct Scene {
   uint32_t near, rim, home;
   uint16_t *px;
   int16_t w, h, stride, hy, amp, gx;
+  int16_t bx0, by0, bx1, by1;  // the plane's box, 2 px round
   int32_t fade;  // the glow's falloff a column, of 65536
   int8_t elev;
   uint8_t land, floor;
@@ -289,8 +290,8 @@ void scene_setup(const AppSky &s, uint16_t *px, int w, int h, int stride) {
   g.near = mix(mix(kLandDusk, kLandDay[g.land][0], lit), 0, dark);
   g.rim = mix(mix(kRimDusk, kLandDay[g.land][1], lit), kRimNight, dark);
   if (grey) {
-    g.near = mix(g.near, slate, 128);
-    g.rim = mix(g.rim, slate, 128);
+    g.near = mix(g.near, slate, 96);
+    g.rim = mix(g.rim, slate, 96);
   }
 }
 
@@ -372,7 +373,7 @@ void sky_fill(AppSky &s, const char *hex, int32_t lat_e4, int32_t lon_e4, int64_
     const struct tm tm = app_local(now);
     const int m = tm.tm_hour * 60 + tm.tm_min;
     rising = m < 720;
-    elev = 50 - (m < 720 ? 720 - m : m - 720) * 100 / 360;
+    elev = 50 - (m < 720 ? 720 - m : m - 720) * 50 / 360;
   }
   s.elev = (int8_t) clampi(elev, -30, 60);
   if (elev > 0)
@@ -434,12 +435,20 @@ void paint_sky(const AppSky &s, uint32_t t) {
   }
   // The sun's disc, where the box is tall
   if (tall && elev > -2) {
-    // At the top by 25 degrees, over the plane
-    const int r = 4, sy = hy - 1 - (elev < 25 ? elev : 25) * (hy - 2 - r) / 25;
-    for (int y = -r; y <= r; y++)
-      for (int x = -r; x <= r; x++)
-        if (x * x + y * y <= r * r + 1 && inside(g.gx + x, sy + y))
-          at(g.gx + x, sy + y) = enc(elev < 8 ? 0xFFD66E : 0xFFECAA, 8);
+    // At the top by 25 degrees
+    const int r = 4;
+    int sx = g.gx, sy = hy - 1 - (elev < 25 ? elev : 25) * (hy - 2 - r) / 25;
+    auto hits = [&]() { return sx + r >= g.bx0 && sx - r <= g.bx1 && sy + r >= g.by0 && sy - r <= g.by1; };
+    // Clear of the plane: edge, then below or above
+    if (hits())
+      sx = g.gx < W / 2 ? r + 1 : W - 2 - r;
+    if (hits())
+      sy = g.by1 + 1 + r <= hy - 1 ? g.by1 + 1 + r : g.by0 - 1 - r;
+    if (!hits() && sy >= r)
+      for (int y = -r; y <= r; y++)
+        for (int x = -r; x <= r; x++)
+          if (x * x + y * y <= r * r + 1 && inside(sx + x, sy + y))
+            at(sx + x, sy + y) = enc(elev < 8 ? 0xFFD66E : 0xFFECAA, 8);
   }
   // Stars and the moon come in below the horizon
   const int night = clampi((-elev - 3) * 32, 0, 256);
@@ -467,7 +476,8 @@ void paint_sky(const AppSky &s, uint32_t t) {
       p.h = g.h;
       p.stride = g.stride;
       p.clip = PxBox{0, 0, g.w, g.h};
-      const int mx = g.gx > W / 2 ? 2 : W - 7;
+      // Away from the tail, or from the glow
+      const int mx = s.kind != 0 ? (s.flip ? 2 : W - 7) : g.gx > W / 2 ? 2 : W - 7;
       uint16_t pal[16] = {};
       pal[5] = enc(mix(sky_at(mx, 2), 0xD8D4B0, night), 8);
       px_sprite(p, kSprSky[ph == 1 || ph == 7 ? SPR_SKY_CRESCENT : ph == 2 || ph == 6 ? SPR_SKY_HALF : SPR_SKY_FULL], mx,
@@ -513,8 +523,10 @@ void paint_land(const AppSky &s, uint32_t t) {
       if (water && y >= hy) {
         // The sky above, upside down and darker
         c = mix(dec(at(x, hy - 1 - (y - hy) < 0 ? 0 : hy - 1 - (y - hy))), 0, 64);
+        // Low sun's glitter, sliding with the land
         const int d = x > g.gx ? x - g.gx : g.gx - x;
-        if (!grey && g.elev > -6 && d < W / 6 && pick(s.home, (uint32_t) (y * 131 + x) + 7000 + t / 500 * 977, 3) == 0)
+        if (!grey && g.elev > -6 && g.elev < 15 && ((y - hy) & 1) == 0 && d < W / 6 &&
+            pick(s.home, wn * 131u + (uint32_t) y + 7000, 4) == 0)
           c = mix(c, hz, 160);
         if ((c & 255) < 16)
           c |= 16;
@@ -525,7 +537,7 @@ void paint_land(const AppSky &s, uint32_t t) {
       }
       if (g.fog && y >= H / 2)
         c = mix(c, g.stop[3], 128);
-      at(x, y) = enc(c, 8);
+      at(x, y) = enc(c, kBayer[(y & 3) * 4 + (x & 3)]);
     }
     if (lamp == 0 || water || hn + (H - hy) < 2)
       continue;
@@ -533,9 +545,12 @@ void paint_land(const AppSky &s, uint32_t t) {
     if (g.land == 2) {
       // Lit windows; few where the box is small
       if (H >= 40) {
-        for (int y = top + 1; y < H - 1; y++)
-          if (((wn + (uint32_t) y) & 1) == 0 && pick(g.home, 8000 + wn * 57 + (uint32_t) y, 9) == 0)
-            blend(x, y, kWindow, lamp);
+        // On a two-pixel grid, buildings only
+        const uint32_t o = wn % (6 * (uint32_t) grown(1));
+        if (hn >= 3 && (o & 1) == 1 && near_h(wn + 1) >= 3)
+          for (int y = top + 2; y < hy; y += 2)
+            if (pick(g.home, 8000 + wn * 57 + (uint32_t) (y - top), 3) == 0)
+              blend(x, y, kWindow, lamp);
       } else if (wn % gap == pick(g.home, 8100 + wn / gap, gap / 2)) {
         blend(x, top + 1 + (int) pick(g.home, 8150 + wn, (uint32_t) rows), kWindow, lamp);
       }
@@ -565,6 +580,18 @@ void sky_paint(Px565 &out, const AppSky &s, uint32_t t) {
     return;
   }
   scene_setup(s, out.px, W, H, out.stride);
+  // The plane's box over its whole wave
+  g.bx0 = g.by0 = INT16_MAX;
+  g.bx1 = g.by1 = INT16_MIN;
+  if (sp != nullptr) {
+    int bx, by;
+    sky_plane_at(s, *sp, 0, bx, by);
+    const int x0 = bx * sc, x1 = (bx + sp->w) * sc - 1;
+    g.bx0 = (int16_t) ((s.flip ? W - 1 - x1 : x0) - 2);
+    g.bx1 = (int16_t) ((s.flip ? W - 1 - x0 : x1) + 2);
+    g.by0 = (int16_t) ((by - 2) * sc - 2);
+    g.by1 = (int16_t) ((by + sp->h + 2) * sc + 1);
+  }
   paint_sky(s, t);
   paint_land(s, t);
   const uint32_t seed = s.seed;

@@ -6117,7 +6117,7 @@ void GamedayComponent::apps_setup_() {
   env.version = App.get_comment().c_str();
   if (!env.version.empty() && env.version[0] == 'v')
     env.version.erase(0, 1);
-  this->logos_.set_photo_agent(::flights::caller_agent(env.version));
+  this->logos_.set_map_agent(::flights::caller_agent(env.version));
   ::espn::register_apps(slots);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];

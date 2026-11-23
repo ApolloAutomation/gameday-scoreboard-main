@@ -1,5 +1,5 @@
 {
-  "about": "Ceilings in bytes for CI's Size budget job (scripts/size_budget.py). Seeded 2026-10-17 from dev's figures plus 10% (at least 1 KB). firmware: flash is the OTA image, static_ram the ELF's internal data RAM (ESPHome's RAM line). host: tests/heap_budget.cpp on the CI runner, json the JSON documents (PSRAM on the panel), heap everything else (internal RAM on the panel). flash: the build's figure plus about 3 KB, static_ram: CI's figure plus about 2 KB (2026-11-15), as internal RAM is the scarce one. loop_stack: the frames of the main loop's deepest known call chain (LOOP_CHAIN in size_budget.py), about half of the loop's 16 KB stack, so the rest is left for the calls below it and an interrupt. max_growth: the most one PR may add to a figure against the base branch; a PR that needs more carries the size-growth-ok label instead of raising it, and a PR into main fails unless it matches GROWTH_DEFAULTS in size_budget.py. Raise an entry only in the PR that needs it, and say why there.",
+  "about": "Ceilings in bytes for CI's Size budget job (scripts/size_budget.py). Seeded 2026-10-17 from dev's figures plus 10% (at least 1 KB). firmware: flash is the OTA image, static_ram the ELF's internal data RAM (ESPHome's RAM line). host: tests/heap_budget.cpp on the CI runner, json the JSON documents (PSRAM on the panel), heap everything else (internal RAM on the panel). flash: the build's figure plus about 3 KB, static_ram: the build's figure plus about 1 KB (2026-11-23), as internal RAM is the scarce one. loop_stack: the frames of the main loop's deepest known call chain (LOOP_CHAIN in size_budget.py), about half of the loop's 16 KB stack, so the rest is left for the calls below it and an interrupt. max_growth: the most one PR may add to a figure against the base branch; a PR that needs more carries the size-growth-ok label instead of raising it, and a PR into main fails unless it matches GROWTH_DEFAULTS in size_budget.py. Raise an entry only in the PR that needs it, and say why there.",
   "max_growth": {
     "flash": 40960,
     "static_ram": 4096,
@@ -9,17 +9,17 @@
   "firmware": {
     "moonhub75": {
       "flash": 2949400,
-      "static_ram": 150000,
+      "static_ram": 149000,
       "loop_stack": 8192
     },
     "moonhub75-2panel": {
       "flash": 2949416,
-      "static_ram": 150000,
+      "static_ram": 149000,
       "loop_stack": 8192
     },
     "scoreboard75": {
       "flash": 2925800,
-      "static_ram": 149200,
+      "static_ram": 148200,
       "loop_stack": 8192
     }
   },

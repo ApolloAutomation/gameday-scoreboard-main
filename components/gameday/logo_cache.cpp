@@ -389,7 +389,7 @@ void LogoCache::run_() {
 bool LogoCache::download_(const std::string &url, bool photo, Bytes &body, int &code, bool &throttled,
                           uint32_t &retry_after_ms) {
   std::vector<http_request::Header> headers = {
-      {"User-Agent", photo && !this->photo_agent_.empty() ? this->photo_agent_.c_str() : USER_AGENT},
+      {"User-Agent", photo && !this->map_agent_.empty() ? this->map_agent_.c_str() : USER_AGENT},
       {"Accept", "image/png,*/*;q=0.8"},
   };
   code = 0;

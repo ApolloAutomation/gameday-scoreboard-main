@@ -17,7 +17,6 @@
 #include "esphome/components/image/image.h"
 #include "logo_lru.h"
 
-
 namespace esphome::gameday {
 
 // PSRAM first, internal RAM only if PSRAM is full. Aborts on failure, as
@@ -69,7 +68,7 @@ class LogoCache {
   // As waiting(), for photo(url, w, h).
   bool photo_waiting(std::string_view url, uint8_t w, uint8_t h);
   // Map hosts get this User-Agent.
-  void set_photo_agent(const std::string &agent) { this->photo_agent_ = agent; }
+  void set_map_agent(const std::string &agent) { this->map_agent_ = agent; }
   // Loaded already: never starts a download.
   bool ready(std::string_view url, uint8_t icon = 0);
   // True while the logo is still on its way. A miss starts it, as get() does;
@@ -148,7 +147,7 @@ class LogoCache {
   http_request::HttpRequestComponent *http_{nullptr};
   // One PNG decoder (~44 KB), the logo task's
   pngle_t *png_{nullptr};
-  std::string photo_agent_;
+  std::string map_agent_;
   // Guards entries_, memo_, pending_ and every Entry's state.
   SemaphoreHandle_t lock_{nullptr};
   std::vector<std::unique_ptr<Entry>, PsramAllocator<std::unique_ptr<Entry>>> entries_;
