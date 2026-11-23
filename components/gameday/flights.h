@@ -513,11 +513,11 @@ struct AirportName {
 // By IATA, else ICAO; false when unknown.
 bool airport_name(const char *code, AirportName &out);
 
-// "ORD Chicago O'Hare", "ORD Chicago", "Chicago", "ORD".
-enum class StopFit : uint8_t { FULL = 0, CITY, PLACE, CODE };
+// "Chicago O'Hare (ORD)", "Chicago (ORD)", "ORD".
+enum class StopFit : uint8_t { FULL = 0, CITY, CODE };
 // A stop's words at that fit; unknown: the code.
 std::string stop_text(const std::string &code, StopFit fit);
-// The ticker's: "SDF Louisville to ORD Chicago O'Hare".
+// The ticker's: "Louisville (SDF) to Chicago O'Hare (ORD)".
 std::string route_words(const std::string &from, const std::string &to);
 // Each line's longest fit; false when neither is named.
 bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b);
@@ -745,7 +745,7 @@ struct FrameOpts {
   float own_nm{0};
 };
 
-// The photo's spot on a card 128 wide.
+// The photo's spot at 128 wide; narrower beside long routes.
 static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
 // Full screen's: the panel's width, doubled pixels.
 static const int kPhotoTallX = 1, kPhotoTallY = 51, kPhotoTallW = 126, kPhotoTallH = 52;

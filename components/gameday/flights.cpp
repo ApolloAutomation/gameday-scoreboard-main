@@ -1156,12 +1156,10 @@ std::string stop_text(const std::string &code, StopFit fit) {
   AirportName a;
   if (fit == StopFit::CODE || !airport_name(code.c_str(), a) || a.city.empty())
     return code;
-  if (fit == StopFit::PLACE)
-    return a.city;
-  std::string out = code + " " + a.city;
+  std::string out = a.city;
   if (fit == StopFit::FULL && !a.part.empty() && a.part != code)
     out += " " + a.part;
-  return out;
+  return out + " (" + code + ")";
 }
 
 std::string route_words(const std::string &from, const std::string &to) {
@@ -1172,7 +1170,7 @@ namespace {
 
 // A stop's longest fitting words; true if named.
 bool stop_line(const std::string &code, const char *lead, size_t max, std::string &out) {
-  for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::PLACE}) {
+  for (StopFit f : {StopFit::FULL, StopFit::CITY}) {
     const std::string s = stop_text(code, f);
     if (s == code)
       break;
@@ -1846,8 +1844,23 @@ void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
   rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o);
 }
 
-// The plane's card in the left 128 pixels.
-void card_left(Frame &f, const Card &c) {
+// Lines up to 16 wide; the picture narrows for them.
+bool card_route(const Card &c, std::string &a, std::string &b, int &ax) {
+  const PlaneSprite *sp = plane_sprite(c.kind);
+  for (int n = 16; n >= 14; n--) {
+    if (n > 14 && sp != nullptr && sp->w > 127 - 5 * n)
+      continue;
+    if (!route_lines(c.from, c.to, (size_t) n, a, b))
+      return false;
+    const int used = (int) std::max(glyphs(a), glyphs(b));
+    ax = used > 14 ? 5 * used + 1 : kPhotoX;
+    return true;
+  }
+  return false;
+}
+
+// The left 128 pixels' card; returns the picture's x.
+int card_left(Frame &f, const Card &c) {
   put(f, 1, 0, 64, BoardFont::S16, Align::LEFT, c.label_color, c.label);
   // Past the callsign, up to the logo at 111.
   const int lx = 127 - kLogoPx;
@@ -1859,18 +1872,20 @@ void card_left(Frame &f, const Card &c) {
   put_logo(f, c, lx, 0);
   // Places on two lines, 7 apart, else the codes
   std::string a, b;
-  if (c.route && route_lines(c.from, c.to, 14, a, b)) {
-    put(f, 1, 16, 70, BoardFont::S8, Align::LEFT, kColRoute, a);
-    put(f, 1, 23, 70, BoardFont::S8, Align::LEFT, kColRoute, b);
+  int ax = kPhotoX;
+  if (c.route && card_route(c, a, b, ax)) {
+    put(f, 1, 16, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
+    put(f, 1, 23, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
   } else {
     put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
   }
   put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
-  put_art(f, c, 72, 17, 56, 21);
+  put_art(f, c, ax, kPhotoY, 128 - ax, kPhotoH);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
   put(f, 66, 46, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
+  return ax;
 }
 
 // Full screen: logo, big flight and route, the picture doubled.
@@ -1933,14 +1948,15 @@ void list_tall(Frame &f, const Nearby &n, RouteCache *routes, const FrameOpts &o
   }
 }
 
-void card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
-  card_left(f, c);
+int card_wide(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
+  const int ax = card_left(f, c);
   const int x0 = 128, lw = o.w - 128;
   list_head(f, n, o, x0, 0, lw);
   rows(f, n, o.card, x0, 8, lw >= 128 ? 128 : 64, o.ticker ? o.h - 8 : o.h, o);
   // The card's plane alone: say so
   if (n.n == 1)
     put(f, x0, 24, lw, BoardFont::S8, Align::CENTER, kColDim, "No others");
+  return ax;
 }
 
 }
@@ -1973,18 +1989,19 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
   c.dist_color = dist_ink(opts);
   const bool tall = esphome::gameday::tall_board(opts.w, opts.h);
+  int ax = kPhotoX;
   if (tall && opts.list)
     list_tall(f, near, routes, opts, now_s);
   else if (tall)
     card_tall(f, c);
   else if (opts.w >= 192)
-    card_wide(f, c, near, opts);
+    ax = card_wide(f, c, near, opts);
   else if (opts.list)
     list_frame(f, near, opts);
   else if (opts.w < 128)
     compact(f, c, near, opts);
   else
-    card_left(f, c);
+    ax = card_left(f, c);
   // Credited on the list too, so the ticker holds
   const PlanePhoto *ph = opts.photo;
   if (opts.w >= 128 && ph != nullptr && ph->state == PhotoState::KNOWN && ph->url[0] != '\0') {
@@ -1996,9 +2013,9 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
       f.photo.w = (uint8_t) kPhotoTallW;
       f.photo.h = (uint8_t) kPhotoTallH;
     } else if (!tall && (opts.w >= 192 || !opts.list)) {
-      f.photo.x = (int16_t) kPhotoX;
+      f.photo.x = (int16_t) ax;
       f.photo.y = (int16_t) kPhotoY;
-      f.photo.w = (uint8_t) kPhotoW;
+      f.photo.w = (uint8_t) (128 - ax);
       f.photo.h = (uint8_t) kPhotoH;
     }
   }
