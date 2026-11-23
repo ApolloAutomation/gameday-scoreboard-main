@@ -8,7 +8,7 @@ parses. An install button has no manifest until a board is picked, each
 board choice names a known build, and the home page offers both boards.
 The docs under docs/ (built from docs/wiki) need a title, a description, a
 canonical URL where they live and a share image on this site. CI runs it on
-docs/site.
+docs/site, and docs.yml on the built docs copied into a site's docs/.
 
 build <dir>: check, then add the FAQPage JSON-LD to support/ from the page's
 own cards, and write sitemap.xml and robots.txt (naming the docs' own

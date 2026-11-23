@@ -30,9 +30,9 @@ permissions:
 env:
   ESPHOME_VERSION: "2026.10.2"
   # The project's site (GitHub Pages today), with no trailing slash: the
-  # flasher, the docs, the changelog and the update manifests. The same
-  # value as site_base in firmware/gameday-common.yaml (CONTRIBUTING.md,
-  # "Moving to a new address").
+  # flasher, the changelog and the update manifests. The same value as
+  # site_base in firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a
+  # new address").
   SITE_URL: "https://apolloautomation.github.io/gameday-scoreboard-main"
 
 # A newer push to the same ref cancels the older run. That stays on for dev

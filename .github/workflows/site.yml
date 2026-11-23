@@ -1,12 +1,13 @@
 name: Site
 
 # Republish the site at SITE_URL, and the update mirror if one is set up
-# (scripts/publish_mirror.sh), when only docs/site or the docs (docs/wiki,
-# published under /docs/) changed, without a firmware release. The
-# firmware files come from the latest release tag's firmware-moonhub75.zip
-# asset, so panels see the same manifest and binaries they saw before. Falls back to the tag's Build artifact for a release that
-# predates that asset (v1.4.3 and earlier); Build artifacts expire after 90
-# days, so that fallback is only good for 90 days after such a release.
+# (scripts/publish_mirror.sh), when only docs/site or docs/wiki changed,
+# without a firmware release. The firmware files come from the latest
+# release tag's firmware-moonhub75.zip asset, so panels see the same
+# manifest and binaries they saw before. Falls back to the tag's Build
+# artifact for a release that predates that asset (v1.4.3 and earlier);
+# Build artifacts expire after 90 days, so that fallback is only good for
+# 90 days after such a release.
 #
 # Runs by itself on a push to main that touches either, and by hand.
 # Only main publishes: a run by hand from dev or beta would put that

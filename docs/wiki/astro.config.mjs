@@ -63,6 +63,8 @@ export default defineConfig({
 				baseUrl: 'https://github.com/ApolloAutomation/gameday-scoreboard-main/edit/dev/docs/wiki/',
 			},
 			lastUpdated: true,
+			// Pages never serves a 404 under /docs/.
+			disable404Route: true,
 			head: [
 				{ tag: 'meta', attrs: { property: 'og:site_name', content: 'Apollo Pulse' } },
 				{ tag: 'meta', attrs: { property: 'og:type', content: 'website' } },

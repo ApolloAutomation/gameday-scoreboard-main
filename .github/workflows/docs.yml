@@ -13,6 +13,7 @@ on:
       - "docs/wiki/**"
       - "CHANGELOG.md"
       - "scripts/check_docs_links.py"
+      - "scripts/site_seo.py"
   workflow_dispatch:
 
 permissions:
@@ -42,3 +43,9 @@ jobs:
       # Astro passes dead links silently.
       - name: Links between pages and their anchors
         run: python3 scripts/check_docs_links.py --base "$(echo "$SITE_URL" | sed -E 's#^[a-z]+://[^/]+##')/docs" docs/wiki/dist
+      # The deploys' search and sharing tags check, here first.
+      - name: Search and sharing tags under /docs/
+        run: |
+          mkdir -p /tmp/site
+          cp -r docs/wiki/dist /tmp/site/docs
+          python3 scripts/site_seo.py check /tmp/site
