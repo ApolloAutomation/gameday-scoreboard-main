@@ -11,6 +11,10 @@ The page's heading says **Apollo Pulse**, with an **AP** mark, and the browser t
 
 The page is plain HTML built into the firmware, so there is nothing to install and no account. It works with no internet connection except for what your browser reads itself: the team logos, from ESPN and, for minor league, AHL and ECHL teams, from MLB and HockeyTech; the **On now** list, from ESPN and MLB; a team's roster when you add a favorite player or a player prop, from ESPN; a town or a ZIP code you look up for the home the [Flight Tracker](/using/flights/) and [Weather](/using/weather/) share, from Open-Meteo's place search; and the photo of the plane on the panel's card that the Flight Tracker card shows, with the photographer's name and a link to the photo's page, from Planespotters.net (api.planespotters.net and t.plnspttrs.net). In firmware v2026.11.7 and earlier, your browser also loads ESPHome's standard device page script from ESPHome's own site (oi.esphome.io) each time the page opens. That script asks Iconify (api.iconify.design) for its icons and keeps a second connection to the panel open, and a phone that can't reach ESPHome's server shows the page small, like a desktop page. From v2026.11.8 on, the page leaves that script out and loads everything else from the panel. The Game Day app, where it works with this firmware, shows many of the same settings, and a change in one shows up in the other.
 
+:::note[Coming in the next release]
+The panel itself stops showing plane photos, but the Flight Tracker card on this page keeps its photo: your browser still reads it from Planespotters.net.
+:::
+
 The line at the foot of the page has a **Help** link that opens these docs, at https://apolloautomation.github.io/gameday-scoreboard-main/docs/.
 
 Your browser also reads the map landmarks under the radar from this project's site, once each time you set the home or tap **Add landmarks**: a small file for each 4-degree square (about 440 km, 275 miles, across) around the square the home is in. Every home in a square reads the same files, so only which square the home is in leaves your browser.

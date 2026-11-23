@@ -130,7 +130,7 @@ caches. CI builds with the ESPHome version pinned as `ESPHOME_VERSION` in
   `app_markets.cpp/.h` (the Stocks & Crypto display),
   `leagues.h`, `poll_timing.h`, `offseason.h`, `recap.h`, `favorites.h`, `follow.h`, `idle.h`,
   `bets.h`, `players.h`, `props.h`, `split.h`, `apps.h`, `app_list.cpp`, `f1.cpp/.h`, `f1_parse.cpp`, `circuits.h`, `app_f1.cpp/.h` (the F1 display),
-  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `sky.cpp/.h`, `plane_photo.h` and `app_flights.cpp/.h` (the Flight Tracker),
+  `flights.cpp/.h`, `flight_airlines.h`, `plane_art.cpp/.h`, `sky.cpp/.h` and `app_flights.cpp/.h` (the Flight Tracker),
   `weather.cpp/.h`, `weather_art.cpp`, `map_canvas.h` and `app_weather.cpp/.h` (Weather), `startup.h`, `panel_text.h`, `badge.h`, `board_layout.h`, `set_request.h`, `captive.h`,
   `hotspot.h`, `setup_qr.h`, `health.h`, `guard.h`, `auto_update.h`, `update_mirror.h`, `qc.h`,
   `wifi_history.h`, `logo_lru.h`, `logo_icon.h`, `logo_decode.h`. `logo_cache.cpp`
@@ -398,35 +398,36 @@ The card's airline is Flightradar24's airline field (`Plane::brand`, the
 paint on the plane), else the callsign's. `plane_art.cpp` holds the side
 views, ASCII art packed to 2 bits a pixel at compile time, and maps an
 ICAO type code, else the ADS-B category, to one of them; `put_art` in
-`board_view.cpp` paints the frame's `AppArt` into a PSRAM buffer. Unscaled,
-the card's picture is an `AppSky` instead (`sky.cpp`): `sky_paint` draws the
-plane with its rotor, propeller or contrail moving, over clouds, birds, the
-sun or moon and Weather's rain or snow (`App::sky`), as a pure function of
-the time; `put_sky` gives it its own canvas and a 100 ms LVGL timer that
-repaints the box and invalidates only the pixels that changed, the way the
-field's canvas does. The timer stops while the sky is hidden or another page
-is up, and in night hours or Off or dim (`AppEnv::still`), when the picture
-holds its first pose. A loaded photo hides the sky as it hides the art. On a card
-128 wide or more the card's plane also gets a photo: a read of
-Planespotters' API (`Read::PHOTO`, by hex, else registration, with a
-User-Agent naming the project) through the fetch task like the others, one
-a plane, kept in `PhotoCache` (a day, a miss 12 hours) behind its own
-`HostWait`. The frame's `AppPhoto` names the JPEG; `app_fields_` asks the
-logo cache for it (`LogoCache::photo`, an entry of its own keyed by URL
-and box, as logos are by URL and size), and once it loads it takes the
-picture's place and its credit goes into the ticker after the card's
-plane. Under 192 wide the list frame carries the photo without a box, so
-the credit stays in the ticker while the card and the list take turns and
-the ticker's text doesn't change every screen. The logo cache keeps at
-most eight photos (`MAX_PHOTOS`), Weather's radar frames among them: a new
-one replaces the oldest photo that is off screen and not downloading
-(`pick_photo_evict_in` in `logo_lru.h`), before any logo, so photos hold at
-most eight of its 128 places.
-Planespotters' JPEGs are progressive, so the logo task decodes their first
-scan alone with JPEGDEC, at 1/8, keeps the whole width and at least 60% of
-the height, trimmed mostly from the bottom, scales that into the box and
-dims what matches each row's ends (`plane_photo.h`), resting like the PNG
-decoder.
+`board_view.cpp` paints a frame's `AppArt` into a PSRAM buffer. The
+card's picture is an `AppSky` (`sky.cpp`): `sky_paint` draws a scene at the
+box's own size, then the plane over it at the frame's scale, as a pure
+function of the time. `sky_fill` sets what the scene needs: the sun's
+elevation and whether it is rising (`sun_elev`, from the home and the
+clock), Weather's cover, rain, snow, fog and wind (`App::sky`), the moon's
+phase, the plane's seed (clouds and stars) and the home's seed (`sky_home`,
+the home rounded to a tenth of a degree, which picks one of five sceneries
+and shapes its land, so a home always has the same view). The sky is a
+four-stop gradient interpolated between keyed elevations, a morning and an
+evening side, dithered to RGB565 with every lit channel at 8 or more, and
+warmed toward the sun's side when it is low; under cloud the stops lean to
+a slate. Over it come the sun's disc on boxes 40 rows or taller, stars and
+the moon, thin cloud streaks or an overcast deck, a hazed far ridge on
+boxes 21 rows or taller, the near land from value noise (hills, mountains,
+a skyline, a coast whose water mirrors the sky, or plains), night lights,
+then rain, snow, wind and birds. The plane keeps its sprite, body and tail
+colors, rotor, propeller and contrail; a darkened halo one pixel wide
+replaces its black edge. Only the plane mirrors with `flip`; the land
+slides toward its tail. Nothing is stored but the two palette tables, and
+the painter keeps its state in one small static. `put_sky` gives the
+scene its own canvas and a 100 ms LVGL timer that repaints the box and
+invalidates only the pixels that changed, the way the field's canvas does.
+The timer stops while the scene is hidden or another page is up, and in
+night hours or Off or dim (`AppEnv::still`), when the picture holds its
+first pose. The panel shows no plane photos: only the device page's card
+does, read by the browser. The logo cache keeps at most eight boxed maps
+(`MAX_PHOTOS`), Weather's radar frames: a new one replaces the oldest that
+is off screen and not downloading (`pick_photo_evict_in` in `logo_lru.h`),
+before any logo.
 
 **Weather.** `WeatherApp` (`app_weather.h`) reads the forecast from
 Open-Meteo, failing over to MET Norway (`F1Host`, as F1's weather does),
@@ -445,9 +446,8 @@ box's shape and averaged over black with faint colors raised, so RainViewer's
 256-pixel images centered on home and Iowa State's NEXRAD mosaic (asked
 for at the box's own size and extent, the US backup) both fit any area.
 `AppPhoto::hold` names the newest frame to draw while an older one loads,
-`alt` a label shown until one draws, and `keep_art` leaves the frame's
-pictures over it; the photo now sits under the frame's labels, line and
-pictures, so the home's dot (`AppFill`) and ring (`AppLine`) draw over the
+and `alt` a label shown until one draws; the map sits under the frame's
+labels, line and pictures, so the home's dot (`AppFill`) and ring (`AppLine`) draw over the
 map. Radar frames step every 500 ms on `app_env().ms`, the component's
 `millis()`, and `redraw_ms` asks for the next step's start; the component
 checks timed redraws every loop (`apps_redraw_`), so one under a second
@@ -1003,15 +1003,14 @@ budget (`size_budget.py`), and bench and factory tools (`factory_flash.py`,
   screens), `test_markets.cpp` (stock and crypto symbols, quotes, text and
   frames), `test_markets_app.cpp` (the Stocks & Crypto display's list,
   failover, frames and state), `test_flights.cpp` (the Flight Tracker: its
-  feeds, sources and failover, routes, photo lookups, screens, settings and
+  feeds, sources and failover, routes, screens, settings and
   the display's reads), `test_weather.cpp` (Weather: each source, failover,
   units, icons, the radar's map math, pages and frames at every size),
   `test_landmarks.cpp` (the landmark set's check, its projection and the
-  base layer's lines and labels), `test_sky.cpp` (the moving pictures: the plane's clarity, calm
-  motion, still in night hours, day and night, weather and the sun's times), `test_plane_art.cpp` (plane pictures and kinds, airline logos
+  base layer's lines and labels), `test_sky.cpp` (the plane's scene: the plane's pixels and halo, colors an LED lights,
+  the sky's gradient, times of day, each home's land, night lights, calm motion, still in night hours, weather and the sun's place), `test_plane_art.cpp` (plane pictures and kinds, airline logos
   and the logo steps), `test_logo_decode.cpp` (the logo task's PNG
-  decoding: size checks, fit, painting and rests), `test_plane_photo.cpp`
-  (the photo's cut, scaling and lighting) and `test_networks.cpp`
+  decoding: size checks, fit, painting and rests) and `test_networks.cpp`
   (saved networks).
 - `make -C tests replay`: a tool that replays recorded single-event
   documents through the parse, text and splash code.

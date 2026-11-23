@@ -165,17 +165,13 @@ constexpr size_t kAppArt = 8;
 // Drawn size, scale included.
 constexpr int kAppArtMaxW = 128, kAppArtMaxH = 48;
 
-// A boxed photo; it hides the art once loaded.
-// A PNG is a map: its middle, over black, unlit.
+// A boxed PNG map under the art, over black.
 struct AppPhoto {
   int16_t x{0}, y{0};
-  uint8_t w{0}, h{0};  // 0: credited, not drawn
+  uint8_t w{0}, h{0};
   std::string url;  // empty when there is none
-  std::string credit;  // into the ticker at `at` once loaded
-  size_t at{0};
   std::string hold;  // drawn while url loads, if loaded
   int8_t alt{-1};    // texts index shown only while none draws
-  bool keep_art{false};  // the art stays over it
 };
 constexpr int kAppPhotoMaxW = 128, kAppPhotoMaxH = 120;
 
@@ -225,16 +221,19 @@ struct SkyNow {
   uint8_t fall{0};   // 0 none, 1 rain, 2 snow
   uint8_t fog{0}, wind{0};
 };
-enum : uint8_t { kSkyDay = 1, kSkyWx = 2, kSkyStill = 4 };
-// A drawn plane in a small moving sky (sky.h); compared as bytes.
+// kSkyAm: the sun rising; top bits: the scenery
+enum : uint8_t { kSkyDay = 1, kSkyWx = 2, kSkyStill = 4, kSkyAm = 8, kSkyLandShift = 5 };
+// A drawn plane over a scene (sky.h); compared as bytes.
 struct AppSky {
   int16_t x{0}, y{0};  // area-local
   uint8_t w{0}, h{0};  // w 0: none
   uint8_t kind{0};     // a flights::PlaneKind; 0 the sky alone
   uint8_t flip{0}, scale{1}, flags{0};
-  uint8_t cover{0}, fall{0}, fog{0}, wind{0}, moon{0}, pad{0};
+  uint8_t cover{0}, fall{0}, fog{0}, wind{0}, moon{0};
+  int8_t elev{45};  // the sun's, degrees, -30 to 60
   uint32_t tail{0};
-  uint32_t seed{0};
+  uint32_t seed{0};  // the plane's: clouds and stars
+  uint32_t home{0};  // the home's: its land
 };
 static_assert(std::has_unique_object_representations_v<AppSky>, "AppSky compares as bytes");
 constexpr int kAppSkyMaxW = 128, kAppSkyMaxH = 48;
@@ -358,10 +357,8 @@ inline void app_frame_trim(AppFrame &f) {
       f.art.erase(f.art.begin() + i);
   }
   AppPhoto &p = f.photo;
-  if (p.url.empty() || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH || p.at > f.ticker.size())
+  if (p.url.empty() || p.w == 0 || p.h == 0 || p.w > kAppPhotoMaxW || p.h > kAppPhotoMaxH)
     f.photo = AppPhoto();
-  else if (p.w == 0 || p.h == 0)
-    p.w = p.h = 0;
   const AppMap &m = f.map;
   if (m.x < 0 || m.y < 0 || m.w < 16 || m.h < 16 || m.w > kAppMapMaxW || m.h > kAppMapMaxH || m.scale_q16 <= 0)
     f.map = AppMap();
