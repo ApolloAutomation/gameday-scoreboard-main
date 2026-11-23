@@ -22,10 +22,23 @@ A USB install from the browser installer is different. It erases whatever was on
 
 You need a desktop or laptop computer with Chrome or Edge, and a USB cable.
 
-1. Open the [installer](https://apolloautomation.github.io/gameday-scoreboard-main/).
-2. Click your controller: **Apollo M-1, one 64x64 panel** (also for three or four panels), **Apollo M-1, 128x64** (one 128x64 panel or two 64x64 side by side) or **scoreboard75 controller board**. The Install button appears once you pick.
+### Apollo M-1
+
+1. Open the [Apollo installer for the M-1](https://install.apolloautomation.com/#/m-1).
+2. Under **Choose your firmware**, pick **Game Day Scoreboard (Rev6 only)**.
 3. Plug the controller into the computer with the USB cable.
-4. Click **Install for Apollo M-1** or **Install for scoreboard75**, the one that names your controller.
+4. Click **Connect & Install** and pick the controller's port when the browser asks.
+5. Wait for the install to finish.
+6. The installer then offers to put the panel on your Wi-Fi. Enter your network name and password.
+
+The panel starts on one 64x64 panel. For a 128x64 panel or more panels, pick the layout on the device page once the panel is on Wi-Fi. See [Panel sizes](/using/panel-sizes/).
+
+### scoreboard75 controller board
+
+1. Open the [installer](https://apolloautomation.github.io/gameday-scoreboard-main/).
+2. Click **scoreboard75 controller board**. The Install button appears once you pick.
+3. Plug the controller into the computer with the USB cable.
+4. Click **Install for scoreboard75**.
 5. Wait for the install to finish.
 6. The same dialog then offers to put the panel on your Wi-Fi. Enter your network name and password.
 
