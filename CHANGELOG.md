@@ -14,6 +14,20 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.13
+
+The Flight Tracker draws each plane over a scene of sky and land that follows the time of day and the weather at your home, and the card's two route lines always match.
+
+- Every plane and helicopter on a Flight Tracker card flies over a small landscape under a sky colored for the time of day at your home: blue at midday, purple, red and gold toward sunset, rose and peach at sunrise, and dark blue with the moon and stars at night.
+- The scene follows Weather when it's set up: thin clouds lit by a low sun, a grey overcast, rain, snow or fog.
+- The scenery is one of five, picked from your home's location: rolling hills, mountains, a city skyline, a coast or plains. It slides slowly past under the plane.
+- The plane keeps its size, its motion and its airline's color on the tail.
+- The panel no longer shows photos of planes, which often came in cropped or hard to make out, and no longer asks Planespotters.net for anything. The device page's Flight Tracker card still shows the photo.
+- On a card 128 wide or more, the two route lines always take the same form: **Louisville (SDF)** and **to Chicago (ORD)**, or **Los Angeles** and **to Tokyo** when the codes don't fit. A line no longer shows a code while the other shows a city.
+- A city shows whenever it fits its line: a long second line leaves off its **to**, like **Atlanta** and **Fort Lauderdale**, before it falls to a code.
+- The route lines keep a clear row between them and above the aircraft type, so their letters never run together.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.12
 
 The Flight Tracker names each airport the way the ticker does, like Louisville (SDF) to Chicago O'Hare (ORD), and the docs are now online with the project's site.
