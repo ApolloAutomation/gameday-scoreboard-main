@@ -65,8 +65,9 @@ contributors; read it too.
 - The size budget in firmware/budget.json is a ceiling. A change that needs
   more raises that one entry in the same PR and says why.
 - Never hand-edit components/gameday/teams.h, team_colors.h,
-  timezones_parsed.h, circuits.h, flight_airlines.h or sprites.h: rerun
-  their generator scripts (for sprites.h, edit firmware/art/sprites/*.txt
+  timezones_parsed.h, circuits.h, flight_airlines.h, flight_airports.h or
+  sprites.h: rerun their generator scripts (for sprites.h, edit
+  firmware/art/sprites/*.txt
   and rerun scripts/build_sprites.py).
 - Never commit secrets.yaml, Wi-Fi details or league and team logos.
 - The site address (the GitHub Pages address today) lives in a few known

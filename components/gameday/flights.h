@@ -499,6 +499,30 @@ bool route_fits(const Stop &a, const Stop &b, const Plane &p);
 std::string leg_text(const Leg &l, const char *sep);
 // Flightradar24's route, else a looked-up leg that fits.
 std::string route_text(const Plane &p, RouteCache *routes, uint32_t now_s, const char *sep);
+// The same route's two codes; false when none.
+bool route_codes(const Plane &p, RouteCache *routes, uint32_t now_s, std::string &from, std::string &to);
+
+// ---- Airports ----------------------------------------------------------------
+
+// An airport's place, from OurAirports (flight_airports.h).
+struct AirportName {
+  std::string city;  // UTF-8, Latin-1 letters: "Chicago", "São Paulo"
+  std::string part;  // where a city has two: "O'Hare"
+};
+
+// By IATA, else ICAO; false when unknown.
+bool airport_name(const char *code, AirportName &out);
+
+// "Chicago O'Hare (ORD)", "Chicago (ORD)", "O'Hare (ORD)", "ORD".
+enum class StopFit : uint8_t { FULL = 0, CITY, PART, CODE };
+// A stop's words at that fit; unknown: the code.
+std::string stop_text(const std::string &code, StopFit fit);
+// The ticker's: "Louisville (SDF) to Chicago O'Hare (ORD)".
+std::string route_words(const std::string &from, const std::string &to);
+// Each line's longest fit; false when neither is named.
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b);
+// UTF-8 glyphs, as the panel draws them.
+size_t glyphs(const std::string &s);
 
 struct RouteAsk {
   char callsign[kNear][9]{};
@@ -721,7 +745,7 @@ struct FrameOpts {
   float own_nm{0};
 };
 
-// The photo's spot on a card 128 wide.
+// The photo's spot at 128 wide; narrower beside long routes.
 static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
 // Full screen's: the panel's width, doubled pixels.
 static const int kPhotoTallX = 1, kPhotoTallY = 51, kPhotoTallW = 126, kPhotoTallH = 52;
