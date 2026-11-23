@@ -23,7 +23,7 @@
 #include "app_weather.h"
 #include "flights.h"
 #include "map_canvas.h"
-#include "plane_photo.h"
+#include "sky.h"
 #include "logo_icon.h"
 #include "logo_lru.h"
 #include "markets_view.h"
@@ -845,16 +845,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       flights::FrameOpts o;
       o.w = w;
       const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
-      for (const flights::Art &a : f.art) {
-        const flights::PlaneSprite *s = flights::plane_sprite(a.kind);
-        if (s == nullptr || a.x < 0 || a.y < 0 || a.x + s->w > w || a.y + s->h > o.h - 8)
-          abort();
-      }
+      if (f.sky.w > 0 && (f.sky.x < 0 || f.sky.y < 0 || f.sky.x + f.sky.w > w || f.sky.y + f.sky.h > o.h - 8))
+        abort();
       for (const flights::Logo &l : f.logos)
         if (l.x < 0 || l.x + flights::kLogoPx > w || flights::airline_by_icao(l.icao) == nullptr ||
             l.alt >= (int) f.items.size())
           abort();
-      sink = sink + f.art.size() + f.logos.size();
+      sink = sink + f.sky.w + f.logos.size();
     }
     {
       // The logo steps on the bytes as an image.
@@ -868,35 +865,22 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       sink = sink + espn::logo_icon_usable(icon.data(), 16) + espn::logo_placeholder(espn::kGoogleLogoUrl, data, size);
     }
     {
-      // A photo answer, its card, the photo steps.
-      flights::PlanePhoto ph;
-      if (flights::parse_photo(json, ph) && ph.state == flights::PhotoState::KNOWN &&
-          (strncmp(ph.url, "https://", 8) != 0 || strlen(ph.url) >= sizeof ph.url || strlen(ph.by) >= sizeof ph.by))
+      // Any scene the bytes ask for paints inside its box.
+      espn::AppSky k;
+      memcpy(&k, data, std::min(size, sizeof k));
+      k.w = (uint8_t) (16 + k.w % 113);
+      k.h = (uint8_t) (8 + k.h % 41);
+      k.scale = (uint8_t) (1 + k.scale % 3);
+      k.kind = (uint8_t) (k.kind % 14);
+      std::vector<uint16_t> px((size_t) k.w * k.h + 2, 0xABCD);
+      espn::Px565 p;
+      p.px = px.data() + 1;
+      p.w = p.stride = k.w;
+      p.h = k.h;
+      p.clip = espn::PxBox{0, 0, k.w, k.h};
+      espn::sky_paint(p, k, (uint32_t) size * 977u);
+      if (px.front() != 0xABCD || px.back() != 0xABCD)
         abort();
-      flights::FrameOpts o;
-      o.w = 128 + (int) (size % 3) * 64;
-      o.h = o.w == 128 && size % 2 == 1 ? 128 : 64;
-      o.photo = &ph;
-      const flights::Frame f = flights::flight_frame(near, &cache, o, 100);
-      if (!f.photo.url.empty() && (f.photo.x + f.photo.w > o.w || f.photo.y + f.photo.h > o.h - 8 ||
-                                   f.photo.at > f.ticker.size()))
-        abort();
-      const int bw = 1 + (int) (size % 128), bh = 1 + (int) (size / 3 % 80);
-      const flights::PhotoFit fit = flights::photo_fit(1 + (uint32_t) (size % 1100), 1 + (uint32_t) (size / 7 % 900),
-                                                       size & 1, bw, bh);
-      if (fit.ok()) {
-        // Bigger than its cut only when grown to fill
-        const bool grown = 2 * fit.cw <= bw && 2 * fit.ch <= bh;
-        if ((!grown && (fit.ow > fit.cw || fit.oh > fit.ch)) || fit.ow > bw || fit.oh > bh ||
-            fit.cy + fit.ch > fit.sh)
-          abort();
-        std::vector<uint16_t> px((size_t) fit.sw * fit.sh, 0);
-        memcpy(px.data(), data, std::min(size, px.size() * 2));
-        std::vector<uint8_t> rgb((size_t) fit.ow * fit.oh * 3), out((size_t) fit.ow * fit.oh * 2);
-        flights::photo_scale(px.data(), fit, rgb.data());
-        flights::photo_light(rgb.data(), fit.ow, fit.oh, out.data());
-        sink = sink + out[0];
-      }
     }
     flights::RouteAsk ask;
     for (const char *cs : {"UAL755", "JBU1407", "DAL2064", "FIN16"})

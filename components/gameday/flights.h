@@ -583,62 +583,8 @@ inline bool parse_adsbdb(const std::string &json, const char *callsign, RouteCac
   return parse_adsbdb(r, callsign, cache, now_s);
 }
 
-// ---- Photos ------------------------------------------------------------------
-
-static const char *const kPhotoApi = "https://api.planespotters.net/pub/photos/";
-static const size_t kPhotoCache = 16;
-static const size_t kPhotoUrlMax = 119;
-static const size_t kPhotoByMax = 31;
-static const uint32_t kPhotoKnownS = 24 * 3600;
-static const uint32_t kPhotoNoneS = 12 * 3600;
-static const uint32_t kPhotoGapMs = 5 * 1000;  // the least time between lookups
-
-enum class PhotoState : uint8_t { EMPTY = 0, KNOWN, NONE };
-
-// A plane's photo on Planespotters, or that it has none.
-struct PlanePhoto {
-  char key[9]{};  // hex, else registration
-  char url[kPhotoUrlMax + 1]{};
-  char by[kPhotoByMax + 1]{};  // who took the photo
-  PhotoState state{PhotoState::EMPTY};
-  uint32_t at_s{0};
-  uint32_t used_s{0};
-};
-
-class PhotoCache {
- public:
-  const PlanePhoto *find(const char *key, uint32_t now_s);
-  bool wants(const char *key, uint32_t now_s) const;
-  PlanePhoto &put(const char *key, uint32_t now_s);
-  PlanePhoto slots[kPhotoCache];
-
- private:
-  int index_(const char *key, uint32_t now_s) const;
-};
-
-// Its hex, else a registration fit for a URL.
-bool photo_key(const Plane &p, char out[9]);
-std::string photo_url(const char *key);
-// Planespotters asks for a way to reach us.
-std::string photo_agent(const std::string &version);
-void fill_photo_filter(JsonDocument &f);
-// KNOWN or NONE into out; false when unreadable.
-bool photo_from_doc(JsonObjectConst root, PlanePhoto &out);
-
-template<typename S> bool parse_photo_from(S &in, PlanePhoto &out) {
-  JsonDocument filter(json_allocator());
-  fill_photo_filter(filter);
-  JsonDocument doc(json_allocator());
-  if (in.json(doc, filter, 5))
-    return false;
-  return photo_from_doc(doc.as<JsonObjectConst>(), out);
-}
-
-inline bool parse_photo(const std::string &json, PlanePhoto &out) {
-  detail::StrReader r(json);
-  detail::Source<detail::StrReader> in(r);
-  return parse_photo_from(in, out);
-}
+// The free services ask who is calling.
+std::string caller_agent(const std::string &version);
 
 // ---- Text --------------------------------------------------------------------
 
@@ -682,17 +628,8 @@ struct Text {
   std::string text;
 };
 
-// A plane picture's top left; flip faces it left.
-struct Art {
-  int16_t x{0}, y{0};
-  PlaneKind kind{PlaneKind::NONE};
-  bool flip{false};
-  uint8_t scale{1};
-  uint32_t tail{kColTail};
-};
-
-// A drawn picture's box, animated with a sky behind.
-// NONE: the sky alone, over a note.
+// The plane's picture: its box, a scene behind it.
+// NONE: the scene alone, over a note.
 struct Sky {
   int16_t x{0}, y{0};
   uint8_t w{0}, h{0};  // w 0: none
@@ -714,20 +651,9 @@ struct Logo {
   int8_t alt{-1};  // items index of the code shown meanwhile
 };
 
-// The card's photo; the art shows until it loads.
-struct Photo {
-  int16_t x{0}, y{0};
-  uint8_t w{0}, h{0};  // 0 on the list: credit only
-  std::string url;  // empty when there is none
-  std::string credit;  // into the ticker at `at`
-  size_t at{0};
-};
-
 struct Frame {
   std::vector<Text> items;
-  std::vector<Art> art;
   std::vector<Logo> logos;
-  Photo photo;
   std::string ticker;
   Sky sky;
 };
@@ -739,16 +665,15 @@ struct FrameOpts {
   Units units;
   uint8_t card{0};  // index into Nearby::planes
   bool list{false};  // under 192 wide: the list, not the card
-  const PlanePhoto *photo{nullptr};  // the card plane's
   // Read wider than the owner's own_nm: how far
   float wide_nm{0};
   float own_nm{0};
 };
 
-// The photo's spot at 128 wide; narrower beside long routes.
-static const int kPhotoX = 72, kPhotoY = 17, kPhotoW = 56, kPhotoH = 21;
-// Full screen's: the panel's width, doubled pixels.
-static const int kPhotoTallX = 1, kPhotoTallY = 51, kPhotoTallW = 126, kPhotoTallH = 52;
+// The picture's spot at 128 wide; narrower beside long routes.
+static const int kArtX = 72, kArtY = 17, kArtW = 56, kArtH = 21;
+// Full screen's: the panel's width, the plane doubled.
+static const int kArtTallY = 53, kArtTallH = 48;
 
 enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING, WIDENING };
 
@@ -757,9 +682,8 @@ enum class Note : uint8_t { NO_HOME = 0, NONE_NEAR, NO_DATA, LOADING, WIDENING }
 Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s);
 // radius_nm: NONE_NEAR's and WIDENING's distance read.
 Frame note_frame(Note note, const FrameOpts &o, float radius_nm);
-// card_end: where the card plane's words end.
 std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s,
-                          size_t planes = 3, size_t *card_end = nullptr);
+                          size_t planes = 3);
 // The radar layouts: a plane's list row number; 0 none.
 uint8_t list_number(const Nearby &n, uint8_t card, uint8_t i, int rows);
 // Their list, numbered rows, 128 by h at x0, y0.

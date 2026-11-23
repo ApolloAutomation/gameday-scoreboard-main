@@ -632,42 +632,21 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
   }
   // Pictures and logos: inside, over the ticker, clear of text.
   std::vector<Box> pics;
-  for (const Art &a : f.art) {
-    const PlaneSprite *s = plane_sprite(a.kind);
-    FCHECK(s != nullptr, "%s: a picture of something", what);
-    if (s == nullptr)
-      continue;
-    const Box b{a.x, a.x + s->w * a.scale, a.y, a.y + s->h * a.scale - 1};
-    FCHECK(a.scale >= 1 && s->w * a.scale <= espn::kAppArtMaxW && s->h * a.scale <= espn::kAppArtMaxH,
-           "%s: the picture drawable", what);
-    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the picture inside", what);
-    for (const Box &t : boxes)
-      FCHECK(apart(b, t), "%s: the picture clear of text", what);
-    pics.push_back(b);
-  }
-  // The photo's box, where it's drawn
-  if (f.photo.w > 0) {
-    const Box b{f.photo.x, f.photo.x + f.photo.w, f.photo.y, f.photo.y + f.photo.h - 1};
-    FCHECK(f.photo.w <= espn::kAppPhotoMaxW && f.photo.h <= espn::kAppPhotoMaxH, "%s: the photo drawable", what);
-    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the photo inside", what);
-    for (const Box &t : boxes)
-      FCHECK(apart(b, t), "%s: the photo clear of text", what);
-  }
   // The sky's box: inside, clear of text, its plane fits
   if (f.sky.w > 0) {
     const Box b{f.sky.x, f.sky.x + f.sky.w, f.sky.y, f.sky.y + f.sky.h - 1};
     const PlaneSprite *sp = plane_sprite(f.sky.kind);
     FCHECK(f.sky.w <= espn::kAppSkyMaxW && f.sky.h <= espn::kAppSkyMaxH && f.sky.scale >= 1, "%s: the sky drawable",
            what);
-    FCHECK(sp == nullptr || (sp->w <= f.sky.w && sp->h <= f.sky.h), "%s: the plane fits its sky", what);
+    FCHECK(sp == nullptr || (sp->w * f.sky.scale <= f.sky.w && sp->h * f.sky.scale <= f.sky.h),
+           "%s: the plane fits its sky", what);
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the sky inside", what);
     for (const Box &t : boxes)
       FCHECK(apart(b, t), "%s: the sky clear of text", what);
     pics.push_back(b);
   }
   const bool tall_list = o.list && esphome::gameday::tall_board(o.w, o.h);
-  FCHECK(f.art.size() + (f.sky.kind != PlaneKind::NONE) <= 1 && (f.logos.size() <= 1 || tall_list),
-         "%s: one picture, one logo", what);
+  FCHECK(f.logos.size() <= 1 || tall_list, "%s: one logo", what);
   for (const Logo &l : f.logos) {
     const Box b{l.x, l.x + l.px, l.y, l.y + l.px - 1};
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
@@ -716,7 +695,7 @@ void test_frames() {
             if (!list || w >= 192)
               FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
             if (list && w < 192)
-              FCHECK(f.art.empty() && f.logos.empty(), "%s: the list has no pictures", what);
+              FCHECK(f.sky.w == 0 && f.logos.empty(), "%s: the list has no pictures", what);
             FCHECK(ticker == !f.ticker.empty(), "%s: ticker", what);
           }
   FrameOpts o;
@@ -867,23 +846,18 @@ void test_tall_frames() {
   const Nearby n = read("fixtures/flights_adsbfi_jfk.json", jfk());
   RouteCache cache;
   parse_routeset(slurp("fixtures/flights_routeset_jfk.json"), recorded_ask(), cache, 100);
-  PlanePhoto photo;
-  strcpy(photo.url, "https://t.plnspttrs.net/1/2_t.jpg");
-  photo.state = PhotoState::KNOWN;
   for (int metric = 0; metric < 2; metric++)
     for (bool list : {false, true})
-      for (bool with_photo : {false, true})
+      {
         for (uint8_t card = 0; card < n.n; card++) {
           FrameOpts o;
           o.w = o.h = 128;
           o.card = card;
           o.list = list;
-          o.photo = with_photo ? &photo : nullptr;
           if (metric)
             o.units = units_metric();
           char what[64];
-          snprintf(what, sizeof(what), "128x128%s%s%s card %u", metric ? " metric" : "", list ? " list" : "",
-                   with_photo ? " photo" : "", card);
+          snprintf(what, sizeof(what), "128x128%s%s card %u", metric ? " metric" : "", list ? " list" : "", card);
           const Frame f = flight_frame(n, &cache, o, 100);
           check_frame(f, o, what);
           // The list shows the nearest seven
@@ -891,7 +865,7 @@ void test_tall_frames() {
             FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
           FCHECK(!f.ticker.empty(), "%s: ticker", what);
           if (list) {
-            FCHECK(f.art.empty() && f.photo.w == 0, "%s: the list has no pictures", what);
+            FCHECK(f.sky.w == 0, "%s: the list has no pictures", what);
             for (const Logo &l : f.logos)
               FCHECK(l.px == kLogoPx && l.x == 0, "%s: a 16 px logo per row", what);
             continue;
@@ -900,10 +874,11 @@ void test_tall_frames() {
                  "%s: the big callsign", what);
           for (const Logo &l : f.logos)
             FCHECK(l.px == kLogoBigPx, "%s: the big logo", what);
-          for (const Art &a : f.art)
-            FCHECK(a.scale >= 2, "%s: the picture doubled at least", what);
-          FCHECK(!with_photo || (f.photo.w == kPhotoTallW && f.photo.h == kPhotoTallH), "%s: the wide photo", what);
+          FCHECK(f.sky.w == 0 || (f.sky.scale >= 2 && f.sky.x == 0 && f.sky.w == 128 && f.sky.y == kArtTallY &&
+                                  f.sky.h == kArtTallH),
+                 "%s: the plane doubled at least, its scene the panel's width", what);
         }
+      }
   FrameOpts o;
   o.w = o.h = 128;
   Frame f = flight_frame(n, &cache, o, 100);
@@ -917,7 +892,7 @@ void test_tall_frames() {
   FCHECK(find_text(f, "1,525 ft") != nullptr && find_text(f, "203 mph") != nullptr &&
              find_text(f, "1.5 mi SE") != nullptr && find_text(f, "Climbing") != nullptr,
          "altitude, speed, where and climb");
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoBigPx && f.art.size() == 1 && f.art[0].scale == 2,
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoBigPx && f.sky.w == 128 && f.sky.scale == 2,
          "a 32 px logo, the airliner doubled");
   o.list = true;
   f = flight_frame(n, &cache, o, 100);
@@ -928,7 +903,7 @@ void test_tall_frames() {
   o.h = 64;
   o.list = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.x == 73 && f.sky.w == 55 &&
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.sky.x == 73 && f.sky.w == 55 &&
              f.sky.scale == 1,
          "the split card, three pixels past the route");
 }
@@ -951,7 +926,7 @@ void test_notes() {
           const Sky &sk = f.sky;
           if (h >= 64 && ticker)
             FCHECK(sk.w == std::min(w, 128) && sk.x == (w - sk.w) / 2 && sk.y == 0 &&
-                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == (h == 128 ? 2 : 1) &&
+                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == 1 &&
                        sk.kind == PlaneKind::NONE,
                    "%s: its sky %d,%d %dx%d", what, sk.x, sk.y, sk.w, sk.h);
           if (h == 32)
@@ -1160,7 +1135,7 @@ void test_airports() {
         const Text *ta = find_text(f, a), *tb = find_text(f, b);
         // The route's ink ends a pixel before 5 * glyphs
         const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
-        FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kPhotoX && f.sky.x + f.sky.w == 128,
+        FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kArtX && f.sky.x + f.sky.w == 128,
                "%s at %d: \"%s\" / \"%s\", the picture at %d", code, w, a.c_str(), b.c_str(), f.sky.x);
         shown++;
       } else {
@@ -1196,14 +1171,14 @@ void test_airports() {
                a->color == b->color,
            "%d: two small lines under the callsign", w);
     // Sixteen wide: the picture moves over, three pixels clear
-    FCHECK(f.sky.x == 83 && f.sky.w == 45 && f.sky.y == kPhotoY && f.sky.h == kPhotoH, "%d: the picture at %d, %d wide",
+    FCHECK(f.sky.x == 83 && f.sky.w == 45 && f.sky.y == kArtY && f.sky.h == kArtH, "%d: the picture at %d, %d wide",
            w, f.sky.x, f.sky.w);
     f = flight_frame(one_route("JFK", "BOS"), &none, o, 100);
     FCHECK(find_text(f, "New York (JFK)") != nullptr && find_text(f, "to Boston (BOS)") != nullptr &&
                f.sky.x == 78 && f.sky.w == 50,
            "%d: fifteen wide, the picture at %d", w, f.sky.x);
   }
-  // No sky drawn within three pixels of the route
+  // The scene fills its box, three pixels past the route
   {
     o.w = 128;
     f = flight_frame(one_route("SDF", "ORD"), &none, o, 100);
@@ -1214,11 +1189,10 @@ void test_airports() {
     s.h = f.sky.h;
     s.kind = (uint8_t) f.sky.kind;
     std::vector<uint16_t> px(128 * 64, 0);
-    int nearest = 128;
     for (uint32_t seed = 1; seed <= 40; seed++)
-      for (uint8_t flags : {(uint8_t) 0, (uint8_t) espn::kSkyDay}) {
+      for (int elev : {-25, 40}) {
         s.seed = seed;
-        s.flags = flags;
+        s.elev = (int8_t) elev;
         s.moon = 1;
         s.cover = (uint8_t) (seed % 3);
         std::fill(px.begin(), px.end(), 0);
@@ -1229,15 +1203,16 @@ void test_airports() {
         p.h = s.h;
         p.clip = espn::PxBox{0, 0, s.w, s.h};
         espn::sky_paint(p, s, seed * 777);
-        int left = 128;
+        int left = 128, out = 0;
         for (int y = 0; y < 64; y++)
           for (int x = 0; x < 128; x++)
-            if (px[(size_t) (y * 128 + x)] != 0)
+            if (px[(size_t) (y * 128 + x)] != 0) {
               left = std::min(left, x);
-        FCHECK(left - 80 >= 3, "seed %u: the sky's first pixel at %d", (unsigned) seed, left);
-        nearest = std::min(nearest, left);
+              out += x < s.x || y < s.y || y >= s.y + s.h;
+            }
+        FCHECK(left == s.x && left - 80 >= 3 && out == 0, "seed %u: the scene from %d, %d outside", (unsigned) seed,
+               left, out);
       }
-    FCHECK(nearest <= 84, "a moon or cloud at the sky's left edge: %d", nearest);
   }
   // Names first; a too-wide jet draws a smaller airliner
   o.w = 128;
@@ -1605,14 +1580,6 @@ std::string frame_text(const espn::AppFrame &f) {
   return out;
 }
 
-// Planespotters' answer as it comes, with made-up names
-const char *const kSpotted =
-    "{\"photos\":[{\"id\":\"1592852\",\"thumbnail\":{\"src\":\"https:\\/\\/t.plnspttrs.net\\/05072\\/"
-    "1592852_29b08bc9ff_t.jpg\",\"size\":{\"width\":200,\"height\":133}},\"thumbnail_large\":{\"src\":"
-    "\"https:\\/\\/t.plnspttrs.net\\/05072\\/1592852_29b08bc9ff_280.jpg\",\"size\":{\"width\":420,"
-    "\"height\":280}},\"link\":\"https:\\/\\/www.planespotters.net\\/photo\\/1592852\\/n8766t?utm_source=api\","
-    "\"photographer\":\"A. Spotter\"}]}";
-
 // Flightradar24's feed: planes dlat degrees north of home.
 std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24Now) {
   const double lat = 40.71, lon = -74.01;
@@ -1630,7 +1597,7 @@ std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24No
   return out + "}";
 }
 
-// The next position read, past any photo or route read.
+// The next position read, past any route read.
 bool read_pos(Reads &x, const std::string &body) {
   for (int i = 0; i < 8; i++) {
     x.wait();
@@ -1886,8 +1853,8 @@ void test_app() {
     // The airline logo as an icon the board loads
     espn::AppFrame wide;
     r.app.frame(256, 64, r.now, wide);
-    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0, "a logo and a picture: %zu %zu",
-           wide.icons.size(), wide.art.size());
+    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0 && wide.photo.url.empty(),
+           "a logo and a drawn picture: %zu", wide.icons.size());
     for (const espn::AppIcon &ic : wide.icons) {
       char url[160];
       const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, 0, url, sizeof url) : 0;
@@ -1900,52 +1867,15 @@ void test_app() {
     }
   }
   {
-    // A wide card drawn: its plane's photo comes next.
-    espn::app_env().version = "2026.11.5";
+    // A wide card drawn: the panel asks for no photo
     espn::AppRequest pr;
-    FCHECK(r.app.request(r.now, pr) && pr.url == "https://api.planespotters.net/pub/photos/hex/ac0fdc",
-           "Southwest's photo by its hex: %s", pr.url.c_str());
-    FCHECK(pr.headers.size() == 1 && pr.headers[0].name == "User-Agent" &&
-               pr.headers[0].value ==
-                   "GameDayScoreboard/2026.11.5 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)",
-           "with a way to reach us");
-    espn::AppTextStream in(kSpotted);
-    FCHECK(r.app.parse(in, r.now), "its answer");
-    r.app.ended(espn::AppResult{200, false, 0});
-    r.app.apply(true, r.now);
-    espn::AppFrame wide;
-    r.app.frame(256, 64, r.now, wide);
-    const espn::AppPhoto &ph = wide.photo;
-    FCHECK(ph.url == "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg" && ph.x == kPhotoX &&
-               ph.y == kPhotoY && ph.w == kPhotoW && ph.h == kPhotoH,
-           "the photo in the picture's spot: %s", ph.url.c_str());
-    FCHECK(wide.sky.w > 0, "the picture until it loads");
-    std::string t = wide.ticker;
-    t.insert(ph.at, ph.credit);
-    FCHECK(t.rfind("27 planes nearby | SWA1678 Southwest", 0) == 0 &&
-               t.find(" SW | Photo: A. Spotter | ") != std::string::npos,
-           "the credit after the card's plane: %s", t.c_str());
-    for (int w : {64, 128}) {
-      std::string words[2];
-      for (int s : {0, 8}) {
-        espn::AppFrame g;
-        r.app.shown(true);
-        r.app.frame(w, 64, r.now, g);
-        if (s > 0)
-          r.app.frame(w, 64, r.now + s, g = espn::AppFrame());
-        espn::app_frame_trim(g);
-        const bool list = s > 0;
-        FCHECK(g.photo.url.empty() == (w < 128) && (g.photo.w > 0) == (w >= 128 && !list),
-               "%d wide, %s: %s %d", w, list ? "the list" : "the card", g.photo.url.c_str(), g.photo.w);
-        words[list] = g.ticker;
-        words[list].insert(g.photo.at, g.photo.credit);
-      }
-      // Credited on both screens, so the ticker never jumps
-      FCHECK(words[0] == words[1] && (words[0].find("| Photo: A. Spotter |") == std::string::npos) == (w < 128),
-             "%d wide: %s / %s", w, words[0].c_str(), words[1].c_str());
-    }
-    FCHECK(!r.app.request(r.now + 1, pr) || pr.url.find("planespotters") == std::string::npos,
-           "one lookup a plane");
+    FCHECK(!r.app.request(r.now, pr) || pr.url.find("planespotters") == std::string::npos, "no photo lookup: %s",
+           pr.url.c_str());
+    FCHECK_EQ(caller_agent(""), "GameDayScoreboard/1.0 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
+    FCHECK_EQ(caller_agent("2026.11.5"),
+              "GameDayScoreboard/2026.11.5 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
+    for (const char *const *h = r.app.hosts(); *h != nullptr; h++)
+      FCHECK(std::string(*h).find("planespotters") == std::string::npos, "no photo host: %s", *h);
     JsonDocument d;
     r.app.state(d.to<JsonObject>(), r.now);
     FCHECK(d["nearest_hex"] == "ac0fdc" && d["nearest_reg"] == "N8766T", "the page's photo lookup");
@@ -2131,100 +2061,6 @@ void test_app() {
 
 }
 
-// Planespotters' photos: keys, URLs, answers, the cache.
-void test_photo_parts() {
-  Plane p;
-  strcpy(p.hex, "ac0fdc");
-  strcpy(p.reg, "N8766T");
-  char key[9];
-  FCHECK(photo_key(p, key) && std::string(key) == "ac0fdc", "by hex: %s", key);
-  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/hex/ac0fdc");
-  p.anon = true;
-  FCHECK(photo_key(p, key) && std::string(key) == "N8766T", "a made-up hex: by registration");
-  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/reg/N8766T");
-  strcpy(p.reg, "g-euus");
-  FCHECK(photo_key(p, key) && std::string(key) == "G-EUUS", "upper case: %s", key);
-  FCHECK_EQ(photo_url("ABCDEF"), "https://api.planespotters.net/pub/photos/reg/ABCDEF");
-  for (const char *bad : {"", "N", "N12 34", "N1/2", "N1?x"}) {
-    strcpy(p.reg, bad);
-    FCHECK(!photo_key(p, key) && key[0] == '\0', "no key from \"%s\"", bad);
-  }
-  // Too long for the field: dropped, never cut
-  for (const char *reg : {"N123456789", "RA-890012", "RA-89001"}) {
-    const bool fits = strlen(reg) < sizeof(p.reg);
-    JsonDocument d;
-    deserializeJson(d, std::string("{\"hex\":\"~abc123\",\"seen\":1,\"r\":\"") + reg + "\"}");
-    FCHECK(plane_from_json(d.as<JsonObjectConst>(), Home(), p) && (std::string(p.reg) == reg) == fits &&
-               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
-           "%s from a receiver: \"%s\"", reg, p.reg);
-    deserializeJson(d, std::string("[\"\",40.7,-73.9,0,3000,200,\"\",\"\",\"B738\",\"") + reg + "\"," +
-                           std::to_string(kFr24Now) + ",\"\",\"\",\"\",0,0,\"\"]");
-    FCHECK(plane_from_fr24(d.as<JsonArrayConst>(), nyc(), kFr24Now, p) && (std::string(p.reg) == reg) == fits &&
-               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
-           "%s from Flightradar24: \"%s\"", reg, p.reg);
-  }
-  p.anon = false;
-  for (const char *hex : {"", "abc12", "00000g", "000000"}) {
-    strcpy(p.hex, hex);
-    FCHECK(!hex_usable(p), "not a hex: \"%s\"", hex);
-  }
-  FCHECK_EQ(photo_agent(""), "GameDayScoreboard/1.0 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
-
-  // What Planespotters answers
-  PlanePhoto ph;
-  FCHECK(parse_photo(kSpotted, ph) && ph.state == PhotoState::KNOWN, "a photo");
-  FCHECK_EQ(ph.url, "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg");
-  FCHECK_EQ(ph.by, "A. Spotter");
-  FCHECK(parse_photo("{\"photos\":[]}", ph) && ph.state == PhotoState::NONE && ph.url[0] == '\0', "none");
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://t.plnspttrs.net/1/2_t.jpg\"}}]}", ph) &&
-             ph.state == PhotoState::KNOWN && std::string(ph.url) == "https://t.plnspttrs.net/1/2_t.jpg" &&
-             ph.by[0] == '\0',
-         "the small one when it's all there is");
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"http://x.net/a.jpg\"}},"
-                     "{\"thumbnail_large\":{\"src\":\"https://x.net/b c.jpg\"}},"
-                     "{\"thumbnail_large\":{\"src\":\"https://x.net/c.jpg\"},\"photographer\":\"C\"}]}",
-                     ph) &&
-             std::string(ph.url) == "https://x.net/c.jpg" && std::string(ph.by) == "C",
-         "the first one fit to download: %s", ph.url);
-  const std::string longurl = "https://t.plnspttrs.net/" + std::string(kPhotoUrlMax, 'a') + ".jpg";
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"" + longurl + "\"}}]}", ph) &&
-             ph.state == PhotoState::NONE,
-         "too long to keep");
-  // A name cut on a whole letter, control characters out
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":"
-                     "\"Bj\\u00f6rn\\tSt\\u00e5hl AAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}",
-                     ph),
-         "a long name");
-  FCHECK_EQ(ph.by, "Bj\xc3\xb6rnSt\xc3\xa5hl " + std::string(18, 'A'));
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":\"" +
-                         std::string(30, 'A') + "\\u00f6\"}]}",
-                     ph) &&
-             std::string(ph.by) == std::string(30, 'A'),
-         "not half a letter: %s", ph.by);
-  for (const char *bad : {"{}", "[]", "{\"photos\":{}}", "{\"error\":\"no\"}", "nope", ""})
-    FCHECK(!parse_photo(bad, ph), "unreadable: %s", bad);
-
-  // The cache: photos a day, misses half that
-  PhotoCache c;
-  const uint32_t t0 = 1000000;
-  FCHECK(c.wants("ac0fdc", t0) && !c.wants("", t0) && !c.wants(nullptr, t0), "wants what it lacks");
-  PlanePhoto &k = c.put("ac0fdc", t0);
-  FCHECK(k.state == PhotoState::NONE, "a miss until told otherwise");
-  k.state = PhotoState::KNOWN;
-  c.put("N7QD", t0);
-  FCHECK(!c.wants("ac0fdc", t0 + kPhotoKnownS - 1) && c.wants("ac0fdc", t0 + kPhotoKnownS), "a photo for a day");
-  FCHECK(!c.wants("N7QD", t0 + kPhotoNoneS - 1) && c.wants("N7QD", t0 + kPhotoNoneS), "a miss for half of one");
-  FCHECK(c.find("ac0fdc", t0 + 10) != nullptr && c.find("ac0fdc", t0 + kPhotoKnownS) == nullptr, "found while fresh");
-  for (int i = 0; i < (int) kPhotoCache; i++) {
-    char hex[9];
-    snprintf(hex, sizeof hex, "a%05d", i);
-    c.put(hex, t0 + 100 + i);
-    c.find("ac0fdc", t0 + 100 + i);
-  }
-  FCHECK(c.find("ac0fdc", t0 + 200) != nullptr && c.find("a00000", t0 + 200) == nullptr && !c.wants("a00001", t0 + 200),
-         "full: the least used goes");
-}
-
 // The recording, its times moved on by shift seconds.
 std::string fr24_later(const std::string &json, int64_t shift) {
   JsonDocument d;
@@ -2235,80 +2071,6 @@ std::string fr24_later(const std::string &json, int64_t shift) {
   std::string out;
   serializeJson(d, out);
   return out;
-}
-
-// Lookups: wide cards only, once a plane, with waits.
-void test_photo_reads() {
-  const std::string fr24 = slurp(kFr24File);
-  Reads r;
-  r.app.setup();
-  r.app.set("flyhome", "40.71,-74.01");
-  r.app.set("flyradius", "28mi");
-  espn::app_env().tz = 0;
-  r.app.shown(true);
-  FCHECK(r.step(200, fr24), "planes");
-  // The panel a second at a time, lookups answered
-  std::vector<int64_t> asked;
-  int status = 503;
-  std::string body;
-  uint32_t retry_ms = 0;
-  // Until secs pass or `until` lookups were made
-  auto run = [&](int64_t secs, int w, size_t until = SIZE_MAX) {
-    for (int64_t end = r.now + secs; r.now < end && asked.size() < until; r.now++) {
-      espn::AppFrame f;
-      r.app.frame(w, 64, r.now, f);
-      espn::AppRequest q;
-      if (!r.app.request(r.now, q))
-        continue;
-      const bool photo = q.url.find("api.planespotters.net") != std::string::npos;
-      if (photo)
-        asked.push_back(r.now);
-      espn::AppTextStream in(photo ? body : fr24_later(fr24, r.now - kFr24Now));
-      const int st = photo ? status : q.url.find("flightradar24") != std::string::npos ? 200 : 404;
-      const bool ok = st == 200 && r.app.parse(in, r.now);
-      r.app.ended(espn::AppResult{st, espn::is_throttle_status(st), photo ? retry_ms : 0});
-      r.app.apply(ok, r.now);
-    }
-  };
-  run(120, 64);
-  FCHECK(asked.empty(), "64 wide: none");
-  const int64_t wide = r.now;
-  run(5, 128);
-  FCHECK(asked.size() == 1 && asked[0] - wide <= 1, "128 wide: at once");
-  // A server error: a wait, then again
-  run(60, 128, 2);
-  FCHECK(asked.size() == 2 && asked[1] - asked[0] >= 15 && asked[1] - asked[0] <= 31, "again after %d s",
-         asked.size() > 1 ? (int) (asked[1] - asked[0]) : -1);
-  // Refused: Retry-After kept
-  status = 429;
-  retry_ms = 900000;
-  r.now++;
-  run(1200, 128, 3);
-  run(1200, 128, 4);
-  FCHECK(asked.size() == 4 && asked[3] - asked[2] >= 900, "Retry-After kept: %d s",
-         asked.size() > 3 ? (int) (asked[3] - asked[2]) : -1);
-  // No photo: a miss, not asked again for hours
-  status = 200;
-  body = "{\"photos\":[]}";
-  retry_ms = 0;
-  const size_t n = asked.size();
-  run(3600, 128);
-  FCHECK(asked.size() <= n + 1, "a miss once: %zu", asked.size() - n);
-  espn::AppFrame g;
-  r.app.frame(256, 64, r.now, g);
-  FCHECK(g.photo.url.empty() && g.sky.w > 0, "the picture, no photo: %s %zu", g.photo.url.c_str(), g.art.size());
-  FCHECK(r.app.photos().slots[0].state == PhotoState::NONE, "kept as a miss");
-  // Off screen: none until a wide card is drawn again
-  Reads s;
-  s.app.setup();
-  s.app.set("flyhome", "40.71,-74.01");
-  s.app.set("flyradius", "28mi");
-  s.app.shown(true);
-  FCHECK(s.step(200, fr24), "planes");
-  s.app.frame(192, 64, s.now, g);
-  s.app.shown(false);
-  espn::AppRequest q;
-  FCHECK(!s.app.request(s.now + 1, q) || q.url.find("planespotters") == std::string::npos, "off screen: none");
 }
 
 // Everything a frame hands the board, as one string.
@@ -2338,8 +2100,8 @@ std::string frame_sig(const espn::AppFrame &f) {
     snprintf(b, sizeof b, "I%d,%d,%d,%d,%s\n", i.x, i.y, i.px, i.alt, i.key);
     o += b;
   }
-  snprintf(b, sizeof b, "P%d,%d,%d,%d,%zu,", f.photo.x, f.photo.y, f.photo.w, f.photo.h, f.photo.at);
-  o += b + f.photo.url + f.photo.credit + "\nK" + f.ticker + (f.map.w > 0 ? "\nM" : "\n");
+  snprintf(b, sizeof b, "P%d,%d,%d,%d,", f.photo.x, f.photo.y, f.photo.w, f.photo.h);
+  o += b + f.photo.url + "\nK" + f.ticker + (f.map.w > 0 ? "\nM" : "\n");
   return o;
 }
 
@@ -2398,9 +2160,9 @@ void test_radar_frames() {
         for (const Text &t : flight_frame(n, nullptr, o, 100).items)
           direct += std::to_string(t.x) + "," + std::to_string(t.y) + t.text;
       }
-    FCHECK(sig_hash(bare) == 0xeecf6540u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
+    FCHECK(sig_hash(bare) == 0x80edb249u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
            (unsigned) sig_hash(bare));
-    FCHECK(sig_hash(sig) == 0x56ac25a0u, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(sig) == 0x34db943fu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
     FCHECK(sig_hash(direct) == 0x1551fcadu, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
   }
   for (int w = 32; w <= 320; w += 32)
@@ -2589,8 +2351,6 @@ int run_flight_tests(int &total_checks) {
   test_prefs();
   test_app();
   test_widen();
-  test_photo_parts();
-  test_photo_reads();
   test_adsbfi();
   test_ground_only();
   test_other_sources();

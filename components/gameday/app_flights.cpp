@@ -16,8 +16,7 @@ namespace flights {
 
 namespace {
 
-const char *const kHosts[] = {"flightradar24.com", "adsb.fi", "adsb.lol", "adsb.im", "adsbdb.com",
-                              "planespotters.net", nullptr};
+const char *const kHosts[] = {"flightradar24.com", "adsb.fi", "adsb.lol", "adsb.im", "adsbdb.com", nullptr};
 
 uint32_t ms_of(int64_t now) { return (uint32_t) ((uint64_t) now * 1000u); }
 
@@ -85,23 +84,6 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
     a.text = t.text;
     out.texts.push_back(std::move(a));
   }
-  for (const Art &a : fr.art) {
-    const PlaneSprite *s = plane_sprite(a.kind);
-    if (s == nullptr)
-      continue;
-    espn::AppArt o;
-    o.x = a.x;
-    o.y = a.y;
-    o.w = s->w;
-    o.h = s->h;
-    o.bits = s->bits;
-    o.flip = a.flip;
-    o.scale = a.scale;
-    o.ink[kArtBody - 1] = kColBody;
-    o.ink[kArtTail - 1] = a.tail;
-    o.ink[kArtDetail - 1] = kColDetail;
-    out.art.push_back(o);
-  }
   for (const Logo &l : fr.logos) {
     espn::AppIcon ic;
     ic.x = l.x;
@@ -122,13 +104,6 @@ void put_text(espn::AppFrame &out, const Frame &fr) {
   out.sky.kind = (uint8_t) k.kind;
   out.sky.flip = k.flip;
   out.sky.tail = k.tail;
-  out.photo.x = fr.photo.x;
-  out.photo.y = fr.photo.y;
-  out.photo.w = fr.photo.w;
-  out.photo.h = fr.photo.h;
-  out.photo.url = fr.photo.url;
-  out.photo.credit = fr.photo.credit;
-  out.photo.at = fr.photo.at;
   out.ticker = fr.ticker;
 }
 
@@ -416,7 +391,7 @@ void FlightsApp::state(JsonObject out, int64_t now) const {
   out["planes"] = n.tier == Tier::AIR ? n.air : n.tier == Tier::GROUND ? n.ground : n.n;
   if (n.n == 0)
     return;
-  // The card's plane: the device page shows its photo
+  // The card's plane: the device page finds its photo
   const Plane &p = n.planes[this->card_ < n.n ? this->card_ : 0];
   out["nearest"] = plane_label(p);
   if (hex_usable(p))
@@ -443,8 +418,6 @@ void FlightsApp::shown(bool on) {
   if (on) {
     this->list_ = false;
     this->screen_s_ = 0;
-  } else {
-    this->photo_room_ = false;
   }
 }
 
@@ -492,23 +465,7 @@ FlightsApp::Next FlightsApp::next_(int64_t now) const {
       n.in_ms = t;
     }
   }
-  // Then the card plane's photo
-  char key[9];
-  if (this->photo_ask_(now, key)) {
-    const uint32_t t = after(this->photo_wait_, this->photo_last_ms_, kPhotoGapMs);
-    if (t < n.in_ms) {
-      n.read = Read::PHOTO;
-      n.in_ms = t;
-    }
-  }
   return n;
-}
-
-bool FlightsApp::photo_ask_(int64_t now, char key[9]) const {
-  const Nearby &n = this->near_;
-  if (!this->photo_room_ || n.n == 0 || this->got_s_ == 0 || now - this->got_s_ > kOldS)
-    return false;
-  return photo_key(n.planes[this->card_ < n.n ? this->card_ : 0], key) && this->photos_.wants(key, (uint32_t) now);
 }
 
 uint32_t FlightsApp::poll_ms(int64_t now) const {
@@ -535,8 +492,6 @@ void FlightsApp::lost_(uint32_t now_ms) {
     case Read::ADSBDB:
       this->db_wait_.fail(false, 0, this->rnd_(), now_ms);
       break;
-    case Read::PHOTO:
-      this->photo_wait_.fail(false, 0, this->rnd_(), now_ms);
       break;
     default:
       break;
@@ -560,7 +515,7 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
     this->read_home_.radius_nm = to_nm(this->read_wide_, (DistUnit) this->prefs_.radius_unit);
   }
   // The free services ask who's calling
-  auto named = [&out]() { espn::app_header(out, "User-Agent", photo_agent(espn::app_env().version)); };
+  auto named = [&out]() { espn::app_header(out, "User-Agent", caller_agent(espn::app_env().version)); };
   switch (n.read) {
     case Read::POSITIONS:
       switch (n.source) {
@@ -590,13 +545,6 @@ bool FlightsApp::request(int64_t now, espn::AppRequest &out) {
       this->im_last_ms_ = now_ms | 1;
       this->pending_routes_ = this->routes_;
       break;
-    case Read::PHOTO:
-      this->photo_ask_(now, this->photo_key_);
-      out.url = photo_url(this->photo_key_);
-      named();
-      this->photo_last_ms_ = now_ms | 1;
-      this->pending_photo_ = PlanePhoto();
-      break;
     default: {
       const RouteAsk ask = route_asks(this->near_, this->routes_, (uint32_t) now);
       memcpy(this->db_callsign_, ask.callsign[0], sizeof(this->db_callsign_));
@@ -625,8 +573,6 @@ bool FlightsApp::parse(espn::AppStream &in, int64_t now) {
       return parse_routeset_from(in, this->ask_, this->pending_routes_, (uint32_t) now);
     case Read::ADSBDB:
       return parse_adsbdb_from(in, this->db_callsign_, this->pending_routes_, (uint32_t) now);
-    case Read::PHOTO:
-      return parse_photo_from(in, this->pending_photo_);
     default:
       return false;
   }
@@ -670,22 +616,6 @@ void FlightsApp::apply(bool ok, int64_t now) {
         this->db_wait_.fail(refused, this->retry_ms_, this->rnd_(), now_ms);
       }
       break;
-    case Read::PHOTO: {
-      // An answer but no photo is a miss too
-      const bool miss = !ok && (this->status_ == 200 || this->status_ == 400 || this->status_ == 404);
-      if (ok || miss) {
-        PlanePhoto &p = this->photos_.put(this->photo_key_, (uint32_t) now);
-        if (ok && this->pending_photo_.state == PhotoState::KNOWN) {
-          memcpy(p.url, this->pending_photo_.url, sizeof(p.url));
-          memcpy(p.by, this->pending_photo_.by, sizeof(p.by));
-          p.state = PhotoState::KNOWN;
-        }
-        this->photo_wait_.clear();
-      } else {
-        this->photo_wait_.fail(refused, this->retry_ms_, this->rnd_(), now_ms);
-      }
-      break;
-    }
     default:
       break;
   }
@@ -786,12 +716,6 @@ void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
   }
   o.card = this->card_ < this->near_.n ? this->card_ : 0;
   o.list = w < 192 && !radar && this->list_;
-  char key[9];
-  if (w >= 128) {
-    this->photo_room_ = true;
-    if (photo_key(this->near_.planes[o.card], key))
-      o.photo = this->photos_.find(key, (uint32_t) now);
-  }
   if (!radar) {
     put_text(out, flight_frame(this->near_, &this->routes_, o, (uint32_t) now));
     return;
@@ -807,7 +731,7 @@ void FlightsApp::frame_(int w, int h, int64_t now, espn::AppFrame &out) const {
     radar_list(fr, this->near_, o.card, o, hx, hy, kRadarH);
   else
     radar_map(this->near_, o.card, this->prefs_, this->shown_wide_, hx, hy, out.map);
-  fr.ticker = flight_ticker(this->near_, &this->routes_, o, (uint32_t) now, 3, &fr.photo.at);
+  fr.ticker = flight_ticker(this->near_, &this->routes_, o, (uint32_t) now);
   put_text(out, fr);
 }
 

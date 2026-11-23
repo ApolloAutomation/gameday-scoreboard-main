@@ -11,11 +11,7 @@
 #include "logo_icon.h"
 #include "logo_lru.h"
 #include "map_canvas.h"
-#include "plane_photo.h"
 #include "psram_tasks.h"
-
-// Last: its macros stay out of the headers above
-#include <JPEGDEC.h>
 
 namespace esphome::gameday {
 
@@ -23,7 +19,7 @@ static const char *const TAG = "gameday.logo";
 static const char *const USER_AGENT = ::espn::kUserAgent;  // the same as every ESPN read (poll_timing.h)
 // Rotating live games plus today's scores, ~3 KB each
 static const size_t MAX_LOGOS = 128;
-// Plane photos and radar frames; the oldest goes first
+// Radar frames; the oldest goes first
 static const size_t MAX_PHOTOS = 8;
 static const size_t MAX_PENDING = 8;
 // ESPN's PNGs are a few KB; anything far bigger is not a logo.
@@ -140,17 +136,6 @@ bool LogoCache::waiting(std::string_view url, uint8_t icon) {
   Locked guard(this->lock_);
   Entry *e = this->find_(url, icon);
   return e != nullptr && e->state != State::FAILED;
-}
-
-bool LogoCache::photo_ready(std::string_view url) {
-  if (url.empty() || this->lock_ == nullptr)
-    return false;
-  Locked guard(this->lock_);
-  for (auto &e : this->entries_) {
-    if (e->box_w > 0 && e->state == State::READY && std::string_view(e->url) == url)
-      return true;
-  }
-  return false;
 }
 
 bool LogoCache::photo_waiting(std::string_view url, uint8_t w, uint8_t h) {
@@ -386,9 +371,9 @@ void LogoCache::run_() {
     }
     if (decoded > 0) {
       ESP_LOGD(TAG, "Decoded %ux%u %s to %dx%d in %u ms", (unsigned) img.src_w, (unsigned) img.src_h,
-               photo ? "photo" : "logo", img.w, img.h, (unsigned) decode_ms);
+               photo ? "map" : "logo", img.w, img.h, (unsigned) decode_ms);
     } else if (decoded < 0 && photo) {
-      ESP_LOGI(TAG, "Photo unreadable: %s", url.c_str());
+      ESP_LOGI(TAG, "Map unreadable: %s", url.c_str());
     } else if (decoded < 0) {
       ESP_LOGI(TAG, "Logo unreadable at %u px: %s", (unsigned) icon, url.c_str());
     } else if (!ok && note == ::espn::LogoNote::NONE) {
@@ -405,7 +390,7 @@ bool LogoCache::download_(const std::string &url, bool photo, Bytes &body, int &
                           uint32_t &retry_after_ms) {
   std::vector<http_request::Header> headers = {
       {"User-Agent", photo && !this->photo_agent_.empty() ? this->photo_agent_.c_str() : USER_AGENT},
-      {"Accept", photo ? "image/jpeg,*/*;q=0.8" : "image/png,*/*;q=0.8"},
+      {"Accept", "image/png,*/*;q=0.8"},
   };
   code = 0;
   auto container = this->http_->get(url, headers, {"retry-after"});
@@ -545,37 +530,6 @@ int LogoCache::decode_(const Bytes &body, uint8_t icon, bool mark, Decoded &out)
 
 namespace {
 
-// One photo decode, for JPEGDEC's callback
-struct JpegJob {
-  uint16_t *px{nullptr};
-  int w{0}, h{0};
-  uint32_t rest_ms{0};
-};
-
-int jpeg_draw(JPEGDRAW *d) {
-  auto *job = static_cast<JpegJob *>(d->pUser);
-  for (int y = 0; y < d->iHeight; y++) {
-    const int row = d->y + y;
-    if (row < 0 || row >= job->h)
-      continue;
-    for (int x = 0; x < d->iWidthUsed; x++) {
-      const int col = d->x + x;
-      if (col >= 0 && col < job->w)
-        job->px[row * job->w + col] = d->pPixels[y * d->iWidth + x];
-    }
-  }
-  // Lets idle tasks and the main loop in
-  if (::espn::logo_rest_due(job->rest_ms, millis())) {
-    vTaskDelay(1);
-    job->rest_ms = millis();
-  }
-  return 1;
-}
-
-}  // namespace
-
-namespace {
-
 // One map decode, for pngle's callbacks
 struct MapJob {
   ::espn::MapCanvas canvas;
@@ -659,63 +613,12 @@ int LogoCache::decode_map_(const Bytes &body, uint8_t box_w, uint8_t box_h, Deco
   return 1;
 }
 
-// JPEGDEC itself; progressive ones decode their first scan
+// A boxed picture is a PNG map; else -1
 int LogoCache::decode_photo_(const Bytes &body, uint8_t box_w, uint8_t box_h, Decoded &out) {
   uint32_t pw = 0, ph = 0;
-  if (::espn::png_size(body.data(), body.size(), pw, ph))
-    return this->decode_map_(body, box_w, box_h, out);
-  if (body.size() < 4 || body[0] != 0xFF || body[1] != 0xD8)
+  if (!::espn::png_size(body.data(), body.size(), pw, ph))
     return -1;
-  if (this->jpeg_ == nullptr) {
-    void *p = heap_caps_malloc_prefer(sizeof(JPEGDEC), 2, MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT);
-    if (p == nullptr) {
-      ESP_LOGW(TAG, "No room for the JPEG decoder");
-      return 0;
-    }
-    this->jpeg_ = new (p) JPEGDEC();
-  }
-  JPEGDEC &jpeg = *this->jpeg_;
-  if (!jpeg.openRAM(const_cast<uint8_t *>(body.data()), (int) body.size(), jpeg_draw)) {
-    ESP_LOGW(TAG, "Photo is not a usable JPEG (%d)", jpeg.getLastError());
-    return -1;
-  }
-  const int type = jpeg.getJPEGType();
-  const bool progressive = type == JPEG_MODE_PROGRESSIVE;
-  const uint32_t w = (uint32_t) std::max(0, jpeg.getWidth()), h = (uint32_t) std::max(0, jpeg.getHeight());
-  ::flights::PhotoFit fit;
-  if (type != JPEG_MODE_INVALID)
-    fit = ::flights::photo_fit(w, h, progressive, box_w, box_h);
-  if (!fit.ok()) {
-    ESP_LOGW(TAG, "Photo can't be read (%ux%u)", (unsigned) w, (unsigned) h);
-    jpeg.close();
-    return -1;
-  }
-  std::vector<uint16_t, PsramAllocator<uint16_t>> px((size_t) fit.sw * fit.sh, 0);
-  JpegJob job;
-  job.px = px.data();
-  job.w = fit.sw;
-  job.h = fit.sh;
-  job.rest_ms = millis();
-  jpeg.setUserPointer(&job);
-  jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
-  static const int SCALE[] = {0, JPEG_SCALE_HALF, JPEG_SCALE_QUARTER, JPEG_SCALE_EIGHTH};
-  const int ok = jpeg.decode(0, 0, progressive ? 0 : SCALE[fit.shift]);
-  const int err = jpeg.getLastError();
-  jpeg.close();
-  if (!ok) {
-    ESP_LOGW(TAG, "Photo decode error %d", err);
-    return 0;
-  }
-  Bytes rgb((size_t) fit.ow * fit.oh * 3);
-  ::flights::photo_scale(px.data(), fit, rgb.data());
-  out.pixels.assign((size_t) fit.ow * fit.oh * 2, 0);
-  out.alpha = false;
-  ::flights::photo_light(rgb.data(), fit.ow, fit.oh, out.pixels.data());
-  out.w = fit.ow;
-  out.h = fit.oh;
-  out.src_w = w;
-  out.src_h = h;
-  return 1;
+  return this->decode_map_(body, box_w, box_h, out);
 }
 
 bool LogoCache::loop(bool &failed) {

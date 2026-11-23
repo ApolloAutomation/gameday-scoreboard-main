@@ -1395,146 +1395,11 @@ void route_unknown(RouteCache &cache, const char *callsign, uint32_t now_s) {
   r.source = RouteSource::ADSBDB;
 }
 
-// ---- Photos ------------------------------------------------------------------
+// ---- Who's calling ------------------------------------------------------------
 
-int PhotoCache::index_(const char *key, uint32_t now_s) const {
-  if (key == nullptr || key[0] == '\0')
-    return -1;
-  for (size_t i = 0; i < kPhotoCache; i++) {
-    const PlanePhoto &p = this->slots[i];
-    if (p.state == PhotoState::EMPTY || strcmp(p.key, key) != 0)
-      continue;
-    const uint32_t ttl = p.state == PhotoState::KNOWN ? kPhotoKnownS : kPhotoNoneS;
-    return now_s - p.at_s < ttl ? (int) i : -1;
-  }
-  return -1;
-}
-
-const PlanePhoto *PhotoCache::find(const char *key, uint32_t now_s) {
-  const int i = this->index_(key, now_s);
-  if (i < 0)
-    return nullptr;
-  this->slots[i].used_s = now_s;
-  return &this->slots[i];
-}
-
-bool PhotoCache::wants(const char *key, uint32_t now_s) const {
-  return key != nullptr && key[0] != '\0' && this->index_(key, now_s) < 0;
-}
-
-// Its own slot, else empty, else least used.
-PlanePhoto &PhotoCache::put(const char *key, uint32_t now_s) {
-  size_t pick = kPhotoCache;
-  for (size_t i = 0; i < kPhotoCache && pick == kPhotoCache; i++)
-    if (this->slots[i].state != PhotoState::EMPTY && strcmp(this->slots[i].key, key) == 0)
-      pick = i;
-  for (size_t i = 0; i < kPhotoCache && pick == kPhotoCache; i++)
-    if (this->slots[i].state == PhotoState::EMPTY)
-      pick = i;
-  if (pick == kPhotoCache) {
-    pick = 0;
-    for (size_t i = 1; i < kPhotoCache; i++)
-      if (now_s - this->slots[i].used_s > now_s - this->slots[pick].used_s)
-        pick = i;
-  }
-  PlanePhoto &p = this->slots[pick];
-  p = PlanePhoto();
-  copy_cut(p.key, sizeof(p.key), key);
-  p.state = PhotoState::NONE;
-  p.at_s = now_s;
-  p.used_s = now_s;
-  return p;
-}
-
-bool photo_key(const Plane &p, char out[9]) {
-  out[0] = '\0';
-  if (hex_usable(p)) {
-    copy_cut(out, 9, p.hex);
-    return true;
-  }
-  const size_t n = strlen(p.reg);
-  if (n < 2 || n > 8)
-    return false;
-  for (size_t i = 0; i < n; i++) {
-    const char c = (char) toupper((unsigned char) p.reg[i]);
-    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) {
-      out[0] = '\0';
-      return false;
-    }
-    out[i] = c;
-  }
-  out[n] = '\0';
-  return true;
-}
-
-std::string photo_url(const char *key) {
-  bool hex = strlen(key) == 6;
-  for (const char *c = key; hex && *c != '\0'; c++)
-    hex = (*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'f');
-  return std::string(kPhotoApi) + (hex ? "hex/" : "reg/") + key;
-}
-
-std::string photo_agent(const std::string &version) {
+std::string caller_agent(const std::string &version) {
   return "GameDayScoreboard/" + (version.empty() ? std::string("1.0") : version) +
          " (+https://github.com/ApolloAutomation/gameday-scoreboard-main)";
-}
-
-void fill_photo_filter(JsonDocument &f) {
-  JsonObject p = f["photos"].add<JsonObject>();
-  p["thumbnail_large"]["src"] = true;
-  p["thumbnail"]["src"] = true;
-  p["photographer"] = true;
-}
-
-namespace {
-
-bool photo_src_ok(const char *s) {
-  const size_t n = strlen(s);
-  if (n <= 8 || n > kPhotoUrlMax || strncmp(s, "https://", 8) != 0)
-    return false;
-  for (size_t i = 0; i < n; i++)
-    if ((unsigned char) s[i] <= 0x20 || (unsigned char) s[i] >= 0x7F)
-      return false;
-  return true;
-}
-
-// Control characters out, cut on a UTF-8 boundary.
-void copy_name(char *dst, size_t cap, const char *src) {
-  size_t n = 0;
-  for (; *src != '\0' && n + 1 < cap; src++)
-    if ((unsigned char) *src >= 0x20 && *src != 0x7F)
-      dst[n++] = *src;
-  // Cut mid-letter: drop its first bytes too
-  if (((unsigned char) *src & 0xC0) == 0x80) {
-    while (n > 0 && ((unsigned char) dst[n - 1] & 0xC0) == 0x80)
-      n--;
-    if (n > 0)
-      n--;
-  }
-  dst[n] = '\0';
-}
-
-}
-
-bool photo_from_doc(JsonObjectConst root, PlanePhoto &out) {
-  JsonArrayConst photos = root["photos"];
-  if (photos.isNull())
-    return false;
-  out.state = PhotoState::NONE;
-  out.url[0] = out.by[0] = '\0';
-  for (JsonObjectConst ph : photos) {
-    // The large one: the small one decodes too small
-    const char *src = ph["thumbnail_large"]["src"] | "";
-    if (!photo_src_ok(src))
-      src = ph["thumbnail"]["src"] | "";
-    if (!photo_src_ok(src))
-      continue;
-    copy_cut(out.url, sizeof(out.url), src);
-    copy_name(out.by, sizeof(out.by), ph["photographer"] | "");
-    out.state = PhotoState::KNOWN;
-    break;
-  }
-  return true;
 }
 
 // ---- Text --------------------------------------------------------------------
@@ -1708,30 +1573,19 @@ void put(Frame &f, int x, int y, int w, BoardFont font, Align a, uint32_t color,
 
 std::string pick_fit(const std::string &a, const std::string &b, size_t max) { return a.size() <= max ? a : cut(b, max); }
 
-// The plane centered in the box, scaled, if it fits.
-// Unscaled, it moves in its own sky.
+// The plane's scene in the box, if the plane fits.
 void put_art(Frame &f, const Card &c, PlaneKind kind, int x, int y, int w, int h, int scale = 1) {
   const PlaneSprite *s = plane_sprite(kind);
   if (s == nullptr || s->w * scale > w || s->h * scale > h)
     return;
-  if (scale == 1) {
-    f.sky.x = (int16_t) x;
-    f.sky.y = (int16_t) y;
-    f.sky.w = (uint8_t) w;
-    f.sky.h = (uint8_t) h;
-    f.sky.kind = kind;
-    f.sky.flip = c.flip;
-    f.sky.tail = c.tail_color;
-    return;
-  }
-  Art a;
-  a.x = (int16_t) (x + (w - s->w * scale) / 2);
-  a.y = (int16_t) (y + (h - s->h * scale) / 2);
-  a.kind = kind;
-  a.flip = c.flip;
-  a.scale = (uint8_t) scale;
-  a.tail = c.tail_color;
-  f.art.push_back(a);
+  f.sky.x = (int16_t) x;
+  f.sky.y = (int16_t) y;
+  f.sky.w = (uint8_t) w;
+  f.sky.h = (uint8_t) h;
+  f.sky.scale = (uint8_t) scale;
+  f.sky.kind = kind;
+  f.sky.flip = c.flip;
+  f.sky.tail = c.tail_color;
 }
 
 // The airline's code, then its logo over it.
@@ -1858,7 +1712,7 @@ bool card_route(const Card &c, std::string &a, std::string &b, int &ax, PlaneKin
       break;
     // Three clear pixels before the picture's sky
     const int used = (int) std::max(glyphs(x), glyphs(y));
-    const int bx = std::max(kPhotoX, 5 * used + 3);
+    const int bx = std::max(kArtX, 5 * used + 3);
     const bool fits = sp == nullptr || sp->w <= 128 - bx;
     const int score = 2 * ((x != c.from) + (y != "to " + c.to)) + fits;
     if (score <= best)
@@ -1886,7 +1740,7 @@ int card_left(Frame &f, const Card &c) {
   put_logo(f, c, lx, 0);
   // Places on two lines, 7 apart, else the codes
   std::string a, b;
-  int ax = kPhotoX;
+  int ax = kArtX;
   PlaneKind kind = c.kind;
   if (c.route && card_route(c, a, b, ax, kind)) {
     put(f, 1, 16, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
@@ -1895,7 +1749,7 @@ int card_left(Frame &f, const Card &c) {
     put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
   }
   put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
-  put_art(f, c, kind, ax, kPhotoY, 128 - ax, kPhotoH);
+  put_art(f, c, kind, ax, kArtY, 128 - ax, kArtH);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
@@ -1903,7 +1757,7 @@ int card_left(Frame &f, const Card &c) {
   return ax;
 }
 
-// Full screen: logo, big flight and route, the picture doubled.
+// Full screen: logo, big flight and route, the plane doubled.
 void card_tall(Frame &f, const Card &c) {
   const int x0 = c.brand != nullptr ? kLogoBigPx + 3 : 1, tw = 127 - x0;
   put_logo(f, c, 0, 0, kLogoBigPx);
@@ -1937,7 +1791,7 @@ void card_tall(Frame &f, const Card &c) {
   }
   // Small planes bigger, still under an airliner
   const PlaneSprite *sp = plane_sprite(c.kind);
-  put_art(f, c, c.kind, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
+  put_art(f, c, c.kind, 0, kArtTallY, 128, kArtTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
   put(f, 1, 104, 62, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 64, 104, 63, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 112, 70, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 14));
@@ -2008,38 +1862,20 @@ Frame flight_frame(const Nearby &near, RouteCache *routes, const FrameOpts &o, u
   Card c = card_of(near.planes[opts.card], routes, opts.units, now_s);
   c.dist_color = dist_ink(opts);
   const bool tall = esphome::gameday::tall_board(opts.w, opts.h);
-  int ax = kPhotoX;
   if (tall && opts.list)
     list_tall(f, near, routes, opts, now_s);
   else if (tall)
     card_tall(f, c);
   else if (opts.w >= 192)
-    ax = card_wide(f, c, near, opts);
+    card_wide(f, c, near, opts);
   else if (opts.list)
     list_frame(f, near, opts);
   else if (opts.w < 128)
     compact(f, c, near, opts);
   else
-    ax = card_left(f, c);
-  // Credited on the list too, so the ticker holds
-  const PlanePhoto *ph = opts.photo;
-  if (opts.w >= 128 && ph != nullptr && ph->state == PhotoState::KNOWN && ph->url[0] != '\0') {
-    f.photo.url = ph->url;
-    f.photo.credit = std::string(" | Photo: ") + (ph->by[0] != '\0' ? ph->by : "Planespotters.net");
-    if (tall && !opts.list) {
-      f.photo.x = (int16_t) kPhotoTallX;
-      f.photo.y = (int16_t) kPhotoTallY;
-      f.photo.w = (uint8_t) kPhotoTallW;
-      f.photo.h = (uint8_t) kPhotoTallH;
-    } else if (!tall && (opts.w >= 192 || !opts.list)) {
-      f.photo.x = (int16_t) ax;
-      f.photo.y = (int16_t) kPhotoY;
-      f.photo.w = (uint8_t) (128 - ax);
-      f.photo.h = (uint8_t) kPhotoH;
-    }
-  }
+    card_left(f, c);
   if (opts.ticker)
-    f.ticker = flight_ticker(near, routes, opts, now_s, 3, &f.photo.at);
+    f.ticker = flight_ticker(near, routes, opts, now_s);
   return f;
 }
 
@@ -2102,7 +1938,6 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
     f.sky.x = (int16_t) ((o.w - bw) / 2);
     f.sky.w = (uint8_t) bw;
     f.sky.h = (uint8_t) bh;
-    f.sky.scale = bh == 48 ? 2 : 1;
     top = bh;
   }
   int y = top + (limit - top - words) / 2;
@@ -2113,8 +1948,7 @@ Frame note_frame(Note note, const FrameOpts &o, float radius_nm) {
   return f;
 }
 
-std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s, size_t planes,
-                          size_t *card_end) {
+std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpts &o, uint32_t now_s, size_t planes) {
   if (near.n == 0)
     return "";
   std::string out;
@@ -2148,8 +1982,6 @@ std::string flight_ticker(const Nearby &near, RouteCache *routes, const FrameOpt
     add(speed_text(p, o.units.speed, Fmt::FULL), ", ");
     add(where_text(p, o.units.dist, Fmt::FULL), ", ");
     out += " | " + one;
-    if (k == 0 && card_end != nullptr)
-      *card_end = out.size();
   }
   return out;
 }

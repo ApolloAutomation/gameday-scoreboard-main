@@ -383,7 +383,7 @@ bool WeatherApp::request(int64_t now, espn::AppRequest &out) {
     return false;
   out.body.clear();
   out.headers.clear();
-  espn::app_header(out, "User-Agent", ::flights::photo_agent(espn::app_env().version));
+  espn::app_header(out, "User-Agent", ::flights::caller_agent(espn::app_env().version));
   Host host = HOST_OPEN_METEO;
   switch (r) {
     case Read::FORECAST: {
@@ -967,7 +967,6 @@ void WeatherApp::radar_(int w, int h, int64_t now, AppFrame &out) const {
   ph.h = (uint8_t) bh;
   ph.url = urls[k];
   ph.hold = urls[n - 1];
-  ph.keep_art = true;
   // Said until a frame draws
   ph.alt = (int8_t) out.texts.size();
   const char *loading = bw >= 70 ? "Loading radar" : "Loading";

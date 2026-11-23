@@ -350,6 +350,7 @@ inline int render_sky_views(const std::string &dir, const std::string &fixtures,
       app_frame_trim(f);
       if (note == 2) {
         f.sky.flags &= (uint8_t) ~kSkyDay;
+        f.sky.elev = -25;
         f.sky.moon = 2;
       }
       static const char *const kWhat[] = {"card", "note", "night"};
@@ -382,7 +383,9 @@ inline int render_sky_views(const std::string &dir, const std::string &fixtures,
         s.flip = i % 2;
         s.tail = 0xD03030;
         s.seed = 0x1234567u * (i + 1);
-        s.flags = sky == 1 ? 0 : kSkyDay;
+        s.flags = (uint8_t) ((sky == 1 ? 0 : kSkyDay) | ((i % 5) << kSkyLandShift));
+        s.elev = (int8_t) (sky == 1 ? -25 : sky == 2 ? 30 : 4);
+        s.home = 0xBEEF01u + (uint32_t) i * 7919u;
         s.cover = sky == 2 ? 3 : 1;
         s.fall = sky == 2 ? 1 : 0;
         s.wind = sky == 2;
