@@ -9,7 +9,7 @@ The prebuilt firmware for DIY builds targets one pinout, the [MoonHub75](https:/
 
 ## Apollo M-1 and MoonHub75
 
-The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [Apollo M-1 installer](/diy/install/) and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
+The [Apollo Automation M-1 LED Matrix](https://apolloautomation.com/products/m-1-led-matrix) (Rev6) and the MoonHub75 use the same pins, so the same prebuilt firmware runs on both. Install it from your browser with the [Apollo installer for the M-1](https://install.apolloautomation.com/#/m-1), or a MoonHub75 with the [project's installer](/diy/install/), and it takes updates over Wi-Fi like any other panel. The M-1 Rev4 uses other pins and needs its own build (see [Other boards](#other-boards)).
 
 Its pin map in the firmware also sets up an I2S microphone on GPIO10, GPIO11 and GPIO12, as both boards carry one. The panel's pages don't use it.
 
