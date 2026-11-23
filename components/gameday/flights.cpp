@@ -1169,7 +1169,7 @@ std::string route_words(const std::string &from, const std::string &to) {
 
 namespace {
 
-// A stop at a level: full, with its code, name alone.
+// A stop: full, with its code, else alone.
 std::string stop_level(const std::string &code, int level, bool shared) {
   if (level == 0)
     return stop_text(code, StopFit::FULL);
@@ -1177,9 +1177,9 @@ std::string stop_level(const std::string &code, int level, bool shared) {
   return level == 1 || s == code ? s : s.substr(0, s.size() - code.size() - 3);
 }
 
-// Whole words off the end: Island, City, else past a hyphen.
+// Whole words off: Island, City, else past hyphen.
 bool shorten(std::string &s, size_t max) {
-  static const char *const kTails[] = {" Island", " Islands", " Atoll", " City", " Beach"};
+  static const char *const kTails[] = {" Island", " Islands", " Atoll", " City"};
   // Words that can't stand alone
   static const char *const kLeads[] = {"Fort",   "Port",   "Pointe", "Saint", "Sainte", "St",   "Ust",  "Yuzhno",
                                        "Severo", "Khanty", "Basse",  "Grand", "Baie",   "Blanc", "T\xC3\xAAte"};
@@ -1232,8 +1232,15 @@ bool route_lines(const std::string &from, const std::string &to, size_t max, std
   if (fx || fy) {
     if (glyphs(a) > max && !shorten(a, max))
       a = from;
-    if (glyphs(b) > max && !shorten(b, max))
-      b = "to " + to;
+    // Second line: "to" goes first, then words
+    if (glyphs(b) > max) {
+      b.erase(0, 3);
+      std::string s = b;
+      if (glyphs(b) > max && shorten(s, max - 3))
+        b = "to " + s;
+      else if (glyphs(b) > max && !shorten(b, max))
+        b = "to " + to;
+    }
     if (glyphs(a) <= max && glyphs(b) <= max && (a != from || b != "to " + to)) {
       if (level != nullptr)
         *level = 3;
@@ -1750,31 +1757,18 @@ void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
   rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o);
 }
 
-// Most places named, then the plane's own picture.
+// The route's lines, then the plane's own picture.
 bool card_route(const Card &c, std::string &a, std::string &b, int &ax, PlaneKind &kind) {
+  if (!route_lines(c.from, c.to, 16, a, b))
+    return false;
+  // Three clear pixels before the picture's sky
+  ax = std::max(kArtX, 5 * (int) std::max(glyphs(a), glyphs(b)) + 3);
+  // Names first, else a smaller airliner's picture
   const PlaneSprite *sp = plane_sprite(c.kind), *narrow = plane_sprite(PlaneKind::NARROW);
-  int best = -1;
-  std::string x, y;
-  for (int n = 16; n >= 13; n--) {
-    int level = 0;
-    if (!route_lines(c.from, c.to, (size_t) n, x, y, &level))
-      break;
-    // Three clear pixels before the picture's sky
-    const int used = (int) std::max(glyphs(x), glyphs(y));
-    const int bx = std::max(kArtX, 5 * used + 3);
-    const bool fits = sp == nullptr || sp->w <= 128 - bx;
-    // Names, then the richest form, then the picture
-    const int score = 16 * ((x != c.from) + (y != "to " + c.to)) + 4 * (3 - level) + fits;
-    if (score <= best)
-      continue;
-    best = score;
-    a = x;
-    b = y;
-    ax = bx;
-    // Else a smaller airliner's picture
-    kind = fits ? c.kind : narrow->w < sp->w && narrow->w <= 128 - bx ? PlaneKind::NARROW : PlaneKind::NONE;
-  }
-  return best >= 0;
+  kind = sp == nullptr || sp->w <= 128 - ax                ? c.kind
+         : narrow->w < sp->w && narrow->w <= 128 - ax ? PlaneKind::NARROW
+                                                      : PlaneKind::NONE;
+  return true;
 }
 
 // The left 128 pixels' card; returns the picture's x.
@@ -1793,8 +1787,8 @@ int card_left(Frame &f, const Card &c) {
   int ax = kArtX;
   PlaneKind kind = c.kind;
   if (c.route && card_route(c, a, b, ax, kind)) {
-    put(f, 1, 16, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
-    put(f, 1, 16 + kRouteGap, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
+    put(f, 1, kRouteY, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
+    put(f, 1, kRouteY + kRouteGap, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
   } else {
     put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
   }

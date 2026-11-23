@@ -523,8 +523,8 @@ std::string route_words(const std::string &from, const std::string &to);
 // Levels: 0 full, 1 codes, 2 names, 3 shortened.
 bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b,
                  int *level = nullptr);
-// The second route line's rows below the first.
-static const int kRouteGap = 9;
+// The card's route lines: first row, second's offset.
+static const int kRouteY = 15, kRouteGap = 9;
 // UTF-8 glyphs, as the panel draws them.
 size_t glyphs(const std::string &s);
 

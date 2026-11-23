@@ -985,34 +985,91 @@ bool shortened(const std::string &line, const std::string &name, size_t max, boo
          line.back() != ' ';
 }
 
-// A clear row between the route lines at every column
+// Each column: its glyph and column, as placed
+std::vector<uint32_t> cells(const Text &t) {
+  std::vector<uint32_t> on(512, 0);
+  const int px = font_px(t.font), tw = px * (int) glyphs(t.text);
+  int x = t.align == Align::LEFT ? t.x : t.align == Align::RIGHT ? t.x + t.w - tw : t.x + (t.w - tw) / 2;
+  for (size_t k = 0; k < t.text.size(); x += px) {
+    uint32_t cp = (unsigned char) t.text[k++];
+    // Past ASCII: assume both edge rows lit
+    for (; k < t.text.size() && ((unsigned char) t.text[k] & 0xC0) == 0x80; k++)
+      cp = 0x100;
+    for (int i = 0; i < px && cp != ' '; i++)
+      if (x + i >= 0 && x + i < 512)
+        on[x + i] = cp << 3 | (uint32_t) i;
+  }
+  return on;
+}
+
+// A small glyph's top or bottom row pixels
+bool edge_px(const Text &t, uint32_t v, bool top) {
+  struct Edge {
+    char c;
+    uint8_t bits;
+  };
+  static const Edge kTop[] = {
+      {'!', 0b00100}, {'"', 0b01010}, {'$', 0b00100}, {'%', 0b00010},  {'&', 0b00100}, {'\'', 0b00100},
+      {'(', 0b00010}, {')', 0b01000}, {'/', 0b00010}, {'?', 0b01100},  {'[', 0b01110}, {'\\', 0b10000},
+      {']', 0b01110}, {'`', 0b01000}, {'b', 0b10000}, {'d', 0b00010},  {'f', 0b00110}, {'h', 0b10000},
+      {'k', 0b10000}, {'l', 0b01000}, {'t', 0b01000}, {'{', 0b00110},  {'|', 0b00100}, {'}', 0b11000}};
+  static const Edge kBottom[] = {
+      {'$', 0b00100}, {'%', 0b10000}, {'(', 0b00010}, {')', 0b01000}, {',', 0b01000}, {'/', 0b10000},
+      {';', 0b01000}, {'Q', 0b00110}, {'[', 0b01110}, {'\\', 0b00010}, {']', 0b01110}, {'_', 0b11110},
+      {'g', 0b11100}, {'j', 0b11000}, {'p', 0b10000}, {'q', 0b00010}, {'y', 0b11100}, {'{', 0b00110},
+      {'|', 0b00100}, {'}', 0b11000}};
+  // The big font's last row stays dark
+  if (t.font != BoardFont::S8)
+    return top;
+  const uint32_t cp = v >> 3, col = v & 7;
+  if (cp >= 0x80)
+    return true;
+  const Edge *e = top ? kTop : kBottom;
+  const size_t n = top ? sizeof(kTop) / sizeof(Edge) : sizeof(kBottom) / sizeof(Edge);
+  for (size_t i = 0; i < n; i++)
+    if ((uint32_t) (unsigned char) e[i].c == cp)
+      return col < 5 && (e[i].bits >> (4 - col) & 1) != 0;
+  return false;
+}
+
+// Route lines: a clear row between, nothing else touching
 void route_gap(const Frame &f, const std::string &a, const std::string &b, const char *what) {
   const Text *ta = find_text(f, a), *tb = find_text(f, b);
   if (ta == nullptr || tb == nullptr) {
     FCHECK(false, "%s: both route lines", what);
     return;
   }
-  // Any glyph but a space may light its whole cell
-  auto lit = [](const Text &t) {
-    std::vector<bool> on(512, false);
-    int i = 0;
-    for (size_t k = 0; k < t.text.size(); k++) {
-      if (((unsigned char) t.text[k] & 0xC0) == 0x80)
-        continue;
-      for (int x = 0; x < 5 && t.text[k] != ' '; x++)
-        on[t.x + 5 * i + x] = true;
-      i++;
-    }
-    return on;
-  };
-  const std::vector<bool> la = lit(*ta), lb = lit(*tb);
-  const int bottom = ta->y + font_rows(ta->font) - 1;
+  const std::vector<uint32_t> la = cells(*ta), lb = cells(*tb);
   for (int x = 0; x < 512; x++)
-    if (la[x] && lb[x]) {
-      FCHECK(tb->y - bottom >= 2, "%s: \"%s\" over \"%s\" at x %d, rows %d and %d", what, a.c_str(), b.c_str(), x,
-             bottom, tb->y);
-      return;
+    if (la[x] != 0 && lb[x] != 0) {
+      FCHECK(tb->y - (ta->y + 7) >= 2, "%s: \"%s\" over \"%s\" at x %d, rows %d and %d", what, a.c_str(), b.c_str(),
+             x, ta->y + 7, tb->y);
+      break;
     }
+  for (const Text &t : f.items) {
+    if (&t == ta || &t == tb)
+      continue;
+    const std::vector<uint32_t> lt = cells(t);
+    const int top = t.y, bottom = t.y + font_rows(t.font) - 1;
+    for (const Text *r : {ta, tb}) {
+      const std::vector<uint32_t> &lr = r == ta ? la : lb;
+      if (bottom < r->y || top > r->y + 7)
+        continue;
+      // Above may share one row, its pixels apart
+      const bool shared = bottom == r->y && top < r->y;
+      for (int x = 1; x < 511; x++) {
+        bool hit = lt[x] != 0 && lr[x] != 0;
+        if (shared)
+          hit = lt[x] != 0 && edge_px(t, lt[x], false) &&
+                ((lr[x - 1] != 0 && edge_px(*r, lr[x - 1], true)) || (lr[x] != 0 && edge_px(*r, lr[x], true)) ||
+                 (lr[x + 1] != 0 && edge_px(*r, lr[x + 1], true)));
+        FCHECK(!hit, "%s: \"%s\" at row %d touches \"%s\" at row %d, x %d", what, t.text.c_str(), t.y,
+               r->text.c_str(), r->y, x);
+        if (hit)
+          break;
+      }
+    }
+  }
 }
 
 void test_airports() {
@@ -1124,14 +1181,20 @@ void test_airports() {
       {"DFW", "LEX", 16, 3, "Dallas", "to Lexington"},
       {"DFW", "IAD", 16, 3, "Dallas", "to Washington"},
       {"SLC", "RAP", 13, 3, "Salt Lake", "to Rapid City"},
-      {"PBI", "ATL", 14, 3, "West Palm", "to Atlanta"},
+      {"PBI", "ATL", 14, 3, "PBI", "to Atlanta"},
       {"LDX", "CAY", 16, 3, "Saint-Laurent", "to Cayenne"},
-      {"ATL", "FLL", 16, 3, "Atlanta", "to FLL"},
-      {"ATL", "COS", 16, 3, "Atlanta", "to COS"},
-      {"ATL", "LAX", 13, 3, "Atlanta", "to LAX"},
+      // The second line's "to" goes first
+      {"ATL", "FLL", 16, 3, "Atlanta", "Fort Lauderdale"},
+      {"ATL", "COS", 16, 3, "Atlanta", "Colorado Springs"},
+      {"ATL", "LAX", 13, 3, "Atlanta", "Los Angeles"},
+      {"ATL", "SLC", 13, 3, "Atlanta", "to Salt Lake"},
+      {"ATL", "HHH", 16, 3, "Atlanta", "to Hilton Head"},
+      {"ATL", "ECP", 16, 3, "Atlanta", "to ECP"},
+      {"HTI", "ATL", 16, 2, "Hamilton Island", "to Atlanta"},
       {"QQQ", "LDX", 16, 3, "QQQ", "to Saint-Laurent"},
-      {"QQQ", "FLL", 16, -1, "", ""},
-      {"SDF", "ORD", 8, -1, "", ""},
+      {"QQQ", "FLL", 16, 3, "QQQ", "Fort Lauderdale"},
+      {"QQQ", "ZZZ", 16, -1, "", ""},
+      {"SDF", "ORD", 8, 3, "SDF", "Chicago"},
       // One city both ends: the airports' own names
       {"BFI", "SEA", 16, 2, "Boeing Field", "to Sea-Tac"},
       {"BFI", "SEA", 25, 1, "Boeing Field (BFI)", "to Sea-Tac (SEA)"},
@@ -1187,11 +1250,16 @@ void test_airports() {
           continue;
         }
         // Else names whole, cut at a word, or codes
-        const std::string na = stop_form(from, 2, shared), nb = "to " + stop_form(to, 2, shared);
-        const bool ca = !shortened(a, na, max, glyphs(na) <= max) && a == from;
-        const bool cb = !shortened(b, nb, max, glyphs(nb) <= max) && b == "to " + to;
-        FCHECK(ok ? level == 3 && (shortened(a, na, max, glyphs(na) <= max) || ca) &&
-                        (shortened(b, nb, max, glyphs(nb) <= max) || cb) && !(ca && cb)
+        const std::string na = stop_form(from, 2, shared), nb = stop_form(to, 2, shared);
+        const bool wa = shortened(a, na, max, glyphs(na) <= max), ca = !wa && a == from;
+        // The second line's "to" goes before any word
+        const bool wb = glyphs("to " + nb) <= max                    ? b == "to " + nb
+                        : glyphs(nb) <= max                          ? b == nb
+                        : b.compare(0, 3, "to ") == 0 && b.size() > 3 ? shortened(b.substr(3), nb, max - 3, false)
+                                                                      : shortened(b, nb, max, false);
+        const bool cb = !wb && b == "to " + to;
+        FCHECK(ok ? level == 3 && (wa || ca) && (wb || cb) && !(ca && cb) && (!ca || glyphs(na) > max) &&
+                        (!cb || glyphs(nb) > max)
                   : a.empty() && b.empty() && glyphs(na) > max && glyphs(nb) > max,
                "%s-%s in %zu: \"%s\" / \"%s\"", from.c_str(), to.c_str(), max, a.c_str(), b.c_str());
       }
@@ -1247,7 +1315,7 @@ void test_airports() {
     FCHECK(a != nullptr && b != nullptr && find_text(f, "SDF-ORD") == nullptr &&
                f.ticker.find("Louisville (SDF) to Chicago O'Hare (ORD), ") != std::string::npos,
            "%d: SDF-ORD's places", w);
-    FCHECK(a != nullptr && b != nullptr && a->y == 16 && b->y == 25 && a->font == BoardFont::S8 && a->x == 1 &&
+    FCHECK(a != nullptr && b != nullptr && a->y == 15 && b->y == 24 && a->font == BoardFont::S8 && a->x == 1 &&
                a->color == b->color,
            "%d: two small lines under the callsign", w);
     // Sixteen wide: the picture moves over, three pixels clear
@@ -1320,6 +1388,23 @@ void test_airports() {
     FCHECK(find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr && f.sky.x == t.x && f.sky.kind == t.kind,
            "%s-%s %s: the route beside a picture at %d", t.from, t.to, t.type, f.sky.x);
   }
+  // Route lines clear of real types and flight numbers
+  static const char *const kRoutes[][2] = {{"DFW", "LEX"}, {"ATL", "LAX"}, {"SDF", "ORD"},
+                                           {"GRU", "YUL"}, {"ATL", "PHL"}, {"BFI", "SEA"}};
+  for (const auto &r : kRoutes)
+    for (const char *type : {"E75L", "A321", "B738", "B38M", "B77W", "B789", "A20N", "CRJ9", "DH8D", "BCS3", "C172",
+                             "PC12", "GLF6", "A359", "E190", "AT76", "B712", "MD11"})
+      for (const char *flight : {"", "QX2345", "QF12"})
+        for (int w : {128, 256}) {
+          Nearby n = one_route(r[0], r[1]);
+          snprintf(n.planes[0].type, sizeof(n.planes[0].type), "%s", type);
+          snprintf(n.planes[0].flight, sizeof(n.planes[0].flight), "%s", flight);
+          o.w = w;
+          f = flight_frame(n, &none, o, 100);
+          std::string a, b;
+          FCHECK(route_lines(r[0], r[1], 16, a, b), "%s-%s: named", r[0], r[1]);
+          route_gap(f, a, b, type);
+        }
   // Unknown both ends: the codes as before, everywhere
   for (int w : {64, 128, 256}) {
     o.w = w;
@@ -2242,8 +2327,8 @@ void test_radar_frames() {
       }
     FCHECK(sig_hash(bare) == 0x80edb249u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
            (unsigned) sig_hash(bare));
-    FCHECK(sig_hash(sig) == 0x17660e2cu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
-    FCHECK(sig_hash(direct) == 0x301bea4au, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
+    FCHECK(sig_hash(sig) == 0x9f20b80cu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(direct) == 0x379fd3d4u, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
   }
   for (int w = 32; w <= 320; w += 32)
     for (int h : {32, 64, 96, 128})
