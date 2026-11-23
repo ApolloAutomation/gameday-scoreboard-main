@@ -912,7 +912,7 @@ void test_tall_frames() {
              find_text(f, "JFK-CDG") == nullptr,
          "the route's places on two lines");
   const Text *tail = find_text(f, "B61407");
-  FCHECK(tail != nullptr && tail->y == 34 && tail->align == Align::RIGHT, "the flight number beside them");
+  FCHECK(tail != nullptr && tail->y == 17 && tail->align == Align::RIGHT, "the flight number past the airline");
   FCHECK(find_text(f, "JetBlue") != nullptr && find_text(f, "Airbus A321neo") != nullptr, "airline and type");
   FCHECK(find_text(f, "1,525 ft") != nullptr && find_text(f, "203 mph") != nullptr &&
              find_text(f, "1.5 mi SE") != nullptr && find_text(f, "Climbing") != nullptr,
@@ -928,8 +928,9 @@ void test_tall_frames() {
   o.h = 64;
   o.list = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.w == kPhotoW && f.sky.scale == 1,
-         "the split card unchanged");
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.x == 73 && f.sky.w == 55 &&
+             f.sky.scale == 1,
+         "the split card, three pixels past the route");
 }
 
 void test_notes() {
@@ -1060,6 +1061,9 @@ void test_airports() {
   FCHECK_EQ(stop_text("QQQ", StopFit::FULL), "QQQ");
   FCHECK_EQ(stop_text("QQQ", StopFit::CITY), "QQQ");
   FCHECK_EQ(stop_text("KORD", StopFit::CITY), "Chicago (KORD)");
+  FCHECK_EQ(stop_text("ORD", StopFit::PART), "O'Hare (ORD)");
+  FCHECK_EQ(stop_text("SDF", StopFit::PART), "Louisville (SDF)");
+  FCHECK_EQ(stop_text("JFK", StopFit::PART), "New York (JFK)");
 
   // The fitting order at each card's width
   struct Fit {
@@ -1094,6 +1098,12 @@ void test_airports() {
       {"LDX", "CAY", 25, true, "LDX", "to Cayenne (CAY)"},
       {"QQQ", "LDX", 16, false, "", ""},
       {"SDF", "ORD", 8, false, "", ""},
+      // One city both ends: the airports' own names
+      {"BFI", "SEA", 16, true, "BFI", "to Sea-Tac (SEA)"},
+      {"BFI", "SEA", 25, true, "Boeing Field (BFI)", "to Seattle Sea-Tac (SEA)"},
+      {"JFK", "LGA", 16, true, "New York (JFK)", "to LGA"},
+      {"JFK", "LGA", 25, true, "New York (JFK)", "to LaGuardia (LGA)"},
+      {"MDW", "ORD", 16, true, "Midway (MDW)", "to O'Hare (ORD)"},
   };
   for (const Fit &t : kFits) {
     std::string a = "x", b = "x";
@@ -1148,8 +1158,9 @@ void test_airports() {
       std::string a, b;
       if (route_lines(code, "ATL", 16, a, b)) {
         const Text *ta = find_text(f, a), *tb = find_text(f, b);
-        const int ax = 5 * (int) std::max(glyphs(a), glyphs(b)) + 1;
-        FCHECK(ta != nullptr && tb != nullptr && f.sky.x >= std::max(ax, kPhotoX) && f.sky.x + f.sky.w == 128,
+        // The route's ink ends a pixel before 5 * glyphs
+        const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
+        FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kPhotoX && f.sky.x + f.sky.w == 128,
                "%s at %d: \"%s\" / \"%s\", the picture at %d", code, w, a.c_str(), b.c_str(), f.sky.x);
         shown++;
       } else {
@@ -1184,42 +1195,75 @@ void test_airports() {
     FCHECK(a != nullptr && b != nullptr && a->y == 16 && b->y == 23 && a->font == BoardFont::S8 && a->x == 1 &&
                a->color == b->color,
            "%d: two small lines under the callsign", w);
-    // Sixteen wide: the picture moves over
-    FCHECK(f.sky.x == 81 && f.sky.w == 47 && f.sky.y == kPhotoY && f.sky.h == kPhotoH, "%d: the picture at %d, %d wide",
+    // Sixteen wide: the picture moves over, three pixels clear
+    FCHECK(f.sky.x == 83 && f.sky.w == 45 && f.sky.y == kPhotoY && f.sky.h == kPhotoH, "%d: the picture at %d, %d wide",
            w, f.sky.x, f.sky.w);
     f = flight_frame(one_route("JFK", "BOS"), &none, o, 100);
     FCHECK(find_text(f, "New York (JFK)") != nullptr && find_text(f, "to Boston (BOS)") != nullptr &&
-               f.sky.x == 76 && f.sky.w == 52,
+               f.sky.x == 78 && f.sky.w == 50,
            "%d: fifteen wide, the picture at %d", w, f.sky.x);
   }
-  // A big jet's picture keeps its room: fewer names
+  // No sky drawn within three pixels of the route
+  {
+    o.w = 128;
+    f = flight_frame(one_route("SDF", "ORD"), &none, o, 100);
+    espn::AppSky s;
+    s.x = f.sky.x;
+    s.y = f.sky.y;
+    s.w = f.sky.w;
+    s.h = f.sky.h;
+    s.kind = (uint8_t) f.sky.kind;
+    std::vector<uint16_t> px(128 * 64, 0);
+    int nearest = 128;
+    for (uint32_t seed = 1; seed <= 40; seed++)
+      for (uint8_t flags : {(uint8_t) 0, (uint8_t) espn::kSkyDay}) {
+        s.seed = seed;
+        s.flags = flags;
+        s.moon = 1;
+        s.cover = (uint8_t) (seed % 3);
+        std::fill(px.begin(), px.end(), 0);
+        espn::Px565 p;
+        p.px = px.data() + s.y * 128 + s.x;
+        p.stride = 128;
+        p.w = s.w;
+        p.h = s.h;
+        p.clip = espn::PxBox{0, 0, s.w, s.h};
+        espn::sky_paint(p, s, seed * 777);
+        int left = 128;
+        for (int y = 0; y < 64; y++)
+          for (int x = 0; x < 128; x++)
+            if (px[(size_t) (y * 128 + x)] != 0)
+              left = std::min(left, x);
+        FCHECK(left - 80 >= 3, "seed %u: the sky's first pixel at %d", (unsigned) seed, left);
+        nearest = std::min(nearest, left);
+      }
+    FCHECK(nearest <= 84, "a moon or cloud at the sky's left edge: %d", nearest);
+  }
+  // Names first; a too-wide jet draws a smaller airliner
   o.w = 128;
   struct Big {
-    const char *type, *a, *b;
+    const char *from, *to, *type, *a, *b;
     int x;
+    PlaneKind kind;
   };
   static const Big kBig[] = {
-      {"A321", "Louisville (SDF)", "to Chicago (ORD)", 81},
-      {"B77W", "SDF", "to ORD", -1},
-      {"B744", "SDF", "to ORD", -1},
+      {"SDF", "ORD", "A321", "Louisville (SDF)", "to Chicago (ORD)", 83, PlaneKind::NARROW},
+      {"SDF", "ORD", "B77W", "Louisville (SDF)", "to Chicago (ORD)", 83, PlaneKind::NARROW},
+      {"SDF", "ORD", "B744", "Louisville (SDF)", "to Chicago (ORD)", 83, PlaneKind::NARROW},
+      {"SDF", "ORD", "A388", "Louisville (SDF)", "to Chicago (ORD)", 83, PlaneKind::NARROW},
+      {"LEX", "ATL", "B77W", "Lexington (LEX)", "to Atlanta (ATL)", 83, PlaneKind::NARROW},
+      // Its own picture when the names cost nothing
+      {"JFK", "LHR", "B77W", "New York (JFK)", "to London (LHR)", 78, PlaneKind::WIDE},
+      {"BOS", "FCO", "B744", "Boston (BOS)", "to Rome (FCO)", 72, PlaneKind::JUMBO},
+      {"JFK", "LHR", "B744", "New York (JFK)", "to London (LHR)", 78, PlaneKind::NARROW},
   };
   for (const Big &t : kBig) {
-    Nearby n = one_route("SDF", "ORD");
+    Nearby n = one_route(t.from, t.to);
     snprintf(n.planes[0].type, sizeof(n.planes[0].type), "%s", t.type);
     f = flight_frame(n, &none, o, 100);
     check_frame(f, o, t.type);
-    const bool named = t.x > 0;
-    FCHECK(named ? find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr && f.sky.x == t.x
-                 : find_text(f, "SDF-ORD") != nullptr && f.sky.x == kPhotoX && f.sky.w == kPhotoW,
-           "%s: the route beside its picture at %d", t.type, f.sky.x);
-  }
-  {
-    Nearby n = one_route("LEX", "ATL");
-    snprintf(n.planes[0].type, sizeof(n.planes[0].type), "%s", "B77W");
-    f = flight_frame(n, &none, o, 100);
-    FCHECK(find_text(f, "Lexington (LEX)") != nullptr && find_text(f, "to ATL") != nullptr && f.sky.x == 76 &&
-               f.sky.w == 52,
-           "a wide jet: fifteen wide, at %d", f.sky.x);
+    FCHECK(find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr && f.sky.x == t.x && f.sky.kind == t.kind,
+           "%s-%s %s: the route beside a picture at %d", t.from, t.to, t.type, f.sky.x);
   }
   // Unknown both ends: the codes as before, everywhere
   for (int w : {64, 128, 256}) {
@@ -1243,17 +1287,26 @@ void test_airports() {
       {"SDF", "ORD", "Louisville (SDF)", "to Chicago O'Hare (ORD)", 34},
       {"DFW", "IAD", "Dallas-Fort Worth (DFW)", "to Washington (IAD)", -1},
       {"MDW", "ATL", "Chicago Midway (MDW)", "to Atlanta (ATL)", 42},
+      // Two spaces clear of the route, else left off
+      {"DFW", "LEX", "Dallas-Fort Worth (DFW)", "to Lexington (LEX)", -1},
+      {"PBI", "ATL", "West Palm Beach (PBI)", "to Atlanta (ATL)", 42},
   };
-  for (const Tail &t : kTails) {
-    Nearby n = one_route(t.from, t.to);
-    snprintf(n.planes[0].flight, sizeof(n.planes[0].flight), "%s", "B6123456");
-    f = flight_frame(n, &none, o, 100);
-    check_frame(f, o, t.from);
-    const Text *tail = find_text(f, "B6123456");
-    FCHECK(find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr &&
-               (t.y < 0 ? tail == nullptr : tail != nullptr && tail->y == t.y && tail->align == Align::RIGHT),
-           "%s-%s full screen, the flight number at %d", t.from, t.to, t.y);
-  }
+  // Past a short airline name; a long one: beside the route
+  for (bool long_name : {false, true})
+    for (const Tail &t : kTails) {
+      Nearby n = one_route(t.from, t.to);
+      snprintf(n.planes[0].flight, sizeof(n.planes[0].flight), "%s", "WN1678");
+      if (long_name)
+        snprintf(n.planes[0].callsign, sizeof(n.planes[0].callsign), "%s", "BAW1678");
+      f = flight_frame(n, &none, o, 100);
+      check_frame(f, o, t.from);
+      const Text *tail = find_text(f, "WN1678");
+      const int y = long_name ? t.y : 17;
+      FCHECK(find_text(f, long_name ? "British Airways" : "JetBlue") != nullptr && find_text(f, t.a) != nullptr &&
+                 find_text(f, t.b) != nullptr &&
+                 (y < 0 ? tail == nullptr : tail != nullptr && tail->y == y && tail->align == Align::RIGHT),
+             "%s-%s full screen, the flight number at %d", t.from, t.to, y);
+    }
 }
 
 void test_ticker() {

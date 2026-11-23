@@ -496,9 +496,12 @@ void test_brand_and_cards() {
         const bool art = plane_sprite(plane_kind(p.type, p.category)) != nullptr;
         // Drawn in its moving sky, never as a still picture too
         PCHECK((f.sky.w > 0) == art && f.art.empty(), "%s %d: a picture", plane_label(p), w);
+        // Its own, or a smaller airliner beside long names
+        const PlaneKind k = plane_kind(p.type, p.category);
+        const bool kind_ok = f.sky.kind == k || (f.sky.kind == PlaneKind::NARROW && plane_sprite(k)->w > f.sky.w);
         if (f.sky.w > 0)
-          PCHECK(f.sky.flip == (p.track > 180) && f.sky.kind == plane_kind(p.type, p.category) && f.sky.scale == 1,
-                 "%s %d: faces its way", plane_label(p), w);
+          PCHECK(f.sky.flip == (p.track > 180) && kind_ok && f.sky.scale == 1, "%s %d: faces its way", plane_label(p),
+                 w);
         for (const Logo &l : f.logos)
           PCHECK(l.alt >= 0 && f.items[(size_t) l.alt].text == logo_chip(*logo_airline(p), p.flight[0] != '\0'
                                                                                              ? p.flight

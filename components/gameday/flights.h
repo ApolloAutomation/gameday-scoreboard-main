@@ -513,8 +513,8 @@ struct AirportName {
 // By IATA, else ICAO; false when unknown.
 bool airport_name(const char *code, AirportName &out);
 
-// "Chicago O'Hare (ORD)", "Chicago (ORD)", "ORD".
-enum class StopFit : uint8_t { FULL = 0, CITY, CODE };
+// "Chicago O'Hare (ORD)", "Chicago (ORD)", "O'Hare (ORD)", "ORD".
+enum class StopFit : uint8_t { FULL = 0, CITY, PART, CODE };
 // A stop's words at that fit; unknown: the code.
 std::string stop_text(const std::string &code, StopFit fit);
 // The ticker's: "Louisville (SDF) to Chicago O'Hare (ORD)".

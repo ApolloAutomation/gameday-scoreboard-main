@@ -1156,8 +1156,9 @@ std::string stop_text(const std::string &code, StopFit fit) {
   AirportName a;
   if (fit == StopFit::CODE || !airport_name(code.c_str(), a) || a.city.empty())
     return code;
-  std::string out = a.city;
-  if (fit == StopFit::FULL && !a.part.empty() && a.part != code)
+  const bool part = !a.part.empty() && a.part != code;
+  std::string out = fit == StopFit::PART && part ? a.part : a.city;
+  if (fit == StopFit::FULL && part)
     out += " " + a.part;
   return out + " (" + code + ")";
 }
@@ -1169,8 +1170,8 @@ std::string route_words(const std::string &from, const std::string &to) {
 namespace {
 
 // A stop's longest fitting words; true if named.
-bool stop_line(const std::string &code, const char *lead, size_t max, std::string &out) {
-  for (StopFit f : {StopFit::FULL, StopFit::CITY}) {
+bool stop_line(const std::string &code, const char *lead, size_t max, bool shared, std::string &out) {
+  for (StopFit f : {StopFit::FULL, shared ? StopFit::PART : StopFit::CITY}) {
     const std::string s = stop_text(code, f);
     if (s == code)
       break;
@@ -1185,8 +1186,11 @@ bool stop_line(const std::string &code, const char *lead, size_t max, std::strin
 }
 
 bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b) {
-  const bool named = stop_line(from, "", max, a);
-  if ((stop_line(to, "to ", max, b) || named) && glyphs(a) <= max && glyphs(b) <= max)
+  // One city both ends: the airports' own names
+  AirportName x, y;
+  const bool shared = airport_name(from.c_str(), x) && airport_name(to.c_str(), y) && x.city == y.city;
+  const bool named = stop_line(from, "", max, shared, a);
+  if ((stop_line(to, "to ", max, shared, b) || named) && glyphs(a) <= max && glyphs(b) <= max)
     return true;
   a.clear();
   b.clear();
@@ -1706,8 +1710,8 @@ std::string pick_fit(const std::string &a, const std::string &b, size_t max) { r
 
 // The plane centered in the box, scaled, if it fits.
 // Unscaled, it moves in its own sky.
-void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1) {
-  const PlaneSprite *s = plane_sprite(c.kind);
+void put_art(Frame &f, const Card &c, PlaneKind kind, int x, int y, int w, int h, int scale = 1) {
+  const PlaneSprite *s = plane_sprite(kind);
   if (s == nullptr || s->w * scale > w || s->h * scale > h)
     return;
   if (scale == 1) {
@@ -1715,7 +1719,7 @@ void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1)
     f.sky.y = (int16_t) y;
     f.sky.w = (uint8_t) w;
     f.sky.h = (uint8_t) h;
-    f.sky.kind = c.kind;
+    f.sky.kind = kind;
     f.sky.flip = c.flip;
     f.sky.tail = c.tail_color;
     return;
@@ -1723,7 +1727,7 @@ void put_art(Frame &f, const Card &c, int x, int y, int w, int h, int scale = 1)
   Art a;
   a.x = (int16_t) (x + (w - s->w * scale) / 2);
   a.y = (int16_t) (y + (h - s->h * scale) / 2);
-  a.kind = c.kind;
+  a.kind = kind;
   a.flip = c.flip;
   a.scale = (uint8_t) scale;
   a.tail = c.tail_color;
@@ -1824,7 +1828,7 @@ void compact(Frame &f, const Card &c, const Nearby &n, const FrameOpts &o) {
   } else {
     put(f, 0, 0, w, BoardFont::S16, Align::CENTER, c.label_color, c.label);
   }
-  put_art(f, c, 0, 16, w, 16);
+  put_art(f, c, c.kind, 0, 16, w, 16);
   put(f, 1, 32, 25, BoardFont::S8, Align::LEFT, kColType, c.type_code);
   // "1185km/h" too wide: the number alone.
   const std::string bare = c.speed_short.substr(0, c.speed_short.find_first_not_of("0123456789"));
@@ -1844,19 +1848,29 @@ void list_frame(Frame &f, const Nearby &n, const FrameOpts &o) {
   rows(f, n, kNear, 0, 8, lw, o.ticker ? o.h - 8 : o.h, o);
 }
 
-// Lines up to 16 wide; the picture narrows for them.
-bool card_route(const Card &c, std::string &a, std::string &b, int &ax) {
-  const PlaneSprite *sp = plane_sprite(c.kind);
-  for (int n = 16; n >= 14; n--) {
-    if (n > 14 && sp != nullptr && sp->w > 127 - 5 * n)
+// Most places named, then the plane's own picture.
+bool card_route(const Card &c, std::string &a, std::string &b, int &ax, PlaneKind &kind) {
+  const PlaneSprite *sp = plane_sprite(c.kind), *narrow = plane_sprite(PlaneKind::NARROW);
+  int best = -1;
+  std::string x, y;
+  for (int n = 16; n >= 13; n--) {
+    if (!route_lines(c.from, c.to, (size_t) n, x, y))
+      break;
+    // Three clear pixels before the picture's sky
+    const int used = (int) std::max(glyphs(x), glyphs(y));
+    const int bx = std::max(kPhotoX, 5 * used + 3);
+    const bool fits = sp == nullptr || sp->w <= 128 - bx;
+    const int score = 2 * ((x != c.from) + (y != "to " + c.to)) + fits;
+    if (score <= best)
       continue;
-    if (!route_lines(c.from, c.to, (size_t) n, a, b))
-      return false;
-    const int used = (int) std::max(glyphs(a), glyphs(b));
-    ax = used > 14 ? 5 * used + 1 : kPhotoX;
-    return true;
+    best = score;
+    a = x;
+    b = y;
+    ax = bx;
+    // Else a smaller airliner's picture
+    kind = fits ? c.kind : narrow->w < sp->w && narrow->w <= 128 - bx ? PlaneKind::NARROW : PlaneKind::NONE;
   }
-  return false;
+  return best >= 0;
 }
 
 // The left 128 pixels' card; returns the picture's x.
@@ -1873,14 +1887,15 @@ int card_left(Frame &f, const Card &c) {
   // Places on two lines, 7 apart, else the codes
   std::string a, b;
   int ax = kPhotoX;
-  if (c.route && card_route(c, a, b, ax)) {
+  PlaneKind kind = c.kind;
+  if (c.route && card_route(c, a, b, ax, kind)) {
     put(f, 1, 16, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
     put(f, 1, 23, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
   } else {
     put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
   }
   put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
-  put_art(f, c, ax, kPhotoY, 128 - ax, kPhotoH);
+  put_art(f, c, kind, ax, kPhotoY, 128 - ax, kPhotoH);
   put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
@@ -1893,19 +1908,23 @@ void card_tall(Frame &f, const Card &c) {
   const int x0 = c.brand != nullptr ? kLogoBigPx + 3 : 1, tw = 127 - x0;
   put_logo(f, c, 0, 0, kLogoBigPx);
   put(f, x0, 0, tw, BoardFont::S16, Align::LEFT, c.label_color, c.label);
-  put(f, x0, 17, tw, BoardFont::S8, Align::LEFT, kColAirline, fit_words(c.who, (size_t) tw / 5));
+  const std::string who = fit_words(c.who, (size_t) tw / 5);
+  put(f, x0, 17, tw, BoardFont::S8, Align::LEFT, kColAirline, who);
   const std::string type = type_line(c, (size_t) tw / 5);
   if (type != c.who)
     put(f, x0, 25, tw, BoardFont::S8, Align::LEFT, kColType, type);
   std::string a, b;
   if (c.route && route_lines(c.from, c.to, 25, a, b)) {
-    // Places on two lines, the flight number where it fits
     put(f, 1, 34, 127, BoardFont::S8, Align::LEFT, kColRoute, a);
     put(f, 1, 42, 127, BoardFont::S8, Align::LEFT, kColRoute, b);
+    // The flight number past the airline, else the route
     const size_t n = glyphs(c.tail);
-    const int ty = glyphs(a) + 1 + n <= 25 ? 34 : glyphs(b) + 1 + n <= 25 ? 42 : -1;
+    const int ty = glyphs(who) + 2 + n <= (size_t) tw / 5 ? 17
+                   : glyphs(a) + 2 + n <= 25              ? 34
+                   : glyphs(b) + 2 + n <= 25              ? 42
+                                                          : -1;
     if (!c.tail.empty() && ty >= 0)
-      put(f, 1, ty, 127, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
+      put(f, ty == 17 ? x0 : 1, ty, ty == 17 ? tw : 127, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
   } else {
     // The biggest font that holds the route.
     const BoardFont rf =
@@ -1918,7 +1937,7 @@ void card_tall(Frame &f, const Card &c) {
   }
   // Small planes bigger, still under an airliner
   const PlaneSprite *sp = plane_sprite(c.kind);
-  put_art(f, c, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
+  put_art(f, c, c.kind, 0, kPhotoTallY, 128, kPhotoTallH, sp != nullptr && sp->w * 3 <= 72 ? 3 : 2);
   put(f, 1, 104, 62, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
   put(f, 64, 104, 63, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
   put(f, 1, 112, 70, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 14));
