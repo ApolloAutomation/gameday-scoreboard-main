@@ -2123,6 +2123,14 @@ test("an install the panel never got doesn't claim it's installing", async ({ pa
   await expect(page.locator("#fwInstall")).toBeVisible();
 });
 
+test("the foot's Help link opens the docs on the site", async ({ page, request }) => {
+  await reset(request);
+  await page.goto("/");
+  const help = page.locator(".foot a", { hasText: "Help" });
+  await expect(help).toHaveAttribute("href", "https://apolloautomation.github.io/gameday-scoreboard-main/docs/");
+  await expect(help).toHaveAttribute("target", "_blank");
+});
+
 test("release notes link to the release's section of the site changelog, a beta to its commit", async ({ page, request }) => {
   await reset(request);
   const fw = { id: "update/Firmware", domain: "update", name: "Firmware", state: "UPDATE AVAILABLE", summary: "" };

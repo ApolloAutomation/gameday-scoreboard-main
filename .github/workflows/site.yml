@@ -1,14 +1,14 @@
 name: Site
 
 # Republish the site at SITE_URL, and the update mirror if one is set up
-# (scripts/publish_mirror.sh), when only docs/site changed, without a
-# firmware release. The firmware files come from the latest release tag's
-# firmware-moonhub75.zip asset, so panels see the same manifest and binaries
-# they saw before. Falls back to the tag's Build artifact for a release that
+# (scripts/publish_mirror.sh), when only docs/site or the docs (docs/wiki,
+# published under /docs/) changed, without a firmware release. The
+# firmware files come from the latest release tag's firmware-moonhub75.zip
+# asset, so panels see the same manifest and binaries they saw before. Falls back to the tag's Build artifact for a release that
 # predates that asset (v1.4.3 and earlier); Build artifacts expire after 90
 # days, so that fallback is only good for 90 days after such a release.
 #
-# Runs by itself on a push to main that touches docs/site, and by hand.
+# Runs by itself on a push to main that touches either, and by hand.
 # Only main publishes: a run by hand from dev or beta would put that
 # branch's unreleased pages on the live site, so the gate fails it.
 # Pages keys deployments by commit sha, so deploying a commit here and then
@@ -25,6 +25,7 @@ on:
     branches: [main]
     paths:
       - "docs/site/**"
+      - "docs/wiki/**"
   workflow_dispatch:
     inputs:
       from_beta:
@@ -100,6 +101,17 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      # The docs (docs/wiki), built for SITE_URL's /docs/.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/wiki/package-lock.json
+      - name: Build the docs
+        working-directory: docs/wiki
+        run: |
+          npm ci
+          npm run build
       - name: Assemble site from docs/site and the latest release's firmware
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,6 +121,10 @@ jobs:
           echo "release $TAG"
           mkdir -p site/firmware
           cp -r docs/site/. site/
+          # The docs go under /docs/; docs/site must not use it.
+          if [ -e site/docs ]; then echo "::error::docs/site has a docs/ path, where the docs go."; exit 1; fi
+          cp -r docs/wiki/dist site/docs
+          python3 scripts/check_docs_links.py --base "$(echo "$SITE_URL" | sed -E 's#^[a-z]+://[^/]+##')/docs" site/docs
           gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-drafts --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
           python3 scripts/release_notes.py --page site/changelog/index.html --dates /tmp/releases.json
           ASSETS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')

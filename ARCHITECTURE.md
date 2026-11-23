@@ -925,7 +925,8 @@ state document.
   tags.
 - `docs/wiki`: the documentation (Astro and Starlight). Pages are markdown
   under `docs/wiki/src/content/docs/`; the changelog page is generated from
-  `CHANGELOG.md` at build time. It has no published home yet.
+  `CHANGELOG.md` at build time. The site deploys build it for, and put
+  it under, the site's `/docs/`.
 
 ## CI (`.github/workflows`)
 
@@ -958,8 +959,8 @@ state document.
     until every manifest and OTA image is live, and create the release with
     the factory images and manifest zips. Publishing waits for the size
     budget.
-- `site.yml`: republishes `docs/site` from `main` with the latest release's
-  firmware, skipped while a release is pending or none exists, then waits
+- `site.yml`: republishes `docs/site` and the docs from `main` with the
+  latest release's firmware, skipped while a release is pending or none exists, then waits
   until the update feed is live.
 - `docs.yml`: builds `docs/wiki` on PRs that touch it and checks every link
   and anchor between its pages.

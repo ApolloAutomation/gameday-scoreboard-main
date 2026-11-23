@@ -30,9 +30,9 @@ permissions:
 env:
   ESPHOME_VERSION: "2026.10.2"
   # The project's site (GitHub Pages today), with no trailing slash: the
-  # flasher, the changelog and the update manifests. The same value as
-  # site_base in firmware/gameday-common.yaml (CONTRIBUTING.md, "Moving to a
-  # new address").
+  # flasher, the docs, the changelog and the update manifests. The same
+  # value as site_base in firmware/gameday-common.yaml (CONTRIBUTING.md,
+  # "Moving to a new address").
   SITE_URL: "https://apolloautomation.github.io/gameday-scoreboard-main"
 
 # A newer push to the same ref cancels the older run. That stays on for dev
@@ -797,6 +797,17 @@ jobs:
         with:
           name: release-notes
           path: notes
+      # The docs (docs/wiki), built for SITE_URL's /docs/.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/wiki/package-lock.json
+      - name: Build the docs
+        working-directory: docs/wiki
+        run: |
+          npm ci
+          npm run build
       - name: Assemble site
         env:
           GH_TOKEN: ${{ github.token }}
@@ -805,6 +816,10 @@ jobs:
           mkdir -p site/firmware
           # docs/site/. (not docs/site/*) so .well-known/ is copied too.
           cp -r docs/site/. site/
+          # The docs go under /docs/; docs/site must not use it.
+          if [ -e site/docs ]; then echo "::error::docs/site has a docs/ path, where the docs go."; exit 1; fi
+          cp -r docs/wiki/dist site/docs
+          python3 scripts/check_docs_links.py --base "$(echo "$SITE_URL" | sed -E 's#^[a-z]+://[^/]+##')/docs" site/docs
           # This tag's release is created after the deploy, so its date comes from --date.
           gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --exclude-drafts --exclude-pre-releases --json tagName,publishedAt > /tmp/releases.json
           python3 scripts/release_notes.py --page site/changelog/index.html --dates /tmp/releases.json --date "$GITHUB_REF_NAME=$(TZ=America/Chicago date +%F)"

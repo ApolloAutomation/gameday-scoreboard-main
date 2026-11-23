@@ -54,8 +54,8 @@ the same ground for people; this file is the short version.
   keep it in step with `firmware/controllers/` and the README's Hardware
   section.
 - `docs/wiki`: the documentation site (Astro + Starlight). CI builds it
-  on every PR that touches it; it has no published home of its own yet, so
-  links point at the markdown in this repo. Pages are markdown under
+  on every PR that touches it, and the site deploys publish it under the
+  project site's `/docs/`. Pages are markdown under
   `docs/wiki/src/content/docs/`; `docs/wiki/README.md` has the
   conventions.
 - `scripts`: generators (`build_web.py`, `build_teams.py`,

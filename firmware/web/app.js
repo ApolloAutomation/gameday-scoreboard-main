@@ -38,7 +38,7 @@
   document.documentElement.lang = "en";
   document.title = "Apollo Pulse";
 
-  // Where the project lives. SITE_URL is the installer and changelog site,
+  // Where the project lives. SITE_URL is the installer, docs and changelog site,
   // the GitHub Pages address today (CONTRIBUTING.md's "Moving to a new
   // address" lists every place it is set); REPO is the GitHub repository.
   const SITE_URL = "https://apolloautomation.github.io/gameday-scoreboard-main";
@@ -477,6 +477,7 @@
 
     <p class="foot">
       <span id="ver"></span><span>·</span>
+      <a href="${SITE_URL}/docs/" target="_blank" rel="noopener">Help</a><span>·</span>
       <a href="https://github.com/${REPO}" target="_blank" rel="noopener">gameday-scoreboard</a>
       <span>·</span><span>scores from ESPN, MLB and HockeyTech</span>
     </p>
