@@ -1169,29 +1169,77 @@ std::string route_words(const std::string &from, const std::string &to) {
 
 namespace {
 
-// A stop's longest fitting words; true if named.
-bool stop_line(const std::string &code, const char *lead, size_t max, bool shared, std::string &out) {
-  for (StopFit f : {StopFit::FULL, shared ? StopFit::PART : StopFit::CITY}) {
-    const std::string s = stop_text(code, f);
-    if (s == code)
-      break;
-    out = lead + s;
-    if (glyphs(out) <= max)
-      return true;
+// A stop at a level: full, with its code, name alone.
+std::string stop_level(const std::string &code, int level, bool shared) {
+  if (level == 0)
+    return stop_text(code, StopFit::FULL);
+  const std::string s = stop_text(code, shared ? StopFit::PART : StopFit::CITY);
+  return level == 1 || s == code ? s : s.substr(0, s.size() - code.size() - 3);
+}
+
+// Whole words off the end: Island, City, else past a hyphen.
+bool shorten(std::string &s, size_t max) {
+  static const char *const kTails[] = {" Island", " Islands", " Atoll", " City", " Beach"};
+  // Words that can't stand alone
+  static const char *const kLeads[] = {"Fort",   "Port",   "Pointe", "Saint", "Sainte", "St",   "Ust",  "Yuzhno",
+                                       "Severo", "Khanty", "Basse",  "Grand", "Baie",   "Blanc", "T\xC3\xAAte"};
+  while (glyphs(s) > max) {
+    bool cut = false;
+    for (const char *t : kTails) {
+      const size_t n = strlen(t);
+      if (!cut && s.size() > n + 3 && s.compare(s.size() - n, n, t) == 0) {
+        s.resize(s.size() - n);
+        cut = true;
+      }
+    }
+    if (cut)
+      continue;
+    size_t k = s.rfind('-');
+    if (k == std::string::npos || k == 0)
+      return false;
+    s.resize(s.find_last_not_of(' ', k - 1) + 1);
+    // "-on-the", "-du": joining words go too
+    while ((k = s.rfind('-')) != std::string::npos && s.size() - k <= 4 &&
+           ((s[k + 1] >= 'a' && s[k + 1] <= 'z') || (unsigned char) s[k + 1] == 0xC3))
+      s.resize(k);
+    const size_t w = s.find_last_of(" -");
+    const std::string last = w == std::string::npos ? s : s.substr(w + 1);
+    for (const char *l : kLeads)
+      if (last == l)
+        return false;
   }
-  out = lead + code;
-  return false;
+  return true;
 }
 
 }
 
-bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b) {
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b,
+                 int *level) {
   // One city both ends: the airports' own names
   AirportName x, y;
-  const bool shared = airport_name(from.c_str(), x) && airport_name(to.c_str(), y) && x.city == y.city;
-  const bool named = stop_line(from, "", max, shared, a);
-  if ((stop_line(to, "to ", max, shared, b) || named) && glyphs(a) <= max && glyphs(b) <= max)
-    return true;
+  const bool fx = airport_name(from.c_str(), x), fy = airport_name(to.c_str(), y);
+  const bool shared = fx && fy && x.city == y.city;
+  for (int l = 0; l < 3 && (fx || fy); l++) {
+    a = stop_level(from, l, shared);
+    b = "to " + stop_level(to, l, shared);
+    if (glyphs(a) <= max && glyphs(b) <= max) {
+      if (level != nullptr)
+        *level = l;
+      return true;
+    }
+  }
+  // Names alone still long: shortened, else the code
+  if (fx || fy) {
+    if (glyphs(a) > max && !shorten(a, max))
+      a = from;
+    if (glyphs(b) > max && !shorten(b, max))
+      b = "to " + to;
+    if (glyphs(a) <= max && glyphs(b) <= max && (a != from || b != "to " + to)) {
+      if (level != nullptr)
+        *level = 3;
+      return true;
+    }
+  }
   a.clear();
   b.clear();
   return false;
@@ -1708,13 +1756,15 @@ bool card_route(const Card &c, std::string &a, std::string &b, int &ax, PlaneKin
   int best = -1;
   std::string x, y;
   for (int n = 16; n >= 13; n--) {
-    if (!route_lines(c.from, c.to, (size_t) n, x, y))
+    int level = 0;
+    if (!route_lines(c.from, c.to, (size_t) n, x, y, &level))
       break;
     // Three clear pixels before the picture's sky
     const int used = (int) std::max(glyphs(x), glyphs(y));
     const int bx = std::max(kArtX, 5 * used + 3);
     const bool fits = sp == nullptr || sp->w <= 128 - bx;
-    const int score = 2 * ((x != c.from) + (y != "to " + c.to)) + fits;
+    // Names, then the richest form, then the picture
+    const int score = 16 * ((x != c.from) + (y != "to " + c.to)) + 4 * (3 - level) + fits;
     if (score <= best)
       continue;
     best = score;
@@ -1738,22 +1788,22 @@ int card_left(Frame &f, const Card &c) {
   if (c.route)
     put(f, rx, 8, rw, BoardFont::S8, Align::RIGHT, kColDim, c.tail);
   put_logo(f, c, lx, 0);
-  // Places on two lines, 7 apart, else the codes
+  // Two route lines, a clear row between, else codes
   std::string a, b;
   int ax = kArtX;
   PlaneKind kind = c.kind;
   if (c.route && card_route(c, a, b, ax, kind)) {
     put(f, 1, 16, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, a);
-    put(f, 1, 23, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
+    put(f, 1, 16 + kRouteGap, ax - 1, BoardFont::S8, Align::LEFT, kColRoute, b);
   } else {
     put(f, 1, 17, 70, BoardFont::S12, Align::LEFT, c.route ? kColRoute : kColDim, c.sub);
   }
-  put(f, 1, 30, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
+  put(f, 1, 32, 70, BoardFont::S8, Align::LEFT, kColType, type_line(c, 14));
   put_art(f, c, kind, ax, kArtY, 128 - ax, kArtH);
-  put(f, 1, 38, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
-  put(f, 66, 38, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
-  put(f, 1, 46, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
-  put(f, 66, 46, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
+  put(f, 1, 40, 60, BoardFont::S8, Align::LEFT, kColValue, c.alt_full);
+  put(f, 66, 40, 61, BoardFont::S8, Align::RIGHT, kColValue, c.speed_full);
+  put(f, 1, 48, 60, BoardFont::S8, Align::LEFT, c.dist_color, pick_fit(c.where_full, c.where_short, 12));
+  put(f, 66, 48, 61, BoardFont::S8, Align::RIGHT, kColDim, c.climb);
   return ax;
 }
 
@@ -1770,12 +1820,12 @@ void card_tall(Frame &f, const Card &c) {
   std::string a, b;
   if (c.route && route_lines(c.from, c.to, 25, a, b)) {
     put(f, 1, 34, 127, BoardFont::S8, Align::LEFT, kColRoute, a);
-    put(f, 1, 42, 127, BoardFont::S8, Align::LEFT, kColRoute, b);
+    put(f, 1, 34 + kRouteGap, 127, BoardFont::S8, Align::LEFT, kColRoute, b);
     // The flight number past the airline, else the route
     const size_t n = glyphs(c.tail);
     const int ty = glyphs(who) + 2 + n <= (size_t) tw / 5 ? 17
                    : glyphs(a) + 2 + n <= 25              ? 34
-                   : glyphs(b) + 2 + n <= 25              ? 42
+                   : glyphs(b) + 2 + n <= 25              ? 34 + kRouteGap
                                                           : -1;
     if (!c.tail.empty() && ty >= 0)
       put(f, ty == 17 ? x0 : 1, ty, ty == 17 ? tw : 127, BoardFont::S8, Align::RIGHT, kColDim, c.tail);

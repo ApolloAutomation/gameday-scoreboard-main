@@ -519,8 +519,12 @@ enum class StopFit : uint8_t { FULL = 0, CITY, PART, CODE };
 std::string stop_text(const std::string &code, StopFit fit);
 // The ticker's: "Louisville (SDF) to Chicago O'Hare (ORD)".
 std::string route_words(const std::string &from, const std::string &to);
-// Each line's longest fit; false when neither is named.
-bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b);
+// Both lines' richest shared form; false when neither is named.
+// Levels: 0 full, 1 codes, 2 names, 3 shortened.
+bool route_lines(const std::string &from, const std::string &to, size_t max, std::string &a, std::string &b,
+                 int *level = nullptr);
+// The second route line's rows below the first.
+static const int kRouteGap = 9;
 // UTF-8 glyphs, as the panel draws them.
 size_t glyphs(const std::string &s);
 

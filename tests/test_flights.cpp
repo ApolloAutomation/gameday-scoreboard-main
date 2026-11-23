@@ -883,7 +883,7 @@ void test_tall_frames() {
   o.w = o.h = 128;
   Frame f = flight_frame(n, &cache, o, 100);
   const Text *route = find_text(f, "New York (JFK)"), *to = find_text(f, "to Paris (CDG)");
-  FCHECK(route != nullptr && to != nullptr && route->y == 34 && to->y == 42 && route->color == kColRoute &&
+  FCHECK(route != nullptr && to != nullptr && route->y == 34 && to->y == 43 && route->color == kColRoute &&
              find_text(f, "JFK-CDG") == nullptr,
          "the route's places on two lines");
   const Text *tail = find_text(f, "B61407");
@@ -968,6 +968,53 @@ std::string city_of(const char *code) {
   return airport_name(code, a) ? a.city + (a.part.empty() ? "" : "|" + a.part) : "?";
 }
 
+// A stop full, with its code, or its name alone
+std::string stop_form(const std::string &code, int level, bool shared) {
+  if (level == 0)
+    return stop_text(code, StopFit::FULL);
+  const std::string s = stop_text(code, shared ? StopFit::PART : StopFit::CITY);
+  return level == 1 || s == code ? s : s.substr(0, s.size() - code.size() - 3);
+}
+
+// The name whole when it fits, else cut at a word
+bool shortened(const std::string &line, const std::string &name, size_t max, bool fits) {
+  if (fits)
+    return line == name;
+  return glyphs(line) <= max && line.size() > 3 && line.size() < name.size() &&
+         name.compare(0, line.size(), line) == 0 && (name[line.size()] == ' ' || name[line.size()] == '-') &&
+         line.back() != ' ';
+}
+
+// A clear row between the route lines at every column
+void route_gap(const Frame &f, const std::string &a, const std::string &b, const char *what) {
+  const Text *ta = find_text(f, a), *tb = find_text(f, b);
+  if (ta == nullptr || tb == nullptr) {
+    FCHECK(false, "%s: both route lines", what);
+    return;
+  }
+  // Any glyph but a space may light its whole cell
+  auto lit = [](const Text &t) {
+    std::vector<bool> on(512, false);
+    int i = 0;
+    for (size_t k = 0; k < t.text.size(); k++) {
+      if (((unsigned char) t.text[k] & 0xC0) == 0x80)
+        continue;
+      for (int x = 0; x < 5 && t.text[k] != ' '; x++)
+        on[t.x + 5 * i + x] = true;
+      i++;
+    }
+    return on;
+  };
+  const std::vector<bool> la = lit(*ta), lb = lit(*tb);
+  const int bottom = ta->y + font_rows(ta->font) - 1;
+  for (int x = 0; x < 512; x++)
+    if (la[x] && lb[x]) {
+      FCHECK(tb->y - bottom >= 2, "%s: \"%s\" over \"%s\" at x %d, rows %d and %d", what, a.c_str(), b.c_str(), x,
+             bottom, tb->y);
+      return;
+    }
+}
+
 void test_airports() {
   // By IATA and by ICAO, the same airport
   FCHECK_EQ(city_of("SDF"), "Louisville");
@@ -1040,51 +1087,65 @@ void test_airports() {
   FCHECK_EQ(stop_text("SDF", StopFit::PART), "Louisville (SDF)");
   FCHECK_EQ(stop_text("JFK", StopFit::PART), "New York (JFK)");
 
-  // The fitting order at each card's width
+  // Both lines one form: full, with codes, names alone, shortened
   struct Fit {
     const char *from, *to;
     size_t max;
-    bool ok;
+    int level;
     const char *a, *b;
   };
   static const Fit kFits[] = {
-      {"SDF", "ORD", 16, true, "Louisville (SDF)", "to Chicago (ORD)"},
-      {"SDF", "ORD", 25, true, "Louisville (SDF)", "to Chicago O'Hare (ORD)"},
-      {"SDF", "ORD", 14, false, "", ""},
-      {"LEX", "ATL", 16, true, "Lexington (LEX)", "to Atlanta (ATL)"},
-      {"LEX", "ATL", 15, true, "Lexington (LEX)", "to ATL"},
-      {"LEX", "ATL", 14, false, "", ""},
-      {"JFK", "LHR", 16, true, "New York (JFK)", "to London (LHR)"},
-      {"JFK", "LHR", 25, true, "New York (JFK)", "to London Heathrow (LHR)"},
-      {"LAX", "NRT", 16, true, "LAX", "to Tokyo (NRT)"},
-      {"LAX", "NRT", 25, true, "Los Angeles (LAX)", "to Tokyo Narita (NRT)"},
-      {"CVG", "MCO", 16, true, "Cincinnati (CVG)", "to Orlando (MCO)"},
-      {"SDF", "QQQ", 16, true, "Louisville (SDF)", "to QQQ"},
-      {"QQQ", "SDF", 25, true, "QQQ", "to Louisville (SDF)"},
-      {"QQQ", "ZZZ", 25, false, "", ""},
-      {"ATL", "LAX", 16, true, "Atlanta (ATL)", "to LAX"},
-      {"ATL", "LAX", 25, true, "Atlanta (ATL)", "to Los Angeles (LAX)"},
-      {"EWR", "SFO", 16, true, "Newark (EWR)", "to SFO"},
-      {"EWR", "SFO", 25, true, "Newark (EWR)", "to San Francisco (SFO)"},
-      {"DFW", "LEX", 16, false, "", ""},
-      {"DFW", "LEX", 25, true, "Dallas-Fort Worth (DFW)", "to Lexington (LEX)"},
-      {"DFW", "IAD", 25, true, "Dallas-Fort Worth (DFW)", "to Washington (IAD)"},
-      {"PBI", "ATL", 25, true, "West Palm Beach (PBI)", "to Atlanta (ATL)"},
-      {"LDX", "CAY", 25, true, "LDX", "to Cayenne (CAY)"},
-      {"QQQ", "LDX", 16, false, "", ""},
-      {"SDF", "ORD", 8, false, "", ""},
+      {"SDF", "ORD", 16, 1, "Louisville (SDF)", "to Chicago (ORD)"},
+      {"SDF", "ORD", 25, 0, "Louisville (SDF)", "to Chicago O'Hare (ORD)"},
+      {"SDF", "ORD", 14, 2, "Louisville", "to Chicago"},
+      {"LEX", "ATL", 16, 0, "Lexington (LEX)", "to Atlanta (ATL)"},
+      {"LEX", "ATL", 15, 2, "Lexington", "to Atlanta"},
+      {"JFK", "LHR", 16, 1, "New York (JFK)", "to London (LHR)"},
+      {"JFK", "LHR", 25, 0, "New York (JFK)", "to London Heathrow (LHR)"},
+      {"LAX", "NRT", 16, 2, "Los Angeles", "to Tokyo"},
+      {"LAX", "NRT", 25, 0, "Los Angeles (LAX)", "to Tokyo Narita (NRT)"},
+      {"CVG", "MCO", 16, 0, "Cincinnati (CVG)", "to Orlando (MCO)"},
+      {"SDF", "QQQ", 16, 0, "Louisville (SDF)", "to QQQ"},
+      {"QQQ", "SDF", 16, 2, "QQQ", "to Louisville"},
+      {"QQQ", "SDF", 25, 0, "QQQ", "to Louisville (SDF)"},
+      {"QQQ", "ZZZ", 25, -1, "", ""},
+      {"ATL", "LAX", 16, 2, "Atlanta", "to Los Angeles"},
+      {"ATL", "LAX", 25, 0, "Atlanta (ATL)", "to Los Angeles (LAX)"},
+      {"EWR", "SFO", 16, 2, "Newark", "to San Francisco"},
+      {"EWR", "SFO", 25, 0, "Newark (EWR)", "to San Francisco (SFO)"},
+      {"GRU", "YUL", 16, 2, "S\xC3\xA3o Paulo", "to Montr\xC3\xA9" "al"},
+      {"SLC", "RAP", 16, 2, "Salt Lake City", "to Rapid City"},
+      {"DFW", "LEX", 25, 0, "Dallas-Fort Worth (DFW)", "to Lexington (LEX)"},
+      {"DFW", "IAD", 25, 1, "Dallas-Fort Worth (DFW)", "to Washington (IAD)"},
+      {"PBI", "ATL", 16, 2, "West Palm Beach", "to Atlanta"},
+      {"PBI", "ATL", 25, 0, "West Palm Beach (PBI)", "to Atlanta (ATL)"},
+      {"LDX", "CAY", 25, 2, "Saint-Laurent-du-Maroni", "to Cayenne"},
+      // A name alone too long: whole words off, else the code
+      {"DFW", "LEX", 16, 3, "Dallas", "to Lexington"},
+      {"DFW", "IAD", 16, 3, "Dallas", "to Washington"},
+      {"SLC", "RAP", 13, 3, "Salt Lake", "to Rapid City"},
+      {"PBI", "ATL", 14, 3, "West Palm", "to Atlanta"},
+      {"LDX", "CAY", 16, 3, "Saint-Laurent", "to Cayenne"},
+      {"ATL", "FLL", 16, 3, "Atlanta", "to FLL"},
+      {"ATL", "COS", 16, 3, "Atlanta", "to COS"},
+      {"ATL", "LAX", 13, 3, "Atlanta", "to LAX"},
+      {"QQQ", "LDX", 16, 3, "QQQ", "to Saint-Laurent"},
+      {"QQQ", "FLL", 16, -1, "", ""},
+      {"SDF", "ORD", 8, -1, "", ""},
       // One city both ends: the airports' own names
-      {"BFI", "SEA", 16, true, "BFI", "to Sea-Tac (SEA)"},
-      {"BFI", "SEA", 25, true, "Boeing Field (BFI)", "to Seattle Sea-Tac (SEA)"},
-      {"JFK", "LGA", 16, true, "New York (JFK)", "to LGA"},
-      {"JFK", "LGA", 25, true, "New York (JFK)", "to LaGuardia (LGA)"},
-      {"MDW", "ORD", 16, true, "Midway (MDW)", "to O'Hare (ORD)"},
+      {"BFI", "SEA", 16, 2, "Boeing Field", "to Sea-Tac"},
+      {"BFI", "SEA", 25, 1, "Boeing Field (BFI)", "to Sea-Tac (SEA)"},
+      {"JFK", "LGA", 16, 2, "New York", "to LaGuardia"},
+      {"JFK", "LGA", 25, 1, "New York (JFK)", "to LaGuardia (LGA)"},
+      {"MDW", "ORD", 16, 1, "Midway (MDW)", "to O'Hare (ORD)"},
+      {"MDW", "ORD", 25, 0, "Chicago Midway (MDW)", "to Chicago O'Hare (ORD)"},
   };
   for (const Fit &t : kFits) {
     std::string a = "x", b = "x";
-    const bool ok = route_lines(t.from, t.to, t.max, a, b);
-    FCHECK(ok == t.ok && a == t.a && b == t.b, "%s-%s in %zu: \"%s\" / \"%s\"", t.from, t.to, t.max, a.c_str(),
-           b.c_str());
+    int level = -1;
+    const bool ok = route_lines(t.from, t.to, t.max, a, b, &level);
+    FCHECK(ok == (t.level >= 0) && level == t.level && a == t.a && b == t.b, "%s-%s in %zu: %d \"%s\" / \"%s\"",
+           t.from, t.to, t.max, level, a.c_str(), b.c_str());
   }
   FCHECK_EQ(route_words("SDF", "ORD"), "Louisville (SDF) to Chicago O'Hare (ORD)");
   FCHECK_EQ(route_words("QQQ", "SDF"), "QQQ to Louisville (SDF)");
@@ -1107,50 +1168,69 @@ void test_airports() {
     FCHECK(city == an.city + " (" + code + ")" && full.compare(0, an.city.size(), an.city) == 0 &&
                full.size() >= city.size() && full.substr(full.size() - 6) == std::string(" (") + code + ")",
            "%s: \"%s\" / \"%s\"", code, full.c_str(), city.c_str());
-    for (size_t max : {(size_t) 14, (size_t) 15, (size_t) 16, (size_t) 25}) {
-      std::string a, b;
-      if (!route_lines(code, "ATL", max, a, b))
-        continue;
-      // Each line the longest of its levels that fits
-      std::string wa, wb;
-      for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::CODE}) {
-        const std::string sa = stop_text(code, f), sb = "to " + stop_text("ATL", f);
-        if (wa.empty() && (glyphs(sa) <= max || f == StopFit::CODE))
-          wa = sa;
-        if (wb.empty() && (glyphs(sb) <= max || f == StopFit::CODE))
-          wb = sb;
+    for (size_t max : {(size_t) 13, (size_t) 14, (size_t) 15, (size_t) 16, (size_t) 25})
+      for (bool first : {true, false}) {
+        const std::string from = first ? code : "ATL", to = first ? "ATL" : code;
+        const std::string cc = city_of(code);
+        const bool shared = cc == "Atlanta" || cc.compare(0, 8, "Atlanta|") == 0;
+        std::string a, b;
+        int level = -1;
+        const bool ok = route_lines(from, to, max, a, b, &level);
+        // The richest form both lines fit
+        int want = -1;
+        for (int l = 0; l < 3 && want < 0; l++)
+          if (glyphs(stop_form(from, l, shared)) <= max && glyphs("to " + stop_form(to, l, shared)) <= max)
+            want = l;
+        if (want >= 0) {
+          FCHECK(ok && level == want && a == stop_form(from, want, shared) && b == "to " + stop_form(to, want, shared),
+                 "%s-%s in %zu: %d \"%s\" / \"%s\"", from.c_str(), to.c_str(), max, level, a.c_str(), b.c_str());
+          continue;
+        }
+        // Else names whole, cut at a word, or codes
+        const std::string na = stop_form(from, 2, shared), nb = "to " + stop_form(to, 2, shared);
+        const bool ca = !shortened(a, na, max, glyphs(na) <= max) && a == from;
+        const bool cb = !shortened(b, nb, max, glyphs(nb) <= max) && b == "to " + to;
+        FCHECK(ok ? level == 3 && (shortened(a, na, max, glyphs(na) <= max) || ca) &&
+                        (shortened(b, nb, max, glyphs(nb) <= max) || cb) && !(ca && cb)
+                  : a.empty() && b.empty() && glyphs(na) > max && glyphs(nb) > max,
+               "%s-%s in %zu: \"%s\" / \"%s\"", from.c_str(), to.c_str(), max, a.c_str(), b.c_str());
       }
-      FCHECK(a == wa && b == wb && glyphs(a) <= max && glyphs(b) <= max, "%s in %zu: \"%s\" / \"%s\"", code, max,
-             a.c_str(), b.c_str());
-    }
-    // The card draws exactly those lines, or the codes
-    const Nearby n = one_route(code, "ATL");
-    for (int w : {128, 256}) {
-      FrameOpts o;
-      o.w = w;
-      const Frame f = flight_frame(n, &none, o, 100);
-      check_frame(f, o, code);
+    // The card draws exactly those lines, or the codes, rows apart
+    for (bool first : {true, false}) {
+      const std::string from = first ? code : "ATL", to = first ? "ATL" : code;
+      const Nearby n = one_route(from.c_str(), to.c_str());
+      for (int w : {128, 256}) {
+        FrameOpts o;
+        o.w = w;
+        const Frame f = flight_frame(n, &none, o, 100);
+        check_frame(f, o, code);
+        std::string a, b;
+        if (route_lines(from, to, 16, a, b)) {
+          const Text *ta = find_text(f, a), *tb = find_text(f, b);
+          // The route's ink ends a pixel before 5 * glyphs
+          const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
+          FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kArtX && f.sky.x + f.sky.w == 128,
+                 "%s-%s at %d: \"%s\" / \"%s\", the picture at %d", from.c_str(), to.c_str(), w, a.c_str(), b.c_str(),
+                 f.sky.x);
+          route_gap(f, a, b, code);
+          shown++;
+        } else {
+          FCHECK(find_text(f, from + "-" + to) != nullptr, "%s-%s at %d: the codes", from.c_str(), to.c_str(), w);
+        }
+      }
+      FrameOpts tall;
+      tall.w = tall.h = 128;
+      const Frame f = flight_frame(n, &none, tall, 100);
+      check_frame(f, tall, code);
       std::string a, b;
-      if (route_lines(code, "ATL", 16, a, b)) {
-        const Text *ta = find_text(f, a), *tb = find_text(f, b);
-        // The route's ink ends a pixel before 5 * glyphs
-        const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
-        FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kArtX && f.sky.x + f.sky.w == 128,
-               "%s at %d: \"%s\" / \"%s\", the picture at %d", code, w, a.c_str(), b.c_str(), f.sky.x);
-        shown++;
-      } else {
-        FCHECK(find_text(f, std::string(code) + "-ATL") != nullptr, "%s at %d: the codes", code, w);
+      if (route_lines(from, to, 25, a, b)) {
+        FCHECK(find_text(f, a) != nullptr && find_text(f, b) != nullptr, "%s-%s full screen", from.c_str(),
+               to.c_str());
+        route_gap(f, a, b, code);
       }
     }
-    FrameOpts tall;
-    tall.w = tall.h = 128;
-    const Frame f = flight_frame(n, &none, tall, 100);
-    check_frame(f, tall, code);
-    std::string a, b;
-    if (route_lines(code, "ATL", 25, a, b))
-      FCHECK(find_text(f, a) != nullptr && find_text(f, b) != nullptr, "%s full screen", code);
   }
-  FCHECK(shown > 3000, "most routes show places: %d", shown);
+  FCHECK(shown > 7000, "most routes show places: %d", shown);
 
   // 64 wide keeps the codes; the ticker has the names
   FrameOpts o;
@@ -1167,7 +1247,7 @@ void test_airports() {
     FCHECK(a != nullptr && b != nullptr && find_text(f, "SDF-ORD") == nullptr &&
                f.ticker.find("Louisville (SDF) to Chicago O'Hare (ORD), ") != std::string::npos,
            "%d: SDF-ORD's places", w);
-    FCHECK(a != nullptr && b != nullptr && a->y == 16 && b->y == 23 && a->font == BoardFont::S8 && a->x == 1 &&
+    FCHECK(a != nullptr && b != nullptr && a->y == 16 && b->y == 25 && a->font == BoardFont::S8 && a->x == 1 &&
                a->color == b->color,
            "%d: two small lines under the callsign", w);
     // Sixteen wide: the picture moves over, three pixels clear
@@ -1261,10 +1341,10 @@ void test_airports() {
   static const Tail kTails[] = {
       {"SDF", "ORD", "Louisville (SDF)", "to Chicago O'Hare (ORD)", 34},
       {"DFW", "IAD", "Dallas-Fort Worth (DFW)", "to Washington (IAD)", -1},
-      {"MDW", "ATL", "Chicago Midway (MDW)", "to Atlanta (ATL)", 42},
+      {"MDW", "ATL", "Chicago Midway (MDW)", "to Atlanta (ATL)", 43},
       // Two spaces clear of the route, else left off
       {"DFW", "LEX", "Dallas-Fort Worth (DFW)", "to Lexington (LEX)", -1},
-      {"PBI", "ATL", "West Palm Beach (PBI)", "to Atlanta (ATL)", 42},
+      {"PBI", "ATL", "West Palm Beach (PBI)", "to Atlanta (ATL)", 43},
   };
   // Past a short airline name; a long one: beside the route
   for (bool long_name : {false, true})
@@ -1399,11 +1479,11 @@ void test_fr24() {
   const Frame f = flight_frame(n, &cache, o, 100);
   bool from = false, to = false, number = false;
   for (const Text &t : f.items) {
-    from = from || (t.text == "Denver (DEN)" && t.color == kColRoute);
-    to = to || (t.text == "to LGA" && t.color == kColRoute);
+    from = from || (t.text == "Denver" && t.color == kColRoute);
+    to = to || (t.text == "to New York" && t.color == kColRoute);
     number = number || t.text == "WN1678";
   }
-  FCHECK(from && to && number, "Denver (DEN), to LGA and WN1678 on the card");
+  FCHECK(from && to && number, "Denver, to New York and WN1678 on the card");
   FCHECK(f.ticker.find("SWA1678 Southwest, Boeing 737 MAX 8, Denver (DEN) to New York LaGuardia (LGA), 5,450 ft") !=
              std::string::npos,
          "%s", f.ticker.c_str());
@@ -2162,8 +2242,8 @@ void test_radar_frames() {
       }
     FCHECK(sig_hash(bare) == 0x80edb249u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
            (unsigned) sig_hash(bare));
-    FCHECK(sig_hash(sig) == 0x34db943fu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
-    FCHECK(sig_hash(direct) == 0x1551fcadu, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
+    FCHECK(sig_hash(sig) == 0x17660e2cu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(direct) == 0x301bea4au, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
   }
   for (int w = 32; w <= 320; w += 32)
     for (int h : {32, 64, 96, 128})
