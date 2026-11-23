@@ -4,8 +4,8 @@ name: Docs
 # request that touches it or CHANGELOG.md, so a broken page or link fails
 # the PR. The changelog page is generated from CHANGELOG.md at build time.
 #
-# Publishing is not done here: the docs have no published home yet, and
-# links point at the markdown in this repo.
+# Publishing is not done here: the site deploys (site.yml and build.yml's
+# publish) build the docs and put them on the site under /docs/.
 
 on:
   pull_request:
@@ -13,10 +13,15 @@ on:
       - "docs/wiki/**"
       - "CHANGELOG.md"
       - "scripts/check_docs_links.py"
+      - "scripts/site_seo.py"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  # The site's address; the docs build for its /docs/.
+  SITE_URL: "https://apolloautomation.github.io/gameday-scoreboard-main"
 
 jobs:
   build:
@@ -37,4 +42,10 @@ jobs:
         run: npm run build
       # Astro passes dead links silently.
       - name: Links between pages and their anchors
-        run: python3 scripts/check_docs_links.py docs/wiki/dist
+        run: python3 scripts/check_docs_links.py --base "$(echo "$SITE_URL" | sed -E 's#^[a-z]+://[^/]+##')/docs" docs/wiki/dist
+      # The deploys' search and sharing tags check, here first.
+      - name: Search and sharing tags under /docs/
+        run: |
+          mkdir -p /tmp/site
+          cp -r docs/wiki/dist /tmp/site/docs
+          python3 scripts/site_seo.py check /tmp/site

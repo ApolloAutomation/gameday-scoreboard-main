@@ -476,10 +476,8 @@ Recommendations follow each.
   uses, and says "no crash reporting" while the panel keeps its own last
   crash. It carries an effective date, so a maintainer should make the edit
   and move the date.
-- **The site's Twitter handle** (`@GameDayScore`) and the docs site's own
-  address (`docs.gameday-scoreboard.com` in `docs/wiki/astro.config.mjs`)
-  point outside this repository; point them at Apollo Automation's own or
-  remove them.
+- **The site's Twitter handle** (`@GameDayScore`) points outside this
+  repository; point it at Apollo Automation's own or remove it.
 - **A leftover file in `docs/site/.well-known/`** has no effect under the
   Pages project path; remove it unless a future domain needs it.
 - **The variant table** in the DIY install page lists `moonhub75-2panel` as

@@ -1,6 +1,6 @@
 # Apollo Pulse docs
 
-This is the documentation site for Apollo Pulse, formerly Game Day Scoreboard, built with [Astro](https://astro.build) and [Starlight](https://starlight.astro.build). It covers setting up a panel, using it, fixing problems, and building one on your own board. It has no published home yet. You can read the pages on GitHub under `src/content/docs/`, but links between pages and the note and caution boxes only work in the built site, so run it locally (below) to browse it properly.
+This is the documentation site for Apollo Pulse, formerly Game Day Scoreboard, built with [Astro](https://astro.build) and [Starlight](https://starlight.astro.build). It covers setting up a panel, using it, fixing problems, and building one on your own board. It's published with the project's site at https://apolloautomation.github.io/gameday-scoreboard-main/docs/. You can read the pages on GitHub under `src/content/docs/`, but links between pages and the note and caution boxes only work in the built site, so run it locally (below) to browse it properly.
 
 ## Run it locally
 
@@ -46,6 +46,6 @@ Images go in `src/assets/` and are pulled in with a relative Markdown image link
 
 ## Publishing
 
-The site has no published home yet. A pull request that touches `docs/wiki/` or `CHANGELOG.md` builds the site through the Docs workflow (`.github/workflows/docs.yml`) to catch broken pages.
+The docs go on the project's site under `/docs/`. The site deploys (`.github/workflows/site.yml`, and the release deploy in `build.yml`) build them from `main` or the release tag and copy `dist/` into the site, so the published docs are `main`'s. `astro.config.mjs` takes the site's address from `SITE_URL` (the GitHub Pages address when it's unset) and builds for its `/docs/` path. Write links between pages from the docs' root, like `/using/weather/`: the build adds the path in front. A pull request that touches `docs/wiki/` or `CHANGELOG.md` builds the site through the Docs workflow (`.github/workflows/docs.yml`) to catch broken pages and links.
 
 A pull request into `dev` that changes `firmware/` or `components/` must also change a page under `src/content/docs/`, or carry the label `docs: not needed`. The Docs updated workflow (`.github/workflows/docs-check.yml`) enforces that.

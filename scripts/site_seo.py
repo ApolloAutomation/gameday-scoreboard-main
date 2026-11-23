@@ -6,11 +6,14 @@ and description, a canonical URL that matches where it lives, Open Graph and
 Twitter card tags, a share image that exists in the site, and JSON-LD that
 parses. An install button has no manifest until a board is picked, each
 board choice names a known build, and the home page offers both boards.
-CI runs it on docs/site.
+The docs under docs/ (built from docs/wiki) need a title, a description, a
+canonical URL where they live and a share image on this site. CI runs it on
+docs/site, and docs.yml on the built docs copied into a site's docs/.
 
 build <dir>: check, then add the FAQPage JSON-LD to support/ from the page's
-own cards, and write sitemap.xml and robots.txt. Both site deploys run it on
-the assembled site, after docs/site is copied in.
+own cards, and write sitemap.xml and robots.txt (naming the docs' own
+sitemap too). Both site deploys run it on the assembled site, after
+docs/site and the docs are copied in.
 
     python3 scripts/site_seo.py check docs/site
     python3 scripts/site_seo.py build site
@@ -30,6 +33,7 @@ from urllib.parse import urlsplit
 # The site's own links are relative, so only these absolute tags name it.
 BASE = "https://apolloautomation.github.io/gameday-scoreboard-main"
 FAQ_PAGE = "support/index.html"
+DOCS = "docs"  # the docs' folder, with its own sitemap
 REQUIRED_PROPS = ["og:title", "og:description", "og:url", "og:image", "og:type"]
 REQUIRED_NAMES = ["description", "twitter:card", "twitter:image"]
 MANIFESTS = ["firmware/moonhub75/manifest.json", "firmware/moonhub75-2panel/manifest.json",
@@ -120,11 +124,11 @@ def squash(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
-def pages(site):
+def pages(site, skip=("firmware", DOCS)):
     """(path under the site, URL) for every page, home first."""
     found = []
     for root, dirs, files in os.walk(site):
-        dirs[:] = sorted(d for d in dirs if not (root == site and d == "firmware") and not d.startswith("."))
+        dirs[:] = sorted(d for d in dirs if not (root == site and d in skip) and not d.startswith("."))
         if "index.html" in files:
             rel = os.path.relpath(os.path.join(root, "index.html"), site).replace(os.sep, "/")
             url = BASE + "/" + rel[: -len("index.html")]
@@ -179,6 +183,33 @@ def check(site):
             and any(m.endswith(MANIFESTS[2]) for m in head.picks)
         ):
             errors.append(f"{rel}: home page doesn't offer both the M-1 and the scoreboard75 build")
+    return errors + check_docs(site)
+
+
+def check_docs(site):
+    """The docs' pages, which Starlight writes, live where they say."""
+    errors = []
+    if not os.path.isdir(os.path.join(site, DOCS)):
+        return errors
+    for rel, url in pages(os.path.join(site, DOCS), skip=()):
+        url = url.replace(BASE, f"{BASE}/{DOCS}", 1)
+        rel = f"{DOCS}/{rel}"
+        with open(os.path.join(site, rel), encoding="utf-8") as f:
+            head = Head()
+            head.feed(f.read())
+        if not squash(head.title):
+            errors.append(f"{rel}: no <title>")
+        for key in REQUIRED_NAMES + REQUIRED_PROPS:
+            if not head.meta.get(key):
+                errors.append(f"{rel}: no {key}")
+        if head.canonical != url:
+            errors.append(f"{rel}: canonical is {head.canonical}, should be {url}")
+        if head.meta.get("og:url") and head.meta["og:url"] != url:
+            errors.append(f"{rel}: og:url is {head.meta['og:url']}, should be {url}")
+        for key in ("og:image", "twitter:image"):
+            img = head.meta.get(key, "")
+            if img and not (img.startswith(BASE + "/") and os.path.isfile(os.path.join(site, img[len(BASE) + 1 :]))):
+                errors.append(f"{rel}: {key} {img} isn't a file on this site")
     return errors
 
 
@@ -217,6 +248,8 @@ def build(site):
     prefix = urlsplit(BASE).path.rstrip("/")
     with open(os.path.join(site, "robots.txt"), "w", encoding="utf-8") as f:
         f.write(f"User-agent: *\nDisallow: {prefix}/firmware/\n\nSitemap: {BASE}/sitemap.xml\n")
+        if os.path.isfile(os.path.join(site, DOCS, "sitemap-index.xml")):
+            f.write(f"Sitemap: {BASE}/{DOCS}/sitemap-index.xml\n")
     return []
 
 
@@ -273,6 +306,29 @@ def selftest():
             robots = f.read()
         assert f"Sitemap: {BASE}/sitemap.xml" in robots
         assert f"Disallow: {urlsplit(BASE).path.rstrip('/')}/firmware/" in robots
+        assert "/docs/sitemap-index.xml" not in robots
+
+        # Docs pages checked in place, sitemap in robots.txt.
+        os.makedirs(os.path.join(site, "docs/help"))
+        open(os.path.join(site, "docs/og.jpg"), "wb").close()
+        open(os.path.join(site, "docs/sitemap-index.xml"), "w").close()
+
+        def docs_page(path, url, img):
+            html = page("index.html", "Docs", desc).replace(f"{BASE}/media/og.jpg", img)
+            with open(os.path.join(site, "docs", path), "w", encoding="utf-8") as f:
+                f.write(html.replace(f'"{BASE}/"', f'"{url}"'))
+
+        docs_page("index.html", f"{BASE}/docs/", f"{BASE}/docs/og.jpg")
+        docs_page("help/index.html", f"{BASE}/docs/help/", f"{BASE}/docs/og.jpg")
+        assert check(site) == [], check(site)
+        assert [p for p, _ in pages(site)] == ["index.html", "install/diy/index.html", "support/index.html"]
+        assert build(site) == []
+        with open(os.path.join(site, "robots.txt"), encoding="utf-8") as f:
+            assert f"Sitemap: {BASE}/docs/sitemap-index.xml" in f.read()
+        docs_page("help/index.html", f"{BASE}/help/", f"{BASE}/docs/gone.jpg")
+        errors = "\n".join(check(site))
+        assert "docs/help/index.html: canonical is" in errors and "gone.jpg isn't a file" in errors, errors
+        docs_page("help/index.html", f"{BASE}/docs/help/", f"{BASE}/docs/og.jpg")
 
         # A copied page, a wrong canonical, a missing image and broken JSON-LD all fail.
         with open(os.path.join(site, "install/diy/index.html"), "w", encoding="utf-8") as f:

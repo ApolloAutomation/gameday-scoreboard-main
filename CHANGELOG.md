@@ -14,6 +14,18 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.12
+
+The Flight Tracker names each airport the way the ticker does, like Louisville (SDF) to Chicago O'Hare (ORD), and the docs are now online with the project's site.
+
+- On a Flight Tracker card 128 wide or more, the route takes two lines, like **Louisville (SDF)** and **to Chicago (ORD)**, with the airport's own name after the city where there's room, like **to Chicago O'Hare (ORD)**. A line too long for its room leaves off the airport's name, then the place, keeping the code, and never cuts a word. When both ends are in the same city, each line names its airport, like **Boeing Field (BFI)** and **to Sea-Tac (SEA)**. A 64x64 card keeps the codes.
+- The ticker names the places in full, like **Louisville (SDF) to Chicago O'Hare (ORD)**.
+- The names come from about 4,000 airports built into the panel, so they need no internet. An airport that changed its code, like West Palm Beach (PBI, now DJT), is found by either.
+- The plane's picture beside the route is a little narrower, with a gap so its sky never touches the words. When a big jet's own picture would cost a name, the card draws a smaller airliner, and the type line still names the plane.
+- On the full-screen card, the flight number sits after the airline's name, or with a clear gap after the route.
+- The docs are online at https://apolloautomation.github.io/gameday-scoreboard-main/docs/, and the device page has a **Help** link at its foot that opens them.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.11
 
 The panel is now called Apollo Pulse, with Apollo the dog on its start-up and setup screens, and on three or four panels in a row the second area's ticker holds still beside the board's so the two read apart.
