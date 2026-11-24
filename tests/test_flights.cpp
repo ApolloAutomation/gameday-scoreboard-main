@@ -632,42 +632,21 @@ void check_frame(const Frame &f, const FrameOpts &o, const char *what) {
   }
   // Pictures and logos: inside, over the ticker, clear of text.
   std::vector<Box> pics;
-  for (const Art &a : f.art) {
-    const PlaneSprite *s = plane_sprite(a.kind);
-    FCHECK(s != nullptr, "%s: a picture of something", what);
-    if (s == nullptr)
-      continue;
-    const Box b{a.x, a.x + s->w * a.scale, a.y, a.y + s->h * a.scale - 1};
-    FCHECK(a.scale >= 1 && s->w * a.scale <= espn::kAppArtMaxW && s->h * a.scale <= espn::kAppArtMaxH,
-           "%s: the picture drawable", what);
-    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the picture inside", what);
-    for (const Box &t : boxes)
-      FCHECK(apart(b, t), "%s: the picture clear of text", what);
-    pics.push_back(b);
-  }
-  // The photo's box, where it's drawn
-  if (f.photo.w > 0) {
-    const Box b{f.photo.x, f.photo.x + f.photo.w, f.photo.y, f.photo.y + f.photo.h - 1};
-    FCHECK(f.photo.w <= espn::kAppPhotoMaxW && f.photo.h <= espn::kAppPhotoMaxH, "%s: the photo drawable", what);
-    FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the photo inside", what);
-    for (const Box &t : boxes)
-      FCHECK(apart(b, t), "%s: the photo clear of text", what);
-  }
   // The sky's box: inside, clear of text, its plane fits
   if (f.sky.w > 0) {
     const Box b{f.sky.x, f.sky.x + f.sky.w, f.sky.y, f.sky.y + f.sky.h - 1};
     const PlaneSprite *sp = plane_sprite(f.sky.kind);
     FCHECK(f.sky.w <= espn::kAppSkyMaxW && f.sky.h <= espn::kAppSkyMaxH && f.sky.scale >= 1, "%s: the sky drawable",
            what);
-    FCHECK(sp == nullptr || (sp->w <= f.sky.w && sp->h <= f.sky.h), "%s: the plane fits its sky", what);
+    FCHECK(sp == nullptr || (sp->w * f.sky.scale <= f.sky.w && sp->h * f.sky.scale <= f.sky.h),
+           "%s: the plane fits its sky", what);
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the sky inside", what);
     for (const Box &t : boxes)
       FCHECK(apart(b, t), "%s: the sky clear of text", what);
     pics.push_back(b);
   }
   const bool tall_list = o.list && esphome::gameday::tall_board(o.w, o.h);
-  FCHECK(f.art.size() + (f.sky.kind != PlaneKind::NONE) <= 1 && (f.logos.size() <= 1 || tall_list),
-         "%s: one picture, one logo", what);
+  FCHECK(f.logos.size() <= 1 || tall_list, "%s: one logo", what);
   for (const Logo &l : f.logos) {
     const Box b{l.x, l.x + l.px, l.y, l.y + l.px - 1};
     FCHECK(b.x0 >= 0 && b.x1 <= o.w && b.y0 >= 0 && b.y1 < limit, "%s: the logo inside", what);
@@ -716,7 +695,7 @@ void test_frames() {
             if (!list || w >= 192)
               FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
             if (list && w < 192)
-              FCHECK(f.art.empty() && f.logos.empty(), "%s: the list has no pictures", what);
+              FCHECK(f.sky.w == 0 && f.logos.empty(), "%s: the list has no pictures", what);
             FCHECK(ticker == !f.ticker.empty(), "%s: ticker", what);
           }
   FrameOpts o;
@@ -867,23 +846,18 @@ void test_tall_frames() {
   const Nearby n = read("fixtures/flights_adsbfi_jfk.json", jfk());
   RouteCache cache;
   parse_routeset(slurp("fixtures/flights_routeset_jfk.json"), recorded_ask(), cache, 100);
-  PlanePhoto photo;
-  strcpy(photo.url, "https://t.plnspttrs.net/1/2_t.jpg");
-  photo.state = PhotoState::KNOWN;
   for (int metric = 0; metric < 2; metric++)
     for (bool list : {false, true})
-      for (bool with_photo : {false, true})
+      {
         for (uint8_t card = 0; card < n.n; card++) {
           FrameOpts o;
           o.w = o.h = 128;
           o.card = card;
           o.list = list;
-          o.photo = with_photo ? &photo : nullptr;
           if (metric)
             o.units = units_metric();
           char what[64];
-          snprintf(what, sizeof(what), "128x128%s%s%s card %u", metric ? " metric" : "", list ? " list" : "",
-                   with_photo ? " photo" : "", card);
+          snprintf(what, sizeof(what), "128x128%s%s card %u", metric ? " metric" : "", list ? " list" : "", card);
           const Frame f = flight_frame(n, &cache, o, 100);
           check_frame(f, o, what);
           // The list shows the nearest seven
@@ -891,7 +865,7 @@ void test_tall_frames() {
             FCHECK(find_text(f, plane_label(n.planes[card])) != nullptr, "%s: callsign present", what);
           FCHECK(!f.ticker.empty(), "%s: ticker", what);
           if (list) {
-            FCHECK(f.art.empty() && f.photo.w == 0, "%s: the list has no pictures", what);
+            FCHECK(f.sky.w == 0, "%s: the list has no pictures", what);
             for (const Logo &l : f.logos)
               FCHECK(l.px == kLogoPx && l.x == 0, "%s: a 16 px logo per row", what);
             continue;
@@ -900,15 +874,16 @@ void test_tall_frames() {
                  "%s: the big callsign", what);
           for (const Logo &l : f.logos)
             FCHECK(l.px == kLogoBigPx, "%s: the big logo", what);
-          for (const Art &a : f.art)
-            FCHECK(a.scale >= 2, "%s: the picture doubled at least", what);
-          FCHECK(!with_photo || (f.photo.w == kPhotoTallW && f.photo.h == kPhotoTallH), "%s: the wide photo", what);
+          FCHECK(f.sky.w == 0 || (f.sky.scale >= 2 && f.sky.x == 0 && f.sky.w == 128 && f.sky.y == kArtTallY &&
+                                  f.sky.h == kArtTallH),
+                 "%s: the plane doubled at least, its scene the panel's width", what);
         }
+      }
   FrameOpts o;
   o.w = o.h = 128;
   Frame f = flight_frame(n, &cache, o, 100);
   const Text *route = find_text(f, "New York (JFK)"), *to = find_text(f, "to Paris (CDG)");
-  FCHECK(route != nullptr && to != nullptr && route->y == 34 && to->y == 42 && route->color == kColRoute &&
+  FCHECK(route != nullptr && to != nullptr && route->y == 34 && to->y == 43 && route->color == kColRoute &&
              find_text(f, "JFK-CDG") == nullptr,
          "the route's places on two lines");
   const Text *tail = find_text(f, "B61407");
@@ -917,7 +892,7 @@ void test_tall_frames() {
   FCHECK(find_text(f, "1,525 ft") != nullptr && find_text(f, "203 mph") != nullptr &&
              find_text(f, "1.5 mi SE") != nullptr && find_text(f, "Climbing") != nullptr,
          "altitude, speed, where and climb");
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoBigPx && f.art.size() == 1 && f.art[0].scale == 2,
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoBigPx && f.sky.w == 128 && f.sky.scale == 2,
          "a 32 px logo, the airliner doubled");
   o.list = true;
   f = flight_frame(n, &cache, o, 100);
@@ -928,7 +903,7 @@ void test_tall_frames() {
   o.h = 64;
   o.list = false;
   f = flight_frame(n, &cache, o, 100);
-  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.art.empty() && f.sky.x == 73 && f.sky.w == 55 &&
+  FCHECK(f.logos.size() == 1 && f.logos[0].px == kLogoPx && f.sky.x == 73 && f.sky.w == 55 &&
              f.sky.scale == 1,
          "the split card, three pixels past the route");
 }
@@ -951,7 +926,7 @@ void test_notes() {
           const Sky &sk = f.sky;
           if (h >= 64 && ticker)
             FCHECK(sk.w == std::min(w, 128) && sk.x == (w - sk.w) / 2 && sk.y == 0 &&
-                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == (h == 128 ? 2 : 1) &&
+                       sk.h == (h == 128 ? 48 : w < 128 ? 24 : 28) && sk.scale == 1 &&
                        sk.kind == PlaneKind::NONE,
                    "%s: its sky %d,%d %dx%d", what, sk.x, sk.y, sk.w, sk.h);
           if (h == 32)
@@ -991,6 +966,110 @@ Nearby one_route(const char *from, const char *to) {
 std::string city_of(const char *code) {
   AirportName a;
   return airport_name(code, a) ? a.city + (a.part.empty() ? "" : "|" + a.part) : "?";
+}
+
+// A stop full, with its code, or its name alone
+std::string stop_form(const std::string &code, int level, bool shared) {
+  if (level == 0)
+    return stop_text(code, StopFit::FULL);
+  const std::string s = stop_text(code, shared ? StopFit::PART : StopFit::CITY);
+  return level == 1 || s == code ? s : s.substr(0, s.size() - code.size() - 3);
+}
+
+// The name whole when it fits, else cut at a word
+bool shortened(const std::string &line, const std::string &name, size_t max, bool fits) {
+  if (fits)
+    return line == name;
+  return glyphs(line) <= max && line.size() > 3 && line.size() < name.size() &&
+         name.compare(0, line.size(), line) == 0 && (name[line.size()] == ' ' || name[line.size()] == '-') &&
+         line.back() != ' ';
+}
+
+// Each column: its glyph and column, as placed
+std::vector<uint32_t> cells(const Text &t) {
+  std::vector<uint32_t> on(512, 0);
+  const int px = font_px(t.font), tw = px * (int) glyphs(t.text);
+  int x = t.align == Align::LEFT ? t.x : t.align == Align::RIGHT ? t.x + t.w - tw : t.x + (t.w - tw) / 2;
+  for (size_t k = 0; k < t.text.size(); x += px) {
+    uint32_t cp = (unsigned char) t.text[k++];
+    // Past ASCII: assume both edge rows lit
+    for (; k < t.text.size() && ((unsigned char) t.text[k] & 0xC0) == 0x80; k++)
+      cp = 0x100;
+    for (int i = 0; i < px && cp != ' '; i++)
+      if (x + i >= 0 && x + i < 512)
+        on[x + i] = cp << 3 | (uint32_t) i;
+  }
+  return on;
+}
+
+// A small glyph's top or bottom row pixels
+bool edge_px(const Text &t, uint32_t v, bool top) {
+  struct Edge {
+    char c;
+    uint8_t bits;
+  };
+  static const Edge kTop[] = {
+      {'!', 0b00100}, {'"', 0b01010}, {'$', 0b00100}, {'%', 0b00010},  {'&', 0b00100}, {'\'', 0b00100},
+      {'(', 0b00010}, {')', 0b01000}, {'/', 0b00010}, {'?', 0b01100},  {'[', 0b01110}, {'\\', 0b10000},
+      {']', 0b01110}, {'`', 0b01000}, {'b', 0b10000}, {'d', 0b00010},  {'f', 0b00110}, {'h', 0b10000},
+      {'k', 0b10000}, {'l', 0b01000}, {'t', 0b01000}, {'{', 0b00110},  {'|', 0b00100}, {'}', 0b11000}};
+  static const Edge kBottom[] = {
+      {'$', 0b00100}, {'%', 0b10000}, {'(', 0b00010}, {')', 0b01000}, {',', 0b01000}, {'/', 0b10000},
+      {';', 0b01000}, {'Q', 0b00110}, {'[', 0b01110}, {'\\', 0b00010}, {']', 0b01110}, {'_', 0b11110},
+      {'g', 0b11100}, {'j', 0b11000}, {'p', 0b10000}, {'q', 0b00010}, {'y', 0b11100}, {'{', 0b00110},
+      {'|', 0b00100}, {'}', 0b11000}};
+  // The big font's last row stays dark
+  if (t.font != BoardFont::S8)
+    return top;
+  const uint32_t cp = v >> 3, col = v & 7;
+  if (cp >= 0x80)
+    return true;
+  const Edge *e = top ? kTop : kBottom;
+  const size_t n = top ? sizeof(kTop) / sizeof(Edge) : sizeof(kBottom) / sizeof(Edge);
+  for (size_t i = 0; i < n; i++)
+    if ((uint32_t) (unsigned char) e[i].c == cp)
+      return col < 5 && (e[i].bits >> (4 - col) & 1) != 0;
+  return false;
+}
+
+// Route lines: a clear row between, nothing else touching
+void route_gap(const Frame &f, const std::string &a, const std::string &b, const char *what) {
+  const Text *ta = find_text(f, a), *tb = find_text(f, b);
+  if (ta == nullptr || tb == nullptr) {
+    FCHECK(false, "%s: both route lines", what);
+    return;
+  }
+  const std::vector<uint32_t> la = cells(*ta), lb = cells(*tb);
+  for (int x = 0; x < 512; x++)
+    if (la[x] != 0 && lb[x] != 0) {
+      FCHECK(tb->y - (ta->y + 7) >= 2, "%s: \"%s\" over \"%s\" at x %d, rows %d and %d", what, a.c_str(), b.c_str(),
+             x, ta->y + 7, tb->y);
+      break;
+    }
+  for (const Text &t : f.items) {
+    if (&t == ta || &t == tb)
+      continue;
+    const std::vector<uint32_t> lt = cells(t);
+    const int top = t.y, bottom = t.y + font_rows(t.font) - 1;
+    for (const Text *r : {ta, tb}) {
+      const std::vector<uint32_t> &lr = r == ta ? la : lb;
+      if (bottom < r->y || top > r->y + 7)
+        continue;
+      // Above may share one row, its pixels apart
+      const bool shared = bottom == r->y && top < r->y;
+      for (int x = 1; x < 511; x++) {
+        bool hit = lt[x] != 0 && lr[x] != 0;
+        if (shared)
+          hit = lt[x] != 0 && edge_px(t, lt[x], false) &&
+                ((lr[x - 1] != 0 && edge_px(*r, lr[x - 1], true)) || (lr[x] != 0 && edge_px(*r, lr[x], true)) ||
+                 (lr[x + 1] != 0 && edge_px(*r, lr[x + 1], true)));
+        FCHECK(!hit, "%s: \"%s\" at row %d touches \"%s\" at row %d, x %d", what, t.text.c_str(), t.y,
+               r->text.c_str(), r->y, x);
+        if (hit)
+          break;
+      }
+    }
+  }
 }
 
 void test_airports() {
@@ -1065,51 +1144,71 @@ void test_airports() {
   FCHECK_EQ(stop_text("SDF", StopFit::PART), "Louisville (SDF)");
   FCHECK_EQ(stop_text("JFK", StopFit::PART), "New York (JFK)");
 
-  // The fitting order at each card's width
+  // Both lines one form: full, with codes, names alone, shortened
   struct Fit {
     const char *from, *to;
     size_t max;
-    bool ok;
+    int level;
     const char *a, *b;
   };
   static const Fit kFits[] = {
-      {"SDF", "ORD", 16, true, "Louisville (SDF)", "to Chicago (ORD)"},
-      {"SDF", "ORD", 25, true, "Louisville (SDF)", "to Chicago O'Hare (ORD)"},
-      {"SDF", "ORD", 14, false, "", ""},
-      {"LEX", "ATL", 16, true, "Lexington (LEX)", "to Atlanta (ATL)"},
-      {"LEX", "ATL", 15, true, "Lexington (LEX)", "to ATL"},
-      {"LEX", "ATL", 14, false, "", ""},
-      {"JFK", "LHR", 16, true, "New York (JFK)", "to London (LHR)"},
-      {"JFK", "LHR", 25, true, "New York (JFK)", "to London Heathrow (LHR)"},
-      {"LAX", "NRT", 16, true, "LAX", "to Tokyo (NRT)"},
-      {"LAX", "NRT", 25, true, "Los Angeles (LAX)", "to Tokyo Narita (NRT)"},
-      {"CVG", "MCO", 16, true, "Cincinnati (CVG)", "to Orlando (MCO)"},
-      {"SDF", "QQQ", 16, true, "Louisville (SDF)", "to QQQ"},
-      {"QQQ", "SDF", 25, true, "QQQ", "to Louisville (SDF)"},
-      {"QQQ", "ZZZ", 25, false, "", ""},
-      {"ATL", "LAX", 16, true, "Atlanta (ATL)", "to LAX"},
-      {"ATL", "LAX", 25, true, "Atlanta (ATL)", "to Los Angeles (LAX)"},
-      {"EWR", "SFO", 16, true, "Newark (EWR)", "to SFO"},
-      {"EWR", "SFO", 25, true, "Newark (EWR)", "to San Francisco (SFO)"},
-      {"DFW", "LEX", 16, false, "", ""},
-      {"DFW", "LEX", 25, true, "Dallas-Fort Worth (DFW)", "to Lexington (LEX)"},
-      {"DFW", "IAD", 25, true, "Dallas-Fort Worth (DFW)", "to Washington (IAD)"},
-      {"PBI", "ATL", 25, true, "West Palm Beach (PBI)", "to Atlanta (ATL)"},
-      {"LDX", "CAY", 25, true, "LDX", "to Cayenne (CAY)"},
-      {"QQQ", "LDX", 16, false, "", ""},
-      {"SDF", "ORD", 8, false, "", ""},
+      {"SDF", "ORD", 16, 1, "Louisville (SDF)", "to Chicago (ORD)"},
+      {"SDF", "ORD", 25, 0, "Louisville (SDF)", "to Chicago O'Hare (ORD)"},
+      {"SDF", "ORD", 14, 2, "Louisville", "to Chicago"},
+      {"LEX", "ATL", 16, 0, "Lexington (LEX)", "to Atlanta (ATL)"},
+      {"LEX", "ATL", 15, 2, "Lexington", "to Atlanta"},
+      {"JFK", "LHR", 16, 1, "New York (JFK)", "to London (LHR)"},
+      {"JFK", "LHR", 25, 0, "New York (JFK)", "to London Heathrow (LHR)"},
+      {"LAX", "NRT", 16, 2, "Los Angeles", "to Tokyo"},
+      {"LAX", "NRT", 25, 0, "Los Angeles (LAX)", "to Tokyo Narita (NRT)"},
+      {"CVG", "MCO", 16, 0, "Cincinnati (CVG)", "to Orlando (MCO)"},
+      {"SDF", "QQQ", 16, 0, "Louisville (SDF)", "to QQQ"},
+      {"QQQ", "SDF", 16, 2, "QQQ", "to Louisville"},
+      {"QQQ", "SDF", 25, 0, "QQQ", "to Louisville (SDF)"},
+      {"QQQ", "ZZZ", 25, -1, "", ""},
+      {"ATL", "LAX", 16, 2, "Atlanta", "to Los Angeles"},
+      {"ATL", "LAX", 25, 0, "Atlanta (ATL)", "to Los Angeles (LAX)"},
+      {"EWR", "SFO", 16, 2, "Newark", "to San Francisco"},
+      {"EWR", "SFO", 25, 0, "Newark (EWR)", "to San Francisco (SFO)"},
+      {"GRU", "YUL", 16, 2, "S\xC3\xA3o Paulo", "to Montr\xC3\xA9" "al"},
+      {"SLC", "RAP", 16, 2, "Salt Lake City", "to Rapid City"},
+      {"DFW", "LEX", 25, 0, "Dallas-Fort Worth (DFW)", "to Lexington (LEX)"},
+      {"DFW", "IAD", 25, 1, "Dallas-Fort Worth (DFW)", "to Washington (IAD)"},
+      {"PBI", "ATL", 16, 2, "West Palm Beach", "to Atlanta"},
+      {"PBI", "ATL", 25, 0, "West Palm Beach (PBI)", "to Atlanta (ATL)"},
+      {"LDX", "CAY", 25, 2, "Saint-Laurent-du-Maroni", "to Cayenne"},
+      // A name alone too long: whole words off, else the code
+      {"DFW", "LEX", 16, 3, "Dallas", "to Lexington"},
+      {"DFW", "IAD", 16, 3, "Dallas", "to Washington"},
+      {"SLC", "RAP", 13, 3, "Salt Lake", "to Rapid City"},
+      {"PBI", "ATL", 14, 3, "PBI", "to Atlanta"},
+      {"LDX", "CAY", 16, 3, "Saint-Laurent", "to Cayenne"},
+      // The second line's "to" goes first
+      {"ATL", "FLL", 16, 3, "Atlanta", "Fort Lauderdale"},
+      {"ATL", "COS", 16, 3, "Atlanta", "Colorado Springs"},
+      {"ATL", "LAX", 13, 3, "Atlanta", "Los Angeles"},
+      {"ATL", "SLC", 13, 3, "Atlanta", "to Salt Lake"},
+      {"ATL", "HHH", 16, 3, "Atlanta", "to Hilton Head"},
+      {"ATL", "ECP", 16, 3, "Atlanta", "to ECP"},
+      {"HTI", "ATL", 16, 2, "Hamilton Island", "to Atlanta"},
+      {"QQQ", "LDX", 16, 3, "QQQ", "to Saint-Laurent"},
+      {"QQQ", "FLL", 16, 3, "QQQ", "Fort Lauderdale"},
+      {"QQQ", "ZZZ", 16, -1, "", ""},
+      {"SDF", "ORD", 8, 3, "SDF", "Chicago"},
       // One city both ends: the airports' own names
-      {"BFI", "SEA", 16, true, "BFI", "to Sea-Tac (SEA)"},
-      {"BFI", "SEA", 25, true, "Boeing Field (BFI)", "to Seattle Sea-Tac (SEA)"},
-      {"JFK", "LGA", 16, true, "New York (JFK)", "to LGA"},
-      {"JFK", "LGA", 25, true, "New York (JFK)", "to LaGuardia (LGA)"},
-      {"MDW", "ORD", 16, true, "Midway (MDW)", "to O'Hare (ORD)"},
+      {"BFI", "SEA", 16, 2, "Boeing Field", "to Sea-Tac"},
+      {"BFI", "SEA", 25, 1, "Boeing Field (BFI)", "to Sea-Tac (SEA)"},
+      {"JFK", "LGA", 16, 2, "New York", "to LaGuardia"},
+      {"JFK", "LGA", 25, 1, "New York (JFK)", "to LaGuardia (LGA)"},
+      {"MDW", "ORD", 16, 1, "Midway (MDW)", "to O'Hare (ORD)"},
+      {"MDW", "ORD", 25, 0, "Chicago Midway (MDW)", "to Chicago O'Hare (ORD)"},
   };
   for (const Fit &t : kFits) {
     std::string a = "x", b = "x";
-    const bool ok = route_lines(t.from, t.to, t.max, a, b);
-    FCHECK(ok == t.ok && a == t.a && b == t.b, "%s-%s in %zu: \"%s\" / \"%s\"", t.from, t.to, t.max, a.c_str(),
-           b.c_str());
+    int level = -1;
+    const bool ok = route_lines(t.from, t.to, t.max, a, b, &level);
+    FCHECK(ok == (t.level >= 0) && level == t.level && a == t.a && b == t.b, "%s-%s in %zu: %d \"%s\" / \"%s\"",
+           t.from, t.to, t.max, level, a.c_str(), b.c_str());
   }
   FCHECK_EQ(route_words("SDF", "ORD"), "Louisville (SDF) to Chicago O'Hare (ORD)");
   FCHECK_EQ(route_words("QQQ", "SDF"), "QQQ to Louisville (SDF)");
@@ -1132,50 +1231,74 @@ void test_airports() {
     FCHECK(city == an.city + " (" + code + ")" && full.compare(0, an.city.size(), an.city) == 0 &&
                full.size() >= city.size() && full.substr(full.size() - 6) == std::string(" (") + code + ")",
            "%s: \"%s\" / \"%s\"", code, full.c_str(), city.c_str());
-    for (size_t max : {(size_t) 14, (size_t) 15, (size_t) 16, (size_t) 25}) {
-      std::string a, b;
-      if (!route_lines(code, "ATL", max, a, b))
-        continue;
-      // Each line the longest of its levels that fits
-      std::string wa, wb;
-      for (StopFit f : {StopFit::FULL, StopFit::CITY, StopFit::CODE}) {
-        const std::string sa = stop_text(code, f), sb = "to " + stop_text("ATL", f);
-        if (wa.empty() && (glyphs(sa) <= max || f == StopFit::CODE))
-          wa = sa;
-        if (wb.empty() && (glyphs(sb) <= max || f == StopFit::CODE))
-          wb = sb;
+    for (size_t max : {(size_t) 13, (size_t) 14, (size_t) 15, (size_t) 16, (size_t) 25})
+      for (bool first : {true, false}) {
+        const std::string from = first ? code : "ATL", to = first ? "ATL" : code;
+        const std::string cc = city_of(code);
+        const bool shared = cc == "Atlanta" || cc.compare(0, 8, "Atlanta|") == 0;
+        std::string a, b;
+        int level = -1;
+        const bool ok = route_lines(from, to, max, a, b, &level);
+        // The richest form both lines fit
+        int want = -1;
+        for (int l = 0; l < 3 && want < 0; l++)
+          if (glyphs(stop_form(from, l, shared)) <= max && glyphs("to " + stop_form(to, l, shared)) <= max)
+            want = l;
+        if (want >= 0) {
+          FCHECK(ok && level == want && a == stop_form(from, want, shared) && b == "to " + stop_form(to, want, shared),
+                 "%s-%s in %zu: %d \"%s\" / \"%s\"", from.c_str(), to.c_str(), max, level, a.c_str(), b.c_str());
+          continue;
+        }
+        // Else names whole, cut at a word, or codes
+        const std::string na = stop_form(from, 2, shared), nb = stop_form(to, 2, shared);
+        const bool wa = shortened(a, na, max, glyphs(na) <= max), ca = !wa && a == from;
+        // The second line's "to" goes before any word
+        const bool wb = glyphs("to " + nb) <= max                    ? b == "to " + nb
+                        : glyphs(nb) <= max                          ? b == nb
+                        : b.compare(0, 3, "to ") == 0 && b.size() > 3 ? shortened(b.substr(3), nb, max - 3, false)
+                                                                      : shortened(b, nb, max, false);
+        const bool cb = !wb && b == "to " + to;
+        FCHECK(ok ? level == 3 && (wa || ca) && (wb || cb) && !(ca && cb) && (!ca || glyphs(na) > max) &&
+                        (!cb || glyphs(nb) > max)
+                  : a.empty() && b.empty() && glyphs(na) > max && glyphs(nb) > max,
+               "%s-%s in %zu: \"%s\" / \"%s\"", from.c_str(), to.c_str(), max, a.c_str(), b.c_str());
       }
-      FCHECK(a == wa && b == wb && glyphs(a) <= max && glyphs(b) <= max, "%s in %zu: \"%s\" / \"%s\"", code, max,
-             a.c_str(), b.c_str());
-    }
-    // The card draws exactly those lines, or the codes
-    const Nearby n = one_route(code, "ATL");
-    for (int w : {128, 256}) {
-      FrameOpts o;
-      o.w = w;
-      const Frame f = flight_frame(n, &none, o, 100);
-      check_frame(f, o, code);
+    // The card draws exactly those lines, or the codes, rows apart
+    for (bool first : {true, false}) {
+      const std::string from = first ? code : "ATL", to = first ? "ATL" : code;
+      const Nearby n = one_route(from.c_str(), to.c_str());
+      for (int w : {128, 256}) {
+        FrameOpts o;
+        o.w = w;
+        const Frame f = flight_frame(n, &none, o, 100);
+        check_frame(f, o, code);
+        std::string a, b;
+        if (route_lines(from, to, 16, a, b)) {
+          const Text *ta = find_text(f, a), *tb = find_text(f, b);
+          // The route's ink ends a pixel before 5 * glyphs
+          const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
+          FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kArtX && f.sky.x + f.sky.w == 128,
+                 "%s-%s at %d: \"%s\" / \"%s\", the picture at %d", from.c_str(), to.c_str(), w, a.c_str(), b.c_str(),
+                 f.sky.x);
+          route_gap(f, a, b, code);
+          shown++;
+        } else {
+          FCHECK(find_text(f, from + "-" + to) != nullptr, "%s-%s at %d: the codes", from.c_str(), to.c_str(), w);
+        }
+      }
+      FrameOpts tall;
+      tall.w = tall.h = 128;
+      const Frame f = flight_frame(n, &none, tall, 100);
+      check_frame(f, tall, code);
       std::string a, b;
-      if (route_lines(code, "ATL", 16, a, b)) {
-        const Text *ta = find_text(f, a), *tb = find_text(f, b);
-        // The route's ink ends a pixel before 5 * glyphs
-        const int ink = 5 * (int) std::max(glyphs(a), glyphs(b));
-        FCHECK(ta != nullptr && tb != nullptr && f.sky.x - ink >= 3 && f.sky.x >= kPhotoX && f.sky.x + f.sky.w == 128,
-               "%s at %d: \"%s\" / \"%s\", the picture at %d", code, w, a.c_str(), b.c_str(), f.sky.x);
-        shown++;
-      } else {
-        FCHECK(find_text(f, std::string(code) + "-ATL") != nullptr, "%s at %d: the codes", code, w);
+      if (route_lines(from, to, 25, a, b)) {
+        FCHECK(find_text(f, a) != nullptr && find_text(f, b) != nullptr, "%s-%s full screen", from.c_str(),
+               to.c_str());
+        route_gap(f, a, b, code);
       }
     }
-    FrameOpts tall;
-    tall.w = tall.h = 128;
-    const Frame f = flight_frame(n, &none, tall, 100);
-    check_frame(f, tall, code);
-    std::string a, b;
-    if (route_lines(code, "ATL", 25, a, b))
-      FCHECK(find_text(f, a) != nullptr && find_text(f, b) != nullptr, "%s full screen", code);
   }
-  FCHECK(shown > 3000, "most routes show places: %d", shown);
+  FCHECK(shown > 7000, "most routes show places: %d", shown);
 
   // 64 wide keeps the codes; the ticker has the names
   FrameOpts o;
@@ -1192,18 +1315,18 @@ void test_airports() {
     FCHECK(a != nullptr && b != nullptr && find_text(f, "SDF-ORD") == nullptr &&
                f.ticker.find("Louisville (SDF) to Chicago O'Hare (ORD), ") != std::string::npos,
            "%d: SDF-ORD's places", w);
-    FCHECK(a != nullptr && b != nullptr && a->y == 16 && b->y == 23 && a->font == BoardFont::S8 && a->x == 1 &&
+    FCHECK(a != nullptr && b != nullptr && a->y == 15 && b->y == 24 && a->font == BoardFont::S8 && a->x == 1 &&
                a->color == b->color,
            "%d: two small lines under the callsign", w);
     // Sixteen wide: the picture moves over, three pixels clear
-    FCHECK(f.sky.x == 83 && f.sky.w == 45 && f.sky.y == kPhotoY && f.sky.h == kPhotoH, "%d: the picture at %d, %d wide",
+    FCHECK(f.sky.x == 83 && f.sky.w == 45 && f.sky.y == kArtY && f.sky.h == kArtH, "%d: the picture at %d, %d wide",
            w, f.sky.x, f.sky.w);
     f = flight_frame(one_route("JFK", "BOS"), &none, o, 100);
     FCHECK(find_text(f, "New York (JFK)") != nullptr && find_text(f, "to Boston (BOS)") != nullptr &&
                f.sky.x == 78 && f.sky.w == 50,
            "%d: fifteen wide, the picture at %d", w, f.sky.x);
   }
-  // No sky drawn within three pixels of the route
+  // The scene fills its box, three pixels past the route
   {
     o.w = 128;
     f = flight_frame(one_route("SDF", "ORD"), &none, o, 100);
@@ -1214,11 +1337,10 @@ void test_airports() {
     s.h = f.sky.h;
     s.kind = (uint8_t) f.sky.kind;
     std::vector<uint16_t> px(128 * 64, 0);
-    int nearest = 128;
     for (uint32_t seed = 1; seed <= 40; seed++)
-      for (uint8_t flags : {(uint8_t) 0, (uint8_t) espn::kSkyDay}) {
+      for (int elev : {-25, 40}) {
         s.seed = seed;
-        s.flags = flags;
+        s.elev = (int8_t) elev;
         s.moon = 1;
         s.cover = (uint8_t) (seed % 3);
         std::fill(px.begin(), px.end(), 0);
@@ -1229,15 +1351,16 @@ void test_airports() {
         p.h = s.h;
         p.clip = espn::PxBox{0, 0, s.w, s.h};
         espn::sky_paint(p, s, seed * 777);
-        int left = 128;
+        int left = 128, out = 0;
         for (int y = 0; y < 64; y++)
           for (int x = 0; x < 128; x++)
-            if (px[(size_t) (y * 128 + x)] != 0)
+            if (px[(size_t) (y * 128 + x)] != 0) {
               left = std::min(left, x);
-        FCHECK(left - 80 >= 3, "seed %u: the sky's first pixel at %d", (unsigned) seed, left);
-        nearest = std::min(nearest, left);
+              out += x < s.x || y < s.y || y >= s.y + s.h;
+            }
+        FCHECK(left == s.x && left - 80 >= 3 && out == 0, "seed %u: the scene from %d, %d outside", (unsigned) seed,
+               left, out);
       }
-    FCHECK(nearest <= 84, "a moon or cloud at the sky's left edge: %d", nearest);
   }
   // Names first; a too-wide jet draws a smaller airliner
   o.w = 128;
@@ -1265,6 +1388,23 @@ void test_airports() {
     FCHECK(find_text(f, t.a) != nullptr && find_text(f, t.b) != nullptr && f.sky.x == t.x && f.sky.kind == t.kind,
            "%s-%s %s: the route beside a picture at %d", t.from, t.to, t.type, f.sky.x);
   }
+  // Route lines clear of real types and flight numbers
+  static const char *const kRoutes[][2] = {{"DFW", "LEX"}, {"ATL", "LAX"}, {"SDF", "ORD"},
+                                           {"GRU", "YUL"}, {"ATL", "PHL"}, {"BFI", "SEA"}};
+  for (const auto &r : kRoutes)
+    for (const char *type : {"E75L", "A321", "B738", "B38M", "B77W", "B789", "A20N", "CRJ9", "DH8D", "BCS3", "C172",
+                             "PC12", "GLF6", "A359", "E190", "AT76", "B712", "MD11"})
+      for (const char *flight : {"", "QX2345", "QF12"})
+        for (int w : {128, 256}) {
+          Nearby n = one_route(r[0], r[1]);
+          snprintf(n.planes[0].type, sizeof(n.planes[0].type), "%s", type);
+          snprintf(n.planes[0].flight, sizeof(n.planes[0].flight), "%s", flight);
+          o.w = w;
+          f = flight_frame(n, &none, o, 100);
+          std::string a, b;
+          FCHECK(route_lines(r[0], r[1], 16, a, b), "%s-%s: named", r[0], r[1]);
+          route_gap(f, a, b, type);
+        }
   // Unknown both ends: the codes as before, everywhere
   for (int w : {64, 128, 256}) {
     o.w = w;
@@ -1286,10 +1426,10 @@ void test_airports() {
   static const Tail kTails[] = {
       {"SDF", "ORD", "Louisville (SDF)", "to Chicago O'Hare (ORD)", 34},
       {"DFW", "IAD", "Dallas-Fort Worth (DFW)", "to Washington (IAD)", -1},
-      {"MDW", "ATL", "Chicago Midway (MDW)", "to Atlanta (ATL)", 42},
+      {"MDW", "ATL", "Chicago Midway (MDW)", "to Atlanta (ATL)", 43},
       // Two spaces clear of the route, else left off
       {"DFW", "LEX", "Dallas-Fort Worth (DFW)", "to Lexington (LEX)", -1},
-      {"PBI", "ATL", "West Palm Beach (PBI)", "to Atlanta (ATL)", 42},
+      {"PBI", "ATL", "West Palm Beach (PBI)", "to Atlanta (ATL)", 43},
   };
   // Past a short airline name; a long one: beside the route
   for (bool long_name : {false, true})
@@ -1424,11 +1564,11 @@ void test_fr24() {
   const Frame f = flight_frame(n, &cache, o, 100);
   bool from = false, to = false, number = false;
   for (const Text &t : f.items) {
-    from = from || (t.text == "Denver (DEN)" && t.color == kColRoute);
-    to = to || (t.text == "to LGA" && t.color == kColRoute);
+    from = from || (t.text == "Denver" && t.color == kColRoute);
+    to = to || (t.text == "to New York" && t.color == kColRoute);
     number = number || t.text == "WN1678";
   }
-  FCHECK(from && to && number, "Denver (DEN), to LGA and WN1678 on the card");
+  FCHECK(from && to && number, "Denver, to New York and WN1678 on the card");
   FCHECK(f.ticker.find("SWA1678 Southwest, Boeing 737 MAX 8, Denver (DEN) to New York LaGuardia (LGA), 5,450 ft") !=
              std::string::npos,
          "%s", f.ticker.c_str());
@@ -1605,14 +1745,6 @@ std::string frame_text(const espn::AppFrame &f) {
   return out;
 }
 
-// Planespotters' answer as it comes, with made-up names
-const char *const kSpotted =
-    "{\"photos\":[{\"id\":\"1592852\",\"thumbnail\":{\"src\":\"https:\\/\\/t.plnspttrs.net\\/05072\\/"
-    "1592852_29b08bc9ff_t.jpg\",\"size\":{\"width\":200,\"height\":133}},\"thumbnail_large\":{\"src\":"
-    "\"https:\\/\\/t.plnspttrs.net\\/05072\\/1592852_29b08bc9ff_280.jpg\",\"size\":{\"width\":420,"
-    "\"height\":280}},\"link\":\"https:\\/\\/www.planespotters.net\\/photo\\/1592852\\/n8766t?utm_source=api\","
-    "\"photographer\":\"A. Spotter\"}]}";
-
 // Flightradar24's feed: planes dlat degrees north of home.
 std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24Now) {
   const double lat = 40.71, lon = -74.01;
@@ -1630,7 +1762,7 @@ std::string fr24_north(std::initializer_list<double> dlats, int64_t at = kFr24No
   return out + "}";
 }
 
-// The next position read, past any photo or route read.
+// The next position read, past any route read.
 bool read_pos(Reads &x, const std::string &body) {
   for (int i = 0; i < 8; i++) {
     x.wait();
@@ -1886,8 +2018,8 @@ void test_app() {
     // The airline logo as an icon the board loads
     espn::AppFrame wide;
     r.app.frame(256, 64, r.now, wide);
-    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0, "a logo and a picture: %zu %zu",
-           wide.icons.size(), wide.art.size());
+    FCHECK(wide.icons.size() == 1 && wide.art.empty() && wide.sky.w > 0 && wide.photo.url.empty(),
+           "a logo and a drawn picture: %zu", wide.icons.size());
     for (const espn::AppIcon &ic : wide.icons) {
       char url[160];
       const size_t n = ic.url != nullptr ? ic.url(ic.key, ic.kind, 0, url, sizeof url) : 0;
@@ -1900,52 +2032,15 @@ void test_app() {
     }
   }
   {
-    // A wide card drawn: its plane's photo comes next.
-    espn::app_env().version = "2026.11.5";
+    // A wide card drawn: the panel asks for no photo
     espn::AppRequest pr;
-    FCHECK(r.app.request(r.now, pr) && pr.url == "https://api.planespotters.net/pub/photos/hex/ac0fdc",
-           "Southwest's photo by its hex: %s", pr.url.c_str());
-    FCHECK(pr.headers.size() == 1 && pr.headers[0].name == "User-Agent" &&
-               pr.headers[0].value ==
-                   "GameDayScoreboard/2026.11.5 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)",
-           "with a way to reach us");
-    espn::AppTextStream in(kSpotted);
-    FCHECK(r.app.parse(in, r.now), "its answer");
-    r.app.ended(espn::AppResult{200, false, 0});
-    r.app.apply(true, r.now);
-    espn::AppFrame wide;
-    r.app.frame(256, 64, r.now, wide);
-    const espn::AppPhoto &ph = wide.photo;
-    FCHECK(ph.url == "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg" && ph.x == kPhotoX &&
-               ph.y == kPhotoY && ph.w == kPhotoW && ph.h == kPhotoH,
-           "the photo in the picture's spot: %s", ph.url.c_str());
-    FCHECK(wide.sky.w > 0, "the picture until it loads");
-    std::string t = wide.ticker;
-    t.insert(ph.at, ph.credit);
-    FCHECK(t.rfind("27 planes nearby | SWA1678 Southwest", 0) == 0 &&
-               t.find(" SW | Photo: A. Spotter | ") != std::string::npos,
-           "the credit after the card's plane: %s", t.c_str());
-    for (int w : {64, 128}) {
-      std::string words[2];
-      for (int s : {0, 8}) {
-        espn::AppFrame g;
-        r.app.shown(true);
-        r.app.frame(w, 64, r.now, g);
-        if (s > 0)
-          r.app.frame(w, 64, r.now + s, g = espn::AppFrame());
-        espn::app_frame_trim(g);
-        const bool list = s > 0;
-        FCHECK(g.photo.url.empty() == (w < 128) && (g.photo.w > 0) == (w >= 128 && !list),
-               "%d wide, %s: %s %d", w, list ? "the list" : "the card", g.photo.url.c_str(), g.photo.w);
-        words[list] = g.ticker;
-        words[list].insert(g.photo.at, g.photo.credit);
-      }
-      // Credited on both screens, so the ticker never jumps
-      FCHECK(words[0] == words[1] && (words[0].find("| Photo: A. Spotter |") == std::string::npos) == (w < 128),
-             "%d wide: %s / %s", w, words[0].c_str(), words[1].c_str());
-    }
-    FCHECK(!r.app.request(r.now + 1, pr) || pr.url.find("planespotters") == std::string::npos,
-           "one lookup a plane");
+    FCHECK(!r.app.request(r.now, pr) || pr.url.find("planespotters") == std::string::npos, "no photo lookup: %s",
+           pr.url.c_str());
+    FCHECK_EQ(caller_agent(""), "GameDayScoreboard/1.0 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
+    FCHECK_EQ(caller_agent("2026.11.5"),
+              "GameDayScoreboard/2026.11.5 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
+    for (const char *const *h = r.app.hosts(); *h != nullptr; h++)
+      FCHECK(std::string(*h).find("planespotters") == std::string::npos, "no photo host: %s", *h);
     JsonDocument d;
     r.app.state(d.to<JsonObject>(), r.now);
     FCHECK(d["nearest_hex"] == "ac0fdc" && d["nearest_reg"] == "N8766T", "the page's photo lookup");
@@ -2131,100 +2226,6 @@ void test_app() {
 
 }
 
-// Planespotters' photos: keys, URLs, answers, the cache.
-void test_photo_parts() {
-  Plane p;
-  strcpy(p.hex, "ac0fdc");
-  strcpy(p.reg, "N8766T");
-  char key[9];
-  FCHECK(photo_key(p, key) && std::string(key) == "ac0fdc", "by hex: %s", key);
-  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/hex/ac0fdc");
-  p.anon = true;
-  FCHECK(photo_key(p, key) && std::string(key) == "N8766T", "a made-up hex: by registration");
-  FCHECK_EQ(photo_url(key), "https://api.planespotters.net/pub/photos/reg/N8766T");
-  strcpy(p.reg, "g-euus");
-  FCHECK(photo_key(p, key) && std::string(key) == "G-EUUS", "upper case: %s", key);
-  FCHECK_EQ(photo_url("ABCDEF"), "https://api.planespotters.net/pub/photos/reg/ABCDEF");
-  for (const char *bad : {"", "N", "N12 34", "N1/2", "N1?x"}) {
-    strcpy(p.reg, bad);
-    FCHECK(!photo_key(p, key) && key[0] == '\0', "no key from \"%s\"", bad);
-  }
-  // Too long for the field: dropped, never cut
-  for (const char *reg : {"N123456789", "RA-890012", "RA-89001"}) {
-    const bool fits = strlen(reg) < sizeof(p.reg);
-    JsonDocument d;
-    deserializeJson(d, std::string("{\"hex\":\"~abc123\",\"seen\":1,\"r\":\"") + reg + "\"}");
-    FCHECK(plane_from_json(d.as<JsonObjectConst>(), Home(), p) && (std::string(p.reg) == reg) == fits &&
-               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
-           "%s from a receiver: \"%s\"", reg, p.reg);
-    deserializeJson(d, std::string("[\"\",40.7,-73.9,0,3000,200,\"\",\"\",\"B738\",\"") + reg + "\"," +
-                           std::to_string(kFr24Now) + ",\"\",\"\",\"\",0,0,\"\"]");
-    FCHECK(plane_from_fr24(d.as<JsonArrayConst>(), nyc(), kFr24Now, p) && (std::string(p.reg) == reg) == fits &&
-               (p.reg[0] == '\0') == !fits && photo_key(p, key) == fits,
-           "%s from Flightradar24: \"%s\"", reg, p.reg);
-  }
-  p.anon = false;
-  for (const char *hex : {"", "abc12", "00000g", "000000"}) {
-    strcpy(p.hex, hex);
-    FCHECK(!hex_usable(p), "not a hex: \"%s\"", hex);
-  }
-  FCHECK_EQ(photo_agent(""), "GameDayScoreboard/1.0 (+https://github.com/ApolloAutomation/gameday-scoreboard-main)");
-
-  // What Planespotters answers
-  PlanePhoto ph;
-  FCHECK(parse_photo(kSpotted, ph) && ph.state == PhotoState::KNOWN, "a photo");
-  FCHECK_EQ(ph.url, "https://t.plnspttrs.net/05072/1592852_29b08bc9ff_280.jpg");
-  FCHECK_EQ(ph.by, "A. Spotter");
-  FCHECK(parse_photo("{\"photos\":[]}", ph) && ph.state == PhotoState::NONE && ph.url[0] == '\0', "none");
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://t.plnspttrs.net/1/2_t.jpg\"}}]}", ph) &&
-             ph.state == PhotoState::KNOWN && std::string(ph.url) == "https://t.plnspttrs.net/1/2_t.jpg" &&
-             ph.by[0] == '\0',
-         "the small one when it's all there is");
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"http://x.net/a.jpg\"}},"
-                     "{\"thumbnail_large\":{\"src\":\"https://x.net/b c.jpg\"}},"
-                     "{\"thumbnail_large\":{\"src\":\"https://x.net/c.jpg\"},\"photographer\":\"C\"}]}",
-                     ph) &&
-             std::string(ph.url) == "https://x.net/c.jpg" && std::string(ph.by) == "C",
-         "the first one fit to download: %s", ph.url);
-  const std::string longurl = "https://t.plnspttrs.net/" + std::string(kPhotoUrlMax, 'a') + ".jpg";
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail_large\":{\"src\":\"" + longurl + "\"}}]}", ph) &&
-             ph.state == PhotoState::NONE,
-         "too long to keep");
-  // A name cut on a whole letter, control characters out
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":"
-                     "\"Bj\\u00f6rn\\tSt\\u00e5hl AAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}",
-                     ph),
-         "a long name");
-  FCHECK_EQ(ph.by, "Bj\xc3\xb6rnSt\xc3\xa5hl " + std::string(18, 'A'));
-  FCHECK(parse_photo("{\"photos\":[{\"thumbnail\":{\"src\":\"https://a.b/c.jpg\"},\"photographer\":\"" +
-                         std::string(30, 'A') + "\\u00f6\"}]}",
-                     ph) &&
-             std::string(ph.by) == std::string(30, 'A'),
-         "not half a letter: %s", ph.by);
-  for (const char *bad : {"{}", "[]", "{\"photos\":{}}", "{\"error\":\"no\"}", "nope", ""})
-    FCHECK(!parse_photo(bad, ph), "unreadable: %s", bad);
-
-  // The cache: photos a day, misses half that
-  PhotoCache c;
-  const uint32_t t0 = 1000000;
-  FCHECK(c.wants("ac0fdc", t0) && !c.wants("", t0) && !c.wants(nullptr, t0), "wants what it lacks");
-  PlanePhoto &k = c.put("ac0fdc", t0);
-  FCHECK(k.state == PhotoState::NONE, "a miss until told otherwise");
-  k.state = PhotoState::KNOWN;
-  c.put("N7QD", t0);
-  FCHECK(!c.wants("ac0fdc", t0 + kPhotoKnownS - 1) && c.wants("ac0fdc", t0 + kPhotoKnownS), "a photo for a day");
-  FCHECK(!c.wants("N7QD", t0 + kPhotoNoneS - 1) && c.wants("N7QD", t0 + kPhotoNoneS), "a miss for half of one");
-  FCHECK(c.find("ac0fdc", t0 + 10) != nullptr && c.find("ac0fdc", t0 + kPhotoKnownS) == nullptr, "found while fresh");
-  for (int i = 0; i < (int) kPhotoCache; i++) {
-    char hex[9];
-    snprintf(hex, sizeof hex, "a%05d", i);
-    c.put(hex, t0 + 100 + i);
-    c.find("ac0fdc", t0 + 100 + i);
-  }
-  FCHECK(c.find("ac0fdc", t0 + 200) != nullptr && c.find("a00000", t0 + 200) == nullptr && !c.wants("a00001", t0 + 200),
-         "full: the least used goes");
-}
-
 // The recording, its times moved on by shift seconds.
 std::string fr24_later(const std::string &json, int64_t shift) {
   JsonDocument d;
@@ -2235,80 +2236,6 @@ std::string fr24_later(const std::string &json, int64_t shift) {
   std::string out;
   serializeJson(d, out);
   return out;
-}
-
-// Lookups: wide cards only, once a plane, with waits.
-void test_photo_reads() {
-  const std::string fr24 = slurp(kFr24File);
-  Reads r;
-  r.app.setup();
-  r.app.set("flyhome", "40.71,-74.01");
-  r.app.set("flyradius", "28mi");
-  espn::app_env().tz = 0;
-  r.app.shown(true);
-  FCHECK(r.step(200, fr24), "planes");
-  // The panel a second at a time, lookups answered
-  std::vector<int64_t> asked;
-  int status = 503;
-  std::string body;
-  uint32_t retry_ms = 0;
-  // Until secs pass or `until` lookups were made
-  auto run = [&](int64_t secs, int w, size_t until = SIZE_MAX) {
-    for (int64_t end = r.now + secs; r.now < end && asked.size() < until; r.now++) {
-      espn::AppFrame f;
-      r.app.frame(w, 64, r.now, f);
-      espn::AppRequest q;
-      if (!r.app.request(r.now, q))
-        continue;
-      const bool photo = q.url.find("api.planespotters.net") != std::string::npos;
-      if (photo)
-        asked.push_back(r.now);
-      espn::AppTextStream in(photo ? body : fr24_later(fr24, r.now - kFr24Now));
-      const int st = photo ? status : q.url.find("flightradar24") != std::string::npos ? 200 : 404;
-      const bool ok = st == 200 && r.app.parse(in, r.now);
-      r.app.ended(espn::AppResult{st, espn::is_throttle_status(st), photo ? retry_ms : 0});
-      r.app.apply(ok, r.now);
-    }
-  };
-  run(120, 64);
-  FCHECK(asked.empty(), "64 wide: none");
-  const int64_t wide = r.now;
-  run(5, 128);
-  FCHECK(asked.size() == 1 && asked[0] - wide <= 1, "128 wide: at once");
-  // A server error: a wait, then again
-  run(60, 128, 2);
-  FCHECK(asked.size() == 2 && asked[1] - asked[0] >= 15 && asked[1] - asked[0] <= 31, "again after %d s",
-         asked.size() > 1 ? (int) (asked[1] - asked[0]) : -1);
-  // Refused: Retry-After kept
-  status = 429;
-  retry_ms = 900000;
-  r.now++;
-  run(1200, 128, 3);
-  run(1200, 128, 4);
-  FCHECK(asked.size() == 4 && asked[3] - asked[2] >= 900, "Retry-After kept: %d s",
-         asked.size() > 3 ? (int) (asked[3] - asked[2]) : -1);
-  // No photo: a miss, not asked again for hours
-  status = 200;
-  body = "{\"photos\":[]}";
-  retry_ms = 0;
-  const size_t n = asked.size();
-  run(3600, 128);
-  FCHECK(asked.size() <= n + 1, "a miss once: %zu", asked.size() - n);
-  espn::AppFrame g;
-  r.app.frame(256, 64, r.now, g);
-  FCHECK(g.photo.url.empty() && g.sky.w > 0, "the picture, no photo: %s %zu", g.photo.url.c_str(), g.art.size());
-  FCHECK(r.app.photos().slots[0].state == PhotoState::NONE, "kept as a miss");
-  // Off screen: none until a wide card is drawn again
-  Reads s;
-  s.app.setup();
-  s.app.set("flyhome", "40.71,-74.01");
-  s.app.set("flyradius", "28mi");
-  s.app.shown(true);
-  FCHECK(s.step(200, fr24), "planes");
-  s.app.frame(192, 64, s.now, g);
-  s.app.shown(false);
-  espn::AppRequest q;
-  FCHECK(!s.app.request(s.now + 1, q) || q.url.find("planespotters") == std::string::npos, "off screen: none");
 }
 
 // Everything a frame hands the board, as one string.
@@ -2338,8 +2265,8 @@ std::string frame_sig(const espn::AppFrame &f) {
     snprintf(b, sizeof b, "I%d,%d,%d,%d,%s\n", i.x, i.y, i.px, i.alt, i.key);
     o += b;
   }
-  snprintf(b, sizeof b, "P%d,%d,%d,%d,%zu,", f.photo.x, f.photo.y, f.photo.w, f.photo.h, f.photo.at);
-  o += b + f.photo.url + f.photo.credit + "\nK" + f.ticker + (f.map.w > 0 ? "\nM" : "\n");
+  snprintf(b, sizeof b, "P%d,%d,%d,%d,", f.photo.x, f.photo.y, f.photo.w, f.photo.h);
+  o += b + f.photo.url + "\nK" + f.ticker + (f.map.w > 0 ? "\nM" : "\n");
   return o;
 }
 
@@ -2398,10 +2325,10 @@ void test_radar_frames() {
         for (const Text &t : flight_frame(n, nullptr, o, 100).items)
           direct += std::to_string(t.x) + "," + std::to_string(t.y) + t.text;
       }
-    FCHECK(sig_hash(bare) == 0xeecf6540u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
+    FCHECK(sig_hash(bare) == 0x80edb249u, "notes at 128x128 and 256x64, under their sky: 0x%08x",
            (unsigned) sig_hash(bare));
-    FCHECK(sig_hash(sig) == 0x56ac25a0u, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
-    FCHECK(sig_hash(direct) == 0x1551fcadu, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
+    FCHECK(sig_hash(sig) == 0x9f20b80cu, "64, 128 and 192 wide, routes with places: 0x%08x", (unsigned) sig_hash(sig));
+    FCHECK(sig_hash(direct) == 0x379fd3d4u, "the card and list, routes with places: 0x%08x", (unsigned) sig_hash(direct));
   }
   for (int w = 32; w <= 320; w += 32)
     for (int h : {32, 64, 96, 128})
@@ -2589,8 +2516,6 @@ int run_flight_tests(int &total_checks) {
   test_prefs();
   test_app();
   test_widen();
-  test_photo_parts();
-  test_photo_reads();
   test_adsbfi();
   test_ground_only();
   test_other_sources();

@@ -6117,7 +6117,7 @@ void GamedayComponent::apps_setup_() {
   env.version = App.get_comment().c_str();
   if (!env.version.empty() && env.version[0] == 'v')
     env.version.erase(0, 1);
-  this->logos_.set_photo_agent(::flights::photo_agent(env.version));
+  this->logos_.set_map_agent(::flights::caller_agent(env.version));
   ::espn::register_apps(slots);
   for (int i = 1; i < ::espn::kDisplayCount; i++) {
     ::espn::App *a = slots.app[i];
@@ -6297,22 +6297,17 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
       f.texts[gone].text.clear();
   }
   size_t pins = f.icon_n;
-  // The photo stands in for the art
+  // A boxed map under the art
   const ::espn::AppPhoto &ph = fr.photo;
-  if (!ph.url.empty()) {
-    const bool boxed = ph.w > 0 && ph.h > 0;
-    image::Image *img = boxed ? this->logos_.photo(ph.url, ph.w, ph.h) : nullptr;
-    // Credited whenever loaded, drawn only when boxed
-    if (img != nullptr || (!boxed && this->logos_.photo_ready(ph.url))) {
-      if (ph.at <= f.status_text.size())
-        f.status_text.insert(ph.at, ph.credit);
+  if (!ph.url.empty() && ph.w > 0 && ph.h > 0) {
+    image::Image *img = this->logos_.photo(ph.url, ph.w, ph.h);
+    if (img != nullptr)
       shown[pins++] = ::espn::logo_key(ph.url.data(), ph.url.size());
-    }
-    bool coming = img == nullptr && boxed && this->logos_.photo_waiting(ph.url, ph.w, ph.h);
+    bool coming = img == nullptr && this->logos_.photo_waiting(ph.url, ph.w, ph.h);
     if (coming)
       this->icon_wait_ |= 1u << (int) d;
     // Its stand-in while it loads
-    if (img == nullptr && boxed && !ph.hold.empty() && ph.hold != ph.url) {
+    if (img == nullptr && !ph.hold.empty() && ph.hold != ph.url) {
       img = this->logos_.photo(ph.hold, ph.w, ph.h);
       if (img != nullptr)
         shown[pins++] = ::espn::logo_key(ph.hold.data(), ph.hold.size());
@@ -6320,17 +6315,12 @@ void GamedayComponent::app_fields_(::espn::Display d, int w, int h, UpdateFields
         coming = coming || this->logos_.photo_waiting(ph.hold, ph.w, ph.h);
     }
     // Nothing drawn and nothing on its way
-    if (img == nullptr && boxed && !coming && a != nullptr)
+    if (img == nullptr && !coming && a != nullptr)
       a->photo_failed(now);
     if (img != nullptr) {
       f.photo_img = img;
       f.photo_xy[0] = (int16_t) (ph.x + (ph.w - img->get_width()) / 2);
       f.photo_xy[1] = (int16_t) (ph.y + (ph.h - img->get_height()) / 2);
-      if (!ph.keep_art) {
-        f.art.clear();
-        if (pics != nullptr)
-          pics->sky = ::espn::AppSky();
-      }
       if (ph.alt >= 0 && (size_t) ph.alt < f.texts.size())
         f.texts[ph.alt].text.clear();
     }

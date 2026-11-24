@@ -203,23 +203,18 @@ void test_frame_helpers() {
   AppFrame g;
   g.line.pts = {{0, 0}, {1, 1}};
   ACHECK(app_frame_board(g));
-  // A photo: boxed, credit only, or dropped when off
-  auto photo = [](const char *url, int w, int h, size_t at) {
+  // A boxed map: kept, or dropped when off or unboxed
+  auto photo = [](const char *url, int w, int h) {
     AppFrame p;
-    p.ticker = "1 nearby | A";
     p.photo.url = url;
     p.photo.w = (uint8_t) w;
     p.photo.h = (uint8_t) h;
-    p.photo.credit = " | Photo: B";
-    p.photo.at = at;
     app_frame_trim(p);
     return p.photo;
   };
-  ACHECK(photo("https://a/b.jpg", 56, 21, 12).w == 56);
-  const AppPhoto bare = photo("https://a/b.jpg", 56, 0, 12);
-  ACHECK(bare.url == "https://a/b.jpg" && bare.w == 0 && bare.h == 0 && bare.credit == " | Photo: B");
-  ACHECK(photo("", 56, 21, 12).credit.empty() && photo("https://a/b.jpg", 56, 21, 13).url.empty());
-  ACHECK(photo("https://a/b.jpg", kAppPhotoMaxW + 1, 21, 0).url.empty());
+  ACHECK(photo("https://a/b.png", 56, 21).w == 56);
+  ACHECK(photo("https://a/b.png", 56, 0).url.empty() && photo("", 56, 21).w == 0);
+  ACHECK(photo("https://a/b.png", kAppPhotoMaxW + 1, 21).url.empty());
 }
 
 // Full screen: the rows become labels at their own pitch.

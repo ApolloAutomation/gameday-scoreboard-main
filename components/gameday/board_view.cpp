@@ -698,8 +698,10 @@ void put_sky(BoardView &v, const UpdateFields &f) {
     lv_obj_set_size(v.sky, s.w, s.h);
   }
   if (memcmp(&s, &was, sizeof s) != 0) {
+    // A new box or craft restarts; the rest updates
+    if (fresh || was.kind != s.kind || was.flip != s.flip || was.scale != s.scale)
+      v.sky_t0 = millis();
     was = s;
-    v.sky_t0 = millis();
   }
   show(v.sky, true);
   sky_draw(v, fresh);
