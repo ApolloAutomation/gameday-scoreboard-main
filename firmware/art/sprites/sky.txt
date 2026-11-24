@@ -1,25 +1,7 @@
 # The small sky behind the Flight Tracker's drawn planes
-# (scripts/build_sprites.py). Original art for this project. c and C are a
-# cloud's light top and darker underside, b a bird, s the sun, m the moon.
+# (scripts/build_sprites.py). Original art for this project. b is a bird
+# and m the moon; the other letters keep their slots.
 @legend .cCbsm0123456789
-
-@frame sky.cloud1 7x3 anchor 0,0 float
-..cc...
-.ccccc.
-CCCCCCC
-
-@frame sky.cloud2 10x4 anchor 0,0 float
-...cc.....
-.cccccc.c.
-cccccccccc
-.CCCCCCCC.
-
-@frame sky.cloud3 14x5 anchor 0,0 float
-.....ccc......
-..ccccccc.cc..
-.cccccccccccc.
-cccccccccccccc
-.CCCCCCCCCCCC.
 
 @frame sky.up 5x2 anchor 0,0 float
 b...b
@@ -28,13 +10,6 @@ b...b
 @frame sky.down 5x2 anchor 0,0 float
 .bbb.
 b...b
-
-@frame sky.sun 5x5 anchor 0,0 float
-.sss.
-sssss
-sssss
-sssss
-.sss.
 
 @frame sky.crescent 5x5 anchor 0,0 float
 ...m.

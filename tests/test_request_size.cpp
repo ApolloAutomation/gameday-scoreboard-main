@@ -147,8 +147,8 @@ void weather(flights::FlightsApp &home, const std::string &version) {
     fh.lon = (float) h[1];
     fh.radius_nm = 250;
     fits("Flights fr24", flights::fr24_url(fh), espn::kUserAgent);
-    fits("Flights adsb.fi", flights::adsbfi_url(fh), flights::photo_agent(version));
-    fits("Flights adsb.lol", flights::adsblol_url(fh), flights::photo_agent(version));
+    fits("Flights adsb.fi", flights::adsbfi_url(fh), flights::caller_agent(version));
+    fits("Flights adsb.lol", flights::adsblol_url(fh), flights::caller_agent(version));
   }
 }
 
@@ -206,9 +206,8 @@ void others(const std::string &version) {
       fits("Coin icon", std::string(icon, len), ua);
   }
 
-  fits("Flights routes", flights::kRoutesetUrl, flights::photo_agent(version), "POST");
-  fits("Flights adsbdb", flights::adsbdb_url("UAL12345"), flights::photo_agent(version));
-  fits("Flights photo", flights::photo_url("a1b2c3"), flights::photo_agent(version));
+  fits("Flights routes", flights::kRoutesetUrl, flights::caller_agent(version), "POST");
+  fits("Flights adsbdb", flights::adsbdb_url("UAL12345"), flights::caller_agent(version));
   for (F1Read r : {F1Read::NEXT, F1Read::DRIVERS, F1Read::CONSTRUCTORS, F1Read::LAST_RESULTS})
     fits("F1 Jolpica", f1_jolpica_url(r), espn::f1_met_agent(version));
   fits("F1 circuit", f1_circuit_url(123), ua);

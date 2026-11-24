@@ -495,7 +495,7 @@ void test_brand_and_cards() {
         const bool brand = logo_airline(p) != nullptr;
         const bool art = plane_sprite(plane_kind(p.type, p.category)) != nullptr;
         // Drawn in its moving sky, never as a still picture too
-        PCHECK((f.sky.w > 0) == art && f.art.empty(), "%s %d: a picture", plane_label(p), w);
+        PCHECK((f.sky.w > 0) == art, "%s %d: a picture", plane_label(p), w);
         // Its own, or a smaller airliner beside long names
         const PlaneKind k = plane_kind(p.type, p.category);
         const bool kind_ok = f.sky.kind == k || (f.sky.kind == PlaneKind::NARROW && plane_sprite(k)->w > f.sky.w);
@@ -565,7 +565,7 @@ void test_brand_and_cards() {
   Plane balloon = v[0];
   strcpy(balloon.type, "");
   strcpy(balloon.category, "B2");
-  PCHECK(card(balloon, 64).art.empty() && card(balloon, 64).sky.w == 0, "a balloon: no picture");
+  PCHECK(card(balloon, 64).sky.w == 0, "a balloon: no picture");
 }
 
 }  // namespace
