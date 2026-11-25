@@ -30,7 +30,7 @@ Your favorite players are a shortcut for [player props](/using/bets/#player-prop
 
 ## The stat line
 
-While a favorite player's game is on the board and live, the ticker adds the player's line from ESPN's game leaders, like **ALLEN 21/34, 241 YDS, 2 TD**, after the game's own parts and before your [bets](/using/bets/). On two rows of two they run in the bottom half's ticker, the only one there. The device page shows the same lines as tags under its board. Each player has a line only while ESPN lists them among the leaders, so a player who isn't leading anything has none, and a line can come and go during the game.
+While a favorite player's game is on the board and live, the ticker adds the player's line from ESPN's game leaders, like **ALLEN 21/34, 241 YDS, 2 TD**, after the game's own parts and before your [bets](/using/bets/). On two rows of two they run in the board's ticker, along the bottom of the top half. The device page shows the same lines as tags under its board. Each player has a line only while ESPN lists them among the leaders, so a player who isn't leading anything has none, and a line can come and go during the game.
 
 What ESPN lists as leaders depends on the sport:
 
