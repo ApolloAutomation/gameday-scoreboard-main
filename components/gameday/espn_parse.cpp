@@ -439,6 +439,14 @@ std::string records_line(const GameSnapshot &s, const std::string &standing) {
   return out;
 }
 
+void add_live_extras(std::string &out, const GameSnapshot &s, const std::string &series) {
+  add_part(out, s.game_name);
+  add_part(out, series);
+  if (s.venue != s.game_name)
+    add_part(out, s.venue);
+  add_part(out, s.tv);
+}
+
 std::string ranked_matchup(const GameSnapshot &s) {
   if (s.team_rank == 0 && s.opp_rank == 0)
     return "";
@@ -690,6 +698,9 @@ std::string status_text(const GameSnapshot &s, const TickerOptions &o, const std
     add_part(out, clock);
   if (o.last_play)
     add_last_play(out, s.last_play);
+  // Never repeat the board's clock row
+  if (out.empty() && !o.clock)
+    detail::add_live_extras(out, s, "");
   if (out.empty())
     out = clock.empty() ? "In Progress" : clock;
   return out;
