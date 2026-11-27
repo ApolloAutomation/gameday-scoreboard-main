@@ -14,6 +14,14 @@ with a one-line summary for each release: the first sentence of the first
 bullet, or a plain line between the heading and the bullets when a release
 needs a better one. Panels link to their release's section there.
 
+## v2026.11.14
+
+During a game, the ticker shows the venue and TV channel instead of repeating the clock, so on two rows of two the top half's ticker scrolls like the bottom half's.
+
+- During a basketball or hockey game with **Last play** off, or a football game with **Down and distance** and **Last play** both off, the ticker shows the game's name, a playoff series, the venue and the TV channel, like **Hilton Coliseum | NBA TV**, instead of the same clock that's already on the board.
+- On two rows of two with a second game in the bottom half, the top half's ticker now scrolls too, so it no longer looks like part of the scoreboard.
+- Updating keeps your team, favorites and every other setting.
+
 ## v2026.11.13
 
 The Flight Tracker draws each plane over a scene of sky and land that follows the time of day and the weather at your home, and the card's two route lines always match.
