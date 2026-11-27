@@ -3350,7 +3350,12 @@ static void test_nba_live() {
   CHECK_EQ(status_text(g, clock, ""), "8:27 - 3rd | " + play);
   TickerOptions quiet = o;
   quiet.last_play = false;
-  CHECK_EQ(status_text(g, quiet, ""), std::string("8:27 - 3rd"));
+  // The clock has its own row, so never the clock.
+  CHECK_EQ(status_text(g, quiet, ""), std::string("Hilton Coliseum | NBA TV"));
+  GameSnapshot bare = g;
+  bare.venue.clear();
+  bare.tv.clear();
+  CHECK_EQ(status_text(bare, quiet, ""), std::string("8:27 - 3rd"));
 
   // Under a minute ESPN sends tenths and no minutes.
   GameSnapshot c = hoops_event("fixtures/event_nba_clock.json", kThunder);
@@ -3655,7 +3660,7 @@ static void test_nhl_live() {
   CHECK_EQ(status_text(g, with_clock, ""), "3:21 - 1st | " + penalty);
   TickerOptions quiet = o;
   quiet.last_play = false;
-  CHECK_EQ(status_text(g, quiet, ""), std::string("3:21 - 1st"));
+  CHECK_EQ(status_text(g, quiet, ""), std::string("Canada Life Centre | ESPN+"));
   GameSnapshot nameless = g;  // seen live: a goal before ESPN had the scorer
   nameless.last_play = ", assists: Neal Pionk (1), Dylan Samberg (1)";
   CHECK_EQ(status_text(nameless, o, ""), std::string("assists: Neal Pionk (1), Dylan Samberg (1)"));

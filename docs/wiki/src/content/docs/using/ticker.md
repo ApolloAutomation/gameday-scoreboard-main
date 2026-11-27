@@ -64,6 +64,10 @@ These three, Down and distance, Count and at-bat and Match stats, are the game s
 
 With every switch off during play, the ticker shows ESPN's short status for the game, like the clock.
 
+:::note[Coming in the next release]
+With every switch off during play, or in hockey and basketball with **Last play** off, the ticker shows the game's name, a playoff series, the venue and the TV channel, like **Hilton Coliseum | NBA TV**, so it never repeats the clock row. Only when ESPN sends none of those does it show ESPN's short status for the game, the same as the clock row, holding still when it fits.
+:::
+
 The game clock always has its own row on the board, so it never goes in the ticker.
 
 ## Messages in the ticker

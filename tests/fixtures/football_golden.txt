@@ -693,7 +693,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 3rd quarter.
   odds= ou= tv=CBS venue=Autzen Stadium
   clock_text=15:00 4th
-  status[0,1,8,9,16,17,24,25]=15:00 - 4th
+  status[0,8,16,24]=Autzen Stadium | CBS
+  status[1,9,17,25]=15:00 - 4th
   status[2,10,18,26]=3rd & 10 at BOIS 25
   status[3,11,19,27]=3rd & 10 at BOIS 25 | 15:00 - 4th
   status[4,12,20,28]=End of 3rd quarter.
@@ -765,7 +766,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 3rd quarter.
   odds= ou= tv=CBS venue=Autzen Stadium
   clock_text=15:00 4th
-  status[0,1,8,9,16,17,24,25]=15:00 - 4th
+  status[0,8,16,24]=Autzen Stadium | CBS
+  status[1,9,17,25]=15:00 - 4th
   status[2,10,18,26]=3rd & 10 at BOIS 25
   status[3,11,19,27]=3rd & 10 at BOIS 25 | 15:00 - 4th
   status[4,12,20,28]=End of 3rd quarter.
@@ -837,7 +839,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   odds= ou= tv=ESPN venue=DKR-Texas Memorial Stadium
   clock_text=6:00 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=6:00 - 4th
+  status[0,2,8,10,16,18,24,26]=DKR-Texas Memorial Stadium | ESPN
+  status[1,3,9,11,17,19,25,27]=6:00 - 4th
   status[4,6,12,14,20,22,28,30]=(06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   status[5,7,13,15,21,23,29,31]=6:00 - 4th | (06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   splash n0 o0 d-1 us=/0 them=/0
@@ -905,7 +908,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   odds= ou= tv=ESPN venue=DKR-Texas Memorial Stadium
   clock_text=6:00 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=6:00 - 4th
+  status[0,2,8,10,16,18,24,26]=DKR-Texas Memorial Stadium | ESPN
+  status[1,3,9,11,17,19,25,27]=6:00 - 4th
   status[4,6,12,14,20,22,28,30]=(06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   status[5,7,13,15,21,23,29,31]=6:00 - 4th | (06:00) #44 G.Spetic field goal attempt from 48 yards GOOD (H: #43 M.Chiumento, LS: #47 T.Dubuc), clock 06:00
   splash n0 o0 d-1 us=/0 them=/0
@@ -973,7 +977,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=No Huddle-Shotgun #21 T.Lester rush middle for 2 yards gain to the MAR03 (#19 Y.Kemajou; #26 C.Smith)
   odds= ou= tv=FS1 venue=Beaver Stadium
   clock_text=12:36 4th
-  status[0,1,8,9,16,17,24,25]=12:36 - 4th
+  status[0,8,16,24]=Beaver Stadium | FS1
+  status[1,9,17,25]=12:36 - 4th
   status[2,10,18,26]=2nd & 8 at MRSH 3
   status[3,11,19,27]=2nd & 8 at MRSH 3 | 12:36 - 4th
   status[4,12,20,28]=No Huddle-Shotgun #21 T.Lester rush middle for 2 yards gain to the MAR03 (#19 Y.Kemajou; #26 C.Smith)
@@ -989,7 +994,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=No Huddle-Shotgun #21 T.Lester rush middle for 2 yards gain to the MAR03 (#19 Y.Kemajou; #26 C.Smith)
   odds= ou= tv=FS1 venue=Beaver Stadium
   clock_text=12:36 4th
-  status[0,1,8,9,16,17,24,25]=12:36 - 4th
+  status[0,8,16,24]=Beaver Stadium | FS1
+  status[1,9,17,25]=12:36 - 4th
   status[2,10,18,26]=2nd & 8 at MRSH 3
   status[3,11,19,27]=2nd & 8 at MRSH 3 | 12:36 - 4th
   status[4,12,20,28]=No Huddle-Shotgun #21 T.Lester rush middle for 2 yards gain to the MAR03 (#19 Y.Kemajou; #26 C.Smith)
@@ -1005,7 +1011,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(Two-Point Conversion failed)
   odds= ou= tv=SECN+ venue=Neyland Stadium
   clock_text=13:03 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=13:03 - 4th
+  status[0,2,8,10,16,18,24,26]=Neyland Stadium | SECN+
+  status[1,3,9,11,17,19,25,27]=13:03 - 4th
   status[4,6,12,14,20,22,28,30]=(Two-Point Conversion failed)
   status[5,7,13,15,21,23,29,31]=13:03 - 4th | (Two-Point Conversion failed)
  event 401856666 team 231 ok=1
@@ -1017,7 +1024,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(Two-Point Conversion failed)
   odds= ou= tv=SECN+ venue=Neyland Stadium
   clock_text=13:03 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=13:03 - 4th
+  status[0,2,8,10,16,18,24,26]=Neyland Stadium | SECN+
+  status[1,3,9,11,17,19,25,27]=13:03 - 4th
   status[4,6,12,14,20,22,28,30]=(Two-Point Conversion failed)
   status[5,7,13,15,21,23,29,31]=13:03 - 4th | (Two-Point Conversion failed)
  event 401856636 team 2 ok=1
@@ -1029,7 +1037,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(00:58) No Huddle-Shotgun #29 O.Mabson II rush right for 2 yards loss to the BAY36 (#11 D.Turner)
   odds= ou= tv=ABC venue=Mercedes-Benz Stadium
   clock_text=0:03 3rd
-  status[0,1,8,9,16,17,24,25]=0:03 - 3rd
+  status[0,8,16,24]=Aflac Kickoff | Mercedes-Benz Stadium | ABC
+  status[1,9,17,25]=0:03 - 3rd
   status[2,10,18,26]=4th & 5 at BAY 36
   status[3,11,19,27]=4th & 5 at BAY 36 | 0:03 - 3rd
   status[4,12,20,28]=(00:58) No Huddle-Shotgun #29 O.Mabson II rush right for 2 yards loss to the BAY36 (#11 D.Turner)
@@ -1045,7 +1054,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(00:58) No Huddle-Shotgun #29 O.Mabson II rush right for 2 yards loss to the BAY36 (#11 D.Turner)
   odds= ou= tv=ABC venue=Mercedes-Benz Stadium
   clock_text=0:03 3rd
-  status[0,1,8,9,16,17,24,25]=0:03 - 3rd
+  status[0,8,16,24]=Aflac Kickoff | Mercedes-Benz Stadium | ABC
+  status[1,9,17,25]=0:03 - 3rd
   status[2,10,18,26]=4th & 5 at BAY 36
   status[3,11,19,27]=4th & 5 at BAY 36 | 0:03 - 3rd
   status[4,12,20,28]=(00:58) No Huddle-Shotgun #29 O.Mabson II rush right for 2 yards loss to the BAY36 (#11 D.Turner)
@@ -1061,7 +1071,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Shotgun #10 M.McKenzie pass intercepted by #8 K.Worthy at CIN38 #8 K.Worthy return 24 yards to the BCE38 (#48 Z.Moore; #52 J.Pruitt)
   odds= ou= tv=FOX venue=Nippert Stadium
   clock_text=End of 3rd
-  status[0,1,8,9,16,17,24,25]=End of 3rd
+  status[0,8,16,24]=Nippert Stadium | FOX
+  status[1,9,17,25]=End of 3rd
   status[2,10,18,26]=1st & 10 at BC 38
   status[3,11,19,27]=1st & 10 at BC 38 | End of 3rd
   status[4,12,20,28]=Shotgun #10 M.McKenzie pass intercepted by #8 K.Worthy at CIN38 #8 K.Worthy return 24 yards to the BCE38 (#48 Z.Moore; #52 J.Pruitt)
@@ -1077,7 +1088,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Shotgun #10 M.McKenzie pass intercepted by #8 K.Worthy at CIN38 #8 K.Worthy return 24 yards to the BCE38 (#48 Z.Moore; #52 J.Pruitt)
   odds= ou= tv=FOX venue=Nippert Stadium
   clock_text=End of 3rd
-  status[0,1,8,9,16,17,24,25]=End of 3rd
+  status[0,8,16,24]=Nippert Stadium | FOX
+  status[1,9,17,25]=End of 3rd
   status[2,10,18,26]=1st & 10 at BC 38
   status[3,11,19,27]=1st & 10 at BC 38 | End of 3rd
   status[4,12,20,28]=Shotgun #10 M.McKenzie pass intercepted by #8 K.Worthy at CIN38 #8 K.Worthy return 24 yards to the BCE38 (#48 Z.Moore; #52 J.Pruitt)
@@ -1093,7 +1105,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
   odds= ou= tv=ACC Network venue=Wallace Wade Stadium
   clock_text=0:09 2nd
-  status[0,1,8,9,16,17,24,25]=0:09 - 2nd
+  status[0,8,16,24]=Wallace Wade Stadium | ACC Network
+  status[1,9,17,25]=0:09 - 2nd
   status[2,10,18,26]=RED ZONE | 3rd & Goal at TULN 10
   status[3,11,19,27]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd
   status[4,12,20,28]=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
@@ -1109,7 +1122,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
   odds= ou= tv=ACC Network venue=Wallace Wade Stadium
   clock_text=0:09 2nd
-  status[0,1,8,9,16,17,24,25]=0:09 - 2nd
+  status[0,8,16,24]=Wallace Wade Stadium | ACC Network
+  status[1,9,17,25]=0:09 - 2nd
   status[2,10,18,26]=RED ZONE | 3rd & Goal at TULN 10
   status[3,11,19,27]=RED ZONE | 3rd & Goal at TULN 10 | 0:09 - 2nd
   status[4,12,20,28]=(00:14) Shotgun #2 W.Eget pass incomplete short right to #85 J.Hasley thrown to TULANE00
@@ -1145,7 +1159,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(08:37) Shotgun #8 J.Davis pass complete short right to #7 T.Kenan caught at Towson19, for 1 yard loss to the Towson24 (#18 W.Miller)
   odds= ou= tv=CBSSN venue=Navy-Marine Corps Memorial Stadium
   clock_text=8:25 4th
-  status[0,1,8,9,16,17,24,25]=8:25 - 4th
+  status[0,8,16,24]=Navy-Marine Corps Memorial Stadium | CBSSN
+  status[1,9,17,25]=8:25 - 4th
   status[2,10,18,26]=2nd & 11 at TOW 24
   status[3,11,19,27]=2nd & 11 at TOW 24 | 8:25 - 4th
   status[4,12,20,28]=(08:37) Shotgun #8 J.Davis pass complete short right to #7 T.Kenan caught at Towson19, for 1 yard loss to the Towson24 (#18 W.Miller)
@@ -1161,7 +1176,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(08:37) Shotgun #8 J.Davis pass complete short right to #7 T.Kenan caught at Towson19, for 1 yard loss to the Towson24 (#18 W.Miller)
   odds= ou= tv=CBSSN venue=Navy-Marine Corps Memorial Stadium
   clock_text=8:25 4th
-  status[0,1,8,9,16,17,24,25]=8:25 - 4th
+  status[0,8,16,24]=Navy-Marine Corps Memorial Stadium | CBSSN
+  status[1,9,17,25]=8:25 - 4th
   status[2,10,18,26]=2nd & 11 at TOW 24
   status[3,11,19,27]=2nd & 11 at TOW 24 | 8:25 - 4th
   status[4,12,20,28]=(08:37) Shotgun #8 J.Davis pass complete short right to #7 T.Kenan caught at Towson19, for 1 yard loss to the Towson24 (#18 W.Miller)
@@ -1177,7 +1193,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 3rd quarter.
   odds= ou= tv=ESPN+ venue=Alamodome
   clock_text=15:00 4th
-  status[0,1,8,9,16,17,24,25]=15:00 - 4th
+  status[0,8,16,24]=Alamodome | ESPN+
+  status[1,9,17,25]=15:00 - 4th
   status[2,10,18,26]=2nd & 15 at UTSA 47
   status[3,11,19,27]=2nd & 15 at UTSA 47 | 15:00 - 4th
   status[4,12,20,28]=End of 3rd quarter.
@@ -1193,7 +1210,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 3rd quarter.
   odds= ou= tv=ESPN+ venue=Alamodome
   clock_text=15:00 4th
-  status[0,1,8,9,16,17,24,25]=15:00 - 4th
+  status[0,8,16,24]=Alamodome | ESPN+
+  status[1,9,17,25]=15:00 - 4th
   status[2,10,18,26]=2nd & 15 at UTSA 47
   status[3,11,19,27]=2nd & 15 at UTSA 47 | 15:00 - 4th
   status[4,12,20,28]=End of 3rd quarter.
@@ -1209,7 +1227,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Timeout Fordham, clock 02:00
   odds= ou= tv=MW+ venue=Fargodome
   clock_text=1:53 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=1:53 - 4th
+  status[0,2,8,10,16,18,24,26]=Fargodome | MW+
+  status[1,3,9,11,17,19,25,27]=1:53 - 4th
   status[4,6,12,14,20,22,28,30]=Timeout Fordham, clock 02:00
   status[5,7,13,15,21,23,29,31]=1:53 - 4th | Timeout Fordham, clock 02:00
  event 401864499 team 2230 ok=1
@@ -1221,7 +1240,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Timeout Fordham, clock 02:00
   odds= ou= tv=MW+ venue=Fargodome
   clock_text=1:53 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=1:53 - 4th
+  status[0,2,8,10,16,18,24,26]=Fargodome | MW+
+  status[1,3,9,11,17,19,25,27]=1:53 - 4th
   status[4,6,12,14,20,22,28,30]=Timeout Fordham, clock 02:00
   status[5,7,13,15,21,23,29,31]=1:53 - 4th | Timeout Fordham, clock 02:00
  event 401866627 team 2026 ok=1
@@ -1233,7 +1253,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
   odds= ou= tv=ESPN+ venue=Kidd Brewer Stadium
   clock_text=10:33 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=10:33 - 4th
+  status[0,2,8,10,16,18,24,26]=Kidd Brewer Stadium | ESPN+
+  status[1,3,9,11,17,19,25,27]=10:33 - 4th
   status[4,6,12,14,20,22,28,30]=(10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
   status[5,7,13,15,21,23,29,31]=10:33 - 4th | (10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
  event 401866627 team 311 ok=1
@@ -1245,7 +1266,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
   odds= ou= tv=ESPN+ venue=Kidd Brewer Stadium
   clock_text=10:33 4th
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=10:33 - 4th
+  status[0,2,8,10,16,18,24,26]=Kidd Brewer Stadium | ESPN+
+  status[1,3,9,11,17,19,25,27]=10:33 - 4th
   status[4,6,12,14,20,22,28,30]=(10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
   status[5,7,13,15,21,23,29,31]=10:33 - 4th | (10:40) No Huddle-Shotgun #13 J.Grier rush left for 28 yards gain to the MNE00 TOUCHDOWN, clock 10:33, 1ST DOWN
  event 401856772 team 202 ok=1
@@ -1257,7 +1279,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(01:08) No Huddle-Shotgun #10 B.Hayes pass incomplete deep left to #2 O.Singleton thrown to OSU35 PENALTY OSU Pass Interference (#6 C.Bodnar) 15 yards from TLS39 to OSU46, 1ST DOWN. NO PLAY
   odds= ou= tv=ESPNU venue=H. A. Chapman Stadium
   clock_text=0:53 3rd
-  status[0,1,8,9,16,17,24,25]=0:53 - 3rd
+  status[0,8,16,24]=H. A. Chapman Stadium | ESPNU
+  status[1,9,17,25]=0:53 - 3rd
   status[2,10,18,26]=1st & 10 at OKST 46
   status[3,11,19,27]=1st & 10 at OKST 46 | 0:53 - 3rd
   status[4,12,20,28]=(01:08) No Huddle-Shotgun #10 B.Hayes pass incomplete deep left to #2 O.Singleton thrown to OSU35 PENALTY OSU Pass Interference (#6 C.Bodnar) 15 yards from T...
@@ -1273,7 +1296,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(01:08) No Huddle-Shotgun #10 B.Hayes pass incomplete deep left to #2 O.Singleton thrown to OSU35 PENALTY OSU Pass Interference (#6 C.Bodnar) 15 yards from TLS39 to OSU46, 1ST DOWN. NO PLAY
   odds= ou= tv=ESPNU venue=H. A. Chapman Stadium
   clock_text=0:53 3rd
-  status[0,1,8,9,16,17,24,25]=0:53 - 3rd
+  status[0,8,16,24]=H. A. Chapman Stadium | ESPNU
+  status[1,9,17,25]=0:53 - 3rd
   status[2,10,18,26]=1st & 10 at OKST 46
   status[3,11,19,27]=1st & 10 at OKST 46 | 0:53 - 3rd
   status[4,12,20,28]=(01:08) No Huddle-Shotgun #10 B.Hayes pass incomplete deep left to #2 O.Singleton thrown to OSU35 PENALTY OSU Pass Interference (#6 C.Bodnar) 15 yards from T...
@@ -1289,7 +1313,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(12:42) Shotgun #28 K.Moulton rush left for 20 yards gain to the NIU32 (#30 A.Ellis), out of bounds, 1ST DOWN, PENALTY Iowa Holding (#14 T.Diaz) 10 yards from NIU32 to NIU42
   odds= ou= tv=BTN venue=Kinnick Stadium
   clock_text=12:25 3rd
-  status[0,1,8,9,16,17,24,25]=12:25 - 3rd
+  status[0,8,16,24]=Kinnick Stadium | BTN
+  status[1,9,17,25]=12:25 - 3rd
   status[2,10,18,26]=1st & 10 at NIU 42
   status[3,11,19,27]=1st & 10 at NIU 42 | 12:25 - 3rd
   status[4,12,20,28]=(12:42) Shotgun #28 K.Moulton rush left for 20 yards gain to the NIU32 (#30 A.Ellis), out of bounds, 1ST DOWN, PENALTY Iowa Holding (#14 T.Diaz) 10 yards fro...
@@ -1305,7 +1330,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(12:42) Shotgun #28 K.Moulton rush left for 20 yards gain to the NIU32 (#30 A.Ellis), out of bounds, 1ST DOWN, PENALTY Iowa Holding (#14 T.Diaz) 10 yards from NIU32 to NIU42
   odds= ou= tv=BTN venue=Kinnick Stadium
   clock_text=12:25 3rd
-  status[0,1,8,9,16,17,24,25]=12:25 - 3rd
+  status[0,8,16,24]=Kinnick Stadium | BTN
+  status[1,9,17,25]=12:25 - 3rd
   status[2,10,18,26]=1st & 10 at NIU 42
   status[3,11,19,27]=1st & 10 at NIU 42 | 12:25 - 3rd
   status[4,12,20,28]=(12:42) Shotgun #28 K.Moulton rush left for 20 yards gain to the NIU32 (#30 A.Ellis), out of bounds, 1ST DOWN, PENALTY Iowa Holding (#14 T.Diaz) 10 yards fro...
@@ -1321,7 +1347,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 2nd quarter.
   odds= ou= tv=SEC Network venue=Donald W. Reynolds Razorback Stadium
   clock_text=5:04 3rd
-  status[0,1,8,9,16,17,24,25]=5:04 - 3rd
+  status[0,8,16,24]=Donald W. Reynolds Razorback Stadium | SEC Network
+  status[1,9,17,25]=5:04 - 3rd
   status[2,10,18,26]=2nd & 10 at UNA 25
   status[3,11,19,27]=2nd & 10 at UNA 25 | 5:04 - 3rd
   status[4,12,20,28]=End of 2nd quarter.
@@ -1337,7 +1364,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=End of 2nd quarter.
   odds= ou= tv=SEC Network venue=Donald W. Reynolds Razorback Stadium
   clock_text=5:04 3rd
-  status[0,1,8,9,16,17,24,25]=5:04 - 3rd
+  status[0,8,16,24]=Donald W. Reynolds Razorback Stadium | SEC Network
+  status[1,9,17,25]=5:04 - 3rd
   status[2,10,18,26]=2nd & 10 at UNA 25
   status[3,11,19,27]=2nd & 10 at UNA 25 | 5:04 - 3rd
   status[4,12,20,28]=End of 2nd quarter.
@@ -1353,7 +1381,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(03:37) No Huddle-Shotgun #6 J.Wilder rush right for 4 yards gain to the USM28 (#8 J.Davis; #14 J.Mcroy)
   odds= ou= tv=ESPN+ venue=M. M. Roberts Stadium
   clock_text=3:32 2nd
-  status[0,1,8,9,16,17,24,25]=3:32 - 2nd
+  status[0,8,16,24]=M. M. Roberts Stadium | ESPN+
+  status[1,9,17,25]=3:32 - 2nd
   status[2,10,18,26]=3rd & 3 at USM 28
   status[3,11,19,27]=3rd & 3 at USM 28 | 3:32 - 2nd
   status[4,12,20,28]=(03:37) No Huddle-Shotgun #6 J.Wilder rush right for 4 yards gain to the USM28 (#8 J.Davis; #14 J.Mcroy)
@@ -1369,7 +1398,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(03:37) No Huddle-Shotgun #6 J.Wilder rush right for 4 yards gain to the USM28 (#8 J.Davis; #14 J.Mcroy)
   odds= ou= tv=ESPN+ venue=M. M. Roberts Stadium
   clock_text=3:32 2nd
-  status[0,1,8,9,16,17,24,25]=3:32 - 2nd
+  status[0,8,16,24]=M. M. Roberts Stadium | ESPN+
+  status[1,9,17,25]=3:32 - 2nd
   status[2,10,18,26]=3rd & 3 at USM 28
   status[3,11,19,27]=3rd & 3 at USM 28 | 3:32 - 2nd
   status[4,12,20,28]=(03:37) No Huddle-Shotgun #6 J.Wilder rush right for 4 yards gain to the USM28 (#8 J.Davis; #14 J.Mcroy)
@@ -1385,7 +1415,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(K. Nguma KICK)
   odds= ou= tv=USA Net venue=Canvas Stadium
   clock_text=10:46 1st
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=10:46 - 1st
+  status[0,2,8,10,16,18,24,26]=Canvas Stadium | USA Net
+  status[1,3,9,11,17,19,25,27]=10:46 - 1st
   status[4,6,12,14,20,22,28,30]=(K. Nguma KICK)
   status[5,7,13,15,21,23,29,31]=10:46 - 1st | (K. Nguma KICK)
  event 401860878 team 2751 ok=1
@@ -1397,7 +1428,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=(K. Nguma KICK)
   odds= ou= tv=USA Net venue=Canvas Stadium
   clock_text=10:46 1st
-  status[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27]=10:46 - 1st
+  status[0,2,8,10,16,18,24,26]=Canvas Stadium | USA Net
+  status[1,3,9,11,17,19,25,27]=10:46 - 1st
   status[4,6,12,14,20,22,28,30]=(K. Nguma KICK)
   status[5,7,13,15,21,23,29,31]=10:46 - 1st | (K. Nguma KICK)
  event 401867973 team 295 ok=1
@@ -1409,7 +1441,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Shotgun #2 D.Bailey rush right for 4 yards gain to the ODU35 (#94 L.McFadden-Pressley; #6 M.Chapman)
   odds= ou= tv=ESPN+ venue=S.B. Ballard Stadium
   clock_text=7:25 1st
-  status[0,1,8,9,16,17,24,25]=7:25 - 1st
+  status[0,8,16,24]=S.B. Ballard Stadium | ESPN+
+  status[1,9,17,25]=7:25 - 1st
   status[2,10,18,26]=3rd & 3 at ODU 35
   status[3,11,19,27]=3rd & 3 at ODU 35 | 7:25 - 1st
   status[4,12,20,28]=Shotgun #2 D.Bailey rush right for 4 yards gain to the ODU35 (#94 L.McFadden-Pressley; #6 M.Chapman)
@@ -1425,7 +1458,8 @@ scoreboard fixtures/scoreboard_ncaa_live.json err=Ok
   play=Shotgun #2 D.Bailey rush right for 4 yards gain to the ODU35 (#94 L.McFadden-Pressley; #6 M.Chapman)
   odds= ou= tv=ESPN+ venue=S.B. Ballard Stadium
   clock_text=7:25 1st
-  status[0,1,8,9,16,17,24,25]=7:25 - 1st
+  status[0,8,16,24]=S.B. Ballard Stadium | ESPN+
+  status[1,9,17,25]=7:25 - 1st
   status[2,10,18,26]=3rd & 3 at ODU 35
   status[3,11,19,27]=3rd & 3 at ODU 35 | 7:25 - 1st
   status[4,12,20,28]=Shotgun #2 D.Bailey rush right for 4 yards gain to the ODU35 (#94 L.McFadden-Pressley; #6 M.Chapman)
