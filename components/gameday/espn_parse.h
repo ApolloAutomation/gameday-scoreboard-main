@@ -849,6 +849,8 @@ std::string fit_words(const std::string &s, size_t line);
 std::string records_line(const GameSnapshot &s, const std::string &standing);
 // "#5 OSU vs #12 MICH" pregame if either is ranked.
 std::string ranked_matchup(const GameSnapshot &s);
+// During play with nothing else: game name, series, venue, TV.
+void add_live_extras(std::string &out, const GameSnapshot &s, const std::string &series);
 // The pre-game betting parts when the ticker shows odds: the line, the
 // over/under and the TV listing. Soccer builds its own line.
 void add_odds(std::string &out, const GameSnapshot &s, const TickerOptions &o);
