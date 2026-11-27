@@ -104,6 +104,9 @@ std::string hockey_status_text(const GameSnapshot &s, const TickerOptions &o, co
       play.erase(0, 2);
     add_last_play(out, play);
   }
+  // Never repeat the board's clock row
+  if (out.empty() && !o.clock)
+    detail::add_live_extras(out, s, h.series);
   if (out.empty())
     out = s.short_detail.empty() ? "In Progress" : s.short_detail;
   return out;

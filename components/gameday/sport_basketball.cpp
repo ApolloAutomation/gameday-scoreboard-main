@@ -113,6 +113,9 @@ std::string basketball_status_text(const GameSnapshot &s, const TickerOptions &o
     add_part(out, s.short_detail);
   if (o.last_play)
     add_last_play(out, s.last_play);
+  // Never repeat the board's clock row
+  if (out.empty() && !o.clock)
+    detail::add_live_extras(out, s, b.series);
   if (out.empty())
     out = s.short_detail.empty() ? "In Progress" : s.short_detail;
   return out;
